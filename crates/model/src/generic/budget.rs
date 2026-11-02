@@ -1,6 +1,6 @@
 //! Expansion work allowance, drawing-size accounting and the prepaid
 //! presentation, ink and clearance cost model.
-use super::ink::{FUTURE_CIP_LABELS, LabelPlan};
+use super::ink::{LabelPlan, cip_text_bytes};
 use crate::document::Document;
 use std::collections::HashSet;
 
@@ -799,11 +799,7 @@ pub(super) fn charge_ink_work(doc: &Document, work: &mut Work) -> Result<(), Str
         // Fresh labels can restore displayed descriptors on an unrelated fixed
         // bond after installation. Pay their finite glyph/font envelope before
         // measurement; assigning CIP or preparing a second Molecule is absent.
-        let labels = b
-            .cip_label
-            .as_ref()
-            .map_or(0, |v| v.len().saturating_add(2))
-            .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3));
+        let labels = cip_text_bytes(b.cip_label.as_deref(), &doc.atom_labels);
         reserve(
             labels.saturating_mul(32).saturating_add(
                 labels

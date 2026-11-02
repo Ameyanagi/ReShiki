@@ -872,6 +872,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Labels(_)
             | Message::Charge(_)
             | Message::ApplyIsotope
+            | Message::SetIsotope(_)
             | Message::AtomRadical(_)
             | Message::RemoveMark(..)
             | Message::RotateMark(..)
