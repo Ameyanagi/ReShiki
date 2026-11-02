@@ -618,15 +618,15 @@ fn analyze_help() -> String {
 
 fn name_help() -> String {
     let body = "\
-Prints the systematic name of one complete molecule or a charge-balanced salt.
-The input is read as for convert (reshiki --cli help convert). The name is generated locally by
-the openclatura port and printed only after the OPSIN port reconstructs
-the same structure.
-For descriptive radical-ion names, it verifies the recovered neutral parent.
+Prints the systematic name of one molecule or charge-balanced salt. The
+input is read as for convert (reshiki --cli help convert). The name is
+generated locally by the openclatura port and printed only after the OPSIN
+port reconstructs the same structure (for a radical ion, its neutral parent).
 
 Options:
-  --json  Print the name and its status as one JSON line.
-  --isotope-style STYLE  Use iupac (default) or boughton isotope notation.
+  --isotope-style STYLE  iupac (default), as in (2H3)methanol, or boughton,
+                         as in methanol-d3.
+  --json                 Print the name and its status as one JSON line.
 
 Without --json, prints only the name followed by a newline. With --json,
 value contains name, preferred, status, reason and detail:

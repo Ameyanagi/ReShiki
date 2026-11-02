@@ -161,15 +161,17 @@ value.analysis. The input is read as for convert (reshiki --cli help convert).
 
 ```text
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]
+Usage: reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--isotope-style STYLE] [--json]
 
-Prints the systematic name of one connected molecule. The input is read as
-for convert (reshiki --cli help convert). The name is generated locally by
-the openclatura port and printed only after the OPSIN port reconstructs
-the same structure.
+Prints the systematic name of one molecule or charge-balanced salt. The
+input is read as for convert (reshiki --cli help convert). The name is
+generated locally by the openclatura port and printed only after the OPSIN
+port reconstructs the same structure (for a radical ion, its neutral parent).
 
 Options:
-  --json  Print the name and its status as one JSON line.
+  --isotope-style STYLE  iupac (default), as in (2H3)methanol, or boughton,
+                         as in methanol-d3.
+  --json                 Print the name and its status as one JSON line.
 
 Without --json, prints only the name followed by a newline. With --json,
 value contains name, preferred, status, reason and detail:
