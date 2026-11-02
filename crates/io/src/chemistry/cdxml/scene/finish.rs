@@ -105,6 +105,7 @@ impl CdxmlScene {
                 cip_label: None,
                 steroid_label: None,
                 undefined_stereo: false,
+                undefined_pseudoasymmetric: false,
                 marks: Vec::new(),
                 mark_serial: 0,
                 stereo: None,

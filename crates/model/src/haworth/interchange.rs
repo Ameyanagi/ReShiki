@@ -322,6 +322,7 @@ fn apply(doc: &mut Document, recognized: Recognized) -> bool {
             atom.cip_label = None;
             atom.steroid_label = None;
             atom.undefined_stereo = false;
+            atom.undefined_pseudoasymmetric = false;
         }
     }
     true

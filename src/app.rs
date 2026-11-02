@@ -1372,6 +1372,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         cip_label: _,
         steroid_label: _,
         undefined_stereo: _,
+        undefined_pseudoasymmetric: _,
         id,
         element,
         position,

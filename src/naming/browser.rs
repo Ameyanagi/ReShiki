@@ -91,11 +91,28 @@ pub async fn generate_name_with_options(
     cancel: Cancel,
 ) -> Result<Record, Error> {
     let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
-    let input = identity.naming_smiles.as_deref().unwrap_or(&expected);
+    let input = identity.generation_smiles(&expected);
+    let ordinary = identity.naming_smiles.as_deref().unwrap_or(&expected);
+    // As on the desktop, Ξ/ξ for undefined units falls back to the plain name.
+    match generate_from(identity, input, &expected, style, &cancel).await {
+        Err(error) if input != ordinary && !matches!(error, Error::Cancelled(_)) => {
+            generate_from(identity, ordinary, &expected, style, &cancel).await
+        }
+        result => result,
+    }
+}
+
+async fn generate_from(
+    identity: &Identity,
+    input: &str,
+    expected: &str,
+    style: super::IsotopeStyle,
+    cancel: &Cancel,
+) -> Result<Record, Error> {
     let request = reverse::generate_request_with_style(input, style)?;
-    let output = exchange(&request, &cancel, GENERATE_CANCELLED).await?;
+    let output = exchange(&request, cancel, GENERATE_CANCELLED).await?;
     let candidate = reverse::parse_response(&output, input)?;
-    reverse::reconstruct(identity, expected, candidate, &cancel).await
+    reverse::reconstruct(identity, expected.to_owned(), candidate, cancel).await
 }
 
 /// What the worker posted: `null` once loaded, then the response bytes or
