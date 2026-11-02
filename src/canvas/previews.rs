@@ -99,8 +99,21 @@ impl TemplateAnchorPreview<'_> {
                     .max_by(|a, b| {
                         (a.cos() * ox + a.sin() * oy).total_cmp(&(b.cos() * ox + b.sin() * oy))
                     })?;
-                let (dx, dy) = (angle.cos(), angle.sin());
                 let p = camera.screen(atom.position, bounds);
+                let base = if atom.element == "C" { 14. } else { 19. };
+                // A cramped gap (e.g. the inner bridge of a drawn cage) can put the
+                // locant nearer another numbered atom; read it from the other side.
+                let near = Point::new(p.x + angle.cos() * base, p.y + angle.sin() * base);
+                let angle = if self.document.atoms.iter().any(|other| {
+                    other.id != atom.id
+                        && locants.contains_key(&other.id)
+                        && near.distance(camera.screen(other.position, bounds)) < base
+                }) {
+                    angle + std::f32::consts::PI
+                } else {
+                    angle
+                };
+                let (dx, dy) = (angle.cos(), angle.sin());
                 // Step past the atom's whole label (e.g. the H of N-H), padded by
                 // the 9 px locant's half extents, where the ray leaves that box.
                 let half = (locant.chars().count() as f32 * 2.75 + 2., 6.5);
@@ -117,7 +130,7 @@ impl TemplateAnchorPreview<'_> {
                         .fold(f32::INFINITY, f32::min)
                     })
                     .unwrap_or(0.)
-                    .max(if atom.element == "C" { 14. } else { 19. });
+                    .max(base);
                 Some((
                     locant.as_str(),
                     Point::new(p.x + dx * offset, p.y + dy * offset),

@@ -828,7 +828,7 @@ fn template_source_locants_sit_in_open_gaps_and_join_preview_omits_them() {
 }
 
 #[test]
-fn template_source_locants_clear_atom_labels_and_preview_edges() {
+fn template_source_locants_clear_atom_labels_and_preview_edges_near_their_atoms() {
     reshiki::style::add_font(
         include_bytes!("../../crates/model/fonts/LiberationSans-Regular.ttf").to_vec(),
     )
@@ -862,6 +862,11 @@ fn template_source_locants_clear_atom_labels_and_preview_edges() {
             .collect();
         let labels = preview.locant_labels(camera, bounds);
         assert_eq!(labels.len(), template.locants.len(), "{}", template.name);
+        let numbered: Vec<_> = doc
+            .atoms
+            .iter()
+            .filter(|a| template.locants.contains_key(&a.id))
+            .collect();
         let boxes: Vec<_> = labels
             .iter()
             .map(|&(locant, p)| {
@@ -885,6 +890,14 @@ fn template_source_locants_clear_atom_labels_and_preview_edges() {
             }
             if boxes[i + 1..].iter().any(|other| rect.intersects(other)) {
                 failures.push(format!("{name} / {locant}: overlaps another locant"));
+            }
+            let p = labels[i].1;
+            let owner = camera.screen(numbered[i].position, bounds);
+            if numbered
+                .iter()
+                .any(|other| p.distance(camera.screen(other.position, bounds)) < p.distance(owner))
+            {
+                failures.push(format!("{name} / {locant}: nearer another numbered atom"));
             }
         }
     }
