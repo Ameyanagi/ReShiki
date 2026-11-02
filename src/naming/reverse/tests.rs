@@ -1,9 +1,10 @@
 use super::*;
+use crate::naming::NameStatus;
 use serde_json::json;
 
 #[test]
 fn rule_protocol_checks_profile_input_and_bounded_name() {
-    let reply = json!({"operation":"generate","protocol":worker::PROTOCOL,"profile":openclatura::PROFILE,"input":"CCO","result":{"Ok":{"text":"ethanol","status":{"status":"preferred"}}}});
+    let reply = json!({"operation":"generate","protocol":worker::PROTOCOL,"profile":openclatura::PROFILE,"input":"CCO","result":{"Ok":{"text":"ethanol","status":{"status":"preferred"},"alternatives":[],"omitted_stereo":[],"omitted_units":0}}});
     let generated = parse_response(&serde_json::to_vec(&reply).unwrap(), "CCO").unwrap();
     assert_eq!(generated.text, "ethanol");
     assert_eq!(generated.status, NameStatus::Preferred);
@@ -31,6 +32,11 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
         (
             "result",
             json!({"Ok":{"text":"ethanol","status":{"status":"preferred"},"unexpected":true}}),
+        ),
+        (
+            "result",
+            json!({"Ok":{"text":"ethanol","status":{"status":"preferred"},
+                "alternatives":[{"name":"","status":{"status":"preferred"}}],"omitted_stereo":[],"omitted_units":0}}),
         ),
         ("result", json!({"Ok":"ethanol"})),
     ] {
@@ -84,6 +90,8 @@ async fn native_worker_then_local_opsin_verifies_supported_names() -> Result<(),
         let record = generate_name(
             &Identity {
                 smiles: smiles.into(),
+                naming_smiles: None,
+                write_unknown_stereo: false,
                 warnings: vec![],
             },
             Cancel::default(),
@@ -139,4 +147,93 @@ async fn independent_decoder_canary_catches_connectivity_stereo_isotope_charge_a
         );
     }
     Ok(())
+}
+
+#[tokio::test]
+async fn alternatives_require_independent_reconstruction() {
+    use crate::naming::{AlternativeName, NameReason};
+    let identity = Identity {
+        smiles: "CCO".into(),
+        naming_smiles: None,
+        write_unknown_stereo: false,
+        warnings: vec![],
+    };
+    let candidate = openclatura::Name {
+        text: "ethanol".into(),
+        status: NameStatus::Preferred,
+        alternatives: [
+            "ethyl alcohol",
+            "methanol",
+            "(2R)-propan-2-ol",
+            "not a chemical name",
+        ]
+        .into_iter()
+        .map(|name| AlternativeName {
+            name: name.into(),
+            status: NameStatus::NotPreferred(NameReason::FunctionalClass),
+        })
+        .collect(),
+        omitted_stereo: vec![],
+        omitted_units: 0,
+    };
+    let record = reconstruct(
+        &identity,
+        super::super::canonical_smiles("CCO").unwrap(),
+        candidate,
+        &Cancel::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(record.alternatives.len(), 1);
+    assert_eq!(record.alternatives[0].name, "ethyl alcohol");
+    let request = super::super::local::parse_request(&record.alternatives[0].name).unwrap();
+    let reply = worker::respond(&request).unwrap();
+    let parsed = super::super::local::parse_result(&record.alternatives[0].name, &reply).unwrap();
+    assert_eq!(parsed.canonical_smiles, record.canonical_smiles);
+}
+
+#[tokio::test]
+async fn unknown_configuration_preference_selects_the_verified_primary() {
+    use crate::naming::NameReason;
+    let input = "C[CH:900001](O)[C@H](Cl)C";
+    for explicit in [false, true] {
+        let reply = worker::respond(&generate_request(input).unwrap()).unwrap();
+        let candidate = parse_response(&reply, input).unwrap();
+        let expected = super::super::canonical_smiles(input).unwrap();
+        let identity = Identity {
+            smiles: expected.clone(),
+            naming_smiles: Some(input.into()),
+            write_unknown_stereo: explicit,
+            warnings: vec![],
+        };
+        let record = reconstruct(&identity, expected, candidate, &Cancel::default())
+            .await
+            .unwrap();
+        if explicit {
+            assert_eq!(record.title, "(2Ξ,3R)-3-chlorobutan-2-ol");
+            assert_eq!(record.name_status, Some(NameStatus::Preferred));
+            assert!(record.omitted_stereo.is_empty());
+            assert_eq!(record.omitted_stereo_note(), None);
+            assert_eq!(record.alternatives[0].name, "(3R)-3-chlorobutan-2-ol");
+        } else {
+            assert_eq!(record.title, "(3R)-3-chlorobutan-2-ol");
+            assert_eq!(
+                record.name_status,
+                Some(NameStatus::NotPreferred(NameReason::UnknownConfiguration))
+            );
+            assert_eq!(record.omitted_stereo, ["2"]);
+            assert_eq!(
+                record.omitted_stereo_note().as_deref(),
+                Some("Configuration at position 2 not specified in name")
+            );
+            assert_eq!(record.alternatives[0].name, "(2Ξ,3R)-3-chlorobutan-2-ol");
+            let mut unlocated = record.clone();
+            unlocated.omitted_stereo.clear();
+            unlocated.omitted_units = 2;
+            assert_eq!(
+                unlocated.omitted_stereo_note().as_deref(),
+                Some("Configuration of 2 units drawn as unknown not specified in name")
+            );
+        }
+    }
 }

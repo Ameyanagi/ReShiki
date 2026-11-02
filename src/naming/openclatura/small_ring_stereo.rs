@@ -84,7 +84,7 @@ mod tests {
     use crate::naming::openclatura::graph_io::read_smiles;
 
     #[test]
-    fn local_isotope_cip_and_modern_precedence_match_upstream() {
+    fn modern_cip_precedes_the_scoped_local_isotope_fallback() {
         // Upstream _assign_local_cip_with_locant_labels independently gives
         // R/S at atoms 4/7; modern accurate CIP gives s/s at the same centers.
         let mut mol = read_smiles("CC(=O)N[C@]1(C)C[C@H](N)C1").unwrap();
@@ -98,11 +98,12 @@ mod tests {
         parts.is_ring = true;
         parts.is_substituent = true;
         let get_loc = |idx| locants[&idx].to_string();
-        assert_eq!(
-            scoped_small_ring_stereo_features(&mol, &parts, &path, get_loc),
-            vec![("1".into(), "s".into()), ("3".into(), "s".into())]
-        );
+        assert_eq!(mol.atoms[&4].stereo.as_deref(), Some("s"));
+        assert_eq!(mol.atoms[&7].stereo.as_deref(), Some("s"));
+        assert!(scoped_small_ring_stereo_features(&mol, &parts, &path, get_loc).is_empty());
         mol.accurate_cip.clear();
+        mol.atoms.get_mut(&4).unwrap().stereo = None;
+        mol.atoms.get_mut(&7).unwrap().stereo = None;
         assert_eq!(
             scoped_small_ring_stereo_features(&mol, &parts, &path, get_loc),
             vec![("1".into(), "R".into()), ("3".into(), "s".into())]
@@ -112,12 +113,14 @@ mod tests {
     }
 
     #[test]
-    fn monosubstituted_centers_keep_relative_fallback() {
+    fn monosubstituted_centers_use_full_cip_without_local_isotopes() {
         let mol = read_smiles("C[C@H]1C[C@@H](C)C1").unwrap();
         let mut parts = AssemblyParts::new(4);
         parts.is_ring = true;
         parts.is_substituent = true;
         let path = [1, 2, 3, 5];
+        assert_eq!(mol.atoms[&1].stereo.as_deref(), Some("s"));
+        assert_eq!(mol.atoms[&3].stereo.as_deref(), Some("s"));
         assert!(
             scoped_small_ring_stereo_features(&mol, &parts, &path, |idx| (path
                 .iter()

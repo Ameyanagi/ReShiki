@@ -162,7 +162,7 @@ async fn actual_parser_rejects_ambiguous_stereo_polymers_and_unknown_names() {
 #[test]
 fn parser_cannot_accept_a_rule_generation_response() {
     let response = serde_json::json!({"operation":"generate", "protocol":worker::PROTOCOL,
-        "profile":super::super::openclatura::PROFILE,"input":"CCO","result":{"Ok":{"text":"ethanol","status":{"status":"preferred"}}}});
+        "profile":super::super::openclatura::PROFILE,"input":"CCO","result":{"Ok":{"text":"ethanol","status":{"status":"preferred"},"alternatives":[],"omitted_stereo":[],"omitted_units":0}}});
     assert!(
         parse_reply(&serde_json::to_vec(&response).unwrap(), "example")
             .unwrap_err()
@@ -544,6 +544,8 @@ async fn retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse() -> Re
         let generated = super::super::generate_name(
             &super::super::Identity {
                 smiles: record.smiles,
+                naming_smiles: None,
+                write_unknown_stereo: false,
                 warnings: vec![],
             },
             Cancel::default(),
