@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd" >
+<!-- Constructed fixture, not saved through ChemDraw's GUI.
+     ChemDraw 26's Large/Small_Retrosynthetic tool definition is exactly:
+     <arrow HeadWidthToLineWidthRatio="12.0" ArrowheadTail="None" ArrowheadHead="Full" ArrowheadType="Angle" FillType="None" ArrowShaftSpacing="12" HeadSize="12"/>
+     The drawing below uses ChemDraw's saved arrowhead parameters (600, 525, 150)
+     and the 2 pt shaft spacing of ChemDraw's saved equilibrium arrow in
+     arrows-chemdraw.cdxml, chosen so the head spans both shafts. This does not
+     establish how ChemDraw converts its tool settings into saved-file dimensions.
+     The Hollow arrow uses Condensation.cdxml's
+     saved head and shaft attributes, with new IDs, position, and palette index. -->
+<CDXML CreationProgram="ChemDraw 26.0.0.6599"
+ Name="retrosynthetic-constructed.cdxml"
+ BoundingBox="30 30 150 90"
+ LineWidth="0.60" BoldWidth="2" BondLength="14.40" color="3" bgcolor="2">
+<colortable>
+<color r="1" g="1" b="1"/>
+<color r="0" g="0" b="0"/>
+</colortable>
+<page id="1" BoundingBox="0 0 523 770" HeightPages="1" WidthPages="1">
+<graphic id="2" SupersededBy="3" BoundingBox="150 30 30 30" Z="1"
+ color="3" GraphicType="Line" ArrowType="RetroSynthetic" HeadSize="600"/>
+<arrow id="3" BoundingBox="30 27 150 33" Z="1" color="3"
+ HeadWidthToLineWidthRatio="12.0" ArrowheadTail="None" ArrowheadHead="Full"
+ ArrowheadType="Angle" FillType="None" ArrowShaftSpacing="200" HeadSize="600"
+ ArrowheadCenterSize="525" ArrowheadWidth="150"
+ Head3D="150 30 0" Tail3D="30 30 0"/>
+<graphic id="4" SupersededBy="5" BoundingBox="150 90 30 90" Z="2"
+ color="3" IgnoreWarnings="yes" GraphicType="Line" ArrowType="Hollow" HeadSize="600"/>
+<arrow id="5" BoundingBox="30 86 150 95" Z="2" color="3" IgnoreWarnings="yes"
+ FillType="None" ArrowheadHead="Full" ArrowheadType="Hollow" HeadSize="600"
+ ArrowheadCenterSize="600" ArrowheadWidth="150" ArrowShaftSpacing="600"
+ Head3D="150 90 0" Tail3D="30 90 0"/>
+<scheme id="6"><step id="7" ReactionStepArrows="2 4"/></scheme>
+</page>
+</CDXML>

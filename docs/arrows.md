@@ -15,9 +15,28 @@ move. Arrows never change the chemistry of the drawing.
 3. With an arrow tool active, click an existing arrow to give it that style.
    Repeated clicks cycle its direction, half-head side or equilibrium variant.
 
-The nine presets are forward, equilibrium, resonance, retrosynthesis, electron
-pair, bent/elbow, single electron, dipole and no reaction. The palette also
-offers bold, dashed, hollow and unequal-equilibrium variants.
+The palette explains each preset when you hover over it:
+
+- **Forward** shows a net reaction.
+- **Equilibrium** (⇌) shows a reversible reaction or interconversion of tautomers.
+- **Resonance** (↔) links contributing structures of one species, not an equilibrium.
+- **Retrosynthesis** (⇒) means the target is made from the indicated precursors,
+  following Corey's retrosynthetic arrow convention.
+- **Curved / electron pair** shows an electron pair moving.
+- **Bent / elbow** is a reaction arrow with a corner.
+- **Single electron** shows one electron moving, including homolysis and radical steps.
+- **Dipole** marks a bond dipole.
+- **No reaction** means the reaction does not take place, following ChemDraw's convention.
+
+Bold, dashed, hollow, angled and half-arrow variants have the meaning of a
+Forward arrow; unequal equilibrium has the meaning of an Equilibrium arrow.
+Help also finds these meanings by preset name, such as “resonance” or
+“retrosynthesis”.
+
+Only Forward, Equilibrium and Bent / elbow arrows accept new reaction roles.
+The **Reaction roles** list shows each arrow's kind and explains when roles
+cannot be assigned. Older files retain existing roles on other arrow kinds and
+show a warning when opened.
 
 ### Bend and aim an arrow
 
@@ -187,10 +206,11 @@ opening in the shaft instead of drawing through the hollow center.
 
 ### CDXML exchange
 
-Supported exchange includes straight full/half-headed arrows, head
-shape/dimensions/notches, color, solid/dashed strokes, resonance, dipole/no-go
-marks, equal-length equilibrium with half heads, and single cubic or quadratic
-Bézier arrows with solid heads. Cubic arrows keep both independently editable
+Supported exchange includes straight full/half-headed arrows, straight
+retrosynthesis arrows with editable heads and style, head shape/dimensions/notches,
+color, solid/dashed strokes, resonance, dipole/no-go marks, equal-length
+equilibrium with half heads, and single cubic or quadratic Bézier arrows with
+solid heads. Cubic arrows keep both independently editable
 controls; quadratic arrows use their exact equivalent cubic control points.
 Mixed-object groups keep supported arrow children.
 
@@ -200,7 +220,7 @@ This drawing metadata does not change molecular connectivity or electron counts.
 
 The importer rejects circular/elliptical arrow arcs, multi-segment arrow
 splines, unknown head/stroke types and unsupported decoration. The exporter
-rejects dotted arrows, retrosynthesis arrows, bent/unequal equilibrium,
+rejects dotted arrows, curved retrosynthesis arrows, bent/unequal equilibrium,
 equilibrium with full/absent heads, dipoles with a tail head, and curved arrows
 with hollow/angled heads or dipole/no-go decoration. Those combinations remain
 editable and exportable in `.rsk`/SVG/PDF/PNG. Interchange checks found that

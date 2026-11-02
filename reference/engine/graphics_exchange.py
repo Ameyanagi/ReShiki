@@ -288,7 +288,17 @@ def read_graphics(root, scale, first_id, object_map: dict | None = None, *, loca
 
 
 def write_graphics(
-    page, graphics, paths, scale, position, color_id, next_id, parts=None, picture_exports=None
+    page,
+    graphics,
+    paths,
+    scale,
+    position,
+    color_id,
+    next_id,
+    parts=None,
+    picture_exports=None,
+    *,
+    write_partial_charge=None,
 ):
     """Emit editable Bézier curves; a two-curve group retains separate fill/stroke."""
     ordered = sorted(graphics, key=lambda g: g.get("layer", -1))
@@ -332,6 +342,12 @@ def write_graphics(
 
     for index, g in enumerate(ordered):
         z = index + 1 if g.get("layer", -1) < 0 else index + 2
+        if write_partial_charge is not None:
+            caption = write_partial_charge(g, next_id, z)
+            if caption is not None:
+                objects[g["id"]] = caption
+                next_id += 1
+                continue
         if g.get("kind") == "picture":
             prepared = None
             if picture_exports is not None:
