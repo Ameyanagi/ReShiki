@@ -38,3 +38,6 @@ i_overlay = "9.1.0"
 [dev-dependencies]
 anyhow = "1"
 reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

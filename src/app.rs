@@ -257,6 +257,9 @@ pub enum Message {
     Ungroup,
     IntegralGroup(bool),
     AddFrame(reshiki::graphics::GraphicKind),
+    BracketIon,
+    DrawChargeSeparated(Vec<u64>),
+    NormalizeDepiction,
     View(view_settings::Action),
     Appearance(crate::appearance::Mode),
     CanvasTheme(reshiki::canvas_theme::CanvasTheme),
@@ -1443,6 +1446,8 @@ fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
 }
 
+#[cfg(test)]
+mod depiction_tests;
 #[cfg(test)]
 mod drawing_polish_qa;
 #[cfg(test)]

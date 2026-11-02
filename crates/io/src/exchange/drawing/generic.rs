@@ -232,11 +232,21 @@ impl Writer<'_> {
                 "Semantic single-sided brackets require native ReShiki export",
             ));
         }
+        let parent = if g
+            .superscript_label(&self.doc.drawing_style.text_style())
+            .is_some()
+        {
+            let id = self.id()?;
+            self.tree
+                .add(Some(self.page), "group", [("id", id), ("Z", z.to_string())])?
+        } else {
+            self.page
+        };
         let id = self.id()?;
-        let (lo, hi) = g.bounds();
+        let (lo, hi) = g.shape_bounds();
         let stroke = self.color(g.style.stroke)?;
         let node = self.tree.add(
-            Some(self.page),
+            Some(parent),
             "graphic",
             [
                 ("id", id),
@@ -260,7 +270,9 @@ impl Writer<'_> {
                 ("LineWidth", super::number(super::real(g.style.width_pt))),
             ],
         )?;
-        self.objects.push((g.id, node));
+        self.bracket_superscript(g, parent, z)?;
+        self.objects
+            .push((g.id, if parent == self.page { node } else { parent }));
         Ok(true)
     }
     pub(super) fn generic_units(&mut self) -> Result<()> {
@@ -322,6 +334,21 @@ impl Writer<'_> {
                     .find(|(id, _)| *id == graphic_id)
                     .map(|(_, k)| *k)
                     .ok_or_else(|| invalid("Missing polymer bracket graphic"))?;
+                let key = if self.tree.node(key)?.tag == "group" {
+                    self.tree
+                        .node(key)?
+                        .children
+                        .iter()
+                        .copied()
+                        .find(|&child| {
+                            self.tree
+                                .node(child)
+                                .is_ok_and(|node| node.tag == "graphic")
+                        })
+                        .ok_or_else(|| invalid("Missing polymer bracket graphic"))?
+                } else {
+                    key
+                };
                 let graphic = self.tree.value(key, "id")?;
                 let id = self.id()?;
                 let attachment = self.tree.add(

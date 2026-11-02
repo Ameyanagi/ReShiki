@@ -18,12 +18,37 @@ impl App {
     }
 
     pub(super) fn add_frame(&mut self, kind: reshiki::graphics::GraphicKind) {
-        let mut ids = self.tab.doc.complete_selection(&self.tab.selected);
-        if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &ids) {
+        let ids = self.tab.doc.complete_selection(&self.tab.selected);
+        self.frame(kind, ids, None);
+    }
+
+    pub(super) fn bracket_ion(&mut self) {
+        match reshiki::ionic::bracket_charge(&self.tab.doc, &self.tab.selected) {
+            Ok((atoms, charge)) => self.frame(
+                reshiki::graphics::GraphicKind::Brackets,
+                atoms,
+                Some(charge),
+            ),
+            Err(reason) => {
+                self.status = reason;
+                self.error = true;
+            }
+        }
+    }
+
+    /// Frames `fit` and groups the frame with its complete selection. An ion
+    /// charge hides the local charge labels of the fitted atoms.
+    fn frame(
+        &mut self,
+        kind: reshiki::graphics::GraphicKind,
+        fit: Vec<u64>,
+        charge: Option<String>,
+    ) {
+        if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &fit) {
             let before = self.tab.doc.clone();
             let id = self.tab.doc.next_id();
             let padding = reshiki::style::DEFAULT.world(6.0);
-            self.tab.doc.graphics.push(Graphic::dragged(
+            let mut frame = Graphic::dragged(
                 id,
                 kind,
                 lo.offset(-padding, -padding),
@@ -34,14 +59,61 @@ impl App {
                 },
                 BracketSides::Both,
                 false,
-            ));
+            );
+            let ion = charge.is_some();
+            if ion {
+                for atom in &mut self.tab.doc.atoms {
+                    if fit.contains(&atom.id) {
+                        atom.display.hide_charge = true;
+                    }
+                }
+            }
+            frame.superscript = charge;
+            self.tab.doc.graphics.push(frame);
+            let mut ids = self.tab.doc.complete_selection(&fit);
             ids.push(id);
             if let Ok(ids) = self.tab.doc.group_selection(&ids) {
-                self.tab.selected = ids;
+                self.set_selection(ids);
             }
             self.changed(before);
             self.tool = Tool::Select;
-            self.status = "Frame added and grouped with the selection".into();
+            self.status = if ion {
+                "Ion bracket added and grouped with the component"
+            } else {
+                "Frame added and grouped with the selection"
+            }
+            .into();
+        }
+    }
+
+    pub(super) fn normalize_depiction(&mut self) {
+        let ids = if self.tab.selected.is_empty() {
+            self.tab.doc.atoms.iter().map(|atom| atom.id).collect()
+        } else {
+            self.tab
+                .doc
+                .expand_abbreviation_selection(&self.tab.selected)
+        };
+        self.draw_charge_separated(&ids);
+    }
+
+    pub(super) fn draw_charge_separated(&mut self, ids: &[u64]) {
+        let before = self.tab.doc.clone();
+        match reshiki::depiction::draw_as_charge_separated(&mut self.tab.doc, ids) {
+            Ok(count) if count > 0 => {
+                self.changed(before);
+                self.status = format!(
+                    "Drew {count} nitrogen center{} as charge-separated",
+                    if count == 1 { "" } else { "s" }
+                );
+            }
+            Ok(_) => {
+                self.status = "No qualifying nitrogen centers to draw as charge-separated".into();
+            }
+            Err(reason) => {
+                self.status = reason;
+                self.error = true;
+            }
         }
     }
     pub(super) fn group_selected(&mut self) {

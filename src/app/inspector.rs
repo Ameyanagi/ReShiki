@@ -1017,6 +1017,7 @@ impl App {
             false,
             || {
                 let chemistry = column![
+                    command("Normalize depiction", Message::NormalizeDepiction),
                     command(
                         "Reaction roles…",
                         Message::Reaction(super::reactions::Action::Open)
@@ -1735,6 +1736,7 @@ impl App {
             ]
             .spacing(6),
             command("Invert selection", Message::InvertSelection),
+            command("Bracket ion", Message::BracketIon),
             crate::appearance::pick_list(
                 [
                     reshiki::graphics::GraphicKind::Brackets,

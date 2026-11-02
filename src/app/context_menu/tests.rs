@@ -64,6 +64,34 @@ fn redraw_stereo_bonds_is_available_for_atom_selections_and_dispatches() {
 }
 
 #[test]
+fn nitrogen_depiction_action_is_conditional_and_runs_from_the_context_menu() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let c = app.tab.doc.add_atom("C", World::new(-42., 0.));
+    let n = app.tab.doc.add_atom("N", World::default());
+    let o = app.tab.doc.add_atom("O", World::new(42., 0.));
+    let other = app.tab.doc.add_atom("O", World::new(0., -42.));
+    app.tab.doc.add_bond(c, n, 1, "plain");
+    app.tab.doc.add_bond(n, o, 2, "plain");
+    app.tab.doc.add_bond(n, other, 2, "plain");
+    app.tab.selected = vec![c];
+    assert!(!labels(&app, Page::Main).contains(&"Draw as charge-separated"));
+    app.tab.selected = vec![n];
+    assert!(labels(&app, Page::Main).contains(&"Draw as charge-separated"));
+    assert!(!labels(&app, Page::Main).contains(&"Bracket ion"));
+    let before = app.tab.doc.clone();
+    run_item(&mut app, Page::Main, "Draw as charge-separated").unwrap();
+    assert_eq!(app.tab.doc.atom(n).unwrap().charge, 1);
+    assert!(!labels(&app, Page::Main).contains(&"Draw as charge-separated"));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    app.tab.doc.atom_mut(o).unwrap().charge = -1;
+    app.tab.selected = vec![c, n, o, other];
+    assert!(labels(&app, Page::Main).contains(&"Bracket ion"));
+}
+
+#[test]
 fn path_cleanup_entries_follow_eligible_selection_and_run_through_menu() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

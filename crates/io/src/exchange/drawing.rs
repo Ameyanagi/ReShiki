@@ -8,6 +8,8 @@ use crate::{
     typography::{TextFormat, TextStyle},
 };
 use std::collections::HashMap;
+#[cfg(test)]
+mod bracket_superscript_tests;
 mod clipboard;
 mod generic;
 mod groups;

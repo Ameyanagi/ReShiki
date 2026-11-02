@@ -568,6 +568,7 @@ fn palette_cases() -> Vec<Case> {
                 style: Default::default(),
                 sides: BracketSides::Left,
                 constrain: false,
+                superscript: None,
             };
             let _ = app.update(Message::Palette(Action::Graphic(option)));
         }),
