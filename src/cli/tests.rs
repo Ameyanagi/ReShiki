@@ -895,6 +895,97 @@ fn render_command_lines_parse() {
     }
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn steroid_alpha_beta_survives_cleanup_exchange_and_cli_render() {
+    use crate::{
+        chemistry::{self, document as molecular},
+        document::Document,
+    };
+
+    for bytes in [
+        include_bytes!("../../crates/model/fonts/LiberationSans-Regular.ttf").as_slice(),
+        include_bytes!("../../crates/model/fonts/LiberationSans-Italic.ttf").as_slice(),
+    ] {
+        crate::style::add_font(bytes.to_vec()).unwrap();
+    }
+    let parsed = opsin::Parser::new().unwrap().parse(
+        "estra-1,3,5(10)-triene-3,17beta-diol",
+        &opsin::ParseOptions::default(),
+    );
+    let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+    let input = chemistry::smiles::read(&smiles).unwrap();
+    let state = input.prepared.state;
+    let positions = chemistry::depict::compute(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        Default::default(),
+    )
+    .unwrap()
+    .positions;
+    let molecule = molecular::Molecule {
+        rdkit_version: chemistry::RDKIT_VERSION,
+        ids: (1..=positions.len() as u64).collect(),
+        state,
+        positions,
+    };
+    let drawing = molecular::for_import(&molecule, false, &input.prepared.dummy_labels).unwrap();
+    let labels = drawing.labels().unwrap();
+    let mut doc = drawing.finish(labels).unwrap();
+    doc.atom_labels.stereo = true;
+    doc.atom_labels.steroid_alpha_beta = true;
+    doc.atom_labels.roman_stereo_parentheses = true;
+    doc.drawing_style.font_family = "Liberation Sans".into();
+    for atom in &mut doc.atoms {
+        atom.display.stereo.style.family = "Liberation Sans".into();
+    }
+    let mut request = crate::engine::Request::molecule("clean", doc);
+    request.cleanup = Some(crate::cleanup::Options {
+        iupac_orientation: true,
+        ..Default::default()
+    });
+    let engine = crate::engine::LocalEngine::in_process();
+    doc = engine.request(request).await.unwrap().document.unwrap();
+    assert!(
+        doc.atoms
+            .iter()
+            .any(|atom| atom.steroid_label.as_deref() == Some("17β"))
+    );
+    for format in ["cdxml", "cdx"] {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let mut request = crate::engine::Request::molecule("export", doc.clone());
+        request.format = Some(format.into());
+        let output = engine.request(request).await.unwrap().output.unwrap();
+        let xml = if format == "cdx" {
+            crate::exchange::from_cdx(&STANDARD.decode(output).unwrap()).unwrap()
+        } else {
+            output
+        };
+        assert!(xml.contains("17β"), "{xml}");
+        assert!(!xml.contains("(17β)"));
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("estradiol.rsk");
+    std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+    assert!(
+        Document::from_native_file(&std::fs::read(&path).unwrap())
+            .unwrap()
+            .atoms
+            .iter()
+            .all(|atom| atom.steroid_label.is_none())
+    );
+    let (code, svg, err) = call_os(vec![
+        "render".into(),
+        path.into_os_string(),
+        "--to".into(),
+        "svg".into(),
+    ])
+    .await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(svg.contains("17β"), "{svg}");
+    assert!(!svg.contains("(17β)"));
+}
+
 #[test]
 fn compose_command_lines_parse() {
     assert_eq!(

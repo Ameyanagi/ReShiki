@@ -192,7 +192,7 @@ fn checked_response_round_trip_recomputes_visible_markers_for_export() {
     let (mut doc, center, (a, b)) = undefined_stereogenic_units();
     doc.atom_labels.stereo = true;
     doc.atom_labels.mark_undefined_stereocentres = true;
-    refresh_undefined_stereo(&mut doc);
+    refresh_optional_stereo(&mut doc);
     let checked: Document = serde_json::from_value(serde_json::to_value(&doc).unwrap()).unwrap();
     assert!(!checked.atom(center).unwrap().undefined_stereo);
     crate::atom_labels::refresh_computed(&mut doc, &checked);

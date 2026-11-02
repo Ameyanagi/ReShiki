@@ -1,6 +1,8 @@
 use super::*;
 use crate::{
-    atom_labels::{Carbons, HydrogenIsotopeLabels, HydrogenPosition, Owner, stereo_text},
+    atom_labels::{
+        Carbons, HydrogenIsotopeLabels, HydrogenPosition, Owner, atom_stereo_code, stereo_text,
+    },
     typography::{Script, TextAlign, TextSpan},
 };
 
@@ -618,7 +620,7 @@ impl Writer<'_> {
             }
             let show = d.stereo.show.unwrap_or(settings.stereo);
             self.tree.set(n, "ShowAtomStereo", yes(show))?;
-            if show && let Some(cip) = &a.cip_label {
+            if show && let Some(cip) = atom_stereo_code(a, doc) {
                 self.indicator(
                     n,
                     Owner::AtomStereo(a.id),

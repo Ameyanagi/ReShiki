@@ -1,6 +1,6 @@
 use super::{App, Job, Message, Request};
 use iced::Task;
-use reshiki::cleanup::{Options, Scope};
+use reshiki::cleanup::{Options, Orientation, Scope};
 
 #[derive(Debug, Clone)]
 pub struct CleanupJob {
@@ -24,8 +24,8 @@ pub enum Action {
     Original(bool),
     /// Reruns the preview with another scope (was `CleanupScope`).
     Scope(Scope),
-    /// Reruns the preview keeping or freeing the orientation (was `CleanupOrientation`, "Keep orientation").
-    Orientation(bool),
+    /// Reruns the preview with another orientation mode.
+    Orientation(Orientation),
 }
 
 impl App {
@@ -33,7 +33,7 @@ impl App {
         match action {
             Action::Begin => self.begin_cleanup(None, None),
             Action::Scope(scope) => self.begin_cleanup(Some(scope), None),
-            Action::Orientation(on) => self.begin_cleanup(None, Some(on)),
+            Action::Orientation(mode) => self.begin_cleanup(None, Some(mode)),
             Action::Original(original) => {
                 self.set_cleanup_original(original);
                 Task::none()
@@ -51,7 +51,7 @@ impl App {
     pub(super) fn begin_cleanup(
         &mut self,
         scope: Option<Scope>,
-        orientation: Option<bool>,
+        orientation: Option<Orientation>,
     ) -> Task<Message> {
         if self.tab.busy {
             return Task::none();
@@ -84,8 +84,8 @@ impl App {
         if let Some(scope) = scope {
             job.options.scope = scope;
         }
-        if let Some(keep_orientation) = orientation {
-            job.options.keep_orientation = keep_orientation;
+        if let Some(orientation) = orientation {
+            job.options.set_orientation(orientation);
         }
         if job.options.scope != Scope::Drawing && job.selection.is_empty() {
             self.status = "Select atoms before using selected cleanup".into();

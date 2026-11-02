@@ -160,7 +160,9 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             false,
         ),
         (
-            Message::Cleanup(cleanup::Action::Orientation(true)),
+            Message::Cleanup(cleanup::Action::Orientation(
+                reshiki::cleanup::Orientation::Keep,
+            )),
             true,
             false,
             false,

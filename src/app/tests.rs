@@ -546,6 +546,28 @@ fn axial_stereodescriptors_are_drawing_wide_and_undoable() {
 }
 
 #[test]
+fn steroid_alpha_beta_is_drawing_wide_and_undoable() {
+    use atom_labels::{Action, Scope};
+
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::New);
+    app.tab.doc.add_atom("C", Point::default());
+    app.tab.labels.scope = Scope::Selection;
+    app.tab.history = History::default();
+    let before = app.tab.doc.clone();
+
+    app.label_action(Action::SteroidAlphaBeta(true));
+    assert!(app.tab.doc.atom_labels.steroid_alpha_beta);
+    assert_eq!(app.tab.labels.scope, Scope::Selection);
+    assert!(!chemistry_changed(&before, &app.tab.doc));
+    let _ = app.update(Message::Undo);
+    assert!(same_drawing(&app.tab.doc, &before));
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert!(app.tab.doc.atom_labels.steroid_alpha_beta);
+}
+
+#[test]
 fn bond_attachment_applies_to_text_labels_in_scope_as_one_undo_step() {
     use atom_labels::{Action, Scope};
     use reshiki::atom_labels::LabelAttachment;
@@ -2724,10 +2746,17 @@ fn view_messages_and_shortcuts_set_their_view_aids() {
     }
 }
 
-#[test]
-fn cleanup_orientation_restarts_the_previewed_job() {
+#[tokio::test]
+async fn cleanup_orientation_restarts_the_previewed_job() {
+    use iced::futures::StreamExt;
+    use reshiki::cleanup::Orientation;
+
     let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
     app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
     app.tab.cleanup = Some(CleanupPreview {
         job: cleanup::CleanupJob {
             options: Default::default(),
@@ -2742,11 +2771,23 @@ fn cleanup_orientation_restarts_the_previewed_job() {
         epoch: app.tab.file_epoch,
         original: false,
     });
-    let serial = app.tab.cleanup_serial;
-    let _ = app.update(Message::Cleanup(cleanup::Action::Orientation(true)));
-    assert!(app.tab.busy);
-    assert_eq!(app.tab.cleanup_serial, serial.wrapping_add(1));
-    assert!(app.tab.cleanup.as_ref().is_some_and(|p| !p.original));
+    let original = app.tab.doc.clone();
+    for mode in [Orientation::Free, Orientation::Iupac, Orientation::Keep] {
+        let serial = app.tab.cleanup_serial;
+        let task = app.update(Message::Cleanup(cleanup::Action::Orientation(mode)));
+        assert!(app.tab.busy);
+        assert_eq!(app.tab.cleanup_serial, serial.wrapping_add(1));
+        let mut stream = iced_runtime::task::into_stream(task).unwrap();
+        let Some(iced_runtime::Action::Output(message)) = stream.next().await else {
+            panic!("Missing cleanup result");
+        };
+        let _ = app.update(message);
+        assert!(!app.tab.busy, "{}", app.status);
+        let preview = app.tab.cleanup.as_ref().unwrap();
+        assert_eq!(preview.job.options.orientation(), mode);
+        assert!(!preview.original);
+        assert_eq!(app.tab.doc, original);
+    }
 }
 
 #[test]

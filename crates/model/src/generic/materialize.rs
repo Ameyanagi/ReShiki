@@ -315,6 +315,7 @@ pub(super) fn link(doc: &Document, node: &LinkNode, count: u32) -> Result<Docume
         copy.id = allocator.take()?;
         copy.display.set_variable(None);
         copy.cip_label = None;
+        copy.steroid_label = None;
         copy.undefined_stereo = false;
         copy.stereo = None;
         let ratio = i as f32 / count as f32;
@@ -432,6 +433,7 @@ pub(super) fn repeat(doc: &Document, unit: &RepeatUnit, count: u32) -> Result<Do
                 .position
                 .offset(shift.x * repeat_index as f32, shift.y * repeat_index as f32);
             a.cip_label = None;
+            a.steroid_label = None;
             a.undefined_stereo = false;
             a.stereo = None;
             ids.insert(old, a.id);

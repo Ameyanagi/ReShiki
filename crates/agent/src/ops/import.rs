@@ -182,8 +182,17 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
         // As the app opens a native file (src/app/files.rs).
         let doc = ctx
             .blocking(move || {
-                Document::from_native_file(text.as_bytes())
-                    .map_err(|error| OpError::failed(format!("Could not open document: {error}")))
+                let mut doc = Document::from_native_file(text.as_bytes()).map_err(|error| {
+                    OpError::failed(format!("Could not open document: {error}"))
+                })?;
+                // Opening clears computed labels; the drawing pipeline restores
+                // CIP labels but not the optional steroid ones.
+                if doc.atom_labels.steroid_alpha_beta {
+                    atom_labels::refresh::Refresh::calculate(&doc, &Default::default())
+                        .map_err(OpError::failed)?
+                        .apply(&mut doc);
+                }
+                Ok(doc)
             })
             .await?;
         return Ok(Read {

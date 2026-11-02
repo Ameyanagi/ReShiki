@@ -319,6 +319,7 @@ fn apply(doc: &mut Document, recognized: Recognized) -> bool {
         if recognized.atoms.contains(&atom.id) {
             atom.stereo = recognized.stereo.get(&atom.id).cloned();
             atom.cip_label = None;
+            atom.steroid_label = None;
             atom.undefined_stereo = false;
         }
     }
