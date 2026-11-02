@@ -2,6 +2,7 @@ use super::{App, InspectorTab, Job, Message, Request, Tool};
 use crate::canvas::{DrawingThumbnail, layered::canvas};
 use iced::widget::{button, column, container, row, scrollable, text};
 use iced::{Element, Length, Task};
+use reshiki::arrows::Preset;
 use reshiki::reactions::{Reaction, Role};
 
 #[derive(Default)]
@@ -190,13 +191,21 @@ impl App {
                 .into();
         }
         for (index, arrow) in self.tab.doc.arrows.iter().enumerate() {
+            let preset = Preset::from_kind(&arrow.kind);
             let reaction = self.tab.doc.reactions.iter().find(|r| r.arrow == arrow.id);
             let summary = reaction
                 .map(|r| format!("{} → {}", r.reactants.len(), r.products.len()))
-                .unwrap_or_else(|| "Assign roles".into());
+                .unwrap_or_else(|| {
+                    if preset.reaction_role_refusal().is_some() {
+                        "Roles unavailable"
+                    } else {
+                        "Assign roles"
+                    }
+                    .into()
+                });
             body = body.push(
                 button(row![
-                    text(format!("Arrow {}", index + 1))
+                    text(format!("Arrow {} · {preset}", index + 1))
                         .size(13)
                         .width(Length::Fill),
                     text(summary).size(12)
@@ -207,16 +216,21 @@ impl App {
                 .on_press(Message::Reaction(Action::Choose(arrow.id))),
             );
         }
-        let Some(arrow) = active else {
+        let Some(arrow) = active.and_then(|id| self.tab.doc.arrows.iter().find(|a| a.id == id))
+        else {
             return body.into();
         };
-        let empty = Reaction::new(arrow);
+        let refusal = Preset::from_kind(&arrow.kind).reaction_role_refusal();
+        if let Some(reason) = refusal {
+            body = body.push(text(reason).size(12).style(text::danger));
+        }
+        let empty = Reaction::new(arrow.id);
         let reaction = self
             .tab
             .doc
             .reactions
             .iter()
-            .find(|r| r.arrow == arrow)
+            .find(|r| r.arrow == arrow.id)
             .unwrap_or(&empty);
         let has_atoms = self
             .tab
@@ -269,14 +283,16 @@ impl App {
             if parts.is_empty() {
                 card = card.push(text("No molecules assigned").size(11).style(muted_text));
             }
-            card = card.push(
-                command(
-                    "+ Assign selected molecules",
-                    Message::Reaction(Action::Assign(role)),
-                )
-                .on_press_maybe(has_atoms.then_some(Message::Reaction(Action::Assign(role))))
-                .width(Length::Fill),
-            );
+            if refusal.is_none() {
+                card = card.push(
+                    command(
+                        "+ Assign selected molecules",
+                        Message::Reaction(Action::Assign(role)),
+                    )
+                    .on_press_maybe(has_atoms.then_some(Message::Reaction(Action::Assign(role))))
+                    .width(Length::Fill),
+                );
+            }
             body = body.push(
                 container(card)
                     .padding(10)
@@ -297,7 +313,9 @@ impl App {
                     }),
             );
         }
-        body = body.push(text("Selecting any atom assigns its whole molecule. Reassigning moves it to the new role.").size(11).style(muted_text));
+        if refusal.is_none() {
+            body = body.push(text("Selecting any atom assigns its whole molecule. Reassigning moves it to the new role.").size(11).style(muted_text));
+        }
         body = body.push(
             row![
                 command("Select reaction", Message::Reaction(Action::SelectAll)),

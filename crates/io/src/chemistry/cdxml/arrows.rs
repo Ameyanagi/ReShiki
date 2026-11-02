@@ -12,6 +12,7 @@ use crate::{
     graphics::{LinePattern, PathHeads},
 };
 use serde::Serialize;
+use std::collections::HashSet;
 
 #[cfg(test)]
 mod tests;
@@ -238,12 +239,27 @@ fn point(text: &str, scale: f64) -> Result<ImportPoint> {
 pub struct ArrowReader {
     tree: Tree,
     order: Vec<usize>,
+    legacy_retro_ids: HashSet<String>,
 }
 impl ArrowReader {
     pub fn new(xml: &str) -> Result<Self> {
         let tree = Tree::parse_import(xml)?;
         let order = tree.descendants(0)?;
-        Ok(Self { tree, order })
+        let mut legacy_retro_ids = HashSet::new();
+        for &source in &order {
+            let node = tree.node(source)?;
+            if node.tag == "graphic"
+                && node.attr("ArrowType") == Some("RetroSynthetic")
+                && let Some(id) = node.attr("SupersededBy")
+            {
+                legacy_retro_ids.insert(id.to_owned());
+            }
+        }
+        Ok(Self {
+            tree,
+            order,
+            legacy_retro_ids,
+        })
     }
     /// Legacy arrows retain the existing single cubic and straight elbow model.
     /// Other splines keep their complete geometry as native graphic paths.
@@ -366,7 +382,17 @@ impl ArrowReader {
                 return Err(ArrowError::Range(key));
             }
         }
-        let kind = if gap != 0. {
+        let legacy_retro = node
+            .attr("id")
+            .is_some_and(|id| self.legacy_retro_ids.contains(id));
+        let kind = if legacy_retro
+            || (gap != 0. && head == Head::Full && tail == Head::None && shape == HeadShape::Open)
+        {
+            Preset::Retro
+        } else if gap != 0.
+            && matches!(head, Head::Left | Head::Right)
+            && matches!(tail, Head::Left | Head::Right)
+        {
             Preset::Equilibrium
         } else if head != Head::None && tail != Head::None {
             Preset::Resonance

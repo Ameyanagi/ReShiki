@@ -3,6 +3,28 @@ use reshiki::document::{Arrow, Point};
 use reshiki::engine::{ChemistryEngine, LocalEngine};
 
 #[test]
+fn arrow_semantics_refusal_does_not_edit_the_drawing() {
+    use reshiki::arrows::{ArrowStyle, Preset};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let atom = app.tab.doc.add_atom("C", Point::default());
+    app.tab.doc.arrows.push(Arrow::new(
+        app.tab.doc.next_id(),
+        Point::new(80., 0.),
+        Point::new(160., 0.),
+        Preset::Resonance,
+        ArrowStyle::preset(Preset::Resonance),
+    ));
+    app.tab.selected = vec![atom];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Reaction(Action::Assign(Role::Reactant)));
+    assert!(app.error);
+    assert!(app.status.contains("Resonance"), "{}", app.status);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn role_edits_are_undoable_and_arrow_reversal_swaps_roles() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

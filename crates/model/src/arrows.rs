@@ -48,6 +48,46 @@ impl Preset {
     pub const fn supports_attachments(self) -> bool {
         matches!(self, Self::Curved | Self::Fishhook)
     }
+    /// The chemical meaning shown in the palette and searchable Help.
+    pub const fn meaning(self) -> &'static str {
+        match self {
+            Self::Forward => "A net reaction.",
+            Self::Equilibrium => "⇌ A reversible reaction or interconversion of tautomers.",
+            Self::Resonance => "↔ Contributing structures of one species, not an equilibrium.",
+            Self::Retro => {
+                "⇒ The target is made from the indicated precursors (Corey's retrosynthetic arrow convention)."
+            }
+            Self::Curved => "An electron pair moves.",
+            Self::Bent => "A reaction arrow with a corner.",
+            Self::Fishhook => "One electron moves, including homolysis and radical steps.",
+            Self::Dipole => "A bond dipole.",
+            Self::NoGo => "The reaction does not take place (ChemDraw convention).",
+        }
+    }
+    /// Why assigning new reaction participants would misrepresent this notation.
+    pub const fn reaction_role_refusal(self) -> Option<&'static str> {
+        match self {
+            Self::Forward | Self::Equilibrium | Self::Bent => None,
+            Self::Resonance => Some(
+                "Resonance arrows link contributing structures of one species; use a reaction or equilibrium arrow.",
+            ),
+            Self::Retro => Some(
+                "Retrosynthesis arrows point from the target to its precursors, reversing reactants and products; use a reaction arrow.",
+            ),
+            Self::Curved => Some(
+                "Curved arrows show an electron pair moving in a mechanism; use a reaction arrow for roles.",
+            ),
+            Self::Fishhook => Some(
+                "Single electron arrows show one electron moving in a mechanism; use a reaction arrow for roles.",
+            ),
+            Self::Dipole => {
+                Some("Dipole arrows mark a bond dipole; use a reaction arrow for roles.")
+            }
+            Self::NoGo => Some(
+                "No reaction arrows mark a reaction that does not take place; use a reaction arrow for roles.",
+            ),
+        }
+    }
 }
 
 /// Editable arrow handles in their visible and pick order.
@@ -1143,3 +1183,5 @@ mod cleanup_tests;
 mod curve_tests;
 #[cfg(test)]
 mod paths_parity_tests;
+#[cfg(test)]
+mod preset_tests;

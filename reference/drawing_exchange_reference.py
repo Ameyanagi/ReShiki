@@ -29,6 +29,7 @@ def main():
                         request.get("graphic_parts"),
                         request.get("atom_indicators"),
                         request.get("picture_exports"),
+                        partial_charge_advances=request.get("partial_charge_advances"),
                     )
                 )
             print(json.dumps(result, allow_nan=False), flush=True)

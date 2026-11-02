@@ -9,6 +9,7 @@ import math
 import xml.etree.ElementTree as ET
 
 HEADS = {"None": "none", "Full": "full", "HalfLeft": "left", "HalfRight": "right"}
+READ_HEADS = HEADS | {"Unspecified": "none"}
 SHAPES = {"Solid": "solid", "Hollow": "hollow", "Angle": "open"}
 
 
@@ -72,8 +73,8 @@ def read_arrow(el, root, point, colors, identifier):
     if el.get("LineType", "Solid") not in ("Solid", "Dashed", "Bold"):
         raise ValueError("Unsupported CDXML arrow stroke")
     try:
-        head = HEADS[el.get("ArrowheadHead", "None")]
-        tail = HEADS[el.get("ArrowheadTail", "None")]
+        head = READ_HEADS[el.get("ArrowheadHead", "None")]
+        tail = READ_HEADS[el.get("ArrowheadTail", "None")]
         shape = SHAPES[el.get("ArrowheadType", "Solid")]
     except KeyError as error:
         raise ValueError("Unsupported CDXML arrowhead") from error
@@ -122,9 +123,18 @@ def read_arrow(el, root, point, colors, identifier):
     ]:
         if not math.isfinite(s[key]) or not lo <= s[key] <= hi:
             raise ValueError(f"Unsupported CDXML arrow {key}")
-    kind = (
-        "equilibrium" if gap else ("resonance" if head != "none" and tail != "none" else "forward")
+    legacy_retro = el.get("id") is not None and any(
+        graphic.get("SupersededBy") == el.get("id") and graphic.get("ArrowType") == "RetroSynthetic"
+        for graphic in root.iter("graphic")
     )
+    if legacy_retro or (gap and head == "full" and tail == "none" and shape == "open"):
+        kind = "retro"
+    elif gap and head in ("left", "right") and tail in ("left", "right"):
+        kind = "equilibrium"
+    elif head != "none" and tail != "none":
+        kind = "resonance"
+    else:
+        kind = "forward"
     result = dict(id=identifier, kind=kind, style=s)
     if el.tag == "curve":
         flags = int(el.get("CurveType", "0"))
@@ -189,10 +199,18 @@ def write_arrow(parent, arrow, identifier, position, color_id):
     c = control(arrow)
     cubic = arrow.get("cubic")
     curved = c is not None or cubic is not None
-    if s["pattern"] == "dotted" or arrow.get("kind") == "retro":
-        raise ValueError(
-            "Dotted and retrosynthesis arrows need native/SVG/PDF/PNG export; CDXML support is not available yet"
-        )
+    if arrow.get("kind") == "retro" and c is not None:
+        start, end = arrow["start"], arrow["end"]
+        dx, dy = end["x"] - start["x"], end["y"] - start["y"]
+        length = dx * dx + dy * dy
+        t = ((c["x"] - start["x"]) * dx + (c["y"] - start["y"]) * dy) / length if length else 0
+        t = min(1, max(0, t))
+        # A straightened retro arrow keeps its control on the chord.
+        curved = math.hypot(c["x"] - start["x"] - t * dx, c["y"] - start["y"] - t * dy) > 0.001
+    if s["pattern"] == "dotted":
+        raise ValueError("Dotted arrows need native/SVG/PDF/PNG export")
+    if arrow.get("kind") == "retro" and curved:
+        raise ValueError("Curved retrosynthesis arrows need native/SVG/PDF/PNG export")
     if arrow.get("kind") == "equilibrium" and (curved or s["equilibrium_ratio"] != 1):
         raise ValueError("Bent or unequal equilibrium arrows need native/SVG/PDF/PNG export")
     if s["dipole"] and s["tail"] != "none":
@@ -226,12 +244,25 @@ def write_arrow(parent, arrow, identifier, position, color_id):
         attrs["NoGo"] = s["no_go"].capitalize()
     if s["dipole"]:
         attrs["Dipole"] = "yes"
-    if arrow.get("kind") == "equilibrium":
+    if arrow.get("kind") in ("equilibrium", "retro"):
         attrs["ArrowShaftSpacing"] = str(round(s["gap_pt"] * 100))
     start, end = arrow["start"], arrow["end"]
     if not curved:
         attrs.update(Tail3D=position(start) + " 0", Head3D=position(end) + " 0")
-        return ET.SubElement(parent, "arrow", attrs)
+        node = ET.SubElement(parent, "arrow", attrs)
+        if arrow.get("kind") == "retro":
+            ET.SubElement(
+                parent,
+                "graphic",
+                id=str(identifier + 1),
+                SupersededBy=str(identifier),
+                BoundingBox=position(end) + " " + position(start),
+                GraphicType="Line",
+                ArrowType="RetroSynthetic",
+                HeadSize=attrs["HeadSize"],
+                color=attrs["color"],
+            )
+        return node
     if arrow.get("kind") == "bent":
 
         def lerp(a, b, t):

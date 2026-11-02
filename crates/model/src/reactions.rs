@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 #[cfg(test)]
 mod copy_tests;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -290,8 +292,11 @@ pub fn copy_reaction(
 }
 
 pub fn assign(doc: &mut Document, arrow: u64, selected: &[u64], role: Role) -> Result<(), String> {
-    if !doc.arrows.iter().any(|a| a.id == arrow) {
+    let Some(target) = doc.arrows.iter().find(|a| a.id == arrow) else {
         return Err("Select a reaction arrow first".into());
+    };
+    if let Some(reason) = crate::arrows::Preset::from_kind(&target.kind).reaction_role_refusal() {
+        return Err(reason.into());
     }
     let parts = molecules(doc, selected);
     if parts.is_empty() {

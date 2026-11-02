@@ -154,6 +154,18 @@ fn top(query: &str) -> &'static registry::Entry {
         .unwrap_or_else(|| panic!("{query}: no results"))]
 }
 
+#[test]
+fn arrow_semantics_help_search_distinguishes_resonance_and_retrosynthesis() {
+    let resonance = top("resonance");
+    assert_eq!(resonance.name, "Resonance arrow");
+    assert!(resonance.description.contains("one species"));
+    assert!(resonance.description.contains("not an equilibrium"));
+    let retro = top("retrosynthesis");
+    assert_eq!(retro.name, "Retrosynthesis arrow");
+    assert!(retro.description.contains("target is made from"));
+    assert!(retro.description.contains("Corey"));
+}
+
 fn position(query: &str, name: &str) -> usize {
     search::rank(entries(), query, false)
         .iter()

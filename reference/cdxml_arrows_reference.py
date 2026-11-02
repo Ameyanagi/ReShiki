@@ -38,8 +38,19 @@ def emit(
     identifier=10,
     prefix="",
     restriction=None,
+    legacy_graphics=(),
+    legacy_before=False,
 ):
     root = ET.Element("CDXML", root_attrs or {})
+
+    def append_legacy_graphics():
+        if legacy_graphics:
+            group = ET.SubElement(ET.SubElement(root, "page"), "group")
+            for attrs in legacy_graphics:
+                ET.SubElement(group, "graphic", attrs)
+
+    if legacy_before:
+        append_legacy_graphics()
     page = ET.SubElement(root, "page")
     group = ET.SubElement(page, "group", id="duplicate")
     values = dict(id="duplicate", ArrowheadHead="Full", Tail3D="0 0 0", Head3D="30 0 0")
@@ -49,6 +60,9 @@ def emit(
         )
     values.update(attrs or {})
     el = ET.SubElement(group, tag, {k: v for k, v in values.items() if v is not None})
+    if not legacy_before:
+        append_legacy_graphics()
+    source = list(root.iter()).index(el)
     text = prefix + ET.tostring(root, encoding="unicode")
     colors = colors if colors is not None else COLORS
     expected = failure = failure_type = None
@@ -63,7 +77,7 @@ def emit(
 
     try:
         root = ET.fromstring(text)
-        el = list(root.iter())[3]
+        el = list(root.iter())[source]
         before = ET.tostring(root)
         expected = read_arrow(el, root, point, colors, identifier)
         assert before == ET.tostring(root)
@@ -74,7 +88,7 @@ def emit(
             dict(
                 name=name,
                 text=text,
-                source=3,
+                source=source,
                 colors=colors,
                 scale=scale,
                 identifier=identifier,
@@ -89,6 +103,77 @@ def emit(
 
 
 def main():
+    emit(
+        "retro-open-full-head-spacing",
+        dict(ArrowheadType="Angle", ArrowheadTail="None", ArrowShaftSpacing="140"),
+    )
+    emit(
+        "retro-native-precision",
+        dict(
+            ArrowheadType="Angle",
+            ArrowShaftSpacing="123.45678901234567",
+            HeadSize="345.6789012345678",
+            ArrowheadWidth="234.5678901234567",
+            LineWidth="0.67890123456789",
+            Tail3D="0.12345678901234567 2.345678901234567 0",
+            Head3D="30.123456789012345 4.567890123456789 0",
+        ),
+    )
+    for name, head, tail, shape, gap in [
+        ("retro-open-full-head-unspecified-tail-spacing", "Full", "Unspecified", "Angle", "140"),
+        ("forward-open-full-head-without-spacing", "Full", "None", "Angle", "0"),
+        ("forward-open-full-head-negative-zero-spacing", "Full", "None", "Angle", "-0"),
+        ("forward-hollow-full-head-without-tail-spacing", "Full", "None", "Hollow", "140"),
+        ("forward-solid-full-head-without-tail-spacing", "Full", "None", "Solid", "140"),
+        ("forward-single-left-half-head-spacing", "HalfLeft", "None", "Angle", "140"),
+        ("forward-single-right-half-tail-spacing", "None", "HalfRight", "Angle", "140"),
+        ("forward-headless-spacing", "None", "None", "Angle", "140"),
+        ("resonance-full-head-full-tail-spacing", "Full", "Full", "Angle", "140"),
+        ("resonance-full-head-left-half-tail-spacing", "Full", "HalfLeft", "Angle", "140"),
+        ("resonance-right-half-head-full-tail-spacing", "HalfRight", "Full", "Angle", "140"),
+        ("resonance-half-heads-without-spacing", "HalfLeft", "HalfRight", "Angle", "0"),
+    ]:
+        emit(
+            name,
+            dict(
+                ArrowheadHead=head,
+                ArrowheadTail=tail,
+                ArrowheadType=shape,
+                ArrowShaftSpacing=gap,
+            ),
+        )
+    for head, tail in itertools.product(("HalfLeft", "HalfRight"), repeat=2):
+        emit(
+            f"equilibrium-{head}-{tail}-spacing",
+            dict(
+                ArrowheadHead=head,
+                ArrowheadTail=tail,
+                ArrowheadType="Angle",
+                ArrowShaftSpacing="140",
+            ),
+        )
+    for before in (True, False):
+        emit(
+            f"retro-legacy-anywhere-{'before' if before else 'after'}",
+            dict(ArrowheadType="Solid"),
+            legacy_graphics=[dict(ArrowType="RetroSynthetic", SupersededBy="duplicate")],
+            legacy_before=before,
+        )
+    emit(
+        "retro-legacy-any-match",
+        dict(ArrowheadHead="HalfLeft", ArrowheadTail="HalfLeft", ArrowheadType="Hollow"),
+        legacy_graphics=[
+            dict(ArrowType="FullHead", SupersededBy="duplicate"),
+            dict(ArrowType="RetroSynthetic", SupersededBy="duplicate"),
+        ],
+    )
+    for name, attrs, legacy in [
+        ("unrelated-id", {}, dict(ArrowType="RetroSynthetic", SupersededBy="other")),
+        ("unrelated-type", {}, dict(ArrowType="FullHead", SupersededBy="duplicate")),
+        ("missing-link", {}, dict(ArrowType="RetroSynthetic")),
+        ("missing-arrow-id", dict(id=None), dict(ArrowType="RetroSynthetic")),
+    ]:
+        emit(f"legacy-{name}", attrs, legacy_graphics=[legacy])
     for tag, head, tail, shape, line, gap in itertools.product(
         ("arrow", "curve"),
         ("None", "Full", "HalfLeft", "HalfRight"),
