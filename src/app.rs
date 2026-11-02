@@ -317,6 +317,7 @@ pub enum Message {
     Charge(i32),
     Isotope(String),
     ApplyIsotope,
+    SetIsotope(u32),
     CancelEngine(engine_jobs::Key),
     EngineFinished {
         key: engine_jobs::Key,

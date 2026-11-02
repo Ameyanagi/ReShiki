@@ -36,6 +36,7 @@ pub mod electronic;
 pub mod graph;
 pub mod hydrogens;
 pub mod inchi;
+pub mod isotopes;
 pub mod kekulize;
 mod native_order;
 pub mod nmr;

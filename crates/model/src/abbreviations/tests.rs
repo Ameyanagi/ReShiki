@@ -107,3 +107,113 @@ fn reconcile_keeps_moved_groups_and_drops_only_chemically_edited_ones() {
     doc.reconcile_abbreviations(&before);
     assert_eq!(doc.abbreviations, groups[..last]);
 }
+
+/// Import only the chemical graph, keeping tests independent of depiction.
+/// The first SMILES atom is outside the contracted fragment.
+fn contract_fragment(smiles: &str) -> (Document, Vec<u64>) {
+    let prepared = crate::chemistry::smiles::prepare(smiles).unwrap();
+    let mut doc = Document::default();
+    let ids: Vec<_> = prepared
+        .state
+        .graph
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| {
+            let symbol = crate::chemistry::ELEMENTS[usize::from(atom.atomic_number)].symbol;
+            let id = doc.add_atom(symbol, Point::new(index as f32 * 42., 0.));
+            let drawing = doc.atom_mut(id).unwrap();
+            drawing.charge = i32::from(atom.charge);
+            drawing.explicit_h = u32::from(atom.explicit_hydrogens);
+            drawing.aromatic = atom.aromatic;
+            id
+        })
+        .collect();
+    for bond in &prepared.state.graph.bonds {
+        doc.add_bond(ids[bond.a], ids[bond.b], bond.order, "plain");
+    }
+    (doc, ids[1..].to_vec())
+}
+
+#[test]
+fn contract_label_warnings_check_both_spellings_and_element_exceptions() {
+    let (doc, members) = contract_fragment("NCC");
+    let before = doc.clone();
+    let warnings = doc.contract_label_warnings(&members, " Custom ", " Co ");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("Co is an element symbol"));
+    assert_eq!(doc.contract_label_warnings(&members, "Co", "Co"), warnings);
+    assert!(
+        doc.contract_label_warnings(&members, "CustomCo", "co")
+            .is_empty()
+    );
+    for label in ["Ac", "Cm", "Nb", "Np", "Pr", "Ts"] {
+        assert!(
+            doc.contract_label_warnings(&members, label, "")
+                .iter()
+                .all(|warning| !warning.contains("element symbol")),
+            "{label}"
+        );
+    }
+    assert_eq!(doc, before);
+    let mut contracted = doc;
+    contracted.contract(&members, "Co", "").unwrap();
+    assert_eq!(contracted.abbreviations[0].label, "Co");
+}
+
+#[test]
+fn contract_label_warnings_compare_canonical_bundled_structures() {
+    let (doc, members) = contract_fragment("NCC");
+    let warnings = doc.contract_label_warnings(&members, "Boc", "");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("Boc means tert-butoxycarbonyl"));
+
+    let (mut doc, mut members) = contract_fragment("NC(OC(C)(C)C)=O");
+    // Both SMILES traversal and native atom order differ from the catalog.
+    doc.atoms.reverse();
+    doc.bonds.reverse();
+    assert!(doc.contract_label_warnings(&members, "Boc", "").is_empty());
+    doc.atom_mut(members[0]).unwrap().map_num = 17;
+    assert!(doc.contract_label_warnings(&members, "Boc", "").is_empty());
+    let carbon = members[3];
+    let hydrogen = doc.add_atom("H", Point::new(200., 42.));
+    doc.add_bond(carbon, hydrogen, 1, "plain");
+    members.push(hydrogen);
+    assert!(doc.contract_label_warnings(&members, "Boc", "").is_empty());
+    doc.atom_mut(carbon).unwrap().isotope = 13;
+    assert_eq!(doc.contract_label_warnings(&members, "Boc", "").len(), 1);
+}
+
+#[test]
+fn contract_label_warnings_use_bundled_reverse_spellings_and_ignore_user_overrides() {
+    let errors = crate::chemistry::abbreviations::set_user_on_thread(
+        r#"{"format":1,"groups":[{"label":"Boc","smiles":"*CC"}]}"#,
+    );
+    assert!(errors.is_empty(), "{errors:?}");
+    let (doc, members) = contract_fragment("NCC");
+    assert_eq!(doc.contract_label_warnings(&members, "Boc", "").len(), 1);
+    let (doc, members) = contract_fragment("NOC");
+    assert!(
+        doc.contract_label_warnings(&members, "Custom", "MeO")
+            .is_empty()
+    );
+    let (doc, members) = contract_fragment("NCC");
+    assert_eq!(
+        doc.contract_label_warnings(&members, "Custom", "MeO").len(),
+        1
+    );
+    let errors = crate::chemistry::abbreviations::set_user_on_thread(r#"{"format":1,"groups":[]}"#);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn contract_label_warnings_explain_bz_and_suggest_bn_for_benzyl() {
+    let (doc, members) = contract_fragment("NCc1ccccc1");
+    let warnings = doc.contract_label_warnings(&members, "Bz", "");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("Bz means benzoyl"));
+    assert!(warnings[0].contains("use Bn for benzyl"));
+    assert!(doc.contract_label_warnings(&members, "Bn", "").is_empty());
+    let (doc, members) = contract_fragment("NC(=O)c1ccccc1");
+    assert!(doc.contract_label_warnings(&members, "Bz", "").is_empty());
+}

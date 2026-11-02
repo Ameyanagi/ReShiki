@@ -415,7 +415,10 @@ impl App {
     fn abbreviation_member_gate(&mut self, message: Message) -> Gate {
         if matches!(
             &message,
-            Message::Charge(_) | Message::AtomRadical(_) | Message::ApplyIsotope
+            Message::Charge(_)
+                | Message::AtomRadical(_)
+                | Message::ApplyIsotope
+                | Message::SetIsotope(_)
         ) && self
             .tab
             .doc

@@ -84,6 +84,8 @@ pub struct Preset {
     pub user: bool,
     #[serde(skip)]
     geometry: OnceLock<std::result::Result<Vec<Point3>, String>>,
+    #[serde(skip)]
+    canonical_smiles: OnceLock<std::result::Result<String, String>>,
 }
 
 pub type Catalog = Arc<[Arc<Preset>]>;
@@ -159,6 +161,7 @@ impl Preset {
             contract: entry.contract,
             user,
             geometry: OnceLock::new(),
+            canonical_smiles: OnceLock::new(),
         };
         matcher::validate(&preset).map_err(|_| {
             "Groups need 1-31 connected atoms, one single attachment and at most 4 rings per atom"
@@ -201,6 +204,26 @@ impl Preset {
     /// Atoms in the group, not counting the attachment.
     pub fn atom_count(&self) -> usize {
         self.atoms.len() - 1
+    }
+
+    /// Canonical chemical identity, including the attachment dummy, for
+    /// comparisons with a drawn fragment independent of atom order.
+    pub fn canonical_smiles(&self) -> Result<&str> {
+        self.canonical_smiles
+            .get_or_init(|| {
+                let prepared = smiles::prepare(&self.smiles).map_err(|e| e.to_string())?;
+                smiles::write::write(
+                    &prepared.state,
+                    smiles::write::Options {
+                        ignore_maps: true,
+                        ..Default::default()
+                    },
+                )
+                .map(|written| written.text)
+                .map_err(|e| e.to_string())
+            })
+            .as_deref()
+            .map_err(|error| invalid(format!("{}: {error}", self.label)))
     }
 
     /// Typed spellings: the label first, then aliases.

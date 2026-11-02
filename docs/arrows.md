@@ -99,6 +99,7 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
 ## Limits
 
 - Arrows do not check electron counts, map atoms or generate mechanisms.
+- **Check structure** adds informational hints for a resonance or equilibrium arrow with one complete molecule at each end: a resonance arrow between structures whose atoms or H differ suggests ⇌ for tautomers, and an equilibrium arrow between structures that differ only in π bonds or charge placement suggests ↔. Abbreviations, partial structures and multi-molecule sides are skipped.
 - Only `.rsk` files keep the links between an arrow and its targets. Other
   formats keep the arrow's shape.
 - Multi-segment arrow splines, circular or elliptical arcs, broad hollow arrow

@@ -170,6 +170,7 @@ pub(super) struct State {
     pending_revision: u64,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
     whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
+    arrow_hints: Option<(u64, u64, Vec<reshiki::reactions::ArrowSemanticsHint>)>,
 }
 impl State {
     pub(super) fn advance_revision(&mut self, epoch: u64, before: u64, after: u64) {
@@ -385,6 +386,17 @@ impl App {
             .and_then(|result| result.as_ref().ok())
     }
 
+    fn checked_arrow_hints(&self) -> &[reshiki::reactions::ArrowSemanticsHint] {
+        self.tab
+            .inspector_ui
+            .arrow_hints
+            .as_ref()
+            .filter(|(revision, epoch, _)| {
+                *revision == self.tab.revision && *epoch == self.tab.file_epoch
+            })
+            .map_or(&[], |(_, _, hints)| hints.as_slice())
+    }
+
     /// Whole drawing work keeps its debounce identity when only the selection changes.
     /// One pending job bounds the work; cached failures are settled until the drawing changes.
     fn next_property_request(&self) -> Option<PropertyKey> {
@@ -491,6 +503,13 @@ impl App {
                 Task::none()
             }
             Action::RefreshProperties | Action::RefreshPropertiesFor(_) => {
+                if matches!(action, Action::RefreshProperties) {
+                    self.tab.inspector_ui.arrow_hints = Some((
+                        self.tab.revision,
+                        self.tab.file_epoch,
+                        reshiki::reactions::arrow_semantics_hints(&self.tab.doc),
+                    ));
+                }
                 let key = match &action {
                     Action::RefreshPropertiesFor(key) => key.clone(),
                     _ => self.property_request_key(),
@@ -1009,6 +1028,9 @@ impl App {
                 .style(muted_text)
         ]
         .spacing(8);
+        for hint in self.checked_arrow_hints() {
+            body = body.push(text(hint.kind.message()).size(11).style(muted_text));
+        }
         let selected: Vec<_> = ids.iter().copied().collect();
         for note in reshiki::models3d::crystal::import_notes(&self.tab.doc, &selected) {
             body = body.push(text(note).size(11).style(muted_text));
@@ -1444,6 +1466,7 @@ impl App {
         first: &reshiki::document::Atom,
         atoms: &[&reshiki::document::Atom],
     ) -> iced::widget::Column<'_, Message> {
+        use reshiki::chemistry::isotopes::{common_mass_numbers, nuclide_symbol, nuclide_warning};
         let count = first.radical_electrons;
         let count = atoms
             .iter()
@@ -1457,8 +1480,9 @@ impl App {
             ]
             .spacing(6)
             .align_y(Alignment::Center),
+            text("Mass number").size(11),
             row![
-                crate::appearance::text_input("Isotope mass", &self.tab.isotope)
+                crate::appearance::text_input("13 or ¹³C (0 clears)", &self.tab.isotope)
                     .on_input(Message::Isotope)
                     .on_submit(Message::ApplyIsotope)
                     .size(12)
@@ -1466,6 +1490,30 @@ impl App {
                 command("Set", Message::ApplyIsotope)
             ]
             .spacing(6),
+        ]
+        .spacing(8);
+        let common = common_mass_numbers(&first.element);
+        if !common.is_empty() && atoms.iter().all(|a| a.element == first.element) {
+            let mut picks = row![].spacing(6);
+            for &value in common {
+                picks = picks.push(
+                    button(text(nuclide_symbol(&first.element, value)).size(12))
+                        .padding([5, 9])
+                        .on_press(Message::SetIsotope(value))
+                        .style(control(atoms.iter().all(|a| a.isotope == value))),
+                );
+            }
+            controls = controls.push(picks);
+        }
+        // Warn about what is stored; a draft is checked when it is applied.
+        let warnings: std::collections::BTreeSet<_> = atoms
+            .iter()
+            .filter_map(|a| nuclide_warning(&a.element, a.isotope))
+            .collect();
+        for warning in warnings {
+            controls = controls.push(text(warning).size(11).style(muted_text));
+        }
+        controls = controls.push(
             row![
                 text("Unpaired electrons").size(11).width(Length::Fill),
                 crate::appearance::pick_list([0u8, 1, 2], count, Message::AtomRadical)
@@ -1475,8 +1523,7 @@ impl App {
             ]
             .spacing(6)
             .align_y(Alignment::Center),
-        ]
-        .spacing(8);
+        );
         for a in atoms.iter().filter(|a| !a.marks.is_empty()) {
             controls = controls.push(text(format!("{} · positioned marks", a.element)).size(12));
             for (index, mark) in a.marks.iter().enumerate() {

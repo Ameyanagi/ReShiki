@@ -6,6 +6,8 @@ use crate::{
     typography::{ScriptRun, TextStyle},
 };
 use serde::{Deserialize, Serialize};
+mod hints;
+pub use hints::{HiddenLabelNotes, hidden_label_notes};
 #[cfg(test)]
 mod placement_tests;
 pub mod refresh;

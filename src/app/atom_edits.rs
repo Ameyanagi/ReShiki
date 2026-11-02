@@ -1,6 +1,7 @@
 //! Element, charge, isotope, radical and mark edits to selected atoms.
 use super::App;
 use crate::canvas::Tool;
+use reshiki::chemistry::isotopes::{is_known_nuclide, nuclide_symbol, parse_mass_number};
 
 impl App {
     pub(super) fn rotate_mark(&mut self, id: u64, index: usize) {
@@ -90,20 +91,48 @@ impl App {
         self.changed(before);
     }
     pub(super) fn apply_isotope(&mut self) {
-        match self.tab.isotope.parse::<u32>() {
-            Ok(value) if value <= 300 => {
-                let before = self.tab.doc.clone();
-                for id in &self.tab.selected {
-                    if let Some(a) = self.tab.doc.atom_mut(*id) {
-                        a.isotope = value;
-                    }
+        let mut edits = Vec::new();
+        let mut warnings = std::collections::BTreeSet::new();
+        for atom in self
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .filter(|a| self.tab.selected.contains(&a.id))
+        {
+            let value = match parse_mass_number(&self.tab.isotope, &atom.element) {
+                Ok(value) => value,
+                Err(error) => {
+                    self.status = error;
+                    self.error = true;
+                    return;
                 }
-                self.changed(before);
+            };
+            if value != 0 && !is_known_nuclide(&atom.element, value) {
+                warnings.insert(format!(
+                    "{} is not a known nuclide",
+                    nuclide_symbol(&atom.element, value)
+                ));
             }
-            _ => {
-                self.status = "Enter an isotope mass number from 0 to 300 (0 clears it)".into();
-                self.error = true;
+            edits.push((atom.id, value));
+        }
+        let before = self.tab.doc.clone();
+        for (id, value) in edits {
+            if let Some(atom) = self.tab.doc.atom_mut(id) {
+                atom.isotope = value;
             }
+        }
+        self.error = false;
+        self.status = "Mass number applied".into();
+        self.changed(before);
+        if !self.error && !warnings.is_empty() {
+            self.status = format!(
+                "Mass number applied; {}",
+                warnings.into_iter().collect::<Vec<_>>().join(", ")
+            );
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
