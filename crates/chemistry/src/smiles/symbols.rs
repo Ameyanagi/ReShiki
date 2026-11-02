@@ -107,6 +107,10 @@ impl<'a> Writer<'a> {
             match meta.chiral_tag {
                 1 => "@@".to_owned(),
                 2 => "@".to_owned(),
+                5 => match meta.chiral_permutation {
+                    Some(permutation @ (1 | 2)) => format!("@AL{permutation}"),
+                    _ => return Err(Error::Chirality(index)),
+                },
                 6..=8 if options.non_tetrahedral => {
                     let (prefix, maximum) = match meta.chiral_tag {
                         6 => ("@SP", 3),

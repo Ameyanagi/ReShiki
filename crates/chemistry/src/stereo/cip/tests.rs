@@ -163,3 +163,169 @@ fn long_stereo_chain_labels_every_center() -> anyhow::Result<()> {
     assert_eq!(result.labels.len(), 400);
     Ok(())
 }
+
+fn allene_state(text: &str, center: usize, permutation: u32) -> anyhow::Result<State> {
+    let mut state = crate::smiles::read(text)?.prepared.state;
+    state.metadata.atoms[center].chiral_tag = 5;
+    state.metadata.atoms[center].chiral_permutation = Some(permutation);
+    Ok(state)
+}
+
+#[test]
+fn extended_tetrahedral_labels_the_central_atom_with_exact_helicity() -> anyhow::Result<()> {
+    // Centres ExtendedTetrahedral LEFT=1/RIGHT=2 maps priority-ordered
+    // [near high, near low, far high, far low] to P/M respectively. Its SMILES
+    // example CH3[CH]=[C@]=[CH]CH3 has [CH3,H,H,CH3] carriers and is therefore M.
+    // Our graph order keeps H last at each end: [CH3,H,CH3,H].
+    for (permutation, expected) in [(1, "P"), (2, "M")] {
+        let state = allene_state("CC=C=CC", 2, permutation)?;
+        let before = serde_json::to_value(&state)?;
+        let result = label::assign(&state, &Default::default())?;
+        assert_eq!(
+            result.state.properties.atoms[2].cip_code.as_deref(),
+            Some(expected)
+        );
+        assert_eq!(result.labels.len(), 1);
+        assert_eq!(result.labels[0].target, configuration::Target::Atom(2));
+        assert_eq!(
+            result.labels[0].neighbor_order,
+            [Some(0), None, Some(4), None]
+        );
+        assert_eq!(serde_json::to_value(&state)?, before);
+    }
+    // Rank each end independently, with the near pair before the far pair,
+    // even though both far substituents have higher atomic numbers.
+    let result = label::assign(&allene_state("FC(Cl)=C=C(I)Br", 3, 1)?, &Default::default())?;
+    assert_eq!(
+        result.state.properties.atoms[3].cip_code.as_deref(),
+        Some("M")
+    );
+    assert_eq!(
+        result.labels[0].neighbor_order,
+        [Some(2), Some(0), Some(5), Some(6)]
+    );
+    Ok(())
+}
+
+#[test]
+fn extended_tetrahedral_identical_terminal_ligands_clear_the_label() -> anyhow::Result<()> {
+    for (text, center) in [("CC(C)=C=CC", 3), ("FC(F)=C=C(Cl)Br", 3)] {
+        let mut state = allene_state(text, center, 1)?;
+        state.properties.atoms[center].cip_code = Some("old".into());
+        let result = label::assign(&state, &Default::default())?;
+        assert!(result.labels.is_empty(), "{text}");
+        assert_eq!(
+            result.state.properties.atoms[center].cip_code, None,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn extended_tetrahedral_survives_bond_order_and_endpoint_permutations() -> anyhow::Result<()> {
+    let original = allene_state("FC(Cl)=C=C(I)Br", 3, 1)?;
+    for swap_near in [false, true] {
+        for swap_far in [false, true] {
+            for reverse_axis in [false, true] {
+                let mut state = original.clone();
+                for (swap, a, b) in [(swap_near, 0, 1), (swap_far, 4, 5), (reverse_axis, 2, 3)] {
+                    if swap {
+                        state.graph.bonds.swap(a, b);
+                        state.metadata.bonds.swap(a, b);
+                        state.directions.swap(a, b);
+                        state.conjugated.swap(a, b);
+                        state.properties.bond_codes.swap(a, b);
+                    }
+                }
+                for bond in &mut state.graph.bonds {
+                    std::mem::swap(&mut bond.a, &mut bond.b);
+                }
+                state.metadata.atoms[3].chiral_permutation =
+                    Some(if swap_near != swap_far { 2 } else { 1 });
+                let result = label::assign(&state, &Default::default())?;
+                assert_eq!(
+                    result.state.properties.atoms[3].cip_code.as_deref(),
+                    Some("M")
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn extended_tetrahedral_labels_an_auxiliary_center_after_rerooting() -> anyhow::Result<()> {
+    use configuration::Configuration;
+    use digraph::{Descriptor, Digraph};
+    use rules::{Iterations, Rules};
+    let state = allene_state("FC(Cl)=C=C(I)Br", 3, 1)?;
+    let mut mol = Molecule::new(&state)?;
+    let mut configuration = Configuration::extended_tetrahedral(&mol, 3)?;
+    let mut graph = Digraph::new(&mol, 0, false)?;
+    let nodes = graph.nodes_for_atom(&mut mol, 3)?;
+    let center = nodes
+        .into_iter()
+        .find(|&node| !graph.node(node).unwrap().is_duplicate())
+        .unwrap();
+    for _ in 0..2 {
+        assert_eq!(
+            configuration.label_at(
+                &mut mol,
+                &mut graph,
+                center,
+                &Rules::full(),
+                &mut Iterations::new(0)
+            )?,
+            Descriptor::M
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn extended_tetrahedral_uses_pseudo_helicity_for_one_enantiomorphic_pair() -> anyhow::Result<()> {
+    let state = allene_state("C([C@H](F)Cl)([C@@H](F)Cl)=C=C(I)Br", 7, 1)?;
+    let result = label::assign(&state, &Default::default())?;
+    assert_eq!(
+        result.state.properties.atoms[1].cip_code.as_deref(),
+        Some("R")
+    );
+    assert_eq!(
+        result.state.properties.atoms[4].cip_code.as_deref(),
+        Some("S")
+    );
+    let code = result.state.properties.atoms[7]
+        .cip_code
+        .as_deref()
+        .unwrap();
+    // R precedes S at the near end and I precedes Br at the far end, so
+    // storage AL1 already has priority order and gives p.
+    assert_eq!(code, "p");
+    // Reflect every stereogenic unit. A pseudoasymmetric axis is invariant.
+    let mut reflected = state;
+    for atom in &mut reflected.metadata.atoms {
+        if matches!(atom.chiral_tag, 1 | 2) {
+            atom.chiral_tag ^= 3;
+        }
+    }
+    reflected.metadata.atoms[7].chiral_permutation = Some(2);
+    let mirror = label::assign(&reflected, &Default::default())?;
+    assert_eq!(
+        mirror.state.properties.atoms[7].cip_code.as_deref(),
+        Some(code)
+    );
+
+    // Two enantiomorphic pairs do not make the axis pseudoasymmetric.
+    let state = allene_state(
+        "C([C@H](F)Cl)([C@@H](F)Cl)=C=C([C@H](F)Cl)[C@@H](F)Cl",
+        7,
+        1,
+    )?;
+    let result = label::assign(&state, &Default::default())?;
+    assert_eq!(
+        result.state.properties.atoms[7].cip_code.as_deref(),
+        Some("P")
+    );
+    Ok(())
+}

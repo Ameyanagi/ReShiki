@@ -414,7 +414,11 @@ pub fn document_identity(document: &Document) -> Result<Identity, String> {
 }
 
 fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, String> {
-    let smiles = structure_smiles(document)?;
+    if document.atoms.is_empty() || document.atoms.len() > MAX_NAMING_ATOMS {
+        return Err("Naming supports molecular graphs with 1–512 atoms".into());
+    }
+    let molecule = chemistry::document::prepare(document).map_err(|e| e.to_string())?;
+    let smiles = canonical_state(&molecule.state)?;
     if smiles.contains('.') {
         return Err("Select a single connected molecule; mixtures and disconnected salts are not supported for local naming".into());
     }

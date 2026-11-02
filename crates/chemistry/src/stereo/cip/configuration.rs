@@ -3,6 +3,7 @@
 //! BSD-3-Clause; see licenses/rdkit/. Graph ownership stays with the caller so
 //! auxiliary evaluation can use another center's expansion.
 mod bond;
+mod extended_tetrahedral;
 mod parity;
 mod tetrahedral;
 use super::{
@@ -16,6 +17,7 @@ pub use parity::parity4;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Tetrahedral,
+    ExtendedTetrahedral,
     Sp2Bond,
     AtropisomerBond,
 }
@@ -60,6 +62,7 @@ impl Configuration {
     }
     /// Tetrahedral central-atom carrier represents implicit H, whereas `None`
     /// is the distinct lowest-priority phantom of a trigonal pyramid.
+    /// Extended-tetrahedral `None` carriers represent terminal hydrogens.
     pub fn carriers(&self) -> &[Option<usize>] {
         &self.carriers
     }
@@ -79,7 +82,7 @@ impl Configuration {
                 descriptor,
                 Descriptor::E | Descriptor::Z | Descriptor::SeqTrans | Descriptor::SeqCis
             ),
-            Kind::AtropisomerBond => matches!(
+            Kind::AtropisomerBond | Kind::ExtendedTetrahedral => matches!(
                 descriptor,
                 Descriptor::M | Descriptor::P | Descriptor::PseudoM | Descriptor::PseudoP
             ),
@@ -138,6 +141,10 @@ impl Configuration {
                 graph.change_root(mol, node)?;
                 self.ranked.clear();
                 self.label_tetrahedral(mol, graph, node, rules, iterations)
+            }
+            Kind::ExtendedTetrahedral => {
+                self.ranked.clear();
+                self.label_extended_tetrahedral(mol, graph, node, rules, iterations)
             }
             Kind::Sp2Bond | Kind::AtropisomerBond => {
                 self.ranked.clear();

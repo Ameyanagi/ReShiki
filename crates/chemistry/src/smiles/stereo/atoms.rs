@@ -13,6 +13,25 @@ impl Context<'_> {
         for a in 0..n {
             self.work.spend(1)?;
             let meta = at(&self.input.metadata.atoms, a)?;
+            if meta.chiral_tag == 5 && !*at(self.broken, a)? {
+                let terminals = crate::stereo::allene::terminals(&self.input.graph, a)
+                    .ok_or_else(|| invalid("Invalid allene stereochemistry"))?;
+                put(
+                    &mut permutations,
+                    a,
+                    super::super::chirality::allene_permutation(
+                        &self.input.graph,
+                        a,
+                        meta.chiral_permutation.unwrap_or(0),
+                        [
+                            at(self.walk.atom_bond_order(), terminals[0])?,
+                            at(self.walk.atom_bond_order(), terminals[1])?,
+                        ],
+                        terminals.map(|t| t == first),
+                    )?,
+                )?;
+                continue;
+            }
             if meta.chiral_tag == 0
                 || *at(self.broken, a)?
                 || !(*at(&potential, a)? || matches!(meta.chiral_tag, 6..=8))

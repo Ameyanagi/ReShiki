@@ -50,6 +50,9 @@ pub(super) fn finish(
     parsed: Parsed,
     mut context: Context,
 ) -> Result<(Prepared, Vec<Conformer>, Vec<usize>)> {
+    // Reject unsupported explicit AL classes before native cleanup can erase
+    // them and turn a specified configuration into an unspecified structure.
+    validate_allenes(&parsed)?;
     let removed = hydrogens::before_sanitization(&hydrogens::Input {
         graph: parsed.graph,
         metadata: parsed.metadata,
@@ -169,4 +172,20 @@ pub(super) fn finish(
         context.conformers,
         removed.kept_atoms,
     ))
+}
+
+pub(super) fn validate_allenes(parsed: &Parsed) -> Result<()> {
+    for (center, meta) in parsed.metadata.atoms.iter().enumerate() {
+        if meta.chiral_tag == 5
+            && !stereo::allene::supported(
+                &parsed.graph,
+                center,
+                meta.chiral_tag,
+                meta.chiral_permutation,
+            )
+        {
+            return Err(Error::Unsupported("invalid allene stereochemistry"));
+        }
+    }
+    Ok(())
 }

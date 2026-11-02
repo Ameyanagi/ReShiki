@@ -415,7 +415,7 @@ fn bond_labels_follow_identity_when_base_order_changes() -> anyhow::Result<()> {
         let mut data = labels(&draft);
         let bond = data.bonds.get_mut(1).context("Missing stereo bond")?;
         match kind {
-            0 => bond.stereo = 6,
+            0 => bond.stereo = 8,
             1 => bond.stereo_atoms = vec![0],
             _ => bond.stereo_atoms = vec![3, 0],
         }
