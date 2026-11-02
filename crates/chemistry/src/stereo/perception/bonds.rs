@@ -1,10 +1,11 @@
 use super::*;
 impl Context {
-    fn directed_neighbors(
+    pub(super) fn directed_neighbors(
         &self,
         atom: usize,
         reference: usize,
         unknown: &mut bool,
+        require_direction: bool,
         work: &mut Work,
     ) -> Result<Vec<(usize, Direction)>, String> {
         let mut result = Vec::new();
@@ -25,11 +26,14 @@ impl Context {
             }
             result.push((self.other(b, atom)?, dir));
         }
-        if !seen
+        if (require_direction && !seen)
             || (result.len() == 2
                 && at(&self.ranks, at(&result, 0)?.0)? == at(&self.ranks, at(&result, 1)?.0)?)
         {
             return Ok(Vec::new());
+        }
+        if !seen {
+            return Ok(result);
         }
         if !directed(at(&result, 0)?.1) {
             let dir = opposite(at(&result, 1)?.1)?;
@@ -83,8 +87,8 @@ impl Context {
             }
             unassigned += 1;
             let mut unknown = self.unknown_atom(bond.a)? || self.unknown_atom(bond.b)?;
-            let left = self.directed_neighbors(bond.a, i, &mut unknown, work)?;
-            let right = self.directed_neighbors(bond.b, i, &mut unknown, work)?;
+            let left = self.directed_neighbors(bond.a, i, &mut unknown, true, work)?;
+            let right = self.directed_neighbors(bond.b, i, &mut unknown, true, work)?;
             if left.is_empty() || right.is_empty() {
                 continue;
             }

@@ -25,6 +25,7 @@ impl App {
     pub(super) fn ask_online_name(&mut self) {
         if self.naming_can_edit()
             && self.tab.naming.pending.is_none()
+            && !self.tab.naming.peptide_sequence
             && !self.tab.naming.name.trim().is_empty()
         {
             self.tab.naming.serial = self.tab.naming.serial.wrapping_add(1);
@@ -98,7 +99,9 @@ impl App {
                 "Look up online…"
             )
             .on_press_maybe(
+                // PubChem would read one-letter sequences as ordinary names.
                 (state.pending.is_none()
+                    && !state.peptide_sequence
                     && !state.name.trim().is_empty()
                     && self.naming_can_edit())
                 .then_some(Message::Naming(Action::AskOnline))
