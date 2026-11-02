@@ -98,6 +98,8 @@ fn selections_cannot_silently_truncate_a_molecule() -> Result<(), String> {
     assert_eq!(doc.atoms.len(), 3);
     let water = doc.add_atom("O", crate::document::Point::new(100., 0.));
     assert!(selected_identity(&doc, &[a, b, o, water]).is_err());
+    verify_identity("CCO.O", &structure_smiles(&doc)?)?;
+    assert!(document_identity(&doc).is_err());
     doc.bonds[0].display = "wavy".into();
     assert!(selected_identity(&doc, &[a, b, o]).is_err());
     Ok(())

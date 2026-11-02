@@ -556,6 +556,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Refresh => None,
                 Action::Finished(..) => Some(Completion::Naming),
                 Action::Name(..)
+                | Action::PeptideSequence(..)
                 | Action::ClearName
                 | Action::Cancel
                 | Action::Resolve

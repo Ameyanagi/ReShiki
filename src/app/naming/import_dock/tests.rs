@@ -229,6 +229,132 @@ async fn insert_without_caption_and_optional_preview_reuse_need_no_acknowledgeme
 }
 
 #[tokio::test]
+async fn one_step_insert_states_parser_warnings_after_inserting() -> Result<(), String> {
+    let mut app = ready();
+    let _ = app.insert_input();
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    let mut result = preview(&app, "CCO").await?;
+    result.record.warnings = vec![
+        "Rotation sign (+) ignored; structure from (S)".into(),
+        "Second note".into(),
+    ];
+    complete(&mut app, ticket, result);
+    assert_eq!(app.tab.doc.atoms.len(), 3);
+    let notice = app.tab.naming.notice.as_ref().unwrap();
+    assert_eq!(notice.kind, NoticeKind::Info);
+    assert_eq!(
+        notice.summary(),
+        "Rotation sign (+) ignored; structure from (S) · Second note"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn salt_insert_notice_keeps_parser_warnings() -> Result<(), String> {
+    let mut app = ready();
+    let _ = app.insert_input();
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    let mut result = preview(&app, "[Na+].[Cl-]").await?;
+    result.record.warnings = vec!["Rotation sign (+) ignored; structure from (S)".into()];
+    complete(&mut app, ticket, result);
+    assert_eq!(app.tab.doc.atoms.len(), 2);
+    assert_eq!(
+        app.tab.naming.notice.as_ref().unwrap().summary(),
+        format!("{MULTICOMPONENT_HINT} · Rotation sign (+) ignored; structure from (S)")
+    );
+    Ok(())
+}
+
+#[test]
+fn peptide_mode_offers_no_online_lookup() {
+    let mut app = ready();
+    let _ = app.naming_action(Action::PeptideSequence(true));
+    let _ = app.naming_action(Action::AskOnline);
+    assert!(app.tab.naming.online_confirmation.is_none());
+}
+
+#[test]
+fn invalid_one_letter_symbols_fail_before_starting_panel_or_dock_requests() {
+    for symbol in ["B", "Z", "X", "?"] {
+        for dock in [false, true] {
+            let mut app = ready();
+            let _ = app.naming_action(Action::PeptideSequence(true));
+            let _ = app.naming_action(Action::Name(format!("AG{symbol}")));
+            let before = app.tab.doc.clone();
+            let task = if dock {
+                app.insert_input()
+            } else {
+                app.naming_action(Action::Resolve)
+            };
+            assert_eq!(task.units(), 0);
+            assert!(app.tab.naming.pending.is_none());
+            assert!(app.tab.naming.local_cancel.is_none());
+            assert!(
+                app.tab
+                    .naming
+                    .notice
+                    .as_ref()
+                    .unwrap()
+                    .detail
+                    .contains(symbol)
+            );
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
+        }
+    }
+}
+
+#[tokio::test]
+async fn explicit_peptide_mode_resolves_one_letter_input_with_a_three_letter_title()
+-> Result<(), String> {
+    use iced::futures::StreamExt;
+
+    for input in ["AG", "A G"] {
+        for dock in [false, true] {
+            let mut app = ready();
+            app.engine = LocalEngine::in_process();
+            let _ = app.naming_action(Action::Name(input.into()));
+            assert_eq!(app.tab.naming.name_to_resolve().unwrap(), input);
+            let _ = app.naming_action(Action::PeptideSequence(true));
+            let task = if dock {
+                app.insert_input()
+            } else {
+                app.naming_action(Action::Resolve)
+            };
+            let mut stream =
+                iced_runtime::task::into_stream(task).ok_or("Missing local request")?;
+            let Some(iced_runtime::Action::Output(message)) = stream.next().await else {
+                return Err("Missing local parser completion".into());
+            };
+            let _ = app.update(message);
+            let preview =
+                app.tab.naming.preview.as_ref().ok_or_else(|| {
+                    format!("Missing peptide preview: {:?}", app.tab.naming.notice)
+                })?;
+            assert_eq!(preview.record.title, "Ala-Gly");
+            assert_eq!(preview.record.interpreted_name(), Some("L-alanyl-glycine"));
+            assert!(preview.record.systematic_name.is_none());
+            assert!(preview.needs_acknowledgement());
+            assert_eq!(app.tab.naming.name, input);
+            // The dock inserts in one step and then states the L default.
+            assert_eq!(app.tab.history.can_undo(), dock);
+            if dock {
+                assert!(
+                    app.tab
+                        .naming
+                        .notice
+                        .as_ref()
+                        .unwrap()
+                        .detail
+                        .contains("read as L")
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn exhausted_ids_report_failed_import_without_changing_the_drawing() -> Result<(), String> {
     let mut app = ready();
     let result = preview(&app, "CCO").await?;
@@ -407,9 +533,9 @@ fn finished_errors_keep_details_and_choose_dock_summaries_from_their_kind() {
         ),
         (
             naming::Error::Disconnected(SALT_DETAIL.into()),
-            NoticeKind::Disconnected,
+            NoticeKind::Failed,
             SALT_DETAIL,
-            SALT,
+            FAILED,
         ),
         (
             naming::Error::Worker("Could not start bounded local naming worker".into()),
@@ -440,47 +566,100 @@ fn finished_errors_keep_details_and_choose_dock_summaries_from_their_kind() {
     }
 }
 
-const SALT: &str = "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES under Import → Structure.";
-
-/// The real parser path: salts get their own summary, while unknown names
-/// keep the unsupported-or-ambiguous one.
 #[tokio::test]
-async fn actual_salt_names_explain_the_salt_limit_and_unknown_names_stay_ambiguous() {
-    for (name, kind, summary) in [
-        ("sodium chloride", NoticeKind::Disconnected, SALT),
-        ("sodium acetate", NoticeKind::Disconnected, SALT),
-        (
-            "reshiki-no-such-chemical-name-50",
-            NoticeKind::Unsupported,
-            "Name not supported locally or ambiguous. Try a systematic name, or choose Look up online.",
-        ),
+async fn salt_names_insert_cation_first_as_separate_fragments_without_a_caption()
+-> Result<(), String> {
+    for (name, smiles, charge) in [
+        ("sodium chloride", "[Na+].[Cl-]", 1),
+        ("sodium acetate", "[Na+].CC(=O)[O-]", 1),
+        ("triethylamine hydrochloride", "CCN(CC)CC.Cl", 0),
     ] {
         let mut app = ready();
+        app.engine = LocalEngine::in_process();
         let _ = app.naming_action(Action::Name(name.into()));
         let before = app.tab.doc.clone();
         let _ = app.insert_input();
         let ticket = app.tab.naming.pending.unwrap().ticket();
-        let error = resolve_preview(
+        let outcome = resolve_preview(
             app.engine.clone(),
             name.into(),
             naming::Cancel::default(),
             Default::default(),
         )
         .await
-        .expect_err(name);
-        let _ = app.naming_action(Action::Finished(ticket, Box::new(Err(error))));
+        .map_err(|error| format!("{name}: {error}"))?;
+        let _ = app.naming_action(Action::Finished(ticket, Box::new(Ok(outcome))));
+        assert!(!app.error, "{name}: {}", app.status);
+        naming::verify_identity(smiles, &naming::structure_smiles(&app.tab.doc)?)?;
+        assert!(app.tab.doc.annotations.is_empty(), "{name}");
+        assert!(app.tab.doc.molecule_names.is_empty(), "{name}");
+        let first = reshiki::molecule_names::component(&app.tab.doc, app.tab.doc.atoms[0].id);
+        let second = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .filter(|atom| !first.contains(&atom.id))
+            .map(|atom| atom.id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            first
+                .iter()
+                .map(|id| app.tab.doc.atom(*id).unwrap().charge)
+                .sum::<i32>(),
+            charge,
+            "{name}"
+        );
+        let (first_lo, first_hi) = reshiki::scene::selection_bounds(&app.tab.doc, &first).unwrap();
+        let (second_lo, second_hi) =
+            reshiki::scene::selection_bounds(&app.tab.doc, &second).unwrap();
+        assert!(first_hi.x < second_lo.x, "{name}: components overlap");
+        assert!(
+            ((first_lo.y + first_hi.y) - (second_lo.y + second_hi.y)).abs() < 0.01,
+            "{name}: components are not side by side"
+        );
         let notice = app.tab.naming.notice.as_ref().unwrap();
-        assert_eq!(notice.kind, kind, "{name}");
-        assert_eq!(notice.summary(), summary, "{name}");
-        assert!(!notice.detail.is_empty(), "{name}");
+        assert_eq!(notice.kind, NoticeKind::Info, "{name}");
+        assert_eq!(notice.summary(), MULTICOMPONENT_HINT, "{name}");
+        assert!(app.status.contains("separate components"), "{name}");
+        assert_eq!(app.tab.history.undo_frames().count(), 1, "{name}");
+        let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc, before, "{name}");
-        assert!(!app.tab.history.can_undo(), "{name}");
     }
+    Ok(())
 }
 
-/// The salt summary points to Import → Structure; it must accept the ions.
 #[tokio::test]
-async fn structure_import_inserts_the_salt_smiles_the_summary_suggests() -> Result<(), String> {
+async fn unknown_names_stay_ambiguous_without_changing_the_drawing() {
+    let mut app = ready();
+    app.engine = LocalEngine::in_process();
+    let name = "reshiki-no-such-chemical-name-50";
+    let _ = app.naming_action(Action::Name(name.into()));
+    let before = app.tab.doc.clone();
+    let _ = app.insert_input();
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    let error = resolve_preview(
+        app.engine.clone(),
+        name.into(),
+        naming::Cancel::default(),
+        Default::default(),
+    )
+    .await
+    .expect_err(name);
+    let _ = app.naming_action(Action::Finished(ticket, Box::new(Err(error))));
+    let notice = app.tab.naming.notice.as_ref().unwrap();
+    assert_eq!(notice.kind, NoticeKind::Unsupported);
+    assert_eq!(
+        notice.summary(),
+        "Name not supported locally or ambiguous. Try a systematic name, or choose Look up online."
+    );
+    assert!(!notice.detail.is_empty());
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+async fn structure_import_still_inserts_salt_smiles() -> Result<(), String> {
     let mut app = ready();
     let _ = app.import_action(import::Action::InputKind(InputKind::Structure));
     app.imports.set_text("[Na+].[Cl-]");
@@ -813,5 +992,32 @@ async fn retained_plus_lactic_import_keeps_stereo_caption_and_atomic_history() -
         (app.tab.history.can_undo(), app.tab.history.can_redo()),
         history
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn cyclic_peptide_with_a_drawn_stereo_hydrogen_inserts_with_its_caption() -> Result<(), String>
+{
+    let mut app = ready();
+    let name = "cyclo(-Val-Orn-Leu-D-Phe-Pro-)";
+    let _ = app.naming_action(Action::Name(name.into()));
+    let _ = app.insert_input();
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    let outcome = resolve_preview(
+        app.engine.clone(),
+        app.tab
+            .naming
+            .name_to_resolve()
+            .map_err(|e| e.to_string())?,
+        naming::Cancel::default(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    let _ = app.naming_action(Action::Finished(ticket, Box::new(Ok(outcome))));
+    // Layout draws proline's ring-fusion stereocentre with an explicit H.
+    assert!(app.tab.doc.atoms.iter().any(|atom| atom.element == "H"));
+    assert_eq!(app.tab.doc.annotations[0].text, name);
+    assert_eq!(app.tab.doc.molecule_names.len(), 1);
     Ok(())
 }
