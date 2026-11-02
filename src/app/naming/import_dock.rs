@@ -97,6 +97,7 @@ impl App {
                 caption_text,
                 preview.record.canonical_smiles,
                 self.tab.caption_format.clone(),
+                self.appearance.name_typography,
             ) {
                 self.tab.naming.notice = Some(Notice::new(NoticeKind::Failed, error));
                 return;

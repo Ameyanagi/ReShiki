@@ -431,6 +431,7 @@ fn named_sites() -> (Document, Vec<u64>, u64) {
         "propane".into(),
         "CCC".into(),
         Default::default(),
+        true,
     )
     .unwrap();
     doc.validate().unwrap();

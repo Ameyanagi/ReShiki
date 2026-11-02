@@ -86,6 +86,7 @@ pub enum Action {
     PreviewOpen(bool),
     DetailsOpen(bool),
     CopyName,
+    CopyFormattedName,
     Caption,
     Alias(AliasAction),
     /// Selects this molecule and opens the Chemical names inspector.
@@ -579,11 +580,16 @@ impl App {
                     return self.naming_action(Action::Resolve);
                 }
             }
-            Action::CopyName => {
+            action @ (Action::CopyName | Action::CopyFormattedName) => {
                 if let Some((_, record)) = &self.tab.naming.structure
                     && let Some(name) = &record.systematic_name
                 {
-                    return iced::clipboard::write(name.clone());
+                    let text = if matches!(action, Action::CopyFormattedName) {
+                        reshiki::typography::name_markup(name).unicode().text
+                    } else {
+                        name.clone()
+                    };
+                    return iced::clipboard::write(text);
                 }
             }
             Action::Caption => self.insert_name_caption(None),

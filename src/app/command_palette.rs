@@ -291,6 +291,7 @@ impl App {
                 .selected
                 .is_empty()
                 .then_some("Select something first"),
+            Need::TextBoxes => (!self.selected_text_boxes()).then_some("Select a text box first"),
             Need::Resizable => self.need_unavailable(Need::Selection, target).or_else(|| {
                 let ids = self
                     .tab

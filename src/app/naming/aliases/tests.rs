@@ -366,3 +366,123 @@ async fn import_details_publish_distinct_alias_and_systematic_actions() -> Resul
     ));
     Ok(())
 }
+
+#[test]
+fn inspector_name_spans_share_italics_small_caps_primes_and_unicode_superscripts() {
+    let spans = chemical_name_spans(
+        "L-(2R)-N'-5lambda^6-3a^1-tricyclo[3.2.2.0^{1,5}]nonane",
+        13.,
+    );
+    let text = spans
+        .iter()
+        .map(|span| span.text.as_ref())
+        .collect::<String>()
+        .replace('\u{2060}', "");
+    assert_eq!(text, "L-(2R)-N′-5λ⁶-3a¹-tricyclo[3.2.2.0¹,⁵]nonane");
+    let italic = spans
+        .iter()
+        .filter(|span| span.font.unwrap().style == iced::font::Style::Italic)
+        .map(|span| span.text.as_ref().replace('\u{2060}', ""))
+        .collect::<Vec<_>>();
+    assert_eq!(italic, ["R", "N"]);
+    assert_eq!(spans[0].size, Some(iced::Pixels(13. * 0.8)));
+    assert_eq!(spans[0].font.unwrap().style, iced::font::Style::Normal);
+    assert!(
+        spans
+            .iter()
+            .skip(1)
+            .all(|span| span.size == Some(iced::Pixels(13.)))
+    );
+}
+
+#[tokio::test]
+async fn name_copy_preserves_engine_ascii_and_formatted_copy_uses_unicode() {
+    use iced::futures::StreamExt;
+    let mut app = ready();
+    let ascii = "N,N'-5lambda^6-tricyclo[3.2.2.0^{1,5}]nonane";
+    app.tab.naming.structure.as_mut().unwrap().1.systematic_name = Some(ascii.into());
+    let before = app.tab.doc.clone();
+    for (action, expected) in [
+        (Action::CopyName, ascii),
+        (
+            Action::CopyFormattedName,
+            "N,N′-5λ⁶-tricyclo[3.2.2.0¹,⁵]nonane",
+        ),
+    ] {
+        let mut stream = iced_runtime::task::into_stream(app.naming_action(action)).unwrap();
+        let Some(iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write {
+            contents,
+            ..
+        })) = stream.next().await
+        else {
+            panic!("Name copy writes text to the clipboard");
+        };
+        assert_eq!(contents, expected);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
+    assert_eq!(
+        app.tab
+            .naming
+            .structure
+            .as_ref()
+            .unwrap()
+            .1
+            .systematic_name
+            .as_deref(),
+        Some(ascii)
+    );
+}
+
+#[test]
+fn name_typography_preference_controls_caption_placement_without_editing_existing_captions() {
+    let mut app = ready();
+    let atoms = app.tab.selected.clone();
+    let name = "N,N'-dimethylmethanamine";
+    let _ = app.update(Message::View(
+        super::super::super::view_settings::Action::NameTypography(false),
+    ));
+    assert!(!app.appearance.name_typography);
+    assert!(!app.tab.history.can_undo());
+    app.place_molecule_caption(&atoms, name.into(), "CCO".into());
+    assert_eq!(app.tab.doc.annotations[0].text, name);
+    assert!(app.tab.doc.annotations[0].format.spans.is_empty());
+    let plain = app.tab.doc.clone();
+    let _ = app.update(Message::View(
+        super::super::super::view_settings::Action::NameTypography(true),
+    ));
+    assert_eq!(app.tab.doc, plain);
+    app.place_molecule_caption(&atoms, name.into(), "CCO".into());
+    assert_eq!(app.tab.doc.annotations.len(), 1);
+    assert_eq!(app.tab.doc.annotations[0].text, "N,N′-dimethylmethanamine");
+    assert_eq!(app.tab.doc.annotations[0].format.spans.len(), 2);
+    assert_eq!(
+        app.tab.doc.molecule_names[0].text,
+        app.tab.doc.annotations[0].text
+    );
+    assert_eq!(app.tab.doc.molecule_names.len(), 1);
+    assert!(!app.error, "{}", app.status);
+}
+
+#[test]
+fn manual_chemical_name_formatting_preserves_an_unedited_caption_link() {
+    let mut app = ready();
+    app.appearance.name_typography = false;
+    let atoms = app.tab.selected.clone();
+    app.place_molecule_caption(&atoms, "N,N'-dimethylmethanamine".into(), "CCO".into());
+    let plain = app.tab.doc.clone();
+    let caption = plain.annotations[0].id;
+    app.tab.selected = vec![caption];
+    let _ = app.update(Message::FormatChemicalName);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.molecule_names.len(), 1);
+    let link = &app.tab.doc.molecule_names[0];
+    assert_eq!(link.annotation, caption);
+    assert_eq!(link.atoms, atoms);
+    assert_eq!(link.smiles, "CCO");
+    assert_eq!(link.text, "N,N′-dimethylmethanamine");
+    assert_eq!(link.text, app.tab.doc.annotations[0].text);
+    assert!(app.tab.doc.annotations[0].format.name_breaks);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, plain);
+}

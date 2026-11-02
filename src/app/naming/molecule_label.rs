@@ -53,6 +53,7 @@ impl App {
             text.clone(),
             identity,
             self.tab.caption_format.clone(),
+            self.appearance.name_typography,
         );
         if let Err(error) = result {
             self.tab.doc = before;

@@ -3115,3 +3115,23 @@ fn touch_batch_caption_commit_and_later_bond_tap_match_mouse() {
     assert_eq!(touch.tab.doc, original);
     assert!(!touch.tab.history.can_undo());
 }
+
+#[test]
+fn roman_stereo_parentheses_document_option_is_one_undo_step_even_in_selection_scope() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.labels.scope = atom_labels::Scope::Selection;
+    let before = app.tab.doc.clone();
+    assert!(!before.atom_labels.roman_stereo_parentheses);
+    let _ = app.update(Message::Labels(
+        atom_labels::Action::RomanStereoParentheses(true),
+    ));
+    assert!(app.tab.doc.atom_labels.roman_stereo_parentheses);
+    assert!(!app.error, "{}", app.status);
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}

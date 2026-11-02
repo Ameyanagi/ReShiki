@@ -411,6 +411,7 @@ fn model_outline_keeps_linked_captions_and_modifier_drag_semantics() {
         "ethanol".into(),
         "CCO".into(),
         Default::default(),
+        true,
     )
     .unwrap();
     let selected = [atoms, vec![name]].concat();
@@ -661,6 +662,7 @@ fn clicking_a_captioned_model_selects_its_name_and_keeps_all_four_frame_handles(
         "ethanol".into(),
         "CCO".into(),
         Default::default(),
+        true,
     )
     .unwrap();
     let unselected = canvas(&doc, &[]);

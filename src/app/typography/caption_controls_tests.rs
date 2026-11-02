@@ -400,3 +400,121 @@ mod rendered {
         }
     }
 }
+
+#[test]
+fn chemical_name_formatting_replaces_selected_annotation_spans_in_one_undo() {
+    let mut app = selected_caption();
+    app.tab.doc.annotations.push(Annotation {
+        id: 3,
+        position: Point::default(),
+        text: "Unselected".into(),
+        format: Default::default(),
+    });
+    for label in app.tab.doc.annotations.iter_mut().take(2) {
+        label.text = "N,N-diethyl-1H-indole".into();
+        label.format.style.family = "Built-in test metrics".into();
+        label.format.style.bold = true;
+        label.format.style.size_pt = 14.;
+        label.format.style.color = Paint::Custom([120, 40, 80]);
+        label.format.style.formula = true;
+        label.format.spans = vec![reshiki::typography::TextSpan {
+            start: 0,
+            end: label.text.len(),
+            style: TextStyle {
+                underline: true,
+                ..Default::default()
+            },
+        }];
+    }
+    app.tab.selected = vec![1, 2];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::FormatChemicalName);
+    assert!(!app.error, "{}", app.status);
+    for (label, original) in app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .zip(&before.annotations)
+        .take(2)
+    {
+        assert_eq!(label.text, "N,N-diethyl-1H-indole");
+        assert_eq!(label.format.style, original.format.style);
+        assert_eq!(label.format.width_pt, original.format.width_pt);
+        assert_eq!(label.format.line_spacing, original.format.line_spacing);
+        assert_eq!(
+            label
+                .format
+                .spans
+                .iter()
+                .map(|span| &label.text[span.start..span.end])
+                .collect::<Vec<_>>(),
+            ["N", "N", "H"]
+        );
+        for span in &label.format.spans {
+            assert!(span.style.italic && span.style.bold && !span.style.formula);
+            assert_eq!(span.style.family, original.format.style.family);
+            assert_eq!(span.style.color, original.format.style.color);
+            assert_eq!(span.style.size_pt, 14.);
+        }
+    }
+    assert_eq!(app.tab.doc.annotations[2], before.annotations[2]);
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
+#[test]
+fn chemical_name_formatting_is_stable_when_applied_again_to_superscript_spans() {
+    let mut app = selected_caption();
+    app.tab.doc.annotations[0].text = "N'-5lambda^6-3a^1-tricyclo[3.2.2.0^{1,5}]nonane".into();
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::FormatChemicalName);
+    assert!(!app.error, "{}", app.status);
+    let formatted = app.tab.doc.clone();
+    assert_eq!(
+        formatted.annotations[0].text,
+        "N′-5λ6-3a1-tricyclo[3.2.2.01,5]nonane"
+    );
+    assert_eq!(
+        formatted.annotations[0]
+            .format
+            .spans
+            .iter()
+            .filter(|span| span.style.script == Script::Superscript)
+            .map(|span| &formatted.annotations[0].text[span.start..span.end])
+            .collect::<Vec<_>>(),
+        ["6", "1", "1,5"]
+    );
+    let _ = app.update(Message::FormatChemicalName);
+    assert_eq!(app.tab.doc, formatted);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn chemical_name_formatting_refreshes_properties_draft_before_the_next_edit() {
+    use iced::widget::text_editor::{Action, Edit, Motion};
+    let mut app = selected_caption();
+    app.tab.doc.annotations[0].text = "N,N'-diethylmethanamine".into();
+    app.sync_typography();
+    let _ = app.update(Message::FormatChemicalName);
+    let formatted = app.tab.doc.annotations[0].clone();
+    assert_eq!(app.tab.caption, formatted.text);
+    assert_eq!(app.tab.caption_editor.text(), formatted.text);
+    assert_eq!(app.tab.caption_format, formatted.format);
+    app.caption_action(Action::Move(Motion::DocumentEnd));
+    app.caption_action(Action::Edit(Edit::Insert('!')));
+    assert_eq!(
+        app.tab.doc.annotations[0].text,
+        format!("{}!", formatted.text)
+    );
+    assert_eq!(
+        app.tab.doc.annotations[0].format.spans,
+        formatted.format.spans
+    );
+}

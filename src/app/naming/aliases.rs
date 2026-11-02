@@ -1,7 +1,51 @@
 //! Source-labelled aliases share the Import dock and normal linked captions.
 use super::super::workspace::{accessible_command, control, hover_hint, muted_text, section};
 use super::*;
-use iced::widget::column;
+use iced::widget::{column, rich_text, span, text::Span};
+use reshiki::typography::{NameRun, name_markup};
+
+fn chemical_name_spans(name: &str, size: f32) -> Vec<Span<'static>> {
+    let markup = name_markup(name).unicode();
+    let mut spans = vec![];
+    let mut end = 0;
+    let mut push = |text: &str, kind: Option<NameRun>, suffix: &str| {
+        if text.is_empty() {
+            return;
+        }
+        let mut text = text.to_owned();
+        // Keep font changes within words visible to cosmic-text, as in the palette.
+        if !text.ends_with(char::is_whitespace) && suffix.starts_with(|c: char| !c.is_whitespace())
+        {
+            text.push('\u{2060}');
+        }
+        let font = iced::Font {
+            style: if kind == Some(NameRun::Italic) {
+                iced::font::Style::Italic
+            } else {
+                iced::font::Style::Normal
+            },
+            ..iced::Font::with_name(reshiki::style::ui_font_family())
+        };
+        spans.push(
+            span(text)
+                .font(font)
+                .size(if kind == Some(NameRun::SmallCaps) {
+                    size * 0.8
+                } else {
+                    size
+                }),
+        );
+    };
+    for (range, kind) in &markup.runs {
+        let (prefix, suffix) = markup.text.split_at(range.start);
+        push(prefix.split_at(end).1, None, suffix);
+        let (text, suffix) = suffix.split_at(range.len());
+        push(text, Some(*kind), suffix);
+        end = range.end;
+    }
+    push(markup.text.split_at(end).1, None, "");
+    spans
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AliasTarget {
@@ -82,7 +126,7 @@ impl App {
                 target == AliasTarget::Import && self.tab.naming.import_alias == Some(index);
             content = content.push(
                 column![
-                    text(&alias.name).size(12),
+                    rich_text(chemical_name_spans(&alias.name, 12.)),
                     // The source line carries the attribution the licenses
                     // require, so it stays under every alias.
                     text(alias.source.label()).size(11).style(muted_text),
@@ -161,7 +205,7 @@ impl App {
                 );
             }
             if let Some(name) = &record.systematic_name {
-                content = content.push(text(name).size(13));
+                content = content.push(rich_text(chemical_name_spans(name, 13.)));
             }
             if let Some(status) = record.name_status {
                 content = content.push(hover_hint(
@@ -182,6 +226,12 @@ impl App {
                     accessible_command("naming.copy-name", "Copy systematic name", "Copy name")
                         .on_press(Message::Naming(Action::CopyName)),
                     accessible_command(
+                        "naming.copy-formatted-name",
+                        "Copy formatted systematic name",
+                        "Copy formatted name"
+                    )
+                    .on_press(Message::Naming(Action::CopyFormattedName)),
+                    accessible_command(
                         "naming.caption",
                         "Insert systematic name caption",
                         "Insert caption"
@@ -191,7 +241,8 @@ impl App {
                             .then_some(Message::Naming(Action::Caption))
                     ),
                 ]
-                .spacing(4),
+                .spacing(4)
+                .wrap(),
             );
             content = content.push(self.alias_controls(AliasTarget::Structure, record));
         }

@@ -1,6 +1,124 @@
 use super::*;
 
 #[test]
+fn roman_stereo_parentheses_are_opt_in_for_saved_documents() {
+    let document = Document::default();
+    let saved = serde_json::to_value(&document).unwrap();
+    assert!(
+        saved["atom_labels"]
+            .get("roman_stereo_parentheses")
+            .is_none()
+    );
+    let loaded: Document = serde_json::from_value(saved).unwrap();
+    assert!(!loaded.atom_labels.roman_stereo_parentheses);
+    assert_eq!(loaded, document);
+
+    let mut document = document;
+    document.atom_labels.roman_stereo_parentheses = true;
+    let saved = serde_json::to_value(&document).unwrap();
+    assert_eq!(saved["atom_labels"]["roman_stereo_parentheses"], true);
+    let loaded: Document = serde_json::from_value(saved).unwrap();
+    assert_eq!(loaded, document);
+}
+
+#[test]
+fn roman_stereo_parentheses_use_three_runs_for_atom_and_bond_indicators() {
+    use crate::scene::Primitive;
+    for (atom_cip, bond_cip) in [("R", "E"), ("S", "Z"), ("r", "E"), ("s", "Z")] {
+        for roman in [false, true] {
+            let mut doc = Document::default();
+            let a = doc.add_atom("C", Point::default());
+            let b = doc.add_atom("C", Point::new(42., 0.));
+            doc.add_bond(a, b, 2, "plain");
+            doc.atom_mut(a).unwrap().cip_label = Some(atom_cip.into());
+            doc.bonds[0].cip_label = Some(bond_cip.into());
+            doc.atom_labels.stereo = true;
+            doc.atom_labels.roman_stereo_parentheses = roman;
+
+            let indicators = indicators(&doc);
+            assert_eq!(indicators.len(), 2);
+            let mut expected = Vec::new();
+            for (indicator, cip) in indicators.iter().zip([atom_cip, bond_cip]) {
+                let runs = if roman {
+                    vec![
+                        ("(".to_owned(), false),
+                        (cip.into(), true),
+                        (")".into(), false),
+                    ]
+                } else {
+                    vec![(format!("({cip})"), true)]
+                };
+                expected.extend(runs.clone());
+                let primitives = indicator.primitives();
+                let mut right = indicator.origin.x;
+                for (primitive, (expected_text, italic)) in primitives.iter().zip(&runs) {
+                    let Primitive::Text {
+                        position,
+                        text,
+                        style,
+                        size,
+                        ..
+                    } = primitive
+                    else {
+                        panic!("indicator run is not text");
+                    };
+                    assert_eq!(text, expected_text);
+                    assert_eq!(style.italic, *italic);
+                    assert!((position.x - right).abs() < 0.001);
+                    assert_eq!(position.y, indicator.origin.y);
+                    right += crate::style::styled_text_width(text, *size, style);
+                }
+                assert_eq!(primitives.len(), runs.len());
+                assert!((right - indicator.origin.x - indicator.width).abs() < 0.001);
+            }
+            let rendered: Vec<_> = crate::scene::primitives(&doc)
+                .into_iter()
+                .filter_map(|primitive| match primitive {
+                    Primitive::Text { text, style, .. } => Some((text, style.italic)),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(rendered, expected);
+            let svg = crate::scene::svg(&doc);
+            let tree = roxmltree::Document::parse(&svg).unwrap();
+            let exported: Vec<_> = tree
+                .descendants()
+                .filter(|node| node.has_tag_name("text"))
+                .map(|node| {
+                    (
+                        node.text().unwrap().to_owned(),
+                        node.attribute("font-style") == Some("italic"),
+                    )
+                })
+                .collect();
+            assert_eq!(exported, expected);
+        }
+    }
+}
+
+#[test]
+fn roman_stereo_parentheses_preserve_number_and_map_styles() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("C", Point::default());
+    let atom = doc.atom_mut(id).unwrap();
+    atom.map_num = 3;
+    atom.display.number = Some(Number {
+        text: "(R)".into(),
+        offset: None,
+        style: stereo_style(),
+    });
+    doc.atom_labels.roman_stereo_parentheses = true;
+    for indicator in indicators(&doc) {
+        assert!(!indicator.roman_parentheses);
+        let primitives = indicator.primitives();
+        let [crate::scene::Primitive::Text { style, .. }] = primitives.as_slice() else {
+            panic!("number or map was split into styled runs");
+        };
+        assert_eq!(style, &indicator.style);
+    }
+}
+
+#[test]
 fn isolated_hydrogen_halides_read_hydrogen_first_and_respect_overrides() {
     for element in ["F", "Cl", "Br", "I"] {
         let mut doc = Document::default();

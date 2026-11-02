@@ -13,6 +13,72 @@ fn dummy(label: &str) -> Document {
     document
 }
 
+#[test]
+fn stereo_parentheses_export_as_optional_cdxml_and_cdx_style_runs_and_roundtrip() {
+    for roman in [false, true] {
+        let mut document = Document::default();
+        let a = document.add_atom("C", Point::default());
+        let b = document.add_atom("C", Point::new(42., 0.));
+        document.add_bond(a, b, 2, "plain");
+        document.atom_mut(a).unwrap().cip_label = Some("R".into());
+        document.bonds[0].cip_label = Some("E".into());
+        document.atom_labels.stereo = true;
+        document.atom_labels.roman_stereo_parentheses = roman;
+        let before = document.clone();
+        let indicators = crate::atom_labels::indicators(&document);
+        for metrics in [None, Some(indicators.as_slice())] {
+            let xml = super::super::write(
+                &document,
+                super::super::Options {
+                    atom_indicators: metrics,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let decoded =
+                crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+            for xml in [&xml, &decoded] {
+                let tree = roxmltree::Document::parse(xml).unwrap();
+                let indicators: Vec<_> = tree
+                    .descendants()
+                    .filter(|node| {
+                        node.has_tag_name("objecttag") && node.attribute("Name") == Some("stereo")
+                    })
+                    .collect();
+                assert_eq!(indicators.len(), 2);
+                for ((indicator, owner), cip) in indicators.iter().zip(["n", "b"]).zip(["R", "E"]) {
+                    assert!(indicator.parent().unwrap().has_tag_name(owner));
+                    let runs: Vec<_> = indicator
+                        .descendants()
+                        .filter(|node| node.has_tag_name("s"))
+                        .map(|node| {
+                            (
+                                node.text().unwrap().to_owned(),
+                                node.attribute("face").unwrap().parse::<u8>().unwrap(),
+                            )
+                        })
+                        .collect();
+                    let expected = if roman {
+                        vec![("(".into(), 0), (cip.into(), 2), (")".into(), 0)]
+                    } else {
+                        vec![(format!("({cip})"), 2)]
+                    };
+                    assert_eq!(runs, expected);
+                }
+                let imported = cdxml::import_cdxml(xml).unwrap().document;
+                assert_eq!(imported.atom_labels.roman_stereo_parentheses, roman);
+                assert!(imported.atoms[0].display.stereo.style.italic);
+                assert!(imported.bonds[0].indicator.style.italic);
+                if roman {
+                    let unsupported = xml.replace("face=\"2\"", "face=\"3\"");
+                    assert!(cdxml::import_cdxml(&unsupported).is_err());
+                }
+            }
+        }
+        assert_eq!(document, before);
+    }
+}
+
 fn runs(xml: &str, kind: &str) -> Vec<(String, u8)> {
     let tree = roxmltree::Document::parse(xml).unwrap();
     let atom = tree

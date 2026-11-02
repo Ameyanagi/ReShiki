@@ -48,6 +48,7 @@ async fn main() -> Result<()> {
             name.into(),
             before.smiles.clone(),
             Default::default(),
+            true,
         )
         .map_err(anyhow::Error::msg)?;
         std::fs::write(

@@ -776,6 +776,7 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
         "ethan-1-ol".into(),
         "CCO".into(),
         Default::default(),
+        true,
     )?;
     assert!(labels(&app, Page::Main).contains(&"Hide chemical name"));
     assert!(!labels(&app, Page::Main).contains(&"Show chemical name"));
@@ -1318,4 +1319,32 @@ fn show_as_is_offered_for_a_molecule_shown_in_3d() {
         Some(true)
     );
     assert_eq!(enabled(&app, Page::Model, "2D and 3D"), Some(true));
+}
+
+#[test]
+fn chemical_name_format_menu_targets_annotations_and_uses_document_history() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let atom = app.tab.doc.add_atom("C", World::default());
+    app.tab.selected = vec![atom];
+    assert!(!labels(&app, Page::Main).contains(&"Format as chemical name"));
+    app.tab.doc.annotations.push(reshiki::document::Annotation {
+        id: 2,
+        position: World::new(0., 50.),
+        text: "tert-butyl".into(),
+        format: Default::default(),
+    });
+    app.tab.selected = vec![2];
+    let before = app.tab.doc.clone();
+    run_item(&mut app, Page::Main, "Format as chemical name").unwrap();
+    let label = &app.tab.doc.annotations[0];
+    assert_eq!(label.format.spans.len(), 1);
+    assert_eq!(
+        &label.text[label.format.spans[0].start..label.format.spans[0].end],
+        "tert"
+    );
+    assert!(label.format.spans[0].style.italic);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
 }

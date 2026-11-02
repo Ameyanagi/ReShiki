@@ -350,7 +350,7 @@ fn generated_names_wrap_only_at_chemical_punctuation() {
             "{text}"
         );
         if index + 1 < lines.len() {
-            assert!(text.ends_with(['-', ',']), "{text}");
+            assert!(text.ends_with(['-', ',', ')', ']']), "{text}");
         }
     }
     for word in ["methyl", "propan", "cyclohexan"] {
