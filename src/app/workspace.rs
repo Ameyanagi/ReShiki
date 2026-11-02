@@ -2021,6 +2021,32 @@ impl App {
         };
         let wait = "Wait for the current chemistry job to finish";
         let label = self.abbreviations.label.trim();
+        let mut fragment_labels = column![
+            crate::appearance::text_input("Label, e.g. Ar", &self.abbreviations.label)
+                .on_input(move |s| action(A::Label(s)))
+                .on_submit(action(A::Contract))
+                .size(13),
+            crate::appearance::text_input(
+                "From the right (optional)",
+                &self.abbreviations.reverse_label
+            )
+            .on_input(move |s| action(A::ReverseLabel(s)))
+            .on_submit(action(A::Contract))
+            .size(13),
+        ]
+        .spacing(6);
+        for warning in self.tab.doc.contract_label_warnings(
+            &self.tab.selected,
+            label,
+            &self.abbreviations.reverse_label,
+        ) {
+            fragment_labels = fragment_labels.push(text(warning).size(11).style(muted_text));
+        }
+        let fragment_labels = hover_hint(
+            fragment_labels,
+            reshiki::abbreviations::CONTRACT_LABEL_HINT,
+            tooltip::Position::Top,
+        );
         let mut body = column![
             command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
             text("Chemical abbreviations").size(18),
@@ -2051,8 +2077,7 @@ impl App {
             text(if self.tab.selected.is_empty() { "Searches the whole drawing." } else { "Complete groups in the selection only." }).size(11).style(muted_text),
             horizontal_line(),
             text("NAME A SELECTED FRAGMENT").size(11).style(muted_text),
-            crate::appearance::text_input("Label, e.g. Ar", &self.abbreviations.label).on_input(move |s| action(A::Label(s))).on_submit(action(A::Contract)).size(13),
-            crate::appearance::text_input("From the right (optional)", &self.abbreviations.reverse_label).on_input(move |s| action(A::ReverseLabel(s))).on_submit(action(A::Contract)).size(13),
+            fragment_labels,
             item(
                 "Contract selection",
                 action(A::Contract),
@@ -2146,6 +2171,27 @@ impl App {
             .first()
             .map(|a| a.display.hydrogen_position)
             .filter(|p| atoms.iter().all(|a| a.display.hydrogen_position == *p));
+        let notes = reshiki::atom_labels::hidden_label_notes(&self.tab.doc, &atoms);
+        let mut hydrogen_control = column![
+            checkbox(hydrogens)
+                .label("Show implied hydrogens")
+                .text_size(12)
+                .on_toggle(|v| Message::Labels(A::Hydrogens(v)))
+        ]
+        .spacing(4);
+        if let Some(note) = notes.hydrogens {
+            hydrogen_control = hydrogen_control.push(text(note).size(11).style(muted_text));
+        }
+        let mut charge_control = column![
+            checkbox(atoms.iter().all(|a| !a.display.hide_charge))
+                .label("Show charge labels")
+                .text_size(12)
+                .on_toggle(|v| Message::Labels(A::Charges(v)))
+        ]
+        .spacing(4);
+        if let Some(note) = notes.charges {
+            charge_control = charge_control.push(text(note).size(11).style(muted_text));
+        }
         let mut body = column![
             command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
             section("ATOM LABELS"),
@@ -2164,14 +2210,8 @@ impl App {
                 .placeholder("Mixed")
                 .text_size(12)
                 .width(Length::Fill),
-            checkbox(hydrogens)
-                .label("Show implied hydrogens")
-                .text_size(12)
-                .on_toggle(|v| Message::Labels(A::Hydrogens(v))),
-            checkbox(atoms.iter().all(|a| !a.display.hide_charge))
-                .label("Show charge labels")
-                .text_size(12)
-                .on_toggle(|v| Message::Labels(A::Charges(v))),
+            hydrogen_control,
+            charge_control,
             text("Hydrogen position").size(12),
             crate::appearance::pick_list(HydrogenPosition::ALL, position, |v| Message::Labels(
                 A::Position(v)
