@@ -2297,7 +2297,12 @@ impl App {
         {
             body = body.push(command("Reverse", Message::Stereo(Action::Reverse)));
         }
-        if !self.tab.stereo_notes.is_empty() {
+        if self
+            .tab
+            .stereo_notes
+            .iter()
+            .any(|note| note.kind != reshiki::chemistry::stereo_lint::Kind::Undefined)
+        {
             body = body.push(command(
                 "Redraw stereo bonds",
                 Message::Stereo(Action::Redraw),

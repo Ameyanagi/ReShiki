@@ -617,6 +617,22 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
                 .into(),
         });
     }
+    let covered: HashSet<_> = notes
+        .iter()
+        .filter(|note| {
+            matches!(
+                note.kind,
+                Kind::NoEffect | Kind::Reversed | Kind::Ambiguous | Kind::Conflicting
+            )
+        })
+        .flat_map(|note| {
+            note.atoms
+                .iter()
+                .copied()
+                .chain(note.bonds.iter().flat_map(|&(a, b)| [a, b]))
+        })
+        .collect();
+    missing.atoms.retain(|id| !covered.contains(id));
     if !missing.atoms.is_empty() || !missing.bonds.is_empty() {
         missing.document_order(document);
         let count = |n, singular, plural| format!("{n} {}", if n == 1 { singular } else { plural });

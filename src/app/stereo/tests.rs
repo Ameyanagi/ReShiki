@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::{Job, atom_labels, same_drawing};
+use crate::app::{Job, Message, atom_labels, same_drawing};
 use reshiki::{
     document::{Document, Point},
     engine::Response,
@@ -139,6 +139,32 @@ fn undefined_note_selects_double_bond_endpoints_and_atom_centres() {
     }];
     app.stereo_action(Action::Select(0));
     assert_eq!(app.tab.selected, vec![1, 2, 3]);
+}
+
+#[test]
+fn note_card_hides_redraw_for_undefined_only_notices() {
+    let mut app = fixture_app(Document::default());
+    for (kinds, button_count) in [
+        (vec![], 0),
+        (vec![Kind::Undefined], 1),
+        (vec![Kind::Undefined, Kind::Undefined], 2),
+        (vec![Kind::NonWedgeOnly], 2),
+        (vec![Kind::Undefined, Kind::NonWedgeOnly], 3),
+        (vec![Kind::Reversed], 3),
+    ] {
+        app.tab.stereo_notes = kinds
+            .iter()
+            .map(|&kind| Note {
+                kind,
+                atoms: vec![],
+                bonds: vec![],
+                message: "notice".into(),
+            })
+            .collect();
+        let view: iced::Element<'_, Message> =
+            app.stereo_note_lines(iced::widget::Column::new()).into();
+        assert_eq!(view.as_widget().children().len(), button_count, "{kinds:?}");
+    }
 }
 
 #[test]

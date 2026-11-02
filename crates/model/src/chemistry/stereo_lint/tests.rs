@@ -43,7 +43,8 @@ fn reversed_and_ineffective_bonds_use_chemical_centres() {
     let reversed = notes.iter().find(|n| n.kind == Kind::Reversed).unwrap();
     assert_eq!(reversed.bonds, [(document.bonds[0].a, center)]);
     assert!(reversed.message.contains("C1"));
-    assert!(has(&document, false, Kind::Undefined));
+    assert!(!has(&document, false, Kind::Undefined));
+    assert_eq!(undefined(&document).atoms, [center]);
 
     let mut ethane = Document::default();
     let a = ethane.add_atom("C", Point::default());
@@ -69,13 +70,43 @@ fn overlapping_and_conflicting_wedges_are_distinguished() {
             .any(|n| n.kind == Kind::Ambiguous && n.atoms == [center])
     );
     assert!(!notes.iter().any(|n| n.kind == Kind::NoEffect));
+    assert!(!notes.iter().any(|n| n.kind == Kind::Undefined));
     assert_eq!(document, before);
 
     document.atom_mut(neighbors[1]).unwrap().position = Point::new(-14., -24.);
     document.bonds[1].display = "hash".into();
     assert!(has(&document, false, Kind::Conflicting));
+    assert!(!has(&document, false, Kind::Undefined));
+    assert_eq!(undefined(&document).atoms, [center]);
     document.bonds[1].display = "wedge".into();
     assert!(!has(&document, false, Kind::Conflicting));
+}
+
+#[test]
+fn drawing_issues_only_suppress_covered_undefined_centres() {
+    for (display, kind) in [("hash", Kind::Reversed), ("wedge", Kind::Conflicting)] {
+        let mut document = Document::default();
+        let (center, neighbors) = tetra(&mut document, 0., display);
+        document.atom_mut(neighbors[0]).unwrap().element = "C".into();
+        if kind == Kind::Reversed {
+            let bond = &mut document.bonds[0];
+            std::mem::swap(&mut bond.a, &mut bond.b);
+        } else {
+            document.bonds[1].display = "hash".into();
+        }
+        let (other, _) = tetra(&mut document, 140., "plain");
+        document.add_bond(neighbors[0], other, 1, "plain");
+        let double = alkene(&mut document, 280., true);
+        let units = undefined(&document);
+        assert_eq!(units.atoms, [center, other]);
+        assert_eq!(units.bonds, [double]);
+
+        let notes = check(&document, false);
+        assert!(notes.iter().any(|note| note.kind == kind));
+        let missing = notes.iter().find(|n| n.kind == Kind::Undefined).unwrap();
+        assert_eq!(missing.atoms, [other]);
+        assert_eq!(missing.bonds, [double]);
+    }
 }
 
 #[test]
@@ -171,6 +202,14 @@ fn bonds_between_centres_and_wavy_alkene_links_get_style_advice() {
     assert!(has(&document, true, Kind::BetweenCentres));
     assert!(!has(&document, false, Kind::BetweenCentres));
     assert_eq!(undefined(&document).atoms, [b]);
+    assert_eq!(
+        check(&document, true)
+            .iter()
+            .find(|note| note.kind == Kind::Undefined)
+            .unwrap()
+            .atoms,
+        [b]
+    );
 
     let mut wavy = Document::default();
     let c = wavy.add_atom("C", Point::default());
