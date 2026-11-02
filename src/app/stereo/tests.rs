@@ -301,7 +301,7 @@ fn check_keeps_undefined_markers_and_computed_flags_do_not_dirty_the_drawing() {
     assert!(!app.tab.doc.atom_labels.mark_undefined_stereocentres);
     assert!(app.tab.labels_dirty);
     // The refresh for the disabled option clears the markers.
-    reshiki::atom_labels::refresh::refresh_undefined_stereo(&mut app.tab.doc);
+    reshiki::atom_labels::refresh::refresh_optional_stereo(&mut app.tab.doc);
     assert!(!app.tab.doc.atoms[0].undefined_stereo);
     app.step_history(false);
     assert!(app.tab.doc.atom_labels.mark_undefined_stereocentres);

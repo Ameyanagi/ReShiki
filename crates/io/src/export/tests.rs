@@ -1,6 +1,45 @@
 use super::*;
 
 #[test]
+fn steroid_alpha_beta_figure_exports_share_the_canvas_labels() {
+    use crate::document::Point;
+
+    for bytes in [
+        include_bytes!("../../../model/fonts/LiberationSans-Regular.ttf").as_slice(),
+        include_bytes!("../../../model/fonts/LiberationSans-Italic.ttf").as_slice(),
+    ] {
+        crate::style::add_font(bytes.to_vec()).unwrap();
+    }
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("O", Point::new(42., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.atom_labels.stereo = true;
+    let atom = doc.atom_mut(a).unwrap();
+    atom.cip_label = Some("S".into());
+    atom.steroid_label = Some("3β".into());
+    atom.display.stereo.style.family = "Liberation Sans".into();
+    doc.drawing_style.font_family = "Liberation Sans".into();
+    for roman in [false, true] {
+        doc.atom_labels.roman_stereo_parentheses = roman;
+        doc.atom_labels.steroid_alpha_beta = false;
+        let cip_png = drawing(&doc, "png").unwrap();
+        let cip_pdf = drawing(&doc, "pdf").unwrap();
+        doc.atom_labels.steroid_alpha_beta = true;
+        let svg = String::from_utf8(drawing(&doc, "svg").unwrap()).unwrap();
+        assert!(svg.contains("3β"), "{svg}");
+        assert!(!svg.contains("(3β)"));
+        let png = drawing(&doc, "png").unwrap();
+        let pdf = drawing(&doc, "pdf").unwrap();
+        assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert!(pdf.starts_with(b"%PDF-"));
+        assert_ne!(png, cip_png);
+        assert_ne!(pdf, cip_pdf);
+        assert_eq!(doc.atom(a).unwrap().cip_label.as_deref(), Some("S"));
+    }
+}
+
+#[test]
 fn missing_named_family_keeps_text_in_svg_tree_and_raster_export() {
     let mut db = resvg::usvg::fontdb::Database::new();
     for bytes in [

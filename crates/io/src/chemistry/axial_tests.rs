@@ -1,6 +1,6 @@
 use super::{cdxml, cleanup, document, inchi::kernel, molfile, stereo::cip::label};
 use crate::{
-    cleanup::Options,
+    cleanup::{Options, Orientation},
     document::{Document, Point},
     exchange::drawing,
 };
@@ -268,8 +268,14 @@ fn binol_cleanup_retains_visible_axial_configuration() -> anyhow::Result<()> {
     for (display, expected) in [("wedge", "P"), ("hash", "M")] {
         let source = binol(display);
         assert_eq!(axial_code(&document::prepare(&source)?)?, expected);
-        for mirror in [false, true] {
-            let cleaned = cleanup::prepare(&source, Options::default(), &[])?.finish_with(
+        // IUPAC fused-ring orientation may also reflect the naphthalene.
+        for (orientation, mirror) in [Orientation::Keep, Orientation::Free, Orientation::Iupac]
+            .into_iter()
+            .flat_map(|orientation| [(orientation, false), (orientation, true)])
+        {
+            let mut options = Options::default();
+            options.set_orientation(orientation);
+            let cleaned = cleanup::prepare(&source, options, &[])?.finish_with(
                 |request| -> Result<_, cleanup::Error> {
                     let mut points = super::depict::compute(
                         &request.molecule.state,

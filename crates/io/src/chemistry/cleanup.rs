@@ -12,7 +12,7 @@ use super::{
     stereo::{Point3, cip::label, wedging},
 };
 use crate::{
-    cleanup::{Options, Scope},
+    cleanup::{Options, Orientation, Scope},
     document::Document,
     models3d,
 };
@@ -428,17 +428,24 @@ impl Prepared {
                 &part.molecule.positions,
                 &mut layout,
                 &part.fixed,
-                self.options.keep_orientation,
+                self.options.orientation() == Orientation::Keep,
             )?;
             if part.fixed.len() < 2 {
                 let pivot = part.fixed.keys().next().copied();
                 super::layout_refinement::straighten(&part.molecule.state, &mut layout, pivot);
             }
-            if !self.options.keep_orientation && part.fixed.is_empty() {
-                super::layout_refinement::conventional_orientation(
-                    &part.molecule.state,
-                    &mut layout,
-                );
+            if part.fixed.is_empty() {
+                match self.options.orientation() {
+                    Orientation::Keep => {}
+                    Orientation::Free => super::layout_refinement::conventional_orientation(
+                        &part.molecule.state,
+                        &mut layout,
+                    ),
+                    Orientation::Iupac => super::layout_refinement::iupac_orientation(
+                        &part.molecule.state,
+                        &mut layout,
+                    ),
+                }
             }
             for (&index, fixed) in &part.fixed {
                 let point = layout.get_mut(index).ok_or(Error::Layout)?;
@@ -571,6 +578,9 @@ impl Prepared {
         }
         result.require_version(reshiki_model::document::EDITOR_BASELINE);
         result.validate().map_err(Error::Document)?;
+        if result.atom_labels.steroid_alpha_beta {
+            reshiki_model::atom_labels::refresh::refresh_optional_stereo(&mut result);
+        }
         let mut warnings = if crossed != 0 {
             vec![format!(
                 "{crossed} double bond(s) use a crossed depiction to keep unspecified stereochemistry."

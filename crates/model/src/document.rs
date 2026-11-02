@@ -53,6 +53,9 @@ pub struct Atom {
     pub display: crate::atom_labels::AtomDisplay,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cip_label: Option<String>,
+    /// Derived steroid locant and face, independent of chemical CIP labels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steroid_label: Option<String>,
     /// Computed editor aid; never an assigned stereochemical descriptor.
     #[serde(skip)]
     pub undefined_stereo: bool,
@@ -225,6 +228,8 @@ pub const MODEL_POLISH: u32 = 33;
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32 or model polish requires version 33.
+/// Optional atom-label settings, including steroid α/β display, retain this
+/// version; older readers may ignore those presentation preferences.
 ///
 /// | Version | Added |
 /// | --- | --- |
@@ -449,6 +454,7 @@ impl Document {
         self.atoms.push(Atom {
             display: Default::default(),
             cip_label: None,
+            steroid_label: None,
             undefined_stereo: false,
             id,
             element: element.into(),

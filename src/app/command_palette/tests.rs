@@ -179,6 +179,26 @@ fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
 }
 
 #[test]
+fn steroid_alpha_beta_is_searchable_and_undoable() {
+    let mut app = app();
+    let _ = app.update(Message::New);
+    app.tab.doc.add_atom("C", Point::default());
+    app.tab.history = Default::default();
+    for query in ["steroid", "alpha beta", "gonane"] {
+        search(&mut app, query);
+        row(&app, "Show steroid α/β");
+    }
+    search(&mut app, "Show steroid α/β");
+    assert_eq!(top(&app).name, "Show steroid α/β");
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert!(app.tab.doc.atom_labels.steroid_alpha_beta);
+    let _ = app.update(Message::Undo);
+    assert!(!app.tab.doc.atom_labels.steroid_alpha_beta);
+    let _ = app.update(Message::Redo);
+    assert!(app.tab.doc.atom_labels.steroid_alpha_beta);
+}
+
+#[test]
 fn path_cleanup_catalog_has_selection_commands_and_explicit_upright_axis() {
     for (query, name, upright) in [
         ("Smooth", "Smooth", None),

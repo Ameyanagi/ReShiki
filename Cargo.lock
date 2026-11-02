@@ -4070,6 +4070,7 @@ dependencies = [
  "i_overlay",
  "iced_core",
  "image",
+ "opsin",
  "png 0.17.16",
  "reshiki-chemistry",
  "reshiki-metafile",

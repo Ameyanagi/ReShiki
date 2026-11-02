@@ -271,6 +271,7 @@ async fn malformed_layouts_fixed_atoms_and_helper_failures_are_atomic() -> anyho
     let options = Options {
         scope: Scope::SelectedAtoms,
         keep_orientation: true,
+        ..Options::default()
     };
     for variant in 0..6 {
         let prepared = cleanup::prepare(&document, options, &[b])?;

@@ -189,7 +189,9 @@ fn cancel_remains_available_while_rerunning_a_cleanup_preview() {
         }),
     ));
     assert!(app.tab.cleanup.is_some());
-    let _ = app.update(Message::Cleanup(cleanup::Action::Orientation(false)));
+    let _ = app.update(Message::Cleanup(cleanup::Action::Orientation(
+        reshiki::cleanup::Orientation::Free,
+    )));
     let rerun = app.tab.engine_job.as_ref().unwrap().key;
     assert!(app.tab.busy);
     let _ = app.update(Message::CancelEngine(rerun));

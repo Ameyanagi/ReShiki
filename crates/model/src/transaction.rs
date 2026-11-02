@@ -76,8 +76,10 @@ pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
             a.display = Default::default();
             b.display = Default::default();
             a.cip_label = None;
+            a.steroid_label = None;
             a.undefined_stereo = false;
             b.cip_label = None;
+            b.steroid_label = None;
             b.undefined_stereo = false;
             a.label_h = 0;
             b.label_h = 0;

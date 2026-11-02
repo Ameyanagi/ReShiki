@@ -554,8 +554,13 @@ fn finish(
         warnings: draft.warnings,
     };
     if request.operation == "export" {
-        let document = response.document.as_ref().ok_or(Error::MissingDocument)?;
         let format = request.format.as_deref().ok_or(Error::MissingFormat)?;
+        let document = response.document.as_mut().ok_or(Error::MissingDocument)?;
+        // The rebuilt drawing restores CIP labels only; editable exports also
+        // write the optional steroid indicator text.
+        if matches!(format, "cdxml" | "cdx") && document.atom_labels.steroid_alpha_beta {
+            crate::atom_labels::refresh::refresh_optional_stereo(document);
+        }
         response.warnings.extend(export_notices::notices(
             document,
             format,

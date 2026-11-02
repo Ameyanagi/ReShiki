@@ -1929,6 +1929,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
         .map(|a| Atom {
             display: Default::default(),
             cip_label: None,
+            steroid_label: None,
             undefined_stereo: false,
             position: Point::default(),
             depth: 0.,

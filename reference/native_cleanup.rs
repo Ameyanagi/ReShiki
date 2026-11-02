@@ -231,6 +231,7 @@ fn carbon(scope: Scope) -> Case {
         options: Options {
             scope,
             keep_orientation: true,
+            ..Options::default()
         },
         selected: vec![id],
         layouts: Vec::new(),
@@ -502,6 +503,7 @@ fn component_callback_order_and_failures_are_atomic() -> anyhow::Result<()> {
     let options = Options {
         scope: Scope::SelectedAtoms,
         keep_orientation: true,
+        ..Options::default()
     };
     let before = document.clone();
     let prepared = cleanup::prepare(&document, options, &[b, d])?;

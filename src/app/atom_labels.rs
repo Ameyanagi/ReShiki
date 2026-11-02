@@ -43,6 +43,7 @@ pub enum Action {
     Attachment(LabelAttachment),
     Stereo(bool),
     MarkUndefined(bool),
+    SteroidAlphaBeta(bool),
     RomanStereoParentheses(bool),
     AxialDescriptors(AxialDescriptors),
     Seed(String),
@@ -179,6 +180,10 @@ impl App {
             }
             Action::MarkUndefined(value) => {
                 self.tab.doc.atom_labels.mark_undefined_stereocentres = value;
+                self.tab.labels_dirty = true;
+            }
+            Action::SteroidAlphaBeta(value) => {
+                self.tab.doc.atom_labels.steroid_alpha_beta = value;
                 self.tab.labels_dirty = true;
             }
             Action::RomanStereoParentheses(value) => {
