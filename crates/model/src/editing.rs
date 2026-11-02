@@ -595,7 +595,7 @@ fn point_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
                 .iter()
                 .filter(|g| ids.contains(&g.id))
                 .flat_map(|g| {
-                    let (lo, hi) = g.bounds();
+                    let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
                     [lo, hi]
                 }),
         );

@@ -50,6 +50,7 @@ fn box_hit(lo: Point, hi: Point, from: Point, to: Point, radius: f32) -> bool {
 }
 
 pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
+    let text_style = doc.drawing_style.text_style();
     let mut ids: Vec<_> = doc
         .atoms
         .iter()
@@ -105,8 +106,14 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
         doc.graphics
             .iter()
             .filter(|g| {
-                g.hit(from, radius)
-                    || g.hit(to, radius)
+                g.hit_with_text_style(from, radius, &text_style)
+                    || g.hit_with_text_style(to, radius, &text_style)
+                    || g.superscript_label(&text_style).is_some_and(|label| {
+                        label
+                            .ink_boxes()
+                            .into_iter()
+                            .any(|(lo, hi)| box_hit(lo, hi, from, to, radius))
+                    })
                     || g.parts().iter().any(|part| {
                         path_hit(&part.commands, from, to, radius + part.style.width() / 2.)
                     })

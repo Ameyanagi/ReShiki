@@ -302,6 +302,14 @@ impl App {
             .iter()
             .filter(|id| self.tab.doc.atom(**id).is_some())
             .count();
+        let eligible = reshiki::depiction::eligible_atoms(&self.tab.doc, &self.tab.selected);
+        if !eligible.is_empty() {
+            entries.push(command(
+                "Draw as charge-separated",
+                Message::DrawChargeSeparated(eligible),
+                true,
+            ));
+        }
         if selected_atoms > 1 {
             entries.push(command(
                 "Create group label…",
@@ -409,6 +417,9 @@ impl App {
                     .into_iter()
                     .map(|c| command(c.menu, c.message, c.enabled)),
             );
+            if reshiki::ionic::bracket_charge(&self.tab.doc, &self.tab.selected).is_ok() {
+                entries.push(command("Bracket ion", Message::BracketIon, true));
+            }
         }
         if tilt {
             entries.push(submenu("3D tilt", Page::Tilt));

@@ -45,6 +45,7 @@ pub struct GraphicOption {
     pub style: GraphicStyle,
     pub sides: BracketSides,
     pub constrain: bool,
+    pub superscript: Option<String>,
 }
 impl GraphicOption {
     fn new(kind: GraphicKind) -> Self {
@@ -53,6 +54,7 @@ impl GraphicOption {
             style: GraphicStyle::default(),
             sides: BracketSides::Both,
             constrain: false,
+            superscript: None,
         }
     }
     fn document(&self) -> Document {
@@ -66,6 +68,9 @@ impl GraphicOption {
             self.sides,
             self.constrain,
         ));
+        if let Some(graphic) = doc.graphics.first_mut() {
+            graphic.superscript = self.superscript.clone();
+        }
         doc
     }
 }
@@ -179,6 +184,11 @@ pub(super) fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
                 options.push((format!("{name} {kind}"), option));
             }
         }
+    }
+    if family == Family::Brackets {
+        let mut option = GraphicOption::new(G::Brackets);
+        option.superscript = Some("‡".into());
+        options.push(("Transition state [ ]‡".into(), option));
     }
     if matches!(family, Family::Rectangles | Family::Ellipses) {
         let mut option = GraphicOption::new(if family == Family::Rectangles {
@@ -757,6 +767,9 @@ impl App {
         if let Some(option) = self.toolbar.graphic(tool) {
             self.tab.graphic_style = option.style.clone();
             self.tab.bracket_sides = option.sides;
+            self.tab.bracket_superscript =
+                super::graphics::Superscript::of(option.superscript.as_deref());
+            self.tab.bracket_superscript_input = option.superscript.clone().unwrap_or_default();
             self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
         }
         self.tool = tool;

@@ -304,6 +304,10 @@ impl App {
                 attach: self.tab.attach_symbols,
                 snap: self.tab.snap_orbitals,
                 bracket_sides: self.tab.bracket_sides,
+                superscript: self
+                    .tab
+                    .bracket_superscript
+                    .text(&self.tab.bracket_superscript_input),
                 revision: self.tab.revision,
             },
             arrows: ArrowOptions {

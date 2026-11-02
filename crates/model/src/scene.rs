@@ -1338,7 +1338,7 @@ fn selections_bounds_in_axes(
     }
     // Only selected objects are measured, so one small selection stays cheap.
     for g in doc.graphics.iter().filter(|g| owners.contains_key(&g.id)) {
-        let (lo, hi) = g.bounds();
+        let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
         grow(g.id, &mut [lo, hi].into_iter());
     }
     for model in doc
@@ -1997,7 +1997,7 @@ pub fn primitives_with_opacity(
     out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
-        out.extend(graphic_primitive(graphic));
+        out.extend(graphic_primitive(graphic, &doc.drawing_style.text_style()));
         if halos.front.contains(&graphic.id) {
             push_label_halo(&mut out, doc, runs, opacity, &halos.above(Some(graphic.id)));
         }
@@ -2089,18 +2089,32 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
     out.extend(front);
 }
 
-fn graphic_primitive(g: &&crate::graphics::Graphic) -> Vec<Primitive> {
+fn graphic_primitive(
+    g: &&crate::graphics::Graphic,
+    text_style: &crate::typography::TextStyle,
+) -> Vec<Primitive> {
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture((*g).clone())]
     } else {
-        g.parts()
+        let mut parts: Vec<_> = g
+            .parts()
             .into_iter()
             .map(|p| Primitive::Path {
                 commands: p.commands,
                 style: p.style,
                 filled: p.filled,
             })
-            .collect()
+            .collect();
+        if let Some(label) = g.superscript_label(text_style) {
+            parts.push(Primitive::Text {
+                position: label.position,
+                text: label.text.into(),
+                size: label.size,
+                color: label.style.color.rgb(),
+                style: label.style,
+            });
+        }
+        parts
     }
 }
 fn push_underlays(
@@ -2113,7 +2127,7 @@ fn push_underlays(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(graphic_primitive),
+            .flat_map(|g| graphic_primitive(g, &doc.drawing_style.text_style())),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -2398,7 +2412,7 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
             .bracket
             .and_then(|id| doc.graphics.iter().find(|g| g.id == id))
         {
-            let (_, hi) = graphic.bounds();
+            let (_, hi) = graphic.shape_bounds();
             let style = doc.drawing_style.text_style();
             out.push(Primitive::Text {
                 position: hi.offset(4., 4.),

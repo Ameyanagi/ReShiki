@@ -706,6 +706,9 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Ungroup
         | Message::IntegralGroup(..)
         | Message::AddFrame(..)
+        | Message::BracketIon
+        | Message::DrawChargeSeparated(_)
+        | Message::NormalizeDepiction
         | Message::View(..)
         | Message::Appearance(..)
         | Message::CanvasTheme(..)

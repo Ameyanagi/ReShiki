@@ -85,6 +85,24 @@ fn partial_charge_symbols_are_searchable_by_delta() {
 }
 
 #[test]
+fn ion_brackets_and_depiction_normalization_are_searchable_structure_commands() {
+    let mut app = app();
+    for (query, name, need) in [
+        ("Bracket ion", "Bracket ion", catalog::Need::Selection),
+        (
+            "Normalize depiction",
+            "Normalize depiction",
+            catalog::Need::Nothing,
+        ),
+    ] {
+        search(&mut app, query);
+        let index = row(&app, name);
+        assert_eq!(top(&app).name, name);
+        assert_eq!(app.commands.items[index].need, need);
+    }
+}
+
+#[test]
 fn path_cleanup_catalog_has_selection_commands_and_explicit_upright_axis() {
     for (query, name, upright) in [
         ("Smooth", "Smooth", None),
