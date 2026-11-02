@@ -854,6 +854,14 @@ impl App {
         if !molecular_first {
             body = body.push(self.molecular_section());
         }
+        if !self.tab.stereo_notes.is_empty() {
+            body = body.push(card(
+                container(self.stereo_note_lines(
+                    column![text("STEREOCHEMISTRY").size(11).style(muted_text)].spacing(5),
+                ))
+                .padding(12),
+            ));
+        }
         body = body.push(self.inspector_section_lazy(
             Section::Chemistry,
             "Labels & chemistry",

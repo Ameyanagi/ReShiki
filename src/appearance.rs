@@ -41,6 +41,8 @@ pub struct Settings {
     pub arrange_controls: bool,
     /// Snap dragged objects to other objects' edges, centers and gaps.
     pub smart_guides: bool,
+    /// Include advisory IUPAC stereochemical drawing conventions in Check drawing.
+    pub iupac_style_notes: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
 }
@@ -51,6 +53,7 @@ impl Default for Settings {
             canvas_theme: Default::default(),
             arrange_controls: true,
             smart_guides: true,
+            iupac_style_notes: false,
             drawing_style_unit: Default::default(),
         }
     }

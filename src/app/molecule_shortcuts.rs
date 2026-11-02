@@ -93,6 +93,7 @@ fn changed_atoms(before: &Document, after: &Document) -> Vec<u64> {
             let mut previous = (*previous).clone();
             // Engine-derived labels can refresh on unrelated molecules.
             previous.cip_label = atom.cip_label.clone();
+            previous.undefined_stereo = atom.undefined_stereo;
             previous.label_h = atom.label_h;
             previous == *atom
         });
@@ -119,6 +120,7 @@ fn changed_atoms(before: &Document, after: &Document) -> Vec<u64> {
             if !other_bonds.get(&(bond.a, bond.b)).is_some_and(|other| {
                 let mut bond = bond.clone();
                 bond.cip_label = other.cip_label.clone();
+                bond.undefined_stereo = other.undefined_stereo;
                 bond == **other
             }) {
                 changed.extend([bond.a, bond.b]);

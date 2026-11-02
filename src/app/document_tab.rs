@@ -85,6 +85,7 @@ pub(super) struct DocumentTab {
     /// Counts computed-label writes that need not bump revision; keys the mapping thumbnail.
     pub(super) label_generation: u64,
     pub(super) chemistry_notice: Option<String>,
+    pub(super) stereo_notes: Vec<reshiki::chemistry::stereo_lint::Note>,
     pub(super) reactions: reactions::State,
     pub(super) naming: naming::State,
     pub(super) mapping: reaction_mapping::State,
@@ -203,6 +204,7 @@ impl DocumentTab {
             label_refresh: Default::default(),
             label_generation: 0,
             chemistry_notice: None,
+            stereo_notes: vec![],
             reactions: Default::default(),
             naming: Default::default(),
             mapping: Default::default(),

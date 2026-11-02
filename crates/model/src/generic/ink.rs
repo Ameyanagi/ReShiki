@@ -6,7 +6,7 @@ use super::{
     variable::variable_ink_clearance,
 };
 use crate::{
-    atom_labels::{bond_indicator_shown, map_indicator_shown, stereo_indicator_shown},
+    atom_labels::{bond_indicator_shown, map_indicator_shown, stereo_indicator_shown, stereo_text},
     document::{Atom, Document, Point},
     highlights::{CAPSULE_RADIUS_SCALE, label_shape_from, radius},
 };
@@ -186,6 +186,7 @@ impl<'a> LabelPlan<'a> {
             || a.charge != 0;
         let map_label = map_indicator_shown(a, doc);
         let stereo_label = stereo_indicator_shown(a, doc);
+        let mark_undefined = doc.atom_labels.stereo && doc.atom_labels.mark_undefined_stereocentres;
         let number = a.display.number.as_ref();
         let mut plan = Self {
             atom: a,
@@ -202,7 +203,7 @@ impl<'a> LabelPlan<'a> {
             return plan;
         }
         plan.bytes = a.element.len()
-            + a.cip_label.as_ref().map_or(0, String::len)
+            + stereo_text(a.cip_label.as_deref(), a.undefined_stereo, doc).map_or(0, str::len)
             + a.display.variable.as_ref().map_or(0, String::len)
             + number.map_or(0, |v| v.text.len())
             + a.marks.len().saturating_mul(512);
@@ -222,10 +223,10 @@ impl<'a> LabelPlan<'a> {
         };
         let stereo_font = if stereo_label {
             a.display.stereo.style.family.len().saturating_mul(
-                a.cip_label
-                    .as_ref()
+                stereo_text(a.cip_label.as_deref(), a.undefined_stereo, doc)
                     .map_or(0, |v| v.len().saturating_add(2))
-                    .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3)),
+                    .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3))
+                    .saturating_add(usize::from(mark_undefined) * 3),
             )
         } else {
             0
@@ -289,9 +290,10 @@ impl<'a> LabelPlan<'a> {
             cip_bounds(
                 &mut bounds,
                 a.position,
-                a.cip_label.as_deref(),
+                stereo_text(a.cip_label.as_deref(), a.undefined_stereo, self.doc),
                 a.display.stereo.offset,
                 &a.display.stereo.style,
+                self.doc.atom_labels.stereo && self.doc.atom_labels.mark_undefined_stereocentres,
             );
         }
         if let Some((lo, hi)) = bounds {
@@ -320,12 +322,16 @@ fn cip_bounds(
     saved: Option<&str>,
     offset: Option<Point>,
     style: &crate::typography::TextStyle,
+    mark_undefined: bool,
 ) {
     if let Some(label) = saved {
         indicator_bounds(bounds, anchor, &format!("({label})"), offset, style, false);
     }
     for label in FUTURE_CIP_LABELS {
         indicator_bounds(bounds, anchor, label, offset, style, false);
+    }
+    if mark_undefined {
+        indicator_bounds(bounds, anchor, "(?)", offset, style, false);
     }
 }
 
@@ -436,9 +442,10 @@ pub(super) fn object_bounds(doc: &Document) -> Result<Option<(Point, Point)>, St
             cip_bounds(
                 &mut bounds,
                 Point::new((a.x + z.x) * 0.5, (a.y + z.y) * 0.5),
-                b.cip_label.as_deref(),
+                stereo_text(b.cip_label.as_deref(), b.undefined_stereo, doc),
                 b.indicator.offset,
                 &b.indicator.style,
+                doc.atom_labels.stereo && doc.atom_labels.mark_undefined_stereocentres,
             );
         }
     }

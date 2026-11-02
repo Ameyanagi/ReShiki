@@ -46,7 +46,9 @@ pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
             a.indicator = Default::default();
             b.indicator = Default::default();
             a.cip_label = None;
+            a.undefined_stereo = false;
             b.cip_label = None;
+            b.undefined_stereo = false;
             if a.order == 4 && b.order == 4 || a.order == b.order && a.projection && b.projection {
                 a.display = "plain".into();
                 b.display = "plain".into();
@@ -74,7 +76,9 @@ pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
             a.display = Default::default();
             b.display = Default::default();
             a.cip_label = None;
+            a.undefined_stereo = false;
             b.cip_label = None;
+            b.undefined_stereo = false;
             a.label_h = 0;
             b.label_h = 0;
             a != b

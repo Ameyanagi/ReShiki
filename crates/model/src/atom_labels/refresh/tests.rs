@@ -9,6 +9,126 @@ fn alcohol() -> Document {
     doc
 }
 
+fn undefined_stereogenic_units() -> (Document, u64, (u64, u64)) {
+    let mut doc = Document::default();
+    let center = doc.add_atom("C", Point::default());
+    for (element, position) in [
+        ("F", Point::new(-40., 0.)),
+        ("Cl", Point::new(25., -35.)),
+        ("Br", Point::new(25., 35.)),
+    ] {
+        let atom = doc.add_atom(element, position);
+        doc.add_bond(center, atom, 1, "plain");
+    }
+    // Collinear alkene substituents provide no drawn E/Z configuration.
+    let a = doc.add_atom("C", Point::new(200., 0.));
+    let b = doc.add_atom("C", Point::new(242., 0.));
+    doc.add_bond(a, b, 2, "plain");
+    let f = doc.add_atom("F", Point::new(158., 0.));
+    let cl = doc.add_atom("Cl", Point::new(284., 0.));
+    doc.add_bond(a, f, 1, "plain");
+    doc.add_bond(b, cl, 1, "plain");
+    (doc, center, (a, b))
+}
+
+#[test]
+fn possible_stereo_markers_are_opt_in_and_the_option_invalidates_refresh_cache() {
+    let (mut doc, center, (a, b)) = undefined_stereogenic_units();
+    doc.atom_labels.stereo = true;
+    let ordinary = Refresh::calculate(&doc, &Refresh::default()).unwrap();
+    assert!(ordinary.notice.is_none(), "{:?}", ordinary.notice);
+    ordinary.apply(&mut doc);
+    assert!(!doc.atom(center).unwrap().undefined_stereo);
+    assert!(!doc.bond_between(a, b).unwrap().1.undefined_stereo);
+    assert!(crate::atom_labels::indicators(&doc).is_empty());
+
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    let marked = Refresh::calculate(&doc, &ordinary).unwrap();
+    assert!(!Arc::ptr_eq(
+        &ordinary.cache[&center],
+        &marked.cache[&center]
+    ));
+    assert!(marked.notice.is_none(), "{:?}", marked.notice);
+    let before = doc.clone();
+    marked.apply(&mut doc);
+    assert!(!crate::transaction::chemistry_changed(&before, &doc));
+    assert!(doc.atom(center).unwrap().undefined_stereo);
+    assert!(doc.bond_between(a, b).unwrap().1.undefined_stereo);
+    assert!(doc.atoms.iter().all(|a| a.cip_label.is_none()));
+    assert!(doc.bonds.iter().all(|b| b.cip_label.is_none()));
+    let labels = crate::atom_labels::indicators(&doc);
+    assert_eq!(labels.len(), 2);
+    assert!(labels.iter().all(|label| label.text == "(?)"));
+    doc.atom_labels.stereo = false;
+    let hidden = Refresh::calculate(&doc, &marked).unwrap();
+    assert!(Arc::ptr_eq(&marked.cache[&center], &hidden.cache[&center]));
+    assert!(crate::atom_labels::indicators(&doc).is_empty());
+    doc.atom_labels.mark_undefined_stereocentres = false;
+    let disabled = Refresh::calculate(&doc, &hidden).unwrap();
+    disabled.apply(&mut doc);
+    assert!(!doc.atom(center).unwrap().undefined_stereo);
+    assert!(!doc.bond_between(a, b).unwrap().1.undefined_stereo);
+}
+
+#[test]
+fn optional_markers_exclude_explicit_unknown_and_equivalent_substituents() {
+    for explicit_unknown in [false, true] {
+        let (mut doc, center, (a, b)) = undefined_stereogenic_units();
+        doc.atom_labels.stereo = true;
+        doc.atom_labels.mark_undefined_stereocentres = true;
+        if explicit_unknown {
+            doc.bonds[0].display = "wavy".into();
+            let index = doc.bond_between(a, b).unwrap().0;
+            doc.bonds[index].stereo = Some("any".into());
+        } else {
+            doc.atoms
+                .iter_mut()
+                .find(|atom| atom.element == "Br")
+                .unwrap()
+                .element = "Cl".into();
+            doc.atoms
+                .iter_mut()
+                .rev()
+                .find(|atom| atom.element == "F")
+                .unwrap()
+                .element = "H".into();
+        }
+        let computed = Refresh::calculate(&doc, &Refresh::default()).unwrap();
+        assert!(computed.notice.is_none(), "{:?}", computed.notice);
+        computed.apply(&mut doc);
+        assert!(!doc.atom(center).unwrap().undefined_stereo);
+        assert!(!doc.bond_between(a, b).unwrap().1.undefined_stereo);
+        assert!(crate::atom_labels::indicators(&doc).is_empty());
+    }
+}
+
+#[test]
+fn checked_response_round_trip_recomputes_visible_markers_for_export() {
+    let (mut doc, center, (a, b)) = undefined_stereogenic_units();
+    doc.atom_labels.stereo = true;
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    refresh_undefined_stereo(&mut doc);
+    let checked: Document = serde_json::from_value(serde_json::to_value(&doc).unwrap()).unwrap();
+    assert!(!checked.atom(center).unwrap().undefined_stereo);
+    crate::atom_labels::refresh_computed(&mut doc, &checked);
+    assert!(doc.atom(center).unwrap().undefined_stereo);
+    assert!(doc.bond_between(a, b).unwrap().1.undefined_stereo);
+    assert_eq!(crate::atom_labels::indicators(&doc).len(), 2);
+    let scene = crate::scene::primitives(&doc);
+    assert_eq!(
+        scene
+            .iter()
+            .filter(|primitive| matches!(primitive,
+                crate::scene::Primitive::Text { text, .. } if text == "(?)"
+            ))
+            .count(),
+        2
+    );
+    doc.atom_labels.mark_undefined_stereocentres = false;
+    crate::atom_labels::refresh_computed(&mut doc, &checked);
+    assert!(crate::atom_labels::indicators(&doc).is_empty());
+}
+
 #[test]
 fn independent_fragments_survive_errors_and_only_unchanged_chemistry_is_reused() {
     let mut source = alcohol();

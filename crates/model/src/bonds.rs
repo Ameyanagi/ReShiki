@@ -413,6 +413,7 @@ impl Bond {
             z_order: 0,
             indicator: Default::default(),
             cip_label: None,
+            undefined_stereo: false,
             a,
             b,
             order,

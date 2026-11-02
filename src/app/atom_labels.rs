@@ -40,6 +40,7 @@ pub enum Action {
     Position(HydrogenPosition),
     Attachment(LabelAttachment),
     Stereo(bool),
+    MarkUndefined(bool),
     Seed(String),
     Number,
     ClearNumbers,
@@ -170,6 +171,10 @@ impl App {
                 {
                     b.indicator.show = (self.tab.labels.scope == Scope::Selection).then_some(value);
                 }
+                self.tab.labels_dirty = true;
+            }
+            Action::MarkUndefined(value) => {
+                self.tab.doc.atom_labels.mark_undefined_stereocentres = value;
                 self.tab.labels_dirty = true;
             }
             Action::Number => {

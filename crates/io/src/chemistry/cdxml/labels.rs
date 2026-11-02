@@ -164,6 +164,7 @@ where
             carbons: carbons(&root_attrs)?,
             hydrogens: !yes(&root_attrs, "HideImplicitHydrogens")?,
             stereo: yes(&root_attrs, "ShowAtomStereo")?,
+            mark_undefined_stereocentres: false,
             maps: true,
         },
         atoms: Vec::new(),
