@@ -28,6 +28,57 @@ fn point_eq(actual: Point, expected: Point) {
 }
 
 #[test]
+fn nuclide_preview_fields_match_ordinary_and_manual_atom_entry() -> Result<(), String> {
+    for (text, runs) in [
+        ("D", vec![]),
+        ("T", vec![]),
+        ("13C", vec![]),
+        ("¹³C", vec![]),
+        ("15NH4+", vec![]),
+        (
+            "13C",
+            vec![ScriptRun {
+                start: 0,
+                end: 2,
+                script: Script::Superscript,
+            }],
+        ),
+    ] {
+        let mut source = Document::default();
+        let id = source.add_atom("*", Point::default());
+        let converted = apply_with_scripts(&source, id, text, &runs, Mode::Auto)?;
+        let chemical = if runs.is_empty() {
+            text.to_owned()
+        } else {
+            manual_chemical_entry(text, &runs)?.ok_or("Chemical entry")?
+        };
+        let mut preview = source.clone();
+        preview_entry(&mut preview, id, &chemical, runs.is_empty()).map_err(|_| "Preview entry")?;
+        let expected = converted.atom(id).ok_or("Atom")?;
+        let actual = preview.atom(id).ok_or("Preview atom")?;
+        assert_eq!(
+            (
+                actual.element.as_str(),
+                actual.isotope,
+                actual.explicit_h,
+                actual.charge,
+                actual.no_implicit
+            ),
+            (
+                expected.element.as_str(),
+                expected.isotope,
+                expected.explicit_h,
+                expected.charge,
+                expected.no_implicit
+            ),
+            "{text}"
+        );
+        assert_eq!(actual.display, expected.display, "{text}");
+    }
+    Ok(())
+}
+
+#[test]
 fn annotation_ink_bounds_match_world_scene_fragments() {
     let mut doc = Document::default();
     caption(&mut doc, "  Pd2+\nX‡  ");
@@ -573,4 +624,21 @@ fn nc_and_ocn_captions_are_read_toward_the_bond_being_drawn() -> Result<(), Stri
         }
     }
     Ok(())
+}
+#[test]
+fn automatic_caption_preview_keeps_ambiguous_peptide_aliases_as_text() {
+    for text in ["Z", "Tos", "Bzl", "OBzl", "BzlO", "OBut", "ButO"] {
+        let mut preview = Document::default();
+        let atom = preview.add_atom("*", Point::new(0., 0.));
+        preview_entry(&mut preview, atom, text, true).unwrap();
+        if matches!(text, "Z" | "Tos") {
+            assert!(preview.abbreviations.is_empty(), "{text}");
+            assert_eq!(
+                preview.atom(atom).unwrap().display.variable.as_deref(),
+                Some(text)
+            );
+        } else {
+            assert_eq!(preview.abbreviations[0].label, text);
+        }
+    }
 }

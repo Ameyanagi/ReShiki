@@ -27,6 +27,19 @@ fn rejects(doc: &Document, selected: &[u64], diagnostic: &str) {
 }
 
 #[test]
+fn atom_merge_preserves_singlet_and_rejects_conflicting_spin_states() {
+    let (mut doc, selected) = sites(3, "C", false);
+    for atom in &mut doc.atoms {
+        atom.radical_electrons = 2;
+        atom.singlet = true;
+    }
+    let (joined, _) = merge_atoms(&doc, &selected).unwrap();
+    assert!(joined.atoms[0].singlet);
+    doc.atom_mut(selected[1]).unwrap().singlet = false;
+    rejects(&doc, &selected, "spin states");
+}
+
+#[test]
 fn asymmetric_three_atoms_use_bounds_center_and_first_style_with_fixed_neighbors() {
     let doc = Document::from_json(include_bytes!(
         "../../../../../tests/fixtures/join-three-atoms-before.rsk"

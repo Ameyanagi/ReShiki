@@ -61,6 +61,9 @@ pub(super) fn name_radical(mol: &Molecule) -> Result<Option<Name>, String> {
     Ok(Some(Name {
         text: super::nest_enclosing_marks(&text),
         status: mol.name_status(),
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         verification: None,
     }))
 }

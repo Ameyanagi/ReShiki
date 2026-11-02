@@ -433,8 +433,8 @@ fn incorrect_verified_identity_cannot_install_a_caption() {
 }
 
 #[test]
-fn component_bond_charge_and_unknown_stereo_edits_remove_automatic_names() {
-    for case in ["join", "split", "bond", "charge", "unknown"] {
+fn component_bond_and_charge_edits_remove_automatic_names() {
+    for case in ["join", "split", "bond", "charge"] {
         let mut doc = ethanol();
         show_ethanol(&mut doc);
         let before = doc.clone();
@@ -448,7 +448,6 @@ fn component_bond_charge_and_unknown_stereo_edits_remove_automatic_names() {
             }
             "bond" => doc.bonds[0].order = 2,
             "charge" => doc.atoms[0].charge = 1,
-            "unknown" => doc.bonds[0].display = "wavy".into(),
             _ => unreachable!(),
         }
         transaction::apply(&mut doc, &mut History::default(), before, false).unwrap();
@@ -646,14 +645,11 @@ fn identity_characterization_table() {
             "allene",
             Err("Invalid drawing: Invalid stereocenter neighbor mapping"),
         ),
-        (
-            "wavy",
-            Err("Unknown stereochemistry invalidates a generated name"),
-        ),
+        ("wavy", Ok("CCO")),
         ("radical", Ok("[CH2]CO")),
         ("query", Err(UNSUPPORTED)),
         ("mapped", Ok("CCO")),
-        ("unknown", Err(UNSUPPORTED)),
+        ("unknown", Ok("CC=CC")),
     ] {
         let doc = identity_case_document(case);
         let actual = identity(&doc, &atoms(&doc));
@@ -663,4 +659,39 @@ fn identity_characterization_table() {
             "{case}"
         );
     }
+}
+
+#[test]
+fn unknown_configuration_captions_follow_layout_and_reject_new_defined_stereo() {
+    let mut doc = identity_case_document("R");
+    let bond = doc.bonds.iter_mut().find(|bond| bond.a == 2).unwrap();
+    bond.display = "wavy".into();
+    let ids = atoms(&doc);
+    let smiles = identity(&doc, &ids).unwrap();
+    assert_eq!(smiles, "CC(O)C(=O)O");
+    show(
+        &mut doc,
+        &ids,
+        "(2Ξ)-2-hydroxypropanoic acid".into(),
+        smiles,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let before = doc.clone();
+    for atom in &mut doc.atoms {
+        atom.position.x += 20.;
+    }
+    transaction::apply(&mut doc, &mut History::default(), before, false).unwrap();
+    assert_eq!(doc.molecule_names.len(), 1);
+    assert_eq!(doc.annotations.len(), 1);
+    let before = doc.clone();
+    for bond in &mut doc.bonds {
+        if bond.a == 2 && bond.display == "wavy" {
+            bond.display = "wedge".into();
+        }
+    }
+    transaction::apply(&mut doc, &mut History::default(), before, false).unwrap();
+    assert!(doc.molecule_names.is_empty());
+    assert!(doc.annotations.is_empty());
 }

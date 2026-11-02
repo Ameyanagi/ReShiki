@@ -24,9 +24,9 @@ print(aspirin.properties().formula)
 Jupyter displays each object as SVG.
 
 `properties()` returns a frozen dataclass with the same fields as
-[`reshiki --cli analyze`](agent-cli.md#analyze): `formula`, `mass`, `exact_mass`,
-`logp`, `tpsa`, `donors`, `acceptors`, `rings`, `inchi`, `inchikey`, `smiles` and
-`unpaired_electrons`.
+[`reshiki --cli analyze`](agent-cli.md#analyze): `formula`, `display_formula`,
+`mass`, `exact_mass`, `logp`, `tpsa`, `donors`, `acceptors`, `rings`, `inchi`,
+`inchikey`, `smiles` and `unpaired_electrons`.
 
 ## Inputs and outputs
 

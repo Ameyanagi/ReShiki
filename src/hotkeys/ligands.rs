@@ -170,6 +170,7 @@ pub(super) fn add(
     point.display = Default::default();
     point.marks.clear();
     point.radical_electrons = 0;
+    point.singlet = false;
     if metal {
         result.add_bond(id, anchor, 1, "plain");
     }

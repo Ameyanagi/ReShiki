@@ -717,6 +717,17 @@ fn analyze_command_lines_parse() {
     );
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn analyze_json_preserves_rdkit_formula_and_adds_display_formula() {
+    let (code, out, err) = call(&["analyze", "--smiles", "[13CH3][2H]"]).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    let result: Value = serde_json::from_str(&out).unwrap();
+    let analysis = &result["value"]["analysis"];
+    assert_eq!(analysis["formula"], "CH4");
+    assert_eq!(analysis["display_formula"], "¹³CH₃²H");
+    assert!(analysis.get("mass_percent").is_none());
+}
+
 #[test]
 fn name_command_lines_parse() {
     for (tokens, source, format, json) in [
@@ -846,6 +857,7 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
         );
         assert_eq!(value["reason"], reason, "{smiles}");
         assert_eq!(value["detail"], status.detail(), "{smiles}");
+        assert_eq!(value["alternatives"], json!([]), "{smiles}");
         assert_eq!(result["experimental"], true);
         assert_eq!(result["api"]["stability"], "experimental");
         assert_eq!(
@@ -1536,4 +1548,34 @@ async fn help_commands_match_golden_stdout() {
         assert!(err.is_empty(), "help {name}: {err}");
         assert_help_golden(&out, golden, name);
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_json_reports_relative_ring_alternatives() {
+    let smiles = "C[C@H]1C[C@@H](C)C1";
+    let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    let result: Value = serde_json::from_str(out.trim()).unwrap();
+    assert_eq!(result["value"]["name"], "(1s,3s)-1,3-dimethylcyclobutane");
+    assert_eq!(
+        result["value"]["alternatives"],
+        json!([{
+            "name": "cis-1,3-dimethylcyclobutane",
+            "status": "not_preferred",
+            "reason": "relative_ring_stereo",
+        }])
+    );
+    let parsed = crate::naming::resolve_name(
+        "cis-1,3-dimethylcyclobutane",
+        crate::naming::Cancel::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        parsed.canonical_smiles,
+        crate::naming::canonical_smiles(smiles).unwrap()
+    );
+    let (code, out, err) = call(&["name", "--smiles", smiles]).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert_eq!(out, "(1s,3s)-1,3-dimethylcyclobutane\n");
 }

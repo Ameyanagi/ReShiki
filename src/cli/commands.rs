@@ -157,7 +157,7 @@ const JSON: OptionSpec = OptionSpec {
 };
 
 const NAME_JSON: OptionSpec = OptionSpec {
-    help: "Print the name and its status as one JSON line.",
+    help: "Print the name, its status and verified alternatives as one JSON line.",
     ..JSON
 };
 
@@ -626,10 +626,11 @@ port reconstructs the same structure (for a radical ion, its neutral parent).
 Options:
   --isotope-style STYLE  iupac (default), as in (2H3)methanol, or boughton,
                          as in methanol-d3.
-  --json                 Print the name and its status as one JSON line.
+  --json                 Print the name, its status and verified alternatives
+                         as one JSON line.
 
 Without --json, prints only the name followed by a newline. With --json,
-value contains name, preferred, status, reason and detail:
+value contains name, preferred, status, reason, detail and alternatives:
   preferred      true only when status is preferred.
   status         preferred = the preferred IUPAC name (IUPAC 2013);
                  not_preferred = systematic, known not to be the preferred
@@ -637,6 +638,7 @@ value contains name, preferred, status, reason and detail:
                  unverified = systematic, preference not verified.
   reason         The snake_case naming-rule reason, or null for preferred.
   detail         The status detail sentence.
+  alternatives   Other verified names, each with name, status and reason.
 ";
     format!("Usage: {}\n\n{body}", NAME.usage)
 }

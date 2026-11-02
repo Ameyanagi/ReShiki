@@ -402,6 +402,71 @@ async fn dark_depth_copy_as_cdxml_and_cdx_preserves_exact_source_ink() {
     }
 }
 
+#[tokio::test]
+async fn bracketed_ion_copy_keeps_hidden_charge_data_and_grouped_superscript() {
+    let mut document = molecule();
+    let oxygen = document
+        .atoms
+        .iter()
+        .find(|atom| atom.element == "O")
+        .unwrap()
+        .id;
+    document.atom_mut(oxygen).unwrap().charge = -1;
+    for atom in &mut document.atoms {
+        atom.display.hide_charge = true;
+    }
+    let mut bracket = crate::graphics::Graphic::dragged(
+        document.next_id(),
+        crate::graphics::GraphicKind::Brackets,
+        Point::new(-20., -25.),
+        Point::new(65., 25.),
+        Default::default(),
+        crate::graphics::BracketSides::Both,
+        false,
+    );
+    bracket.superscript = Some("−".into());
+    document.graphics.push(bracket);
+    document.group_selection(&document.all_ids()).unwrap();
+    let source = document.clone();
+    for format in [CopyFormat::Cdxml, CopyFormat::Cdx] {
+        let copy = prepare_as(Default::default(), document.clone(), format)
+            .await
+            .unwrap();
+        let xml = if format == CopyFormat::Cdxml {
+            copy.text().unwrap().to_owned()
+        } else {
+            let representation = copy
+                .representations
+                .iter()
+                .find(|r| r.kind == CDX_TYPES[0])
+                .unwrap();
+            crate::exchange::from_cdx(&representation.bytes().unwrap()).unwrap()
+        };
+        let restored = crate::chemistry::cdxml::import_cdxml(&xml)
+            .unwrap()
+            .document;
+        let oxygen = restored
+            .atoms
+            .iter()
+            .find(|atom| atom.element == "O")
+            .unwrap();
+        assert_eq!(oxygen.charge, -1);
+        assert!(oxygen.display.hide_charge);
+        let annotation = restored
+            .annotations
+            .iter()
+            .find(|label| label.text == "−")
+            .unwrap();
+        assert!(
+            restored
+                .groups
+                .iter()
+                .any(|group| group.members.contains(&annotation.id))
+        );
+        assert_eq!(document, source);
+    }
+}
+
 #[test]
 fn selection_does_not_expand_to_other_molecules_or_replace_the_source() {
     let mut doc = molecule();

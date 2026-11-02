@@ -22,6 +22,11 @@ the local parser's vocabulary, after you confirm that the name may be sent.
 typed name no longer matches, so ReShiki inserts the structure without it.
 Apply SMILES edits before you insert.
 
+**Peptide sequence** reads the input as one-letter amino-acid codes; online
+lookup is unavailable in this mode. When a
+name needed an assumption, such as L residues in a peptide or an ignored
+rotation sign, the dock states it after inserting; **Details** lists it too.
+
 ### Look up a common name online
 
 1. Enter the complete name under **Import → Name**. If local parsing cannot
@@ -83,6 +88,8 @@ molecule and opens the **Chemical names** inspector. It has two parts:
   **Restore** returns to the parsed structure. If the result has warnings,
   check **I reviewed these warnings and the structure**. Choose **Insert** to
   add the editable structure. It is inserted without a name caption.
+  **Peptide sequence** explicitly reads one-letter amino-acid codes, with the
+  N terminus on the left; both `AGF` and `A G F` become `Ala-Gly-Phe`.
 - **STRUCTURE → NAME**: choose **Generate selected name**, then **Copy name** or
   **Insert caption**. A tag under the generated name gives its
   [preferred IUPAC name status](#preferred-iupac-name-status). Curated aliases
@@ -93,14 +100,35 @@ Import tab.
 
 ## Limits
 
-- Ambiguous names, unsupported or ignored stereo, relative or racemic
-  qualifiers, radicals, polymers, queries and disconnected salts are rejected
+- Ambiguous names, unsupported stereo, relative or racemic
+  qualifiers, radicals, polymers and queries are rejected
   with a reason. A rejected name leaves the drawing and Undo history unchanged.
-  A salt or mixture name, such as `sodium chloride`, is summarized as
-  "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES
-  under Import → Structure." rather than as an ambiguous name.
-- Optical rotation signs are not turned into R/S. The one exception is
-  `(+)-lactic acid`, which reads as `(2S)-2-hydroxypropanoic acid`.
+- Local name input accepts salts and mixtures. All components are verified,
+  previewed left to right without overlap and inserted as separate fragments.
+  Components with positive net charge come first; other relative order is
+  preserved. **Add name below** is unchecked and disabled for these results;
+  insertion explains that the caption is omitted for salts and mixtures.
+  OPSIN's protonation choices are kept, so a hydrochloride is the neutral base
+  plus HCl. Online lookup still accepts one connected molecule only.
+- Optical rotation signs are never used to infer R/S. A name such as
+  `(S)-(+)-ibuprofen` is accepted only when its only parser warnings concern
+  optical rotation, it contains explicit CIP descriptors, and native stereo
+  perception finds no unspecified stereogenic atoms, ring cis/trans pairs or
+  double bonds. A warning
+  identifies the ignored sign and the descriptors used. Sign-only names remain rejected, apart from the verified
+  retained name `(+)-lactic acid`, which reads as
+  `(2S)-2-hydroxypropanoic acid`. Contradictions between a catalogue rotation
+  sign and CIP descriptors cannot be detected.
+  The native completeness check remains conservative for cumulated double
+  bonds: signed cumulene names are rejected when it cannot certify their
+  stereo, including some achiral axes. Unsigned names keep their previous
+  behavior; this does not add an axial-stereo perception algorithm.
+- Peptide symbols and glycan symbols are expanded only when the complete input
+  belongs to the supported notation. **Read as …** shows the expanded input
+  in the preview and Import Details. The original text remains the title and
+  caption; explicit one-letter peptide mode uses its translated three-letter
+  sequence as the title. Expansion never supplies a generated systematic name
+  or a curated alias. Side-chain peptide protection is outside this grammar.
 - Generated names cover one complete molecule or a charge-balanced salt: chains, rings, ring
   assemblies, spiro, bridged and fused ring systems, with charges and R/S and
   E/Z stereo, supported mono-/diradicals, and parenthesised isotope descriptors.
@@ -124,19 +152,69 @@ substituted functional groups, bicyclic/spiro systems, heterocycles, phane
 absolute R/S and E/Z stereo, isotopes and formal charge. It follows unreleased
 OPSIN main at commit `42e87ac6` rather than the 2.9.0 release; the
 [commit ledger](../crates/opsin/PORTING.md#upstream-commits-after-290) lists
-what changed. The editor accepts a
-connected graph with at most 512 atoms. ReShiki verifies the editable graph
-before inserting it. The specific retained name `(+)-lactic acid` is normalized
+what changed. The editor accepts a graph with at most 512 atoms across all
+components. ReShiki verifies the editable graph before inserting it. The
+specific retained name `(+)-lactic acid` is normalized
 locally to `(2S)-2-hydroxypropanoic acid`, using
 [ChEBI:422](https://www.ebi.ac.uk/chebi/CHEBI:422), then parsed and checked
 against its explicit S graph. The parser result identifies this retained-name
-source. Other optical-rotation names, including derivatives, salts and
-conflicting descriptors, remain subject to strict rejection; this entry is not
-a general sign-to-configuration rule. The original input can be used for **Add
-name below**, while structure-to-name returns the verified
+source. This is an exact retained-name mapping, not a general
+sign-to-configuration rule. Other optical-rotation names use the warning and stereo-completeness gate described above. Names
+without rotation signs retain their ordinary unspecified-stereo behavior.
+The original `(+)-lactic acid` input can be used for **Add name below**, while
+naming its structure returns the verified
 `(2S)-2-hydroxypropanoic acid`. Older screenshots that show this name rejected
 predate this change. Changing the input or drawing invalidates pending or
 outdated results.
+
+### Peptide and glycan notation
+
+The shared pre-parser runs before the same OPSIN request/reply adapter on both
+desktop and browser. It accepts case-sensitive three-letter sequences using
+the 20 standard amino acids and `Orn`, `Cit`, `Nle`, `Nva`, `Hse`, `Hcy`, `Aib`,
+`Hyp`, `Sar` and `Glp`. Chiral residues default to L; each residue may explicitly
+use D or L. Gly, Sar and Aib are achiral and reject configuration prefixes.
+`Hyp` uses OPSIN's trans-4-hydroxyproline configuration. DL residues are rejected
+with an explanation because their racemic CX layer cannot be retained in an
+editable preview. These defaults follow
+[IUPAC peptide symbolism](https://iupac.qmul.ac.uk/AminoAcid/A1819.html).
+
+N-terminal `H-` leaves the amine unprotected. `Ac`, `Boc`, `Fmoc`, `Z`/`Cbz`,
+`Tos`, `For` and `PhCO` expand respectively to `N-acetyl-`,
+`N-(tert-butoxycarbonyl)-`, `N-[(9H-fluoren-9-yl)methoxycarbonyl]-`,
+`N-(benzyloxycarbonyl)-`, `N-tosyl-`, `N-formyl-` and `N-benzoyl-`.
+C-terminal `OH` leaves the acid, `OMe`, `OEt`, `OBzl` and `OBut` use methyl,
+ethyl, benzyl and tert-butyl esters, and `NH2` uses the amino-acid amide.
+Asp/Glu terminal esters specify position 1 and their terminal amides use
+`alpha-asparagine`/`alpha-glutamine`, preserving the side-chain acid.
+For example, `Boc-Ala-D-Phe-Gly-OMe` reads as
+`N-(tert-butoxycarbonyl)-L-alanyl-D-phenylalanyl-glycine methyl ester`.
+Head-to-tail cycles use OPSIN's all-acyl form, e.g.
+`cyclo(L-valyl-L-ornithyl-L-leucyl-D-phenylalanyl-L-prolyl)`.
+One-letter mode accepts only the 20 standard codes (also in lowercase);
+ambiguous or unsupported letters are reported by name.
+
+Glycan symbols follow [IUPAC 2-Carb-38](https://iupac.qmul.ac.uk/2carb/38.html):
+`Glc`, `Gal`, `Man`, `Fru`, `Rib`, `dRib`, `Xyl`, `Fuc`, `Rha`, `GlcNAc`,
+`GalNAc`, `GlcA` and `Neu5Ac`. Extended notation supplies anomer, D/L and p/f
+ring size; condensed notation places the anomer in the linkage and assumes D
+and pyranose, except Fuc defaults to L. Rha defaults to D under this rule.
+Explicit D-/L- prefixes and p/f suffixes override condensed defaults. Alpha and
+beta accept `a`/`b`, `alpha`/`beta` and `α`/`β`; linkages accept `-`, `->` and
+`→`, with branches in square brackets. `Glc(a1-2b)Fruf` is supported.
+Only applied assumptions and unspecified anomers are listed as warnings.
+Neu5Ac supports pyranose; its furanose form cannot close through the absent
+5-hydroxyl group and is rejected explicitly.
+
+Examples of the exact OPSIN expansions are:
+
+| Symbols                  | Expanded input                                                                                             |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `Gal(b1-4)GlcNAc`        | `beta-D-galactopyranosyl-(1->4)-2-acetamido-2-deoxy-D-glucopyranose`                                       |
+| `a-D-Glcp-(1->4)-D-Glcp` | `alpha-D-glucopyranosyl-(1->4)-D-glucopyranose`                                                            |
+| `Glc(a1-2b)Fruf`         | `alpha-D-glucopyranosyl-(1->2)-beta-D-fructofuranose`                                                      |
+| `GlcA(a1-4)Glc`          | `(alpha-D-glucopyranosyluronic acid)-(1->4)-D-glucopyranose`                                               |
+| `Neu5Ac(a2-3)Gal`        | `(5-acetamido-3,5-dideoxy-D-glycero-alpha-D-galacto-non-2-ulopyranosylonic acid)-(2->3)-D-galactopyranose` |
 
 ### Structure to name
 
@@ -159,7 +237,7 @@ groups, charges and ions, and R/S, r/s and E/Z. It also names:
 
 - charge-balanced salts, cations before anions with multiplying prefixes
   (`sodium acetate`, `disodium sulfate`), checked against the whole
-  disconnected graph. Import → Name still rejects salt names.
+  disconnected graph.
 - neutral mono- and diradicals on chains, monocycles and simple heteroatom or
   acyl centres with P-71 names (`propan-2-yl`, `phenoxyl`, `methanaminyl`).
   Only the generation check parses radicals; Import → Name does not.

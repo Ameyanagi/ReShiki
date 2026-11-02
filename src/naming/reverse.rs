@@ -94,6 +94,13 @@ pub(super) fn parse_response(bytes: &[u8], smiles: &str) -> Result<openclatura::
             return Err(Error::Worker("The radical-ion name or neutral verification target differs from the recovered parent".into()));
         }
     }
+    for alternative in &name.alternatives {
+        worker::check_name(
+            &alternative.name,
+            "Local name generation returned an invalid alternative",
+        )
+        .map_err(Error::Worker)?;
+    }
     Ok(name)
 }
 
@@ -112,8 +119,9 @@ pub async fn generate_name_with_options(
 ) -> Result<Record, Error> {
     let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
     let stop = CancelOnDrop(cancel.clone());
+    let input = identity.naming_smiles.as_deref().unwrap_or(&expected);
     let candidate = client::on_slot(
-        &expected,
+        input,
         &cancel,
         &SLOTS,
         "Local name generation is unavailable",
@@ -122,35 +130,75 @@ pub async fn generate_name_with_options(
         move |smiles, cancel| generate_worker(smiles, style, cancel),
     )
     .await?;
+    let record = reconstruct(identity, expected, candidate, &cancel).await;
+    drop(stop);
+    record
+}
+
+/// Check every name independently, then apply the Ξ/ξ preference.
+/// The browser uses the same selection and reconstruction gate.
+pub(super) async fn reconstruct(
+    identity: &Identity,
+    expected: String,
+    mut candidate: openclatura::Name,
+    cancel: &super::Cancel,
+) -> Result<Record, Error> {
+    let parser_name = candidate
+        .verification
+        .as_ref()
+        .map_or(&candidate.text, |v| &v.name);
+    let primary = reconstruct_name(parser_name, cancel).await?;
+    let mut alternatives = vec![];
+    for alternative in std::mem::take(&mut candidate.alternatives) {
+        match reconstruct_name(&alternative.name, cancel).await {
+            Ok(parsed) if super::verify_identity(&expected, &parsed.smiles).is_ok() => {
+                alternatives.push(alternative);
+            }
+            Err(error @ Error::Cancelled(_)) => return Err(error),
+            _ => {}
+        }
+    }
+    // Only a verified Ξ/ξ name can replace the primary name, which has the
+    // same identity as `primary`.
+    if identity.write_unknown_stereo
+        && let Some(alternative) = alternatives
+            .iter_mut()
+            .find(|alternative| alternative.name.contains(['Ξ', 'ξ']))
+    {
+        std::mem::swap(&mut candidate.text, &mut alternative.name);
+        std::mem::swap(&mut candidate.status, &mut alternative.status);
+        candidate.omitted_stereo.clear();
+        candidate.omitted_units = 0;
+    }
+    let mut record = generated_record(identity, expected, candidate, &primary)?;
+    record.alternatives = alternatives;
+    Ok(record)
+}
+
+async fn reconstruct_name(name: &str, cancel: &super::Cancel) -> Result<Record, Error> {
     if cancel.stopped() {
         return Err(Error::Cancelled(
             "Local name generation was cancelled".into(),
         ));
     }
-    // Use a separate token: resolve_name's drop guard stops its own operation,
+    // Use a separate token: the resolver's drop guard stops its own operation,
     // while this guard continues to cover cancellation of the whole pipeline.
-    let decoder = Cancel::default();
-    let parser_name = candidate
-        .verification
-        .as_ref()
-        .map_or(&candidate.text, |v| &v.name);
-    let reconstructed = tokio::select! {
-        result = super::local::resolve_generated(parser_name, decoder.clone()) => result?,
-        () = cancel.cancelled() => {
-            decoder.stop();
-            return Err(Error::Cancelled("Local name generation was cancelled".into()));
-        },
-    };
-    let record = generated_record(
-        identity,
-        expected,
-        candidate.text,
-        candidate.status,
-        &reconstructed,
-        candidate.verification.as_ref().map(|v| v.smiles.as_str()),
-    );
-    drop(stop);
-    record
+    #[cfg(not(target_arch = "wasm32"))]
+    let decoder = super::Cancel::default();
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        tokio::select! {
+            result = super::local::resolve_generated(name, decoder.clone()) => result,
+            () = cancel.cancelled() => {
+                decoder.stop();
+                Err(Error::Cancelled("Local name generation was cancelled".into()))
+            },
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        super::browser::resolve_generated(name, cancel.clone()).await
+    }
 }
 
 /// The generated name's record, once the parser's `reconstructed` record of
@@ -158,11 +206,10 @@ pub async fn generate_name_with_options(
 pub(super) fn generated_record(
     identity: &Identity,
     expected: String,
-    candidate: String,
-    status: NameStatus,
+    candidate: openclatura::Name,
     reconstructed: &Record,
-    neutral: Option<&str>,
 ) -> Result<Record, Error> {
+    let neutral = candidate.verification.as_ref().map(|v| v.smiles.as_str());
     super::verify_identity(neutral.unwrap_or(&expected), &reconstructed.smiles)
         .map_err(|e| Error::Rejected(format!("Name reconstruction failed: {e}")))?;
     let mut warnings = identity.warnings.clone();
@@ -177,9 +224,12 @@ pub(super) fn generated_record(
         super::aliases_for_smiles(&expected).map_err(Error::Worker)?
     };
     Ok(Record {
-        title: candidate.clone(),
-        systematic_name: Some(candidate),
-        name_status: Some(status),
+        title: candidate.text.clone(),
+        systematic_name: Some(candidate.text),
+        name_status: Some(candidate.status),
+        alternatives: vec![],
+        omitted_stereo: candidate.omitted_stereo,
+        omitted_units: candidate.omitted_units,
         smiles: expected.clone(),
         canonical_smiles: expected,
         synonyms,

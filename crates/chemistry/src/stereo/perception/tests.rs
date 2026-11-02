@@ -24,6 +24,42 @@ fn options() -> Options {
         flag_possible: true,
     }
 }
+
+#[test]
+fn unspecified_stereo_uses_perceived_atom_and_double_bond_candidates() -> TestResult {
+    for (smiles, unspecified) in [
+        ("CC(O)C(=O)O", true),
+        ("C[C@H](O)C(=O)O", false),
+        ("C[C@H](O)C(O)C", true),
+        ("CC=CC", true),
+        ("C/C=C/C", false),
+        ("C[C@H](O)CC=CC", true),
+        ("C[C@H](O)C/C=C/C", false),
+        // Legacy bond candidates are conservative for cumulenes; do not skip
+        // them and silently admit unspecified axial stereo in naming.
+        ("C[C@H](O)CC=C=C(C)C", true),
+        ("C[C@H](O)CC=C=CC", true),
+        ("C=C", false),
+        ("CC=C(C)C", false),
+        ("O=C(O)C", false),
+        ("C1=CCCCC1", false),
+        // Ring cis/trans needs both members of the pair specified.
+        ("CC1CCC(CC1)[C@@H](C)O", true),
+        ("C[C@H]1CC[C@@H](CC1)[C@@H](C)O", false),
+        ("C[C@H]1CCC(CC1)[C@@H](C)O", true),
+        ("C1CCC(CC1)[C@@H](C)O", false),
+        ("Cc1ccc(cc1)[C@@H](C)O", false),
+        ("CCO.[Na+]", false),
+    ] {
+        let imported = crate::smiles::read(smiles)?;
+        assert_eq!(
+            has_unspecified_stereo(&imported.prepared.state).map_err(anyhow::Error::msg)?,
+            unspecified,
+            "{smiles}"
+        );
+    }
+    Ok(())
+}
 fn star() -> Result<State, String> {
     state(Graph {
         atoms: [6, 9, 17, 35, 53]

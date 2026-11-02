@@ -742,6 +742,8 @@ mod tests {
     fn italic_name_tokens_keep_punctuation_and_locant_digits_roman() {
         for (name, expected) in [
             ("(2R,3S)-(E)-N,N-dimethyl", vec!["R", "S", "E", "N", "N"]),
+            ("(2Ξ,3R)-3-chlorobutan-2-ol", vec!["Ξ", "R"]),
+            ("(1ξ,4ξ)-cyclohexane-1,4-diol", vec!["ξ", "ξ"]),
             ("((3aR*,8bS*)-tert-butyl)", vec!["R*", "S*", "tert"]),
             (
                 "(r,s,M,P,ξ,Ξ,rel,rac)-hexane",

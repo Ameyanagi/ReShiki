@@ -1,15 +1,25 @@
-//! Native aromatic ligand presentation, verified against desktop CDX output.
+//! Hidden-charge and aromatic-ligand presentation using native CDX symbols.
 use super::*;
 use crate::document::Atom;
 
-/// A hidden Cp⁻ ring charge, or the hidden balancing charge on a metal that
-/// carries haptic rings (ferrocene's Fe²⁺), exported as an invisible symbol.
+/// Bracketed-ion charges and aromatic-ligand charges export as invisible
+/// symbols referring to their atoms, preserving chemistry and presentation.
+/// A reopened ion bracket keeps its net charge as grouped text.
 pub(super) fn hidden_charge(atom: &Atom, doc: &Document) -> bool {
     atom.display.hide_charge
         && atom.charge != 0
-        && atom.marks.is_empty()
-        && (atom.charge.unsigned_abs() == 1 && atom.element == "C" && atom.aromatic
-            || haptic_metal(atom, doc))
+        && (doc.groups.iter().any(|group| {
+            group.members.contains(&atom.id)
+                && group.members.iter().any(|id| {
+                    doc.annotations.iter().any(|a| a.id == *id)
+                        || doc
+                            .graphics
+                            .iter()
+                            .any(|g| g.id == *id && g.kind.brackets() && g.superscript.is_some())
+                })
+        }) || atom.marks.is_empty()
+            && (atom.charge.unsigned_abs() == 1 && atom.element == "C" && atom.aromatic
+                || haptic_metal(atom, doc)))
 }
 
 fn haptic_metal(atom: &Atom, doc: &Document) -> bool {

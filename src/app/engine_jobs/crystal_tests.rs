@@ -9,6 +9,8 @@ fn cached_analysis() -> Analysis {
     Analysis {
         smiles: String::new(),
         formula: String::new(),
+        display_formula: String::new(),
+        mass_percent: vec![],
         mass: 0.,
         exact_mass: 0.,
         logp: 0.,

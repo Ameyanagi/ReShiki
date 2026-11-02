@@ -17,6 +17,162 @@ fn journal_presets_use_publisher_settings() {
 }
 
 #[test]
+fn hydrogen_isotope_modes_survive_native_and_cdxml_style_roundtrips() {
+    use crate::chemistry::cdxml::{import_cdxml, presentation};
+    use crate::style::HydrogenIsotopes;
+
+    for (mode, attribute) in [
+        (HydrogenIsotopes::Auto, None),
+        (HydrogenIsotopes::Letters, Some("letters")),
+        (HydrogenIsotopes::MassNumbers, Some("mass_numbers")),
+    ] {
+        let style = DrawingStyle {
+            hydrogen_isotopes: mode,
+            ..Default::default()
+        };
+        let name = std::path::Path::new("isotopes.reshiki-style");
+        assert_eq!(
+            load_bytes(name, to_bytes(name, &style).unwrap()).unwrap(),
+            style
+        );
+        let mut doc = Document {
+            drawing_style: style,
+            ..Default::default()
+        };
+        let a = doc.add_atom("H", Point::new(0., 0.));
+        doc.atom_mut(a).unwrap().isotope = 2;
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        doc.atom_mut(b).unwrap().isotope = 13;
+        doc.add_bond(a, b, 1, "plain");
+        let xml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
+        let tree = presentation::parse(&xml).unwrap();
+        assert_eq!(
+            tree.root_element().attribute("ReShikiHydrogenIsotopes"),
+            attribute
+        );
+        let native = presentation::drawing_style(tree.root_element()).unwrap();
+        let native_back: presentation::NativeDrawingStyle =
+            serde_json::from_slice(&serde_json::to_vec(&native).unwrap()).unwrap();
+        assert_eq!(native_back, native);
+        let imported = import_cdxml(&xml).unwrap().document;
+        assert_eq!(imported.atoms[0].element, "H");
+        assert_eq!(imported.atoms[0].isotope, 2);
+        assert_eq!(imported.atoms[1].element, "C");
+        assert_eq!(imported.atoms[1].isotope, 13);
+        for imported in [
+            native.into_document().unwrap(),
+            imported.drawing_style,
+            from_chemdraw_xml(&xml, "Isotopes").unwrap(),
+        ] {
+            assert_eq!(imported.hydrogen_isotopes, mode);
+        }
+        // Binary CDX/CDS have no custom presentation tag and still serialize.
+        crate::exchange::to_cdx(&xml).unwrap();
+        crate::exchange::to_cds(&xml).unwrap();
+    }
+}
+
+#[test]
+fn cdxml_hydrogen_isotope_text_uses_document_mode_and_preserves_isotope_attributes() {
+    use crate::chemistry::cdxml::import_cdxml;
+    use crate::style::HydrogenIsotopes;
+
+    for mode in HydrogenIsotopes::ALL {
+        for carbon_isotope in [0, 13] {
+            let mut doc = Document::default();
+            doc.drawing_style.hydrogen_isotopes = mode;
+            let carbon = doc.add_atom("C", Point::new(0., 0.));
+            doc.atom_mut(carbon).unwrap().isotope = carbon_isotope;
+            for (mass, x) in [(2, -42.), (3, 42.)] {
+                let h = doc.add_atom("H", Point::new(x, 0.));
+                doc.atom_mut(h).unwrap().isotope = mass;
+                doc.add_bond(carbon, h, 1, "plain");
+            }
+            let xml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
+            let tree = roxmltree::Document::parse(&xml).unwrap();
+            let letters = mode == HydrogenIsotopes::Letters
+                || mode == HydrogenIsotopes::Auto && carbon_isotope == 0;
+            for (mass, symbol) in [("2", "D"), ("3", "T")] {
+                let node = tree
+                    .descendants()
+                    .find(|node| {
+                        node.has_tag_name("n")
+                            && node.attribute("Element") == Some("1")
+                            && node.attribute("Isotope") == Some(mass)
+                    })
+                    .unwrap();
+                let runs: Vec<_> = node
+                    .descendants()
+                    .filter(|node| node.has_tag_name("s"))
+                    .collect();
+                let label: String = runs.iter().filter_map(|node| node.text()).collect();
+                assert_eq!(
+                    label,
+                    if letters {
+                        symbol.into()
+                    } else {
+                        format!("{mass}H")
+                    }
+                );
+                let raised_mass = runs.iter().any(|node| {
+                    node.text() == Some(mass)
+                        && node.attribute("face").unwrap().parse::<u8>().unwrap() & 64 != 0
+                });
+                assert_eq!(raised_mass, !letters);
+            }
+            let imported = import_cdxml(&xml).unwrap().document;
+            let hydrogen_isotopes: Vec<_> = imported
+                .atoms
+                .iter()
+                .filter(|atom| atom.element == "H")
+                .map(|atom| atom.isotope)
+                .collect();
+            assert_eq!(hydrogen_isotopes, [2, 3]);
+        }
+    }
+}
+
+#[test]
+fn absent_hydrogen_isotope_style_fields_keep_auto_and_reject_unknown_values() {
+    use crate::chemistry::cdxml::presentation::{self, NativeDrawingStyle};
+    use crate::style::HydrogenIsotopes;
+
+    let source = include_str!("../../../../assets/drawing_style.json");
+    let defaults = NativeDrawingStyle::defaults().unwrap();
+    assert_eq!(defaults.hydrogen_isotopes, HydrogenIsotopes::Auto);
+    assert_eq!(
+        serde_json::to_string_pretty(&defaults).unwrap(),
+        source.trim_end()
+    );
+    for preset in Preset::ALL.into_iter().chain([Preset::Presentation]) {
+        let style = preset.style();
+        assert_eq!(style.hydrogen_isotopes, HydrogenIsotopes::Auto);
+        assert!(
+            serde_json::to_value(style)
+                .unwrap()
+                .get("hydrogen_isotopes")
+                .is_none()
+        );
+    }
+    for value in [None, Some("auto")] {
+        let attribute = value
+            .map(|value| format!(" ReShikiHydrogenIsotopes=\"{value}\""))
+            .unwrap_or_default();
+        let xml = format!("<CDXML BondLength=\"14.4\"{attribute}/>");
+        let tree = presentation::parse(&xml).unwrap();
+        assert_eq!(
+            presentation::drawing_style(tree.root_element()).unwrap(),
+            defaults
+        );
+    }
+    for value in ["D/T", "yes", "2", ""] {
+        let xml = format!("<CDXML BondLength=\"14.4\" ReShikiHydrogenIsotopes=\"{value}\"/>");
+        let tree = presentation::parse(&xml).unwrap();
+        assert!(presentation::drawing_style(tree.root_element()).is_err());
+    }
+}
+
+#[test]
 fn stereochemistry_options_survive_native_and_cdxml_style_roundtrips() {
     use crate::chemistry::cdxml::{import_cdxml, presentation};
     let directory = tempfile::tempdir().unwrap();

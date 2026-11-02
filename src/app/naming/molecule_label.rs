@@ -44,18 +44,31 @@ impl App {
         let document = self.tab.doc.clone();
         self.status = "Generating chemical name locally…".into();
         self.error = false;
-        Task::perform(generate_for_atoms(document, atoms, cancel), move |result| {
-            Message::Naming(Action::Finished(ticket, Box::new(result)))
-        })
+        Task::perform(
+            generate_for_atoms(
+                document,
+                atoms,
+                cancel,
+                self.appearance.write_unknown_stereo,
+            ),
+            move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
+        )
     }
 
     pub(super) fn place_molecule_name(&mut self, atoms: &[u64], record: Record) {
+        let note = record.omitted_stereo_note();
         let Some(text) = record.systematic_name else {
             self.status = "The local generator returned no supported systematic name".into();
             self.error = true;
             return;
         };
         self.place_molecule_caption(atoms, text, record.canonical_smiles);
+        // The caption alone looks like a name for unspecified stereo.
+        if let Some(note) = note
+            && !self.error
+        {
+            self.status = format!("{} · {note}", self.status);
+        }
     }
 
     pub(super) fn place_molecule_caption(&mut self, atoms: &[u64], text: String, identity: String) {

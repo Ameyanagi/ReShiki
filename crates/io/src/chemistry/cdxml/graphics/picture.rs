@@ -99,6 +99,7 @@ impl Reader<'_, '_> {
             axis_y: y,
             style: None,
             sides: None,
+            superscript: None,
             phase: None,
             phase_flipped: None,
             layer: self.layer(el)?,

@@ -113,6 +113,9 @@ pub struct Fragment {
     /// Native CDX_NODE_ID on standalone external connection points.
     pub fuse_labels: Vec<Option<u32>>,
     pub graph: Graph,
+    /// Spin state retained beside the graph's radical electron counts.
+    #[serde(skip)]
+    pub singlets: Vec<bool>,
     pub metadata: Metadata,
     pub directions: Vec<Direction>,
     /// Y-up normalized positions; an empty fragment has no conformer.

@@ -28,7 +28,7 @@ Properties → Labels & chemistry → Chemical abbreviations provides compact la
 
 Each action is one Undo step. Native version-10 documents preserve custom names and reversed labels. SVG, PDF and PNG display the abbreviated drawing. Editable binary/XML exchange carries explicit nested chemical fragments; imported labels can expand back to real atoms. Common reversed labels are recognized on import. Custom reversed spellings are native-only.
 
-The catalog holds 359 groups with 52 alternative spellings. Typing one of these
+The catalog holds 362 groups with 59 alternative spellings. Typing one of these
 labels on an endpoint creates the real group, so formula and mass match the
 expanded structure. A reverse spelling, such as MeO, AcO, BnO, TBSO or
 (HO)2B, also makes its group (OMe, OAc, OBn, OTBS, B(OH)2), which then
@@ -46,22 +46,22 @@ Click **Use Morph**, or another suggested label, to replace the draft and choose
 Chemical abbreviation, then **Apply**. Acetyl offers separate **Use Ac** and
 **Use COMe** choices; both select the group explicitly rather than an element.
 
-| Category         | Groups | Examples                                                                    |
-| ---------------- | -----: | --------------------------------------------------------------------------- |
-| Protecting group |     79 | Boc, Cbz, Fmoc, Alloc, Teoc, PMB, DMB, DMTr, Mtt, SEM, THP, Dde, ivDde, Acm |
-| Carbonyl         |     42 | CHO, COMe, CO2tBu, CO2Bn, CONH2, CONMe2, CON(OMe)Me, OSu                    |
-| Sulfonyl         |     34 | Ts, Ns, pNs, Pbf, Mtr, SO2Ph, SO3H, Tf, OTf, NTf2                           |
-| Nitrogen         |     31 | NMe2, NEt2, NHMe, NHPh, NCO, NCS, Morph, Pip, Pyrr                          |
-| Alkyl            |     27 | sBu, iBu, cPr, cHex (Cy), neoPent, Vinyl, Prenyl, Propargyl                 |
-| Heteroaryl       |     25 | 2-Py, 3-Py, 4-Py, 2-Thienyl, 2-Furyl, Im, Bt, PT, BT                        |
-| Aryl             |     24 | Mes, Dipp, Tripp, PMP, oTol, C6F5, 4-CF3C6H4, 1-Naph                        |
-| Halogen          |     20 | CF3, CHF2, OCF3, SCF3, SF5, C2F5, CCl3                                      |
-| Silyl            |     19 | TMS, TES, TBS (TBDMS), TIPS, TBDPS, OTMS, CCTMS                             |
-| Phosphorus       |     15 | PPh2, PCy2, PtBu2, P(O)Ph2, P(O)(OEt)2, PPh3+                               |
-| Sulfur           |     14 | SMe, SPh, SAc, SBn, SOMe, SePh                                              |
-| Metal            |     11 | SnBu3, SnMe3, ZnCl, MgCl, GeMe3                                             |
-| Alkoxy           |     10 | OMe, OEt, OPh, OtBu, OiPr                                                   |
-| Boron            |      8 | Bpin, B(OH)2, Bnep, Bcat, BMIDA, Bdan, BF3-                                 |
+| Category         | Groups | Examples                                                                         |
+| ---------------- | -----: | -------------------------------------------------------------------------------- |
+| Protecting group |     80 | Boc, Cbz, Fmoc, Alloc, Teoc, PMB, DMB, DMTr, Mtt, SEM, THP, Dde, ivDde, Acm, Suc |
+| Carbonyl         |     43 | CHO, For, COMe, CO2tBu, CO2Bn, CONH2, CONMe2, CON(OMe)Me, OSu                    |
+| Sulfonyl         |     35 | Ts, Dns, Ns, pNs, Pbf, Mtr, SO2Ph, SO3H, Tf, OTf, NTf2                           |
+| Nitrogen         |     31 | NMe2, NEt2, NHMe, NHPh, NCO, NCS, Morph, Pip, Pyrr                               |
+| Alkyl            |     27 | sBu, iBu, cPr, cHex (Cy), neoPent, Vinyl, Prenyl, Propargyl                      |
+| Heteroaryl       |     25 | 2-Py, 3-Py, 4-Py, 2-Thienyl, 2-Furyl, Im, Bt, PT, BT                             |
+| Aryl             |     24 | Mes, Dipp, Tripp, PMP, oTol, C6F5, 4-CF3C6H4, 1-Naph                             |
+| Halogen          |     20 | CF3, CHF2, OCF3, SCF3, SF5, C2F5, CCl3                                           |
+| Silyl            |     19 | TMS, TES, TBS (TBDMS), TIPS, TBDPS, OTMS, CCTMS                                  |
+| Phosphorus       |     15 | PPh2, PCy2, PtBu2, P(O)Ph2, P(O)(OEt)2, PPh3+                                    |
+| Sulfur           |     14 | SMe, SPh, SAc, SBn, SOMe, SePh                                                   |
+| Metal            |     11 | SnBu3, SnMe3, ZnCl, MgCl, GeMe3                                                  |
+| Alkoxy           |     10 | OMe, OEt, OPh, OtBu, OiPr                                                        |
+| Boron            |      8 | Bpin, B(OH)2, Bnep, Bcat, BMIDA, Bdan, BF3-                                      |
 
 The bundled catalog file lists every label with its full names. Phthaloyl
 (Phth) bonds twice to its nitrogen; use NPhth for the phthalimido group. TBDPS
@@ -71,6 +71,17 @@ also be entered with **Enter** in Automatic or Chemical abbreviation mode. Ac
 and Ts are also element symbols, so Automatic mode types actinium and
 tennessine; choose Chemical abbreviation for acetyl and tosyl. Expanding TBDPS or OTBDPS
 reveals the real Si(phenyl)₂–tert-butyl or O–Si(phenyl)₂–tert-butyl structure.
+
+The [IUPAC peptide symbols](https://iupac.qmul.ac.uk/AminoAcid/A1819.html)
+Z, Tos, Bzl, OBzl/BzlO and OBut/ButO are input aliases for Cbz, Ts, Bn, OBn
+and OtBu. **Z and Tos require Chemical abbreviation mode**; Automatic mode
+keeps them as text because those symbols have other meanings. The label keeps
+the alias exactly as typed. **Contract common groups** continues to show the
+established Cbz, Ts and Bn labels. Dns creates dansyl
+(5-(dimethylamino)naphthalene-1-sulfonyl), and Suc creates succinyl
+(3-carboxypropanoyl). For creates formyl when typed; the existing CHO/OHC
+display and its explicitly requested contraction remain unchanged. For, like
+CHO, is skipped by automatic contraction.
 
 Internal groups can have several
 external bonds when they all connect to the same attachment atom. Editable

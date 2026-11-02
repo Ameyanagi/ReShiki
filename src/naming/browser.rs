@@ -67,6 +67,18 @@ pub async fn resolve_name(name: &str, cancel: Cancel) -> Result<Record, Error> {
     local::parse_result(name, &output)
 }
 
+/// Parse a generated name in the generation-verification mode, which also
+/// admits salts and radicals.
+pub(super) async fn resolve_generated(name: &str, cancel: Cancel) -> Result<Record, Error> {
+    let output = exchange(
+        &local::verification_request(name)?,
+        &cancel,
+        GENERATE_CANCELLED,
+    )
+    .await?;
+    local::verification_result(name, &output)
+}
+
 /// As on the desktop, a name is returned only after the parser exactly
 /// reconstructs the structure from it.
 pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record, Error> {
@@ -79,32 +91,11 @@ pub async fn generate_name_with_options(
     cancel: Cancel,
 ) -> Result<Record, Error> {
     let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
-    let request = reverse::generate_request_with_style(&expected, style)?;
+    let input = identity.naming_smiles.as_deref().unwrap_or(&expected);
+    let request = reverse::generate_request_with_style(input, style)?;
     let output = exchange(&request, &cancel, GENERATE_CANCELLED).await?;
-    let candidate = reverse::parse_response(&output, &expected)?;
-    let parser_name = candidate
-        .verification
-        .as_ref()
-        .map_or(&candidate.text, |v| &v.name);
-    let output = exchange(
-        &local::verification_request(parser_name)?,
-        &cancel,
-        GENERATE_CANCELLED,
-    )
-    .await
-    .map_err(|error| match error {
-        Error::Cancelled(_) => Error::Cancelled(GENERATE_CANCELLED.into()),
-        error => error,
-    })?;
-    let reconstructed = local::verification_result(parser_name, &output)?;
-    reverse::generated_record(
-        identity,
-        expected,
-        candidate.text,
-        candidate.status,
-        &reconstructed,
-        candidate.verification.as_ref().map(|v| v.smiles.as_str()),
-    )
+    let candidate = reverse::parse_response(&output, input)?;
+    reverse::reconstruct(identity, expected, candidate, &cancel).await
 }
 
 /// What the worker posted: `null` once loaded, then the response bytes or

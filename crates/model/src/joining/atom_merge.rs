@@ -230,6 +230,7 @@ fn metadata_compatible(first: &Atom, atom: &Atom) -> Result<(), String> {
             first.radical_electrons != atom.radical_electrons,
             "radicals",
         ),
+        (first.singlet != atom.singlet, "spin states"),
         (
             first.explicit_h != atom.explicit_h || first.no_implicit != atom.no_implicit,
             "fixed hydrogens",

@@ -20,7 +20,6 @@ pub const MAX_SMILES_BYTES: usize = 32_768;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityRejection {
     UnsupportedAtomsOrBonds,
-    UnknownStereo,
     NonclassicalStereo,
     /// Preserve the SMILES writer's own diagnostic at both call sites.
     Write(String),
@@ -60,19 +59,10 @@ pub fn canonical_identity(
     {
         return Err(IdentityRejection::UnsupportedAtomsOrBonds);
     }
-    if state.properties.atoms.iter().any(|atom| atom.unknown)
-        || state
-            .metadata
-            .bonds
-            .iter()
-            .any(|bond| bond.unknown_stereo || bond.stereo == 1)
-    {
-        return Err(IdentityRejection::UnknownStereo);
-    }
     if has_nonclassical_stereo(state) {
         return Err(IdentityRejection::NonclassicalStereo);
     }
-    let mut state = state.clone();
+    let mut state = unspecified_unknown_stereo(state);
     for atom in &mut state.metadata.atoms {
         atom.map_number = 0;
         atom.map_present = false;
@@ -207,6 +197,71 @@ mod canonical_identity_tests {
     }
 }
 
+/// The identity named by an unknown-configuration drawing. Clear only the
+/// explicitly unknown units; specified neighbouring stereocentres remain part
+/// of the identity checked by naming and generated captions.
+pub fn unspecified_unknown_stereo(
+    state: &chemistry::stereo::perception::State,
+) -> chemistry::stereo::perception::State {
+    use chemistry::kekulize::Direction;
+    let unknown_atoms = unknown_atom_units(state);
+    let mut state = state.clone();
+    for ((property, metadata), unknown) in state
+        .properties
+        .atoms
+        .iter_mut()
+        .zip(&mut state.metadata.atoms)
+        .zip(unknown_atoms)
+    {
+        if unknown {
+            property.unknown = false;
+            property.cip_code = None;
+            metadata.chiral_tag = 0;
+            metadata.chiral_permutation = None;
+            metadata.ring_stereo = false;
+        }
+    }
+    for (idx, metadata) in state.metadata.bonds.iter_mut().enumerate() {
+        if metadata.unknown_stereo || metadata.stereo == 1 {
+            metadata.unknown_stereo = false;
+            metadata.stereo = 0;
+            metadata.stereo_atoms.clear();
+            if let Some(code) = state.properties.bond_codes.get_mut(idx) {
+                *code = None;
+            }
+            if let Some(direction) = state.directions.get_mut(idx) {
+                *direction = Direction::None;
+            }
+        }
+    }
+    state
+}
+
+/// Unknown tetrahedral anchors can be explicit properties or the first
+/// endpoint of a native wavy single bond. Double-bond unknowns are separate.
+pub fn unknown_atom_units(state: &chemistry::stereo::perception::State) -> Vec<bool> {
+    let mut unknown: Vec<_> = state
+        .properties
+        .atoms
+        .iter()
+        .map(|atom| atom.unknown)
+        .collect();
+    for (idx, bond) in state.graph.bonds.iter().enumerate() {
+        if bond.order == 1
+            && (state.directions.get(idx) == Some(&chemistry::kekulize::Direction::Unknown)
+                || state
+                    .metadata
+                    .bonds
+                    .get(idx)
+                    .is_some_and(|meta| meta.unknown_stereo))
+            && let Some(anchor) = unknown.get_mut(bond.a)
+        {
+            *anchor = true;
+        }
+    }
+    unknown
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MoleculeName {
     pub annotation: u64,
@@ -319,7 +374,7 @@ pub fn include_annotations(doc: &Document, ids: &[u64]) -> Vec<u64> {
 #[cfg(test)]
 thread_local! { pub(crate) static IDENTITY_ENTRIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
 /// Exact native chemical identity for a complete component. This does not
-/// generate a name and never replaces unsupported stereo with a plain graph.
+/// generate a name. Explicitly unknown units are compared as unspecified.
 fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
     #[cfg(test)]
     IDENTITY_ENTRIES.with(|v| v.set(v.get() + 1));
@@ -329,9 +384,6 @@ fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
     // Use the shared fragment path so abbreviations and unresolved semantic
     // metadata cannot disappear before chemical validation.
     let part = crate::editing::analysis_document(doc, atoms);
-    if has_unknown_wavy_bond(&part) {
-        return Err("Unknown stereochemistry invalidates a generated name".into());
-    }
     let state = chemistry::document::prepare(&part)
         .map_err(|error| error.to_string())?
         .state;
@@ -339,9 +391,7 @@ fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
     // message for every rejection; keep its document pre-checks above separate.
     canonical_identity(&state).map_err(|error| match error {
         IdentityRejection::Write(message) => message,
-        IdentityRejection::UnsupportedAtomsOrBonds
-        | IdentityRejection::UnknownStereo
-        | IdentityRejection::NonclassicalStereo => {
+        IdentityRejection::UnsupportedAtomsOrBonds | IdentityRejection::NonclassicalStereo => {
             "Unsupported chemical semantics invalidate a generated name".into()
         }
     })

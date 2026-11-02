@@ -18,6 +18,9 @@ struct NamingBudget {
     remaining: Cell<usize>,
     depth: Cell<usize>,
     status: Cell<NameStatus>,
+    relative_ring_names: Cell<bool>,
+    unknown_units: RefCell<BTreeSet<String>>,
+    relative_ring_alternative: Cell<bool>,
 }
 
 impl Default for NamingBudget {
@@ -26,6 +29,9 @@ impl Default for NamingBudget {
             remaining: Cell::new(NAMING_WORK_LIMIT),
             depth: Cell::new(0),
             status: Cell::new(NameStatus::Preferred),
+            relative_ring_names: Cell::new(false),
+            unknown_units: RefCell::default(),
+            relative_ring_alternative: Cell::new(false),
         }
     }
 }
@@ -154,8 +160,37 @@ impl Molecule {
         }
     }
 
+    pub(super) fn mark_relative_ring_alternative(&self) {
+        self.naming_budget.relative_ring_alternative.set(true);
+    }
+
+    pub(super) fn has_relative_ring_alternative(&self) -> bool {
+        self.naming_budget.relative_ring_alternative.get()
+    }
+
+    pub(super) fn use_relative_ring_names(&self) -> bool {
+        self.naming_budget.relative_ring_names.get()
+    }
+
+    pub(super) fn set_relative_ring_names(&self, enabled: bool) {
+        self.naming_budget.relative_ring_names.set(enabled);
+    }
+
     pub(super) fn name_status(&self) -> NameStatus {
         self.naming_budget.status.get()
+    }
+
+    pub(super) fn record_unknown_unit(&self, locant: String) {
+        self.naming_budget.unknown_units.borrow_mut().insert(locant);
+    }
+
+    pub(super) fn unknown_units(&self) -> Vec<String> {
+        self.naming_budget
+            .unknown_units
+            .borrow()
+            .iter()
+            .cloned()
+            .collect()
     }
 
     pub(super) fn set_name_status(&self, status: NameStatus) {
@@ -169,9 +204,11 @@ impl Molecule {
         name: impl FnOnce() -> Result<Option<T>, String>,
     ) -> Result<Option<T>, String> {
         let status = self.name_status();
+        let unknown_units = self.naming_budget.unknown_units.borrow().clone();
         let result = name();
         if !matches!(result, Ok(Some(_))) {
             self.set_name_status(status);
+            *self.naming_budget.unknown_units.borrow_mut() = unknown_units;
         }
         result
     }

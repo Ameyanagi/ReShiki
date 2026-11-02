@@ -391,6 +391,9 @@ pub(super) fn name_smiles(smiles: &str, style: IsotopeStyle) -> Result<Name, Str
     Ok(Name {
         text,
         status,
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         verification: None,
     })
 }

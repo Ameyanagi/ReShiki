@@ -434,6 +434,16 @@ fn assert_response_matches_contract(
     let source = source.map(serde_json::to_value).transpose()?;
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    // The Python reference has no display formula or mass percentages.
+    for side in [&mut actual, &mut expected] {
+        if let Some(analysis) = side
+            .get_mut("analysis")
+            .and_then(|value| value.as_object_mut())
+        {
+            analysis.remove("display_formula");
+            analysis.remove("mass_percent");
+        }
+    }
     let mut failures = Vec::new();
     if let Err(error) =
         reaction_presentation::adapt_import(operation, format, &actual, &mut expected)

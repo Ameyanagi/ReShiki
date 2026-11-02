@@ -13,7 +13,7 @@ fn at<T>(items: &[T], index: usize) -> Result<&T, String> {
         .ok_or_else(|| "Invalid normalization index".into())
 }
 
-/// Normalize neutral nitro/azide, phosphorus and oxygen-bound halogen groups.
+/// Normalize neutral nitro/azide/N-oxide, phosphorus and oxygen-bound halogen groups.
 /// This is one sanitization pass, not full molecule sanitization. Return a copy
 /// so rejected inputs and later pipeline failures cannot partially edit a graph.
 pub fn functional_groups(graph: &Graph) -> Result<Graph, String> {
@@ -55,6 +55,35 @@ pub fn functional_groups(graph: &Graph) -> Result<Graph, String> {
                 && at(&result.bonds, bond)?.order == 3
             {
                 charge_separate(&mut result, id, other, bond, 2)?;
+                break;
+            }
+        }
+    }
+    // A main-group N->O arrow is the dipolar N-oxide depiction, rather
+    // than a metal coordination bond. Normalize it before caching valence:
+    // leaving terminal O neutral would invent an implicit O-H (or a radical
+    // when implicit H is disabled). Keep other donor/acceptor pairs intact.
+    for (id, atom) in graph.atoms.iter().enumerate() {
+        let valence = at(&valences, id)?;
+        if atom.atomic_number != 7
+            || at(&result.atoms, id)?.charge != 0
+            || atom.radical_electrons != 0
+            || valence.explicit_valence + valence.implicit_hydrogens != 3
+        {
+            continue;
+        }
+        for &(other, bond) in at(&neighbors, id)? {
+            let target = at(&result.atoms, other)?;
+            let edge = at(&result.bonds, bond)?;
+            if target.atomic_number == 8
+                && target.charge == 0
+                && target.explicit_hydrogens == 0
+                && target.radical_electrons == 0
+                && at(&neighbors, other)?.len() == 1
+                && edge.order == 5
+                && edge.a == id
+            {
+                charge_separate(&mut result, id, other, bond, 1)?;
                 break;
             }
         }
@@ -105,6 +134,9 @@ pub fn functional_groups(graph: &Graph) -> Result<Graph, String> {
     }
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests;
 
 fn charge_separate(
     graph: &mut Graph,

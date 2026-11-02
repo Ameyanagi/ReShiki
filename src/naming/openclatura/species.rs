@@ -46,6 +46,9 @@ pub(super) fn monatomic_cation(smiles: &str, in_salt: bool) -> Result<Option<Nam
             format!("{name}({}+)", atom.charge)
         },
         status: NameStatus::Preferred,
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         verification: None,
     }))
 }
@@ -142,6 +145,9 @@ pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, Strin
     Ok(Name {
         text: super::nest_enclosing_marks(&words.join(" ")),
         status,
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         verification: None,
     })
 }

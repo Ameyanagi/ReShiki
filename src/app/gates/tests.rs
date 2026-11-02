@@ -178,6 +178,12 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             false,
         ),
         (
+            Message::View(view_settings::Action::TwoDecimalWeight(true)),
+            true,
+            true,
+            false,
+        ),
+        (
             Message::View(view_settings::Action::Rulers(true)),
             true,
             true,

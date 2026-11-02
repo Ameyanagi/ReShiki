@@ -365,7 +365,7 @@ async fn feedback_layout_and_visual_evidence() {
         &directory,
         &format!("{prefix}-changed-status"),
     );
-    assert!(contains(&texts, "Whole drawing · C4H9NO"));
+    assert!(contains(&texts, "Whole drawing · C₄H₉NO"));
     if !baseline {
         assert_eq!(changed.status, "Drawing changed");
         assert!(
