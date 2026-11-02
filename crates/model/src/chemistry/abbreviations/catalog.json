@@ -362,6 +362,6 @@
     {"label": "C6F13", "reverse": "F13C6", "smiles": "*C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)F", "formula": "C6F13", "category": "halogen", "names": ["perfluorohexyl"], "contract": false},
     {"label": "CD3", "reverse": "D3C", "smiles": "*C([2H])([2H])[2H]", "formula": "CH3", "category": "alkyl", "names": ["trideuteriomethyl", "methyl-d3"], "contract": false},
     {"label": "OCD3", "reverse": "D3CO", "smiles": "*OC([2H])([2H])[2H]", "formula": "CH3O", "category": "alkoxy", "names": ["trideuteriomethoxy", "methoxy-d3"], "contract": false},
-    {"label": "OD", "reverse": "DO", "smiles": "*O[2H]", "formula": "HO", "category": "alkoxy", "names": ["deuterioxy", "deuterated hydroxy"], "contract": false}
+    {"label": "OD", "reverse": "DO", "smiles": "*O[2H]", "formula": "HO", "category": "alkoxy", "names": ["deuterioxy"], "contract": false}
   ]
 }
