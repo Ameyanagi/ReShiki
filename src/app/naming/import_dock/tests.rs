@@ -994,3 +994,30 @@ async fn retained_plus_lactic_import_keeps_stereo_caption_and_atomic_history() -
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn cyclic_peptide_with_a_drawn_stereo_hydrogen_inserts_with_its_caption() -> Result<(), String>
+{
+    let mut app = ready();
+    let name = "cyclo(-Val-Orn-Leu-D-Phe-Pro-)";
+    let _ = app.naming_action(Action::Name(name.into()));
+    let _ = app.insert_input();
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    let outcome = resolve_preview(
+        app.engine.clone(),
+        app.tab
+            .naming
+            .name_to_resolve()
+            .map_err(|e| e.to_string())?,
+        naming::Cancel::default(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    let _ = app.naming_action(Action::Finished(ticket, Box::new(Ok(outcome))));
+    // Layout draws proline's ring-fusion stereocentre with an explicit H.
+    assert!(app.tab.doc.atoms.iter().any(|atom| atom.element == "H"));
+    assert_eq!(app.tab.doc.annotations[0].text, name);
+    assert_eq!(app.tab.doc.molecule_names.len(), 1);
+    Ok(())
+}

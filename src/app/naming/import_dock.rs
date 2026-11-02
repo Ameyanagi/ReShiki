@@ -72,12 +72,18 @@ impl App {
             ));
             return;
         }
-        if let Err(error) = naming::structure_smiles(&preview.document)
-            .and_then(|actual| naming::verify_identity(&preview.identity, &actual))
+        // The caption keeps the drawn identity: layout may add an explicit
+        // stereo hydrogen (e.g. proline in a macrocycle) that the parser's
+        // SMILES leaves implicit.
+        let identity = match naming::structure_smiles(&preview.document)
+            .and_then(|actual| naming::verify_identity(&preview.identity, &actual).map(|()| actual))
         {
-            self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
-            return;
-        }
+            Ok(identity) => identity,
+            Err(error) => {
+                self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
+                return;
+            }
+        };
         let multicomponent = preview.is_multicomponent();
         let mut document = preview.document;
         let omit_caption = caption && preview.identity != preview.record.canonical_smiles;
@@ -103,7 +109,7 @@ impl App {
                 &mut document,
                 &atoms,
                 caption_text,
-                preview.record.canonical_smiles,
+                identity,
                 self.tab.caption_format.clone(),
                 self.appearance.name_typography,
             ) {
@@ -319,7 +325,10 @@ impl App {
                 .on_press_maybe(can_resolve.then_some(Message::Naming(Action::Resolve))),
             );
         }
-        if let Some(notice) = &state.notice {
+        // The summary above already shows a notice that is its own detail.
+        if let Some(notice) = &state.notice
+            && notice.summary() != notice.detail
+        {
             content = content.push(text(&notice.detail).size(11));
         }
         if let Some(preview) = &state.preview {
