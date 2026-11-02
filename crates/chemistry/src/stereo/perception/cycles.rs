@@ -112,7 +112,7 @@ impl Context {
         }
         Ok(true)
     }
-    fn candidate(&mut self, atom: usize, work: &mut Work) -> Result<bool, String> {
+    pub(super) fn candidate(&mut self, atom: usize, work: &mut Work) -> Result<bool, String> {
         if let Some(value) = at(&self.state.properties.atoms, atom)?.ring_candidate {
             return Ok(value);
         }

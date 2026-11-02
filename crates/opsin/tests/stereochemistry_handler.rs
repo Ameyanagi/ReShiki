@@ -292,8 +292,8 @@ fn unsupported_descriptors_follow_exact_warning_categories() {
         &mut a,
         r,
         STEREOCHEMISTRY_EL,
-        "r",
-        &[(TYPE_ATR, R_OR_S_TYPE_VAL), (VALUE_ATR, "r")],
+        "Q",
+        &[(TYPE_ATR, R_OR_S_TYPE_VAL), (VALUE_ATR, "Q")],
     );
     assert!(matches!(
         apply(&mut state, &mut a, f, &[id]),

@@ -3,6 +3,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use super::client::{self, CancelOnDrop, POLL};
 use super::{Error, Provenance, Record, canonical_smiles, worker};
+use std::borrow::Cow;
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
     path::Path,
@@ -93,35 +94,42 @@ fn run_with_executable(name: &str, cancel: &Cancel, executable: &Path) -> Result
 pub(super) fn parse_request(name: &str) -> Result<Vec<u8>, Error> {
     serde_json::to_vec(&worker::Request::Parse {
         protocol: worker::PROTOCOL,
-        name: retained_parser_name(name).into(),
+        name: parser_name(name)?.into_owned(),
     })
     .map_err(|error| Error::Worker(error.to_string()))
 }
 
 /// The record for the worker's reply to `parse_request(name)`.
 pub(super) fn parse_result(name: &str, output: &[u8]) -> Result<Record, Error> {
-    certify_retained_name(name, parse_reply(output, retained_parser_name(name))?)
+    certify_name(name, parse_reply(output, &parser_name(name)?)?)
 }
 
 // A curated retained-name equivalence, not a rule from optical rotation to R/S.
 // CHEBI:422 explicitly lists (+)-lactic acid and its (2S) graph:
 // https://www.ebi.ac.uk/chebi/CHEBI:422 (entry modified 2024-04-18).
-// Only this complete name is admitted; salts, derivatives, conflicting stereo
-// and all other optical-rotation names still use the strict parser unchanged.
+// Only this complete name is mapped to S; other rotation signs never assign CIP.
 const PLUS_LACTIC_NAME: &str = "(+)-lactic acid";
 const PLUS_LACTIC_PARSER_NAME: &str = "(2S)-2-hydroxypropanoic acid";
 const PLUS_LACTIC_GRAPH: &str = "C[C@H](O)C(=O)O";
 
-fn retained_parser_name(name: &str) -> &str {
+/// The text OPSIN parses: the retained-name mapping, an expansion of
+/// biochemical symbol notation, or the name itself.
+fn parser_name(name: &str) -> Result<Cow<'_, str>, Error> {
     if name.eq_ignore_ascii_case(PLUS_LACTIC_NAME) {
-        PLUS_LACTIC_PARSER_NAME
-    } else {
-        name
+        return Ok(Cow::Borrowed(PLUS_LACTIC_PARSER_NAME));
     }
+    Ok(super::symbols::expand(name)?.map_or(Cow::Borrowed(name), |e| Cow::Owned(e.name)))
 }
 
-fn certify_retained_name(name: &str, mut record: Record) -> Result<Record, Error> {
+fn certify_name(name: &str, mut record: Record) -> Result<Record, Error> {
     if !name.eq_ignore_ascii_case(PLUS_LACTIC_NAME) {
+        if let Some(expansion) = super::symbols::expand(name)? {
+            record.title = name.into();
+            record.provenance = Provenance::OpsinRustSymbols {
+                name: expansion.name,
+            };
+            record.warnings.extend(expansion.warnings);
+        }
         return Ok(record);
     }
     // The strict adapter already checked warnings, semantic layers, provenance,
@@ -165,7 +173,25 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
             "Local parser result has inconsistent version, options or input identity".into(),
         ));
     }
-    if !matches!(reply.status, worker::ParserStatus::Success) || !reply.warnings.is_empty() {
+    const ROTATION_PREFIX: &str = "Optical rotation cannot be algorithmically used to assign stereochemistry. This term was ignored: ";
+    // Optical-rotation terms are the only warnings a name may carry; they are
+    // checked against CIP descriptors and complete stereo below.
+    let signs: Option<Vec<_>> = reply
+        .warnings
+        .iter()
+        .map(|w| {
+            (w.kind == "STEREOCHEMISTRY_IGNORED")
+                .then(|| w.message.strip_prefix(ROTATION_PREFIX))
+                .flatten()
+                .map(|sign| sign.trim_end_matches('-'))
+        })
+        .collect();
+    let signs = signs.filter(|signs| !signs.is_empty());
+    if matches!(reply.status, worker::ParserStatus::Failure)
+        || (signs.is_none()
+            && (!matches!(reply.status, worker::ParserStatus::Success)
+                || !reply.warnings.is_empty()))
+    {
         const MESSAGE: &str = "The OPSIN Rust port could not interpret this name unambiguously with complete stereochemistry";
         let details = reply
             .warnings
@@ -187,22 +213,95 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
         const MESSAGE: &str = "This name requires relative/racemic stereo, polymer or atom-label semantics unsupported by editable naming previews. No simplified structure was accepted";
         return Err(Error::Rejected(MESSAGE.into()));
     }
-    if smiles.contains('.') {
-        const MESSAGE: &str = "Local naming supports one connected molecule; disconnected salts and mixtures are unsupported";
-        return Err(Error::Disconnected(MESSAGE.into()));
-    }
     let canonical_smiles = canonical_smiles(&smiles).map_err(Error::Rejected)?;
-    let synonyms = super::aliases_for_smiles(&canonical_smiles).map_err(Error::Worker)?;
+    let mut warnings = Vec::new();
+    if let Some(signs) = signs {
+        let descriptors = cip_descriptors(name);
+        let imported = crate::chemistry::smiles::read(&smiles)
+            .map_err(|error| Error::Rejected(error.to_string()))?;
+        if descriptors.is_empty()
+            || crate::chemistry::stereo::perception::has_unspecified_stereo(
+                &imported.prepared.state,
+            )
+            .map_err(Error::Rejected)?
+        {
+            return Err(Error::Rejected("A rotation sign is accepted only beside R/S descriptors that specify every stereocentre and double bond; the sign itself is never used to assign configuration".into()));
+        }
+        for sign in signs {
+            warnings.push(format!(
+                "Rotation sign {sign} ignored; structure from {}",
+                descriptors.join(", ")
+            ));
+        }
+    }
+    // Stable sorting moves positive components to the front without changing
+    // the parser's atom order (and therefore stereo) within each component.
+    let smiles = if smiles.contains('.') {
+        let mut components = smiles
+            .split('.')
+            .map(|part| {
+                let graph = crate::chemistry::smiles::parse(part)
+                    .map_err(|error| Error::Rejected(error.to_string()))?
+                    .graph;
+                let charge: i32 = graph.atoms.iter().map(|atom| i32::from(atom.charge)).sum();
+                Ok((charge <= 0, part))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        components.sort_by_key(|(nonpositive, _)| *nonpositive);
+        components
+            .into_iter()
+            .map(|(_, part)| part)
+            .collect::<Vec<_>>()
+            .join(".")
+    } else {
+        smiles
+    };
+    let synonyms = if smiles.contains('.') {
+        vec![]
+    } else {
+        super::aliases_for_smiles(&canonical_smiles).map_err(Error::Worker)?
+    };
     Ok(Record {
         title: name.into(),
         systematic_name: None,
         name_status: None,
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         smiles,
         canonical_smiles,
         synonyms,
-        warnings: vec![],
+        warnings,
         provenance: Provenance::OpsinRust,
     })
+}
+
+fn cip_descriptors(name: &str) -> Vec<&str> {
+    name.match_indices('(')
+        .filter_map(|(start, _)| {
+            let end = start + name[start..].find(')')? + 1;
+            let text = &name[start + 1..end - 1];
+            let mut cip = false;
+            for term in text.split(',') {
+                let term = term.trim();
+                let descriptor = term.chars().last()?;
+                if !matches!(descriptor, 'R' | 'S' | 'r' | 's' | 'M' | 'P' | 'E' | 'Z') {
+                    return None;
+                }
+                let locant = &term[..term.len() - 1];
+                if !locant.is_empty()
+                    && (!locant.starts_with(|c: char| c.is_ascii_digit())
+                        || !locant.chars().all(|c| {
+                            c.is_ascii_digit() || c.is_ascii_lowercase() || matches!(c, '\'' | '′')
+                        }))
+                {
+                    return None;
+                }
+                cip |= matches!(descriptor, 'R' | 'S' | 'r' | 's' | 'M' | 'P');
+            }
+            cip.then_some(&name[start..end])
+        })
+        .collect()
 }
 
 #[cfg(test)]

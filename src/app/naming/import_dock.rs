@@ -34,12 +34,19 @@ impl App {
             self.insert_import_preview(caption);
             return Task::none();
         }
+        let name = match self.tab.naming.name_to_resolve() {
+            Ok(name) => name,
+            Err(error) => {
+                // A sequence-mode error names the bad symbol, so show it.
+                self.tab.naming.notice = Some(Notice::new(NoticeKind::Retry, error.to_string()));
+                return Task::none();
+            }
+        };
         let (ticket, cancel) = self.begin_naming(|ticket| Pending::Import {
             ticket,
             add_caption: caption,
         });
         let engine = self.engine.clone();
-        let name = self.tab.naming.name.clone();
         let options = (&self.tab.doc.drawing_style).into();
         Task::perform(
             resolve_preview(engine, name, cancel, options),
@@ -65,12 +72,19 @@ impl App {
             ));
             return;
         }
-        if let Err(error) = naming::document_identity(&preview.document)
-            .and_then(|actual| naming::verify_identity(&preview.identity, &actual.smiles))
+        // The caption keeps the drawn identity: layout may add an explicit
+        // stereo hydrogen (e.g. proline in a macrocycle) that the parser's
+        // SMILES leaves implicit.
+        let identity = match naming::structure_smiles(&preview.document)
+            .and_then(|actual| naming::verify_identity(&preview.identity, &actual).map(|()| actual))
         {
-            self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
-            return;
-        }
+            Ok(identity) => identity,
+            Err(error) => {
+                self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
+                return;
+            }
+        };
+        let multicomponent = preview.is_multicomponent();
         let mut document = preview.document;
         let omit_caption = caption && preview.identity != preview.record.canonical_smiles;
         let caption_text = if let Some(index) = self.tab.naming.import_alias {
@@ -85,7 +99,7 @@ impl App {
         } else {
             preview.record.title.clone()
         };
-        if caption && !omit_caption {
+        if caption && !omit_caption && !multicomponent {
             let atoms = document
                 .atoms
                 .iter()
@@ -95,7 +109,7 @@ impl App {
                 &mut document,
                 &atoms,
                 caption_text,
-                preview.record.canonical_smiles,
+                identity,
                 self.tab.caption_format.clone(),
                 self.appearance.name_typography,
             ) {
@@ -116,13 +130,24 @@ impl App {
             return;
         }
         self.tool = Tool::Select;
-        self.tab.naming.notice = omit_caption.then(|| {
-            Notice::new(
-                NoticeKind::Info,
-                "Edited structure inserted; original name omitted.",
+        // One-step insertion still states what was assumed or ignored.
+        let lead = if multicomponent {
+            Some(MULTICOMPONENT_HINT)
+        } else {
+            omit_caption.then_some("Edited structure inserted; original name omitted.")
+        };
+        let notes: Vec<_> = lead
+            .into_iter()
+            .chain(preview.record.warnings.iter().map(String::as_str))
+            .collect();
+        self.tab.naming.notice =
+            (!notes.is_empty()).then(|| Notice::new(NoticeKind::Info, notes.join(" · ")));
+        self.status = if multicomponent {
+            format!(
+                "Inserted {} as separate components · Undo removes it",
+                preview.record.title
             )
-        });
-        self.status = if omit_caption {
+        } else if omit_caption {
             "Inserted edited structure · Original name omitted · Undo removes it".into()
         } else {
             format!("Inserted {} · Undo removes it", preview.record.title)
@@ -144,7 +169,11 @@ impl App {
             .preview
             .as_ref()
             .is_some_and(|preview| preview.modified);
-        let caption = state.add_name_below && !changed;
+        let multicomponent = state
+            .preview
+            .as_ref()
+            .is_some_and(Preview::is_multicomponent);
+        let caption = state.add_name_below && !changed && !multicomponent;
         let input = text_input(
             "import-name",
             "Chemical name",
@@ -177,10 +206,18 @@ impl App {
         let mut content = column![
             input,
             accessible_checkbox(
+                "import-name-peptide-sequence",
+                "Peptide sequence",
+                state.peptide_sequence,
+                Some(Message::Naming(Action::PeptideSequence(
+                    !state.peptide_sequence
+                ))),
+            ),
+            accessible_checkbox(
                 "import-name-caption",
                 "Add name below",
                 caption,
-                (idle && !changed)
+                (idle && !changed && !multicomponent)
                     .then_some(Message::Naming(Action::AddNameBelow(!state.add_name_below))),
             ),
             row![
@@ -229,11 +266,12 @@ impl App {
             );
         }
         if let Some(notice) = &state.notice {
-            content = content.push(
-                text(notice.summary())
-                    .size(12)
-                    .color(self.theme().palette().danger),
-            );
+            let summary = text(notice.summary()).size(12);
+            content = content.push(if notice.kind == NoticeKind::Info {
+                summary.style(muted_text)
+            } else {
+                summary.color(self.theme().palette().danger)
+            });
         }
         content = content.push(self.online_name_controls());
         if !idle {
@@ -287,10 +325,16 @@ impl App {
                 .on_press_maybe(can_resolve.then_some(Message::Naming(Action::Resolve))),
             );
         }
-        if let Some(notice) = &state.notice {
+        // The summary above already shows a notice that is its own detail.
+        if let Some(notice) = &state.notice
+            && notice.summary() != notice.detail
+        {
             content = content.push(text(&notice.detail).size(11));
         }
         if let Some(preview) = &state.preview {
+            if let Some(name) = preview.record.interpreted_name() {
+                content = content.push(text(format!("Read as {name}")).size(11).style(muted_text));
+            }
             content = content.push(
                 text(preview.record.provenance.label())
                     .size(11)
@@ -305,7 +349,7 @@ impl App {
                         .size(11)
                         .style(muted_text),
                 );
-            } else {
+            } else if !preview.is_multicomponent() {
                 content = content.push(self.alias_controls(AliasTarget::Import, &preview.record));
             }
         }

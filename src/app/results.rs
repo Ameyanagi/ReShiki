@@ -556,6 +556,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Refresh => None,
                 Action::Finished(..) => Some(Completion::Naming),
                 Action::Name(..)
+                | Action::PeptideSequence(..)
                 | Action::ClearName
                 | Action::Cancel
                 | Action::Resolve
@@ -580,7 +581,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::AskOnline
                 | Action::ConfirmOnline(..)
                 | Action::DismissOnline
-                | Action::OpenOnlineSource => None,
+                | Action::OpenOnlineSource
+                | Action::WriteUnknownStereo(_) => None,
             }
         }
         Message::ThemeFile(action) => {

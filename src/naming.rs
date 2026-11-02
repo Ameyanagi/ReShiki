@@ -21,6 +21,11 @@ mod online;
 pub use online::resolve_name_online;
 pub mod openclatura;
 mod reverse;
+mod symbols;
+/// Translate explicit one-letter peptide input into its three-letter title.
+pub fn peptide_sequence(name: &str) -> Result<String, Error> {
+    symbols::peptide_sequence(name)
+}
 #[cfg(test)]
 mod s2n_harness;
 pub mod worker;
@@ -47,7 +52,7 @@ pub enum Error {
     /// The name or structure is outside what local naming supports.
     Rejected(String),
     /// The name describes several disconnected pieces, such as a salt or a
-    /// mixture. Local naming accepts one connected molecule.
+    /// mixture returned by a source requiring a connected molecule.
     Disconnected(String),
     /// The bounded worker could not be started, supervised or understood.
     Worker(String),
@@ -115,6 +120,8 @@ pub enum NameReason {
     AtomOrder,
     AmineChalcogenide,
     PrincipalGroupTie,
+    RelativeRingStereo,
+    UnknownConfiguration,
 }
 impl NameReason {
     pub fn detail(self) -> &'static str {
@@ -167,6 +174,12 @@ impl NameReason {
             Self::AmineChalcogenide => {
                 "Amine oxide-type names (amine sulfide, selenide, telluride) have not been checked against the preferred IUPAC form."
             }
+            Self::RelativeRingStereo => {
+                "Uses cis/trans for an achiral cyclic compound; preferred IUPAC names use CIP r/s descriptors, while cis/trans is used in general nomenclature (P-93.5.1.1.2)."
+            }
+            Self::UnknownConfiguration => {
+                "Omits a descriptor for unknown configuration; preferred IUPAC names indicate unknown configuration with Ξ or ξ (P-91.2.1.2.1)."
+            }
             Self::PrincipalGroupTie => {
                 "Equally senior principal groups, such as a chain and a ring carboxylic acid, were chosen by atom order; the preferred parent (P-44.1) has not been verified."
             }
@@ -177,6 +190,7 @@ impl NameReason {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provenance {
     OpsinRust,
+    OpsinRustSymbols { name: String },
     OpsinRustRetainedName { source: &'static str },
     Openclatura,
     PubChem { cid: u64 },
@@ -193,6 +207,7 @@ impl Provenance {
     pub fn label(&self) -> String {
         match self {
             Self::OpsinRust => "OPSIN Rust port · local deterministic parser".into(),
+            Self::OpsinRustSymbols { .. } => "OPSIN Rust port · expanded symbol notation".into(),
             Self::OpsinRustRetainedName { source } => {
                 format!("{source} retained name · parsed locally by OPSIN Rust port")
             }
@@ -200,6 +215,14 @@ impl Provenance {
             Self::Openclatura => "openclatura 0.4.3 Rust port · verified by OPSIN Rust port".into(),
         }
     }
+}
+
+/// An independently reconstructed alternative generated name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AlternativeName {
+    pub name: String,
+    pub status: NameStatus,
 }
 
 #[derive(Debug, Clone)]
@@ -210,6 +233,11 @@ pub struct Record {
     pub systematic_name: Option<String>,
     /// Only generated names carry a rule-path preference assessment.
     pub name_status: Option<NameStatus>,
+    pub alternatives: Vec<AlternativeName>,
+    /// Parent locants whose unknown configuration the primary name omits.
+    pub omitted_stereo: Vec<String>,
+    /// Unknown stereo units the primary name omits, located or not.
+    pub omitted_units: usize,
     pub smiles: String,
     pub canonical_smiles: String,
     /// Curated offline aliases, separate from the generated systematic name.
@@ -218,10 +246,41 @@ pub struct Record {
     pub warnings: Vec<String>,
     pub provenance: Provenance,
 }
+impl Record {
+    /// The expanded input read by OPSIN, separate from a generated name.
+    pub fn interpreted_name(&self) -> Option<&str> {
+        match &self.provenance {
+            Provenance::OpsinRustSymbols { name } => Some(name),
+            _ => None,
+        }
+    }
+}
+
+impl Record {
+    /// What the primary name leaves out of a drawing with unknown configuration.
+    pub fn omitted_stereo_note(&self) -> Option<String> {
+        match self.omitted_units {
+            0 => None,
+            units if units == self.omitted_stereo.len() => Some(format!(
+                "Configuration at {} {} not specified in name",
+                if units == 1 { "position" } else { "positions" },
+                self.omitted_stereo.join(", ")
+            )),
+            1 => Some("Configuration of 1 unit drawn as unknown not specified in name".into()),
+            units => Some(format!(
+                "Configuration of {units} units drawn as unknown not specified in name"
+            )),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Identity {
     pub smiles: String,
+    /// Internal unknown-unit markers for generation; ordinary atom maps are removed.
+    pub naming_smiles: Option<String>,
+    /// Whether the UI requested explicit IUPAC Ξ/ξ descriptors.
+    pub write_unknown_stereo: bool,
     pub warnings: Vec<String>,
 }
 
@@ -235,10 +294,6 @@ fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<Strin
         IdentityRejection::UnsupportedAtomsOrBonds => {
             "Naming does not support query atoms, radicals, exotic bonds or relative stereo groups"
                 .into()
-        }
-        IdentityRejection::UnknownStereo => {
-            const MESSAGE: &str = "Resolve unknown stereochemistry before generating a name; wavy stereo cannot be sent as unspecified stereo";
-            MESSAGE.into()
         }
         IdentityRejection::NonclassicalStereo => {
             const MESSAGE: &str = "Naming supports tetrahedral and ordinary alkene stereochemistry only; other stereo classes cannot be discarded";
@@ -344,6 +399,16 @@ pub fn selected_identity(document: &Document, selected: &[u64]) -> Result<Identi
     drawing_identity(&part, document)
 }
 
+/// Canonical identity of a whole drawing, which may hold several components,
+/// such as the ions of a parsed salt.
+pub fn structure_smiles(document: &Document) -> Result<String, String> {
+    if document.atoms.is_empty() || document.atoms.len() > MAX_NAMING_ATOMS {
+        return Err("Naming supports molecular graphs with 1–512 atoms".into());
+    }
+    let molecule = chemistry::document::prepare(document).map_err(|e| e.to_string())?;
+    canonical_state(&molecule.state)
+}
+
 pub fn document_identity(document: &Document) -> Result<Identity, String> {
     drawing_identity(document, document)
 }
@@ -352,14 +417,100 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
     if document.atoms.is_empty() || document.atoms.len() > MAX_NAMING_ATOMS {
         return Err("Naming supports molecular graphs with 1–512 atoms".into());
     }
-    if molecule_names::has_unknown_wavy_bond(document) {
-        return Err("Resolve wavy/unknown stereochemistry before generating a name".into());
-    }
     let molecule = chemistry::document::prepare(document).map_err(|e| e.to_string())?;
     let smiles = canonical_state(&molecule.state)?;
     if smiles.contains('.') {
         return Err("Select a single connected molecule; mixtures and disconnected salts are not supported for local naming".into());
     }
+    let mut marked = molecule_names::unspecified_unknown_stereo(&molecule.state);
+    let mut unknown = vec![0; marked.metadata.atoms.len()];
+    for (idx, (is_unknown, marker)) in molecule_names::unknown_atom_units(&molecule.state)
+        .into_iter()
+        .zip(&mut unknown)
+        .enumerate()
+    {
+        if !is_unknown {
+            continue;
+        }
+        // A decorative wavy bond on an achiral atom has no stereolocant.
+        let stereogenic = [1, 2].into_iter().all(|tag| {
+            let mut trial = marked.clone();
+            if let Some(atom) = trial.metadata.atoms.get_mut(idx) {
+                atom.chiral_tag = tag;
+            }
+            chemistry::stereo::cip::label::assign(&trial, &Default::default()).is_ok_and(
+                |assignment| {
+                    assignment
+                        .state
+                        .properties
+                        .atoms
+                        .get(idx)
+                        .is_some_and(|atom| atom.cip_code.is_some())
+                },
+            )
+        });
+        if stereogenic {
+            *marker |= 1;
+        }
+    }
+    for (idx, (bond, metadata)) in molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&molecule.state.metadata.bonds)
+        .enumerate()
+    {
+        if bond.order != 2 || !(metadata.unknown_stereo || metadata.stereo == 1) {
+            continue;
+        }
+        // As for atoms, a crossed bond that cannot be E/Z has no stereolocant.
+        let neighbour = |atom: usize, other: usize| {
+            marked.graph.bonds.iter().find_map(|b| {
+                (b.a == atom && b.b != other)
+                    .then_some(b.b)
+                    .or((b.b == atom && b.a != other).then_some(b.a))
+            })
+        };
+        let (Some(first), Some(last)) = (neighbour(bond.a, bond.b), neighbour(bond.b, bond.a))
+        else {
+            continue;
+        };
+        let mut trial = marked.clone();
+        if let Some(metadata) = trial.metadata.bonds.get_mut(idx) {
+            metadata.stereo = 4;
+            metadata.stereo_atoms = vec![first, last];
+        }
+        if chemistry::stereo::cip::label::assign(&trial, &Default::default()).is_ok_and(
+            |assignment| {
+                assignment
+                    .state
+                    .properties
+                    .bond_codes
+                    .get(idx)
+                    .is_some_and(Option::is_some)
+            },
+        ) {
+            for endpoint in [bond.a, bond.b] {
+                if let Some(marker) = unknown.get_mut(endpoint) {
+                    *marker |= 2;
+                }
+            }
+        }
+    }
+    for (metadata, marker) in marked.metadata.atoms.iter_mut().zip(&unknown) {
+        metadata.map_number = if *marker == 0 { 0 } else { 900_000 + marker };
+        metadata.map_present = *marker != 0;
+    }
+    let naming_smiles = if unknown.iter().any(|&marker| marker != 0) {
+        Some(
+            chemistry::smiles::write::write(&marked, Default::default())
+                .map_err(|error| error.to_string())?
+                .text,
+        )
+    } else {
+        None
+    };
     let undefined = chemistry::stereo_lint::undefined(document);
     let mut units = undefined
         .atoms
@@ -383,7 +534,12 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
             units.join(", ")
         )],
     };
-    Ok(Identity { smiles, warnings })
+    Ok(Identity {
+        smiles,
+        naming_smiles,
+        write_unknown_stereo: false,
+        warnings,
+    })
 }
 
 pub fn verify_identity(expected: &str, actual: &str) -> Result<(), String> {
