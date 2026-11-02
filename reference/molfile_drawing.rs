@@ -225,11 +225,13 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
                         .iter()
                         .filter(|b| matches!(b.display.as_str(), "wedge" | "hash"))
                         .count();
-                    let document = difference(
-                        &serde_json::to_value(&actual)?,
-                        &expected_document,
-                        "drawing",
-                    );
+                    let mut actual = serde_json::to_value(&actual)?;
+                    // RDKit keeps only the radical count; the MOL RAD 1 singlet
+                    // spin is native drawing metadata.
+                    for atom in actual["atoms"].as_array_mut().into_iter().flatten() {
+                        atom.as_object_mut().map(|a| a.remove("singlet"));
+                    }
+                    let document = difference(&actual, &expected_document, "drawing");
                     let differences = [state, labeling, document]
                         .into_iter()
                         .flatten()

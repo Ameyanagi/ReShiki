@@ -90,7 +90,8 @@ impl CdxmlScene {
                 no_implicit: source.no_implicit,
                 aromatic: source.aromatic,
                 radical_electrons: source.radical_electrons,
-                singlet: *self.singlets.get(i).ok_or(SceneError::Limit)?,
+                singlet: source.radical_electrons == 2
+                    && *self.singlets.get(i).ok_or(SceneError::Limit)?,
                 label_h: u32::from(source.explicit_hydrogens)
                     + self
                         .molecule

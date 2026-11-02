@@ -76,7 +76,8 @@ impl Drawing {
             return Err(invalid("Drawing spin state dimensions changed"));
         }
         for (atom, &singlet) in self.document.atoms.iter_mut().zip(singlets) {
-            atom.singlet = singlet;
+            // Perception can leave a RAD 1 atom without two radical electrons.
+            atom.singlet = singlet && atom.radical_electrons == 2;
         }
         Ok(self)
     }

@@ -108,6 +108,18 @@ fn v3000_preserves_singlet_and_triplet_spin() -> anyhow::Result<()> {
 }
 
 #[test]
+fn singlet_code_without_two_perceived_electrons_stays_triplet() -> anyhow::Result<()> {
+    let text = "\n     RDKit          2D\n\n  0  0  0  0  0  0  0  0  0  0999 V3000\n\
+        M  V30 BEGIN CTAB\nM  V30 COUNTS 1 0 0 0 0\nM  V30 BEGIN ATOM\n\
+        M  V30 1 D 0 0 0 0 CHG=1 VAL=15 RAD=1\nM  V30 END ATOM\n\
+        M  V30 END CTAB\nM  END\n";
+    let (document, _) = read(text)?.display_document()?;
+    assert_ne!(document.atoms[0].radical_electrons, 2);
+    assert!(!document.atoms[0].singlet);
+    Ok(())
+}
+
+#[test]
 fn hydrogen_folding_preserves_singlet_spin() -> anyhow::Result<()> {
     let text = v2000_chain(2)
         .replacen(" C ", " H ", 1)

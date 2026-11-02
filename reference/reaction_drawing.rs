@@ -265,7 +265,13 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                                     separators += doc.annotations.len();
                                     agents +=
                                         doc.reactions.iter().map(|r| r.agents.len()).sum::<usize>();
-                                    let actual = serde_json::to_value(doc)?;
+                                    let mut actual = serde_json::to_value(doc)?;
+                                    // RDKit keeps only the radical count; the MOL RAD 1
+                                    // singlet spin is native drawing metadata.
+                                    for atom in actual["atoms"].as_array_mut().into_iter().flatten()
+                                    {
+                                        atom.as_object_mut().map(|a| a.remove("singlet"));
+                                    }
                                     let mut expected = serde_json::to_value(document)?;
                                     if let Err(error) = reaction_presentation::adapt_document(
                                         &actual,
