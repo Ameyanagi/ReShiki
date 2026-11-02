@@ -228,6 +228,7 @@ pub enum Message {
     Element(String),
     CaptionAction(iced::widget::text_editor::Action),
     TextStyle(reshiki::typography::StyleChange),
+    FormatChemicalName,
     FontSize(String),
     ApplyFontSize,
     ColorScope(typography::ColorScope),

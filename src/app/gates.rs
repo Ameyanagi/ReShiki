@@ -457,6 +457,7 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
                 view_settings::Action::Grid
                     | view_settings::Action::SmartGuides(_)
                     | view_settings::Action::TwoDecimalWeight(_)
+                    | view_settings::Action::NameTypography(_)
                     | view_settings::Action::Rulers(_)
                     | view_settings::Action::Crosshair(_)
                     | view_settings::Action::RulerUnit(_)

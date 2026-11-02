@@ -9,6 +9,7 @@ pub enum Action {
     Grid,
     SmartGuides(bool),
     TwoDecimalWeight(bool),
+    NameTypography(bool),
     Rulers(bool),
     Crosshair(bool),
     RulerUnit(crate::canvas::guides::Unit),
@@ -22,6 +23,14 @@ impl App {
             Action::Grid => self.grid = !self.grid,
             Action::SmartGuides(enabled) => self.set_smart_guides(enabled),
             Action::TwoDecimalWeight(enabled) => self.set_two_decimal_weight(enabled),
+            Action::NameTypography(enabled) => {
+                self.appearance.name_typography = enabled;
+                if let Err(error) = self.appearance.save() {
+                    self.status =
+                        format!("Could not save chemical name typography preference: {error}");
+                    self.error = true;
+                }
+            }
             Action::Toggle => self.view_open = !self.view_open,
             Action::Rulers(enabled) => self.set_rulers(enabled),
             Action::Crosshair(enabled) => self.guides.crosshair = enabled,

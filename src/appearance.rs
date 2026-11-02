@@ -43,6 +43,8 @@ pub struct Settings {
     pub smart_guides: bool,
     /// Display molecular weight with two decimal places instead of three.
     pub two_decimal_weight: bool,
+    /// Typeset chemical names when placing a new caption.
+    pub name_typography: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
 }
@@ -54,6 +56,7 @@ impl Default for Settings {
             arrange_controls: true,
             smart_guides: true,
             two_decimal_weight: false,
+            name_typography: true,
             drawing_style_unit: Default::default(),
         }
     }

@@ -36,6 +36,7 @@ fn appearance_preferences_survive_file_reload_independently() {
                 arrange_controls: false,
                 smart_guides: false,
                 two_decimal_weight: true,
+                name_typography: false,
                 drawing_style_unit: Unit::Millimetres,
             };
             settings.save_to(&path).unwrap();
@@ -44,6 +45,7 @@ fn appearance_preferences_survive_file_reload_independently() {
             assert_eq!(loaded.canvas_theme, canvas_theme);
             assert!(!loaded.arrange_controls && !loaded.smart_guides);
             assert!(loaded.two_decimal_weight);
+            assert!(!loaded.name_typography);
             assert_eq!(loaded.drawing_style_unit, Unit::Millimetres);
         }
     }
@@ -87,6 +89,7 @@ fn older_preferences_keep_interface_choice_and_default_to_light_canvas() {
         let loaded = Settings::load_from(&path);
         assert_eq!(loaded.mode, expected, "{json}");
         assert_eq!(loaded.canvas_theme, CanvasTheme::Light);
+        assert!(loaded.name_typography);
     }
     for invalid in ["", "not JSON", r#"{"canvas_theme":"future-mode"}"#] {
         std::fs::write(&path, invalid).unwrap();
