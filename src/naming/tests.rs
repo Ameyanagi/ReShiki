@@ -103,6 +103,67 @@ fn selections_cannot_silently_truncate_a_molecule() -> Result<(), String> {
     Ok(())
 }
 
+#[test]
+fn naming_notice_lists_only_undefined_stereogenic_units() -> Result<(), String> {
+    let mut doc = Document::default();
+    let ids = ["C", "C", "O", "C", "C", "C"]
+        .into_iter()
+        .enumerate()
+        .map(|(index, element)| {
+            doc.add_atom(element, crate::document::Point::new(index as f32 * 28., 0.))
+        })
+        .collect::<Vec<_>>();
+    for (a, b, order) in [(0, 1, 1), (1, 2, 1), (1, 3, 1), (3, 4, 2), (4, 5, 1)] {
+        doc.add_bond(ids[a], ids[b], order, "plain");
+    }
+    doc.bonds[3].stereo_authoritative = true;
+    assert_eq!(
+        document_identity(&doc)?.warnings,
+        ["C2 and the C4=C5 bond have no configuration; the name leaves them unspecified"]
+    );
+    doc.atoms[1].display.number = Some(crate::atom_labels::Number {
+        text: "alpha".into(),
+        offset: None,
+        style: crate::atom_labels::number_style(),
+    });
+    assert_eq!(
+        document_identity(&doc)?.warnings,
+        ["alpha and the C4=C5 bond have no configuration; the name leaves them unspecified"]
+    );
+    for case in ["plain", "R", "S", "E", "Z"] {
+        assert!(
+            document_identity(&identity_case_document(case))?
+                .warnings
+                .is_empty(),
+            "A fully specified {case} molecule should have no missing-stereo notice"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn naming_notice_uses_document_atom_order_for_a_selected_molecule() -> Result<(), String> {
+    let mut doc = Document::default();
+    doc.add_atom("O", crate::document::Point::new(-50., 0.));
+    let ids = ["C", "C", "O", "C"]
+        .into_iter()
+        .enumerate()
+        .map(|(index, element)| {
+            doc.add_atom(element, crate::document::Point::new(index as f32 * 28., 0.))
+        })
+        .collect::<Vec<_>>();
+    doc.add_bond(ids[0], ids[1], 1, "plain");
+    doc.add_bond(ids[1], ids[2], 1, "plain");
+    doc.add_bond(ids[1], ids[3], 1, "plain");
+    // The right branch has a different isotope, so this is a possible centre.
+    doc.atom_mut(ids[3]).unwrap().isotope = 13;
+    assert_eq!(
+        selected_identity(&doc, &ids)?.warnings,
+        ["C3 has no configuration; the name leaves it unspecified"]
+    );
+    Ok(())
+}
+
 // Keep these cases, documents and expected bytes in sync with the identity
 // characterization table in crates/model/src/molecule_names/tests.rs.
 fn identity_case_document(case: &str) -> Document {

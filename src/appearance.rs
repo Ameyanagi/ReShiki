@@ -41,6 +41,8 @@ pub struct Settings {
     pub arrange_controls: bool,
     /// Snap dragged objects to other objects' edges, centers and gaps.
     pub smart_guides: bool,
+    /// Include advisory IUPAC stereochemical drawing conventions in Check drawing.
+    pub iupac_style_notes: bool,
     /// Typeset chemical names when placing a new caption.
     pub name_typography: bool,
     /// Write IUPAC Ξ/ξ descriptors for explicitly unknown configuration.
@@ -55,6 +57,7 @@ impl Default for Settings {
             canvas_theme: Default::default(),
             arrange_controls: true,
             smart_guides: true,
+            iupac_style_notes: false,
             name_typography: true,
             write_unknown_stereo: false,
             drawing_style_unit: Default::default(),

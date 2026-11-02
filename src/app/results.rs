@@ -700,6 +700,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Example(..)
         | Message::Cleanup(..)
         | Message::Analyze
+        | Message::Stereo(..)
         | Message::Undo
         | Message::Redo
         | Message::Delete

@@ -845,6 +845,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Arrange(_)
             | Message::Cleanup(super::cleanup::Action::Begin)
             | Message::Analyze
+            | Message::Stereo(_)
             | Message::Import
             | Message::InsertInput
             | Message::Example(_)

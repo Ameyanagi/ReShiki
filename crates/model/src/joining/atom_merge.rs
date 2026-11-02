@@ -258,7 +258,9 @@ fn same_bond(a: &Bond, b: &Bond) -> bool {
     a.distance_derived = false;
     b.distance_derived = false;
     a.cip_label = None;
+    a.undefined_stereo = false;
     b.cip_label = None;
+    b.undefined_stereo = false;
     if a.a != b.a {
         // This direction check uses fewer displays than bonds::is_stereo_marker.
         if a.is_dative() || matches!(a.display.as_str(), "wedge" | "hollow_wedge" | "hash") {

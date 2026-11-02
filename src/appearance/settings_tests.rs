@@ -35,6 +35,7 @@ fn appearance_preferences_survive_file_reload_independently() {
                 canvas_theme,
                 arrange_controls: false,
                 smart_guides: false,
+                iupac_style_notes: true,
                 name_typography: false,
                 write_unknown_stereo: true,
                 drawing_style_unit: Unit::Millimetres,
@@ -44,6 +45,7 @@ fn appearance_preferences_survive_file_reload_independently() {
             assert_eq!(loaded.mode, mode);
             assert_eq!(loaded.canvas_theme, canvas_theme);
             assert!(!loaded.arrange_controls && !loaded.smart_guides);
+            assert!(loaded.iupac_style_notes);
             assert!(!loaded.name_typography);
             assert!(loaded.write_unknown_stereo);
             assert_eq!(loaded.drawing_style_unit, Unit::Millimetres);
@@ -67,6 +69,7 @@ fn older_preferences_keep_interface_choice_and_default_to_light_canvas() {
         let loaded = Settings::load_from(&path);
         assert_eq!(loaded.mode, expected, "{json}");
         assert_eq!(loaded.canvas_theme, CanvasTheme::Light);
+        assert!(!loaded.iupac_style_notes);
         assert!(loaded.name_typography);
         assert!(!loaded.write_unknown_stereo);
     }

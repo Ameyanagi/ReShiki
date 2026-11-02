@@ -99,6 +99,7 @@ mod shortcut_examples;
 mod shortcut_focus_tests;
 mod shortcuts;
 mod startup;
+mod stereo;
 mod tabs;
 mod template_library;
 #[cfg(test)]
@@ -245,6 +246,7 @@ pub enum Message {
     Example(&'static str),
     Cleanup(cleanup::Action),
     Analyze,
+    Stereo(stereo::Action),
     Undo,
     Redo,
     Delete,
@@ -480,6 +482,7 @@ impl App {
         self.sync_drawing_panel_context();
         self.cancel_engine_job();
         self.tab.file_epoch = self.next_epoch();
+        self.tab.stereo_notes.clear();
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
         self.tab.mapping.clear_pending();
@@ -799,6 +802,7 @@ impl App {
             self.tab.chemistry_notice = None;
         }
         if committed.recorded {
+            self.tab.stereo_notes.clear();
             let previous = self.tab.revision;
             self.tab.revision = self.tab.revision.wrapping_add(1);
             if committed.chemistry_changed {
@@ -1324,6 +1328,7 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
         z_order,
         indicator,
         cip_label: _,
+        undefined_stereo: _,
         a: start,
         b: end,
         order,
@@ -1357,6 +1362,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
     let reshiki::document::Atom {
         display,
         cip_label: _,
+        undefined_stereo: _,
         id,
         element,
         position,

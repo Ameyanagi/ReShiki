@@ -117,6 +117,7 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
     point.radical_electrons = 0;
     point.stereo = None;
     point.cip_label = None;
+    point.undefined_stereo = false;
     point.display.set_variable(None);
     point.marks.clear();
     for group in &mut result.groups {

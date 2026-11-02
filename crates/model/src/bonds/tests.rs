@@ -14,6 +14,7 @@ fn plain_bond_matches_the_fresh_bond_literals() {
             z_order: 0,
             indicator: Default::default(),
             cip_label: None,
+            undefined_stereo: false,
             a: 1,
             b: 2,
             order,
