@@ -214,6 +214,7 @@ pub enum Message {
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),
+    AtomSinglet(bool),
     ToggleInspector,
     Inspector(InspectorTab),
     Imports(import::Action),
@@ -1372,6 +1373,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         attachment,
         charge,
         radical_electrons,
+        singlet,
         marks,
         mark_serial,
         isotope,
@@ -1392,6 +1394,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         && *attachment == b.attachment
         && *charge == b.charge
         && *radical_electrons == b.radical_electrons
+        && *singlet == b.singlet
         && *marks == b.marks
         && *mark_serial == b.mark_serial
         && *isotope == b.isotope

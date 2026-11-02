@@ -63,7 +63,7 @@ fn elemental_analysis_formats_combustion_elements_and_isotope_mass() {
 #[test]
 fn property_rows_define_methods_and_preserve_exact_mass_precision() {
     let analysis = analysis("CCO");
-    let rows = property_rows(&analysis, false);
+    let rows = property_rows(&analysis, false, analysis.unpaired_electrons);
     let expected = [
         ("Weight (g/mol)", Some("RDKit"), "46.069"),
         ("Exact mass (Da)", Some("Monoisotopic mass"), "46.04186"),
@@ -100,7 +100,7 @@ fn property_rows_define_methods_and_preserve_exact_mass_precision() {
     assert!(weight_hint.contains(reshiki::chemistry::RDKIT_VERSION));
     assert!(weight_hint.contains("IUPAC 2023 longest-lived mass numbers"));
     assert!(weight_hint.contains("Labelled atoms use their nuclide mass"));
-    let precise = property_rows(&analysis, true);
+    let precise = property_rows(&analysis, true, analysis.unpaired_electrons);
     assert_eq!(precise[0].2, "46.07");
     assert_eq!(precise[1], rows[1]);
 }

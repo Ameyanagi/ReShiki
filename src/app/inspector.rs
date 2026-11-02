@@ -19,6 +19,7 @@ fn molecular_weight(mass: f64, two_decimal_weight: bool) -> String {
 fn property_rows(
     a: &Analysis,
     two_decimal_weight: bool,
+    unpaired: u32,
 ) -> [(&'static str, Option<String>, String); 8] {
     [
         (
@@ -57,8 +58,8 @@ fn property_rows(
         ("Rings", None, a.rings.to_string()),
         (
             "Unpaired electrons",
-            Some("Radical electrons in the analysed structure, from radical marks or atoms with fewer hydrogens than their valence".into()),
-            a.unpaired_electrons.to_string(),
+            Some("Radical electrons in the analysed structure, from radical marks or atoms with fewer hydrogens than their valence; a singlet's electron pair is not counted".into()),
+            unpaired.to_string(),
         ),
     ]
 }
@@ -209,6 +210,47 @@ pub struct PropertyKey {
     epoch: u64,
     atoms: Vec<u64>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SpinState {
+    Singlet,
+    Triplet,
+}
+
+impl SpinState {
+    fn selection(atoms: &[&reshiki::document::Atom]) -> Option<Self> {
+        let first = atoms.first()?;
+        atoms
+            .iter()
+            .all(|atom| atom.singlet == first.singlet)
+            .then_some(if first.singlet {
+                Self::Singlet
+            } else {
+                Self::Triplet
+            })
+    }
+}
+
+impl std::fmt::Display for SpinState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Singlet => "Singlet",
+            Self::Triplet => "Triplet",
+        })
+    }
+}
+
+/// The chemistry graph retains two radical electrons for a singlet carbene;
+/// its electron pair contributes no unpaired electrons to the displayed scope.
+fn unpaired_electrons(doc: &Document, analysis: &Analysis, selected: Option<&HashSet<u64>>) -> u32 {
+    let singlets = doc
+        .atoms
+        .iter()
+        .filter(|atom| atom.singlet && selected.is_none_or(|ids| ids.contains(&atom.id)))
+        .count() as u32;
+    analysis.unpaired_electrons - 2 * singlets
+}
+
 #[derive(Default)]
 pub(super) struct State {
     expected_viewport: Option<iced::Size>,
@@ -1146,7 +1188,10 @@ impl App {
             );
         }
         if let Some(a) = self.property_analysis() {
-            for (label, hint, value) in property_rows(a, self.appearance.two_decimal_weight) {
+            let unpaired = unpaired_electrons(&self.tab.doc, a, key.as_ref().map(|_| &ids));
+            for (label, hint, value) in
+                property_rows(a, self.appearance.two_decimal_weight, unpaired)
+            {
                 let label = text(label).size(11).style(muted_text).width(Length::Fill);
                 let label: Element<'_, Message> = if let Some(hint) = hint {
                     hover_hint(label, hint, tooltip::Position::Top).into()
@@ -1612,7 +1657,7 @@ impl App {
         }
         controls = controls.push(
             row![
-                text("Unpaired electrons").size(11).width(Length::Fill),
+                text("Radical electrons").size(11).width(Length::Fill),
                 crate::appearance::pick_list([0u8, 1, 2], count, Message::AtomRadical)
                     .placeholder("Mixed")
                     .text_size(12)
@@ -1621,6 +1666,23 @@ impl App {
             .spacing(6)
             .align_y(Alignment::Center),
         );
+        if count == Some(2) {
+            controls = controls.push(
+                row![
+                    text("Spin state").size(11).width(Length::Fill),
+                    crate::appearance::pick_list(
+                        [SpinState::Singlet, SpinState::Triplet],
+                        SpinState::selection(atoms),
+                        |spin| Message::AtomSinglet(spin == SpinState::Singlet),
+                    )
+                    .placeholder("Mixed")
+                    .text_size(12)
+                    .padding(6)
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            );
+        }
         for a in atoms.iter().filter(|a| !a.marks.is_empty()) {
             controls = controls.push(text(format!("{} · positioned marks", a.element)).size(12));
             for (index, mark) in a.marks.iter().enumerate() {

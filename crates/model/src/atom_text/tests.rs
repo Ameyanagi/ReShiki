@@ -1,6 +1,19 @@
 use super::*;
 use crate::document::Point;
 
+#[test]
+fn changing_a_singlet_carbene_element_clears_its_spin_state() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("C", Point::default());
+    let atom = doc.atom_mut(id).unwrap();
+    atom.radical_electrons = 2;
+    atom.singlet = true;
+    let changed = apply(&doc, id, "N", Mode::Auto).unwrap();
+    assert_eq!(changed.atom(id).unwrap().radical_electrons, 0);
+    assert!(!changed.atom(id).unwrap().singlet);
+    changed.validate().unwrap();
+}
+
 fn alpha_glucose() -> Result<Document, String> {
     let mut doc = crate::haworth::sugar_document(
         crate::haworth::Sugar::Glucose,

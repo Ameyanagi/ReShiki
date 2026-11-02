@@ -378,6 +378,7 @@ fn apply_entry(
         a.label_h = 0;
         a.no_implicit = new_element == "*";
         a.radical_electrons = 0;
+        a.singlet = false;
         a.stereo = None;
     }
     a.display.set_variable(variable);

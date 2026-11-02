@@ -90,6 +90,8 @@ impl CdxmlScene {
                 no_implicit: source.no_implicit,
                 aromatic: source.aromatic,
                 radical_electrons: source.radical_electrons,
+                singlet: source.radical_electrons == 2
+                    && *self.singlets.get(i).ok_or(SceneError::Limit)?,
                 label_h: u32::from(source.explicit_hydrogens)
                     + self
                         .molecule
@@ -129,7 +131,8 @@ impl CdxmlScene {
         let drawing = chemistry::document::for_import_scene(
             &self.molecule,
             self.conformer_3d.unwrap_or(false),
-        )?;
+        )?
+        .with_singlets(&self.singlets)?;
         let labels = drawing.labels()?;
         let mut molecule = self.molecule.clone();
         let mut document = drawing.finish_with(labels, |document| self.restore(document))?;
