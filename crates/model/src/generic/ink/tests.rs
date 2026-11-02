@@ -7,6 +7,30 @@ use crate::{
 };
 
 #[test]
+fn optional_unknown_indicators_fit_the_generic_ink_envelope() {
+    let mut doc = chain(&["C", "C"]);
+    doc.atom_labels.stereo = true;
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    doc.atoms[0].undefined_stereo = true;
+    doc.atoms[0].display.stereo.offset = Some(Point::new(-70., -60.));
+    doc.bonds[0].undefined_stereo = true;
+    doc.bonds[0].indicator.offset = Some(Point::new(60., 80.));
+    let atom = atom_bounds(&doc.atoms[0], &doc).unwrap().unwrap();
+    let bond = object_bounds(&doc).unwrap().unwrap();
+    for indicator in crate::atom_labels::indicators(&doc) {
+        let (lo, hi) = match indicator.owner {
+            crate::atom_labels::Owner::AtomStereo(_) => atom,
+            crate::atom_labels::Owner::BondStereo(_, _) => bond,
+            _ => continue,
+        };
+        assert_eq!(indicator.text, "(?)");
+        assert!(indicator.origin.x >= lo.x && indicator.origin.y >= lo.y);
+        assert!(indicator.origin.x + indicator.width <= hi.x);
+        assert!(indicator.origin.y + indicator.height <= hi.y);
+    }
+}
+
+#[test]
 fn stereo_descriptors_future_bounds_cover_displayed_sequence_and_axial_ink() {
     with_fonts(|| {
         for axial in ["helicity", "ra"] {

@@ -47,6 +47,36 @@ fn top(app: &App) -> &Command {
 }
 
 #[test]
+fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
+    let mut app = app();
+    for name in ["Check drawing", "Redraw stereo bonds"] {
+        search(&mut app, name);
+        // Available commands intentionally precede unavailable ones, including
+        // the style preference whose description also mentions Check drawing.
+        let command = &app.commands.items[row(&app, name)];
+        assert_eq!(command.need, catalog::Need::Molecule);
+        assert_eq!(
+            app.command_unavailable(command),
+            Some("Draw a molecule first")
+        );
+    }
+    assert!(!app.appearance.iupac_style_notes);
+    run(&mut app, "Toggle IUPAC style notes");
+    assert!(app.appearance.iupac_style_notes);
+    run(&mut app, "Toggle IUPAC style notes");
+    assert!(!app.appearance.iupac_style_notes);
+    let atom = app.tab.doc.add_atom("C", Point::default());
+    app.tab.selected = vec![atom];
+    for name in ["Check drawing", "Redraw stereo bonds"] {
+        search(&mut app, name);
+        assert_eq!(top(&app).name, name);
+        assert!(app.command_unavailable(top(&app)).is_none());
+    }
+    run(&mut app, "Redraw stereo bonds");
+    assert_eq!(app.status, "No stereocentres to redraw");
+}
+
+#[test]
 fn ionic_and_centred_charge_commands_follow_selection_eligibility() {
     let mut app = app();
     let o = app.tab.doc.add_atom("O", Point::default());

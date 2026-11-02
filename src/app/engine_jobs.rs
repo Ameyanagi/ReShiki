@@ -378,6 +378,7 @@ impl App {
             // A skipped check must not refresh labels or move the drawing.
             self.tab.analysis = None;
             self.tab.chemistry_notice = None;
+            self.tab.stereo_notes.clear();
             self.status = if response.warnings.is_empty() {
                 "Chemical analysis unavailable".into()
             } else {
@@ -397,14 +398,11 @@ impl App {
         }
         self.tab.analysis = response.analysis;
         self.tab.chemistry_notice = None;
-        self.status = if response.warnings.is_empty() {
-            "No chemistry errors found".into()
-        } else {
-            format!("Structure checked · {}", response.warnings.join(" · "))
-        };
+        self.checked_stereo(response.warnings);
         self.error = false;
     }
     fn structure_replaced(&mut self, kind: Job, response: Response) {
+        self.tab.stereo_notes.clear();
         if let Some(document) = response.document {
             self.cancel_reference_stretch();
             let before = self.tab.doc.clone();

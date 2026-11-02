@@ -341,10 +341,14 @@ pub fn selected_identity(document: &Document, selected: &[u64]) -> Result<Identi
         );
     }
     let part = editing::selection(document, &ids.iter().copied().collect::<Vec<_>>());
-    document_identity(&part)
+    drawing_identity(&part, document)
 }
 
 pub fn document_identity(document: &Document) -> Result<Identity, String> {
+    drawing_identity(document, document)
+}
+
+fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, String> {
     if document.atoms.is_empty() || document.atoms.len() > MAX_NAMING_ATOMS {
         return Err("Naming supports molecular graphs with 1–512 atoms".into());
     }
@@ -356,10 +360,30 @@ pub fn document_identity(document: &Document) -> Result<Identity, String> {
     if smiles.contains('.') {
         return Err("Select a single connected molecule; mixtures and disconnected salts are not supported for local naming".into());
     }
-    Ok(Identity {
-        smiles,
-        warnings: vec!["Names describe specified stereochemistry only. Unspecified centers remain unspecified; no absolute configuration is inferred by the naming engine.".into()],
-    })
+    let undefined = chemistry::stereo_lint::undefined(document);
+    let mut units = undefined
+        .atoms
+        .into_iter()
+        .map(|id| chemistry::stereo_lint::atom_name(names, id))
+        .chain(undefined.bonds.into_iter().map(|(a, b)| {
+            format!(
+                "the {}={} bond",
+                chemistry::stereo_lint::atom_name(names, a),
+                chemistry::stereo_lint::atom_name(names, b)
+            )
+        }))
+        .collect::<Vec<_>>();
+    let warnings = match units.pop() {
+        None => vec![],
+        Some(unit) if units.is_empty() => vec![format!(
+            "{unit} has no configuration; the name leaves it unspecified"
+        )],
+        Some(last) => vec![format!(
+            "{} and {last} have no configuration; the name leaves them unspecified",
+            units.join(", ")
+        )],
+    };
+    Ok(Identity { smiles, warnings })
 }
 
 pub fn verify_identity(expected: &str, actual: &str) -> Result<(), String> {
