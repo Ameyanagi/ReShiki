@@ -202,6 +202,8 @@ pub(super) fn completed_analysis() -> reshiki::engine::Analysis {
     reshiki::engine::Analysis {
         smiles: String::new(),
         formula: String::new(),
+        display_formula: String::new(),
+        mass_percent: vec![],
         mass: 0.,
         exact_mass: 0.,
         logp: 0.,
@@ -1658,6 +1660,8 @@ fn matching_dative_click_invalidates_computed_chemistry_like_reverse_bonds() {
     let cached = reshiki::engine::Analysis {
         smiles: "cached".into(),
         formula: "cached".into(),
+        display_formula: "cached".into(),
+        mass_percent: vec![],
         mass: 0.,
         exact_mass: 0.,
         logp: 0.,
@@ -2640,14 +2644,17 @@ fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
         )),
         Message::View(view_settings::Action::Grid),
         Message::View(view_settings::Action::SmartGuides(false)),
+        Message::View(view_settings::Action::TwoDecimalWeight(true)),
     ] {
         let _ = app.update(message);
     }
     // Smart guides are on by default, also for settings saved before them.
     assert!(!app.appearance.smart_guides);
+    assert!(app.appearance.two_decimal_weight);
     let legacy: crate::appearance::Settings =
         serde_json::from_str(r#"{"mode":"light","arrange_controls":false}"#).unwrap();
     assert!(legacy.smart_guides && !legacy.arrange_controls);
+    assert!(!legacy.two_decimal_weight);
     assert_eq!(app.tab.doc, document);
     assert_eq!(app.tab.selected, [id]);
     assert_eq!(app.tab.revision, revision);
@@ -2680,6 +2687,12 @@ fn view_messages_and_shortcuts_set_their_view_aids() {
     assert!(!app.guides.rulers);
     let _ = app.update(Message::Shortcut(shortcuts::Action::Crosshair));
     assert!(!app.guides.crosshair);
+    for enabled in [true, false] {
+        let _ = app.update(Message::View(view_settings::Action::TwoDecimalWeight(
+            enabled,
+        )));
+        assert_eq!(app.appearance.two_decimal_weight, enabled);
+    }
 }
 
 #[test]

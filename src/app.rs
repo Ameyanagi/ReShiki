@@ -267,6 +267,7 @@ pub enum Message {
     Save,
     Export(&'static str),
     CopySmiles,
+    CopyAnalysis,
     CopyChemicalText,
     Copy(bool),
     CopyImage,

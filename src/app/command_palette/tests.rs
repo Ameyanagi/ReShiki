@@ -85,6 +85,24 @@ fn partial_charge_symbols_are_searchable_by_delta() {
 }
 
 #[test]
+fn molecular_weight_precision_command_toggles_the_current_preference() {
+    let mut app = app();
+    let document = app.tab.doc.clone();
+    assert!(!app.appearance.two_decimal_weight);
+    for expected in [true, false] {
+        search(&mut app, "MW precision");
+        let index = row(&app, "Toggle 2-decimal molecular weight");
+        let command = app.commands.items[index].clone();
+        assert_eq!(command.category, Category::View);
+        assert!(app.command_unavailable(&command).is_none());
+        let _ = app.run_command(command);
+        assert_eq!(app.appearance.two_decimal_weight, expected);
+        assert_eq!(app.tab.doc, document);
+        assert!(!app.dirty());
+    }
+}
+
+#[test]
 fn path_cleanup_catalog_has_selection_commands_and_explicit_upright_axis() {
     for (query, name, upright) in [
         ("Smooth", "Smooth", None),
@@ -2052,10 +2070,10 @@ fn molecular_properties_palette_reports_the_current_scope_and_reopens_its_sectio
     use crate::app::{InspectorTab, inspector};
 
     for (scope, expected) in [
-        ("all", "C2H8O · 48.085 g/mol"),
-        ("molecule", "C2H6 · 30.070 g/mol"),
-        ("fragment", "CH4 · 16.043 g/mol"),
-        ("drawing", "C2H8O · 48.085 g/mol"),
+        ("all", "C₂H₈O · 48.085 g/mol"),
+        ("molecule", "C₂H₆ · 30.070 g/mol"),
+        ("fragment", "CH₄ · 16.043 g/mol"),
+        ("drawing", "C₂H₈O · 48.085 g/mol"),
     ] {
         let mut app = app();
         let (a, b) = ethane(&mut app);
@@ -2219,7 +2237,7 @@ fn molecular_properties_palette_uses_attachment_composition() {
     }
     run(&mut app, "Molecular formula and properties");
     assert!(
-        app.status.starts_with("Molecular properties · C10H10Fe · "),
+        app.status.starts_with("Molecular properties · C₁₀H₁₀Fe · "),
         "{}",
         app.status
     );

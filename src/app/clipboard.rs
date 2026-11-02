@@ -603,6 +603,29 @@ impl App {
         Task::none()
     }
 
+    pub(super) fn copy_analysis(&mut self) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        if let Some(analysis) = self
+            .property_analysis()
+            .and_then(|a| self.elemental_analysis(a))
+        {
+            // Journal text uses plain digits for counts: C2H6O.
+            return write_text(
+                analysis
+                    .chars()
+                    .map(|c| match c {
+                        '₀'..='₉' => char::from_digit(c as u32 - '₀' as u32, 10).unwrap_or(c),
+                        _ => c,
+                    })
+                    .collect(),
+            );
+        }
+        Task::none()
+    }
+
     pub(super) fn pasted(&mut self, contents: Option<String>) -> Task<Message> {
         if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
             if let Some(json) = editing::clipboard_json(&contents) {

@@ -68,9 +68,13 @@ pub struct AtomFacts {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Properties {
     pub formula: String,
+    #[serde(default)]
+    pub display_formula: String,
     pub mass: f64,
     pub exact_mass: f64,
     pub unpaired_electrons: u32,
+    #[serde(default)]
+    pub mass_percent: Vec<(String, f64)>,
 }
 
 pub struct Element {
@@ -82,6 +86,27 @@ pub struct Element {
     pub valences: &'static [i32],
 }
 
+// CIAAW/IUPAC Atomic Weights 2023, Table 2 (https://iupac.qmul.ac.uk/AtWt/):
+// bracketed mass numbers for elements without stable nuclides. These nominal
+// averages apply only to unlabelled atoms; RDKit's exact/common isotope data
+// and every explicit isotope mass remain unchanged in atomic_data.rs.
+const AVERAGE_MASS_OVERRIDES: &[(u8, f64)] = &[
+    (43, 97.),   // Tc
+    (105, 270.), // Db
+    (108, 270.), // Hs
+    (113, 286.), // Nh
+    (115, 289.), // Mc
+    (117, 293.), // Ts
+];
+
+fn script_number(number: u32, digits: &str) -> String {
+    number
+        .to_string()
+        .bytes()
+        .filter_map(|digit| digits.chars().nth(usize::from(digit - b'0')))
+        .collect()
+}
+
 /// RDKit's default formula merges isotopes; masses retain their isotope values.
 pub fn properties(atoms: &[AtomFacts]) -> Result<Properties, String> {
     // Together with the bounded atom fields this keeps all sums below u32/i32
@@ -91,6 +116,9 @@ pub fn properties(atoms: &[AtomFacts]) -> Result<Properties, String> {
     }
     let hydrogen = ELEMENTS.get(1).ok_or("Missing hydrogen mass data")?;
     let mut counts = BTreeMap::<&str, u32>::new();
+    let mut nuclides = BTreeMap::<&str, BTreeMap<u16, u32>>::new();
+    let mut element_masses = BTreeMap::<&str, f64>::new();
+    let mut other_nuclides = false;
     let (mut mass, mut exact_mass) = (0., 0.);
     let (mut hydrogens, mut charge, mut radicals) = (0u32, 0i32, 0u32);
     for atom in atoms {
@@ -98,11 +126,26 @@ pub fn properties(atoms: &[AtomFacts]) -> Result<Properties, String> {
             .get(usize::from(atom.atomic_number))
             .ok_or("Unknown atomic number in molecular properties")?;
         *counts.entry(element.symbol).or_default() += 1;
+        // Dummy-atom isotope metadata is not a nuclide label.
+        let isotope = if atom.atomic_number == 0 {
+            0
+        } else {
+            atom.isotope
+        };
+        *nuclides
+            .entry(element.symbol)
+            .or_default()
+            .entry(isotope)
+            .or_default() += 1;
+        other_nuclides |= isotope != 0 && !(atom.atomic_number == 1 && matches!(isotope, 2 | 3));
         hydrogens += u32::from(atom.hydrogens);
         charge += i32::from(atom.charge);
         radicals += u32::from(atom.radical_electrons);
         let isotope_mass = if atom.isotope == 0 {
-            element.average
+            AVERAGE_MASS_OVERRIDES
+                .iter()
+                .find_map(|&(number, mass)| (number == atom.atomic_number).then_some(mass))
+                .unwrap_or(element.average)
         } else {
             ISOTOPES
                 .binary_search_by_key(&(atom.atomic_number, atom.isotope), |&(n, i, _)| (n, i))
@@ -121,6 +164,12 @@ pub fn properties(atoms: &[AtomFacts]) -> Result<Properties, String> {
         // Keep RDKit's operation order; grouping sums changes low bits in f64.
         mass += isotope_mass;
         mass += f64::from(atom.hydrogens) * hydrogen.average;
+        if isotope_mass != 0. {
+            *element_masses.entry(element.symbol).or_default() += isotope_mass;
+        }
+        if atom.hydrogens != 0 {
+            *element_masses.entry("H").or_default() += f64::from(atom.hydrogens) * hydrogen.average;
+        }
         exact_mass += if atom.isotope == 0 {
             element.exact
         } else {
@@ -131,6 +180,7 @@ pub fn properties(atoms: &[AtomFacts]) -> Result<Properties, String> {
     exact_mass += f64::from(hydrogens) * hydrogen.exact;
     if hydrogens != 0 {
         *counts.entry("H").or_default() += hydrogens;
+        *nuclides.entry("H").or_default().entry(0).or_default() += hydrogens;
     }
     let mut formula = String::new();
     let mut append = |symbol: &str, count: u32| {
@@ -154,11 +204,61 @@ pub fn properties(atoms: &[AtomFacts]) -> Result<Properties, String> {
             formula.push_str(&charge.unsigned_abs().to_string());
         }
     }
+    let mut display_formula = String::new();
+    let mut append = |symbol: &str, isotopes: BTreeMap<u16, u32>| {
+        for (isotope, count) in isotopes {
+            match (symbol, isotope) {
+                ("H", 2) if !other_nuclides => display_formula.push('D'),
+                ("H", 3) if !other_nuclides => display_formula.push('T'),
+                (_, 0) => display_formula.push_str(symbol),
+                _ => {
+                    display_formula.push_str(&script_number(u32::from(isotope), "⁰¹²³⁴⁵⁶⁷⁸⁹"));
+                    display_formula.push_str(symbol);
+                }
+            }
+            if count > 1 {
+                display_formula.push_str(&script_number(count, "₀₁₂₃₄₅₆₇₈₉"));
+            }
+        }
+    };
+    for symbol in ["C", "H"] {
+        if let Some(isotopes) = nuclides.remove(symbol) {
+            append(symbol, isotopes);
+        }
+    }
+    for (symbol, isotopes) in nuclides {
+        append(symbol, isotopes);
+    }
+    if charge != 0 {
+        if radicals != 0 {
+            display_formula = format!("[{display_formula}]•");
+        }
+        if charge.unsigned_abs() > 1 {
+            display_formula.push_str(&script_number(charge.unsigned_abs(), "⁰¹²³⁴⁵⁶⁷⁸⁹"));
+        }
+        display_formula.push(if charge > 0 { '⁺' } else { '⁻' });
+    }
+    let mut mass_percent = Vec::new();
+    // Hill order puts hydrogen after carbon only when carbon is present.
+    if element_masses.contains_key("C") {
+        for symbol in ["C", "H"] {
+            if let Some(element_mass) = element_masses.remove(symbol) {
+                mass_percent.push((symbol.to_owned(), element_mass / mass * 100.));
+            }
+        }
+    }
+    mass_percent.extend(
+        element_masses
+            .into_iter()
+            .map(|(symbol, element_mass)| (symbol.to_owned(), element_mass / mass * 100.)),
+    );
     Ok(Properties {
         formula,
+        display_formula,
         mass,
         exact_mass,
         unpaired_electrons: radicals,
+        mass_percent,
     })
 }
 

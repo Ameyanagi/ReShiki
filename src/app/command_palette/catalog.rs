@@ -1281,6 +1281,15 @@ fn view(app: &App) -> Vec<Command> {
             )),
         ),
         send(
+            "Toggle 2-decimal molecular weight",
+            View,
+            "Switch molecular weight between 2 and 3 decimal places",
+            "MW mass precision rounding display",
+            Message::View(view_settings::Action::TwoDecimalWeight(
+                !app.appearance.two_decimal_weight,
+            )),
+        ),
+        send(
             "Toggle rulers",
             View,
             "Show or hide the rulers",

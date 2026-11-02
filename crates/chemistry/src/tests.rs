@@ -1,6 +1,187 @@
 use super::*;
 use serde_json::json;
 
+fn atom(atomic_number: u8, isotope: u16, hydrogens: u8) -> AtomFacts {
+    AtomFacts {
+        atomic_number,
+        isotope,
+        charge: 0,
+        hydrogens,
+        radical_electrons: 0,
+    }
+}
+
+#[test]
+fn display_formula_distinguishes_nuclides_and_preserves_merged_formula() -> anyhow::Result<()> {
+    for (atoms, formula, display) in [
+        (
+            vec![
+                atom(6, 0, 2),
+                atom(6, 0, 0),
+                atom(8, 0, 1),
+                atom(1, 2, 0),
+                atom(1, 2, 0),
+                atom(1, 2, 0),
+            ],
+            "C2H6O",
+            "C₂H₃D₃O",
+        ),
+        (
+            vec![
+                atom(6, 14, 1),
+                atom(6, 13, 0),
+                atom(6, 0, 1),
+                atom(6, 13, 0),
+            ],
+            "C4H2",
+            "C¹³C₂¹⁴CH₂",
+        ),
+        (
+            vec![atom(6, 13, 3), atom(1, 2, 0), atom(1, 3, 0)],
+            "CH5",
+            "¹³CH₃²H³H",
+        ),
+        (
+            vec![atom(1, 3, 0), atom(1, 0, 0), atom(1, 2, 0)],
+            "H3",
+            "HDT",
+        ),
+        (
+            vec![atom(1, 1, 0), atom(1, 2, 0), atom(1, 3, 0)],
+            "H3",
+            "¹H²H³H",
+        ),
+        (vec![atom(13, 0, 3), atom(1, 2, 0)], "H4Al", "H₃DAl"),
+        (vec![atom(0, 99, 0), atom(1, 2, 0)], "H*", "D*"),
+        (vec![atom(0, 99, 0)], "*", "*"),
+        (vec![], "", ""),
+    ] {
+        let result = properties(&atoms).map_err(anyhow::Error::msg)?;
+        assert_eq!(result.formula, formula);
+        assert_eq!(serde_json::to_value(result)?["display_formula"], display);
+    }
+    Ok(())
+}
+
+#[test]
+fn display_formula_formats_charges_and_charged_radicals() -> anyhow::Result<()> {
+    for (atoms, formula, display) in [
+        (
+            vec![AtomFacts {
+                charge: -3,
+                ..atom(13, 0, 6)
+            }],
+            "H6Al-3",
+            "H₆Al³⁻",
+        ),
+        (
+            vec![AtomFacts {
+                charge: 1,
+                ..atom(7, 0, 4)
+            }],
+            "H4N+",
+            "H₄N⁺",
+        ),
+        (
+            vec![
+                AtomFacts {
+                    charge: 2,
+                    radical_electrons: 1,
+                    ..atom(6, 0, 3)
+                },
+                atom(6, 0, 3),
+            ],
+            "C2H6+2",
+            "[C₂H₆]•²⁺",
+        ),
+        (
+            vec![AtomFacts {
+                charge: -1,
+                radical_electrons: 1,
+                ..atom(8, 0, 0)
+            }],
+            "O-",
+            "[O]•⁻",
+        ),
+        (
+            vec![AtomFacts {
+                radical_electrons: 2,
+                ..atom(6, 0, 2)
+            }],
+            "CH2",
+            "CH₂",
+        ),
+    ] {
+        let result = properties(&atoms).map_err(anyhow::Error::msg)?;
+        assert_eq!(result.formula, formula);
+        assert_eq!(serde_json::to_value(result)?["display_formula"], display);
+    }
+    Ok(())
+}
+
+#[test]
+fn mass_percent_uses_isotope_masses_and_hill_element_order() -> anyhow::Result<()> {
+    let ethanol =
+        properties(&[atom(6, 0, 3), atom(6, 0, 2), atom(8, 0, 1)]).map_err(anyhow::Error::msg)?;
+    let isotope =
+        properties(&[atom(6, 13, 3), atom(8, 0, 1), atom(1, 2, 0)]).map_err(anyhow::Error::msg)?;
+    let no_carbon = properties(&[atom(13, 0, 3)]).map_err(anyhow::Error::msg)?;
+    for (result, expected) in [
+        (ethanol, vec![("C", 24.022), ("H", 6.048), ("O", 15.999)]),
+        (
+            isotope,
+            vec![("C", 13.00335484), ("H", 6.046101778), ("O", 15.999)],
+        ),
+        (no_carbon, vec![("Al", 26.982), ("H", 3.024)]),
+    ] {
+        let fractions: Vec<(String, f64)> =
+            serde_json::from_value(serde_json::to_value(&result)?["mass_percent"].clone())?;
+        assert_eq!(fractions.len(), expected.len());
+        for ((element, fraction), (symbol, mass)) in fractions.iter().zip(expected) {
+            assert_eq!(element, symbol);
+            assert!((fraction - mass / result.mass * 100.).abs() < 1e-10);
+        }
+        assert!((fractions.iter().map(|(_, fraction)| fraction).sum::<f64>() - 100.).abs() < 1e-12);
+    }
+    for atoms in [vec![], vec![atom(0, 999, 0)]] {
+        let result = properties(&atoms).map_err(anyhow::Error::msg)?;
+        assert_eq!(serde_json::to_value(result)?["mass_percent"], json!([]));
+    }
+    Ok(())
+}
+
+#[test]
+fn radioactive_nominal_averages_leave_exact_and_labelled_masses_unchanged() -> anyhow::Result<()> {
+    for (number, average) in [
+        (43, 97.),
+        (105, 270.),
+        (108, 270.),
+        (113, 286.),
+        (115, 289.),
+        (117, 293.),
+    ] {
+        let result = properties(&[atom(number, 0, 0)]).map_err(anyhow::Error::msg)?;
+        assert_eq!(result.mass, average);
+        assert_eq!(result.exact_mass, ELEMENTS[usize::from(number)].exact);
+        let explicit = properties(&[atom(number, 999, 0)]).map_err(anyhow::Error::msg)?;
+        assert_eq!(explicit.mass, 999.);
+        assert_eq!(explicit.exact_mass, 999.);
+    }
+    Ok(())
+}
+
+#[test]
+fn old_properties_payloads_default_new_display_fields() -> anyhow::Result<()> {
+    let old: Properties = serde_json::from_value(json!({
+        "formula": "CH4", "mass": 16.043, "exact_mass": 16.031300128,
+        "unpaired_electrons": 0,
+    }))?;
+    let value = serde_json::to_value(old)?;
+    assert_eq!(value["display_formula"], "");
+    assert_eq!(value["mass_percent"], json!([]));
+    Ok(())
+}
+
 #[test]
 fn worker_completion_is_atomic_and_requires_matching_data() -> Result<(), String> {
     let input = json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{

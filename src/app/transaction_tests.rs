@@ -23,6 +23,8 @@ fn analysis() -> reshiki::engine::Analysis {
     reshiki::engine::Analysis {
         smiles: "CC".into(),
         formula: "C2H6".into(),
+        display_formula: "C₂H₆".into(),
+        mass_percent: vec![],
         mass: 30.07,
         exact_mass: 30.047,
         logp: 1.02,

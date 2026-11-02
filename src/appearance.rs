@@ -41,6 +41,8 @@ pub struct Settings {
     pub arrange_controls: bool,
     /// Snap dragged objects to other objects' edges, centers and gaps.
     pub smart_guides: bool,
+    /// Display molecular weight with two decimal places instead of three.
+    pub two_decimal_weight: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
 }
@@ -51,6 +53,7 @@ impl Default for Settings {
             canvas_theme: Default::default(),
             arrange_controls: true,
             smart_guides: true,
+            two_decimal_weight: false,
             drawing_style_unit: Default::default(),
         }
     }

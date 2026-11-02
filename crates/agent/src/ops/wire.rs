@@ -286,6 +286,7 @@ pub(crate) fn warnings(messages: Vec<String>) -> Vec<Warning> {
 pub struct AnalysisJson {
     pub smiles: String,
     pub formula: String,
+    pub display_formula: String,
     pub mass: f64,
     pub exact_mass: f64,
     pub logp: f64,
@@ -305,6 +306,8 @@ impl From<Analysis> for AnalysisJson {
         let Analysis {
             smiles,
             formula,
+            display_formula,
+            mass_percent: _,
             mass,
             exact_mass,
             logp,
@@ -319,6 +322,7 @@ impl From<Analysis> for AnalysisJson {
         Self {
             smiles,
             formula,
+            display_formula,
             mass: round(mass),
             exact_mass: round(exact_mass),
             logp: round(logp),

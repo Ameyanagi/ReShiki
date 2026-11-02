@@ -120,6 +120,8 @@ async fn the_whole_drawing_is_analyzed_without_changing_it() {
         .unwrap();
     let result = analyze_ok(&host, &handle, Value::Null).await;
     assert_eq!(result["value"]["analysis"]["formula"], "C2H6O");
+    assert_eq!(result["value"]["analysis"]["display_formula"], "C₂H₆O");
+    assert!(result["value"]["analysis"].get("mass_percent").is_none());
     assert_eq!(result["value"]["analysis"], engine_analysis(doc).await);
     assert_eq!(result["value"]["analyzed_atoms"], strings(&ids));
     assert_eq!(result["warnings"], json!([]));
@@ -293,6 +295,8 @@ fn a_missing_analysis_warns_for_the_drawing_and_fails_a_selection() {
     let analysis = Analysis {
         smiles: "C".into(),
         formula: "CH4".into(),
+        display_formula: "CH₄".into(),
+        mass_percent: vec![],
         mass: 16.04,
         exact_mass: 16.03,
         logp: 0.64,

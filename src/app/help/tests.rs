@@ -247,6 +247,18 @@ fn registry_uses_menu_bindings_and_covers_every_context() {
 }
 
 #[test]
+fn molecular_weight_precision_help_names_the_option_and_both_display_defaults() {
+    for query in ["molecular weight precision", "MW rounding"] {
+        let entry = top(query);
+        assert_eq!(entry.name, "Molecular weight precision", "{query}");
+        assert_eq!(entry.keys, "View → 2-decimal MW");
+        assert!(entry.description.contains("default 3"));
+        assert!(entry.description.contains("exact mass keeps 5"));
+        assert_eq!(entry.scope, registry::Scope::Anywhere);
+    }
+}
+
+#[test]
 fn every_example_renders_a_changed_drawing() {
     let mut count = 0;
     for entry in entries() {

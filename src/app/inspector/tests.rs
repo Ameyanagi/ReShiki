@@ -71,11 +71,11 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
             app.tab.inspector_ui.seed_molecular(Some(expanded));
             let text = panel_text(&app, &mut renderer);
             assert!(
-                text.contains("Whole drawing · Cl4KNa3 · 249.880\u{a0}g/\u{2060}mol"),
+                text.contains("Whole drawing · Cl₄KNa₃ · 249.880\u{a0}g/\u{2060}mol"),
                 "{text}"
             );
             assert_eq!(
-                text.contains("Selection · K+ · 39.098\u{a0}g/\u{2060}mol"),
+                text.contains("Selection · K⁺ · 39.098\u{a0}g/\u{2060}mol"),
                 !app.tab.selected.is_empty(),
                 "{text}"
             );

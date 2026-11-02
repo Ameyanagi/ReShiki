@@ -35,6 +35,7 @@ fn appearance_preferences_survive_file_reload_independently() {
                 canvas_theme,
                 arrange_controls: false,
                 smart_guides: false,
+                two_decimal_weight: true,
                 drawing_style_unit: Unit::Millimetres,
             };
             settings.save_to(&path).unwrap();
@@ -42,8 +43,31 @@ fn appearance_preferences_survive_file_reload_independently() {
             assert_eq!(loaded.mode, mode);
             assert_eq!(loaded.canvas_theme, canvas_theme);
             assert!(!loaded.arrange_controls && !loaded.smart_guides);
+            assert!(loaded.two_decimal_weight);
             assert_eq!(loaded.drawing_style_unit, Unit::Millimetres);
         }
+    }
+}
+
+#[test]
+fn molecular_weight_precision_defaults_to_three_decimals_and_survives_reload() {
+    assert!(!Settings::default().two_decimal_weight);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    std::fs::write(&path, r#"{"mode":"dark","smart_guides":false}"#).unwrap();
+    let legacy = Settings::load_from(&path);
+    assert!(!legacy.two_decimal_weight);
+    assert!(!legacy.smart_guides);
+    assert_eq!(legacy.mode, Mode::Dark);
+
+    let mut settings = legacy;
+    for two_decimal_weight in [true, false] {
+        settings.two_decimal_weight = two_decimal_weight;
+        settings.save_to(&path).unwrap();
+        let loaded = Settings::load_from(&path);
+        assert_eq!(loaded.two_decimal_weight, two_decimal_weight);
+        assert!(!loaded.smart_guides);
+        assert_eq!(loaded.mode, Mode::Dark);
     }
 }
 
