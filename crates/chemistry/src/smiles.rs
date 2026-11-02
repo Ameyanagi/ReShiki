@@ -97,6 +97,7 @@ struct Reader<'a> {
     adjacent: Vec<Vec<(usize, usize)>>,
     closures: Vec<Vec<Option<usize>>>,
     starts: Vec<bool>,
+    default_chirality: Vec<bool>,
     rings: BTreeMap<u32, Vec<RingEnd>>,
     pairs: HashSet<(usize, usize)>,
     bond_count: usize,
@@ -144,6 +145,7 @@ fn parse_inner(text: &str) -> Result<Parsed> {
         adjacent: Vec::new(),
         closures: Vec::new(),
         starts: Vec::new(),
+        default_chirality: Vec::new(),
         rings: BTreeMap::new(),
         pairs: HashSet::new(),
         bond_count: 0,
@@ -282,7 +284,7 @@ impl Reader<'_> {
         if self.parsed.graph.atoms.len() >= 100_000 {
             return Err(Error::Limit);
         }
-        let (atom, meta, label) = self.atom()?;
+        let (atom, meta, label, default_chirality) = self.atom()?;
         let id = self.parsed.graph.atoms.len();
         self.parsed.graph.atoms.push(atom);
         self.parsed.metadata.atoms.push(meta);
@@ -290,6 +292,7 @@ impl Reader<'_> {
         self.adjacent.push(Vec::new());
         self.closures.push(Vec::new());
         self.starts.push(start);
+        self.default_chirality.push(default_chirality);
         Ok(id)
     }
     fn add_bond(
@@ -451,6 +454,62 @@ impl Reader<'_> {
         Ok(())
     }
     fn chirality(&mut self) -> Result<()> {
+        // Resolve the degree-two shorthand before the tetrahedral adjustments.
+        // Terminal atom order, including closure tokens, defines the collapsed
+        // tetrahedron; the two central bonds alone cannot encode its winding.
+        for id in 0..self.parsed.graph.atoms.len() {
+            let meta = self.parsed.metadata.atoms.get(id).ok_or(Error::Limit)?;
+            if !matches!(meta.chiral_tag, 1 | 2 | 5) {
+                continue;
+            }
+            if meta.chiral_tag != 5
+                && !self
+                    .default_chirality
+                    .get(id)
+                    .copied()
+                    .ok_or(Error::Limit)?
+            {
+                continue;
+            }
+            let adjacent = self.adjacent.get(id).ok_or(Error::Limit)?;
+            if adjacent.len() != 2
+                || !adjacent.iter().all(|(_, b)| {
+                    self.parsed
+                        .graph
+                        .bonds
+                        .get(*b)
+                        .is_some_and(|b| b.order == 2)
+                })
+            {
+                continue;
+            }
+            let Some(terminals) = crate::stereo::allene::terminals(&self.parsed.graph, id) else {
+                continue;
+            };
+            let value = if meta.chiral_tag == 5 {
+                meta.chiral_permutation.unwrap_or(0)
+            } else {
+                u32::from(3 - meta.chiral_tag)
+            };
+            // Unspecified @AL remains unsupported at the chemistry boundary.
+            if !matches!(value, 1 | 2) {
+                continue;
+            }
+            let orders = [
+                self.chiral_bond_order(terminals[0])?,
+                self.chiral_bond_order(terminals[1])?,
+            ];
+            let permutation = chirality::allene_permutation(
+                &self.parsed.graph,
+                id,
+                value,
+                [&orders[0], &orders[1]],
+                terminals.map(|a| self.starts.get(a).copied().unwrap_or(false)),
+            )?;
+            let meta = self.parsed.metadata.atoms.get_mut(id).ok_or(Error::Limit)?;
+            meta.chiral_tag = 5;
+            meta.chiral_permutation = Some(permutation);
+        }
         for (id, meta) in self.parsed.metadata.atoms.iter_mut().enumerate() {
             if !matches!(meta.chiral_tag, 1 | 2 | 6..=8) {
                 continue;
@@ -517,5 +576,31 @@ impl Reader<'_> {
             }
         }
         Ok(())
+    }
+
+    fn chiral_bond_order(&self, id: usize) -> Result<Vec<usize>> {
+        let adjacent = self.adjacent.get(id).ok_or(Error::Limit)?;
+        let closures = self
+            .closures
+            .get(id)
+            .ok_or(Error::Limit)?
+            .iter()
+            .copied()
+            .collect::<Option<Vec<_>>>()
+            .ok_or(Error::Limit)?;
+        let mut neighbors = adjacent
+            .iter()
+            .copied()
+            .filter(|(_, bond)| !closures.contains(bond))
+            .collect::<Vec<_>>();
+        neighbors.sort_unstable();
+        let split = neighbors.partition_point(|(other, _)| *other < id);
+        Ok(neighbors
+            .iter()
+            .take(split)
+            .map(|(_, b)| *b)
+            .chain(closures.iter().copied())
+            .chain(neighbors.iter().skip(split).map(|(_, b)| *b))
+            .collect())
     }
 }

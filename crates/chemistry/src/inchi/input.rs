@@ -67,7 +67,7 @@ pub struct Stereo {
     /// None is InChI's NO_ATOM (-1), used by double-bond records.
     pub central_atom: Option<i16>,
     pub neighbors: [i16; 4],
-    /// Native InChI code: 1 double bond, 2 tetrahedral.
+    /// Native InChI code: 1 double bond, 2 tetrahedral, 3 allene.
     pub kind: i8,
     /// Native InChI code: 1 odd, 2 even, 3 unknown.
     pub parity: i8,
@@ -206,6 +206,13 @@ pub fn prepare(state: &State, positions: Option<&[Point3]>) -> Result<Input, Err
         let tag = at(&state.metadata.atoms, i)?.chiral_tag;
         if matches!(tag, 1 | 2) {
             add_tetrahedron(&graph, &topology, &refreshed, i, tag, &mut result.stereo)?;
+        } else if tag == 5 {
+            add_allene(
+                &graph,
+                i,
+                at(&state.metadata.atoms, i)?.chiral_permutation,
+                &mut result.stereo,
+            )?;
         }
     }
     for (i, bond) in graph.bonds.iter().enumerate() {
@@ -332,6 +339,39 @@ fn add_tetrahedron(
         } else {
             1
         },
+    });
+    Ok(())
+}
+
+fn add_allene(
+    graph: &Graph,
+    center: usize,
+    permutation: Option<u32>,
+    result: &mut Vec<Stereo>,
+) -> Result<(), Error> {
+    let Some(permutation @ (1 | 2)) = permutation else {
+        return Ok(());
+    };
+    let Some([left, right]) = crate::stereo::allene::terminals(graph, center) else {
+        return Ok(());
+    };
+    let Some([Some(first), _, Some(last), _]) = crate::stereo::allene::carriers(graph, center)
+    else {
+        return Ok(());
+    };
+    // InChI's allene order is X-A=C=B-Y, with one actual carrier from each
+    // end. Its EVEN projection is the AL1 configuration for carrier order
+    // [X, other-at-A, Y, other-at-B]; an implicit H is last at its end.
+    result.push(Stereo {
+        central_atom: Some(atom_id(center)?),
+        neighbors: [
+            atom_id(first)?,
+            atom_id(left)?,
+            atom_id(right)?,
+            atom_id(last)?,
+        ],
+        kind: 3,
+        parity: if permutation == 1 { 2 } else { 1 },
     });
     Ok(())
 }

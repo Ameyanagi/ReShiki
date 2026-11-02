@@ -1,0 +1,9 @@
+ReShiki adapts extended-tetrahedral CIP labeling from SiMolecule centres:
+https://github.com/SiMolecule/centres
+Revision d4b2ca46228bdf8814ff0c1f00465be4085af8c9
+core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java
+Copyright (c) 2020 John Mayfield
+
+The adaptation is in
+crates/chemistry/src/stereo/cip/configuration/extended_tetrahedral.rs.
+It retains the BSD-2-Clause terms in LICENSE in this directory.

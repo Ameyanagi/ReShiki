@@ -50,3 +50,14 @@ fn changed_chemical_identity_cannot_publish_a_display_edit() -> anyhow::Result<(
     }
     Ok(())
 }
+
+#[test]
+fn ring_display_cannot_drop_a_biaryl_axis_wedge() -> anyhow::Result<()> {
+    let binol = super::super::atrop_tests::binol("wedge");
+    let ring: Vec<_> = binol.atoms[..6].iter().map(|a| a.id).collect();
+    let edit = aromatic_display(&binol, &ring)?.finish();
+    assert!(matches!(edit, Err(Error::IdentityChanged)));
+    let other: Vec<_> = binol.atoms[10..16].iter().map(|a| a.id).collect();
+    aromatic_display(&binol, &other)?.finish()?;
+    Ok(())
+}

@@ -186,6 +186,25 @@ fn remove_inner(input: &Input, finish: bool) -> Result<Removal> {
     let mut metadata = input.metadata.clone();
     let mut directions = input.directions.clone();
     let mut unknown = input.unknown_atoms.clone();
+    // An allene's winding belongs to its central carbon, while the removed H
+    // is bonded to a terminal carbon. Moving that explicit carrier to the
+    // absent-H slot at the end of its pair swaps the winding exactly when it
+    // was the pair's first carrier. Atom remapping preserves every other slot.
+    for (center, meta) in metadata.atoms.iter_mut().enumerate() {
+        if meta.chiral_tag != 5 || !matches!(meta.chiral_permutation, Some(1 | 2)) {
+            continue;
+        }
+        let Some(carriers) = crate::stereo::allene::carriers(&input.graph, center) else {
+            continue;
+        };
+        let mut odd = false;
+        for first in [carriers[0], carriers[2]].into_iter().flatten() {
+            odd ^= *at(&removed, first)?;
+        }
+        if odd {
+            meta.chiral_permutation = meta.chiral_permutation.map(|p| 3 - p);
+        }
+    }
     let mut alive = vec![true; m];
     let mut degree = neighbors.iter().map(Vec::len).collect::<Vec<_>>();
     for id in (0..n).rev().filter(|&a| removed.get(a) == Some(&true)) {

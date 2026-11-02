@@ -123,6 +123,31 @@ struct Draft {
     smiles: String,
     inchi: Option<kernel::Molecule>,
     figure_only: bool,
+    warnings: Vec<String>,
+}
+
+pub(crate) const ALLENE_INCHI_NOTICE: &str = "Allene InChI and InChIKey require an ordinary 2D depiction; use stereochemical SMILES or MOL export";
+
+fn has_allene_stereo(molecule: &molecular::Molecule) -> bool {
+    molecule
+        .state
+        .metadata
+        .atoms
+        .iter()
+        .any(|atom| atom.chiral_tag == 5)
+}
+
+fn allene_inchi_unavailable(molecule: &molecular::Molecule, projected: bool) -> bool {
+    has_allene_stereo(molecule)
+        && (projected || molecule.positions.iter().any(|position| position.z != 0.))
+}
+
+pub(super) fn identifier_notices(molecule: &molecular::Molecule, projected: bool) -> Vec<String> {
+    if allene_inchi_unavailable(molecule, projected) {
+        vec![ALLENE_INCHI_NOTICE.into()]
+    } else {
+        Vec::new()
+    }
 }
 
 /// A retained distance graph cannot acquire molecular meaning through an
@@ -383,6 +408,7 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
                 smiles: String::new(),
                 inchi: None,
                 figure_only: true,
+                warnings: Vec::new(),
             });
         }
         return Err(Error::Empty);
@@ -401,6 +427,13 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
     {
         return Err(Error::Identity);
     }
+    let projected = molfile::has_projected_coordinates(document);
+    if request.operation == "export"
+        && request.format.as_deref() == Some("inchi")
+        && allene_inchi_unavailable(&prepared.molecule, projected)
+    {
+        return Err(Error::Chemistry(ALLENE_INCHI_NOTICE.into()));
+    }
     // The original to_document pass precedes Analyze. Full CIP operates on
     // the detached drawing, never on the molecule used for identifiers.
     let labels = prepared.drawing.labels()?;
@@ -412,17 +445,13 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
     } else {
         prepared.drawing.clone().finish(labels)?
     };
-    let (smiles, inchi) = prepare_identifiers(
-        &prepared.molecule,
-        molfile::has_projected_coordinates(
-            request.document.as_ref().ok_or(Error::MissingDocument)?,
-        ),
-    )?;
+    let (smiles, inchi) = prepare_identifiers(&prepared.molecule, projected)?;
     Ok(Draft {
         document,
         smiles,
         inchi,
         figure_only: false,
+        warnings: identifier_notices(&prepared.molecule, projected),
     })
 }
 
@@ -445,7 +474,12 @@ fn prepare_identifiers(
     } else {
         String::new()
     };
-    let inchi = if identifiers && !bonds.iter().any(|b| matches!(b.order, 5 | 6)) {
+    // Allene parity is passed through real planar coordinates and terminal
+    // wedges. Projected drawings cannot use that route without inventing XY.
+    let inchi = if identifiers
+        && !bonds.iter().any(|b| matches!(b.order, 5 | 6))
+        && !allene_inchi_unavailable(molecule, projected)
+    {
         // A flattened view must not invent stereochemistry from its XY. The
         // prepared state already owns the tetrahedral and double-bond tags.
         let positions = (!projected).then_some(molecule.positions.as_slice());
@@ -517,7 +551,7 @@ fn finish(
         analysis,
         output: None,
         engine_version: chemistry::RDKIT_VERSION.into(),
-        warnings: Vec::new(),
+        warnings: draft.warnings,
     };
     if request.operation == "export" {
         let format = request.format.as_deref().ok_or(Error::MissingFormat)?;
@@ -527,14 +561,14 @@ fn finish(
         if matches!(format, "cdxml" | "cdx") && document.atom_labels.steroid_alpha_beta {
             crate::atom_labels::refresh::refresh_optional_stereo(document);
         }
-        response.warnings = export_notices::notices(
+        response.warnings.extend(export_notices::notices(
             document,
             format,
             Route::Prepared {
                 source: request.document.as_ref().ok_or(Error::MissingDocument)?,
                 figure_only: draft.figure_only,
             },
-        );
+        ));
         if document.bonds.iter().any(|bond| match format {
             "mol" => matches!(bond.order, 0 | 6 | 7),
             "smiles" => matches!(bond.order, 0 | 7),

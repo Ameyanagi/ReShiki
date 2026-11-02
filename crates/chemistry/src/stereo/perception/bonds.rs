@@ -145,15 +145,23 @@ impl Context {
                 && at(&self.state.metadata.atoms, bond.a)?.chiral_tag == 0
                 && at(&self.state.metadata.atoms, bond.b)?.chiral_tag == 0
             {
-                let mut atrop = false;
+                let mut axial = false;
                 for &b in at(&self.neighbors, bond.a)? {
                     work.spend(1)?;
-                    if matches!(at(&self.state.metadata.bonds, b)?.stereo, 6 | 7) {
-                        atrop = true;
+                    if matches!(at(&self.state.metadata.bonds, b)?.stereo, 6 | 7)
+                        || bond.order == 1
+                            && at(&self.state.graph.bonds, b)?.order == 2
+                            && crate::stereo::allene::terminals(
+                                &self.state.graph,
+                                self.other(b, bond.a)?,
+                            )
+                            .is_some()
+                    {
+                        axial = true;
                         break;
                     }
                 }
-                if !atrop {
+                if !axial {
                     put(&mut self.state.directions, i, Direction::None)?;
                 }
             }

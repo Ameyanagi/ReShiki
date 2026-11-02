@@ -9,7 +9,7 @@ use super::{
     document::{self as molecular, Molecule},
     kekulize::Direction,
     smiles::write,
-    stereo::{Point3, wedging},
+    stereo::{Point3, cip::label, wedging},
 };
 use crate::{
     cleanup::{Options, Orientation, Scope},
@@ -70,7 +70,7 @@ type Result<T> = std::result::Result<T, Error>;
 struct Part {
     base: Document,
     molecule: Molecule,
-    identity: String,
+    identity: Identity,
     moving: HashSet<u64>,
     fixed: Coordinates,
 }
@@ -125,8 +125,51 @@ pub struct Cleaned {
 fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
 }
-fn identity(molecule: &Molecule) -> Result<String> {
-    Ok(write::write(&molecule.state, Default::default())?.text)
+#[derive(Debug, PartialEq, Eq)]
+struct Identity {
+    smiles: String,
+    axes: Vec<(u64, u64, Option<String>)>,
+}
+
+fn identity(molecule: &Molecule) -> Result<Identity> {
+    let smiles = write::write(&molecule.state, Default::default())?.text;
+    let mut axes = Vec::new();
+    if molecule
+        .state
+        .metadata
+        .bonds
+        .iter()
+        .any(|bond| matches!(bond.stereo, 6 | 7))
+    {
+        // Plain SMILES omits axial chirality. Check its full CIP labels by
+        // stable drawing IDs as well, including axes without a descriptor.
+        let labeled =
+            label::assign(&molecule.state, &Default::default()).map_err(molecular::Error::from)?;
+        for (i, (bond, metadata)) in labeled
+            .state
+            .graph
+            .bonds
+            .iter()
+            .zip(&labeled.state.metadata.bonds)
+            .enumerate()
+        {
+            if matches!(metadata.stereo, 6 | 7) {
+                let a = *molecule.ids.get(bond.a).ok_or(Error::Layout)?;
+                let b = *molecule.ids.get(bond.b).ok_or(Error::Layout)?;
+                let code = labeled
+                    .state
+                    .properties
+                    .bond_codes
+                    .get(i)
+                    .ok_or(Error::Layout)?
+                    .clone();
+                let (a, b) = pair(a, b);
+                axes.push((a, b, code));
+            }
+        }
+        axes.sort_unstable();
+    }
+    Ok(Identity { smiles, axes })
 }
 fn positions(document: &Document) -> Vec<Point3> {
     document
@@ -602,6 +645,14 @@ impl Prepared {
 
 fn rewedge(molecule: &Molecule, base: &Document, work: &mut usize) -> Result<Vec<String>> {
     let state = &molecule.state;
+    let axial_ends = state
+        .graph
+        .bonds
+        .iter()
+        .zip(&state.metadata.bonds)
+        .filter(|(_, metadata)| matches!(metadata.stereo, 6 | 7))
+        .flat_map(|(bond, _)| [bond.a, bond.b])
+        .collect::<HashSet<_>>();
     let mut wedge = wedging::WedgeState {
         graph: state.graph.clone(),
         metadata: state.metadata.clone(),
@@ -626,27 +677,35 @@ fn rewedge(molecule: &Molecule, base: &Document, work: &mut usize) -> Result<Vec
     for (i, bond) in base.bonds.iter().enumerate() {
         let mut display = bond.display.clone();
         let atom = *indices.get(&bond.a).ok_or(Error::Layout)?;
+        let axial = axial_ends.contains(&atom)
+            && matches!(
+                state.directions.get(i),
+                Some(Direction::Wedge | Direction::Hash)
+            );
         if bond.order == 1
             && !bond.projection
             && matches!(
                 display.as_str(),
                 "wedge" | "hash" | "hollow_wedge" | "hashed" | "bold"
             )
-            && state
-                .metadata
-                .atoms
-                .get(atom)
-                .ok_or(Error::Layout)?
-                .chiral_tag
-                != 0
+            && (axial
+                || state
+                    .metadata
+                    .atoms
+                    .get(atom)
+                    .ok_or(Error::Layout)?
+                    .chiral_tag
+                    != 0)
         {
-            let storage = state.rings.atoms.iter().try_fold(
-                molecule.ids.len().saturating_add(base.bonds.len()),
-                |size, ring| size.checked_add(ring.len()).ok_or(Error::Limit),
-            )?;
-            *work = work.checked_sub(storage).ok_or(Error::Limit)?;
-            wedge = wedging::wedge_bond(&wedge, &properties, &conformer, i, atom)
-                .map_err(Error::Wedge)?;
+            if !axial {
+                let storage = state.rings.atoms.iter().try_fold(
+                    molecule.ids.len().saturating_add(base.bonds.len()),
+                    |size, ring| size.checked_add(ring.len()).ok_or(Error::Limit),
+                )?;
+                *work = work.checked_sub(storage).ok_or(Error::Limit)?;
+                wedge = wedging::wedge_bond(&wedge, &properties, &conformer, i, atom)
+                    .map_err(Error::Wedge)?;
+            }
             let up = wedge.directions.get(i) == Some(&Direction::Wedge);
             display = match (display.as_str(), up) {
                 ("bold", true) => "bold",
