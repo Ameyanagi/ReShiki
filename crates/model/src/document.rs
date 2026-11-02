@@ -785,7 +785,7 @@ impl Document {
             }
             if a.cip_label
                 .as_ref()
-                .is_some_and(|s| !["R", "S", "r", "s"].contains(&s.as_str()))
+                .is_some_and(|s| !["R", "S", "r", "s", "M", "P", "m", "p"].contains(&s.as_str()))
             {
                 return Err("Unsupported atom CIP label".into());
             }

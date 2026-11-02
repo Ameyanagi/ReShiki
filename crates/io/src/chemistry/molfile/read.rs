@@ -424,6 +424,12 @@ impl Parsed {
             &self.directions,
             Some(&conformer),
         )?;
+        // Keep terminal stereobonds even when ambiguous allene drawings have
+        // no assigned configuration, so the drawing's stereo lint can see them.
+        let allene_terminals = (0..self.graph.atoms.len())
+            .filter_map(|center| stereo::allene::terminals(&self.graph, center))
+            .flatten()
+            .collect::<std::collections::HashSet<_>>();
         for ((bond, metadata), direction) in self
             .graph
             .bonds
@@ -433,7 +439,11 @@ impl Parsed {
         {
             if bond.order == 1 {
                 metadata.unknown_stereo = *direction == Direction::Unknown;
-                *direction = Direction::None;
+                if !allene_terminals.contains(&bond.a)
+                    || !matches!(*direction, Direction::Wedge | Direction::Hash)
+                {
+                    *direction = Direction::None;
+                }
             }
         }
         // V2000 reaction agents perceive bond directions before the application's
@@ -512,7 +522,19 @@ impl Parsed {
             .map_err(ReadError::Chemistry)?;
         }
         if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
-            || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
+            || state
+                .metadata
+                .atoms
+                .iter()
+                .enumerate()
+                .any(|(center, atom)| {
+                    !stereo::allene::supported(
+                        &state.graph,
+                        center,
+                        atom.chiral_tag,
+                        atom.chiral_permutation,
+                    )
+                })
             || state.metadata.bonds.iter().any(|b| b.stereo > 7)
             || !state.metadata.groups.is_empty()
         {

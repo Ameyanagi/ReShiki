@@ -4,7 +4,7 @@ use super::{Error, Molecule, WORLD_PER_DEPICT_UNIT, at, invalid};
 use crate::{
     chemistry::{
         ELEMENTS, RDKIT_VERSION, kekulize, ranking,
-        stereo::{cip::label, perception::RingKind, wedging},
+        stereo::{allene, cip::label, perception::RingKind, wedging},
     },
     document::{Atom, AtomStereo, Bond, Document, Point},
 };
@@ -476,7 +476,12 @@ pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
         return Err(invalid("Drawing molecule dimensions or identities changed"));
     }
     if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
-        || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
+        || state
+            .metadata
+            .atoms
+            .iter()
+            .enumerate()
+            .any(|(i, a)| !allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation))
         || state.metadata.bonds.iter().any(|b| b.stereo > 7)
         || !state.metadata.groups.is_empty()
     {
@@ -714,11 +719,11 @@ fn reconstruct_atoms(
                 a.explicit_hydrogens
             });
             atom.stereo = match metadata.chiral_tag {
-                0 => None,
-                tag => Some(AtomStereo {
+                tag @ (1 | 2) => Some(AtomStereo {
                     winding: if tag == 1 { "cw" } else { "ccw" }.into(),
                     neighbors: at(adjacent, i)?.clone(),
                 }),
+                _ => None,
             };
             atom.label_h = u32::from(a.explicit_hydrogens)
                 .checked_add(at(&work.state.valences, i)?.implicit_hydrogens)

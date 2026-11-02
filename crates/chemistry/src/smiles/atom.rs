@@ -2,7 +2,7 @@ use super::{Atom, AtomMetadata, Error, Reader, Result};
 use crate::ELEMENTS;
 
 impl Reader<'_> {
-    pub(super) fn atom(&mut self) -> Result<(Atom, AtomMetadata, Option<String>)> {
+    pub(super) fn atom(&mut self) -> Result<(Atom, AtomMetadata, Option<String>, bool)> {
         let bracket = self.eat(b'[');
         let isotope = if bracket && self.peek().is_some_and(|b| b.is_ascii_digit()) {
             self.number()? as u16
@@ -32,10 +32,12 @@ impl Reader<'_> {
             ..Atom::default()
         };
         let mut meta = AtomMetadata::default();
+        let mut default_chirality = false;
         if bracket {
             if !hydrogen && self.eat(b'@') {
                 if self.eat(b'@') {
                     meta.chiral_tag = 1;
+                    default_chirality = true;
                 } else {
                     let mut end = self.pos;
                     while matches!(self.bytes.get(end), Some(b' ' | b'\'')) {
@@ -72,6 +74,7 @@ impl Reader<'_> {
                         }
                     } else {
                         meta.chiral_tag = 2;
+                        default_chirality = true;
                     }
                 }
             }
@@ -99,7 +102,7 @@ impl Reader<'_> {
             }
             self.require(b']')?;
         }
-        Ok((atom, meta, dummy.then(|| "*".to_owned())))
+        Ok((atom, meta, dummy.then(|| "*".to_owned()), default_chirality))
     }
     fn element(&self, bracket: bool) -> Option<(u8, bool, usize)> {
         let rest = self.bytes.get(self.pos..)?;

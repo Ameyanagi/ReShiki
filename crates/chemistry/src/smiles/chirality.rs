@@ -3,6 +3,57 @@
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 use super::{Error, Result};
 
+/// Allene text order is the collapsed tetrahedron's four terminal ligands.
+/// OpenSMILES 3.8.4 and Daylight 3.3.4 place a terminal's bracket/implicit H
+/// immediately after that atom (after its incoming bond, before its branches).
+/// Storage instead keeps absent H last in each terminal's insertion-order pair.
+/// Reversing the axis swaps both pairs and has even parity.
+pub(super) fn allene_permutation(
+    graph: &crate::graph::Graph,
+    center: usize,
+    value: u32,
+    orders: [&[usize]; 2],
+    starts: [bool; 2],
+) -> Result<u32> {
+    if !matches!(value, 1 | 2) {
+        return Err(Error::Unsupported("invalid allene permutation"));
+    }
+    let terminals = crate::stereo::allene::terminals(graph, center)
+        .ok_or(Error::Unsupported("invalid allene stereochemistry"))?;
+    let stored = crate::stereo::allene::carriers(graph, center)
+        .ok_or(Error::Unsupported("invalid allene stereochemistry"))?;
+    let mut odd = false;
+    for (end, ((&terminal, order), start)) in terminals.iter().zip(orders).zip(starts).enumerate() {
+        let mut current = order
+            .iter()
+            .map(|&id| {
+                let bond = graph.bonds.get(id).ok_or(Error::Limit)?;
+                if bond.a == terminal {
+                    Ok(Some(bond.b))
+                } else if bond.b == terminal {
+                    Ok(Some(bond.a))
+                } else {
+                    Err(Error::Limit)
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if stored.get(end * 2 + 1) == Some(&None) {
+            let insertion = if start { 0 } else { 1.min(current.len()) };
+            current.insert(insertion, None);
+        }
+        current.retain(|a| *a != Some(center));
+        let pair = stored.get(end * 2..end * 2 + 2).ok_or(Error::Limit)?;
+        if current.as_slice() == pair {
+            continue;
+        }
+        if current.len() != 2 || current.first() != pair.get(1) || current.get(1) != pair.first() {
+            return Err(Error::Unsupported("invalid allene carrier order"));
+        }
+        odd = !odd;
+    }
+    Ok(if odd { 3 - value } else { value })
+}
+
 /// Convert text neighbor order to storage order, keeping absent ligands.
 pub(super) fn permutation(
     tag: u8,

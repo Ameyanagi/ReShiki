@@ -515,7 +515,7 @@ impl Context {
                 .get_mut(i)
                 .ok_or("Missing stereo atom")?;
             if meta.chiral_tag != 0
-                && !matches!(meta.chiral_tag, 6..=8)
+                && !matches!(meta.chiral_tag, 5..=8)
                 && at(&self.state.properties.atoms, i)?.cip_code.is_none()
                 && (!*at(&special, i)? || !meta.ring_stereo)
             {

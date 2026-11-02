@@ -74,8 +74,15 @@ fn configurations(molecule: &Molecule<'_>, options: &Options) -> Result<Vec<Conf
         Some(options.bonds.as_deref().unwrap_or(&[]))
     };
     for atom in selected(atoms, state.graph.atoms.len())? {
-        if matches!(at(&state.metadata.atoms, atom)?.chiral_tag, 1 | 2) {
-            configurations.push(Configuration::tetrahedral(molecule, atom)?);
+        let metadata = at(&state.metadata.atoms, atom)?;
+        match metadata.chiral_tag {
+            1 | 2 => configurations.push(Configuration::tetrahedral(molecule, atom)?),
+            5 if matches!(metadata.chiral_permutation, Some(1 | 2))
+                && crate::stereo::allene::terminals(&state.graph, atom).is_some() =>
+            {
+                configurations.push(Configuration::extended_tetrahedral(molecule, atom)?)
+            }
+            _ => (),
         }
     }
     for bond in selected(bonds, state.graph.bonds.len())? {
@@ -129,7 +136,8 @@ fn auxiliary<'a>(
                 continue;
             }
             let mut low = node;
-            if let Some(&other) = configuration.foci().get(1) {
+            if let Target::Bond(_) = configuration.target() {
+                let other = *at(configuration.foci(), 1)?;
                 for edge in graph.edges_to_atom(molecule, node, other)? {
                     let other = graph.edge(edge)?.other(node)?;
                     if graph.node(other)?.distance < graph.node(node)?.distance {

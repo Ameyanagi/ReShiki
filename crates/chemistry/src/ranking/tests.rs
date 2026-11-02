@@ -79,6 +79,47 @@ fn symmetry_classes_and_unique_ranks_match_reference() -> Result<(), String> {
 }
 
 #[test]
+fn allene_permutations_refine_axial_symmetry_classes() -> anyhow::Result<()> {
+    for (text, equivalent) in [
+        ("CC=[C@AL1]=CC=[C@AL1]=CC", true),
+        ("CC=[C@AL1]=CC=[C@AL2]=CC", false),
+        (
+            "CCCC(CC)=[C@AL1]=C(CCCCC)CCCCCCC(CCCCC)=[C@AL2]=C(CC)CCC",
+            false,
+        ),
+    ] {
+        let state = crate::smiles::read(text)?.prepared.state;
+        let centers = state
+            .metadata
+            .atoms
+            .iter()
+            .enumerate()
+            .filter_map(|(a, meta)| (meta.chiral_tag == 5).then_some(a))
+            .collect::<Vec<_>>();
+        assert_eq!(centers.len(), 2);
+        for include_chirality in [false, true] {
+            let ranks = rank(
+                &state.graph,
+                &state.rings.atoms,
+                &state.metadata,
+                Options {
+                    break_ties: false,
+                    include_chirality,
+                    ..Options::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            assert_eq!(
+                ranks[centers[0]] == ranks[centers[1]],
+                equivalent || !include_chirality,
+                "{text}, chirality {include_chirality}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn invalid_metadata_and_work_exhaustion_are_atomic_errors() -> Result<(), String> {
     let graph = benzene();
     let metadata = Metadata::unspecified(&graph);

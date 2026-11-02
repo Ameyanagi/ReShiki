@@ -78,6 +78,38 @@ impl Ranker<'_> {
     fn chiral_rank(&mut self, atom: usize) -> Result<u8, String> {
         let neighbors = at(&self.neighbors, atom)?;
         self.work.spend(neighbors.len())?;
+        let meta = at(&self.metadata.atoms, atom)?;
+        if meta.chiral_tag == 5 {
+            let Some(value @ (1 | 2)) = meta.chiral_permutation else {
+                return Ok(0);
+            };
+            if neighbors.len() != 2 {
+                return Ok(0);
+            }
+            let mut odd = false;
+            for &terminal in neighbors {
+                let carriers = at(&self.neighbors, terminal)?;
+                self.work.spend(carriers.len())?;
+                let mut ranks = carriers
+                    .iter()
+                    .filter(|&&other| other != atom)
+                    .map(|&other| at(&self.classes, other).copied().map(Some))
+                    .collect::<Result<Vec<_>, _>>()?;
+                if !(1..=2).contains(&ranks.len()) {
+                    return Ok(0);
+                }
+                ranks.resize(2, None);
+                let (first, second) = (*at(&ranks, 0)?, *at(&ranks, 1)?);
+                if first == second {
+                    return Ok(0);
+                }
+                // Missing H stays last in storage. Reversing either pair
+                // flips winding; exchanging the two ends has even parity.
+                odd ^= first > second;
+            }
+            let value = value as u8;
+            return Ok(if odd { 3 - value } else { value });
+        }
         let mut seen = HashSet::new();
         let mut ranks = Vec::new();
         for &other in neighbors {
@@ -87,7 +119,7 @@ impl Ranker<'_> {
             }
             ranks.push(rank);
         }
-        let tag = at(&self.metadata.atoms, atom)?.chiral_tag;
+        let tag = meta.chiral_tag;
         if !matches!(tag, 1 | 2) {
             return Ok(0);
         }

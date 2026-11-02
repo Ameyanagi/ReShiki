@@ -25,6 +25,7 @@ pub enum Kind {
     WavyAlkeneCentre,
     ReEntrant,
     TShape,
+    AlleneBothEnds,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -112,6 +113,29 @@ fn direction(bond: &Bond) -> Direction {
 
 // Generic structures wait for expansion and a crystal's bonds come from
 // distances: neither is checked. Parts carry chemistry only, not display.
+/// Atoms whose shared stereobonds depict a biaryl axis (ST-1.7): the axis
+/// atoms and the rest of each ring holding one, where the preferred depiction
+/// places its opposite wedge and bold bond. Exocyclic wedges are not exempt.
+fn axis_atoms(state: &perception::State) -> HashSet<usize> {
+    let ends: HashSet<_> = state
+        .graph
+        .bonds
+        .iter()
+        .zip(&state.metadata.bonds)
+        .filter(|(_, m)| matches!(m.stereo, 6 | 7))
+        .flat_map(|(b, _)| [b.a, b.b])
+        .collect();
+    state
+        .rings
+        .atoms
+        .iter()
+        .filter(|ring| ring.iter().any(|a| ends.contains(a)))
+        .flatten()
+        .chain(&ends)
+        .copied()
+        .collect()
+}
+
 fn components(source: &Document) -> impl Iterator<Item = Document> {
     let distance = crate::models3d::crystal::analysis_atoms(source);
     crate::atom_labels::refresh::components(source)
@@ -405,16 +429,60 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
         let ids = &component.molecule.ids;
         let directions: Vec<_> = source.bonds.iter().map(direction).collect();
         let geometry = component.geometry(&directions);
-        // Biaryl axis wedges (ST-1.7) start at an sp2 axis atom, not a centre.
         let state = &component.molecule.state;
-        let axial: HashSet<_> = state
+        let axial = axis_atoms(state);
+        let mut allene_ends = HashSet::new();
+        for (center, ((atom, adjacent), &id)) in state
             .graph
-            .bonds
+            .atoms
             .iter()
-            .zip(&state.metadata.bonds)
-            .filter(|(_, m)| matches!(m.stereo, 6 | 7))
-            .flat_map(|(b, _)| [b.a, b.b])
-            .collect();
+            .zip(&component.adjacent)
+            .zip(ids)
+            .enumerate()
+        {
+            if atom.atomic_number != 6
+                || adjacent.len() != 2
+                || adjacent
+                    .iter()
+                    .any(|&(b, _)| state.graph.bonds.get(b).is_none_or(|b| b.order != 2))
+            {
+                continue;
+            }
+            let Some(ends) = stereo::allene::terminals(&state.graph, center) else {
+                continue;
+            };
+            let wedges = ends.map(|end| {
+                component
+                    .adjacent
+                    .get(end)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|&(i, _)| {
+                        let bond = source.bonds.get(i)?;
+                        (state.graph.bonds.get(i)?.a == end && stereobond(bond))
+                            .then_some((bond.a, bond.b))
+                    })
+                    .collect::<Vec<_>>()
+            });
+            let both = wedges.iter().all(|bonds| !bonds.is_empty());
+            if both
+                || state
+                    .metadata
+                    .atoms
+                    .get(center)
+                    .is_some_and(|a| a.chiral_tag == 5)
+            {
+                allene_ends.extend(ends);
+            }
+            if both {
+                notes.push(Note {
+                    kind: Kind::AlleneBothEnds,
+                    atoms: vec![id],
+                    bonds: wedges.into_iter().flatten().collect(),
+                    message: "Stereo bonds at both ends of an allene are ambiguous; use wedges at one end only (ST-1.6)".into(),
+                });
+            }
+        }
         let mut groups = vec![Vec::new(); ids.len()];
         for (index, (bond, graph_bond)) in source
             .bonds
@@ -427,7 +495,10 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
                 if let Some(group) = groups.get_mut(a) {
                     group.push(index);
                 }
-                if !component.centre(a) && !axial.contains(&a) {
+                if !component.centre(a)
+                    && !(axial.contains(&a) && axial.contains(&b))
+                    && !allene_ends.contains(&a)
+                {
                     let valid_reverse = component.centre(b) && {
                         let mut reversed = component.molecule.state.graph.clone();
                         let Some(edge) = reversed.bonds.get_mut(index) else {
@@ -711,21 +782,24 @@ pub fn redraw(source: &Document, selected: &[u64]) -> Result<(Document, usize), 
             continue;
         };
         let state = &molecule.state;
-        // Keep the author's biaryl axis wedges; only stereocentre bonds move.
-        let axial: HashSet<_> = state
-            .graph
-            .bonds
+        // Keep the author's biaryl axis depiction; only stereocentre bonds move.
+        let axial = axis_atoms(state);
+        let kept: Vec<_> = state
+            .directions
             .iter()
-            .zip(&state.metadata.bonds)
-            .filter(|(_, m)| matches!(m.stereo, 6 | 7))
-            .flat_map(|(b, _)| [b.a, b.b])
+            .zip(&state.graph.bonds)
+            .map(|(d, b)| {
+                matches!(d, Direction::Wedge | Direction::Hash)
+                    && axial.contains(&b.a)
+                    && axial.contains(&b.b)
+            })
             .collect();
         let directions = state
             .directions
             .iter()
-            .zip(&state.graph.bonds)
-            .map(|(&d, b)| {
-                if matches!(d, Direction::Wedge | Direction::Hash) && !axial.contains(&b.a) {
+            .zip(&kept)
+            .map(|(&d, &kept)| {
+                if matches!(d, Direction::Wedge | Direction::Hash) && !kept {
                     Direction::None
                 } else {
                     d
@@ -751,13 +825,14 @@ pub fn redraw(source: &Document, selected: &[u64]) -> Result<(Document, usize), 
         )
         .map_err(document::Error::WedgeAssignment)?;
         let mut edited = part.clone();
-        for ((bond, &direction), edge) in edited
+        for (((bond, &direction), edge), &kept) in edited
             .bonds
             .iter_mut()
             .zip(&wedged.directions)
             .zip(&wedged.graph.bonds)
+            .zip(&kept)
         {
-            if bond.projection {
+            if bond.projection || kept {
                 continue;
             }
             if stereobond(bond) {

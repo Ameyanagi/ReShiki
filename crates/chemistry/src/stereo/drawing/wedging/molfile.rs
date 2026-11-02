@@ -23,6 +23,7 @@ pub fn file_bonds(
     let mut ctx = Context::new(input, properties, conformer, true, &mut work)?;
     ctx.choose_tetrahedral(&mut work)?;
     ctx.choose_atrop(&mut work)?;
+    ctx.choose_allene(&mut work)?;
     ctx.state
         .graph
         .bonds
@@ -35,10 +36,11 @@ pub fn file_bonds(
                 let direction = match ctx.choices.get(&i) {
                     Some(Choice::Atom(atom)) => ctx.wedge_direction(i, *atom, &mut work)?,
                     Some(Choice::Atrop(direction)) => *direction,
+                    Some(Choice::Allene(_, direction)) => *direction,
                     None => ctx.direction(i)?,
                 };
                 if (wedged(direction) || direction == Direction::Unknown)
-                    && let Some(Choice::Atom(atom)) = ctx.choices.get(&i)
+                    && let Some(Choice::Atom(atom) | Choice::Allene(atom, _)) = ctx.choices.get(&i)
                 {
                     reverse = *atom != bond.a;
                 }
