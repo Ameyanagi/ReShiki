@@ -281,7 +281,8 @@ fn undefined_markers_follow_stereo_visibility_and_keep_cip_labels_separate() {
                 );
                 assert_eq!(
                     serde_json::to_value(&labels).unwrap(),
-                    serde_json::to_value(layout_indicators(&doc)).unwrap()
+                    serde_json::to_value(layout_indicators(&doc, &doc.abbreviation_render_copy()))
+                        .unwrap()
                 );
                 assert!(doc.atoms[0].cip_label.is_none() && doc.bonds[0].cip_label.is_none());
             }
@@ -511,6 +512,7 @@ fn atoms_hidden_in_a_collapsed_group_do_not_claim_map_numbers() {
         label: "R".into(),
         reverse_label: "R".into(),
         anchor,
+        exit: None,
         members,
     });
     let oxygen = &doc.atoms[0];
@@ -588,7 +590,11 @@ fn absent_indicator_fast_path_matches_full_layout_for_visibility_and_display_ove
                         let compare = |doc: &Document| {
                             assert_eq!(
                                 serde_json::to_value(indicators(doc)).unwrap(),
-                                serde_json::to_value(layout_indicators(doc)).unwrap()
+                                serde_json::to_value(layout_indicators(
+                                    doc,
+                                    &doc.abbreviation_render_copy()
+                                ))
+                                .unwrap()
                             );
                         };
                         compare(&doc);
@@ -596,6 +602,7 @@ fn absent_indicator_fast_path_matches_full_layout_for_visibility_and_display_ove
                             label: "NO".into(),
                             reverse_label: String::new(),
                             anchor: a,
+                            exit: None,
                             members: vec![a, b],
                             alignment: Default::default(),
                             label_style: None,

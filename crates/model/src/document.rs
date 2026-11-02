@@ -224,10 +224,13 @@ pub const ARROW_LABEL_GAPS: u32 = 31;
 pub const ORTEP: u32 = 32;
 /// Linked conformer snapshots, generation seeds and 3D atom labels.
 pub const MODEL_POLISH: u32 = 33;
+/// Collapsed residue groups with two attachment atoms.
+pub const RESIDUE_GROUPS: u32 = 34;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
-/// require version 32 or model polish requires version 33.
+/// require version 32, model polish requires version 33 or two-sided groups
+/// require version 34.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -259,7 +262,8 @@ pub const MODEL_POLISH: u32 = 33;
 /// | 31 | Custom clearances for attached reaction labels (#600). |
 /// | 32 | Thermal ellipsoids and molecule-only crystal display (#417). |
 /// | 33 | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
-pub const VERSION: u32 = 33;
+/// | 34 | Collapsed groups with two attachment atoms (#870). |
+pub const VERSION: u32 = 34;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -426,7 +430,9 @@ impl Document {
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
-        if self.models.iter().any(|model| model.needs_polish_version()) {
+        if self.abbreviations.iter().any(|group| group.exit.is_some()) {
+            RESIDUE_GROUPS
+        } else if self.models.iter().any(|model| model.needs_polish_version()) {
             MODEL_POLISH
         } else if self
             .models

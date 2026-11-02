@@ -463,7 +463,7 @@ fn stage_order_is_fixed() {
         doc.add_bond(c, d, 1, "plain");
         assert_eq!(
             doc.validate(),
-            Err("Only the abbreviation's attachment atom can connect outside it".into())
+            Err("Only the abbreviation's attachment atoms can connect outside it".into())
         );
         assert!(reconcile(&mut doc, before).is_ok());
         assert!(doc.abbreviations.is_empty());

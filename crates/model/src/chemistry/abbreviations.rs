@@ -7,6 +7,7 @@ mod catalog;
 mod define;
 mod matcher;
 mod replacement;
+mod residues;
 use super::{RDKIT_VERSION, document::Molecule};
 use crate::{abbreviations::Abbreviation, document::Document};
 #[cfg(test)]
@@ -16,13 +17,22 @@ pub use catalog::{
     presets, set_user,
 };
 pub use define::{Defined, from_selection, upsert};
-pub use replacement::{Error as ReplacementError, replace, replace_bundled, replace_with_policy};
+pub use replacement::{
+    Error as ReplacementError, replace, replace_bundled, replace_bundled_with_policy,
+    replace_with_policy,
+};
+pub(crate) use residues::residue_selection_attachments;
+pub use residues::{
+    RESIDUES, Residue, ResidueDefinition, residue, residue_labels, residue_matches_selection,
+};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     #[error("Abbreviations require document version 10")]
     Version,
+    #[error("Two-attachment abbreviations require document version 34")]
+    ResidueVersion,
     #[error("An abbreviation needs a label")]
     Label,
     #[error("Invalid abbreviation label")]
@@ -31,7 +41,7 @@ pub enum Error {
     Members,
     #[error("Abbreviations need one attachment atom and at most one outside bond")]
     Attachment,
-    #[error("All abbreviation bonds must connect through its attachment atom")]
+    #[error("All abbreviation outside bonds must connect through an attachment atom")]
     InternalAttachment,
     #[error("An abbreviation must be connected")]
     Connected,
@@ -72,7 +82,7 @@ fn check_size(document: &Document) -> Result<()> {
 }
 
 /// The original preset interface accepts terminal groups only. Desktop
-/// interchange also permits explicitly defined internal groups on one atom.
+/// interchange also permits internal groups on one or two attachment atoms.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AttachmentPolicy {
     Terminal,
@@ -88,6 +98,14 @@ pub fn validate(document: &Document) -> Result<()> {
 pub fn validate_with_policy(document: &Document, policy: AttachmentPolicy) -> Result<()> {
     if !document.abbreviations.is_empty() && document.version < crate::document::ABBREVIATIONS {
         return Err(Error::Version);
+    }
+    if document.version < crate::document::RESIDUE_GROUPS
+        && document
+            .abbreviations
+            .iter()
+            .any(|group| group.exit.is_some())
+    {
+        return Err(Error::ResidueVersion);
     }
     check_size(document)?;
     let ids: HashSet<_> = document.atoms.iter().map(|a| a.id).collect();
@@ -119,11 +137,17 @@ pub fn validate_with_policy(document: &Document, policy: AttachmentPolicy) -> Re
         if members.is_empty()
             || members.len() != group.members.len()
             || !members.contains(&group.anchor)
+            || group
+                .exit
+                .is_some_and(|exit| exit == group.anchor || !members.contains(&exit))
             || members
                 .iter()
                 .any(|id| !ids.contains(id) || used.contains(id))
         {
             return Err(Error::Members);
+        }
+        if policy == AttachmentPolicy::Terminal && group.exit.is_some() {
+            return Err(Error::Attachment);
         }
         used.extend(&members);
         let mut external = 0usize;
@@ -135,7 +159,7 @@ pub fn validate_with_policy(document: &Document, policy: AttachmentPolicy) -> Re
                     {
                         return Err(Error::Attachment);
                     }
-                    if id != group.anchor {
+                    if id != group.anchor && Some(id) != group.exit {
                         return Err(Error::InternalAttachment);
                     }
                 }
@@ -182,6 +206,9 @@ pub fn find_with_policy(
     label: Option<&str>,
     policy: AttachmentPolicy,
 ) -> Result<Document> {
+    if let Some(definition) = label.and_then(residue) {
+        return residues::find(document, molecule, selection, definition, policy);
+    }
     let catalog = presets()?;
     let label = label.filter(|label| !label.is_empty());
     // A named search may use any group; Contract all skips opted-out groups.
@@ -322,6 +349,7 @@ pub fn find_with_policy(
             label: preset.label.clone(),
             reverse_label: preset.reverse_label.clone(),
             anchor,
+            exit: None,
             members,
         });
     }

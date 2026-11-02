@@ -123,8 +123,8 @@ fn ink_segments(doc: &Document) -> Vec<(reshiki::document::Point, reshiki::docum
         .filter(|b| doc.bond_visible(b.a, b.b))
         .filter_map(|b| {
             Some((
-                doc.atom(b.a)?.position,
-                doc.atom(b.b)?.position,
+                doc.atom(doc.abbreviation_endpoint(b.a, b.b))?.position,
+                doc.atom(doc.abbreviation_endpoint(b.b, b.a))?.position,
                 doc.drawing_style.line_width(),
             ))
         })
@@ -163,6 +163,8 @@ fn placements_with_width(
     bounds: Rectangle,
     mut width: impl FnMut(&str) -> f32,
 ) -> Vec<Assignment> {
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     let mut occupied: Vec<_> = doc
         .atoms
         .iter()

@@ -109,7 +109,10 @@ pub fn read_abbreviations(
         if members > 1_000_000 || bytes > 16 * 1024 * 1024 {
             return Err(Error::Limit);
         }
-        for id in std::iter::once(&record.anchor).chain(&record.members) {
+        for id in std::iter::once(&record.anchor)
+            .chain(std::iter::once(&record.exit))
+            .chain(&record.members)
+        {
             bytes = bytes
                 .checked_add(id.as_ref().map_or(0, String::len))
                 .ok_or(Error::Limit)?;
@@ -198,6 +201,11 @@ pub fn read_abbreviations(
     };
     for record in records {
         let anchor = identify(&record.anchor)?;
+        let exit = record
+            .exit
+            .as_ref()
+            .map(|_| identify(&record.exit))
+            .transpose()?;
         let members = record
             .members
             .iter()
@@ -225,6 +233,7 @@ pub fn read_abbreviations(
             label: record.label.clone(),
             reverse_label: record.reverse_label.clone(),
             anchor,
+            exit,
             members,
         });
     }

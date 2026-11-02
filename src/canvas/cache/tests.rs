@@ -359,6 +359,7 @@ fn retained_ring_hits_reuse_geometry_and_invalidate_on_real_document_changes() {
     assert!(cache.ring_at(&doc, moved).is_some());
     doc.abbreviations
         .push(reshiki::abbreviations::Abbreviation {
+            exit: None,
             label: "Cy".into(),
             reverse_label: String::new(),
             anchor: ids[0],

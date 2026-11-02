@@ -522,6 +522,9 @@ fn mapped_append_part(
     for group in &mut part.abbreviations {
         let anchor = mapping.get(&group.anchor).copied()?;
         group.anchor = anchor;
+        if let Some(exit) = &mut group.exit {
+            *exit = mapping.get(exit).copied()?;
+        }
         for id in &mut group.members {
             let mapped = mapping.get(id).copied()?;
             *id = mapped;
@@ -567,7 +570,9 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     if !doc.reactions.is_empty() {
         doc.require_version(crate::document::REACTIONS);
     }
-    if !doc.abbreviations.is_empty() {
+    if doc.abbreviations.iter().any(|group| group.exit.is_some()) {
+        doc.require_version(crate::document::RESIDUE_GROUPS);
+    } else if !doc.abbreviations.is_empty() {
         doc.require_version(crate::document::ABBREVIATION_EDITING);
     }
 }
@@ -1006,6 +1011,8 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
     if doc.bonds.is_empty() {
         return None;
     }
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     // One index per query replaces two linear atom searches for every bond.
     // Reversed insertion retains Document::atom's first-ID behavior even for
     // an unvalidated document containing duplicate IDs.
@@ -1015,14 +1022,28 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
         .rev()
         .map(|atom| (atom.id, atom.position))
         .collect();
+    let two_sided = doc.abbreviations.iter().any(|group| group.exit.is_some());
     doc.bonds
         .iter()
         .enumerate()
         .filter_map(|(i, b)| {
-            let a = *positions.get(&b.a)?;
-            let z = *positions.get(&b.b)?;
-            let d = crate::graphics::segment_distance(p, a, z);
-            (d < r && doc.bond_drawn(b.a, b.b)).then_some((i, d))
+            let (a_id, z_id) = (b.a, b.b);
+            let (a, z) = (*positions.get(&a_id)?, *positions.get(&z_id)?);
+            let distance = crate::graphics::segment_distance(p, a, z);
+            if !(distance < r && doc.bond_drawn(b.a, b.b)) {
+                return None;
+            }
+            let distance = if two_sided
+                && [a_id, z_id].into_iter().any(|id| {
+                    doc.abbreviation(id)
+                        .is_some_and(|group| group.exit.is_some())
+                }) {
+                let (a, z) = crate::scene::bond_segment(doc, b, None)?;
+                crate::graphics::segment_distance(p, a, z)
+            } else {
+                distance
+            };
+            (distance < r).then_some((i, distance))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|x| x.0)

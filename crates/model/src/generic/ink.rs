@@ -107,13 +107,15 @@ pub(super) fn saved_and_refreshed_boxes(
     if saved.atoms.len() != refreshed.atoms.len() {
         return Err("Prepared label snapshots differ in size".into());
     }
+    let saved = saved.abbreviation_render_copy();
+    let refreshed = refreshed.abbreviation_render_copy();
     saved
         .atoms
         .iter()
         .zip(&refreshed.atoms)
         .map(|(a, b)| {
-            let mut bounds = atom_bounds(a, saved)?;
-            if let Some((lo, hi)) = atom_bounds(b, refreshed)? {
+            let mut bounds = atom_bounds(a, &saved)?;
+            if let Some((lo, hi)) = atom_bounds(b, &refreshed)? {
                 include(&mut bounds, lo, hi);
             }
             Ok(bounds)

@@ -144,6 +144,7 @@ impl MoleculeCanvas<'_> {
                 paint,
             )
         });
+        let drawn = self.doc.abbreviation_render_copy();
         for (target, color, radius, width) in [
             (self.arrows.source, ACCENT_STRONG, 10., 2.),
             (hovered.as_ref(), ACCENT, 8., 1.5),
@@ -169,7 +170,7 @@ impl MoleculeCanvas<'_> {
                     reshiki::arrow_anchors::Pick::Atom(id) => self
                         .doc
                         .atom(*id)
-                        .and_then(|a| reshiki::scene::atom_label_bounds(a, self.doc))
+                        .and_then(|a| reshiki::scene::atom_label_bounds(a, &drawn))
                         .map(|(lo, hi)| {
                             [lo, hi, World::new(lo.x, hi.y), World::new(hi.x, lo.y)]
                                 .into_iter()
@@ -740,8 +741,9 @@ impl MoleculeCanvas<'_> {
             ink: rotation_ink,
         } = selection;
         if self.reviewing_pair {
+            let drawn = preview.abbreviation_render_copy();
             for atom in selected.iter().filter_map(|id| preview.atom(*id)) {
-                let (lo, hi) = reshiki::scene::atom_label_ink_bounds(atom, preview)
+                let (lo, hi) = reshiki::scene::atom_label_ink_bounds(atom, &drawn)
                     .unwrap_or((atom.position, atom.position));
                 let lo = self.camera.screen(lo, bounds);
                 let hi = self.camera.screen(hi, bounds);

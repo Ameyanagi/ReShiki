@@ -18,6 +18,9 @@ pub struct Abbreviation {
     #[serde(default)]
     pub reverse_label: String,
     pub anchor: u64,
+    /// Second attachment of a two-sided group. Its outside bonds meet the label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit: Option<u64>,
     pub members: Vec<u64>,
     #[serde(default, skip_serializing_if = "LabelAlignment::is_auto")]
     pub alignment: LabelAlignment,
@@ -242,12 +245,16 @@ impl Abbreviation {
         let members: HashSet<_> = self.members.iter().copied().collect();
         if members.len() != self.members.len()
             || !members.contains(&self.anchor)
+            || self
+                .exit
+                .is_some_and(|id| id == self.anchor || !members.contains(&id))
             || members.iter().any(|id| !connectivity.atoms.contains(id))
         {
             return Err("Invalid abbreviation atoms or attachment".into());
         }
         for id in &members {
             if *id != self.anchor
+                && Some(*id) != self.exit
                 && connectivity
                     .adjacent
                     .get(id)
@@ -256,7 +263,7 @@ impl Abbreviation {
                     .any(|other| !members.contains(other))
             {
                 return Err(
-                    "Only the abbreviation's attachment atom can connect outside it".into(),
+                    "Only the abbreviation's attachment atoms can connect outside it".into(),
                 );
             }
         }
@@ -280,6 +287,9 @@ impl Abbreviation {
             LabelAlignment::Left => return false,
             LabelAlignment::Right => return true,
             _ => {}
+        }
+        if self.exit.is_some() {
+            return false;
         }
         let Some(anchor) = doc.atom(self.anchor) else {
             return false;
@@ -453,12 +463,51 @@ impl Document {
             .iter()
             .any(|a| a.anchor != id && a.members.contains(&id))
     }
-    /// Both atoms are visible and no abbreviation hides the bond between them.
+    /// Outside bonds at either attachment remain visible; internal bonds hide.
     pub fn bond_visible(&self, a: u64, b: u64) -> bool {
         !self.abbreviations.iter().any(|g| {
             let (has_a, has_b) = (g.members.contains(&a), g.members.contains(&b));
-            has_a && (has_b || g.anchor != a) || has_b && g.anchor != b
+            has_a && (has_b || g.anchor != a && g.exit != Some(a))
+                || has_b && g.anchor != b && g.exit != Some(b)
         })
+    }
+    /// A visible bond's endpoint at the label, retaining real atom IDs elsewhere.
+    pub fn abbreviation_endpoint(&self, id: u64, other: u64) -> u64 {
+        self.abbreviations
+            .iter()
+            .find(|group| group.exit == Some(id) && !group.members.contains(&other))
+            .map_or(id, |group| group.anchor)
+    }
+
+    /// Shared view for label layout, drawing and picking. Only external bond
+    /// endpoints change; member atoms and the chemical graph stay in the document.
+    pub fn abbreviation_render_copy(&self) -> std::borrow::Cow<'_, Self> {
+        let exits: std::collections::HashMap<_, _> = self
+            .abbreviations
+            .iter()
+            .filter_map(|group| group.exit.map(|exit| (exit, group)))
+            .collect();
+        if exits.is_empty() {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let endpoint = |id, other| {
+            exits
+                .get(&id)
+                .filter(|group| !group.members.contains(&other))
+                .map_or(id, |group| group.anchor)
+        };
+        if !self
+            .bonds
+            .iter()
+            .any(|bond| (endpoint(bond.a, bond.b), endpoint(bond.b, bond.a)) != (bond.a, bond.b))
+        {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut drawn = self.clone();
+        for bond in &mut drawn.bonds {
+            (bond.a, bond.b) = (endpoint(bond.a, bond.b), endpoint(bond.b, bond.a));
+        }
+        std::borrow::Cow::Owned(drawn)
     }
     /// Any selected member pulls in the whole abbreviation. The result is in
     /// [`Document::all_ids`] order.
@@ -484,6 +533,9 @@ impl Document {
         let connectivity = Connectivity::new(self);
         let mut used = HashSet::new();
         for abbreviation in &self.abbreviations {
+            if abbreviation.exit.is_some() && self.version < crate::document::RESIDUE_GROUPS {
+                return Err("Two-sided abbreviations require document version 34".into());
+            }
             abbreviation.validate_with(&connectivity)?;
             if abbreviation.members.iter().any(|id| !used.insert(*id)) {
                 return Err("Abbreviations cannot overlap".into());
@@ -516,6 +568,15 @@ impl Document {
             }
             if let Ok(Some((preset, _))) = crate::chemistry::abbreviations::lookup_bundled(text) {
                 bundled.push((text, preset));
+            }
+            if let Some(residue) = crate::chemistry::abbreviations::residue(text)
+                && crate::chemistry::abbreviations::residue_matches_selection(self, ids, text)
+                    .is_ok_and(|matches| !matches)
+            {
+                warnings.push(format!(
+                    "{text} means the {} residue in the bundled catalog, which differs from the selected fragment.",
+                    residue.name
+                ));
             }
         }
         if !bundled.is_empty()
@@ -556,18 +617,45 @@ impl Document {
             .into_iter()
             .filter(|id| self.atom(*id).is_some())
             .collect();
-        let anchor = self
-            .bonds
-            .iter()
-            .find_map(|b| {
-                if members.contains(&b.a) != members.contains(&b.b) {
-                    Some(if members.contains(&b.a) { b.a } else { b.b })
-                } else {
-                    None
-                }
-            })
-            .or_else(|| members.first().copied())
-            .ok_or("Select atoms to abbreviate")?;
+        let mut boundary = Vec::new();
+        for (a, b) in crate::attachments::edges(self) {
+            if members.contains(&a) == members.contains(&b) {
+                continue;
+            }
+            let (inside, outside) = if members.contains(&a) { (a, b) } else { (b, a) };
+            let x = self
+                .atom(outside)
+                .ok_or("Missing attachment atom")?
+                .position
+                .x;
+            if let Some((_, leftmost)) = boundary.iter_mut().find(|(id, _)| *id == inside) {
+                *leftmost = f32::min(*leftmost, x);
+            } else {
+                boundary.push((inside, x));
+            }
+        }
+        if boundary.len() > 2 {
+            return Err("A group connects through at most two atoms".into());
+        }
+        boundary.sort_by(|(_, a), (_, b)| a.total_cmp(b));
+        let (anchor, exit) = if let Some((anchor, exit)) =
+            crate::chemistry::abbreviations::residue_selection_attachments(
+                self,
+                &members,
+                label.trim(),
+            )
+            .ok()
+            .flatten()
+        {
+            (anchor, Some(exit))
+        } else {
+            let anchor = boundary
+                .first()
+                .map(|(id, _)| *id)
+                .or_else(|| members.first().copied())
+                .ok_or("Select atoms to abbreviate")?;
+            (anchor, boundary.get(1).map(|(id, _)| *id))
+        };
         let abbreviation = Abbreviation {
             label_style: None,
             label_color_override: false,
@@ -576,13 +664,18 @@ impl Document {
             label: label.trim().into(),
             reverse_label: reverse_label.trim().into(),
             anchor,
+            exit,
             members,
         };
         abbreviation.validate(self)?;
         self.abbreviations
             .retain(|a| !a.members.iter().any(|id| abbreviation.members.contains(id)));
         self.abbreviations.push(abbreviation);
-        self.require_version(crate::document::ABBREVIATION_EDITING);
+        self.require_version(if exit.is_some() {
+            crate::document::RESIDUE_GROUPS
+        } else {
+            crate::document::ABBREVIATION_EDITING
+        });
         Ok(())
     }
     pub fn expand_abbreviations(&mut self, ids: &[u64]) -> usize {

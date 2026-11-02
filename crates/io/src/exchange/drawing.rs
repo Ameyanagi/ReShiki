@@ -205,10 +205,18 @@ fn write_impl(
     }
     let haworth = crate::haworth::interchange::export_bonds(document).map_err(invalid)?;
     // ChemDraw 26 discards native fills and MultiAttachment definitions inside
-    // Fragment labels. Expand only those groups for editable exchange; native
-    // documents and figure output retain their compact labels.
+    // Fragment labels. Unused residue attachments have no outside bond to pair
+    // with a connection point. Expand these groups for editable exchange;
+    // native documents and figure output retain their compact labels.
     let needs_expansion = |g: &crate::abbreviations::Abbreviation| {
-        g.members
+        g.exit.is_some_and(|exit| {
+            [g.anchor, exit].into_iter().any(|attachment| {
+                !document.bonds.iter().any(|bond| {
+                    bond.a == attachment && !g.members.contains(&bond.b)
+                        || bond.b == attachment && !g.members.contains(&bond.a)
+                })
+            })
+        }) || g.members
             .iter()
             .any(|id| document.atom(*id).is_some_and(|a| a.attachment.is_some()))
             || document

@@ -54,6 +54,7 @@ fn metadata_cases() -> Vec<(&'static str, Document)> {
             label: "C".into(),
             reverse_label: String::new(),
             anchor: 1,
+            exit: None,
             members: vec![],
             alignment: Default::default(),
         };

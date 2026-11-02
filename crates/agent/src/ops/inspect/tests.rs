@@ -313,6 +313,29 @@ async fn the_whole_drawing_is_summarized_with_string_ids() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn two_sided_abbreviation_inspection_includes_the_exit_id() {
+    let mut doc = Document::default();
+    let atoms: Vec<_> = (0..4)
+        .map(|i| doc.add_atom("C", Point::new(i as f32 * 42., 0.)))
+        .collect();
+    for pair in atoms.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    doc.contract(&atoms[1..3], "Link", "").unwrap();
+    let (host, handle) = hosting(doc, Budgets::default());
+    let summary = inspect_ok(&host, &handle, Value::Null).await;
+    assert_eq!(
+        summary["abbreviations"],
+        json!([{
+            "label": "Link",
+            "anchor": atoms[1].to_string(),
+            "exit": atoms[2].to_string(),
+            "members": strings(&atoms[1..3]),
+        }])
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn numbers_appear_only_under_allowlisted_keys() {
     let (doc, _) = everything();
     let (host, handle) = hosting(doc, Budgets::default());

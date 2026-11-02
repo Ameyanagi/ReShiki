@@ -2,10 +2,11 @@
 //! the bond scene. Persistent links deliberately do not use this hit-test gate.
 use super::*;
 use crate::polygon::signed_area;
-use std::{cell::OnceCell, rc::Rc};
+use std::{borrow::Cow, cell::OnceCell, rc::Rc};
 
 pub(crate) struct AttachmentInk<'a> {
     doc: &'a Document,
+    drawn: Cow<'a, Document>,
     active: bool,
     opacity: OnceCell<Rc<crate::rear_opacity::Paint>>,
     bonds: OnceCell<Vec<Vec<Primitive>>>,
@@ -15,6 +16,7 @@ impl<'a> AttachmentInk<'a> {
     pub(crate) fn new(doc: &'a Document) -> Self {
         Self {
             doc,
+            drawn: doc.abbreviation_render_copy(),
             active: crate::rear_opacity::present(doc),
             opacity: OnceCell::new(),
             bonds: OnceCell::new(),
@@ -26,6 +28,9 @@ impl<'a> AttachmentInk<'a> {
             opacity: OnceCell::from(paint),
             ..Self::new(doc)
         }
+    }
+    pub(crate) fn drawn(&self) -> &Document {
+        &self.drawn
     }
     fn opacity(&self) -> Option<&crate::rear_opacity::Paint> {
         self.active.then(|| {
@@ -70,25 +75,27 @@ impl<'a> AttachmentInk<'a> {
     pub(crate) fn mark(&self, id: u64) -> bool {
         self.doc.atom_drawn(id) && self.opacity().is_none_or(|paint| paint.atom(id) > 0.)
     }
-    pub(crate) fn segment(&self, bond: &Bond) -> Option<(Point, Point)> {
-        bond_segment(self.doc, bond, self.opacity())
+    pub(crate) fn segment(&self, index: usize) -> Option<(Point, Point)> {
+        bond_segment(&self.drawn, self.drawn.bonds.get(index)?, self.opacity())
     }
     pub(crate) fn label_hit(&self, p: Point, radius: f32) -> Option<u64> {
+        let isotopes = HydrogenIsotopeLabels::new(&self.drawn);
         self.doc
             .atoms
             .iter()
             .rev()
             .filter(|a| self.doc.atom_drawn(a.id))
             .find_map(|a| {
-                (atom_label_ink_boxes(a, self.doc)
-                    .into_iter()
-                    .any(|(lo, hi)| {
-                        p.x >= lo.x - radius
-                            && p.x <= hi.x + radius
-                            && p.y >= lo.y - radius
-                            && p.y <= hi.y + radius
-                    })
-                    && self.mark(a.id))
+                (label_ink_boxes(&atom_label_shown(a, &self.drawn, &isotopes, || {
+                    visible(a, &self.drawn)
+                }))
+                .into_iter()
+                .any(|(lo, hi)| {
+                    p.x >= lo.x - radius
+                        && p.x <= hi.x + radius
+                        && p.y >= lo.y - radius
+                        && p.y <= hi.y + radius
+                }) && self.mark(a.id))
                 .then_some(a.id)
             })
     }
@@ -100,7 +107,7 @@ impl<'a> AttachmentInk<'a> {
             .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
             .map(|a| a.id)
             .or_else(|| {
-                crate::abbreviations::label_hit(self.doc, p, radius).filter(|id| self.atom(*id))
+                abbreviation_label_hit_prepared(&self.drawn, p, radius).filter(|id| self.atom(*id))
             })
     }
     pub(crate) fn bond(&self, index: usize, fraction: f32) -> bool {
@@ -122,7 +129,10 @@ impl<'a> AttachmentInk<'a> {
         if !opacity.has_visibility() {
             return true;
         }
-        let Some((a, b)) = self.doc.atom(bond.a).zip(self.doc.atom(bond.b)) else {
+        let Some(drawn) = self.drawn.bonds.get(index) else {
+            return false;
+        };
+        let Some((a, b)) = self.drawn.atom(drawn.a).zip(self.drawn.atom(drawn.b)) else {
             return false;
         };
         let axis = Point::new(b.position.x - a.position.x, b.position.y - a.position.y);
@@ -133,7 +143,7 @@ impl<'a> AttachmentInk<'a> {
         let unit = Point::new(axis.x / length, axis.y / length);
         let at = length * fraction;
         self.bonds
-            .get_or_init(|| rendered_bond_parts(self.doc, opacity))
+            .get_or_init(|| rendered_bond_parts(&self.drawn, opacity))
             .get(index)
             .is_some_and(|parts| {
                 parts
@@ -153,7 +163,7 @@ fn rendered_bond_parts(
     // Unrelated labels, pictures and arrows cannot make a hidden chemical bond
     // eligible. The one-time result is shared by all candidate bonds of this
     // pointer/commit query.
-    let inputs = BondInputs::prepare(doc, opacity, Resolve::Scene);
+    let inputs = BondInputs::from_drawn(doc, opacity, Resolve::Scene);
     let rings = push_ring_strokes(&mut Vec::new(), inputs.doc(), opacity);
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;

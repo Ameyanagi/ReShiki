@@ -2028,7 +2028,12 @@ impl App {
         let choices: Vec<String> = reshiki::abbreviations::group_labels()
             .into_iter()
             .chain(reshiki::ligands::LABELS.iter().map(|s| (*s).into()))
+            .chain(reshiki::chemistry::abbreviations::residue_labels())
             .collect();
+        let findable = reshiki::chemistry::abbreviations::residue(&self.abbreviations.preset)
+            .is_some()
+            || reshiki::chemistry::abbreviations::lookup(&self.abbreviations.preset)
+                .is_ok_and(|group| group.is_some());
         // Disabled commands say what they need.
         let item = |label, message: Message, enabled: bool, hint, reason| {
             hover_hint(
@@ -2075,8 +2080,15 @@ impl App {
             ]
             .spacing(6),
             horizontal_line(),
-            text("COMMON GROUP").size(11).style(muted_text),
+            text("COMMON GROUP OR RESIDUE").size(11).style(muted_text),
             crate::appearance::pick_list(choices, Some(self.abbreviations.preset.clone()), move |s| action(A::Preset(s))).width(Length::Fill).text_size(14),
+            item(
+                "Find selected label",
+                action(A::FindLabel),
+                !self.tab.busy && !self.tab.doc.atoms.is_empty() && findable,
+                "Contracts matching groups or amino-acid residues into the selected label",
+                if self.tab.busy { wait } else if !findable { "Find supports catalog groups and amino-acid residues" } else { "Draw or import a molecule first" },
+            ),
             item(
                 "Replace selected endpoint",
                 action(A::Replace),
@@ -2100,7 +2112,7 @@ impl App {
                 "Contract selection",
                 action(A::Contract),
                 !self.tab.selected.is_empty() && !label.is_empty(),
-                "Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.",
+                "Select a connected fragment whose outside bonds meet at most two selected atoms. A custom name does not change its chemistry.",
                 if self.tab.selected.is_empty() { "Select a connected fragment first" } else { "Enter a label first" },
             ),
             item(

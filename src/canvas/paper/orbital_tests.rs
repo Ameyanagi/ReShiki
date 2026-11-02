@@ -218,6 +218,7 @@ fn a_mark_drag_builds_its_orbit_guide_once_and_rebuilds_it_on_real_changes() {
         // An abbreviation's label, and then its alignment, set the orbit too.
         &|d| {
             d.abbreviations.push(reshiki::abbreviations::Abbreviation {
+                exit: None,
                 label_style: None,
                 label_color_override: false,
                 highlight: None,

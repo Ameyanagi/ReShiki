@@ -358,14 +358,14 @@ fn abbreviations_reconcile_before_validation() {
         app.tab.doc.add_bond(c, d, 1, "plain");
         assert_eq!(
             app.tab.doc.validate(),
-            Err("Only the abbreviation's attachment atom can connect outside it".into())
+            Err("Only the abbreviation's attachment atoms can connect outside it".into())
         );
         app.changed(before);
         assert!(app.tab.doc.abbreviations.is_empty());
         assert!(!app.error);
         assert_ne!(
             app.status,
-            "Edit cancelled: Only the abbreviation's attachment atom can connect outside it"
+            "Edit cancelled: Only the abbreviation's attachment atoms can connect outside it"
         );
         assert_eq!(app.status, CHEMISTRY);
         assert_eq!(app.tab.revision, revision + 1);
