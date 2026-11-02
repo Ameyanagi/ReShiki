@@ -12,6 +12,77 @@ fn molecule() -> Document {
     doc
 }
 
+#[test]
+fn name_follows_inchi_in_copy_formats_and_uses_the_name_code() {
+    let index = CopyFormat::ALL
+        .iter()
+        .position(|format| *format == CopyFormat::Inchi)
+        .unwrap();
+    assert_eq!(CopyFormat::ALL[index + 1], CopyFormat::Name);
+    assert_eq!(CopyFormat::Name.label(), "Name");
+    assert_eq!(CopyFormat::Name.code(), "name");
+    assert!(CopyFormat::Name.is_chemical());
+}
+
+#[test]
+fn name_needs_one_connected_molecule_without_a_reaction() {
+    let format = CopyFormat::Name;
+    assert!(format.unavailable_reason(&Document::default()).is_some());
+    let mut doc = molecule();
+    assert_eq!(format.unavailable_reason(&doc), None);
+    let partial = selection_or_drawing(&doc, &[doc.atoms[0].id]);
+    assert_eq!(format.unavailable_reason(&partial), None);
+    assert_eq!(
+        format.unavailable_reason_for_selection(&doc, &partial),
+        Some(NAME_REASON)
+    );
+    let other = doc.add_atom("N", Point::new(240., 0.));
+    assert_eq!(
+        format.unavailable_reason(&doc),
+        Some("Name needs one complete connected molecule.")
+    );
+    doc.add_bond(doc.atoms[0].id, other, 1, "plain");
+    doc.reactions.push(Reaction::new(99));
+    assert!(format.unavailable_reason(&doc).is_some());
+    doc.reactions.clear();
+    assert_eq!(format.unavailable_reason(&doc), None);
+}
+
+#[test]
+fn prepared_name_has_plain_html_and_rtf() {
+    let name = "N1-ethyl-N2-methylethane-1,2-diamine";
+    let copy = prepare_name(name.into());
+    assert_eq!(copy.format, CopyFormat::Name);
+    assert_eq!(copy.text(), Some(name));
+    assert!(copy.notices.is_empty());
+    assert_eq!(
+        copy.representations
+            .iter()
+            .map(|r| r.kind.as_str())
+            .collect::<Vec<_>>(),
+        ["public.html", "public.rtf", TEXT]
+    );
+    assert_eq!(copy.representations[2].bytes().unwrap(), name.as_bytes());
+    assert_eq!(
+        String::from_utf8(copy.representations[0].bytes().unwrap()).unwrap(),
+        "<meta charset=\"utf-8\"><i>N</i><sup>1</sup>-ethyl-<i>N</i><sup>2</sup>-methylethane-1,2-diamine"
+    );
+    let rtf = String::from_utf8(copy.representations[1].bytes().unwrap()).unwrap();
+    assert!(rtf.contains("{\\i N}{\\super 1}-ethyl-{\\i N}{\\super 2}"));
+}
+
+#[tokio::test]
+async fn name_preparation_generates_verified_ethanol() -> Result<(), String> {
+    let mut doc = molecule();
+    let carbon = doc.add_atom("C", Point::new(-42., 0.));
+    doc.add_bond(carbon, doc.atoms[0].id, 1, "plain");
+    let before = doc.clone();
+    let copy = prepare_as(LocalEngine::default(), doc.clone(), CopyFormat::Name).await?;
+    assert_eq!(copy, prepare_name("ethanol".into()));
+    assert_eq!(doc, before);
+    Ok(())
+}
+
 fn rings(arrow: bool) -> Document {
     let mut doc = Document::default();
     crate::editing::ring(&mut doc, Point::default(), 6, arrow, 36.);

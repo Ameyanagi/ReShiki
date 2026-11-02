@@ -1,4 +1,103 @@
+use super::test_support::with_fonts;
 use super::*;
+
+fn stereo_document() -> Document {
+    let mut doc = Document::default();
+    doc.drawing_style.font_family = "Liberation Sans".into();
+    doc.atom_labels.stereo = true;
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(a, b, 2, "plain");
+    doc.bonds[0].indicator.style.family = "Liberation Sans".into();
+    doc
+}
+
+#[test]
+fn stereo_descriptors_use_display_names_without_changing_cached_codes_or_styles() {
+    with_fonts(|| {
+        let mut doc = stereo_document();
+        for (code, display) in [
+            ("E", "(E)"),
+            ("Z", "(Z)"),
+            ("e", "(seqTrans)"),
+            ("z", "(seqCis)"),
+            ("M", "(M)"),
+            ("P", "(P)"),
+            ("m", "(m)"),
+            ("p", "(p)"),
+        ] {
+            doc.bonds[0].cip_label = Some(code.into());
+            let before = doc.clone();
+            let [indicator] = indicators(&doc).try_into().unwrap();
+            assert_eq!(indicator.text, display, "{code}");
+            assert!(indicator.style.italic);
+            assert_eq!(indicator.style, doc.bonds[0].indicator.style);
+            assert_eq!(doc, before);
+        }
+    });
+}
+
+#[test]
+fn stereo_descriptors_axial_choice_changes_only_displayed_helicity() {
+    with_fonts(|| {
+        let mut doc = stereo_document();
+        doc.atom_labels = serde_json::from_value(serde_json::json!({
+            "stereo": true,
+            "axial_descriptors": "ra"
+        }))
+        .unwrap();
+        for (code, display) in [
+            ("M", "(Ra)"),
+            ("P", "(Sa)"),
+            ("m", "(ra)"),
+            ("p", "(sa)"),
+            ("e", "(seqTrans)"),
+            ("z", "(seqCis)"),
+        ] {
+            doc.bonds[0].cip_label = Some(code.into());
+            let [indicator] = indicators(&doc).try_into().unwrap();
+            assert_eq!(indicator.text, display, "{code}");
+            assert_eq!(doc.bonds[0].cip_label.as_deref(), Some(code));
+            assert!(indicator.style.italic);
+        }
+    });
+}
+
+#[test]
+fn stereo_descriptors_validate_native_bond_codes_without_accepting_display_strings() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(a, b, 2, "plain");
+    for code in ["E", "Z", "e", "z", "M", "P", "m", "p"] {
+        doc.bonds[0].cip_label = Some(code.into());
+        assert_eq!(doc.validate(), Ok(()), "{code}");
+    }
+    for display in ["seqTrans", "seqCis", "Ra", "Sa", "ra", "sa", "R"] {
+        doc.bonds[0].cip_label = Some(display.into());
+        assert_eq!(doc.validate().unwrap_err(), "Unsupported bond CIP label");
+    }
+}
+
+#[test]
+fn stereo_descriptors_serde_preserves_old_defaults_and_saves_axial_choice() {
+    let old = serde_json::json!({"carbons": "skeletal", "hydrogens": true, "stereo": false});
+    let settings: Settings = serde_json::from_value(old.clone()).unwrap();
+    assert_eq!(settings, Settings::default());
+    assert_eq!(settings.axial_descriptors, AxialDescriptors::Helicity);
+    assert_eq!(
+        AxialDescriptors::Helicity.to_string(),
+        "M/P (IUPAC preferred)"
+    );
+    assert_eq!(AxialDescriptors::Ra.to_string(), "Ra/Sa");
+    assert_eq!(serde_json::to_value(settings).unwrap(), old);
+    let chosen = serde_json::json!({
+        "carbons": "skeletal", "hydrogens": true, "stereo": false,
+        "axial_descriptors": "ra"
+    });
+    let settings: Settings = serde_json::from_value(chosen.clone()).unwrap();
+    assert_eq!(serde_json::to_value(settings).unwrap(), chosen);
+}
 
 #[test]
 fn isolated_hydrogen_halides_read_hydrogen_first_and_respect_overrides() {
