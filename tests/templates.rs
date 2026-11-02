@@ -33,11 +33,10 @@ async fn every_thumbnail_is_the_structure_that_gets_placed()
             .analysis
             .unwrap();
         assert_eq!(actual.smiles, expected.smiles, "{}", item.name);
-        if matches!(item.group.as_str(), "Macrocycles" | "Ligands") {
-            let facts = catalog
-                .iter()
-                .find(|f| f.get("name").and_then(|v| v.as_str()) == Some(item.name.as_str()))
-                .ok_or("Missing catalog entry")?;
+        if let Some(facts) = catalog
+            .iter()
+            .find(|f| f.get("name").and_then(|v| v.as_str()) == Some(item.name.as_str()))
+        {
             assert_eq!(
                 actual.formula,
                 facts
@@ -485,5 +484,372 @@ fn connected_phenyl_ring_has_120_degree_angles_at_every_source_vertex() {
                 }
             }
         }
+    }
+}
+
+fn numbered_template(name: &str) -> &'static reshiki::templates::Template {
+    LIBRARY.iter().find(|t| t.name == name).unwrap()
+}
+
+fn locant_atom<'a>(
+    item: &'a reshiki::templates::Template,
+    locant: &str,
+) -> &'a reshiki::document::Atom {
+    let id = item
+        .locants
+        .iter()
+        .find_map(|(id, number)| (number == locant).then_some(*id))
+        .unwrap_or_else(|| panic!("{} has no locant {locant}", item.name));
+    item.document.atom(id).unwrap()
+}
+
+fn locants_are_bonded(item: &reshiki::templates::Template, a: &str, b: &str) -> bool {
+    let a = locant_atom(item, a).id;
+    let b = locant_atom(item, b).id;
+    item.document
+        .bonds
+        .iter()
+        .any(|edge| (edge.a == a && edge.b == b) || (edge.a == b && edge.b == a))
+}
+
+#[test]
+fn ring_locants_cover_exactly_ring_atoms_without_duplicates() {
+    use std::collections::HashSet;
+
+    for item in LIBRARY.iter().filter(|t| {
+        matches!(
+            t.group.as_str(),
+            "Rings"
+                | "Cycloalkanes"
+                | "Unsaturated rings"
+                | "Heterocycles"
+                | "Bicyclics and cages"
+                | "Nucleobases"
+        ) || (t.group == "Macrocycles" && !t.name.starts_with("Porphine"))
+            || t.name == "1,10-Phenanthroline"
+    }) {
+        assert!(!item.locants.is_empty(), "{} needs ring locants", item.name);
+        let labels: HashSet<_> = item.locants.values().collect();
+        assert_eq!(labels.len(), item.locants.len(), "{}", item.name);
+        for (id, label) in &item.locants {
+            assert!(item.document.atom(*id).is_some(), "{}: {label}", item.name);
+            assert!(!label.is_empty(), "{}", item.name);
+        }
+        // An edge belongs to a cycle exactly when its endpoints remain
+        // connected after removing that edge. This checks the stored graph,
+        // independently of the catalog's SMILES atom order or its locants.
+        let mut ring_atoms = HashSet::new();
+        for (edge_index, edge) in item.document.bonds.iter().enumerate() {
+            let mut visited = HashSet::from([edge.a]);
+            let mut pending = vec![edge.a];
+            while let Some(id) = pending.pop() {
+                for other in item
+                    .document
+                    .bonds
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, other)| {
+                        if index == edge_index {
+                            return None;
+                        }
+                        if other.a == id {
+                            Some(other.b)
+                        } else if other.b == id {
+                            Some(other.a)
+                        } else {
+                            None
+                        }
+                    })
+                {
+                    if visited.insert(other) {
+                        pending.push(other);
+                    }
+                }
+            }
+            if visited.contains(&edge.b) {
+                ring_atoms.extend([edge.a, edge.b]);
+            }
+        }
+        assert_eq!(
+            item.locants.keys().copied().collect::<HashSet<_>>(),
+            ring_atoms,
+            "{}: every ring atom, and no exocyclic atom, must have a locant",
+            item.name
+        );
+    }
+}
+
+#[test]
+fn retained_and_hantzsch_widman_heteroatom_locants_are_chemical_positions() {
+    for (name, locants, element) in [
+        ("Pyridine", "1", "N"),
+        ("Pyrazole", "1 2", "N"),
+        ("Imidazole", "1 3", "N"),
+        ("Oxazole", "1", "O"),
+        ("Oxazole", "3", "N"),
+        ("Isoxazole", "2", "N"),
+        ("Thiazole", "1", "S"),
+        ("Morpholine", "1", "O"),
+        ("Morpholine", "4", "N"),
+        ("Quinoline", "1", "N"),
+        ("Isoquinoline", "2", "N"),
+        ("Indole", "1", "N"),
+        ("9H-Purine", "1 3 7 9", "N"),
+        ("7H-Purine", "1 3 7 9", "N"),
+        ("Adenine (9H)", "1 3 7 9", "N"),
+        ("Guanine (9H)", "1 3 7 9", "N"),
+        ("Cytosine", "1 3", "N"),
+        ("Thymine", "1 3", "N"),
+        ("Uracil", "1 3", "N"),
+        ("Carbazole (9H)", "9", "N"),
+        // Acridine retains its special N-10 numbering in the 2013 Blue Book,
+        // P-25.2.1 Table 2.8; it is not the systematic fusion position 5.
+        ("Acridine", "10", "N"),
+        ("Quinazoline", "1 3", "N"),
+        ("Quinoxaline", "1 4", "N"),
+        ("Benzimidazole (1H)", "1 3", "N"),
+        ("Indazole (1H)", "1 2", "N"),
+        ("Chromene (2H)", "1", "O"),
+        ("Dibenzofuran", "5", "O"),
+        ("Dibenzothiophene", "5", "S"),
+        // FR-2.2.4 numbers phenanthroline systematically, unlike phenanthrene.
+        ("1,10-Phenanthroline", "1 10", "N"),
+        ("12-Crown-4", "1 4 7 10", "O"),
+        ("18-Crown-6", "1 4 7 10 13 16", "O"),
+        ("Cyclen", "1 4 7 10", "N"),
+        ("Cyclam", "1 4 8 11", "N"),
+    ] {
+        let item = numbered_template(name);
+        for locant in locants.split_whitespace() {
+            assert_eq!(
+                locant_atom(item, locant).element,
+                element,
+                "{name}: {locant}"
+            );
+        }
+    }
+}
+
+#[test]
+fn ring_perimeters_follow_retained_numbering_and_fusion_locants() {
+    for (names, perimeter, fusion_edges) in [
+        ("Cyclopropane", "1 2 3", ""),
+        ("Cyclobutane", "1 2 3 4", ""),
+        (
+            "Cyclopentane|Cyclopentadiene|Pyrrole|Furan|Thiophene|Pyrazole|Imidazole|Oxazole|Isoxazole|Thiazole|Isothiazole|Pyrrolidine|Tetrahydrofuran",
+            "1 2 3 4 5",
+            "",
+        ),
+        (
+            "Benzene|Cyclohexane|Cyclohexene|1,3-Cyclohexadiene|Pyridine|Pyridazine|Pyrimidine|Pyrazine|Piperidine|Piperazine|Morpholine|Tetrahydropyran|1,4-Dioxane|Cytosine|Thymine|Uracil",
+            "1 2 3 4 5 6",
+            "",
+        ),
+        ("Cycloheptane", "1 2 3 4 5 6 7", ""),
+        ("Cyclooctane", "1 2 3 4 5 6 7 8", ""),
+        ("12-Crown-4|Cyclen", "1 2 3 4 5 6 7 8 9 10 11 12", ""),
+        ("Cyclam", "1 2 3 4 5 6 7 8 9 10 11 12 13 14", ""),
+        ("Norbornane", "1 2 3 4 5 6", "1 7 7 4"),
+        ("Bicyclo[1.1.1]pentane", "1 2 3 4", "1 5 5 3"),
+        ("Adamantane", "1 2 3 4 5 6 7 8", "1 9 9 5 3 10 10 7"),
+        ("Cubane", "1 2 3 4 5 6 7 8", "1 6 2 5 3 8 4 7"),
+        (
+            "Naphthalene|Decalin|Quinoline|Isoquinoline|Quinazoline|Quinoxaline|Chromene (2H)",
+            "1 2 3 4 4a 5 6 7 8 8a",
+            "4a 8a",
+        ),
+        (
+            "Indole|Benzofuran|Benzothiophene|Indene (1H)|Benzimidazole (1H)|Indazole (1H)",
+            "1 2 3 3a 4 5 6 7 7a",
+            "3a 7a",
+        ),
+        ("Azulene", "1 2 3 3a 4 5 6 7 8 8a", "3a 8a"),
+        (
+            "Anthracene|Acridine",
+            "1 2 3 4 4a 10 10a 5 6 7 8 8a 9 9a",
+            "4a 9a 8a 10a",
+        ),
+        (
+            "Phenanthrene",
+            "1 2 3 4 4a 4b 5 6 7 8 8a 9 10 10a",
+            "4a 10a 4b 8a",
+        ),
+        (
+            "Fluorene (9H)|Carbazole (9H)",
+            "1 2 3 4 4a 4b 5 6 7 8 8a 9 9a",
+            "4a 9a 4b 8a",
+        ),
+        (
+            "Dibenzofuran|Dibenzothiophene",
+            "1 2 3 4 4a 5 5a 6 7 8 9 9a 9b",
+            "4a 9b 5a 9a",
+        ),
+        (
+            "1,10-Phenanthroline",
+            "1 2 3 4 4a 5 6 6a 7 8 9 10 10a 10b",
+            "4a 10b 6a 10a",
+        ),
+        (
+            "Pyrene",
+            "1 2 3 3a 4 5 5a 6 7 8 8a 9 10 10a",
+            "3a 3a¹ 10a 3a¹ 3a¹ 5a¹ 5a 5a¹ 8a 5a¹",
+        ),
+        (
+            "9H-Purine|7H-Purine|Adenine (9H)|Guanine (9H)",
+            "1 2 3 4 9 8 7 5 6",
+            "4 5",
+        ),
+    ] {
+        for name in names.split('|') {
+            let item = numbered_template(name);
+            let perimeter: Vec<_> = perimeter.split_whitespace().collect();
+            for (&a, &b) in perimeter
+                .iter()
+                .zip(perimeter.iter().cycle().skip(1))
+                .take(perimeter.len())
+            {
+                assert!(locants_are_bonded(item, a, b), "{name}: {a}–{b}");
+            }
+            let fusion_edges: Vec<_> = fusion_edges.split_whitespace().collect();
+            for edge in fusion_edges.as_chunks::<2>().0 {
+                assert!(
+                    locants_are_bonded(item, edge[0], edge[1]),
+                    "{name}: fusion {}–{}",
+                    edge[0],
+                    edge[1]
+                );
+            }
+        }
+    }
+}
+
+fn nitrogen_hydrogens(item: &reshiki::templates::Template, locant: &str) -> u32 {
+    let atom = locant_atom(item, locant);
+    assert_eq!(atom.element, "N");
+    assert_eq!(atom.charge, 0);
+    let valence: u32 = item
+        .document
+        .bonds
+        .iter()
+        .filter(|b| b.a == atom.id || b.b == atom.id)
+        .map(|b| {
+            assert!((1..=3).contains(&b.order));
+            b.order as u32
+        })
+        .sum();
+    atom.explicit_h
+        + if atom.no_implicit {
+            0
+        } else {
+            3 - valence - atom.explicit_h
+        }
+}
+
+#[test]
+fn purine_defaults_are_9h_and_the_named_7h_form_stays_7h() {
+    for name in ["9H-Purine", "Adenine (9H)", "Guanine (9H)"] {
+        let item = numbered_template(name);
+        assert_eq!(nitrogen_hydrogens(item, "9"), 1, "{name}: N9");
+        assert_eq!(nitrogen_hydrogens(item, "7"), 0, "{name}: N7");
+    }
+    let seven_h = numbered_template("7H-Purine");
+    assert_eq!(nitrogen_hydrogens(seven_h, "7"), 1);
+    assert_eq!(nitrogen_hydrogens(seven_h, "9"), 0);
+}
+
+#[tokio::test]
+async fn adenine_can_connect_at_n9_without_changing_its_ring_tautomer() {
+    use reshiki::templates::{Anchor, Connection, place_with_mode};
+
+    let item = numbered_template("Adenine (9H)");
+    let n9 = locant_atom(item, "9");
+    let mut methyl = Document::default();
+    let carbon = methyl.add_atom("C", Point::default());
+    let (joined, ids) = place_with_mode(
+        &methyl,
+        &item.document,
+        Point::default(),
+        None,
+        5.,
+        Anchor::Atom(n9.id),
+        Connection::Connect,
+    )
+    .expect("N9 of the 9H tautomer must have available valence for nucleoside-style attachment");
+    let mapping: std::collections::HashMap<_, _> =
+        item.document.all_ids().into_iter().zip(ids).collect();
+    assert!(joined.bonds.iter().any(|b| b.order == 1
+        && ((b.a == carbon && b.b == mapping[&n9.id])
+            || (b.b == carbon && b.a == mapping[&n9.id]))));
+    let engine = LocalEngine::default();
+    let actual = engine
+        .execute(Request::molecule("analyze", joined))
+        .await
+        .unwrap()
+        .analysis
+        .unwrap();
+    let expected = engine
+        .execute(Request::import_smiles("Cn1cnc2c(N)ncnc21"))
+        .await
+        .unwrap()
+        .analysis
+        .unwrap();
+    assert_eq!(actual.formula, "C6H7N5");
+    assert_eq!(actual.smiles, expected.smiles);
+    assert_eq!(actual.inchikey, expected.inchikey);
+}
+
+fn locant_centroid(item: &reshiki::templates::Template, locants: &str) -> Point {
+    let points: Vec<_> = locants
+        .split_whitespace()
+        .map(|locant| locant_atom(item, locant).position)
+        .collect();
+    Point::new(
+        points.iter().map(|p| p.x).sum::<f32>() / points.len() as f32,
+        points.iter().map(|p| p.y).sum::<f32>() / points.len() as f32,
+    )
+}
+
+#[test]
+fn new_fused_templates_store_the_requested_orientation() {
+    let phenanthrene = numbered_template("Phenanthrene");
+    let mut rings = [
+        locant_centroid(phenanthrene, "4b 5 6 7 8 8a"),
+        locant_centroid(phenanthrene, "4b 8a 9 10 10a 4a"),
+        locant_centroid(phenanthrene, "10a 1 2 3 4 4a"),
+    ];
+    rings.sort_by(|a, b| a.x.total_cmp(&b.x));
+    let [left, center, right] = rings;
+    assert!((left.y - center.y).abs() < 0.01);
+    assert!(left.x < center.x && center.x < right.x);
+    assert!(right.y < center.y - 1.);
+
+    for (name, lower) in [
+        ("Benzimidazole (1H)", "3"),
+        ("Indazole (1H)", "3"),
+        ("Chromene (2H)", "4"),
+    ] {
+        let item = numbered_template(name);
+        assert!(
+            locant_atom(item, "1").position.y < locant_atom(item, lower).position.y,
+            "{name}: heteroatom 1 must be above position {lower}"
+        );
+    }
+
+    for (name, locant, direction) in [
+        ("Fluorene (9H)", "9", -1.),
+        ("Carbazole (9H)", "9", -1.),
+        ("Dibenzofuran", "5", 1.),
+        ("Dibenzothiophene", "5", 1.),
+    ] {
+        let item = numbered_template(name);
+        let atom = locant_atom(item, locant);
+        assert!(
+            item.document
+                .atoms
+                .iter()
+                .filter(|a| a.id != atom.id)
+                .all(|a| (atom.position.y - a.position.y) * direction > 0.01),
+            "{name}: locant {locant} must have the requested vertical orientation"
+        );
     }
 }

@@ -1810,6 +1810,7 @@ impl App {
             canvas(crate::canvas::TemplateAnchorPreview {
                 document: &t.document,
                 anchor: state.anchor,
+                locants: Some(&t.locants),
             })
             .width(Length::Fill)
             .height(145)
@@ -1834,7 +1835,9 @@ impl App {
             .push(text(state.connection.hint()).size(11).style(muted_text))
             .push(
                 row![
-                    text(state.anchor.to_string()).size(11).width(Length::Fill),
+                    text(super::template_library::anchor_label(t, state.anchor))
+                        .size(11)
+                        .width(Length::Fill),
                     command("Auto", action(A::Anchor(reshiki::templates::Anchor::Auto)))
                 ]
                 .align_y(Alignment::Center),

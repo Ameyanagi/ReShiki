@@ -91,6 +91,15 @@ impl Sugar {
             Self::Fructose => "fructose",
         }
     }
+    fn symbol(self) -> &'static str {
+        match self {
+            Self::Glucose => "Glc",
+            Self::Galactose => "Gal",
+            Self::Mannose => "Man",
+            Self::Ribose => "Rib",
+            Self::Fructose => "Fru",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -244,13 +253,45 @@ pub fn templates() -> Result<Vec<Template>, String> {
         } else {
             "beta"
         };
+        let ring_name = if ring == Ring::Six {
+            "pyranose"
+        } else {
+            "furanose"
+        };
+        let ring_symbol = format!(
+            "{}{}",
+            entry.sugar.symbol(),
+            if ring == Ring::Six { 'p' } else { 'f' }
+        );
+        let mut keywords = vec![
+            "sugar".into(),
+            "Haworth".into(),
+            entry.sugar.name().into(),
+            anomer.into(),
+            ring_name.into(),
+            entry.sugar.symbol().into(),
+            ring_symbol.clone(),
+        ];
+        if let Some(series) = entry
+            .name
+            .split('-')
+            .find(|part| matches!(*part, "D" | "L"))
+        {
+            let prefixes = if entry.anomer == Anomer::Alpha {
+                ["a", "α", "alpha"]
+            } else {
+                ["b", "β", "beta"]
+            };
+            keywords.extend(prefixes.map(|prefix| format!("{prefix}-{series}-{ring_symbol}")));
+        }
         result.push(Template {
             id: String::new(),
             group: "Carbohydrates".into(),
             name: format!("{} · Haworth", entry.name),
             smiles: entry.smiles,
-            keywords: vec!["sugar".into(), "Haworth".into(), entry.sugar.name().into(), anomer.into(), if ring == Ring::Six { "pyranose" } else { "furanose" }.into()],
+            keywords,
             note: "Haworth projection with defined D-sugar stereochemistry. CH2OH contains real atoms. Use native/figure output to retain perspective; cleanup creates a conventional stereochemical drawing.".into(),
+            locants: Default::default(),
             document: sugar_document(entry.sugar, entry.anomer, crate::style::DEFAULT.bond_length_world)?,
             anchor: Anchor::Auto,
         });
@@ -266,6 +307,7 @@ pub fn templates() -> Result<Vec<Template>, String> {
             smiles: smiles.into(),
             keywords: vec!["Haworth".into(), "sugar".into(), "scaffold".into()],
             note: "Oxygen-containing Haworth ring scaffold. Add substituents to define a sugar; no stereochemistry is assigned to this blank scaffold.".into(),
+            locants: Default::default(),
             document: ring.document(crate::style::DEFAULT.bond_length_world, true),
             anchor: Anchor::Auto,
         });

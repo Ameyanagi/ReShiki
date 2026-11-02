@@ -80,6 +80,7 @@ pub(super) fn template() -> Result<Template, String> {
         smiles: facts.smiles,
         keywords: facts.keywords,
         note: facts.note,
+        locants: Default::default(),
         document,
         anchor: Anchor::Auto,
     })

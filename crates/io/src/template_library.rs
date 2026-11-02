@@ -104,6 +104,7 @@ impl Library {
             smiles: String::new(),
             keywords: vec![],
             note: String::new(),
+            locants: Default::default(),
             document,
             anchor,
         });

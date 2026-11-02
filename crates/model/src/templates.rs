@@ -22,6 +22,9 @@ pub struct Template {
     pub keywords: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+    /// Parent-ring numbering for the source preview, keyed by document atom ID.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub locants: HashMap<u64, String>,
     pub document: Document,
     #[serde(default)]
     pub anchor: Anchor,
@@ -370,7 +373,8 @@ fn bond_directions(doc: &Document, source: &Atom) -> Vec<(f32, u8)> {
         .collect()
 }
 
-fn connection_directions(doc: &Document, source: &Atom) -> Vec<f32> {
+/// Bisectors of the widest angular gaps between `source`'s bonds (world radians).
+pub fn connection_directions(doc: &Document, source: &Atom) -> Vec<f32> {
     use std::f32::consts::{PI, TAU};
     let neighbors = bond_directions(doc, source);
     match neighbors.as_slice() {
@@ -462,12 +466,15 @@ pub static LIBRARY: LazyLock<Vec<Template>> = LazyLock::new(|| {
             smiles: "C1CCCCC1".into(),
             keywords: vec!["chair".into(),"cyclohexane".into()],
             note: "Chair projection with equal bond lengths. It does not assign 3D geometry or stereochemistry.".into(),
+            locants: HashMap::new(),
             document: preset.document(crate::style::DEFAULT.bond_length_world, false),
             anchor: Anchor::Auto,
         });
     }
     for t in &mut templates {
-        t.id = format!("builtin:{}/{}", t.group, t.name);
+        if t.id.is_empty() {
+            t.id = format!("builtin:{}/{}", t.group, t.name);
+        }
     }
     templates
 });

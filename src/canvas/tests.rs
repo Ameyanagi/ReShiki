@@ -762,6 +762,7 @@ fn template_anchor_preview_hit_tests_atoms_bonds_and_empty_space() {
     let preview = TemplateAnchorPreview {
         document: &doc,
         anchor: Anchor::Auto,
+        locants: None,
     };
     let bounds = Rectangle::new(Point::new(20., 30.), iced::Size::new(220., 150.));
     let camera = preview.camera(bounds);
@@ -790,6 +791,40 @@ fn template_anchor_preview_hit_tests_atoms_bonds_and_empty_space() {
             )
             .is_none()
     );
+}
+
+#[test]
+fn template_source_locants_sit_in_open_gaps_and_join_preview_omits_them() {
+    let template = reshiki::templates::LIBRARY
+        .iter()
+        .find(|t| t.name == "Anthracene")
+        .unwrap();
+    let doc = &template.document;
+    let preview = TemplateAnchorPreview {
+        document: doc,
+        anchor: reshiki::templates::Anchor::Auto,
+        locants: Some(&template.locants),
+    };
+    let bounds = Rectangle::with_size(iced::Size::new(220., 145.));
+    let camera = preview.camera(bounds);
+    let labels = preview.locant_labels(camera, bounds);
+    assert_eq!(labels.len(), doc.atoms.len());
+    // Fusion atoms have three equal 120° gaps; no label may land on bond ink.
+    for (locant, p) in &labels {
+        for bond in &doc.bonds {
+            let a = camera.screen(doc.atom(bond.a).unwrap().position, bounds);
+            let b = camera.screen(doc.atom(bond.b).unwrap().position, bounds);
+            let (ab, ap) = (b - a, *p - a);
+            let t = ((ap.x * ab.x + ap.y * ab.y) / (ab.x * ab.x + ab.y * ab.y)).clamp(0., 1.);
+            let gap = (ap - ab * t).x.hypot((ap - ab * t).y);
+            assert!(gap > 6., "{locant} is {gap} px from a bond");
+        }
+    }
+    let join_preview = TemplateAnchorPreview {
+        locants: None,
+        ..preview
+    };
+    assert!(join_preview.locant_labels(camera, bounds).is_empty());
 }
 
 #[test]

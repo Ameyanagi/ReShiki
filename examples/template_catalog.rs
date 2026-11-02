@@ -1,4 +1,6 @@
 //! Generate drawing coordinates from frozen molecular facts with the native engine.
+//! Use scripts/regenerate_templates.py for the bundled library's frozen geometry,
+//! source-atom locants, and orientation metadata.
 use anyhow::Context;
 use reshiki::{
     engine::{LocalEngine, Request},
@@ -22,7 +24,10 @@ async fn main() -> anyhow::Result<()> {
                 .and_then(|v| v.as_str())
                 .context("Missing molecular fact")
         };
-        let smiles = get("smiles")?;
+        let smiles = fact
+            .get("tautomer_smiles")
+            .and_then(|v| v.as_str())
+            .unwrap_or(get("smiles")?);
         let response = engine
             .request(Request::import("smiles", smiles))
             .await
@@ -34,12 +39,17 @@ async fn main() -> anyhow::Result<()> {
             get("name")?
         );
         templates.push(Template {
-            id: String::new(),
+            id: fact
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .into(),
             name: get("name")?.into(),
             group: get("group")?.into(),
             smiles: smiles.into(),
             keywords: serde_json::from_value(fact.get("keywords").cloned().unwrap_or_default())?,
             note: get("note")?.into(),
+            locants: Default::default(),
             document: response.document.context("Missing drawing")?,
             anchor: Default::default(),
         });

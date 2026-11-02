@@ -84,12 +84,50 @@ pub fn categories(template: &reshiki::templates::Template) -> impl Iterator<Item
         &template.group
     };
     let heterocycle = (aromatic
-        && template
-            .smiles
-            .chars()
-            .any(|c| matches!(c, 'n' | 'o' | 's' | 'p' | 'b')))
+        && (template.group == "Heterocycles"
+            || template
+                .smiles
+                .chars()
+                .any(|c| matches!(c, 'n' | 'o' | 's' | 'p' | 'b'))))
     .then_some("Heterocycles");
     [Some(primary), heterocycle].into_iter().flatten()
+}
+
+/// Match both printed and plain-text von Baeyer superscript locants.
+fn search_fold(text: &str) -> String {
+    text.chars()
+        .filter_map(|c| match c {
+            '^' | '{' | '}' => None,
+            '⁰' => Some('0'),
+            '¹' => Some('1'),
+            '²' => Some('2'),
+            '³' => Some('3'),
+            '⁴' => Some('4'),
+            '⁵' => Some('5'),
+            '⁶' => Some('6'),
+            '⁷' => Some('7'),
+            '⁸' => Some('8'),
+            '⁹' => Some('9'),
+            _ => Some(c),
+        })
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+pub(super) fn anchor_label(template: &reshiki::templates::Template, anchor: Anchor) -> String {
+    let atom_label = |id| {
+        let locant = template.locants.get(&id)?;
+        let atom = template.document.atom(id)?;
+        Some(format!("{}-{locant}", atom.element))
+    };
+    match anchor {
+        Anchor::Atom(id) => atom_label(id).map(|label| format!("Attach at {label}")),
+        Anchor::Bond(a, b) => atom_label(a)
+            .zip(atom_label(b))
+            .map(|(a, b)| format!("Attach at {a}–{b}")),
+        Anchor::Auto => None,
+    }
+    .unwrap_or_else(|| anchor.to_string())
 }
 
 pub struct State {
@@ -227,7 +265,7 @@ impl State {
         state
     }
     pub fn matches(&self, index: usize, t: &reshiki::templates::Template) -> bool {
-        let query = self.query.to_lowercase();
+        let query = search_fold(&self.query);
         (match self.filter {
             Filter::All => true,
             Filter::Mine => index >= LIBRARY.len(),
@@ -238,18 +276,18 @@ impl State {
                 categories(t)
                     .chain([t.name.as_str(), t.group.as_str(), t.smiles.as_str()])
                     .chain(t.keywords.iter().map(String::as_str))
-                    .any(|text| text.to_lowercase().contains(word))
+                    .any(|text| search_fold(text).contains(word))
             })
     }
     pub fn search_rank(&self, t: &reshiki::templates::Template) -> u8 {
-        let query = self.query.trim().to_lowercase();
-        let name = t.name.to_lowercase();
-        if name == query || t.keywords.iter().any(|s| s.eq_ignore_ascii_case(&query)) {
+        let query = search_fold(self.query.trim());
+        let name = search_fold(&t.name);
+        if name == query || t.keywords.iter().any(|s| search_fold(s) == query) {
             0
         } else if name.starts_with(&query)
             || t.keywords
                 .iter()
-                .any(|s| s.to_lowercase().starts_with(&query))
+                .any(|s| search_fold(s).starts_with(&query))
         {
             1
         } else {
@@ -441,6 +479,7 @@ impl Operation {
                     .ok_or("Choose a custom template")?;
                 template.document = drawing;
                 template.smiles.clear();
+                template.locants.clear();
                 template.anchor = Anchor::Auto;
                 undo = Some(self.previous.clone());
                 Effect::Updated {

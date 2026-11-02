@@ -651,6 +651,7 @@ fn duplicate_titles_prefer_the_direct_insert() {
         smiles: "c1ccccc1".into(),
         keywords: vec![],
         note: String::new(),
+        locants: Default::default(),
         document: reshiki::rings::Preset::Benzene.document(42., false),
         anchor: Default::default(),
     }];
