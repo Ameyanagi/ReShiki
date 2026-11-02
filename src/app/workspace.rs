@@ -2042,17 +2042,11 @@ impl App {
         ) {
             fragment_labels = fragment_labels.push(text(warning).size(11).style(muted_text));
         }
-        let fragment_labels: Element<'_, Message> =
-            if label == "Bz" || self.abbreviations.reverse_label.trim() == "Bz" {
-                hover_hint(
-                    fragment_labels,
-                    reshiki::abbreviations::BZ_LABEL_HINT,
-                    tooltip::Position::Top,
-                )
-                .into()
-            } else {
-                fragment_labels.into()
-            };
+        let fragment_labels = hover_hint(
+            fragment_labels,
+            reshiki::abbreviations::CONTRACT_LABEL_HINT,
+            tooltip::Position::Top,
+        );
         let mut body = column![
             command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
             text("Chemical abbreviations").size(18),

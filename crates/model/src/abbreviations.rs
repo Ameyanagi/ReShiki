@@ -318,9 +318,9 @@ pub const NICKNAMES: &[&str] = &[
     "TBS", "tBu", "TES", "Tf", "THP", "TIPS", "TMS", "Tol", "Tr", "Ts",
 ];
 
-/// Bz is used for both benzoyl and benzyl in the literature; the bundled
-/// catalog consistently uses Bz for benzoyl and Bn for benzyl.
-pub const BZ_LABEL_HINT: &str = "benzoyl here; spell out or use Bn for benzyl";
+/// Guidance for naming a contracted fragment without conflicting with element
+/// symbols or bundled labels, including the Bz/Bn convention.
+pub const CONTRACT_LABEL_HINT: &str = "Avoid element symbols and bundled labels with another meaning. Bz means benzoyl here; spell it out or use Bn for benzyl.";
 
 /// Canonicalize just the selected fragment, replacing each outside neighbor
 /// with an attachment dummy. Display labels never affect this comparison.

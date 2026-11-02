@@ -1,7 +1,7 @@
 //! Element, charge, isotope, radical and mark edits to selected atoms.
 use super::App;
 use crate::canvas::Tool;
-use reshiki::chemistry::isotopes::{nuclide_warning, parse_mass_number};
+use reshiki::chemistry::isotopes::{is_known_nuclide, nuclide_symbol, parse_mass_number};
 
 impl App {
     pub(super) fn rotate_mark(&mut self, id: u64, index: usize) {
@@ -108,8 +108,11 @@ impl App {
                     return;
                 }
             };
-            if let Some(warning) = nuclide_warning(&atom.element, value) {
-                warnings.insert(warning);
+            if value != 0 && !is_known_nuclide(&atom.element, value) {
+                warnings.insert(format!(
+                    "{} is not a known nuclide",
+                    nuclide_symbol(&atom.element, value)
+                ));
             }
             edits.push((atom.id, value));
         }
@@ -123,7 +126,10 @@ impl App {
         self.status = "Mass number applied".into();
         self.changed(before);
         if !self.error && !warnings.is_empty() {
-            self.status = warnings.into_iter().collect::<Vec<_>>().join(" ");
+            self.status = format!(
+                "Mass number applied; {}",
+                warnings.into_iter().collect::<Vec<_>>().join(", ")
+            );
         }
     }
 }
