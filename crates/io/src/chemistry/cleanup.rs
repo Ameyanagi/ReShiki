@@ -391,6 +391,12 @@ impl Prepared {
                 let pivot = part.fixed.keys().next().copied();
                 super::layout_refinement::straighten(&part.molecule.state, &mut layout, pivot);
             }
+            if !self.options.keep_orientation && part.fixed.is_empty() {
+                super::layout_refinement::conventional_orientation(
+                    &part.molecule.state,
+                    &mut layout,
+                );
+            }
             for (&index, fixed) in &part.fixed {
                 let point = layout.get_mut(index).ok_or(Error::Layout)?;
                 if native_hypot(point.x - fixed.x, point.y - fixed.y) > 1e-6 {
