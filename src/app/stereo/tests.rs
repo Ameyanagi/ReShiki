@@ -297,7 +297,7 @@ fn check_keeps_undefined_markers_and_computed_flags_do_not_dirty_the_drawing() {
     assert!(!app.dirty());
     app.tab.doc.bonds[0].undefined_stereo = true;
     assert!(!app.dirty());
-    app.label_action(atom_labels::Action::MarkUndefined(false));
+    let _ = app.label_action(atom_labels::Action::MarkUndefined(false));
     assert!(!app.tab.doc.atom_labels.mark_undefined_stereocentres);
     assert!(app.tab.labels_dirty);
     // The refresh for the disabled option clears the markers.
