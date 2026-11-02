@@ -88,3 +88,183 @@ fn long_attached_text_avoids_free_captions() {
     assert!(!overlaps, "{lo:?}..{hi:?} vs {caption:?}");
     assert!(clear_of_bonds(&doc, (lo, hi)));
 }
+
+fn stereo_document(mut doc: Document) -> Document {
+    doc.drawing_style.font_family = "Liberation Sans".into();
+    doc.atom_labels.stereo = true;
+    doc.atom_labels.dl_descriptors = true;
+    for atom in &mut doc.atoms {
+        atom.display.stereo.style.family = "Liberation Sans".into();
+    }
+    let refresh = super::refresh::Refresh::calculate(&doc, &Default::default()).unwrap();
+    assert!(refresh.notice.is_none(), "{:?}", refresh.notice);
+    refresh.apply(&mut doc);
+    doc
+}
+
+fn assert_stereo_clear(doc: &Document, indicator: &super::Indicator) {
+    let own = indicator.owner.anchor(doc).unwrap();
+    for atom in doc
+        .atoms
+        .iter()
+        .filter(|atom| indicator.owner != Owner::AtomStereo(atom.id))
+    {
+        assert!(
+            indicator.center.distance(own) < indicator.center.distance(atom.position),
+            "{indicator:?} is nearer atom {} at {:?} than {own:?}",
+            atom.id,
+            atom.position
+        );
+    }
+    let lo = indicator.origin;
+    let hi = lo.offset(indicator.width, indicator.height);
+    assert!(clear_of_bonds(doc, (lo, hi)), "{indicator:?}");
+    for atom in &doc.atoms {
+        if let Some((a, b)) = crate::scene::atom_label_bounds(atom, doc) {
+            assert!(
+                hi.x <= a.x || b.x <= lo.x || hi.y <= a.y || b.y <= lo.y,
+                "{indicator:?} overlaps atom {} at {a:?}..{b:?}",
+                atom.id
+            );
+        }
+    }
+    for other in indicators(doc) {
+        if other.owner != indicator.owner {
+            let a = other.origin;
+            let b = a.offset(other.width, other.height);
+            assert!(
+                hi.x <= a.x || b.x <= lo.x || hi.y <= a.y || b.y <= lo.y,
+                "{indicator:?} overlaps {other:?}"
+            );
+        }
+    }
+}
+
+fn assert_rendered_bonds_clear(doc: &Document, indicator: &super::Indicator) {
+    let check_segment = |a, b, half_width: f32| {
+        let lo = indicator.origin.offset(-half_width, -half_width);
+        let hi = indicator
+            .origin
+            .offset(indicator.width + half_width, indicator.height + half_width);
+        assert!(
+            !segment_hits_rect(a, b, lo, hi),
+            "{indicator:?} overlaps rendered bond {a:?}..{b:?} with half-width {half_width}"
+        );
+    };
+    for primitive in crate::scene::primitives(doc) {
+        match primitive {
+            crate::scene::Primitive::Line(a, b, width) => check_segment(a, b, width / 2.),
+            crate::scene::Primitive::Polygon(points) => {
+                for (&a, &b) in points.iter().zip(points.iter().cycle().skip(1)) {
+                    check_segment(a, b, 0.);
+                }
+            }
+            crate::scene::Primitive::Path {
+                commands, style, ..
+            } => {
+                for path in crate::graphics::flattened(&commands) {
+                    for pair in path.windows(2) {
+                        check_segment(pair[0], pair[1], style.width() / 2.);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn dl_cysteine_stereo_stays_with_its_alpha_carbon() {
+    super::test_support::with_fonts(|| {
+        let template = crate::templates::LIBRARY
+            .iter()
+            .find(|template| template.group == "Amino acids" && template.name == "L-Cysteine")
+            .unwrap();
+        let (placed, _) = template
+            .place(
+                &Document::default(),
+                Point::new(0., 0.),
+                None,
+                10.,
+                crate::templates::Anchor::Auto,
+                crate::templates::Connection::Connect,
+            )
+            .unwrap();
+        let mut doc = stereo_document(placed);
+        let [indicator] = indicators(&doc).try_into().unwrap();
+        assert_eq!(indicator.owner, Owner::AtomStereo(2));
+        assert_eq!(indicator.text, "L (R)");
+        let own = doc.atom(2).unwrap().position;
+        // The three bonds are exactly 120° apart, so the upper and right gaps
+        // tie and atan2 rounding picks one per platform. Either is open, but
+        // the label must not sit between the amine and the carboxyl.
+        assert!(
+            indicator.center.x > own.x || indicator.center.y < own.y,
+            "{indicator:?} must stay out of the lower-left gap beside {own:?}"
+        );
+        for atom in doc.atoms.iter().filter(|atom| atom.id != 2) {
+            assert!(
+                indicator.center.distance(own) + 3. < indicator.center.distance(atom.position),
+                "{indicator:?} must clearly belong to the alpha carbon, not atom {}",
+                atom.id
+            );
+        }
+        assert_stereo_clear(&doc, &indicator);
+        assert_rendered_bonds_clear(&doc, &indicator);
+        let hash = doc
+            .bonds
+            .iter()
+            .find(|bond| bond.a == 2 && bond.b == 1)
+            .unwrap();
+        assert_eq!(hash.display, "hash");
+        let a = doc.atom(hash.a).unwrap().position;
+        let b = doc.atom(hash.b).unwrap().position;
+        let mut bars = 0;
+        for primitive in crate::scene::primitives(&doc) {
+            let crate::scene::Primitive::Line(start, end, _) = primitive else {
+                continue;
+            };
+            let midpoint = Point::new((start.x + end.x) / 2., (start.y + end.y) / 2.);
+            // Keep the actual hash in this fixture; all its rendered bars and
+            // stroke widths are checked by assert_rendered_bonds_clear above.
+            if crate::graphics::segment_distance(midpoint, a, b) > 0.01 {
+                continue;
+            }
+            bars += 1;
+        }
+        assert!(bars >= 3, "the C–N hash must have visible bars");
+        doc.atom_labels.dl_descriptors = false;
+        let [plain] = indicators(&doc).try_into().unwrap();
+        assert_eq!(plain.text, "(R)");
+        assert_eq!(indicator.center, plain.center);
+        assert_stereo_clear(&doc, &plain);
+        assert_rendered_bonds_clear(&doc, &plain);
+        doc.atom_labels.dl_descriptors = true;
+        indicator
+            .owner
+            .set_offset(&mut doc, Some(Point::new(-5., -40.)));
+        let [manual] = indicators(&doc).try_into().unwrap();
+        assert_eq!(manual.text, "L (R)");
+        assert_eq!(manual.center, own.offset(-5., -40.));
+    });
+}
+
+#[test]
+fn dl_haworth_stereo_stays_with_its_configurational_carbon() {
+    super::test_support::with_fonts(|| {
+        let doc = stereo_document(
+            crate::haworth::sugar_document(
+                crate::haworth::Sugar::Glucose,
+                crate::haworth::Anomer::Alpha,
+                42.,
+            )
+            .unwrap(),
+        );
+        let indicator = indicators(&doc)
+            .into_iter()
+            .find(|indicator| indicator.owner == Owner::AtomStereo(5))
+            .unwrap();
+        assert_eq!(indicator.text, "D (R)");
+        assert_stereo_clear(&doc, &indicator);
+    });
+}

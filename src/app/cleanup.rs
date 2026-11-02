@@ -10,10 +10,15 @@ pub struct CleanupJob {
     pub epoch: u64,
 }
 
+#[cfg(test)]
+mod tests;
+
 /// Cleanup commands, nested under `Message::Cleanup`.
-/// `Begin` is the only one the cleanup preview blocks and the only one that commits drafts.
+/// Starting a layout operation commits drafts and is blocked by the cleanup preview.
 #[derive(Debug, Clone)]
 pub enum Action {
+    ToWedge,
+    ToFischer,
     /// Starts a cleanup preview (was `Clean`: toolbar "Clean up…", Shift+Cmd/Ctrl+K).
     Begin,
     /// Applies the previewed cleanup (was `ApplyCleanup`).
@@ -31,6 +36,8 @@ pub enum Action {
 impl App {
     pub(super) fn cleanup_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::ToWedge => self.convert_projection("fischer_wedge", "Wedge drawing"),
+            Action::ToFischer => self.convert_projection("fischer", "Fischer projection"),
             Action::Begin => self.begin_cleanup(None, None),
             Action::Scope(scope) => self.begin_cleanup(Some(scope), None),
             Action::Orientation(mode) => self.begin_cleanup(None, Some(mode)),
@@ -47,6 +54,11 @@ impl App {
                 Task::none()
             }
         }
+    }
+    fn convert_projection(&mut self, operation: &str, name: &'static str) -> Task<Message> {
+        let mut request = Request::molecule(operation, self.tab.doc.clone());
+        request.selected_ids = Some(self.tab.selected.clone());
+        self.run(request, Job::Projection(name))
     }
     pub(super) fn begin_cleanup(
         &mut self,

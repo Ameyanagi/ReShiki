@@ -10,10 +10,11 @@ fn template(name: &str) -> &'static Document {
 
 #[test]
 fn biological_template_collections_have_the_documented_coverage() {
-    assert_eq!(LIBRARY.len(), 195);
+    assert_eq!(LIBRARY.len(), 202);
     for (group, count) in [
         ("Amino acids", 21),
         ("Carbohydrates", 50),
+        ("Fischer projections", 7),
         ("Nucleosides", 15),
         ("Steroids", 16),
     ] {

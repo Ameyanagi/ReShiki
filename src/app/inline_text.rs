@@ -847,7 +847,11 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::ObjectToolbar(super::object_toolbar::Action::Layer(_))
             | Message::Transform(_)
             | Message::Arrange(_)
-            | Message::Cleanup(super::cleanup::Action::Begin)
+            | Message::Cleanup(
+                super::cleanup::Action::Begin
+                    | super::cleanup::Action::ToWedge
+                    | super::cleanup::Action::ToFischer,
+            )
             | Message::Analyze
             | Message::Stereo(_)
             | Message::Import

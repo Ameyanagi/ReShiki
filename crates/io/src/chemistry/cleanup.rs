@@ -460,12 +460,44 @@ impl Prepared {
             }
             let mut molecule = part.molecule;
             molecule.positions = layout;
+            let fischer = crate::fischer::marked_centers(&part.base);
             let drawing = molecular::for_drawing(&molecule, &part.base).map_err(Error::from)?;
             let displays = rewedge(drawing.molecule(), &part.base, &mut work)?;
             let labels = drawing.labels().map_err(Error::from)?;
             let mut generated = drawing.finish(labels).map_err(Error::from)?;
             for (bond, display) in generated.bonds.iter_mut().zip(displays) {
                 bond.display = display;
+            }
+            if !fischer.is_empty() {
+                // Fischer's four plain arms are stereochemical input. Once
+                // laid out conventionally, use the same native wedge solver
+                // as imported molecules and remove their projection markers.
+                let fresh = molecular::for_generated(
+                    &molecule,
+                    &vec![None; molecule.ids.len()],
+                    molecular::DrawingOptions {
+                        ring_fusion_hydrogens: false,
+                        ..molecular::DrawingOptions::from(&part.base.drawing_style)
+                    },
+                )
+                .map_err(Error::from)?;
+                let labels = fresh.labels().map_err(Error::from)?;
+                let fresh = fresh.finish(labels).map_err(Error::from)?;
+                let bonds: HashMap<_, _> = fresh
+                    .bonds
+                    .iter()
+                    .map(|bond| (pair(bond.a, bond.b), bond))
+                    .collect();
+                for bond in &mut generated.bonds {
+                    if !fischer.contains(&bond.a) && !fischer.contains(&bond.b) {
+                        continue;
+                    }
+                    let native = bonds.get(&pair(bond.a, bond.b)).ok_or(Error::Layout)?;
+                    bond.a = native.a;
+                    bond.b = native.b;
+                    bond.display.clone_from(&native.display);
+                    bond.projection = false;
+                }
             }
             let mut merged = part.base.clone();
             let mut raw = positions(&part.base);
@@ -538,14 +570,26 @@ impl Prepared {
             }
             let mut before = part.base;
             let mut after = merged.clone();
-            for drawing in [&mut before, &mut after] {
-                for atom in &mut drawing.atoms {
+            for atom in &mut before.atoms {
+                // Off-axis Fischer objects have no geometric reading;
+                // their retained stored configuration remains the input.
+                if !fischer.contains(&atom.id) {
                     atom.stereo = None;
                 }
+            }
+            for atom in &mut after.atoms {
+                atom.stereo = None;
+            }
+            for drawing in [&mut before, &mut after] {
                 for bond in &mut drawing.bonds {
                     bond.stereo = None;
                     bond.stereo_atoms.clear();
                 }
+            }
+            // Plain Fischer arms visibly encode a tetrahedral reading even
+            // after cached atom stereo is stripped for this independent check.
+            for cross in crate::fischer::recognize(&before).crosses {
+                before.atom_mut(cross.center).ok_or(Error::Layout)?.stereo = Some(cross.reading());
             }
             if identity(&molecular::prepare(&before).map_err(Error::from)?)?
                 != identity(&molecular::prepare_at(&after, &raw).map_err(Error::from)?)?

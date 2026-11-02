@@ -318,3 +318,73 @@ fn style_preference_is_opt_in_and_invalidates_cached_notices() {
     assert!(app.appearance.iupac_style_notes);
     assert!(app.tab.stereo_notes.is_empty());
 }
+
+#[test]
+fn invert_configuration_here_restores_haworth_fischer_and_wedges_in_one_undo() {
+    let haworth = reshiki::haworth::sugar_document(
+        reshiki::haworth::Sugar::Glucose,
+        reshiki::haworth::Anomer::Alpha,
+        42.,
+    )
+    .unwrap();
+    let haworth_with_ring_hydrogens = reshiki::haworth::sugar_document_with_options(
+        reshiki::haworth::Sugar::Glucose,
+        reshiki::haworth::Anomer::Alpha,
+        42.,
+        reshiki::haworth::HaworthOptions {
+            ring_hydrogens: true,
+        },
+    )
+    .unwrap();
+    let fischer = reshiki::fischer::document(reshiki::fischer::Compound::LAlanine, 42.).unwrap();
+    for document in [
+        haworth,
+        haworth_with_ring_hydrogens,
+        fischer,
+        drawing("wedge", false),
+    ] {
+        let mut app = fixture_app(document);
+        app.tab.busy = false;
+        app.error = true;
+        app.status = "Previous edit failed".into();
+        let center = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .find(|atom| atom.stereo.is_some())
+            .map_or(1, |atom| atom.id);
+        app.tab.selected = vec![center];
+        let original = app.tab.doc.clone();
+        let _ = app.update(Message::Stereo(Action::Invert));
+        assert!(!app.error, "{}", app.status);
+        assert_ne!(app.tab.doc, original);
+        assert_eq!(app.tab.history.undo_frames().count(), 1);
+        app.step_history(false);
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
+fn invert_configuration_here_requires_one_defined_atom() {
+    let mut app = fixture_app(drawing("plain", false));
+    app.tab.busy = false;
+    let original = app.tab.doc.clone();
+    for (selection, status) in [
+        (vec![], "Select one atom with a defined configuration"),
+        (vec![1, 2], "Select one atom with a defined configuration"),
+        (
+            vec![1],
+            "The selected atom has no defined tetrahedral configuration",
+        ),
+        (vec![u64::MAX], "The selected atom no longer exists"),
+    ] {
+        app.tab.selected = selection;
+        let _ = app.update(Message::Stereo(Action::Invert));
+        assert!(app.error, "{}", app.status);
+        assert_eq!(app.status, status);
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+    }
+}

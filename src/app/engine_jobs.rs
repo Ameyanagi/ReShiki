@@ -212,6 +212,7 @@ impl App {
         }
         match kind {
             Job::Clean(job) => self.cleanup_preview_ready(job, revision, response),
+            Job::Projection(name) => self.projection_ready(name, response),
             Job::Insert => self.structure_inserted(response),
             Job::AromaticDisplay => self.aromatic_display_ready(response),
             Job::Abbreviate => self.abbreviations_ready(response),
@@ -221,6 +222,21 @@ impl App {
             }
         }
         Task::none()
+    }
+    fn projection_ready(&mut self, name: &str, response: Response) {
+        let Some(document) = response.document else {
+            return;
+        };
+        let before = std::mem::replace(&mut self.tab.doc, document);
+        self.changed(before);
+        if !self.error {
+            self.tab.analysis = response.analysis;
+            self.status = format!("{name} applied · Undo restores the original drawing");
+            if !response.warnings.is_empty() {
+                self.status.push_str(" · ");
+                self.status.push_str(&response.warnings.join(" · "));
+            }
+        }
     }
     fn cleanup_preview_ready(&mut self, job: CleanupJob, revision: u64, response: Response) {
         if let Some(document) = response.document {

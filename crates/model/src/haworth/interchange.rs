@@ -243,7 +243,8 @@ fn assignments(
     Some(result)
 }
 
-fn equivalent(a: &AtomStereo, b: &AtomStereo) -> bool {
+/// Compare validated tetrahedral configurations by their neighbor-order parity.
+pub fn equivalent(a: &AtomStereo, b: &AtomStereo) -> bool {
     if a.neighbors.len() != b.neighbors.len() {
         return false;
     }

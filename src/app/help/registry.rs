@@ -315,6 +315,27 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["reverse", "inverse"],
         ),
         entry(
+            "Command palette / atom context menu",
+            "Convert to Wedge Drawing",
+            "Convert selected Fischer molecules, or all Fischer molecules when nothing is selected, to ordinary wedge drawings in one Undo step",
+            Anywhere,
+            &["Fischer", "Mills", "projection", "stereochemistry"],
+        ),
+        entry(
+            "Command palette / atom context menu",
+            "Convert to Fischer Projection",
+            "Arrange a selected acyclic molecule with its stereocentres on the longest carbon chain as a Fischer projection",
+            Selection,
+            &["Fischer", "wedge", "projection", "carbohydrate"],
+        ),
+        entry(
+            "Command palette / atom context menu",
+            "Invert Configuration Here",
+            "Invert one selected stereocentre, including a Haworth anomer or epimer, in one Undo step",
+            Selection,
+            &["configuration", "anomer", "epimer", "alpha", "beta"],
+        ),
+        entry(
             format!("{} / {}", label(Message::Group), label(Message::Ungroup)),
             "Group / ungroup",
             "Group the selection so it moves together, or split a group",

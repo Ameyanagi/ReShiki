@@ -2307,6 +2307,12 @@ impl App {
                 tooltip::Position::Left,
             ))
             .push(
+                checkbox(self.tab.doc.atom_labels.dl_descriptors)
+                    .label("Show D/L for amino acids and sugars")
+                    .text_size(12)
+                    .on_toggle(|v| Message::Labels(A::DlDescriptors(v))),
+            )
+            .push(
                 checkbox(self.tab.doc.atom_labels.roman_stereo_parentheses)
                     .label("Upright stereo parentheses (whole drawing)")
                     .text_size(12)

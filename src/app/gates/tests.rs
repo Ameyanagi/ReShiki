@@ -140,6 +140,18 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             false,
         ),
         (Message::Cleanup(cleanup::Action::Begin), false, false, true),
+        (
+            Message::Cleanup(cleanup::Action::ToWedge),
+            false,
+            false,
+            true,
+        ),
+        (
+            Message::Cleanup(cleanup::Action::ToFischer),
+            false,
+            false,
+            true,
+        ),
         (Message::Cleanup(cleanup::Action::Apply), true, false, false),
         (
             Message::Cleanup(cleanup::Action::Cancel),

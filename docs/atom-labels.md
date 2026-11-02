@@ -76,6 +76,28 @@ the same italic indicator style. This option does not add axial stereo perceptio
 Search **CIP** or **pseudoasymmetric** in the command palette (`:`) to show or hide
 stereodescriptors throughout the drawing.
 
+**Show D/L for amino acids and sugars** is off by default and applies to the
+whole drawing. When stereodescriptors are visible, recognized structures show
+an upright D or L before their CIP assignment, for example L (_S_). The CIP
+code keeps its italic style; **Upright stereo parentheses** also keeps the
+parentheses upright. Search **D/L** in the command palette to toggle this display.
+The choice is saved in native documents and does not alter stereochemistry.
+
+For an alpha amino acid with N, C(=O)X (X = O, N, S or H, not a ketone) and
+carbon side-chain neighbors plus one hydrogen, D/L follows the assigned R/S code
+and the carbonyl versus side-chain CIP priority. This includes peptide residues
+and handles L-cysteine as L (_R_). The comparison uses atomic numbers through
+the second sphere, including multiple-bond duplicates and hydrogens. A tie
+omits D/L rather than guessing from incomplete priorities. Glycine and
+unrelated stereocentres keep their usual indicators.
+
+Recognized Haworth monosaccharides show D/L only at the last configurational
+carbon. If ring closure involves a terminal CH2, the preceding stereocentre
+supplies the name. Open-chain aldoses with stored configurations, such as the
+Fischer templates, show D/L at the stereocentre next to CH₂OH. Both forms read
+stored stereochemical parity and connectivity, so turning a Fischer projection
+by 90° (which draws the enantiomer) changes D to L rather than hiding the name.
+
 Indicators start at 7.5 pt Arial; stereo labels are italic. Change their size or
 apply the current toolbar font/color. **Position numbers & stereo labels**
 shows handles: drag a number or stereo indicator, then Escape to finish. Each

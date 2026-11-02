@@ -37,6 +37,9 @@ fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
 }
 
+/// A plain Fischer cross cannot be transferred as unmarked planar bonds.
+pub const FISCHER_EXPORT_ADVICE: &str = "CDXML/CDX cannot preserve Fischer projection stereochemistry. Use Convert to wedge drawing before editable export, or save as native ReShiki (.rsk) to keep the Fischer projection.";
+
 /// Generic advice transported by the engine; the application names its Copy shortcut.
 pub const TEXT_LABEL_COPY_ADVICE: &str =
     "Try Copy for an editable copy · Save as .rsk keeps everything";
@@ -177,6 +180,9 @@ fn write_impl(
     preserve_drawing: bool,
     variable_labels: bool,
 ) -> Result<String> {
+    if !crate::fischer::marked_centers(document).is_empty() {
+        return Err(invalid(FISCHER_EXPORT_ADVICE));
+    }
     if crate::rear_opacity::present(document) {
         return Err(invalid(
             "CDXML/CDX cannot preserve rear opacity. Use native ReShiki for editable appearance or SVG, PDF or PNG for the figure. Set rear opacity to 100% for editable CDXML/CDX.",

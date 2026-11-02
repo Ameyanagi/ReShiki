@@ -141,16 +141,18 @@ pub struct Committed {
 /// Reconciles `doc` after an edit from `before`, or rolls it back to `before`.
 ///
 /// The stages run in a fixed order:
-/// 1. Centroids follow their members, and stale ring fills and depth scopes are
+/// 1. Explicit Fischer crosses are read from their page geometry.
+/// 2. Centroids follow their members, and stale ring fills and depth scopes are
 ///    pruned.
-/// 2. Abbreviations the edit broke are dropped before validation, which would
+/// 3. Abbreviations the edit broke are dropped before validation, which would
 ///    reject them.
-/// 3. Reaction participants grow with their molecules. A join of separate
+/// 4. Reaction participants grow with their molecules. A join of separate
 ///    participants is rejected here, before validation.
-/// 4. Only a changed document is validated. Molecule groups are reconciled after
+/// 5. Only a changed document is validated. Molecule groups are reconciled after
 ///    validation, because their final prune would repair a stale member that
 ///    validation rejects.
 pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rejection> {
+    crate::fischer::reconcile(doc, &before);
     crate::projection::sync_centroids(doc);
     crate::ring_fills::prune(doc);
     crate::depth_appearance::prune(doc);

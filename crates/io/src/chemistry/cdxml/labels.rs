@@ -128,18 +128,40 @@ fn inherited(tree: &Tree, element: usize) -> super::Result<Attributes> {
 fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
 }
-fn roman_stereo_parentheses(value: &NativeText) -> bool {
+/// Accept the generated upright D/L prefix and optional upright parentheses.
+/// Indicator text controls appearance only; D/L never supplies configuration.
+fn roman_stereo_parentheses(value: &NativeText) -> Option<bool> {
     let [span] = value.format.spans.as_slice() else {
-        return false;
+        return None;
+    };
+    let (text, prefix) = if let Some(text) = value
+        .text
+        .strip_prefix("D ")
+        .or_else(|| value.text.strip_prefix("L "))
+    {
+        if !matches!(text, "(R)" | "(S)") {
+            return None;
+        }
+        (text, 2)
+    } else {
+        (value.text.as_str(), 0)
     };
     let mut descriptor = value.format.style.clone();
     descriptor.italic = true;
-    !value.format.style.italic
-        && value.text.starts_with('(')
-        && value.text.ends_with(')')
-        && span.start == 1
-        && span.end == value.text.len() - 1
-        && span.style == descriptor
+    if value.format.style.italic
+        || !text.starts_with('(')
+        || !text.ends_with(')')
+        || span.style != descriptor
+    {
+        return None;
+    }
+    if span.start == prefix + 1 && span.end == value.text.len() - 1 {
+        Some(true)
+    } else if prefix != 0 && span.start == prefix && span.end == value.text.len() {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 /// Read appearance using prepared atoms and positions AFTER conformer scaling.
@@ -335,8 +357,10 @@ where
                 .get(text)
                 .ok_or_else(|| invalid("Missing source text ordinal"))?;
             let mut value = read_text(source, &attrs).map_err(LabelsError::Text)?;
-            if name == Some("stereo") && roman_stereo_parentheses(&value) {
-                output.atom_labels.roman_stereo_parentheses = true;
+            if name == Some("stereo")
+                && let Some(roman) = roman_stereo_parentheses(&value)
+            {
+                output.atom_labels.roman_stereo_parentheses |= roman;
                 value.format.spans.clear();
                 value.format.style.italic = true;
             }

@@ -6,6 +6,7 @@ use crate::{
     typography::{ScriptRun, TextFormat, TextSpan, TextStyle},
 };
 use serde::{Deserialize, Serialize};
+mod dl_descriptors;
 mod hints;
 pub use hints::{HiddenLabelNotes, hidden_label_notes};
 mod hydrogen_isotopes;
@@ -445,6 +446,9 @@ pub struct Settings {
     pub carbons: Carbons,
     pub hydrogens: bool,
     pub stereo: bool,
+    /// Add D/L names to recognized amino-acid and carbohydrate stereodescriptors.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dl_descriptors: bool,
     /// Mark perceived stereogenic units without drawn configuration with (?).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mark_undefined_stereocentres: bool,
@@ -466,6 +470,7 @@ impl Default for Settings {
             carbons: Carbons::Skeletal,
             hydrogens: yes(),
             stereo: false,
+            dl_descriptors: false,
             mark_undefined_stereocentres: false,
             steroid_alpha_beta: false,
             roman_stereo_parentheses: false,
@@ -486,19 +491,25 @@ pub fn stereo_style() -> TextStyle {
         ..number_style()
     }
 }
-/// One style by default; optional upright punctuation around `({cip})` text.
+/// D/L prefixes stay upright; optional upright punctuation surrounds the CIP code.
 pub fn indicator_format(text: &str, style: &TextStyle, roman_parentheses: bool) -> TextFormat {
     let mut format = TextFormat {
         style: style.clone(),
         ..Default::default()
     };
-    if roman_parentheses && text.starts_with('(') && text.ends_with(')') {
+    let prefix = if text.starts_with("D (") || text.starts_with("L (") {
+        2
+    } else {
+        0
+    };
+    let roman = roman_parentheses && text[prefix..].starts_with('(') && text.ends_with(')');
+    if prefix > 0 || roman {
         format.style.italic = false;
         let mut descriptor = style.clone();
         descriptor.italic = true;
         format.spans.push(TextSpan {
-            start: 1,
-            end: text.len() - 1,
+            start: prefix + usize::from(roman),
+            end: text.len() - usize::from(roman),
             style: descriptor,
         });
     }
@@ -521,6 +532,29 @@ pub fn stereo_text(cip: &str, settings: &Settings) -> String {
     };
     format!("({text})")
 }
+/// Drawing text for computed atom CIP codes, including optional D/L names.
+/// Recognize conventional names once for the drawing. Cached chemical codes
+/// remain unmodified for molecular exports.
+pub fn atom_stereo_texts(doc: &Document) -> std::collections::HashMap<u64, String> {
+    let dl = dl_descriptors::descriptors(doc);
+    doc.atoms
+        .iter()
+        .filter_map(|atom| {
+            let code = atom_stereo_code(atom, doc)?;
+            let text = stereo_text(code, &doc.atom_labels);
+            let text = match dl.get(&atom.id) {
+                // Use plain capitals for D/L; IUPAC prefers small capitals.
+                // Steroid α/β and (?) markers stay as they are.
+                Some(prefix) if atom.cip_label.as_deref() == Some(code) => {
+                    format!("{prefix} {text}")
+                }
+                _ => text,
+            };
+            Some((atom.id, text))
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Number {
     pub text: String,
@@ -845,7 +879,8 @@ pub struct Indicator {
 }
 impl Indicator {
     pub fn primitives(&self) -> Vec<crate::scene::Primitive> {
-        let format = indicator_format(&self.text, &self.style, self.roman_parentheses);
+        let format =
+            owned_indicator_format(self.owner, &self.text, &self.style, self.roman_parentheses);
         let mut x = self.origin.x;
         indicator_runs(&self.text, &format)
             .map(|(text, style)| {
@@ -860,6 +895,17 @@ impl Indicator {
                 }
             })
             .collect()
+    }
+}
+
+fn owned_indicator_format(owner: Owner, text: &str, style: &TextStyle, roman: bool) -> TextFormat {
+    if matches!(owner, Owner::Number(_) | Owner::Mapping(_)) {
+        TextFormat {
+            style: style.clone(),
+            ..Default::default()
+        }
+    } else {
+        indicator_format(text, style, roman)
     }
 }
 
@@ -988,6 +1034,7 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
 }
 
 fn layout_indicators(doc: &Document) -> Vec<Indicator> {
+    let mut atom_stereo = atom_stereo_texts(doc);
     let mut labels = Vec::new();
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         if let Some(n) = &a.display.number {
@@ -1013,7 +1060,9 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
         {
             labels.push((
                 Owner::AtomStereo(a.id),
-                stereo_text(cip, &doc.atom_labels),
+                atom_stereo
+                    .remove(&a.id)
+                    .unwrap_or_else(|| stereo_text(cip, &doc.atom_labels)),
                 a.display.stereo.offset,
                 indicator_style(&a.display.stereo.style, cip),
                 doc.atom_labels.roman_stereo_parentheses,
@@ -1056,7 +1105,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             && let Some(anchor) = owner.anchor(doc)
         {
             let height = crate::style::DEFAULT.world(style.size_pt);
-            let format = indicator_format(text, style, *roman_parentheses);
+            let format = owned_indicator_format(*owner, text, style, *roman_parentheses);
             let width = indicator_width(text, height, &format);
             let center = anchor.offset(offset.x, offset.y);
             occupied.push((
@@ -1070,7 +1119,14 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
     let segments: Vec<_> = doc
         .bonds
         .iter()
-        .filter_map(|b| Some((*positions.get(&b.a)?, *positions.get(&b.b)?)))
+        .filter_map(|b| {
+            Some((
+                *positions.get(&b.a)?,
+                *positions.get(&b.b)?,
+                b.order,
+                b.display.as_str(),
+            ))
+        })
         .collect();
     // Atoms hidden in collapsed groups cannot claim a map number.
     let visible: Vec<_> = doc
@@ -1085,8 +1141,10 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             continue;
         };
         let height = crate::style::DEFAULT.world(style.size_pt);
-        let format = indicator_format(&text, &style, roman_parentheses);
+        let format = owned_indicator_format(owner, &text, &style, roman_parentheses);
         let width = indicator_width(&text, height, &format);
+        let dl = matches!(owner, Owner::AtomStereo(_))
+            && (text.starts_with("D (") || text.starts_with("L ("));
         let outward = if matches!(owner, Owner::Number(_)) {
             outward_extent(width, height)
         } else {
@@ -1148,12 +1206,15 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                                 && center.x - width / 2. < b.x
                                 && center.x + width / 2. > a.x
                         });
-                        let distance2 =
-                            |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
-                        let own = distance2(&anchor);
                         if !stacked {
                             score += 500.;
                         }
+                    }
+                    if mapping.is_some() || dl {
+                        // Extended stereo labels must still read as this atom's.
+                        let distance2 =
+                            |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
+                        let own = distance2(&anchor);
                         if visible.iter().any(|p| distance2(p) < own) {
                             score += 1000.;
                         }
@@ -1163,9 +1224,26 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                             * (hi.y.min(b.y) - lo.y.max(a.y)).max(0.);
                         score += overlap * 10.;
                     }
-                    for &(a, b) in &segments {
+                    for &(a, b, order, display) in &segments {
                         // Include space for the secondary line of double bonds.
-                        if segment_hits_rect(a, b, lo.offset(-4., -4.), hi.offset(4., 4.)) {
+                        // Wider D/L labels can stay near single bonds: 3 units
+                        // for plain lines, 2 for wedges and hashes. Other bonds
+                        // retain the 3-unit text margin plus 4 for extra ink.
+                        let padding = if dl && order == 1 {
+                            match display {
+                                "plain" => 3.,
+                                "wedge" | "hash" => 2.,
+                                _ => 7.,
+                            }
+                        } else {
+                            7.
+                        };
+                        if segment_hits_rect(
+                            a,
+                            b,
+                            center.offset(-width / 2. - padding, -height / 2. - padding),
+                            center.offset(width / 2. + padding, height / 2. + padding),
+                        ) {
                             score += 2000.;
                         }
                     }

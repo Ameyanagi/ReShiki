@@ -453,6 +453,7 @@ static BUNDLED: LazyLock<Result<Vec<Template>, String>> = LazyLock::new(|| {
         serde_json::from_str(include_str!("../../../assets/templates.json"))
             .map_err(|e| format!("Bundled templates could not be read: {e}"))?;
     templates.extend(crate::haworth::templates()?);
+    templates.extend(crate::fischer::templates()?);
     templates.push(porphine::template()?);
     templates.extend(nucleosides::templates(&templates)?);
     templates.extend(steroids::templates()?);
