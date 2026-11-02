@@ -1008,3 +1008,86 @@ fn local_parse_cancels_obsolete_tickets() {
     assert!(app.tab.naming.local_cancel.is_none());
     assert_eq!(app.tab.naming.name, "propane");
 }
+
+#[test]
+fn changing_peptide_mode_cancels_requests_and_invalidates_the_interpretation() {
+    for dock in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let _ = app.naming_action(Action::Name("AG".into()));
+        let _ = app.naming_action(Action::PeptideSequence(true));
+        if dock {
+            let _ = app.insert_name_import();
+        } else {
+            let _ = app.naming_action(Action::Resolve);
+        }
+        let ticket = app.tab.naming.pending.unwrap().ticket();
+        app.tab.naming.candidates = vec![record("CCO")];
+        app.tab.naming.set_preview(Preview::new(
+            record("CCO"),
+            ethanol(),
+            vec!["Review this interpretation".into()],
+            "CCO".into(),
+        ));
+        app.tab.naming.acknowledged = true;
+        app.tab.naming.import_alias = Some(0);
+        app.tab.naming.notice = Some(Notice::new(NoticeKind::Info, "Previous interpretation"));
+        let before = app.tab.doc.clone();
+
+        let _ = app.naming_action(Action::PeptideSequence(false));
+        let _ = app.naming_action(Action::Finished(
+            ticket,
+            Box::new(Ok(Outcome::Names(vec![record("CCO")], None))),
+        ));
+
+        assert_eq!(app.tab.naming.name, "AG");
+        assert!(!app.tab.naming.peptide_sequence);
+        assert!(app.tab.naming.pending.is_none());
+        assert!(app.tab.naming.local_cancel.is_none());
+        assert!(app.tab.naming.preview.is_none());
+        assert!(app.tab.naming.candidates.is_empty());
+        assert!(app.tab.naming.notice.is_none());
+        assert!(app.tab.naming.import_alias.is_none());
+        assert!(!app.tab.naming.acknowledged);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[tokio::test]
+async fn symbol_previews_keep_the_read_as_interpretation_and_default_warnings() -> Result<(), String>
+{
+    for (name, expanded_fragment) in [
+        ("Boc-Ala-Gly-OMe", "L-alanyl-glycine methyl ester"),
+        ("Gal(b1-4)GlcNAc", "galactopyranosyl"),
+    ] {
+        let outcome = resolve_preview(
+            LocalEngine::in_process(),
+            name.into(),
+            naming::Cancel::default(),
+            DrawingOptions::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+        let Outcome::Names(records, Some(preview)) = outcome else {
+            return Err("Missing symbol preview".into());
+        };
+        assert_eq!(records[0].title, name);
+        assert_eq!(preview.record.title, name);
+        assert!(
+            preview
+                .record
+                .interpreted_name()
+                .is_some_and(|expanded| expanded.contains(expanded_fragment)),
+            "{name}: {:?}",
+            preview.record.interpreted_name()
+        );
+        assert!(preview.record.systematic_name.is_none());
+        assert!(preview.needs_acknowledgement());
+        naming::verify_identity(
+            &preview.record.canonical_smiles,
+            &naming::document_identity(&preview.document)?.smiles,
+        )?;
+    }
+    Ok(())
+}

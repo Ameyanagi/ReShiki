@@ -34,10 +34,13 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
             "Simplified unsupported {smiles}"
         );
     }
-    assert!(matches!(
-        parse(reply("[Na+].[Cl-]")),
-        Err(Error::Disconnected(_))
-    ));
+    assert_eq!(parse(reply("[Cl-].[Na+]")).unwrap().smiles, "[Na+].[Cl-]");
+    assert_eq!(
+        parse(reply("CC(=O)[O-].O.[Na+].[K+].[Cl-]"))
+            .unwrap()
+            .smiles,
+        "[Na+].[K+].CC(=O)[O-].O.[Cl-]"
+    );
     assert!(matches!(
         parse(reply(&"C".repeat(513))),
         Err(Error::Rejected(_))
@@ -102,6 +105,7 @@ async fn pinned_local_engine_matches_independent_connected_graphs_and_stereo() -
         ("(E)-but-2-ene", "C/C=C/C"),
         ("(Z)-but-2-ene", "C/C=C\\C"),
         ("lactic acid", "CC(O)C(=O)O"),
+        ("(S)-6-methylhepta-4,5-dien-2-ol", "C[C@@H](CC=C=C(C)C)O"),
         ("ethan-1-ol-1-13C", "C[13CH2]O"),
         ("ethanoate", "CC(=O)[O-]"),
     ] {
@@ -117,17 +121,36 @@ async fn pinned_local_engine_matches_independent_connected_graphs_and_stereo() -
 }
 
 #[tokio::test]
-async fn actual_parser_reports_salts_as_disconnected_not_ambiguous() {
-    for name in [
-        "sodium chloride",
-        "potassium bromide",
-        "sodium acetate",
-        "triethylamine hydrochloride",
+async fn actual_parser_accepts_whole_salts_cation_first() -> Result<(), String> {
+    for (name, expected) in [
+        ("sodium chloride", "[Na+].[Cl-]"),
+        ("potassium bromide", "[K+].[Br-]"),
+        ("sodium acetate", "[Na+].CC(=O)[O-]"),
+        ("triethylamine hydrochloride", "CCN(CC)CC.Cl"),
     ] {
-        let error = resolve_name(name, Cancel::default()).await.expect_err(name);
-        assert!(matches!(error, Error::Disconnected(_)), "{name}: {error}");
-        assert!(error.to_string().contains("salts and mixtures"), "{name}");
+        let record = resolve_name(name, Cancel::default())
+            .await
+            .map_err(|error| error.to_string())?;
+        super::super::verify_identity(expected, &record.smiles)
+            .map_err(|error| format!("{name}: {error}"))?;
+        let first =
+            crate::chemistry::smiles::parse(record.smiles.split('.').next().unwrap()).unwrap();
+        if name.starts_with("sodium") || name.starts_with("potassium") {
+            assert!(
+                first
+                    .graph
+                    .atoms
+                    .iter()
+                    .map(|a| i32::from(a.charge))
+                    .sum::<i32>()
+                    > 0,
+                "{name}: {}",
+                record.smiles
+            );
+        }
+        assert!(record.warnings.is_empty());
     }
+    Ok(())
 }
 
 #[tokio::test]
@@ -137,7 +160,15 @@ async fn actual_parser_rejects_ambiguous_stereo_polymers_and_unknown_names() {
         "(+)-butan-2-ol",
         "(-)-lactic acid",
         "(+)-ethyl lactate",
-        "(R)-(+)-lactic acid",
+        "(+)-limonene",
+        "(2R)-(+)-butane-2,3-diol",
+        "(S)-(+)-hex-4-en-2-ol",
+        // The ring's cis/trans pair is left unspecified.
+        "(R)-(+)-1-(4-methylcyclohexyl)ethan-1-ol",
+        // Native legacy perception cannot certify cumulene stereo completeness,
+        // including that the first example's axis is achiral. Keep both strict.
+        "(S)-(+)-6-methylhepta-4,5-dien-2-ol",
+        "(S)-(+)-hepta-4,5-dien-2-ol",
         "(rac)-lactic acid",
         "rel-(1R,2R)-cyclohexane-1,2-diol",
         "poly(ethylene)",
@@ -159,6 +190,90 @@ async fn actual_parser_rejects_ambiguous_stereo_polymers_and_unknown_names() {
     }
 }
 
+#[tokio::test]
+async fn rotation_signs_require_explicit_complete_stereo() -> Result<(), String> {
+    for (name, expected, warning) in [
+        (
+            "(R)-(+)-lactic acid",
+            "C[C@@H](O)C(=O)O",
+            "Rotation sign (+) ignored; structure from (R)",
+        ),
+        (
+            "(S)-(+)-butan-2-ol",
+            "C[C@@H](CC)O",
+            "Rotation sign (+) ignored; structure from (S)",
+        ),
+        (
+            "(S)-(−)-butan-2-ol",
+            "C[C@@H](CC)O",
+            // OPSIN normalizes the minus sign in the ignored term.
+            "Rotation sign (-) ignored; structure from (S)",
+        ),
+        (
+            "(S)-(+)-ibuprofen",
+            "C[C@@H](c1ccc(CC(C)C)cc1)C(=O)O",
+            "Rotation sign (+) ignored; structure from (S)",
+        ),
+        (
+            "(2S,4E)-(+)-hex-4-en-2-ol",
+            "C[C@@H](C/C=C/C)O",
+            "Rotation sign (+) ignored; structure from (2S,4E)",
+        ),
+        (
+            "(2R,3S)-(-)-butane-2,3-diol",
+            "C[C@H](O)[C@H](O)C",
+            "Rotation sign (-) ignored; structure from (2R,3S)",
+        ),
+    ] {
+        let record = resolve_name(name, Cancel::default())
+            .await
+            .map_err(|error| format!("{name}: {error}"))?;
+        super::super::verify_identity(expected, &record.smiles)
+            .map_err(|error| format!("{name}: {error}"))?;
+        assert_eq!(record.title, name);
+        assert_eq!(record.warnings, [warning]);
+    }
+    Ok(())
+}
+
+#[test]
+fn cip_descriptor_sets_are_not_letters_in_words() {
+    for (name, expected) in [
+        ("(S)-(+)-butan-2-ol", vec!["(S)"]),
+        ("(2S,3R)-(+)-example", vec!["(2S,3R)"]),
+        ("(1r,2s,3M,4P)-example", vec!["(1r,2s,3M,4P)"]),
+        ("(1aR,2'S)-example", vec!["(1aR,2'S)"]),
+        ("(2R,4E)-example", vec!["(2R,4E)"]),
+        ("(+)-wordsR", vec![]),
+        ("(wordS)-example", vec![]),
+        ("(E)-example", vec![]),
+        ("(N-methyl)-example", vec![]),
+    ] {
+        assert_eq!(cip_descriptors(name), expected, "{name}");
+    }
+}
+
+#[test]
+fn other_warnings_still_reject_rotation_and_cip_names() {
+    let name = "(S)-(+)-butan-2-ol";
+    for warning in [
+        json!({"kind":"APPEARS_AMBIGUOUS", "message":"Missing locant"}),
+        json!({"kind":"STEREOCHEMISTRY_IGNORED", "message":"Unsupported stereo"}),
+    ] {
+        let mut value = reply("C[C@@H](CC)O");
+        value["name"] = json!(name);
+        value["status"] = json!("WARNING");
+        value["warnings"] = json!([
+            {"kind":"STEREOCHEMISTRY_IGNORED", "message":"Optical rotation cannot be algorithmically used to assign stereochemistry. This term was ignored: (+)-"},
+            warning,
+        ]);
+        assert!(matches!(
+            parse_reply(&serde_json::to_vec(&value).unwrap(), name),
+            Err(Error::Rejected(_))
+        ));
+    }
+}
+
 #[test]
 fn parser_cannot_accept_a_rule_generation_response() {
     let response = serde_json::json!({"operation":"generate", "protocol":worker::PROTOCOL,
@@ -169,6 +284,19 @@ fn parser_cannot_accept_a_rule_generation_response() {
             .to_string()
             .contains("different operation")
     );
+}
+
+#[test]
+fn expanded_notation_is_bounded_before_sending_the_worker_request() {
+    for name in [
+        format!("{}Trp", "Trp-".repeat(180)),
+        format!("{}Glc", "Gal(b1-4)".repeat(100)),
+    ] {
+        assert!(name.len() < worker::MAX_NAME_BYTES);
+        let error = parse_request(&name).unwrap_err();
+        assert!(matches!(error, Error::Rejected(_)));
+        assert!(error.to_string().contains("expanded name"));
+    }
 }
 
 #[tokio::test]
@@ -469,7 +597,7 @@ fn measured_resource_breaches_cannot_enter_the_exit_race_grace_path() {
 #[test]
 fn retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph() {
     for name in ["(+)-lactic acid", "(+)-LACTIC ACID"] {
-        assert_eq!(retained_parser_name(name), PLUS_LACTIC_PARSER_NAME);
+        assert_eq!(parser_name(name).unwrap(), PLUS_LACTIC_PARSER_NAME);
         for smiles in [
             "C[C@H](O)C(=O)O",
             "C[C@@H](O)C(=O)O",
@@ -485,7 +613,7 @@ fn retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph() {
                 PLUS_LACTIC_PARSER_NAME,
             )
             .unwrap();
-            let certified = certify_retained_name(name, record);
+            let certified = certify_name(name, record);
             if smiles == PLUS_LACTIC_GRAPH {
                 let record = certified.unwrap();
                 assert_eq!(record.title, name);
@@ -520,7 +648,7 @@ fn retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph() {
         "(+)-2-hydroxypropanoic acid",
         "lactic acid",
     ] {
-        assert_eq!(retained_parser_name(name), name);
+        assert_eq!(parser_name(name).unwrap(), name);
     }
 }
 

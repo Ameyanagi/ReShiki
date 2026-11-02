@@ -24,6 +24,8 @@ const PANEL_INTRO: &str = "Parse names locally, or confirm an online lookup.";
 const NAME_HINT: &str = "Ambiguous names and unsupported stereo are rejected.";
 const PREVIEW_HINT: &str = "Drag atoms to arrange the layout.";
 const STRUCTURE_HINT: &str = "One connected molecule; each name is checked by parsing it back.";
+const MULTICOMPONENT_HINT: &str =
+    "Components are inserted separately. A name below is unavailable for this result.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ticket {
@@ -65,6 +67,7 @@ pub enum Action {
     #[cfg(target_arch = "wasm32")]
     Refresh,
     Name(String),
+    PeptideSequence(bool),
     ClearName,
     Cancel,
     Resolve,
@@ -130,14 +133,20 @@ impl Preview {
             },
         }
     }
+
+    fn needs_acknowledgement(&self) -> bool {
+        !self.record.warnings.is_empty() || !self.warnings.is_empty()
+    }
+
+    fn is_multicomponent(&self) -> bool {
+        self.identity.contains('.')
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NoticeKind {
     Retry,
     Unsupported,
-    /// The name parsed to a salt or mixture.
-    Disconnected,
     Failed,
     Info,
 }
@@ -161,9 +170,6 @@ impl Notice {
             NoticeKind::Unsupported => {
                 "Name not supported locally or ambiguous. Try a systematic name, or choose Look up online."
             }
-            NoticeKind::Disconnected => {
-                "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES under Import → Structure."
-            }
             NoticeKind::Failed => "Could not import this name. See Details.",
         }
     }
@@ -172,7 +178,7 @@ impl From<naming::Error> for Notice {
     fn from(error: naming::Error) -> Self {
         match error {
             naming::Error::Rejected(detail) => Self::new(NoticeKind::Unsupported, detail),
-            naming::Error::Disconnected(detail) => Self::new(NoticeKind::Disconnected, detail),
+            naming::Error::Disconnected(detail) => Self::new(NoticeKind::Failed, detail),
             naming::Error::Worker(detail) => Self::new(NoticeKind::Failed, detail),
             naming::Error::Cancelled(detail) => Self::new(NoticeKind::Retry, detail),
         }
@@ -181,6 +187,7 @@ impl From<naming::Error> for Notice {
 
 pub(super) struct State {
     name: String,
+    peptide_sequence: bool,
     local_cancel: Option<naming::Cancel>,
     pending: Option<Pending>,
     serial: u64,
@@ -202,6 +209,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             name: String::new(),
+            peptide_sequence: false,
             local_cancel: None,
             pending: None,
             serial: 0,
@@ -255,7 +263,18 @@ impl State {
         self.smiles = preview.identity.clone();
         self.acknowledged = false;
         self.import_alias = None;
+        if preview.is_multicomponent() {
+            self.notice = Some(Notice::new(NoticeKind::Info, MULTICOMPONENT_HINT));
+        }
         self.preview = Some(preview);
+    }
+
+    fn name_to_resolve(&self) -> Result<String, naming::Error> {
+        if self.peptide_sequence {
+            naming::peptide_sequence(&self.name)
+        } else {
+            Ok(self.name.clone())
+        }
     }
 }
 
@@ -272,14 +291,49 @@ async fn prepare_preview(
         .request(request)
         .await
         .map_err(naming::Error::Worker)?;
-    let document = response
+    let mut document = response
         .document
         .ok_or_else(|| naming::Error::Worker("The parser returned no editable drawing".into()))?;
-    let actual = naming::document_identity(&document)
-        .map_err(naming::Error::Rejected)?
-        .smiles;
+    if identity.contains('.') {
+        arrange_name_components(&mut document);
+    }
+    let actual = naming::structure_smiles(&document).map_err(naming::Error::Rejected)?;
     naming::verify_identity(&identity, &actual).map_err(naming::Error::Rejected)?;
     Ok(Preview::new(record, document, response.warnings, identity))
+}
+
+/// Name imports keep source component order (the resolver puts cations first),
+/// with enough horizontal space for their labels. General depiction can stack
+/// fragments vertically to make a compact drawing.
+fn arrange_name_components(document: &mut Document) {
+    let mut seen = std::collections::HashSet::new();
+    let components = document
+        .atoms
+        .iter()
+        .filter_map(|atom| {
+            if seen.contains(&atom.id) {
+                return None;
+            }
+            let atoms = reshiki::molecule_names::component(document, atom.id);
+            seen.extend(atoms.iter().copied());
+            Some(atoms)
+        })
+        .collect::<Vec<_>>();
+    let mut previous = None;
+    let gap = document.drawing_style.bond_length_world;
+    for atoms in components {
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(document, &atoms) else {
+            continue;
+        };
+        let center_y = (lo.y + hi.y) / 2.;
+        if let Some((right, baseline)) = previous {
+            let dx = right + gap - lo.x;
+            document.translate(&atoms, dx, baseline - center_y);
+            previous = Some((hi.x + dx, baseline));
+        } else {
+            previous = Some((hi.x, center_y));
+        }
+    }
 }
 
 async fn resolve_preview(
@@ -458,6 +512,12 @@ impl App {
                 self.tab.naming.invalidate_name();
                 self.tab.naming.name = name;
             }
+            Action::PeptideSequence(value) => {
+                if self.tab.naming.peptide_sequence != value {
+                    self.tab.naming.invalidate_name();
+                    self.tab.naming.peptide_sequence = value;
+                }
+            }
             Action::ClearName => {
                 self.tab.naming.invalidate_name();
                 self.tab.naming.name.clear();
@@ -496,8 +556,15 @@ impl App {
                 if self.tab.naming.name.trim().is_empty() || self.tab.naming.pending.is_some() {
                     return Task::none();
                 }
+                let name = match self.tab.naming.name_to_resolve() {
+                    Ok(name) => name,
+                    Err(error) => {
+                        self.tab.naming.notice =
+                            Some(Notice::new(NoticeKind::Retry, error.to_string()));
+                        return Task::none();
+                    }
+                };
                 let (ticket, cancel) = self.begin_naming(Pending::Request);
-                let name = self.tab.naming.name.clone();
                 self.tab.naming.preview = None;
                 self.tab.naming.candidates.clear();
                 let engine = self.engine.clone();
@@ -668,9 +735,7 @@ impl App {
         let Some(preview) = &self.tab.naming.preview else {
             return;
         };
-        if (!preview.record.warnings.is_empty() || !preview.warnings.is_empty())
-            && !self.tab.naming.acknowledged
-        {
+        if preview.needs_acknowledgement() && !self.tab.naming.acknowledged {
             return;
         }
         if self.tab.naming.smiles != preview.identity {
@@ -680,12 +745,13 @@ impl App {
             ));
             return;
         }
-        let actual = naming::document_identity(&preview.document)
-            .and_then(|i| naming::verify_identity(&preview.identity, &i.smiles));
+        let actual = naming::structure_smiles(&preview.document)
+            .and_then(|smiles| naming::verify_identity(&preview.identity, &smiles));
         if let Err(error) = actual {
             self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
             return;
         }
+        let multicomponent = preview.is_multicomponent();
         let document = preview.document.clone();
         let title = preview.record.title.clone();
         let before = self.tab.doc.clone();
@@ -697,7 +763,12 @@ impl App {
         };
         self.commit_structure_insert(before, selected);
         self.tool = Tool::Select;
-        self.status = "Inserted editable name result · Undo removes the insertion".into();
+        self.status = if multicomponent {
+            "Inserted editable name result as separate components · Undo removes the insertion"
+                .into()
+        } else {
+            "Inserted editable name result · Undo removes the insertion".into()
+        };
         self.error = false;
     }
 
@@ -777,6 +848,14 @@ impl App {
             .on_submit(Message::Naming(Action::Resolve))
             .size(13)
             .padding(8),
+            accessible_checkbox(
+                "naming.peptide-sequence",
+                "Peptide sequence",
+                state.peptide_sequence,
+                Some(Message::Naming(Action::PeptideSequence(
+                    !state.peptide_sequence
+                ))),
+            ),
             text(NAME_HINT).size(11).style(muted_text),
             accessible_command("naming.resolve", "Parse name locally", "Parse name")
                 .on_press_maybe(
@@ -786,11 +865,12 @@ impl App {
         ]
         .spacing(10);
         if let Some(notice) = &state.notice {
-            name = name.push(
-                text(&notice.detail)
-                    .size(12)
-                    .color(self.theme().palette().danger),
-            );
+            let detail = text(&notice.detail).size(12);
+            name = name.push(if notice.kind == NoticeKind::Info {
+                detail.style(muted_text)
+            } else {
+                detail.color(self.theme().palette().danger)
+            });
         }
         name = name.push(self.online_name_controls());
         if !idle {
@@ -827,7 +907,7 @@ impl App {
     fn naming_preview<'a>(&'a self, preview: &'a Preview) -> Element<'a, Message> {
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
-        let needs_ack = !preview.record.warnings.is_empty() || !preview.warnings.is_empty();
+        let needs_ack = preview.needs_acknowledgement();
         let mut content = column![
             text(preview.record.provenance.label())
                 .size(11)
@@ -857,6 +937,9 @@ impl App {
             .spacing(4),
         ]
         .spacing(8);
+        if let Some(name) = preview.record.interpreted_name() {
+            content = content.push(text(format!("Read as {name}")).size(11).style(muted_text));
+        }
         if preview.modified {
             content = content.push(
                 text("Edited structure: the name may not match.")

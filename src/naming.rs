@@ -21,6 +21,11 @@ mod online;
 pub use online::resolve_name_online;
 pub mod openclatura;
 mod reverse;
+mod symbols;
+/// Translate explicit one-letter peptide input into its three-letter title.
+pub fn peptide_sequence(name: &str) -> Result<String, Error> {
+    symbols::peptide_sequence(name)
+}
 #[cfg(test)]
 mod s2n_harness;
 pub mod worker;
@@ -47,7 +52,7 @@ pub enum Error {
     /// The name or structure is outside what local naming supports.
     Rejected(String),
     /// The name describes several disconnected pieces, such as a salt or a
-    /// mixture. Local naming accepts one connected molecule.
+    /// mixture returned by a source requiring a connected molecule.
     Disconnected(String),
     /// The bounded worker could not be started, supervised or understood.
     Worker(String),
@@ -177,6 +182,7 @@ impl NameReason {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provenance {
     OpsinRust,
+    OpsinRustSymbols { name: String },
     OpsinRustRetainedName { source: &'static str },
     Openclatura,
     PubChem { cid: u64 },
@@ -193,6 +199,7 @@ impl Provenance {
     pub fn label(&self) -> String {
         match self {
             Self::OpsinRust => "OPSIN Rust port · local deterministic parser".into(),
+            Self::OpsinRustSymbols { .. } => "OPSIN Rust port · expanded symbol notation".into(),
             Self::OpsinRustRetainedName { source } => {
                 format!("{source} retained name · parsed locally by OPSIN Rust port")
             }
@@ -217,6 +224,15 @@ pub struct Record {
     pub synonyms: Vec<Alias>,
     pub warnings: Vec<String>,
     pub provenance: Provenance,
+}
+impl Record {
+    /// The expanded input read by OPSIN, separate from a generated name.
+    pub fn interpreted_name(&self) -> Option<&str> {
+        match &self.provenance {
+            Provenance::OpsinRustSymbols { name } => Some(name),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -344,7 +360,9 @@ pub fn selected_identity(document: &Document, selected: &[u64]) -> Result<Identi
     document_identity(&part)
 }
 
-pub fn document_identity(document: &Document) -> Result<Identity, String> {
+/// Canonical identity of a whole drawing, which may hold several components,
+/// such as the ions of a parsed salt.
+pub fn structure_smiles(document: &Document) -> Result<String, String> {
     if document.atoms.is_empty() || document.atoms.len() > MAX_NAMING_ATOMS {
         return Err("Naming supports molecular graphs with 1–512 atoms".into());
     }
@@ -352,7 +370,11 @@ pub fn document_identity(document: &Document) -> Result<Identity, String> {
         return Err("Resolve wavy/unknown stereochemistry before generating a name".into());
     }
     let molecule = chemistry::document::prepare(document).map_err(|e| e.to_string())?;
-    let smiles = canonical_state(&molecule.state)?;
+    canonical_state(&molecule.state)
+}
+
+pub fn document_identity(document: &Document) -> Result<Identity, String> {
+    let smiles = structure_smiles(document)?;
     if smiles.contains('.') {
         return Err("Select a single connected molecule; mixtures and disconnected salts are not supported for local naming".into());
     }
