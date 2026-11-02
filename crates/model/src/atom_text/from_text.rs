@@ -80,17 +80,8 @@ fn text_atom_preview(doc: &Document, id: u64) -> Option<Document> {
         .iter()
         .find(|annotation| annotation.id == id)?;
     let target = text_first_glyph_center(annotation)?;
-    let text = annotation.text.trim();
-    let lead = annotation.text.len() - annotation.text.trim_start().len();
-    let runs: Vec<ScriptRun> = manual_runs(annotation)
-        .into_iter()
-        .map(|run| ScriptRun {
-            start: run.start.clamp(lead, lead + text.len()) - lead,
-            end: run.end.clamp(lead, lead + text.len()) - lead,
-            script: run.script,
-        })
-        .collect();
-    let runs = typography::normalize_label_scripts(text, &runs).ok()?;
+    let (text, runs) =
+        super::trimmed_label_scripts(&annotation.text, &manual_runs(annotation)).ok()?;
     let mut preview = Document {
         drawing_style: doc.drawing_style.clone(),
         atom_labels: doc.atom_labels.clone(),
@@ -165,7 +156,9 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
             return Err(());
         }
     }
-    let element = crate::editing::ELEMENTS.contains(&text) || text == "*";
+    let isotope = super::nuclide(text).map_err(|_| ())?;
+    let body = isotope.map_or(text, |(_, body)| body);
+    let element = crate::editing::ELEMENTS.contains(&body) || body == "*";
     if crate::ligands::LABELS.contains(&text)
         || super::formula_group(text).is_some()
         || !element && super::known_group(text) && !super::wrong_side(doc, atom, text)
@@ -186,7 +179,7 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
     let explicit = if element {
         None
     } else {
-        hydride::parse(text).map_err(|_| ())?
+        hydride::parse(body).map_err(|_| ())?
     };
     let label = doc.atom_mut(atom).ok_or(())?;
     if let Some(explicit) = explicit {
@@ -195,10 +188,16 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
         label.charge = explicit.charge;
         label.no_implicit = true;
     } else if element {
-        label.element = text.to_owned();
-        label.no_implicit = text == "*";
+        label.element = body.to_owned();
+        label.no_implicit = body == "*";
     } else {
         label.display.set_variable(Some(text.to_owned()));
+    }
+    if let Some((isotope, _)) = isotope {
+        label.isotope = u32::from(isotope);
+        if label.element == "H" {
+            label.no_implicit = true;
+        }
     }
     if label.element == "C" {
         label.display.carbons = Some(crate::atom_labels::Carbons::All);

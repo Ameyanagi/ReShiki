@@ -390,6 +390,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Name(..)
                 | Action::Font(..)
                 | Action::ChargeBeforeRadical(..)
+                | Action::HydrogenIsotopes(..)
                 | Action::Input(..)
                 | Action::CommitField(..)
                 | Action::DisplayUnit(..)

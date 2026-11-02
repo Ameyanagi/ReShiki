@@ -1,3 +1,4 @@
+use crate::atom_labels::HydrogenIsotopeLabels;
 use crate::document::{Atom, Bond, Document, Point};
 use crate::style::DEFAULT as STYLE;
 use bond_pass::{BondInputs, BondPass, Resolve};
@@ -201,10 +202,15 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
 /// Atom maps, numbers and stereo labels are separate renderer primitives and
 /// must be included when spacing a participant beside another molecule.
 pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point, Point)> {
+    let isotopes = HydrogenIsotopeLabels::new(doc);
     let mut ink: Vec<_> = atoms
         .iter()
         .filter_map(|id| doc.atom(*id))
-        .flat_map(|atom| atom_label_ink_boxes(atom, doc))
+        .flat_map(|atom| {
+            label_ink_boxes(&atom_label_shown(atom, doc, &isotopes, || {
+                visible(atom, doc)
+            }))
+        })
         .collect();
     for indicator in crate::atom_labels::indicators(doc) {
         if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
@@ -218,6 +224,7 @@ pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point,
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
     let reach = LabelReach::new(doc);
+    let isotopes = HydrogenIsotopeLabels::new(doc);
     let mut best: Option<(bool, f32, u64)> = None;
     for atom in doc.atoms.iter().rev() {
         // Laying out a label is costly, so skip atoms it cannot reach from.
@@ -230,7 +237,7 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
         }
         // Empty corners between a symbol and its stacked H/isotope/charge
         // must not hide a neighboring atom or bond from pointer targeting.
-        let runs = atom_label(atom, doc);
+        let runs = atom_label_shown(atom, doc, &isotopes, || visible(atom, doc));
         if !label_ink_boxes(&runs).into_iter().any(|(lo, hi)| {
             point.x >= lo.x - radius
                 && point.x <= hi.x + radius
@@ -239,7 +246,8 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
         }) {
             continue;
         }
-        let core = group_labels::element_glyph_hit(atom, doc, &runs, point);
+        let symbol = isotopes.symbol(atom).unwrap_or(&atom.element);
+        let core = group_labels::element_glyph_hit(atom, doc, &runs, symbol, point);
         let distance = (atom.position.x - point.x).powi(2) + (atom.position.y - point.y).powi(2);
         if best.is_none_or(|(old_core, old_distance, _)| {
             core && !old_core || core == old_core && distance < old_distance
@@ -374,10 +382,15 @@ fn label_ink_shapes(runs: &[Primitive]) -> Vec<((Point, Point), f32)> {
 }
 
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
-    atom_label_shown(a, doc, || visible(a, doc))
+    atom_label_shown(a, doc, &HydrogenIsotopeLabels::new(doc), || visible(a, doc))
 }
-fn atom_label_shown(a: &Atom, doc: &Document, shown: impl FnOnce() -> bool) -> Vec<Primitive> {
-    label_runs(a, doc, ChargeLayout::Automatic, shown)
+fn atom_label_shown(
+    a: &Atom,
+    doc: &Document,
+    isotopes: &HydrogenIsotopeLabels,
+    shown: impl FnOnce() -> bool,
+) -> Vec<Primitive> {
+    label_runs(a, doc, ChargeLayout::Automatic, isotopes, shown)
         .into_iter()
         .flat_map(resolve_label_fonts)
         .collect()
@@ -431,7 +444,13 @@ fn atom_label_runs_with_charge_layout(
     doc: &Document,
     charge_layout: ChargeLayout,
 ) -> Vec<Primitive> {
-    label_runs(a, doc, charge_layout, || visible(a, doc))
+    label_runs(
+        a,
+        doc,
+        charge_layout,
+        &HydrogenIsotopeLabels::new(doc),
+        || visible(a, doc),
+    )
 }
 
 /// `shown`: whether the atom's element label is visible, see [`visible`].
@@ -439,6 +458,7 @@ fn label_runs(
     a: &Atom,
     doc: &Document,
     charge_layout: ChargeLayout,
+    isotopes: &HydrogenIsotopeLabels,
     shown: impl FnOnce() -> bool,
 ) -> Vec<Primitive> {
     if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
@@ -482,6 +502,7 @@ fn label_runs(
     let size = STYLE.world(style.size_pt);
     let small = size * 0.7;
     let is_link = doc.generic.links.iter().any(|s| s.atom == a.id);
+    let isotope_symbol = isotopes.symbol(a);
     let label = internal_group
         .map(|group| group.label.as_str())
         .or_else(|| {
@@ -490,7 +511,7 @@ fn label_runs(
                 .as_deref()
                 .filter(|_| a.element == "*" || is_link)
         })
-        .unwrap_or(&a.element);
+        .unwrap_or_else(|| isotope_symbol.unwrap_or(&a.element));
     let scripts = (internal_group.is_none()
         && a.element == "*"
         && a.display.variable.is_some()
@@ -583,7 +604,7 @@ fn label_runs(
     };
     let right = origin.x + element_width;
     let mark_y = origin.y;
-    let isotope_width = if a.isotope > 0 {
+    let isotope_width = if a.isotope > 0 && isotope_symbol.is_none() {
         text_width(&a.isotope.to_string(), small)
     } else {
         0.0
@@ -611,9 +632,11 @@ fn label_runs(
         return cursor.runs;
     }
     if !is_link {
-        push_hydrogens(a, doc, frame, &mut cursor, show_element);
+        push_hydrogens(a, doc, isotopes, frame, &mut cursor, show_element);
     }
-    push_isotope(a, frame, &mut cursor);
+    if isotope_symbol.is_none() {
+        push_isotope(a, frame, &mut cursor);
+    }
     if matches!(charge_layout, ChargeLayout::Omitted) {
         return cursor.runs;
     }
@@ -631,7 +654,7 @@ fn label_runs(
     }
     if matches!(charge_layout, ChargeLayout::Automatic) && show_element && automatic_charge {
         let (core, charge) = cursor.runs.split_at_mut(suffix_start);
-        place_automatic_charge(a, doc, frame, core, charge);
+        place_automatic_charge(a, doc, isotopes, frame, core, charge);
     }
     cursor.runs
 }
@@ -892,6 +915,7 @@ fn push_condensed_suffix(
 fn push_hydrogens(
     a: &Atom,
     doc: &Document,
+    isotopes: &HydrogenIsotopeLabels,
     frame: LabelFrame<'_>,
     cursor: &mut LabelCursor,
     show_element: bool,
@@ -947,7 +971,7 @@ fn push_hydrogens(
         // Keep the bond-based side unless its ink meets a nearby label or
         // charge; a replacement must also stay off unrelated bonds.
         if a.display.hydrogen_position == H::Auto
-            && let Some(labels) = nearby_label_ink(a, doc, size)
+            && let Some(labels) = nearby_label_ink(a, doc, isotopes, size)
             && !clear_of(&parts, &labels, &[], size)
         {
             let bonds = unrelated_bonds(a, doc);
@@ -1000,13 +1024,26 @@ fn measuring<T>(measure: impl FnOnce() -> T) -> Option<T> {
 
 /// Ink of other atoms' labels and charges near `a` (for example an unbonded
 /// metal's 3+).
-fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+fn nearby_label_ink(
+    a: &Atom,
+    doc: &Document,
+    isotopes: &HydrogenIsotopeLabels,
+    size: f32,
+) -> Option<Vec<(Point, Point)>> {
     measuring(|| {
         doc.atoms
             .iter()
             .filter(|other| other.id != a.id && nearby(a, other, size))
             .filter(|other| doc.atom_visible(other.id))
-            .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
+            .flat_map(|other| {
+                label_ink_boxes(&label_runs(
+                    other,
+                    doc,
+                    ChargeLayout::Automatic,
+                    isotopes,
+                    || visible(other, doc),
+                ))
+            })
             .collect()
     })
 }
@@ -1376,6 +1413,7 @@ fn selections_bounds_in_axes(
             }
         }
     }
+    let isotopes = HydrogenIsotopeLabels::new(doc);
     for atom in doc
         .atoms
         .iter()
@@ -1391,7 +1429,9 @@ fn selections_bounds_in_axes(
                     .flat_map(crate::graphics::PathCommand::iter_points),
             );
         }
-        if let Some((lo, hi)) = text_bounds(&atom_label(atom, doc)) {
+        if let Some((lo, hi)) = text_bounds(&atom_label_shown(atom, doc, &isotopes, || {
+            visible(atom, doc)
+        })) {
             grow(atom.id, &mut [lo, hi].into_iter());
         }
         if let Some((lo, hi)) = crate::highlights::atom_bounds(doc, atom) {
@@ -2234,10 +2274,16 @@ struct AtomLabels {
 }
 fn collect_atom_labels(doc: &Document, opacity: &crate::rear_opacity::Paint) -> AtomLabels {
     let graph = graph::Graph::new(doc);
+    let isotopes = HydrogenIsotopeLabels::new(doc);
     let labels: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
-        .map(|a| (a.id, atom_label_shown(a, doc, || graph.visible(a))))
+        .map(|a| {
+            (
+                a.id,
+                atom_label_shown(a, doc, &isotopes, || graph.visible(a)),
+            )
+        })
         .collect();
     let label_bounds: std::collections::HashMap<_, _> = labels
         .iter()
@@ -3181,6 +3227,8 @@ pub fn svg_with_background(doc: &Document) -> String {
 mod charge_placement_tests;
 #[cfg(test)]
 mod double_bond_tests;
+#[cfg(test)]
+mod hydrogen_isotope_tests;
 #[cfg(test)]
 mod label_attachment_tests;
 #[cfg(test)]

@@ -10,7 +10,7 @@ use iced::{Alignment, Element, Length, Task};
 use reshiki::{
     document_styles::Preset,
     style::{
-        DrawingStyle,
+        DrawingStyle, HydrogenIsotopes,
         units::{self, Dimension, Unit},
     },
 };
@@ -205,6 +205,7 @@ pub enum Action {
     Name(String),
     Font(String),
     ChargeBeforeRadical(bool),
+    HydrogenIsotopes(HydrogenIsotopes),
     Input(Field, String),
     CommitField(Field),
     DisplayUnit(Unit),
@@ -234,6 +235,7 @@ pub struct Editor {
     name: String,
     font: String,
     charge_before_radical: bool,
+    hydrogen_isotopes: HydrogenIsotopes,
     inputs: Vec<(Field, Input)>,
     display_unit: Unit,
     unit_notice: Option<String>,
@@ -264,6 +266,7 @@ impl Editor {
             name: String::new(),
             font: String::new(),
             charge_before_radical: false,
+            hydrogen_isotopes: HydrogenIsotopes::Auto,
             inputs: vec![],
             display_unit: unit,
             unit_notice: None,
@@ -289,6 +292,7 @@ impl Editor {
         self.ring_fusion_hydrogens = style.ring_fusion_hydrogens;
         self.wavy_unknown_alkenes = style.wavy_unknown_alkenes;
         self.charge_before_radical = style.charge_before_radical;
+        self.hydrogen_isotopes = style.hydrogen_isotopes;
         self.unit_notice = None;
         self.inputs = [
             (Field::FontSize, style.font_size_pt),
@@ -318,6 +322,7 @@ impl Editor {
         }
         style.center_chain_double_bonds = self.center_chain_double_bonds;
         style.charge_before_radical = self.charge_before_radical;
+        style.hydrogen_isotopes = self.hydrogen_isotopes;
         for (field, input) in &self.inputs {
             let value = input.value(*field, self.display_unit)?;
             if let Some(dimension) = field.dimension() {
@@ -695,6 +700,12 @@ impl App {
                                 editor.mark_custom();
                             }
                         }
+                        Action::HydrogenIsotopes(value) => {
+                            if editor.hydrogen_isotopes != value {
+                                editor.hydrogen_isotopes = value;
+                                editor.mark_custom();
+                            }
+                        }
                         Action::Input(field, value) => {
                             if let Some((_, input)) =
                                 editor.inputs.iter_mut().find(|(f, _)| *f == field)
@@ -900,6 +911,26 @@ impl App {
             .style(button::text),
         );
         body = body
+            .push(
+                row![
+                    text("Hydrogen isotopes").size(12).width(Length::Fill),
+                    crate::appearance::pick_list(
+                        HydrogenIsotopes::ALL,
+                        Some(editor.hydrogen_isotopes),
+                        move |value| action(Action::HydrogenIsotopes(value)),
+                    )
+                    .text_size(12)
+                    .padding(6)
+                    .width(104),
+                ]
+                .align_y(Alignment::Center)
+                .spacing(8),
+            )
+            .push(
+                text("Auto: D/T unless the molecule has another labelled nuclide.")
+                    .size(11)
+                    .style(super::workspace::muted_text),
+            )
             .push(
                 checkbox(editor.center_chain_double_bonds)
                     .label("Center chain double bonds")

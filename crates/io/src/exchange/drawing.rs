@@ -4,6 +4,7 @@ use crate::{
     document::{Document, Point},
     engine::{Request, TextMetrics},
     graphics::PathCommand,
+    style::HydrogenIsotopes,
     typography::{TextFormat, TextStyle},
 };
 use std::collections::HashMap;
@@ -516,6 +517,13 @@ impl<'a> Writer<'a> {
         ] {
             if value != default {
                 tree.set(0, attribute, if value { "yes" } else { "no" })?;
+            }
+        }
+        match style.hydrogen_isotopes {
+            HydrogenIsotopes::Auto => {}
+            HydrogenIsotopes::Letters => tree.set(0, "ReShikiHydrogenIsotopes", "letters")?,
+            HydrogenIsotopes::MassNumbers => {
+                tree.set(0, "ReShikiHydrogenIsotopes", "mass_numbers")?;
             }
         }
         let fonts = tree.add(Some(0), "fonttable", [])?;
