@@ -40,6 +40,7 @@ mod numbering;
 mod parent_pipeline;
 mod parent_selection;
 mod perception;
+mod phane;
 mod polycycle_topology;
 mod principal_groups;
 mod principal_suffixes;
@@ -135,8 +136,28 @@ pub(super) fn name_smiles_with_style(
     if components.len() != 1 {
         return Err("openclatura: expected one connected component".into());
     }
-    let text = component_namer::name_component(&mol, &components[0])?;
+    let phane = phane::name(&mol);
+    let text = match component_namer::name_component(&mol, &components[0]) {
+        Ok(text) => text,
+        Err(error) => {
+            return phane.map_or(Err(error), |text| {
+                Ok(Name {
+                    text,
+                    status: crate::naming::NameStatus::Unverified(crate::naming::NameReason::Phane),
+                    alternatives: vec![],
+                    omitted_stereo: vec![],
+                    omitted_units: 0,
+                    verification: None,
+                })
+            });
+        }
+    };
     assess_parent_name(&mol, &text);
+    if phane.is_some() {
+        mol.mark_name(crate::naming::NameStatus::NotPreferred(
+            crate::naming::NameReason::Phane,
+        ));
+    }
     let status = mol.name_status();
     let mut alternatives = vec![];
     if mol.has_relative_ring_alternative() {
@@ -153,6 +174,10 @@ pub(super) fn name_smiles_with_style(
             });
         }
     }
+    alternatives.extend(phane.map(|name| crate::naming::AlternativeName {
+        name,
+        status: crate::naming::NameStatus::Unverified(crate::naming::NameReason::Phane),
+    }));
     Ok(Name {
         text: nest_enclosing_marks(&text),
         status,

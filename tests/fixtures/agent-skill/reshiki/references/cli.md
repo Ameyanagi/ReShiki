@@ -171,12 +171,12 @@ port reconstructs the same structure (for a radical ion, its neutral parent).
 Options:
   --isotope-style STYLE  iupac (default), as in (2H3)methanol, or boughton,
                          as in methanol-d3.
-  --json                 Print the name, its status and verified alternatives
-                         as one JSON line.
+  --json                 Print the name, status, alternatives and curated
+                         aliases as one JSON line.
   --locants              Print JSON with parent locants in input atom order.
 
 Without --json or --locants, prints only the name followed by a newline. With either,
-value contains name, preferred, status, reason, detail and alternatives:
+value contains name, preferred, status, reason, detail, alternatives and aliases:
   preferred      true only when status is preferred.
   status         preferred = the preferred IUPAC name (IUPAC 2013);
                  not_preferred = systematic, known not to be the preferred
@@ -184,6 +184,7 @@ value contains name, preferred, status, reason, detail and alternatives:
                  unverified = systematic, preference not verified.
   reason         The snake_case naming-rule reason, or null for preferred.
   detail         The status detail sentence.
+  aliases        Curated names matching the exact isomeric graph, or [].
   alternatives   Other verified names, each with name, status and reason.
 With --locants, value also contains locants: one string or null per imported
 atom, in input atom order. Atoms outside the principal parent have null.

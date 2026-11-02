@@ -9,7 +9,18 @@ use reshiki::{
     document::Document,
     engine::{Analysis, ChemistryEngine, Request},
 };
-use std::collections::{HashMap, HashSet};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
+
+#[derive(Default)]
+struct ClassCache {
+    key: Option<PropertyKey>,
+    matches: Vec<&'static reshiki::chemistry::classes::Class>,
+    #[cfg(test)]
+    calculations: usize,
+}
 
 fn molecular_weight(mass: f64, two_decimal_weight: bool) -> String {
     let precision = if two_decimal_weight { 2 } else { 3 };
@@ -264,6 +275,7 @@ pub(super) struct State {
     pending_revision: u64,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
     whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
+    classes: RefCell<ClassCache>,
     arrow_hints: Option<(u64, u64, Vec<reshiki::reactions::ArrowSemanticsHint>)>,
 }
 impl State {
@@ -275,6 +287,12 @@ impl State {
             if key.epoch == epoch && key.revision == before {
                 key.revision = after;
             }
+        }
+        if let Some(key) = &mut self.classes.get_mut().key
+            && key.epoch == epoch
+            && key.revision == before
+        {
+            key.revision = after;
         }
         // Keep the original receipt key while carrying its chemistry forward.
         if self.pending.as_ref().is_some_and(|key| key.epoch == epoch)
@@ -508,6 +526,28 @@ impl App {
         }
         self.property_result(&key)
             .and_then(|result| result.as_ref().ok())
+    }
+
+    fn property_classes(&self) -> Vec<&'static reshiki::chemistry::classes::Class> {
+        if self.property_analysis().is_none() {
+            return vec![];
+        }
+        let key = self.property_request_key();
+        let mut cache = self.tab.inspector_ui.classes.borrow_mut();
+        if cache.key.as_ref() != Some(&key) {
+            cache.matches = reshiki::chemistry::document::prepare(&self.property_document(&key))
+                .ok()
+                .and_then(|molecule| {
+                    reshiki::chemistry::classes::classify(&molecule.state.graph).ok()
+                })
+                .unwrap_or_default();
+            cache.key = Some(key);
+            #[cfg(test)]
+            {
+                cache.calculations += 1;
+            }
+        }
+        cache.matches.clone()
     }
 
     fn checked_arrow_hints(&self) -> &[reshiki::reactions::ArrowSemanticsHint] {
@@ -1210,6 +1250,27 @@ impl App {
                             .wrapping(text::Wrapping::WordOrGlyph),
                     )
                     .push(command("Copy analysis", Message::CopyAnalysis));
+            }
+            let classes = self.property_classes();
+            if !classes.is_empty() {
+                body = body.push(
+                    column![
+                        text("Classes").size(11).style(muted_text),
+                        row(classes.into_iter().map(|class| {
+                            hover_hint(
+                                container(text(class.term).size(11))
+                                    .padding([3, 7])
+                                    .style(container::rounded_box),
+                                class.tooltip,
+                                tooltip::Position::Top,
+                            )
+                            .into()
+                        }))
+                        .spacing(4)
+                        .wrap(),
+                    ]
+                    .spacing(4),
+                );
             }
             body = body
                 .push(text("Canonical SMILES").size(12))

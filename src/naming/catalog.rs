@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::{collections::HashMap, sync::OnceLock};
 
 pub const VERSION: &str = "ReShiki retained aliases 1";
-const MAX_ENTRIES: usize = 40;
+const MAX_ENTRIES: usize = 128;
 const MAX_ALIASES: usize = 5;
 const MAX_CATALOG_BYTES: usize = 65_536;
 const MAX_ALIAS_BYTES: usize = 128;

@@ -1,5 +1,18 @@
 # Unreleased changes
 
+Generated names gain an alternative phane name for simple cyclophanes, such as
+`1,4(1,4)-dibenzenacyclohexaphane` for [2.2]paracyclophane, which had no name
+before. Each phane name must parse back to the same structure. Because the
+preferred IUPAC name of a cyclophane is a phane name (P-52.2.5), an ordinary
+name shown next to one is marked not preferred. The curated alias catalog adds
+the 21 amino-acid templates (such as `L-alanine`), nucleobases and 24 sugar
+anomers (such as `β-D-glucopyranose`), with exact stereo and tautomer matching.
+Molecular properties gains a **Classes** row: chips such as lactam, amide and
+ester, each with a one-line definition.
+([issue #860](https://github.com/Ameyanagi/ReShiki/issues/860),
+[issue #861](https://github.com/Ameyanagi/ReShiki/issues/861),
+[issue #862](https://github.com/Ameyanagi/ReShiki/issues/862)).
+
 Automatic fusion double bonds now favour the ring with more other double or
 aromatic bonds, preferring six-membered rings on a tie. Substituted chain double
 bonds offset toward an attached ring or, when no attached ring selects a side,

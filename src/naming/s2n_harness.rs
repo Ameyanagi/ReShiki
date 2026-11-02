@@ -177,6 +177,13 @@ impl Measurements {
         match generated {
             Err(reason) => result.reason = reason,
             Ok(name) => {
+                for alternative in name.alternatives.iter().map(|n| &n.name) {
+                    let actual = self
+                        .parse_name(alternative)
+                        .unwrap_or_else(|error| panic!("{alternative}: {error}"));
+                    super::verify_identity(&expected, &actual)
+                        .unwrap_or_else(|error| panic!("{alternative}: {error}"));
+                }
                 result.status = Some(name.status);
                 result.name = name.text;
                 match self.parse_name(&result.name) {

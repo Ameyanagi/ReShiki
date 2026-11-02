@@ -29,6 +29,7 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<std::alloc::System> =
 
 pub mod aromaticity;
 mod atomic_data;
+pub mod classes;
 pub mod cx;
 pub mod depict;
 pub mod descriptors;

@@ -34,6 +34,7 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
     let generated = parse_response(&serde_json::to_vec(&reply).unwrap(), "CCO").unwrap();
     assert_eq!(generated.text, "ethanol");
     assert_eq!(generated.status, NameStatus::Preferred);
+    assert!(generated.alternatives.is_empty());
     for (key, value) in [
         ("protocol", json!(worker::PROTOCOL - 1)),
         ("profile", json!("other")),
@@ -65,6 +66,11 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
                 "alternatives":[{"name":"","status":{"status":"preferred"}}],"omitted_stereo":[],"omitted_units":0}}),
         ),
         ("result", json!({"Ok":"ethanol"})),
+        (
+            "result",
+            json!({"Ok":{"text":"ethanol","status":{"status":"preferred"},
+                "alternatives":[{"name":"x".repeat(2049),"status":{"status":"preferred"}}],"omitted_stereo":[],"omitted_units":0}}),
+        ),
     ] {
         let mut bad = reply.clone();
         bad[key] = value;
@@ -79,6 +85,45 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
         parse_response(&serde_json::to_vec(&rejected).unwrap(), "CCO").unwrap_err(),
         Error::Rejected("openclatura: isotopic naming not ported".into())
     );
+}
+
+#[tokio::test]
+async fn phane_names_are_verified_alternatives_or_the_only_name() -> Result<(), String> {
+    use crate::naming::{AlternativeName, NameReason};
+    for smiles in ["C1Cc2ccc(cc2)CCc2ccc1cc2", "C1Cc2cccc(c2)CCc2cccc1c2"] {
+        let record = generate_name(
+            &Identity {
+                smiles: smiles.into(),
+                naming_smiles: None,
+                write_unknown_stereo: false,
+                warnings: vec![],
+            },
+            Cancel::default(),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        if smiles == "C1Cc2cccc(c2)CCc2cccc1c2" {
+            assert_eq!(
+                record.name_status,
+                Some(NameStatus::NotPreferred(NameReason::Phane))
+            );
+            assert_eq!(
+                record.alternatives,
+                [AlternativeName {
+                    name: "1,4(1,3)-dibenzenacyclohexaphane".into(),
+                    status: NameStatus::Unverified(NameReason::Phane),
+                }]
+            );
+        } else {
+            assert_eq!(
+                record.name_status,
+                Some(NameStatus::Unverified(NameReason::Phane))
+            );
+            assert_eq!(record.title, "1,4(1,4)-dibenzenacyclohexaphane");
+            assert!(record.alternatives.is_empty());
+        }
+    }
+    Ok(())
 }
 
 #[test]

@@ -46,6 +46,16 @@ pub(crate) async fn run(
             ("reason".into(), json!(assessment.get("reason"))),
             ("detail".into(), json!(status.detail())),
             (
+                "aliases".into(),
+                json!(
+                    record
+                        .synonyms
+                        .iter()
+                        .map(|alias| &alias.name)
+                        .collect::<Vec<_>>()
+                ),
+            ),
+            (
                 "alternatives".into(),
                 record
                     .alternatives

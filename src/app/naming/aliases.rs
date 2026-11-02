@@ -71,7 +71,7 @@ pub(super) enum CaptionName {
 }
 
 impl App {
-    fn alias_record(&self, target: AliasTarget) -> Option<&Record> {
+    pub(super) fn alias_record(&self, target: AliasTarget) -> Option<&Record> {
         if self.tab.naming.pending.is_some() {
             return None;
         }

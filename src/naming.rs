@@ -135,6 +135,7 @@ pub enum NameReason {
     BoughtonIsotope,
     RadicalIon,
     AnionParent,
+    Phane,
     RelativeRingStereo,
     UnknownConfiguration,
 }
@@ -209,6 +210,9 @@ impl NameReason {
             }
             Self::AnionParent => {
                 "The preferred parent, suffix and retained-name choice for this hydroxy- or acid-derived anion have not been verified (P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."
+            }
+            Self::Phane => {
+                "The structure is a cyclophane: at least six nodes, two or more rings and a mancude ring. Cyclic phane names rank above fused, bridged fused and von Baeyer names, so the preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). ReShiki has not verified the numbering and citation order of its phane name."
             }
         }
     }
