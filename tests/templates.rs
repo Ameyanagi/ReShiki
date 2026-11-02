@@ -8,6 +8,23 @@ fn template(name: &str) -> &'static Document {
     &LIBRARY.iter().find(|t| t.name == name).unwrap().document
 }
 
+#[test]
+fn biological_template_collections_have_the_documented_coverage() {
+    assert_eq!(LIBRARY.len(), 192);
+    for (group, count) in [
+        ("Amino acids", 21),
+        ("Carbohydrates", 50),
+        ("Nucleosides", 15),
+        ("Steroids", 16),
+    ] {
+        assert_eq!(
+            LIBRARY.iter().filter(|t| t.group == group).count(),
+            count,
+            "{group}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn every_thumbnail_is_the_structure_that_gets_placed()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -32,7 +49,13 @@ async fn every_thumbnail_is_the_structure_that_gets_placed()
             .unwrap()
             .analysis
             .unwrap();
-        assert_eq!(actual.smiles, expected.smiles, "{}", item.name);
+        assert_eq!(actual.formula, expected.formula, "{}", item.name);
+        assert_eq!(actual.inchikey, expected.inchikey, "{}", item.name);
+        // A full Haworth/steroid drawing retains real H atoms in its SMILES;
+        // its reference SMILES can express those same hydrogens implicitly.
+        if !item.document.atoms.iter().any(|a| a.element == "H") {
+            assert_eq!(actual.smiles, expected.smiles, "{}", item.name);
+        }
         if let Some(facts) = catalog
             .iter()
             .find(|f| f.get("name").and_then(|v| v.as_str()) == Some(item.name.as_str()))
@@ -853,3 +876,6 @@ fn new_fused_templates_store_the_requested_orientation() {
         );
     }
 }
+
+#[path = "templates/nucleosides.rs"]
+mod nucleosides;

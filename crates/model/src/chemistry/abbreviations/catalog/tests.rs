@@ -271,6 +271,38 @@ fn detectable_groups_have_distinct_structures() {
     }
 }
 
+#[test]
+fn peptide_groups_follow_the_frozen_core_and_formyl_is_typed_only() {
+    let file: File = serde_json::from_str(BUILTIN).unwrap();
+    let captured: serde_json::Value = serde_json::from_str(include_str!(
+        "../replacement/rdkit-geometry-macos-aarch64.json"
+    ))
+    .unwrap();
+    let core = captured["templates"].as_array().unwrap();
+    assert_eq!(core.len(), 62);
+    for (entry, frozen) in file.groups.iter().zip(core) {
+        assert_eq!(entry.label, frozen["label"]);
+        assert_eq!(entry.smiles, frozen["smiles"]);
+    }
+    for (label, smiles, formula, contract) in [
+        ("Dns", "*S(=O)(=O)c1cccc2c(N(C)C)cccc12", "C12H12NO2S", true),
+        ("Suc", "*C(=O)CCC(=O)O", "C4H5O3", true),
+        ("For", "*C=O", "CHO", false),
+        ("CHO", "*C=O", "CHO", false),
+    ] {
+        let (index, entry) = file
+            .groups
+            .iter()
+            .enumerate()
+            .find(|(_, g)| g.label == label)
+            .unwrap();
+        assert!(index >= 62, "{label}");
+        assert_eq!(entry.smiles, smiles);
+        assert_eq!(entry.formula.as_deref(), Some(formula));
+        assert_eq!(entry.contract, contract, "{label}");
+    }
+}
+
 /// Bond lengths and the closest non-bonded contact of a group layout, in
 /// units of the 1.5 depiction bond length.
 fn layout_quality(preset: &Preset) -> (f64, f64) {
