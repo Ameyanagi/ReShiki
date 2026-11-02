@@ -1341,8 +1341,7 @@ fn view(app: &App) -> Vec<Command> {
                 "Show stereodescriptors"
             },
             View,
-            "Show or hide CIP labels throughout the drawing; r/s: pseudoasymmetric centres, \
-             M/P (Ra/Sa): axial or planar chirality, seqCis/seqTrans: enantiomorphic double bonds",
+            "Show or hide R/S, r/s, E/Z, M/P and seqCis/seqTrans labels throughout the drawing",
             "CIP pseudoasymmetric r/s stereodescriptor R/S E/Z M/P Ra/Sa seqCis seqTrans chirality descriptor",
             Run::Send(vec![
                 Message::Labels(Labels::Scope(Scope::Drawing)),

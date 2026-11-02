@@ -2239,7 +2239,7 @@ impl App {
             .push(section("STEREOCHEMISTRY"))
             .push(hover_hint(
                 checkbox(stereo)
-                    .label("Show stereodescriptors (R/S, E/Z…)")
+                    .label("Show stereodescriptors\n(R/S, E/Z…)")
                     .text_size(12)
                     .on_toggle(|v| Message::Labels(A::Stereo(v))),
                 "R/S: stereocentre; swaps in the mirror image.\n\
