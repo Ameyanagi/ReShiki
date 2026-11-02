@@ -818,7 +818,7 @@ impl Document {
             b.indicator.validate()?;
             if b.cip_label
                 .as_ref()
-                .is_some_and(|s| !["E", "Z"].contains(&s.as_str()))
+                .is_some_and(|s| !["E", "Z", "e", "z", "M", "P", "m", "p"].contains(&s.as_str()))
             {
                 return Err("Unsupported bond CIP label".into());
             }

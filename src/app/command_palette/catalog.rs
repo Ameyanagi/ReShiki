@@ -1234,6 +1234,7 @@ fn files() -> Vec<Command> {
 }
 
 fn view(app: &App) -> Vec<Command> {
+    use super::super::atom_labels::{Action as Labels, Scope};
     use Category::View;
     let mut list = vec![
         send(
@@ -1332,6 +1333,21 @@ fn view(app: &App) -> Vec<Command> {
             "Turn keyboard drawing on or off",
             "hotspot accessibility",
             Message::KeyboardDrawing(keyboard_drawing::Action::Toggle),
+        ),
+        Command::new(
+            if app.tab.doc.atom_labels.stereo {
+                "Hide stereodescriptors"
+            } else {
+                "Show stereodescriptors"
+            },
+            View,
+            "Show or hide R/S, r/s, E/Z, M/P and seqCis/seqTrans labels throughout the drawing",
+            "CIP pseudoasymmetric r/s stereodescriptor R/S E/Z M/P Ra/Sa seqCis seqTrans chirality descriptor",
+            Run::Send(vec![
+                Message::Labels(Labels::Scope(Scope::Drawing)),
+                Message::Labels(Labels::Stereo(!app.tab.doc.atom_labels.stereo)),
+                Message::Labels(Labels::Scope(app.tab.labels.scope)),
+            ]),
         ),
         send(
             "Help & shortcuts",

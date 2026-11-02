@@ -1,5 +1,7 @@
 use super::*;
-use reshiki::atom_labels::{self as labels, Carbons, HydrogenPosition, LabelAttachment, Number};
+use reshiki::atom_labels::{
+    self as labels, AxialDescriptors, Carbons, HydrogenPosition, LabelAttachment, Number,
+};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Scope {
@@ -40,6 +42,7 @@ pub enum Action {
     Position(HydrogenPosition),
     Attachment(LabelAttachment),
     Stereo(bool),
+    AxialDescriptors(AxialDescriptors),
     Seed(String),
     Number,
     ClearNumbers,
@@ -172,6 +175,7 @@ impl App {
                 }
                 self.tab.labels_dirty = true;
             }
+            Action::AxialDescriptors(value) => self.tab.doc.atom_labels.axial_descriptors = value,
             Action::Number => {
                 let sequence = labels::sequence(&self.tab.labels.seed, ids.len())?;
                 for (id, text) in ids.iter().zip(sequence) {
