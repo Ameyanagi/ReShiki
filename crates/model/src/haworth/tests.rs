@@ -27,6 +27,60 @@ fn recognized_haworth_atoms_include_ring_and_direct_substituents() -> anyhow::Re
     Ok(())
 }
 
+#[test]
+fn ring_h_labels_clear_each_other_and_unrelated_bonds() -> anyhow::Result<()> {
+    use anyhow::Context;
+    let length = crate::style::DEFAULT.bond_length_world;
+    let mut checked = 0;
+    for template in templates()
+        .map_err(anyhow::Error::msg)?
+        .into_iter()
+        .filter(|t| t.name.ends_with(", ring H"))
+    {
+        let doc = &template.document;
+        // Include condensed-group anchors and explicit methyl carbons, but
+        // exclude atoms and internal bonds hidden by those groups.
+        let labels: Vec<_> = doc
+            .atoms
+            .iter()
+            .filter(|a| {
+                doc.atom_visible(a.id)
+                    && (doc.abbreviation(a.id).is_some() || crate::atom_labels::visible(a, doc))
+            })
+            .collect();
+        for (i, atom) in labels.iter().enumerate() {
+            for other in &labels[i + 1..] {
+                assert!(
+                    atom.position.distance(other.position) >= 0.9 * length,
+                    "{}: labels {} and {} are too close",
+                    template.name,
+                    atom.id,
+                    other.id
+                );
+            }
+            for bond in doc
+                .bonds
+                .iter()
+                .filter(|b| b.a != atom.id && b.b != atom.id && doc.bond_visible(b.a, b.b))
+            {
+                let a = doc.atom(bond.a).context("Bond endpoint")?.position;
+                let b = doc.atom(bond.b).context("Bond endpoint")?.position;
+                assert!(
+                    crate::graphics::segment_distance(atom.position, a, b) >= 0.35 * length,
+                    "{}: label {} is too close to bond {}–{}",
+                    template.name,
+                    atom.id,
+                    bond.a,
+                    bond.b
+                );
+            }
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 24);
+    Ok(())
+}
+
 fn label_ring_intersections(doc: &Document) -> anyhow::Result<Vec<(u64, u64, u64)>> {
     use anyhow::Context;
     let mut intersections = Vec::new();

@@ -289,10 +289,11 @@ pub fn sugar_document_with_options(
     if !length.is_finite() || !(1. ..=10_000.).contains(&length) {
         return Err("Haworth bond length must be finite and between 1 and 10000".into());
     }
-    // Fructose's inward OH needs more clearance from the sloping back edge.
-    let ring_scale = if matches!(sugar, Sugar::Fructose)
-        || options.ring_hydrogens && sugar.ring() == Ring::Five
-    {
+    // Full pyranoses need a bond length between opposing inward labels.
+    // Fructose's inward OH also needs clearance from the sloping back edge.
+    let ring_scale = if options.ring_hydrogens && sugar.ring() == Ring::Six {
+        3.
+    } else if matches!(sugar, Sugar::Fructose) || options.ring_hydrogens {
         2.5
     } else {
         1.8
