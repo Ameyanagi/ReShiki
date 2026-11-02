@@ -11,6 +11,59 @@ use reshiki::{
 };
 use std::collections::{HashMap, HashSet};
 
+fn molecular_weight(mass: f64, two_decimal_weight: bool) -> String {
+    let precision = if two_decimal_weight { 2 } else { 3 };
+    format!("{mass:.precision$}")
+}
+
+fn property_rows(
+    a: &Analysis,
+    two_decimal_weight: bool,
+    unpaired: u32,
+) -> [(&'static str, Option<String>, String); 8] {
+    [
+        (
+            "Weight (g/mol)",
+            Some(format!(
+                "Average molecular weight from RDKit {} standard atomic weights; IUPAC 2023 longest-lived mass numbers for elements with no standard atomic weight (e.g. Tc [97]). Labelled atoms use their nuclide mass.",
+                reshiki::chemistry::RDKIT_VERSION
+            )),
+            molecular_weight(a.mass, two_decimal_weight),
+        ),
+        (
+            "Exact mass (Da)",
+            Some("Monoisotopic mass: most abundant nuclide of each element, or the labelled nuclide, with electron mass adjusted for charge.".into()),
+            format!("{:.5}", a.exact_mass),
+        ),
+        (
+            "cLogP",
+            Some("Calculated octanol/water log P (Wildman–Crippen method, RDKit)".into()),
+            format!("{:.2}", a.logp),
+        ),
+        (
+            "TPSA (Å²)",
+            Some("Topological polar surface area from N and O contributions (Ertl method)".into()),
+            format!("{:.2}", a.tpsa),
+        ),
+        (
+            "H-bond donors",
+            Some("Hydrogen-bond donor count from RDKit's Lipinski-style rules".into()),
+            a.donors.to_string(),
+        ),
+        (
+            "H-bond acceptors",
+            Some("Hydrogen-bond acceptor count from RDKit's Lipinski-style rules".into()),
+            a.acceptors.to_string(),
+        ),
+        ("Rings", None, a.rings.to_string()),
+        (
+            "Unpaired electrons",
+            Some("Radical electrons in the analysed structure, from radical marks or atoms with fewer hydrogens than their valence; a singlet's electron pair is not counted".into()),
+            unpaired.to_string(),
+        ),
+    ]
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Section {
     Structure,
@@ -157,6 +210,47 @@ pub struct PropertyKey {
     epoch: u64,
     atoms: Vec<u64>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SpinState {
+    Singlet,
+    Triplet,
+}
+
+impl SpinState {
+    fn selection(atoms: &[&reshiki::document::Atom]) -> Option<Self> {
+        let first = atoms.first()?;
+        atoms
+            .iter()
+            .all(|atom| atom.singlet == first.singlet)
+            .then_some(if first.singlet {
+                Self::Singlet
+            } else {
+                Self::Triplet
+            })
+    }
+}
+
+impl std::fmt::Display for SpinState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Singlet => "Singlet",
+            Self::Triplet => "Triplet",
+        })
+    }
+}
+
+/// The chemistry graph retains two radical electrons for a singlet carbene;
+/// its electron pair contributes no unpaired electrons to the displayed scope.
+fn unpaired_electrons(doc: &Document, analysis: &Analysis, selected: Option<&HashSet<u64>>) -> u32 {
+    let singlets = doc
+        .atoms
+        .iter()
+        .filter(|atom| atom.singlet && selected.is_none_or(|ids| ids.contains(&atom.id)))
+        .count() as u32;
+    analysis.unpaired_electrons - 2 * singlets
+}
+
 #[derive(Default)]
 pub(super) struct State {
     expected_viewport: Option<iced::Size>,
@@ -315,8 +409,9 @@ impl App {
         match properties {
             Ok(properties) => {
                 self.status = format!(
-                    "Molecular properties · {} · {:.3} g/mol",
-                    properties.formula, properties.mass
+                    "Molecular properties · {} · {} g/mol",
+                    self.shown_formula(&properties.display_formula),
+                    molecular_weight(properties.mass, self.appearance.two_decimal_weight)
                 );
                 self.error = false;
             }
@@ -329,6 +424,35 @@ impl App {
             "inspector-section-Molecule",
         ))
         .discard()
+    }
+
+    /// `[X]•⁺` reads `[X]⁺•` when the drawing style writes the charge first.
+    fn shown_formula(&self, formula: &str) -> String {
+        match formula.split_once("]•") {
+            Some((head, charge)) if self.tab.doc.drawing_style.charge_before_radical => {
+                format!("{head}]{charge}•")
+            }
+            _ => formula.into(),
+        }
+    }
+
+    pub(super) fn elemental_analysis(&self, a: &Analysis) -> Option<String> {
+        let elements: Vec<_> = ["C", "H", "N", "S"]
+            .into_iter()
+            .filter_map(|symbol| {
+                a.mass_percent
+                    .iter()
+                    .find(|(element, _)| element == symbol)
+                    .map(|(_, percent)| format!("{symbol}, {percent:.2}"))
+            })
+            .collect();
+        (!elements.is_empty()).then(|| {
+            format!(
+                "Anal. Calcd for {}: {}.",
+                self.shown_formula(&a.display_formula),
+                elements.join("; ")
+            )
+        })
     }
 
     fn property_key(&self) -> Option<PropertyKey> {
@@ -584,13 +708,18 @@ impl App {
             let properties = if reshiki::models3d::crystal::touches(&self.tab.doc, atoms) {
                 reshiki::models3d::crystal::composition(&self.tab.doc, atoms)
                     .ok()
-                    .map(|p| (p.formula, p.mass))
+                    .map(|p| (self.shown_formula(&p.display_formula), p.mass))
             } else {
-                analysis.map(|a| (a.formula.clone(), a.mass))
+                analysis.map(|a| (self.shown_formula(&a.display_formula), a.mass))
             };
             properties.map_or_else(
                 || scope.into(),
-                |(formula, mass)| format!("{scope} · {formula} · {mass:.3}\u{a0}g/\u{2060}mol"),
+                |(formula, mass)| {
+                    format!(
+                        "{scope} · {formula} · {}\u{a0}g/\u{2060}mol",
+                        molecular_weight(mass, self.appearance.two_decimal_weight)
+                    )
+                },
             )
         };
         let whole = if !reshiki::models3d::crystal::touches(&self.tab.doc, &[])
@@ -873,6 +1002,14 @@ impl App {
         if !molecular_first {
             body = body.push(self.molecular_section());
         }
+        if !self.tab.stereo_notes.is_empty() {
+            body = body.push(card(
+                container(self.stereo_note_lines(
+                    column![text("STEREOCHEMISTRY").size(11).style(muted_text)].spacing(5),
+                ))
+                .padding(12),
+            ));
+        }
         body = body.push(self.inspector_section_lazy(
             Section::Chemistry,
             "Labels & chemistry",
@@ -880,6 +1017,7 @@ impl App {
             false,
             || {
                 let chemistry = column![
+                    command("Normalize depiction", Message::NormalizeDepiction),
                     command(
                         "Reaction roles…",
                         Message::Reaction(super::reactions::Action::Open)
@@ -988,8 +1126,9 @@ impl App {
                 body = body
                     .push(
                         text(format!(
-                            "{} · {:.3}\u{a0}g/\u{2060}mol",
-                            composition.formula, composition.mass
+                            "{} · {}\u{a0}g/\u{2060}mol",
+                            self.shown_formula(&composition.display_formula),
+                            molecular_weight(composition.mass, self.appearance.two_decimal_weight)
                         ))
                         .size(14),
                     )
@@ -1050,23 +1189,27 @@ impl App {
             );
         }
         if let Some(a) = self.property_analysis() {
-            for (label, value) in [
-                ("Weight (g/mol)", format!("{:.3}", a.mass)),
-                ("Exact mass (Da)", format!("{:.5}", a.exact_mass)),
-                ("cLogP", format!("{:.2}", a.logp)),
-                ("TPSA (Å²)", format!("{:.2}", a.tpsa)),
-                ("H-bond donors", a.donors.to_string()),
-                ("H-bond acceptors", a.acceptors.to_string()),
-                ("Rings", a.rings.to_string()),
-                ("Unpaired electrons", a.unpaired_electrons.to_string()),
-            ] {
-                body = body.push(
-                    row![
-                        text(label).size(11).style(muted_text).width(Length::Fill),
-                        text(value).size(12)
-                    ]
-                    .align_y(Alignment::Center),
-                );
+            let unpaired = unpaired_electrons(&self.tab.doc, a, key.as_ref().map(|_| &ids));
+            for (label, hint, value) in
+                property_rows(a, self.appearance.two_decimal_weight, unpaired)
+            {
+                let label = text(label).size(11).style(muted_text).width(Length::Fill);
+                let label: Element<'_, Message> = if let Some(hint) = hint {
+                    hover_hint(label, hint, tooltip::Position::Top).into()
+                } else {
+                    label.into()
+                };
+                body = body.push(row![label, text(value).size(12)].align_y(Alignment::Center));
+            }
+            if let Some(analysis) = self.elemental_analysis(a) {
+                body = body
+                    .push(text("Elemental analysis").size(11).style(muted_text))
+                    .push(
+                        text(analysis.replace(", ", ",\u{a0}"))
+                            .size(12)
+                            .wrapping(text::Wrapping::WordOrGlyph),
+                    )
+                    .push(command("Copy analysis", Message::CopyAnalysis));
             }
             body = body
                 .push(text("Canonical SMILES").size(12))
@@ -1515,7 +1658,7 @@ impl App {
         }
         controls = controls.push(
             row![
-                text("Unpaired electrons").size(11).width(Length::Fill),
+                text("Radical electrons").size(11).width(Length::Fill),
                 crate::appearance::pick_list([0u8, 1, 2], count, Message::AtomRadical)
                     .placeholder("Mixed")
                     .text_size(12)
@@ -1524,6 +1667,23 @@ impl App {
             .spacing(6)
             .align_y(Alignment::Center),
         );
+        if count == Some(2) {
+            controls = controls.push(
+                row![
+                    text("Spin state").size(11).width(Length::Fill),
+                    crate::appearance::pick_list(
+                        [SpinState::Singlet, SpinState::Triplet],
+                        SpinState::selection(atoms),
+                        |spin| Message::AtomSinglet(spin == SpinState::Singlet),
+                    )
+                    .placeholder("Mixed")
+                    .text_size(12)
+                    .padding(6)
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            );
+        }
         for a in atoms.iter().filter(|a| !a.marks.is_empty()) {
             controls = controls.push(text(format!("{} · positioned marks", a.element)).size(12));
             for (index, mark) in a.marks.iter().enumerate() {
@@ -1576,6 +1736,7 @@ impl App {
             ]
             .spacing(6),
             command("Invert selection", Message::InvertSelection),
+            command("Bracket ion", Message::BracketIon),
             crate::appearance::pick_list(
                 [
                     reshiki::graphics::GraphicKind::Brackets,
@@ -1906,6 +2067,8 @@ impl App {
 
 #[cfg(test)]
 mod continuity_tests;
+#[cfg(test)]
+mod property_tests;
 #[cfg(test)]
 mod tests;
 

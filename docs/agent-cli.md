@@ -296,6 +296,7 @@ to 9 decimal places to remove floating-point noise. This is
   "value": {
     "analysis": {
       "acceptors": 1,
+      "display_formula": "C₆H₆O",
       "donors": 1,
       "exact_mass": 94.041864812,
       "formula": "C6H6O",

@@ -53,6 +53,16 @@ fn request(document: Document, selected: Vec<u64>) -> Request {
 fn equal(actual: Response, expected: Response) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    // The Python reference has no display formula or mass percentages.
+    for side in [&mut actual, &mut expected] {
+        if let Some(analysis) = side
+            .get_mut("analysis")
+            .and_then(|value| value.as_object_mut())
+        {
+            analysis.remove("display_formula");
+            analysis.remove("mass_percent");
+        }
+    }
     for field in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(a), Some(e)) = (
             actual["analysis"][field].as_f64(),
@@ -482,6 +492,9 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
             "reference/engine/abbreviations.py" => Some("aromatic-abbreviations-source.py.gz"),
             "reference/engine/cdx_exchange.py" => Some("aromatic-cdx-exchange-source.py.gz"),
             "reference/engine/arrows_exchange.py" => Some("aromatic-arrows-exchange-source.py.gz"),
+            "reference/engine/graphics_exchange.py" => {
+                Some("aromatic-graphics-exchange-source.py.gz")
+            }
             "reference/engine/worker.py" => Some("aromatic-worker-source.py.gz"),
             _ => None,
         };

@@ -154,7 +154,11 @@ fn clear_bridged_and_disjoint_ring_imports_keep_native_shape() -> anyhow::Result
         )?
         .positions;
         let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
-        super::super::tests::assert_rigid_rotation(&original, &positions);
+        let mut expected = original.clone();
+        crate::chemistry::layout_refinement::straighten(state, &mut expected, None);
+        super::super::tests::assert_rigid_rotation(&original, &expected);
+        crate::chemistry::layout_refinement::conventional_orientation(state, &mut expected);
+        assert_eq!(positions, expected);
     }
     Ok(())
 }

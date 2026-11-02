@@ -52,19 +52,40 @@ impl Writer<'_> {
             let start = P::from(a.start);
             let end = P::from(a.end);
             let cubic = a.cubic.map(|[a, b]| [P::from(a), P::from(b)]);
-            let control = a.control.map(P::from).or_else(|| {
-                if cubic.is_some() {
-                    return None;
-                }
-                matches!(a.kind.as_str(), "curved" | "fishhook" | "bent").then_some(P {
-                    x: (start.x + end.x - end.y + start.y) / 2.,
-                    y: (start.y + end.y + end.x - start.x) / 2.,
+            let control = a
+                .control
+                .map(P::from)
+                .filter(|p| {
+                    if a.kind != "retro" {
+                        return true;
+                    }
+                    let dx = end.x - start.x;
+                    let dy = end.y - start.y;
+                    let length = dx * dx + dy * dy;
+                    let t = if length > 0. {
+                        ((p.x - start.x) * dx + (p.y - start.y) * dy) / length
+                    } else {
+                        0.
+                    }
+                    .clamp(0., 1.);
+                    (p.x - start.x - t * dx).hypot(p.y - start.y - t * dy) > 0.001
                 })
-            });
+                .or_else(|| {
+                    if cubic.is_some() {
+                        return None;
+                    }
+                    matches!(a.kind.as_str(), "curved" | "fishhook" | "bent").then_some(P {
+                        x: (start.x + end.x - end.y + start.y) / 2.,
+                        y: (start.y + end.y + end.x - start.x) / 2.,
+                    })
+                });
             let curved = control.is_some() || cubic.is_some();
-            if s.pattern == LinePattern::Dotted || a.kind == "retro" {
+            if s.pattern == LinePattern::Dotted {
+                return Err(invalid("Dotted arrows require native or image export"));
+            }
+            if a.kind == "retro" && curved {
                 return Err(invalid(
-                    "Dotted and retrosynthesis arrows require native or image export",
+                    "Curved retrosynthesis arrows require native or image export",
                 ));
             }
             if a.kind == "equilibrium" && (curved || s.equilibrium_ratio != 1.) {
@@ -141,7 +162,7 @@ impl Writer<'_> {
             if s.dipole {
                 self.tree.set(n, "Dipole", "yes")?;
             }
-            if a.kind == "equilibrium" {
+            if matches!(a.kind.as_str(), "equilibrium" | "retro") {
                 self.tree
                     .set(n, "ArrowShaftSpacing", integer(style_real(s.gap_pt) * 100.))?;
             }
@@ -199,6 +220,28 @@ impl Writer<'_> {
                 self.tree
                     .set(n, "Head3D", format!("{} 0", self.position(end)))?;
             }
+            if a.kind == "retro" {
+                let id = self.id()?;
+                let legacy = self.tree.add(
+                    Some(self.page),
+                    "graphic",
+                    [
+                        ("id", id),
+                        ("SupersededBy", self.tree.value(n, "id")?),
+                        (
+                            "BoundingBox",
+                            format!("{} {}", self.position(end), self.position(start)),
+                        ),
+                        ("GraphicType", "Line".into()),
+                        ("ArrowType", "RetroSynthetic".into()),
+                        ("HeadSize", self.tree.value(n, "HeadSize")?),
+                        ("color", self.tree.value(n, "color")?),
+                    ],
+                )?;
+                // Both representations share group ownership; the legacy one
+                // also needs the arrow's stacking order, like ChemDraw's files.
+                self.objects.push((a.id, legacy));
+            }
             self.objects.push((a.id, n));
         }
         Ok(())
@@ -208,7 +251,14 @@ impl Writer<'_> {
         for atom in &doc.atoms {
             for mark in &atom.marks {
                 self.spend(doc.atoms.len())?;
-                if let Some(text) = match mark.kind {
+                let kind = match mark.kind {
+                    MarkKind::Charge | MarkKind::CircledCharge if atom.display.hide_charge => {
+                        continue;
+                    }
+                    MarkKind::RadicalIon if atom.display.hide_charge => MarkKind::Radical,
+                    kind => kind,
+                };
+                if let Some(text) = match kind {
                     MarkKind::PartialPositive => Some("δ+"),
                     MarkKind::PartialNegative => Some("δ−"),
                     _ => None,
@@ -230,7 +280,7 @@ impl Writer<'_> {
                     )?;
                     continue;
                 }
-                let (symbol, attribute) = match mark.kind {
+                let (symbol, attribute) = match kind {
                     MarkKind::Charge | MarkKind::CircledCharge => {
                         if atom.charge == 0 {
                             continue;
@@ -243,7 +293,7 @@ impl Writer<'_> {
                         (
                             format!(
                                 "{}{}",
-                                if mark.kind == MarkKind::CircledCharge {
+                                if kind == MarkKind::CircledCharge {
                                     "Circle"
                                 } else {
                                     ""
@@ -483,7 +533,10 @@ impl Writer<'_> {
                 [(_, paths)] if matches!(paths.as_slice(), [(_, false)]) => g.heads.as_ref(),
                 _ => None,
             };
-            let parent = if parsed.len() > 1
+            let parent = if g
+                .superscript_label(&doc.drawing_style.text_style())
+                .is_some()
+                || parsed.len() > 1
                 || parsed
                     .iter()
                     .any(|(paint, paths)| paths.len() > 1 || paint.fill.is_some())
@@ -528,11 +581,53 @@ impl Writer<'_> {
                     }
                 }
             }
+            self.bracket_superscript(g, parent, z)?;
             if let Some(n) = object {
                 self.objects.push((g.id, n));
             }
         }
         Ok(middle)
+    }
+    pub(super) fn bracket_superscript(
+        &mut self,
+        graphic: &crate::graphics::Graphic,
+        parent: Key,
+        z: usize,
+    ) -> Result<()> {
+        let Some(label) = graphic.superscript_label(&self.doc.drawing_style.text_style()) else {
+            return Ok(());
+        };
+        // Scripted CDXML text is anchored on the unraised nominal baseline.
+        let baseline = label.position.offset(
+            0.,
+            crate::style::text_ascent(&label.style)
+                + crate::style::DEFAULT.world(label.style.size_pt) * 0.3,
+        );
+        let far = label.position.offset(
+            crate::style::styled_text_width(label.text, label.size, &label.style),
+            label.size,
+        );
+        let id = self.id()?;
+        self.text(
+            parent,
+            label.text,
+            &TextFormat {
+                style: label.style,
+                ..Default::default()
+            },
+            [
+                ("id", id),
+                ("Z", z.to_string()),
+                ("InterpretChemically", "no".into()),
+                ("CaptionJustification", "Left".into()),
+                ("p", self.position(baseline)),
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(label.position), self.position(far)),
+                ),
+            ],
+        )?;
+        Ok(())
     }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn curve(

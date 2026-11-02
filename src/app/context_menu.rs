@@ -11,6 +11,7 @@ mod cascade;
 mod cascade_tests;
 use reshiki::{
     bonds::BondPreset,
+    chemistry::stereo_lint,
     editing::{Arrange, Transform},
 };
 
@@ -311,6 +312,14 @@ impl App {
             .iter()
             .filter(|id| self.tab.doc.atom(**id).is_some())
             .count();
+        let eligible = reshiki::depiction::eligible_atoms(&self.tab.doc, &self.tab.selected);
+        if !eligible.is_empty() {
+            entries.push(command(
+                "Draw as charge-separated",
+                Message::DrawChargeSeparated(eligible),
+                true,
+            ));
+        }
         if selected_atoms > 1 {
             entries.push(command(
                 "Create group label…",
@@ -413,11 +422,24 @@ impl App {
         let submenu = Entry::page;
         let mut entries = vec![];
         if atoms {
+            let molecules = reshiki::reactions::molecules(&self.tab.doc, &self.tab.selected);
+            if self.tab.doc.bonds.iter().any(|bond| {
+                stereo_lint::stereobond(bond) && molecules.iter().any(|ids| ids.contains(&bond.a))
+            }) {
+                entries.push(command(
+                    "Redraw stereo bonds",
+                    Message::Stereo(super::stereo::Action::Redraw),
+                    !self.tab.busy,
+                ));
+            }
             entries.extend(
                 self.selected_join_commands()
                     .into_iter()
                     .map(|c| command(c.menu, c.message, c.enabled)),
             );
+            if reshiki::ionic::bracket_charge(&self.tab.doc, &self.tab.selected).is_ok() {
+                entries.push(command("Bracket ion", Message::BracketIon, true));
+            }
         }
         if tilt {
             entries.push(submenu("3D tilt", Page::Tilt));

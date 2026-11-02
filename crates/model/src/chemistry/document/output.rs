@@ -70,6 +70,17 @@ pub struct Drawing {
     bond_indices: Vec<usize>,
 }
 impl Drawing {
+    /// Restore file spin states without changing the chemistry graph.
+    pub fn with_singlets(mut self, singlets: &[bool]) -> Result<Self, Error> {
+        if singlets.len() != self.document.atoms.len() {
+            return Err(invalid("Drawing spin state dimensions changed"));
+        }
+        for (atom, &singlet) in self.document.atoms.iter_mut().zip(singlets) {
+            // Perception can leave a RAD 1 atom without two radical electrons.
+            atom.singlet = singlet && atom.radical_electrons == 2;
+        }
+        Ok(self)
+    }
     pub fn with_generic(mut self, generic: &crate::generic::Generic) -> Result<Self, Error> {
         self.document.generic = generic.clone();
         for site in &generic.alternatives {
@@ -693,6 +704,7 @@ fn reconstruct_atoms(
                 charge: i32::from(a.charge),
                 isotope: u32::from(a.isotope),
                 radical_electrons: a.radical_electrons,
+                singlet: a.radical_electrons == 2 && old.is_some_and(|a| a.singlet),
                 explicit_h: u32::from(a.explicit_hydrogens),
                 no_implicit: a.no_implicit,
                 aromatic: a.aromatic,
@@ -701,6 +713,7 @@ fn reconstruct_atoms(
                 stereo: None,
                 label_h: 0,
                 cip_label: None,
+                undefined_stereo: false,
                 display: old.map(|a| a.display.clone()).unwrap_or_default(),
                 marks: old.map(|a| a.marks.clone()).unwrap_or_default(),
                 mark_serial: old.map_or(0, |a| a.mark_serial),
@@ -722,6 +735,7 @@ fn reconstruct_atoms(
                 .checked_add(at(&work.state.valences, i)?.implicit_hydrogens)
                 .ok_or_else(|| invalid("Drawing hydrogen count overflow"))?;
             atom.cip_label = None;
+            atom.undefined_stereo = false;
             Ok(atom)
         })
         .collect::<Result<Vec<_>, Error>>()
@@ -787,6 +801,7 @@ fn reconstruct_bonds(
                 stereo: None,
                 stereo_atoms: Vec::new(),
                 cip_label: None,
+                undefined_stereo: false,
                 double_position: Default::default(),
                 secondary_display: None,
                 color: Default::default(),
@@ -826,6 +841,7 @@ fn reconstruct_bonds(
                 bond.stereo_atoms.reverse();
             }
             bond.cip_label = None;
+            bond.undefined_stereo = false;
             Ok(bond)
         })
         .collect::<Result<Vec<_>, Error>>()?;

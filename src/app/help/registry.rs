@@ -9,7 +9,7 @@ use super::super::{
     shortcuts::{self, TabKey, keys, tab_keys},
 };
 use iced::keyboard::Modifiers;
-use reshiki::editing::Transform;
+use reshiki::{arrows::Preset as ArrowPreset, editing::Transform};
 
 /// Where a shortcut applies; Help shows it beside each row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -480,6 +480,28 @@ pub(crate) fn entries() -> Vec<Entry> {
     ];
     list.extend(atom_entries());
     list.extend(bond_entries());
+    list.extend(
+        [
+            (ArrowPreset::Forward, "Forward arrow"),
+            (ArrowPreset::Equilibrium, "Equilibrium arrow"),
+            (ArrowPreset::Resonance, "Resonance arrow"),
+            (ArrowPreset::Retro, "Retrosynthesis arrow"),
+            (ArrowPreset::Curved, "Curved / electron pair arrow"),
+            (ArrowPreset::Bent, "Bent / elbow arrow"),
+            (ArrowPreset::Fishhook, "Single electron arrow"),
+            (ArrowPreset::Dipole, "Dipole arrow"),
+            (ArrowPreset::NoGo, "No reaction arrow"),
+        ]
+        .map(|(preset, name)| {
+            entry(
+                "Arrow palette",
+                name,
+                preset.meaning(),
+                Anywhere,
+                &["arrow", "meaning", "notation"],
+            )
+        }),
+    );
     list.extend([
         // Files, tabs and view.
         entry(
@@ -562,6 +584,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Show or hide the rulers or the crosshair",
             Anywhere,
             &["guides", "view", "measure"],
+        ),
+        entry(
+            "View → 2-decimal MW",
+            "Molecular weight precision",
+            "Show molecular weight with 2 decimal places instead of the default 3; exact mass keeps 5 decimal places",
+            Anywhere,
+            &["mass", "MW", "rounding", "decimals", "inspector"],
         ),
         entry(
             if crate::platform::mac() {

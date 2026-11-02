@@ -53,6 +53,9 @@ pub struct Atom {
     pub display: crate::atom_labels::AtomDisplay,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cip_label: Option<String>,
+    /// Computed editor aid; never an assigned stereochemical descriptor.
+    #[serde(skip)]
+    pub undefined_stereo: bool,
     pub id: u64,
     pub element: String,
     pub position: Point,
@@ -68,6 +71,10 @@ pub struct Atom {
     pub charge: i32,
     #[serde(default)]
     pub radical_electrons: u8,
+    /// Spin state of two nonbonding electrons; meaningful only when
+    /// `radical_electrons == 2`. False (triplet) is the default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub singlet: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub marks: Vec<crate::scientific::AtomMark>,
     /// High-water mark: deleting an annotation never reuses its attachment ID.
@@ -119,6 +126,9 @@ pub struct Bond {
     pub indicator: crate::atom_labels::StereoDisplay,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cip_label: Option<String>,
+    /// Computed editor aid; never an assigned stereochemical descriptor.
+    #[serde(skip)]
+    pub undefined_stereo: bool,
     pub a: u64,
     pub b: u64,
     /// 0 = hydrogen interaction; 1–3 = order; 4 = aromatic; 5 = dative;
@@ -439,6 +449,7 @@ impl Document {
         self.atoms.push(Atom {
             display: Default::default(),
             cip_label: None,
+            undefined_stereo: false,
             id,
             element: element.into(),
             position,
@@ -447,6 +458,7 @@ impl Document {
             attachment: None,
             charge: 0,
             radical_electrons: 0,
+            singlet: false,
             marks: vec![],
             mark_serial: 0,
             isotope: 0,
@@ -783,6 +795,7 @@ impl Document {
                 return Err("Unsupported atom CIP label".into());
             }
             if a.radical_electrons > 2
+                || (a.singlet && a.radical_electrons != 2)
                 || a.marks.len() > 12
                 || a.marks.iter().any(|m| {
                     !m.offset.x.is_finite()

@@ -145,18 +145,20 @@ impl MoleculeCanvas<'_> {
                     }
                 } else {
                     let id = preview.next_id();
-                    preview.to_mut().graphics.push(
-                        Graphic::dragged(
-                            id,
-                            kind,
-                            *start,
-                            end,
-                            self.graphics.style.clone(),
-                            self.graphics.bracket_sides,
-                            state.modifiers.shift() || self.graphics.constrain,
-                        )
-                        .with_arc(self.graphics.arc),
-                    );
+                    let mut graphic = Graphic::dragged(
+                        id,
+                        kind,
+                        *start,
+                        end,
+                        self.graphics.style.clone(),
+                        self.graphics.bracket_sides,
+                        state.modifiers.shift() || self.graphics.constrain,
+                    )
+                    .with_arc(self.graphics.arc);
+                    if kind.brackets() {
+                        graphic.superscript = self.graphics.superscript.map(str::to_owned);
+                    }
+                    preview.to_mut().graphics.push(graphic);
                     *ring_selection = Some(vec![id]);
                 }
             }

@@ -1,0 +1,354 @@
+[
+  {
+    "name": "Adenosine (Ado)",
+    "symbol": "Ado",
+    "base": "Adenine",
+    "base_anchor": 7,
+    "deoxy": false,
+    "phosphate": false,
+    "keywords": [
+      "Ado",
+      "adenosine",
+      "nucleoside",
+      "Haworth"
+    ],
+    "low_rank_keywords": [
+      "A"
+    ],
+    "smiles": "C1=NC(=C2C(=N1)N(C=N2)[C@H]3[C@@H]([C@@H]([C@H](O3)CO)O)O)N",
+    "formula": "C10H13N5O4",
+    "inchikey": "OIRDTQYFTABQOQ-KQYNXXCUSA-N",
+    "cid": 60961,
+    "iupac_name": "(2R,3R,4S,5R)-2-(6-aminopurin-9-yl)-5-(hydroxymethyl)oxolane-3,4-diol",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/60961/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "Guanosine (Guo)",
+    "symbol": "Guo",
+    "base": "Guanine",
+    "base_anchor": 5,
+    "deoxy": false,
+    "phosphate": false,
+    "keywords": [
+      "Guo",
+      "guanosine",
+      "nucleoside",
+      "Haworth"
+    ],
+    "low_rank_keywords": [
+      "G"
+    ],
+    "smiles": "C1=NC2=C(N1[C@H]3[C@@H]([C@@H]([C@H](O3)CO)O)O)N=C(NC2=O)N",
+    "formula": "C10H13N5O5",
+    "inchikey": "NYHBQMYGNKIUIF-UUOKFMHZSA-N",
+    "cid": 135398635,
+    "iupac_name": "2-amino-9-[(2R,3R,4S,5R)-3,4-dihydroxy-5-(hydroxymethyl)oxolan-2-yl]-1H-purin-6-one",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/135398635/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "Cytidine (Cyd)",
+    "symbol": "Cyd",
+    "base": "Cytosine",
+    "base_anchor": 5,
+    "deoxy": false,
+    "phosphate": false,
+    "keywords": [
+      "Cyd",
+      "cytidine",
+      "nucleoside",
+      "Haworth"
+    ],
+    "low_rank_keywords": [
+      "C"
+    ],
+    "smiles": "C1=CN(C(=O)N=C1N)[C@H]2[C@@H]([C@@H]([C@H](O2)CO)O)O",
+    "formula": "C9H13N3O5",
+    "inchikey": "UHDGCWIWMRVCDJ-XVFCMESISA-N",
+    "cid": 6175,
+    "iupac_name": "4-amino-1-[(2R,3R,4S,5R)-3,4-dihydroxy-5-(hydroxymethyl)oxolan-2-yl]pyrimidin-2-one",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6175/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "Uridine (Urd)",
+    "symbol": "Urd",
+    "base": "Uracil",
+    "base_anchor": 5,
+    "deoxy": false,
+    "phosphate": false,
+    "keywords": [
+      "Urd",
+      "uridine",
+      "nucleoside",
+      "Haworth"
+    ],
+    "low_rank_keywords": [
+      "U"
+    ],
+    "smiles": "C1=CN(C(=O)NC1=O)[C@H]2[C@@H]([C@@H]([C@H](O2)CO)O)O",
+    "formula": "C9H12N2O6",
+    "inchikey": "DRTQHJPVMGBUCF-XVFCMESISA-N",
+    "cid": 6029,
+    "iupac_name": "1-[(2R,3R,4S,5R)-3,4-dihydroxy-5-(hydroxymethyl)oxolan-2-yl]pyrimidine-2,4-dione",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6029/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "5-Methyluridine (Thd)",
+    "symbol": "Thd",
+    "base": "Thymine",
+    "base_anchor": 4,
+    "deoxy": false,
+    "phosphate": false,
+    "keywords": [
+      "Thd",
+      "5-methyluridine",
+      "ribosylthymine",
+      "ribothymidine",
+      "nucleoside",
+      "Haworth"
+    ],
+    "low_rank_keywords": [],
+    "smiles": "CC1=CN(C(=O)NC1=O)[C@H]2[C@@H]([C@@H]([C@H](O2)CO)O)O",
+    "formula": "C10H14N2O6",
+    "inchikey": "DWRXFEITVBNRMK-JXOAFFINSA-N",
+    "cid": 445408,
+    "iupac_name": "1-[(2R,3R,4S,5R)-3,4-dihydroxy-5-(hydroxymethyl)oxolan-2-yl]-5-methylpyrimidine-2,4-dione",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/445408/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "2′-Deoxyadenosine (dAdo)",
+    "symbol": "dAdo",
+    "base": "Adenine",
+    "base_anchor": 7,
+    "deoxy": true,
+    "phosphate": false,
+    "keywords": [
+      "dAdo",
+      "2-deoxyadenosine",
+      "nucleoside",
+      "Haworth",
+      "2′-Deoxyadenosine",
+      "2'-deoxyadenosine"
+    ],
+    "low_rank_keywords": [
+      "dA"
+    ],
+    "smiles": "C1[C@@H]([C@H](O[C@H]1N2C=NC3=C(N=CN=C32)N)CO)O",
+    "formula": "C10H13N5O3",
+    "inchikey": "OLXZPDWKRNYJJZ-RRKCRQDMSA-N",
+    "cid": 13730,
+    "iupac_name": "(2R,3S,5R)-5-(6-aminopurin-9-yl)-2-(hydroxymethyl)oxolan-3-ol",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/13730/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "2′-Deoxyguanosine (dGuo)",
+    "symbol": "dGuo",
+    "base": "Guanine",
+    "base_anchor": 5,
+    "deoxy": true,
+    "phosphate": false,
+    "keywords": [
+      "dGuo",
+      "2-deoxyguanosine",
+      "nucleoside",
+      "Haworth",
+      "2′-Deoxyguanosine",
+      "2'-deoxyguanosine"
+    ],
+    "low_rank_keywords": [
+      "dG"
+    ],
+    "smiles": "C1[C@@H]([C@H](O[C@H]1N2C=NC3=C2N=C(NC3=O)N)CO)O",
+    "formula": "C10H13N5O4",
+    "inchikey": "YKBGVTZYEHREMT-KVQBGUIXSA-N",
+    "cid": 135398592,
+    "iupac_name": "2-amino-9-[(2R,4S,5R)-4-hydroxy-5-(hydroxymethyl)oxolan-2-yl]-1H-purin-6-one",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/135398592/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "2′-Deoxycytidine (dCyd)",
+    "symbol": "dCyd",
+    "base": "Cytosine",
+    "base_anchor": 5,
+    "deoxy": true,
+    "phosphate": false,
+    "keywords": [
+      "dCyd",
+      "2-deoxycytidine",
+      "nucleoside",
+      "Haworth",
+      "2′-Deoxycytidine",
+      "2'-deoxycytidine"
+    ],
+    "low_rank_keywords": [
+      "dC"
+    ],
+    "smiles": "C1[C@@H]([C@H](O[C@H]1N2C=CC(=NC2=O)N)CO)O",
+    "formula": "C9H13N3O4",
+    "inchikey": "CKTSBUTUHBMZGZ-SHYZEUOFSA-N",
+    "cid": 13711,
+    "iupac_name": "4-amino-1-[(2R,4S,5R)-4-hydroxy-5-(hydroxymethyl)oxolan-2-yl]pyrimidin-2-one",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/13711/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "2′-Deoxythymidine (dThd)",
+    "symbol": "dThd",
+    "base": "Thymine",
+    "base_anchor": 4,
+    "deoxy": true,
+    "phosphate": false,
+    "keywords": [
+      "dThd",
+      "thymidine",
+      "nucleoside",
+      "Haworth",
+      "2′-Deoxythymidine",
+      "2'-deoxythymidine"
+    ],
+    "low_rank_keywords": [
+      "dT"
+    ],
+    "smiles": "CC1=CN(C(=O)NC1=O)[C@H]2C[C@@H]([C@H](O2)CO)O",
+    "formula": "C10H14N2O5",
+    "inchikey": "IQFYYKKMVGJFEH-XLPZGREQSA-N",
+    "cid": 5789,
+    "iupac_name": "1-[(2R,4S,5R)-4-hydroxy-5-(hydroxymethyl)oxolan-2-yl]-5-methylpyrimidine-2,4-dione",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/5789/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "Adenosine 5′-monophosphate (AMP)",
+    "symbol": "AMP",
+    "base": "Adenine",
+    "base_anchor": 7,
+    "deoxy": false,
+    "phosphate": true,
+    "keywords": [
+      "AMP",
+      "adenosine 5-monophosphate",
+      "nucleotide",
+      "Haworth",
+      "Adenosine 5′-monophosphate",
+      "Adenosine 5'-monophosphate"
+    ],
+    "low_rank_keywords": [],
+    "smiles": "C1=NC(=C2C(=N1)N(C=N2)[C@H]3[C@@H]([C@@H]([C@H](O3)COP(=O)(O)O)O)O)N",
+    "formula": "C10H14N5O7P",
+    "inchikey": "UDMBCSSLTHHNCD-KQYNXXCUSA-N",
+    "cid": 6083,
+    "iupac_name": "[(2R,3S,4R,5R)-5-(6-aminopurin-9-yl)-3,4-dihydroxyoxolan-2-yl]methyl dihydrogen phosphate",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6083/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "Guanosine 5′-monophosphate (GMP)",
+    "symbol": "GMP",
+    "base": "Guanine",
+    "base_anchor": 5,
+    "deoxy": false,
+    "phosphate": true,
+    "keywords": [
+      "GMP",
+      "guanosine 5'-monophosphate",
+      "nucleotide",
+      "Haworth",
+      "Guanosine 5′-monophosphate"
+    ],
+    "low_rank_keywords": [],
+    "smiles": "C1=NC2=C(N1[C@H]3[C@@H]([C@@H]([C@H](O3)COP(=O)(O)O)O)O)N=C(NC2=O)N",
+    "formula": "C10H14N5O8P",
+    "inchikey": "RQFCJASXJCIDSX-UUOKFMHZSA-N",
+    "cid": 135398631,
+    "iupac_name": "[(2R,3S,4R,5R)-5-(2-amino-6-oxo-1H-purin-9-yl)-3,4-dihydroxyoxolan-2-yl]methyl dihydrogen phosphate",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/135398631/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "Cytidine 5′-monophosphate (CMP)",
+    "symbol": "CMP",
+    "base": "Cytosine",
+    "base_anchor": 5,
+    "deoxy": false,
+    "phosphate": true,
+    "keywords": [
+      "CMP",
+      "cytidine 5'-monophosphate",
+      "nucleotide",
+      "Haworth",
+      "Cytidine 5′-monophosphate"
+    ],
+    "low_rank_keywords": [],
+    "smiles": "C1=CN(C(=O)N=C1N)[C@H]2[C@@H]([C@@H]([C@H](O2)COP(=O)(O)O)O)O",
+    "formula": "C9H14N3O8P",
+    "inchikey": "IERHLVCPSMICTF-XVFCMESISA-N",
+    "cid": 6131,
+    "iupac_name": "[(2R,3S,4R,5R)-5-(4-amino-2-oxopyrimidin-1-yl)-3,4-dihydroxyoxolan-2-yl]methyl dihydrogen phosphate",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6131/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "Uridine 5′-monophosphate (UMP)",
+    "symbol": "UMP",
+    "base": "Uracil",
+    "base_anchor": 5,
+    "deoxy": false,
+    "phosphate": true,
+    "keywords": [
+      "UMP",
+      "uridine 5'-monophosphate",
+      "nucleotide",
+      "Haworth",
+      "Uridine 5′-monophosphate"
+    ],
+    "low_rank_keywords": [],
+    "smiles": "C1=CN(C(=O)NC1=O)[C@H]2[C@@H]([C@@H]([C@H](O2)COP(=O)(O)O)O)O",
+    "formula": "C9H13N2O9P",
+    "inchikey": "DJJCXFVJDGTHFX-XVFCMESISA-N",
+    "cid": 6030,
+    "iupac_name": "[(2R,3S,4R,5R)-5-(2,4-dioxopyrimidin-1-yl)-3,4-dihydroxyoxolan-2-yl]methyl dihydrogen phosphate",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6030/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "2′-Deoxyadenosine 5′-monophosphate (dAMP)",
+    "symbol": "dAMP",
+    "base": "Adenine",
+    "base_anchor": 7,
+    "deoxy": true,
+    "phosphate": true,
+    "keywords": [
+      "dAMP",
+      "deoxyadenosine monophosphate",
+      "nucleotide",
+      "Haworth",
+      "2′-Deoxyadenosine 5′-monophosphate",
+      "2'-deoxyadenosine",
+      "2'-Deoxyadenosine 5'-monophosphate"
+    ],
+    "low_rank_keywords": [],
+    "smiles": "C1[C@@H]([C@H](O[C@H]1N2C=NC3=C(N=CN=C32)N)COP(=O)(O)O)O",
+    "formula": "C10H14N5O6P",
+    "inchikey": "KHWCHTKSEGGWEX-RRKCRQDMSA-N",
+    "cid": 12599,
+    "iupac_name": "[(2R,3S,5R)-5-(6-aminopurin-9-yl)-3-hydroxyoxolan-2-yl]methyl dihydrogen phosphate",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/12599/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  },
+  {
+    "name": "2′-Deoxythymidine 5′-monophosphate (dTMP)",
+    "symbol": "dTMP",
+    "base": "Thymine",
+    "base_anchor": 4,
+    "deoxy": true,
+    "phosphate": true,
+    "keywords": [
+      "dTMP",
+      "thymidine monophosphate",
+      "nucleotide",
+      "Haworth",
+      "2′-Deoxythymidine 5′-monophosphate",
+      "2'-deoxythymidine",
+      "2'-Deoxythymidine 5'-monophosphate"
+    ],
+    "low_rank_keywords": [],
+    "smiles": "CC1=CN(C(=O)NC1=O)[C@H]2C[C@@H]([C@H](O2)COP(=O)(O)O)O",
+    "formula": "C10H15N2O8P",
+    "inchikey": "GYOZYWVXFNDGLU-XLPZGREQSA-N",
+    "cid": 9700,
+    "iupac_name": "[(2R,3S,5R)-3-hydroxy-5-(5-methyl-2,4-dioxopyrimidin-1-yl)oxolan-2-yl]methyl dihydrogen phosphate",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/9700/property/MolecularFormula,InChIKey,SMILES,IUPACName/JSON"
+  }
+]

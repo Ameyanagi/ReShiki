@@ -216,7 +216,9 @@ fn reverse_spellings_follow_labels_and_aliases() {
 /// but never created under them.
 #[test]
 fn user_groups_cannot_take_reserved_spellings() {
-    for spelling in ["N3", "MgBr", "Cp", "OCH3", "C2H5", "Fe", "Np", "*"] {
+    for spelling in [
+        "N3", "MgBr", "Cp", "OCH3", "C2H5", "Fe", "Np", "*", "D", "T", "13C", "¹⁸O",
+    ] {
         let text = format!(
             r#"{{"format": 1, "groups": [{{"label": "{spelling}", "smiles": "*OC"}},
             {{"label": "Fine", "smiles": "*OC", "aliases": ["{spelling}"]}}]}}"#
@@ -225,6 +227,25 @@ fn user_groups_cannot_take_reserved_spellings() {
         assert!(presets.is_empty(), "{spelling}");
         assert_eq!(errors.len(), 2, "{spelling}: {errors:?}");
         assert!(errors[0].contains("already means"), "{errors:?}");
+    }
+}
+
+#[test]
+fn isotope_groups_keep_their_explicit_hydrogens_and_disable_contraction() {
+    for (smiles, formula) in [
+        ("*C([2H])([2H])[2H]", "CH3"),
+        ("*OC([2H])([2H])[2H]", "CH3O"),
+        ("*O[2H]", "HO"),
+    ] {
+        let text = format!(
+            r#"{{"format":1,"groups":[{{"label":"Heavy","smiles":"{smiles}","formula":"{formula}","contract":false}}]}}"#
+        );
+        let (presets, errors) = parse(&text, true);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(presets.len(), 1);
+        assert!(!presets[0].contract);
+        assert_eq!(presets[0].formula, formula);
+        assert!(presets[0].positions().is_ok());
     }
 }
 
@@ -247,6 +268,38 @@ fn detectable_groups_have_distinct_structures() {
                 preset.label
             );
         }
+    }
+}
+
+#[test]
+fn peptide_groups_follow_the_frozen_core_and_formyl_is_typed_only() {
+    let file: File = serde_json::from_str(BUILTIN).unwrap();
+    let captured: serde_json::Value = serde_json::from_str(include_str!(
+        "../replacement/rdkit-geometry-macos-aarch64.json"
+    ))
+    .unwrap();
+    let core = captured["templates"].as_array().unwrap();
+    assert_eq!(core.len(), 62);
+    for (entry, frozen) in file.groups.iter().zip(core) {
+        assert_eq!(entry.label, frozen["label"]);
+        assert_eq!(entry.smiles, frozen["smiles"]);
+    }
+    for (label, smiles, formula, contract) in [
+        ("Dns", "*S(=O)(=O)c1cccc2c(N(C)C)cccc12", "C12H12NO2S", true),
+        ("Suc", "*C(=O)CCC(=O)O", "C4H5O3", true),
+        ("For", "*C=O", "CHO", false),
+        ("CHO", "*C=O", "CHO", false),
+    ] {
+        let (index, entry) = file
+            .groups
+            .iter()
+            .enumerate()
+            .find(|(_, g)| g.label == label)
+            .unwrap();
+        assert!(index >= 62, "{label}");
+        assert_eq!(entry.smiles, smiles);
+        assert_eq!(entry.formula.as_deref(), Some(formula));
+        assert_eq!(entry.contract, contract, "{label}");
     }
 }
 

@@ -154,6 +154,18 @@ fn top(query: &str) -> &'static registry::Entry {
         .unwrap_or_else(|| panic!("{query}: no results"))]
 }
 
+#[test]
+fn arrow_semantics_help_search_distinguishes_resonance_and_retrosynthesis() {
+    let resonance = top("resonance");
+    assert_eq!(resonance.name, "Resonance arrow");
+    assert!(resonance.description.contains("one species"));
+    assert!(resonance.description.contains("not an equilibrium"));
+    let retro = top("retrosynthesis");
+    assert_eq!(retro.name, "Retrosynthesis arrow");
+    assert!(retro.description.contains("target is made from"));
+    assert!(retro.description.contains("Corey"));
+}
+
 fn position(query: &str, name: &str) -> usize {
     search::rank(entries(), query, false)
         .iter()
@@ -244,6 +256,18 @@ fn registry_uses_menu_bindings_and_covers_every_context() {
             .iter()
             .all(|e| !e.keys.is_empty() && !e.name.is_empty())
     );
+}
+
+#[test]
+fn molecular_weight_precision_help_names_the_option_and_both_display_defaults() {
+    for query in ["molecular weight precision", "MW rounding"] {
+        let entry = top(query);
+        assert_eq!(entry.name, "Molecular weight precision", "{query}");
+        assert_eq!(entry.keys, "View → 2-decimal MW");
+        assert!(entry.description.contains("default 3"));
+        assert!(entry.description.contains("exact mass keeps 5"));
+        assert_eq!(entry.scope, registry::Scope::Anywhere);
+    }
 }
 
 #[test]

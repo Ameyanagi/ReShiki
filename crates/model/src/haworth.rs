@@ -74,12 +74,21 @@ pub enum Sugar {
     Mannose,
     Ribose,
     Fructose,
+    Deoxyribose,
+    Xylose,
+    Fucose,
+    Rhamnose,
+    #[serde(rename = "glcnac")]
+    GlcNAc,
+    #[serde(rename = "galnac")]
+    GalNAc,
+    GlucuronicAcid,
 }
 impl Sugar {
     fn ring(self) -> Ring {
         match self {
-            Self::Glucose | Self::Galactose | Self::Mannose => Ring::Six,
-            Self::Ribose | Self::Fructose => Ring::Five,
+            Self::Ribose | Self::Deoxyribose | Self::Fructose => Ring::Five,
+            _ => Ring::Six,
         }
     }
     fn name(self) -> &'static str {
@@ -89,6 +98,30 @@ impl Sugar {
             Self::Mannose => "mannose",
             Self::Ribose => "ribose",
             Self::Fructose => "fructose",
+            Self::Deoxyribose => "deoxyribose",
+            Self::Xylose => "xylose",
+            Self::Fucose => "fucose",
+            Self::Rhamnose => "rhamnose",
+            Self::GlcNAc => "GlcNAc",
+            Self::GalNAc => "GalNAc",
+            Self::GlucuronicAcid => "glucuronic acid",
+        }
+    }
+    /// IUPAC symbol, split where the ring-size letter goes (Glc|NAc → GlcpNAc).
+    fn symbol(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Glucose => ("Glc", ""),
+            Self::Galactose => ("Gal", ""),
+            Self::Mannose => ("Man", ""),
+            Self::Ribose => ("Rib", ""),
+            Self::Fructose => ("Fru", ""),
+            Self::Deoxyribose => ("dRib", ""),
+            Self::Xylose => ("Xyl", ""),
+            Self::Fucose => ("Fuc", ""),
+            Self::Rhamnose => ("Rha", ""),
+            Self::GlcNAc => ("Glc", "NAc"),
+            Self::GalNAc => ("Gal", "NAc"),
+            Self::GlucuronicAcid => ("Glc", "A"),
         }
     }
 }
@@ -118,93 +151,231 @@ fn hydroxymethyl(
     Ok(carbon)
 }
 
+/// Presentation options do not change a sugar's molecular identity.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct HaworthOptions {
+    /// Draw every ring-carbon hydrogen, including both faces of an achiral CH2.
+    pub ring_hydrogens: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Substituent {
+    Hydroxyl,
+    Hydroxymethyl,
+    Methyl,
+    Carboxyl,
+    Acetamido,
+    Hydrogen,
+}
+
+/// One pair of opposite substituents at a ring carbon. Clockwise ring order
+/// fixes the stored winding from the face of the first substituent. Two
+/// hydrogens describe a CH2 carbon and never create a stereocenter.
+#[derive(Debug, Clone, Copy)]
+struct CarbonPattern {
+    up: bool,
+    branch: Substituent,
+    opposite: Substituent,
+}
+
+fn pattern(sugar: Sugar, anomer: Anomer) -> Vec<CarbonPattern> {
+    use Substituent::*;
+    let l_sugar = matches!(sugar, Sugar::Fucose | Sugar::Rhamnose);
+    let anomer_up = (anomer == Anomer::Beta) != l_sugar;
+    let (faces, terminal): (&[bool], Substituent) = match sugar {
+        Sugar::Glucose | Sugar::GlcNAc | Sugar::GlucuronicAcid => (
+            &[false, true, false, true],
+            if matches!(sugar, Sugar::GlucuronicAcid) {
+                Carboxyl
+            } else {
+                Hydroxymethyl
+            },
+        ),
+        Sugar::Galactose | Sugar::GalNAc => (&[false, true, true, true], Hydroxymethyl),
+        Sugar::Mannose => (&[true, true, false, true], Hydroxymethyl),
+        Sugar::Ribose | Sugar::Deoxyribose => (&[false, false, true], Hydroxymethyl),
+        Sugar::Fructose => (&[true, false, true], Hydroxymethyl),
+        Sugar::Xylose => (&[false, true, false, true], Hydrogen),
+        Sugar::Fucose => (&[true, false, false, false], Methyl),
+        Sugar::Rhamnose => (&[false, false, true, false], Methyl),
+    };
+    std::iter::once(anomer_up)
+        .chain(faces.iter().copied())
+        .enumerate()
+        .map(|(i, up)| {
+            let branch = if i == faces.len() {
+                terminal
+            } else if i == 1 && matches!(sugar, Sugar::Deoxyribose) {
+                Hydrogen
+            } else if i == 1 && matches!(sugar, Sugar::GlcNAc | Sugar::GalNAc) {
+                Acetamido
+            } else {
+                Hydroxyl
+            };
+            let opposite = if i == 0 && matches!(sugar, Sugar::Fructose) {
+                Hydroxymethyl
+            } else {
+                Hydrogen
+            };
+            CarbonPattern {
+                up,
+                branch,
+                opposite,
+            }
+        })
+        .collect()
+}
+
+fn substituent(
+    doc: &mut Document,
+    kind: Substituent,
+    end: Point,
+    length: f32,
+    depth: f32,
+) -> Result<u64, String> {
+    use Substituent::*;
+    let (anchor, members) = match kind {
+        Hydroxymethyl => return hydroxymethyl(doc, end, length, depth),
+        Hydroxyl => {
+            let id = doc.add_atom("O", end);
+            doc.atom_mut(id).ok_or("Missing hydroxyl")?.label_h = 1;
+            (id, vec![id])
+        }
+        Hydrogen => {
+            let id = doc.add_atom("H", end);
+            (id, vec![id])
+        }
+        Methyl => {
+            let id = doc.add_atom("C", end);
+            let atom = doc.atom_mut(id).ok_or("Missing methyl")?;
+            atom.label_h = 3;
+            atom.display.carbons = Some(crate::atom_labels::Carbons::All);
+            atom.display.hydrogens = Some(true);
+            atom.display.hydrogen_position = crate::atom_labels::HydrogenPosition::Right;
+            (id, vec![id])
+        }
+        Carboxyl => {
+            let carbon = doc.add_atom("C", end);
+            let oxo = doc.add_atom("O", end.offset(-length * 0.8, -length * 0.6));
+            let hydroxyl = doc.add_atom("O", end.offset(length * 0.8, -length * 0.6));
+            doc.add_bond(carbon, oxo, 2, "plain");
+            doc.add_bond(carbon, hydroxyl, 1, "plain");
+            doc.atom_mut(hydroxyl)
+                .ok_or("Missing carboxyl hydroxyl")?
+                .label_h = 1;
+            let members = vec![carbon, oxo, hydroxyl];
+            doc.contract(&members, "CO2H", "HO2C")?;
+            (carbon, members)
+        }
+        Acetamido => {
+            let nitrogen = doc.add_atom("N", end);
+            let carbon = doc.add_atom("C", end.offset(length * 0.8, length * 0.6));
+            let oxygen = doc.add_atom("O", end.offset(length * 0.8, length * 1.6));
+            let methyl = doc.add_atom("C", end.offset(length * 1.6, 0.));
+            doc.add_bond(nitrogen, carbon, 1, "plain");
+            doc.add_bond(carbon, oxygen, 2, "plain");
+            doc.add_bond(carbon, methyl, 1, "plain");
+            doc.atom_mut(nitrogen)
+                .ok_or("Missing acetamido nitrogen")?
+                .label_h = 1;
+            let members = vec![nitrogen, carbon, oxygen, methyl];
+            doc.contract(&members, "NHAc", "AcHN")?;
+            (nitrogen, members)
+        }
+    };
+    for id in members {
+        doc.atom_mut(id).ok_or("Missing substituent atom")?.depth = depth;
+    }
+    Ok(anchor)
+}
+
 /// Ring atoms are ordered from the anomeric carbon around the front to oxygen.
-/// α/β affects only the anomeric substituents; D configuration is fixed.
+/// The default omits ring H atoms and preserves the original ten drawings.
 pub fn sugar_document(sugar: Sugar, anomer: Anomer, length: f32) -> Result<Document, String> {
+    sugar_document_with_options(sugar, anomer, length, HaworthOptions::default())
+}
+
+/// Build a named sugar from a per-carbon face/substituent pattern. Explicit
+/// hydrogens occupy the opposite face and the fourth AtomStereo neighbor.
+pub fn sugar_document_with_options(
+    sugar: Sugar,
+    anomer: Anomer,
+    length: f32,
+    options: HaworthOptions,
+) -> Result<Document, String> {
     if !length.is_finite() || !(1. ..=10_000.).contains(&length) {
         return Err("Haworth bond length must be finite and between 1 and 10000".into());
     }
-    // Fructose's inward OH needs more clearance from the sloping back edge.
-    // Keep substituent bond lengths unchanged while opening the ring outline.
-    let ring_scale = if matches!(sugar, Sugar::Fructose) {
+    // Full pyranoses and L-pyranoses, whose C-5 methyl points into the ring,
+    // need a bond length between opposing inward labels.
+    // Fructose's inward OH also needs clearance from the sloping back edge.
+    let ring_scale = if sugar.ring() == Ring::Six
+        && (options.ring_hydrogens || matches!(sugar, Sugar::Fucose | Sugar::Rhamnose))
+    {
+        3.
+    } else if matches!(sugar, Sugar::Fructose) || options.ring_hydrogens {
         2.5
     } else {
         1.8
     };
     let mut doc = sugar.ring().document(length * ring_scale, true);
     let ring: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
-    let carbons = ring.len().saturating_sub(1);
+    let patterns = pattern(sugar, anomer);
     let mut stereo = Vec::new();
-    for (i, &id) in ring.iter().take(carbons).enumerate() {
-        let up = match (sugar, i) {
-            (_, 0) => anomer == Anomer::Beta,
-            (Sugar::Glucose | Sugar::Galactose | Sugar::Mannose, 1) => {
-                matches!(sugar, Sugar::Mannose)
-            }
-            (Sugar::Glucose | Sugar::Galactose | Sugar::Mannose, 2) => true,
-            (Sugar::Glucose | Sugar::Galactose | Sugar::Mannose, 3) => {
-                matches!(sugar, Sugar::Galactose)
-            }
-            (Sugar::Ribose, 1 | 2) | (Sugar::Fructose, 2) => false,
-            _ => true,
-        };
+    for (i, (&id, pattern)) in ring.iter().zip(patterns).enumerate() {
         let atom = doc.atom(id).ok_or("Missing Haworth ring atom")?;
         let origin = atom.position;
         let depth = atom.depth;
-        let end = origin.offset(0., if up { -length } else { length });
-        let branch = if i + 1 == carbons {
-            let carbon = hydroxymethyl(&mut doc, end, length, depth)?;
-            if sugar.ring() == Ring::Five
-                && let Some(group) = doc.abbreviations.iter_mut().find(|g| g.anchor == carbon)
+        let previous = ring
+            .get((i + ring.len() - 1) % ring.len())
+            .copied()
+            .ok_or("Missing previous Haworth ring atom")?;
+        let next = ring
+            .get(i + 1)
+            .copied()
+            .ok_or("Missing next Haworth ring atom")?;
+        let mut neighbors = vec![previous, next];
+        for (kind, up) in [
+            (pattern.branch, pattern.up),
+            (pattern.opposite, !pattern.up),
+        ] {
+            if kind == Substituent::Hydrogen && !options.ring_hydrogens {
+                continue;
+            }
+            let end = origin.offset(0., if up { -length } else { length });
+            let branch = substituent(&mut doc, kind, end, length, depth)?;
+            if kind == Substituent::Hydroxymethyl
+                && i + 2 == ring.len()
+                && sugar.ring() == Ring::Five
+                && let Some(group) = doc.abbreviations.iter_mut().find(|g| g.anchor == branch)
             {
                 group.alignment = crate::abbreviations::LabelAlignment::Right;
             }
-            carbon
-        } else {
-            let oxygen = doc.add_atom("O", end);
-            if let Some(atom) = doc.atom_mut(oxygen) {
-                atom.label_h = 1;
-                if sugar.ring() == Ring::Six && i == 3 || i > 0 && up && origin.x > 0. {
-                    atom.display.hydrogen_position = crate::atom_labels::HydrogenPosition::Left;
-                }
+            if kind == Substituent::Hydroxyl
+                && (sugar.ring() == Ring::Six && i == 3 || i > 0 && up && origin.x > 0.)
+            {
+                doc.atom_mut(branch)
+                    .ok_or("Missing hydroxyl")?
+                    .display
+                    .hydrogen_position = crate::atom_labels::HydrogenPosition::Left;
             }
-            oxygen
-        };
-        if let Some(atom) = doc.atom_mut(branch) {
-            atom.depth = depth;
+            doc.add_bond(id, branch, 1, "plain");
+            neighbors.push(branch);
         }
-        doc.add_bond(id, branch, 1, "plain");
-        let previous = ring
-            .get(if i == 0 { ring.len() - 1 } else { i - 1 })
-            .copied()
-            .ok_or("Missing previous ring atom")?;
-        let next = ring.get(i + 1).copied().ok_or("Missing next ring atom")?;
-        let mut neighbors = vec![previous, next, branch];
-        if matches!(sugar, Sugar::Fructose) && i == 0 {
-            let extra = hydroxymethyl(
-                &mut doc,
-                origin.offset(0., if up { length } else { -length }),
-                length,
-                depth,
-            )?;
-            if let Some(atom) = doc.atom_mut(extra) {
-                atom.depth = depth;
-            }
-            doc.add_bond(id, extra, 1, "plain");
-            neighbors.push(extra);
+        if pattern.branch != pattern.opposite {
+            stereo.push((
+                id,
+                AtomStereo {
+                    // With [previous, next, first branch, opposite] above-plane
+                    // first substituents have counterclockwise winding.
+                    winding: if pattern.up { "ccw" } else { "cw" }.into(),
+                    neighbors,
+                },
+            ));
         }
-        stereo.push((
-            id,
-            AtomStereo {
-                // With [previous, next, substituent] around the clockwise drawn
-                // ring, above-plane substituents have counterclockwise winding.
-                winding: if up { "ccw" } else { "cw" }.into(),
-                neighbors,
-            },
-        ));
     }
-    // Adding a neighboring bond invalidates cached stereo; install assignments
-    // only after the graph is complete.
+    // Adding neighboring bonds invalidates cached stereo. Install only after
+    // the graph is complete, including every explicit ring hydrogen.
     for (id, assignment) in stereo {
         doc.atom_mut(id).ok_or("Missing stereocenter")?.stereo = Some(assignment);
     }
@@ -216,6 +387,10 @@ pub fn sugar_document(sugar: Sugar, anomer: Anomer, length: f32) -> Result<Docum
                 .filter(|b| b.a == atom.id || b.b == atom.id)
                 .count()
                 == 1
+            && doc
+                .bonds
+                .iter()
+                .any(|b| (b.a == atom.id || b.b == atom.id) && b.order == 1)
         {
             atom.label_h = 1;
         }
@@ -244,28 +419,85 @@ pub fn templates() -> Result<Vec<Template>, String> {
         } else {
             "beta"
         };
-        result.push(Template {
-            id: String::new(),
-            group: "Carbohydrates".into(),
-            name: format!("{} · Haworth", entry.name),
-            smiles: entry.smiles,
-            keywords: vec!["sugar".into(), "Haworth".into(), entry.sugar.name().into(), anomer.into(), if ring == Ring::Six { "pyranose" } else { "furanose" }.into()],
-            note: "Haworth projection with defined D-sugar stereochemistry. CH2OH contains real atoms. Use native/figure output to retain perspective; cleanup creates a conventional stereochemical drawing.".into(),
-            document: sugar_document(entry.sugar, entry.anomer, crate::style::DEFAULT.bond_length_world)?,
-            anchor: Anchor::Auto,
-        });
+        let ring_name = if ring == Ring::Six {
+            "pyranose"
+        } else {
+            "furanose"
+        };
+        let (base, suffix) = entry.sugar.symbol();
+        let symbol = format!("{base}{suffix}");
+        let ring_symbol = format!(
+            "{base}{}{suffix}",
+            if ring == Ring::Six { 'p' } else { 'f' }
+        );
+        let mut keywords = vec![
+            "sugar".into(),
+            "Haworth".into(),
+            entry.sugar.name().into(),
+            anomer.into(),
+            ring_name.into(),
+            ring_symbol.clone(),
+        ];
+        if symbol != entry.sugar.name() {
+            keywords.push(symbol);
+        }
+        if let Some(series) = entry
+            .name
+            .split('-')
+            .find(|part| matches!(*part, "D" | "L"))
+        {
+            let prefixes = if entry.anomer == Anomer::Alpha {
+                ["a", "α", "alpha"]
+            } else {
+                ["b", "β", "beta"]
+            };
+            keywords.extend(prefixes.map(|prefix| format!("{prefix}-{series}-{ring_symbol}")));
+        }
+        keywords.extend(
+            match entry.sugar {
+                Sugar::Deoxyribose => vec!["2-deoxyribose", "deoxy"],
+                Sugar::Fucose => vec!["L-fucose", "6-deoxygalactose"],
+                Sugar::Rhamnose => vec!["L-rhamnose", "6-deoxymannose"],
+                Sugar::GlcNAc => vec!["N-acetylglucosamine", "glucosamine"],
+                Sugar::GalNAc => vec!["N-acetylgalactosamine", "galactosamine"],
+                Sugar::GlucuronicAcid => vec!["glucuronate", "uronic acid"],
+                _ => Vec::new(),
+            }
+            .into_iter()
+            .map(String::from),
+        );
+        for ring_hydrogens in [false, true] {
+            let mut variant_keywords = keywords.clone();
+            if ring_hydrogens {
+                variant_keywords.extend(["ring H".into(), "explicit hydrogen".into()]);
+            }
+            result.push(Template {
+                low_rank_keywords: Vec::new(),
+                id: String::new(),
+                group: "Carbohydrates".into(),
+                name: format!("{} · Haworth{}", entry.name, if ring_hydrogens { ", ring H" } else { "" }),
+                smiles: entry.smiles.clone(),
+                keywords: variant_keywords,
+                note: "Haworth projection with defined sugar stereochemistry. CH2OH, NHAc and CO2H contain real atoms. The ring H variant includes every ring-carbon hydrogen. Native/figure output retains perspective; cleanup creates a conventional stereochemical drawing.".into(),
+                locants: Default::default(),
+                document: sugar_document_with_options(entry.sugar, entry.anomer, crate::style::DEFAULT.bond_length_world, HaworthOptions { ring_hydrogens })?,
+                anchor: Anchor::Auto,
+            });
+        }
     }
     for (ring, name, smiles) in [
         (Ring::Five, "Furanose scaffold", "C1CCOC1"),
         (Ring::Six, "Pyranose scaffold", "C1CCOCC1"),
     ] {
         result.push(Template {
+            low_rank_keywords: Vec::new(),
             id: String::new(),
             group: "Carbohydrates".into(),
             name: format!("{name} · Haworth"),
             smiles: smiles.into(),
             keywords: vec!["Haworth".into(), "sugar".into(), "scaffold".into()],
             note: "Oxygen-containing Haworth ring scaffold. Add substituents to define a sugar; no stereochemistry is assigned to this blank scaffold.".into(),
+            locants: Default::default(),
             document: ring.document(crate::style::DEFAULT.bond_length_world, true),
             anchor: Anchor::Auto,
         });

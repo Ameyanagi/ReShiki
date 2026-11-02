@@ -30,6 +30,68 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
 }
 
 #[test]
+fn redraw_stereo_bonds_is_available_for_atom_selections_and_dispatches() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    let atom = app.tab.doc.add_atom("C", World::default());
+    app.tab.selected = vec![atom];
+    assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    let f = app.tab.doc.add_atom("F", World::new(28., 0.));
+    let cl = app.tab.doc.add_atom("Cl", World::new(-14., -24.));
+    let br = app.tab.doc.add_atom("Br", World::new(-14., 24.));
+    app.tab.doc.add_bond(atom, f, 1, "plain");
+    app.tab.doc.add_bond(atom, cl, 1, "plain");
+    app.tab.doc.add_bond(atom, br, 1, "plain");
+    assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    app.tab.doc.bonds[0].display = "wedge".into();
+    let other = app.tab.doc.add_atom("C", World::new(200., 0.));
+    app.tab.selected = vec![other];
+    assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    // An atom elsewhere in the same molecule still offers Redraw.
+    app.tab.selected = vec![cl];
+    assert!(labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    run_item(&mut app, Page::Main, "Redraw stereo bonds").unwrap();
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocentre");
+    app.tab.selected = vec![other, br];
+    assert_eq!(enabled(&app, Page::Main, "Redraw stereo bonds"), Some(true));
+    app.tab.busy = true;
+    assert_eq!(
+        enabled(&app, Page::Main, "Redraw stereo bonds"),
+        Some(false)
+    );
+}
+
+#[test]
+fn nitrogen_depiction_action_is_conditional_and_runs_from_the_context_menu() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let c = app.tab.doc.add_atom("C", World::new(-42., 0.));
+    let n = app.tab.doc.add_atom("N", World::default());
+    let o = app.tab.doc.add_atom("O", World::new(42., 0.));
+    let other = app.tab.doc.add_atom("O", World::new(0., -42.));
+    app.tab.doc.add_bond(c, n, 1, "plain");
+    app.tab.doc.add_bond(n, o, 2, "plain");
+    app.tab.doc.add_bond(n, other, 2, "plain");
+    app.tab.selected = vec![c];
+    assert!(!labels(&app, Page::Main).contains(&"Draw as charge-separated"));
+    app.tab.selected = vec![n];
+    assert!(labels(&app, Page::Main).contains(&"Draw as charge-separated"));
+    assert!(!labels(&app, Page::Main).contains(&"Bracket ion"));
+    let before = app.tab.doc.clone();
+    run_item(&mut app, Page::Main, "Draw as charge-separated").unwrap();
+    assert_eq!(app.tab.doc.atom(n).unwrap().charge, 1);
+    assert!(!labels(&app, Page::Main).contains(&"Draw as charge-separated"));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    app.tab.doc.atom_mut(o).unwrap().charge = -1;
+    app.tab.selected = vec![c, n, o, other];
+    assert!(labels(&app, Page::Main).contains(&"Bracket ion"));
+}
+
+#[test]
 fn path_cleanup_entries_follow_eligible_selection_and_run_through_menu() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

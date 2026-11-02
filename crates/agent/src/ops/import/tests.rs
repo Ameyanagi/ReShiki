@@ -164,10 +164,11 @@ async fn smiles_imports_into_a_new_document_with_an_analysis() {
     assert_eq!(value["revision"], "0");
     assert_eq!(value["counts"], counts(3, 2, 0, 0, 0));
     assert_eq!(value["analysis"]["formula"], "C2H6O");
+    assert_eq!(value["analysis"]["display_formula"], "C₂H₆O");
     assert_eq!(value["analysis"]["smiles"], "CCO");
     assert_eq!(
         value["analysis"].as_object().unwrap().len(),
-        12,
+        13,
         "{}",
         value["analysis"]
     );
@@ -360,10 +361,12 @@ fn a_rejected_drawing_is_an_error_envelope() {
 }
 
 #[test]
-fn analysis_json_keeps_every_engine_field() {
+fn analysis_json_keeps_public_fields_and_omits_mass_percent() {
     let analysis = Analysis {
         smiles: "CC".into(),
         formula: "C2H6".into(),
+        display_formula: "C₂H₆".into(),
+        mass_percent: vec![("C".into(), 79.88), ("H".into(), 20.12)],
         mass: 30.07,
         exact_mass: 30.047,
         logp: 1.02,
@@ -375,8 +378,11 @@ fn analysis_json_keeps_every_engine_field() {
         inchi: "InChI=1S/C2H6/c1-2/h1-2H3".into(),
         inchikey: "OTMSDBZUPAUEDD-UHFFFAOYSA-N".into(),
     };
-    assert_eq!(
-        serde_json::to_value(AnalysisJson::from(analysis.clone())).unwrap(),
-        serde_json::to_value(analysis).unwrap()
-    );
+    let public = serde_json::to_value(AnalysisJson::from(analysis.clone())).unwrap();
+    assert_eq!(public["formula"], "C2H6");
+    assert_eq!(public["display_formula"], "C₂H₆");
+    assert!(public.get("mass_percent").is_none());
+    let mut expected = serde_json::to_value(analysis).unwrap();
+    expected.as_object_mut().unwrap().remove("mass_percent");
+    assert_eq!(public, expected);
 }

@@ -391,6 +391,7 @@ impl App {
         let preview: Element<'_, Anchor> = canvas(TemplateAnchorPreview {
             document: &state.prepared.fragment,
             anchor: state.anchor,
+            locants: None,
         })
         .width(Length::Fill)
         .height(200)

@@ -7,7 +7,8 @@ use super::{
 };
 use crate::{
     atom_labels::{
-        Settings, bond_indicator_shown, map_indicator_shown, stereo_indicator_shown, stereo_text,
+        Settings, bond_indicator_shown, map_indicator_shown, stereo_code, stereo_indicator_shown,
+        stereo_text,
     },
     document::{Atom, Document, Point},
     highlights::{CAPSULE_RADIUS_SCALE, label_shape_from, radius},
@@ -209,7 +210,7 @@ impl<'a> LabelPlan<'a> {
             0
         };
         plan.bytes = a.element.len()
-            + a.cip_label.as_ref().map_or(0, String::len)
+            + stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc).map_or(0, str::len)
             + a.display.variable.as_ref().map_or(0, String::len)
             + number.map_or(0, |v| v.text.len())
             + a.marks.len().saturating_mul(512);
@@ -319,10 +320,16 @@ pub(super) fn atom_bounds(a: &Atom, doc: &Document) -> Result<Option<(Point, Poi
 // without assigning CIP, inventing a label, or altering persisted caches.
 const FUTURE_CIP_CODES: [&str; 12] = ["R", "S", "r", "s", "E", "Z", "e", "z", "M", "P", "m", "p"];
 
+/// Optional undefined-centre markers may likewise appear after a refresh.
+fn future_codes<'a>(settings: &Settings) -> impl Iterator<Item = &'a str> + use<'a> {
+    let undefined = settings.stereo && settings.mark_undefined_stereocentres;
+    FUTURE_CIP_CODES.into_iter().chain(undefined.then_some("?"))
+}
+
 pub(super) fn cip_text_bytes(saved: Option<&str>, settings: &Settings) -> usize {
     saved
         .into_iter()
-        .chain(FUTURE_CIP_CODES)
+        .chain(future_codes(settings))
         .map(|code| stereo_text(code, settings).len())
         .sum()
 }
@@ -335,7 +342,7 @@ fn cip_bounds(
     style: &crate::typography::TextStyle,
     settings: &Settings,
 ) {
-    for code in saved.into_iter().chain(FUTURE_CIP_CODES) {
+    for code in saved.into_iter().chain(future_codes(settings)) {
         indicator_bounds(
             bounds,
             anchor,
@@ -468,7 +475,7 @@ pub(super) fn object_bounds(doc: &Document) -> Result<Option<(Point, Point)>, St
         }
     }
     for g in &doc.graphics {
-        let (lo, hi) = g.bounds();
+        let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
         finite(lo)?;
         finite(hi)?;
         include(&mut bounds, lo, hi);

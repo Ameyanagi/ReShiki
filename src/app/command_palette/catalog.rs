@@ -804,6 +804,19 @@ fn edits() -> Vec<Command> {
             Message::ClearHighlights,
         )
         .alias(&["noh"]),
+        send(
+            "Normalize depiction",
+            Edit,
+            "Draw qualifying nitrogen centers as charge-separated in the selection or whole drawing",
+            "nitro oxide nitrone azide dipolar nitrogen structure",
+            Message::NormalizeDepiction,
+        ),
+        selection(
+            "Bracket ion",
+            "Bracket one complete charged component and hide its local charge labels",
+            "charge ion bracket structure",
+            Message::BracketIon,
+        ),
         selection(
             "Frame selection",
             "Draw a rectangle around the selection",
@@ -947,7 +960,18 @@ fn analysis() -> Vec<Command> {
         Command::new(name, Analyze, detail, synonyms, Run::Send(messages)).need(Need::Molecule)
     };
     let mut list = vec![
-        // The Properties panel's "Predict NMR…" button sends Open, which predicts.
+        molecule(
+            "Check drawing",
+            "Check chemistry and stereochemical drawing notices",
+            "analyze stereo lint wedges hashes undefined",
+            vec![Message::Analyze],
+        ),
+        molecule(
+            "Redraw stereo bonds",
+            "Choose wedges for the selected molecules while preserving configurations",
+            "stereo wedges hashes redraw iupac",
+            vec![Message::Stereo(super::super::stereo::Action::Redraw)],
+        ),
         molecule(
             "Predict NMR",
             "Predict ¹H or ¹³C NMR shifts for the selected molecule",
@@ -1249,6 +1273,15 @@ fn view(app: &App) -> Vec<Command> {
     use Category::View;
     let mut list = vec![
         send(
+            "Toggle IUPAC style notes",
+            View,
+            "Include optional stereochemical style advice in Check drawing",
+            "stereo lint drawing check iupac wedges hashes",
+            Message::Stereo(super::super::stereo::Action::IupacStyleNotes(
+                !app.appearance.iupac_style_notes,
+            )),
+        ),
+        send(
             "Fit drawing",
             View,
             "Zoom so the whole drawing fits",
@@ -1290,6 +1323,15 @@ fn view(app: &App) -> Vec<Command> {
             "snap align",
             Message::View(view_settings::Action::SmartGuides(
                 !app.appearance.smart_guides,
+            )),
+        ),
+        send(
+            "Toggle 2-decimal molecular weight",
+            View,
+            "Switch molecular weight between 2 and 3 decimal places",
+            "MW mass precision rounding display",
+            Message::View(view_settings::Action::TwoDecimalWeight(
+                !app.appearance.two_decimal_weight,
             )),
         ),
         send(

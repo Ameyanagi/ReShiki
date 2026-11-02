@@ -123,8 +123,13 @@ pub fn coordination_donor(atom: &Atom) -> bool {
 
 /// Supported acceptor elements for the explicit coordination drawing workflow.
 pub fn coordination_metal(atom: &Atom) -> bool {
+    coordination_metal_element(&atom.element)
+}
+
+/// Supported metal symbols for coordination drawing and depiction exchange.
+pub fn coordination_metal_element(element: &str) -> bool {
     matches!(
-        atom.element.as_str(),
+        element,
         "Sc" | "Ti"
             | "V"
             | "Cr"

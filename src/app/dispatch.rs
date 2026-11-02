@@ -77,6 +77,9 @@ impl App {
             Message::BondColor(value) => self.tab.bond_color_input = value,
             Message::ApplyBondColor => self.apply_bond_color(),
             Message::AddFrame(kind) => self.add_frame(kind),
+            Message::BracketIon => self.bracket_ion(),
+            Message::DrawChargeSeparated(ids) => self.draw_charge_separated(&ids),
+            Message::NormalizeDepiction => self.normalize_depiction(),
             Message::Group => self.group_selected(),
             Message::Ungroup => self.ungroup_selected(),
             Message::IntegralGroup(integral) => self.set_integral_groups(integral),
@@ -86,6 +89,7 @@ impl App {
             Message::RotateMark(id, index) => self.rotate_mark(id, index),
             Message::RemoveMark(id, index) => self.remove_mark(id, index),
             Message::AtomRadical(value) => self.set_radical(value),
+            Message::AtomSinglet(value) => self.set_singlet(value),
             Message::ToggleInspector => return Some(self.toggle_inspector()),
             Message::Inspector(tab) => {
                 if tab == InspectorTab::Predict {
@@ -173,6 +177,7 @@ impl App {
             Message::Import => return Some(self.import_input()),
             Message::Example(smiles) => return Some(self.insert_example(smiles)),
             Message::Analyze => return Some(self.analyze_drawing()),
+            Message::Stereo(action) => self.stereo_action(action),
             Message::Cleanup(action) => return Some(self.cleanup_action(action)),
             Message::Undo => self.step_history(false),
             Message::Redo => self.step_history(true),
@@ -185,6 +190,7 @@ impl App {
                 self.apply_isotope();
             }
             Message::CopySmiles => return Some(self.copy_smiles()),
+            Message::CopyAnalysis => return Some(self.copy_analysis()),
             Message::CopyChemicalText => return Some(self.copy_chemical_text()),
             // Tabs wait while the save dialog asks about the tab in front.
             Message::New | Message::Open if self.pending.is_some() => {}

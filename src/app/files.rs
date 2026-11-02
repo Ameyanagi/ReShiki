@@ -637,6 +637,33 @@ impl super::App {
             self.fit();
         }
         self.status = "Document opened".into();
+        let incompatible = self
+            .tab
+            .doc
+            .reactions
+            .iter()
+            .filter(|reaction| {
+                reshiki::reactions::Role::ALL
+                    .into_iter()
+                    .any(|role| !reaction.participants(role).is_empty())
+                    && self.tab.doc.arrows.iter().any(|arrow| {
+                        arrow.id == reaction.arrow
+                            && reshiki::arrows::Preset::from_kind(&arrow.kind)
+                                .reaction_role_refusal()
+                                .is_some()
+                    })
+            })
+            .count();
+        if incompatible > 0 {
+            let (noun, verb) = if incompatible == 1 {
+                ("arrow", "has")
+            } else {
+                ("arrows", "have")
+            };
+            self.status.push_str(&format!(
+                " · Warning: {incompatible} {noun} {verb} incompatible reaction roles"
+            ));
+        }
         self.error = false;
     }
 

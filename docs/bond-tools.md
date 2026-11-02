@@ -33,7 +33,19 @@ Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**.
 
 On an aromatic edge, solid/hashed/hollow wedges, bold, parallel hashes and wavy styles preserve the aromatic bond order. They depict the ring's projection without assigning tetrahedral stereochemistry. The aromatic circle or partial inner curve remains visible, including after a 3D tilt. Clicking the same wedge again reverses its direction; Single restores a plain edge while keeping the ring aromatic. Explicit Double/Triple and coordination presets still change the bond order.
 
-This behavior is shared by bond clicks, drag previews, committed drags and Properties, with Undo/Redo. Native files and SVG/PNG/PDF retain the appearance. CDXML/CDX currently reject these projection styles explicitly; restore plain edges before editable exchange. Ordinary single-bond wedges retain their stereochemical meaning.
+This behavior is shared by bond clicks, drag previews, committed drags and Properties, with Undo/Redo. Native files and SVG/PNG/PDF retain the appearance. CDXML/CDX preserve aromatic bold edges and solid wedges, bold double bonds, supported Haworth projections and single-bond projection wedges/hashes whose narrow end is an unassigned coordination metal. Other projection styles still require plain edges before editable file export. Coordination-frame wedges carry no tetrahedral stereo; ordinary single-bond wedges retain their stereochemical meaning.
+
+Export marks such a metal with ChemDraw's no-stereocentre flag (`AS="N"`). On import, a flagged metal's single-bond wedges/hashes are read without tetrahedral stereo and become projections, as do metal wedges that specify no tetrahedral centre (for example at a six-coordinate metal). Unflagged wedges at a four-coordinate metal keep their tetrahedral meaning.
+
+### Checking and redrawing stereochemistry
+
+**Check drawing** reports stereobonds with no effect or a probably reversed narrow end, ambiguous wedge geometry, conflicting wedges, and undefined stereocentres or stereogenic double bonds. The notices select the affected atoms and bonds; clicking a notice in **Stereochemistry** selects that item again. **Reverse** fixes the probably reversed bonds in one Undo step. Explicitly unknown stereochemistry, such as a wavy bond, is excluded from the undefined count.
+
+Enable **IUPAC style notes in Check drawing** in Stereochemistry for optional advice about bonds between stereocentres, mixed hash styles, alternate-only depictions, wavy bonds beside alkenes, re-entrant ring atoms and T-shaped geometry. This preference starts off and does not alter how bonds are interpreted.
+
+**Redraw stereo bonds**, available in the selection context menu, command palette and stereo notices, lets the automatic wedge chooser place the wedges again. It acts on the molecules touched by the selection, or the whole drawing with no selection. It normalises solid/hollow/bold and hash depictions to solid or hashed wedges while retaining configuration, coordinates, colours and other bond properties. Wavy and projection bonds stay as drawn. The command is undoable.
+
+Under **Show R/S and E/Z labels**, enable **Mark undefined stereocentres** to show muted **(?)** markers at undefined stereocentres and stereogenic double bonds. The document option starts off. Markers appear in figure exports only while visible; they are separate from chemical CIP labels. Generated-name notices list the specific units whose configurations are left unspecified.
 
 ## Native and chemical representation
 

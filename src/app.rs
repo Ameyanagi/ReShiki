@@ -99,6 +99,7 @@ mod shortcut_examples;
 mod shortcut_focus_tests;
 mod shortcuts;
 mod startup;
+mod stereo;
 mod tabs;
 mod template_library;
 #[cfg(test)]
@@ -213,6 +214,7 @@ pub enum Message {
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),
+    AtomSinglet(bool),
     ToggleInspector,
     Inspector(InspectorTab),
     Imports(import::Action),
@@ -245,6 +247,7 @@ pub enum Message {
     Example(&'static str),
     Cleanup(cleanup::Action),
     Analyze,
+    Stereo(stereo::Action),
     Undo,
     Redo,
     Delete,
@@ -254,6 +257,9 @@ pub enum Message {
     Ungroup,
     IntegralGroup(bool),
     AddFrame(reshiki::graphics::GraphicKind),
+    BracketIon,
+    DrawChargeSeparated(Vec<u64>),
+    NormalizeDepiction,
     View(view_settings::Action),
     Appearance(crate::appearance::Mode),
     CanvasTheme(reshiki::canvas_theme::CanvasTheme),
@@ -268,6 +274,7 @@ pub enum Message {
     Save,
     Export(&'static str),
     CopySmiles,
+    CopyAnalysis,
     CopyChemicalText,
     Copy(bool),
     CopyImage,
@@ -480,6 +487,7 @@ impl App {
         self.sync_drawing_panel_context();
         self.cancel_engine_job();
         self.tab.file_epoch = self.next_epoch();
+        self.tab.stereo_notes.clear();
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
         self.tab.mapping.clear_pending();
@@ -799,6 +807,7 @@ impl App {
             self.tab.chemistry_notice = None;
         }
         if committed.recorded {
+            self.tab.stereo_notes.clear();
             let previous = self.tab.revision;
             self.tab.revision = self.tab.revision.wrapping_add(1);
             if committed.chemistry_changed {
@@ -1326,6 +1335,7 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
         z_order,
         indicator,
         cip_label: _,
+        undefined_stereo: _,
         a: start,
         b: end,
         order,
@@ -1359,6 +1369,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
     let reshiki::document::Atom {
         display,
         cip_label: _,
+        undefined_stereo: _,
         id,
         element,
         position,
@@ -1367,6 +1378,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         attachment,
         charge,
         radical_electrons,
+        singlet,
         marks,
         mark_serial,
         isotope,
@@ -1387,6 +1399,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         && *attachment == b.attachment
         && *charge == b.charge
         && *radical_electrons == b.radical_electrons
+        && *singlet == b.singlet
         && *marks == b.marks
         && *mark_serial == b.mark_serial
         && *isotope == b.isotope
@@ -1435,6 +1448,8 @@ fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
 }
 
+#[cfg(test)]
+mod depiction_tests;
 #[cfg(test)]
 mod drawing_polish_qa;
 #[cfg(test)]

@@ -547,6 +547,7 @@ pub struct GraphicOptions<'a> {
     pub attach: bool,
     pub snap: bool,
     pub bracket_sides: BracketSides,
+    pub superscript: Option<&'a str>,
     /// The document revision, which invalidates per-drag caches.
     pub revision: u64,
 }
@@ -563,6 +564,7 @@ impl Default for GraphicOptions<'_> {
             attach: false,
             snap: false,
             bracket_sides: Default::default(),
+            superscript: None,
             revision: 0,
         }
     }

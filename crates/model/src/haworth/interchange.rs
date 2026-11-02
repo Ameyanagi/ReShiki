@@ -37,13 +37,12 @@ pub(crate) fn recognize(doc: &Document) -> Recognized {
 /// drawing convention. Their depth represents drawing perspective.
 pub fn recognized_atoms(doc: &Document) -> HashSet<u64> {
     let recognized = recognize(doc);
-    let mut atoms = recognized.atoms;
-    atoms.extend(
-        recognized
-            .stereo
-            .values()
-            .flat_map(|stereo| stereo.neighbors.iter().copied()),
-    );
+    let mut atoms = recognized.atoms.clone();
+    for bond in &doc.bonds {
+        if recognized.atoms.contains(&bond.a) || recognized.atoms.contains(&bond.b) {
+            atoms.extend([bond.a, bond.b]);
+        }
+    }
     atoms
 }
 
@@ -214,6 +213,24 @@ fn assignments(
         if above.len() == 2 && above.first() == above.last() {
             return None;
         }
+        // A deoxy/terminal CH2 can carry one explicit H plus an implicit H,
+        // or two explicit H atoms in the preferred full drawing. Identical
+        // hydrogen ligands never define tetrahedral stereochemistry.
+        let hydrogen_isotopes: Vec<_> = branches
+            .iter()
+            .filter_map(|&&(id, _)| {
+                let atom = atoms.get(&id)?;
+                (atom.element == "H").then_some(atom.isotope)
+            })
+            .collect();
+        let identical_hydrogens = match hydrogen_isotopes.as_slice() {
+            [0] => true,
+            [first, second] => first == second,
+            _ => false,
+        };
+        if hydrogen_isotopes.len() == branches.len() && identical_hydrogens {
+            continue;
+        }
         let ccw = *above.first()? ^ (determinant < 0.);
         result.insert(
             id,
@@ -302,6 +319,7 @@ fn apply(doc: &mut Document, recognized: Recognized) -> bool {
         if recognized.atoms.contains(&atom.id) {
             atom.stereo = recognized.stereo.get(&atom.id).cloned();
             atom.cip_label = None;
+            atom.undefined_stereo = false;
         }
     }
     true

@@ -25,7 +25,9 @@ fn merge_compares_all_content_fields_ignoring_only_identity_and_keeps_first_matc
         group: "Reagents".into(),
         smiles: "CCO".into(),
         keywords: vec!["alcohol".into()],
+        low_rank_keywords: Vec::new(),
         note: "Reference fragment".into(),
+        locants: Default::default(),
         document: ethanol(),
         anchor: Anchor::Atom(2),
     };
@@ -46,7 +48,7 @@ fn merge_compares_all_content_fields_ignoring_only_identity_and_keeps_first_matc
     assert_eq!(library.favorites, ["first"]);
     assert_eq!(library.templates[0], entry);
     assert_eq!(library.merge(incoming).unwrap(), 0);
-    for field in 0..7 {
+    for field in 0..9 {
         let mut changed = entry.clone();
         match field {
             0 => changed.name.push('!'),
@@ -55,7 +57,11 @@ fn merge_compares_all_content_fields_ignoring_only_identity_and_keeps_first_matc
             3 => changed.keywords.push("new".into()),
             4 => changed.note.push('!'),
             5 => changed.document.atoms[0].position.x += 1.,
-            _ => changed.anchor = Anchor::Atom(1),
+            6 => changed.anchor = Anchor::Atom(1),
+            7 => {
+                changed.locants.insert(1, "1".into());
+            }
+            _ => changed.low_rank_keywords.push("alias".into()),
         }
         let mut target = Library::default();
         let initial = Library {
@@ -76,6 +82,24 @@ fn merge_compares_all_content_fields_ignoring_only_identity_and_keeps_first_matc
         assert_eq!(target.merge(revised).unwrap(), 0, "field {field}");
         assert_eq!(target, saved);
     }
+}
+
+#[test]
+fn legacy_custom_templates_load_without_locants_and_preserve_numbered_round_trips() {
+    let mut library = Library::default();
+    library
+        .add("Ethanol", "Mine", ethanol(), Anchor::Atom(2))
+        .unwrap();
+    let bytes = library.to_bytes().unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(value["templates"][0].get("locants").is_none());
+    let mut loaded = Library::from_bytes(&bytes).unwrap();
+    assert_eq!(loaded, library);
+    assert!(loaded.templates[0].locants.is_empty());
+    loaded.templates[0].locants.insert(2, "2".into());
+    let bytes = loaded.to_bytes().unwrap();
+    assert_eq!(Library::from_bytes(&bytes).unwrap(), loaded);
+    assert_eq!(library.templates[0].document, loaded.templates[0].document);
 }
 #[tokio::test]
 async fn exact_source_atom_changes_regiochemistry_without_substitution_or_fallback() {

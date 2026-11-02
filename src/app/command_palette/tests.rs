@@ -47,6 +47,36 @@ fn top(app: &App) -> &Command {
 }
 
 #[test]
+fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
+    let mut app = app();
+    for name in ["Check drawing", "Redraw stereo bonds"] {
+        search(&mut app, name);
+        // Available commands intentionally precede unavailable ones, including
+        // the style preference whose description also mentions Check drawing.
+        let command = &app.commands.items[row(&app, name)];
+        assert_eq!(command.need, catalog::Need::Molecule);
+        assert_eq!(
+            app.command_unavailable(command),
+            Some("Draw a molecule first")
+        );
+    }
+    assert!(!app.appearance.iupac_style_notes);
+    run(&mut app, "Toggle IUPAC style notes");
+    assert!(app.appearance.iupac_style_notes);
+    run(&mut app, "Toggle IUPAC style notes");
+    assert!(!app.appearance.iupac_style_notes);
+    let atom = app.tab.doc.add_atom("C", Point::default());
+    app.tab.selected = vec![atom];
+    for name in ["Check drawing", "Redraw stereo bonds"] {
+        search(&mut app, name);
+        assert_eq!(top(&app).name, name);
+        assert!(app.command_unavailable(top(&app)).is_none());
+    }
+    run(&mut app, "Redraw stereo bonds");
+    assert_eq!(app.status, "No stereocentres to redraw");
+}
+
+#[test]
 fn ionic_and_centred_charge_commands_follow_selection_eligibility() {
     let mut app = app();
     let o = app.tab.doc.add_atom("O", Point::default());
@@ -82,6 +112,42 @@ fn partial_charge_symbols_are_searchable_by_delta() {
     search(&mut app, "delta");
     row(&app, "Partial positive");
     row(&app, "Partial negative");
+}
+
+#[test]
+fn molecular_weight_precision_command_toggles_the_current_preference() {
+    let mut app = app();
+    let document = app.tab.doc.clone();
+    assert!(!app.appearance.two_decimal_weight);
+    for expected in [true, false] {
+        search(&mut app, "MW precision");
+        let index = row(&app, "Toggle 2-decimal molecular weight");
+        let command = app.commands.items[index].clone();
+        assert_eq!(command.category, Category::View);
+        assert!(app.command_unavailable(&command).is_none());
+        let _ = app.run_command(command);
+        assert_eq!(app.appearance.two_decimal_weight, expected);
+        assert_eq!(app.tab.doc, document);
+        assert!(!app.dirty());
+    }
+}
+
+#[test]
+fn ion_brackets_and_depiction_normalization_are_searchable_structure_commands() {
+    let mut app = app();
+    for (query, name, need) in [
+        ("Bracket ion", "Bracket ion", catalog::Need::Selection),
+        (
+            "Normalize depiction",
+            "Normalize depiction",
+            catalog::Need::Nothing,
+        ),
+    ] {
+        search(&mut app, query);
+        let index = row(&app, name);
+        assert_eq!(top(&app).name, name);
+        assert_eq!(app.commands.items[index].need, need);
+    }
 }
 
 #[test]
@@ -678,7 +744,9 @@ fn duplicate_titles_prefer_the_direct_insert() {
         name: "Benzene".into(),
         smiles: "c1ccccc1".into(),
         keywords: vec![],
+        low_rank_keywords: Vec::new(),
         note: String::new(),
+        locants: Default::default(),
         document: reshiki::rings::Preset::Benzene.document(42., false),
         anchor: Default::default(),
     }];
@@ -2080,10 +2148,10 @@ fn molecular_properties_palette_reports_the_current_scope_and_reopens_its_sectio
     use crate::app::{InspectorTab, inspector};
 
     for (scope, expected) in [
-        ("all", "C2H8O · 48.085 g/mol"),
-        ("molecule", "C2H6 · 30.070 g/mol"),
-        ("fragment", "CH4 · 16.043 g/mol"),
-        ("drawing", "C2H8O · 48.085 g/mol"),
+        ("all", "C₂H₈O · 48.085 g/mol"),
+        ("molecule", "C₂H₆ · 30.070 g/mol"),
+        ("fragment", "CH₄ · 16.043 g/mol"),
+        ("drawing", "C₂H₈O · 48.085 g/mol"),
     ] {
         let mut app = app();
         let (a, b) = ethane(&mut app);
@@ -2247,7 +2315,7 @@ fn molecular_properties_palette_uses_attachment_composition() {
     }
     run(&mut app, "Molecular formula and properties");
     assert!(
-        app.status.starts_with("Molecular properties · C10H10Fe · "),
+        app.status.starts_with("Molecular properties · C₁₀H₁₀Fe · "),
         "{}",
         app.status
     );

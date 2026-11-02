@@ -3,6 +3,7 @@
 import base64
 import json
 import math
+import struct
 import sys
 import xml.etree.ElementTree as ET
 from functools import partial
@@ -693,6 +694,8 @@ def export_cdxml(
     graphic_parts=None,
     atom_indicators=None,
     picture_exports=None,
+    *,
+    partial_charge_advances=None,
 ):
     # Coordinates and styles belong to the editor. Chemistry is checked first.
     mol = from_document(doc)
@@ -935,9 +938,43 @@ def export_cdxml(
     next_id = write_marks(
         fragment, doc["atoms"], ids, position, scale, next_id, style["font_size_pt"]
     )
+    retro_arrows = []
     for a in doc.get("arrows", []):
-        object_map[a["id"]] = write_arrow(page, a, next_id, position, color_id)
-        next_id += 1
+        node = write_arrow(page, a, next_id, position, color_id)
+        if a.get("kind") == "retro":
+            # Rust assigns group ownership to the legacy graphic before its arrow.
+            object_map[a["id"]] = page[-1]
+            retro_arrows.append((page[-1], node))
+            next_id += 2
+        else:
+            object_map[a["id"]] = node
+            next_id += 1
+
+    def write_partial_charge(graphic, identifier, z):
+        kind = graphic.get("kind")
+        text = (
+            {"partial_positive": "δ+", "partial_negative": "δ−"}.get(kind.get("symbol"))
+            if isinstance(kind, dict)
+            else None
+        )
+        advance = (partial_charge_advances or {}).get(str(graphic["id"]))
+        if text is None or advance is None:
+            return None
+        center, axis = graphic["origin"], graphic["axis_x"]
+        size = math.hypot(axis["x"], axis["y"])
+        baseline = dict(x=center["x"] - size * advance * 0.5, y=center["y"] + size * 0.3)
+        points = struct.unpack("f", struct.pack("f", size * scale * 0.85))[0]
+        return write_text(
+            page,
+            text,
+            dict(style=dict(size_pt=points, color=graphic["style"]["stroke"])),
+            id=str(identifier),
+            Z=str(z),
+            InterpretChemically="no",
+            p=position(baseline),
+            CaptionJustification="Left",
+        )
+
     next_id, middle, graphic_objects = write_graphics(
         page,
         doc.get("graphics", []),
@@ -948,6 +985,7 @@ def export_cdxml(
         next_id,
         graphic_parts,
         picture_exports,
+        write_partial_charge=write_partial_charge,
     )
     # Leave one common layer for the molecule, arrows and text. The graphic
     # layers above and below it retain the editor's front/back order.
@@ -959,6 +997,12 @@ def export_cdxml(
     write_crossings(doc, bond_nodes, page, middle)
     object_map.update(graphic_objects)
     write_groups(page, doc, fragment, object_map, ids, next_id)
+    parents = {child: parent for parent in page.iter() for child in parent}
+    for legacy, node in retro_arrows:
+        owner = parents[legacy]
+        if owner is not page:
+            page.remove(node)
+            owner.insert(list(owner).index(legacy) + 1, node)
     abbreviations_exchange.write(root, doc, ids, position, write_text, TEXT_DEFAULTS)
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode")
 

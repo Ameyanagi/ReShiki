@@ -1,6 +1,19 @@
 use super::*;
 use crate::document::Point;
 
+#[test]
+fn changing_a_singlet_carbene_element_clears_its_spin_state() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("C", Point::default());
+    let atom = doc.atom_mut(id).unwrap();
+    atom.radical_electrons = 2;
+    atom.singlet = true;
+    let changed = apply(&doc, id, "N", Mode::Auto).unwrap();
+    assert_eq!(changed.atom(id).unwrap().radical_electrons, 0);
+    assert!(!changed.atom(id).unwrap().singlet);
+    changed.validate().unwrap();
+}
+
 fn alpha_glucose() -> Result<Document, String> {
     let mut doc = crate::haworth::sugar_document(
         crate::haworth::Sugar::Glucose,
@@ -747,7 +760,7 @@ fn typed_charges_follow_element_hydride_text_and_link_grammars() -> Result<(), S
         ("OH-", Element("O", 1, -1, "OH-")),
         (
             "NH42+",
-            Error("Write the charge after the sign, for example NH4+2"),
+            Error("Write the charge as e.g. NH₄⁺, PH₂²⁻ or NH4+2"),
         ),
         ("Pd9+", Error("Enter a charge from -8 to +8")),
         ("SO4 2-", Dummy),
@@ -887,10 +900,10 @@ fn charged_label_shapes_normalization_and_existing_errors() -> Result<(), String
             "{text}"
         );
     }
-    for text in ["CH32+", "NH4²⁺", "NH12-"] {
+    for text in ["CH32+", "NH12-"] {
         assert_eq!(
             apply(&source, id, text, Mode::Auto),
-            Err("Write the charge after the sign, for example NH4+2".into()),
+            Err("Write the charge as e.g. NH₄⁺, PH₂²⁻ or NH4+2".into()),
             "{text}"
         );
     }
@@ -985,26 +998,328 @@ fn text_and_unrecognized_automatic_entries_show_scripts_without_assigning_chemis
 
 #[test]
 fn charged_entry_preserves_implicit_hydrogens_and_imported_isotopes() -> Result<(), String> {
-    for element in ["N", "Pt", "H"] {
+    for (element, isotope) in [("N", 15), ("Pt", 195), ("H", 2)] {
         let mut source = Document::default();
         let id = source.add_atom(element, Point::default());
         let atom = source.atom_mut(id).ok_or("Missing atom")?;
         atom.charge = 1;
         assert_eq!(entry(atom), element);
         atom.no_implicit = true;
-        atom.isotope = 2;
+        atom.isotope = isotope;
         let text = entry(atom);
-        assert_eq!(text, format!("{element}+"));
+        assert_eq!(text, format!("{isotope}{element}+"));
         assert_eq!(apply(&source, id, &text, Mode::Auto)?, source);
         let atom = source.atom_mut(id).ok_or("Missing atom")?;
         atom.charge = 0;
         assert_eq!(
             entry(atom),
             if element == "H" {
-                "H".into()
+                format!("{isotope}H")
             } else {
-                format!("{element}H0")
+                format!("{isotope}{element}H0")
             }
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_nuclides_are_validated_atoms_and_plain_elements_clear_the_mass() -> Result<(), String> {
+    let mut source = Document::default();
+    let carbon = source.add_atom("C", Point::default());
+    let id = source.add_atom("O", Point::new(42., 0.));
+    source.add_bond(carbon, id, 1, "plain");
+    for mode in [Mode::Auto, Mode::Group] {
+        for (text, element, isotope) in [
+            ("D", "H", 2),
+            ("T", "H", 3),
+            ("2H", "H", 2),
+            ("13C", "C", 13),
+            ("¹³C", "C", 13),
+            ("15N", "N", 15),
+            ("¹⁸O", "O", 18),
+            ("195Pt", "Pt", 195),
+        ] {
+            let result = apply(&source, id, text, mode)?;
+            let atom = result.atom(id).ok_or("Atom")?;
+            assert_eq!(
+                (atom.element.as_str(), atom.isotope),
+                (element, isotope),
+                "{text}"
+            );
+            assert!(atom.display.variable.is_none(), "{text}");
+            assert!(result.abbreviations.is_empty(), "{text}");
+            assert_eq!(result.bonds, source.bonds);
+            assert_eq!(apply(&result, id, &entry(atom), mode)?, result, "{text}");
+            assert_eq!(
+                apply(&result, id, element, Mode::Auto)?
+                    .atom(id)
+                    .ok_or("Atom")?
+                    .isotope,
+                0
+            );
+            if element != "H" {
+                let hydride = format!("{element}H2");
+                let retyped = apply(&result, id, &hydride, Mode::Auto)?;
+                assert_eq!(retyped.atom(id).ok_or("Atom")?.isotope, 0, "{hydride}");
+            }
+            assert!(
+                description(text, &[], mode).contains("entered isotope"),
+                "{text}"
+            );
+            assert!(suggestions(text, mode).is_empty(), "{text}");
+        }
+        for text in ["12H", "¹²H", "0C", "999C"] {
+            let before = source.clone();
+            let error = apply(&source, id, text, mode).unwrap_err();
+            assert!(
+                error.starts_with(&format!("{text} is not a known nuclide")),
+                "{error}"
+            );
+            assert_eq!(source, before);
+        }
+    }
+    for text in ["D", "T", "13C", "¹³C", "¹²H"] {
+        let result = apply(&source, id, text, Mode::Text)?;
+        let atom = result.atom(id).ok_or("Atom")?;
+        assert_eq!((atom.element.as_str(), atom.isotope), ("*", 0));
+        assert_eq!(atom.display.variable.as_deref(), Some(text));
+    }
+    let protected = apply(&source, id, "OAc", Mode::Auto)?;
+    for mode in [Mode::Auto, Mode::Group] {
+        let isotope = apply(&protected, id, "¹⁸O", mode)?;
+        assert_eq!(isotope.atoms.len(), source.atoms.len());
+        assert!(isotope.abbreviations.is_empty());
+        assert_eq!(isotope.atom(id).ok_or("Atom")?.isotope, 18);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_leading_manual_superscript_enters_a_nuclide_and_keeps_repeat_hints_consistent()
+-> Result<(), String> {
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    let raised = [ScriptRun {
+        start: 0,
+        end: 2,
+        script: Script::Superscript,
+    }];
+    let padded = " 13C ";
+    let padded_run = [ScriptRun {
+        start: 1,
+        end: 3,
+        script: Script::Superscript,
+    }];
+    let result = apply_with_scripts(&source, id, padded, &padded_run, Mode::Auto)?;
+    assert_eq!(result.atom(id).ok_or("Atom")?.isotope, 13);
+    assert_eq!(
+        description(padded, &padded_run, Mode::Auto),
+        description("13C", &[], Mode::Auto)
+    );
+    for (text, element, isotope) in [("13C", "C", 13), ("15N", "N", 15), ("18O", "O", 18)] {
+        let result = apply_with_scripts(&source, id, text, &raised, Mode::Auto)?;
+        let atom = result.atom(id).ok_or("Atom")?;
+        assert_eq!((atom.element.as_str(), atom.isotope), (element, isotope));
+        assert!(atom.display.label_scripts.is_empty());
+        assert_eq!(
+            description(text, &raised, Mode::Auto),
+            description(text, &[], Mode::Auto)
+        );
+        let literal = apply_with_scripts(&source, id, text, &raised, Mode::Text)?;
+        assert_eq!(
+            literal.atom(id).ok_or("Atom")?.display.variable.as_deref(),
+            Some(text)
+        );
+    }
+    assert!(
+        apply_with_scripts(&source, id, "12H", &raised, Mode::Auto)
+            .unwrap_err()
+            .contains("not a known nuclide")
+    );
+    let lowered = [ScriptRun {
+        start: 0,
+        end: 2,
+        script: Script::Subscript,
+    }];
+    for text in ["13C", "12H", "999C"] {
+        let literal = apply_with_scripts(&source, id, text, &lowered, Mode::Auto)?;
+        assert_eq!(literal.atom(id).ok_or("Atom")?.element, "*", "{text}");
+    }
+    assert!(description("13C", &lowered, Mode::Auto).starts_with("Text on a dummy"));
+    for (text, runs) in [
+        (
+            "13C",
+            vec![ScriptRun {
+                start: 1,
+                end: 2,
+                script: Script::Subscript,
+            }],
+        ),
+        (
+            "57Fe2+",
+            vec![
+                raised[0],
+                ScriptRun {
+                    start: 4,
+                    end: 5,
+                    script: Script::Subscript,
+                },
+            ],
+        ),
+    ] {
+        let literal = apply_with_scripts(&source, id, text, &runs, Mode::Auto)?;
+        assert_eq!(literal.atom(id).ok_or("Atom")?.element, "*", "{text}");
+    }
+    let charged = apply_with_scripts(
+        &source,
+        id,
+        "15NH42+",
+        &[
+            raised[0],
+            ScriptRun {
+                start: 4,
+                end: 5,
+                script: Script::Subscript,
+            },
+            ScriptRun {
+                start: 5,
+                end: 7,
+                script: Script::Superscript,
+            },
+        ],
+        Mode::Auto,
+    )?;
+    let atom = charged.atom(id).ok_or("Atom")?;
+    assert_eq!((atom.isotope, atom.explicit_h, atom.charge), (15, 4, 2));
+    for x in [-42., 42.] {
+        let neighbor = source.add_atom("C", Point::new(x, 0.));
+        source.add_bond(id, neighbor, 1, "plain");
+    }
+    for text in ["[D]1-3", "[13C]1-3", "[¹⁸O]1-3"] {
+        let repeated = apply(&source, id, text, Mode::Auto)?;
+        assert_eq!(repeated.generic.links.len(), 1, "{text}");
+        assert!(
+            description(text, &[], Mode::Auto).starts_with("A repeat of one atom"),
+            "{text}"
+        );
+    }
+    assert!(apply(&source, id, "[12H]1-3", Mode::Auto).is_err());
+    assert!(!description("[12H]1-3", &[], Mode::Auto).starts_with("A repeat of one atom"));
+    Ok(())
+}
+
+#[test]
+fn deuterated_groups_have_explicit_isotopes_and_methanol_properties() -> anyhow::Result<()> {
+    let mut source = Document::default();
+    let oxygen = source.add_atom("O", Point::default());
+    let carbon = source.add_atom("C", Point::new(42., 0.));
+    source.add_bond(oxygen, carbon, 1, "plain");
+    let methanol = apply(&source, carbon, "CD3", Mode::Auto).map_err(anyhow::Error::msg)?;
+    assert_eq!(
+        methanol
+            .atoms
+            .iter()
+            .filter(|a| a.element == "H" && a.isotope == 2)
+            .count(),
+        3
+    );
+    let molecule = crate::chemistry::document::prepare(&methanol)?;
+    let properties = crate::chemistry::properties(
+        &molecule
+            .state
+            .graph
+            .atom_facts()
+            .map_err(anyhow::Error::msg)?,
+    )
+    .map_err(anyhow::Error::msg)?;
+    // Formulas merge isotopes as RDKit does; the mass keeps them.
+    assert_eq!(properties.formula, "CH4O");
+    assert!(
+        (properties.mass - 35.0603).abs() < 0.001,
+        "{}",
+        properties.mass
+    );
+    let smiles = crate::chemistry::smiles::write::write(&molecule.state, Default::default())?.text;
+    assert_eq!(smiles.matches("[2H]").count(), 3, "{smiles}");
+    let imported = crate::chemistry::smiles::prepare(&smiles)?;
+    let imported_properties = crate::chemistry::properties(
+        &imported
+            .state
+            .graph
+            .atom_facts()
+            .map_err(anyhow::Error::msg)?,
+    )
+    .map_err(anyhow::Error::msg)?;
+    assert_eq!(imported_properties.formula, properties.formula);
+    assert!((imported_properties.mass - properties.mass).abs() < 1e-10);
+    assert!((imported_properties.exact_mass - properties.exact_mass).abs() < 1e-10);
+    let reopened = Document::from_json(&methanol.file_json().map_err(anyhow::Error::msg)?)
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(reopened.atoms, methanol.atoms);
+    assert_eq!(reopened.bonds, methanol.bonds);
+    assert_eq!(reopened.abbreviations, methanol.abbreviations);
+    let mut expanded = methanol.clone();
+    expanded.expand_abbreviations(&[carbon]);
+    assert_eq!(expanded.atoms, methanol.atoms);
+    assert_eq!(
+        formula(&expanded).map_err(|e| anyhow::anyhow!("{e}"))?,
+        "CH4O"
+    );
+    for (text, label, reverse, deuteriums) in [
+        ("OCD3", "OCD3", "D3CO", 3),
+        ("D3CO", "OCD3", "D3CO", 3),
+        ("OD", "OD", "DO", 1),
+        ("DO", "OD", "DO", 1),
+    ] {
+        let result = apply(&source, oxygen, text, Mode::Auto).map_err(anyhow::Error::msg)?;
+        let group = result
+            .abbreviation(oxygen)
+            .ok_or_else(|| anyhow::anyhow!("Group"))?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (label, reverse)
+        );
+        assert_eq!(
+            result
+                .atoms
+                .iter()
+                .filter(|a| a.element == "H" && a.isotope == 2)
+                .count(),
+            deuteriums
+        );
+    }
+    // Two outside attachments cannot be represented by the catalog grammar.
+    assert!(!known_group("CD2"));
+    Ok(())
+}
+
+#[test]
+fn isolated_deuterium_and_tritium_do_not_gain_an_ordinary_hydrogen() -> anyhow::Result<()> {
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    for (text, formula, smiles) in [("D", "H", "[2H]"), ("T", "H", "[3H]"), ("²H", "H", "[2H]")] {
+        let typed = apply(&source, id, text, Mode::Auto).map_err(anyhow::Error::msg)?;
+        assert!(
+            typed
+                .atom(id)
+                .ok_or_else(|| anyhow::anyhow!("Atom"))?
+                .no_implicit
+        );
+        let molecule = crate::chemistry::document::prepare(&typed)?;
+        let properties = crate::chemistry::properties(
+            &molecule
+                .state
+                .graph
+                .atom_facts()
+                .map_err(anyhow::Error::msg)?,
+        )
+        .map_err(anyhow::Error::msg)?;
+        assert_eq!(properties.formula, formula, "{text}");
+        assert_eq!(
+            crate::chemistry::smiles::write::write(&molecule.state, Default::default())?.text,
+            smiles,
+            "{text}"
         );
     }
     Ok(())
@@ -1362,6 +1677,126 @@ fn catalog_aliases_create_the_same_group_under_the_typed_spelling()
 }
 
 #[test]
+fn peptide_aliases_keep_typed_labels_and_require_explicit_chemical_mode_when_ambiguous()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut doc = Document::default();
+    let methyl = doc.add_atom("C", Point::new(0., 0.));
+    let endpoint = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(methyl, endpoint, 1, "plain");
+    for (alias, label, expected) in [
+        ("Z", "Cbz", "C9H10O2"),
+        ("Tos", "Ts", "C8H10O2S"),
+        ("Bzl", "Bn", "C8H10"),
+        ("OBzl", "OBn", "C8H10O"),
+        ("BzlO", "OBn", "C8H10O"),
+        ("OBut", "OtBu", "C5H12O"),
+        ("ButO", "OtBu", "C5H12O"),
+    ] {
+        let explicit_only = matches!(alias, "Z" | "Tos");
+        let canonical = apply(&doc, endpoint, label, Mode::Group)?;
+        for mode in [Mode::Auto, Mode::Group, Mode::Text] {
+            let typed = apply(&doc, endpoint, alias, mode)?;
+            if mode == Mode::Text || mode == Mode::Auto && explicit_only {
+                assert!(typed.abbreviations.is_empty(), "{alias}: {mode}");
+                let atom = typed.atom(endpoint).ok_or(alias)?;
+                assert_eq!(atom.element, "*", "{alias}: {mode}");
+                assert_eq!(atom.display.variable.as_deref(), Some(alias));
+                assert!(description(alias, &[], mode).starts_with("Text on a dummy atom"));
+                continue;
+            }
+            let group = typed.abbreviation(endpoint).ok_or(alias)?;
+            assert_eq!(group.label, alias);
+            assert!(group.reverse_label.is_empty(), "{alias}");
+            assert_eq!(group.text(&typed), alias);
+            assert_eq!(formula(&typed)?, expected, "{alias}: {mode}");
+            let chemistry = |drawing: &Document| -> Result<String, Box<dyn std::error::Error>> {
+                let molecule = crate::chemistry::document::prepare(drawing)?;
+                Ok(
+                    crate::chemistry::smiles::write::write(&molecule.state, Default::default())?
+                        .text,
+                )
+            };
+            assert_eq!(chemistry(&typed)?, chemistry(&canonical)?, "{alias}");
+
+            // Detection continues to use the established labels, never an alias.
+            let mut expanded = typed.clone();
+            expanded.expand_abbreviations(&[endpoint]);
+            let molecule = crate::chemistry::document::prepare(&expanded)?;
+            let contracted =
+                crate::chemistry::abbreviations::find(&expanded, &molecule, &[], Some(label))?;
+            let found = contracted.abbreviations.first().ok_or(label)?;
+            assert_eq!(found.label, label, "{alias}");
+            assert_eq!(formula(&contracted)?, expected);
+            if label != "OtBu" {
+                let automatic = crate::chemistry::abbreviations::find(
+                    &expanded,
+                    &molecule,
+                    &group.members,
+                    None,
+                )?;
+                let found = automatic.abbreviations.first().ok_or(label)?;
+                assert_eq!(found.label, label, "{alias} automatic contraction");
+                assert_eq!(found.members.len(), group.members.len());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn peptide_groups_are_real_atoms_and_formyl_keeps_its_established_display()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut doc = Document::default();
+    let methyl = doc.add_atom("C", Point::new(0., 0.));
+    let endpoint = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(methyl, endpoint, 1, "plain");
+    for (label, expected, atoms) in [
+        ("Dns", "C13H15NO2S", 16),
+        ("Suc", "C5H8O3", 7),
+        ("For", "C2H4O", 2),
+    ] {
+        for mode in [Mode::Auto, Mode::Group] {
+            let typed = apply(&doc, endpoint, label, mode)?;
+            let group = typed.abbreviation(endpoint).ok_or(label)?;
+            assert_eq!(group.label, label);
+            assert_eq!(group.members.len(), atoms);
+            assert_eq!(formula(&typed)?, expected, "{label}");
+            let mut expanded = typed.clone();
+            expanded.expand_abbreviations(&[endpoint]);
+            assert_eq!(formula(&expanded)?, expected);
+        }
+        assert!(
+            apply(&doc, endpoint, label, Mode::Text)?
+                .abbreviations
+                .is_empty()
+        );
+    }
+    for label in ["CHO", "For"] {
+        let typed = apply(&doc, endpoint, label, Mode::Group)?;
+        let group = typed.abbreviation(endpoint).ok_or(label)?;
+        assert_eq!(group.label, label);
+        assert_eq!(group.reverse_label, if label == "CHO" { "OHC" } else { "" });
+        let mut expanded = typed.clone();
+        expanded.expand_abbreviations(&[endpoint]);
+        assert!(
+            contracted(&expanded)?
+                .iter()
+                .all(|(label, _)| label != "For")
+        );
+        let molecule = crate::chemistry::document::prepare(&expanded)?;
+        let detected =
+            crate::chemistry::abbreviations::find(&expanded, &molecule, &[], Some("CHO"))?;
+        let formyl = detected.abbreviations.first().ok_or("CHO")?;
+        assert_eq!(
+            (formyl.label.as_str(), formyl.reverse_label.as_str()),
+            ("CHO", "OHC")
+        );
+        assert_eq!(formula(&detected)?, "C2H4O");
+    }
+    Ok(())
+}
+
+#[test]
 fn the_public_group_list_covers_every_typed_group() {
     let groups: Vec<_> = crate::abbreviations::groups().collect();
     let tbs = groups.iter().find(|g| g.label == "TBS").unwrap();
@@ -1428,10 +1863,9 @@ fn every_bundled_spelling_types_as_its_group() -> Result<(), Box<dyn std::error:
     let mut checked = 0;
     for preset in catalog.iter() {
         for spelling in preset.spellings() {
-            // Acetyl and tosyl predate the catalog: "Ac" and "Ts" alone type
-            // actinium and tennessine, so these groups need Chemical
-            // abbreviation mode. No other spelling may shadow an element.
-            let mode = if ["Ac", "Ts"].contains(&spelling) {
+            // Element symbols and ambiguous IUPAC peptide aliases need an
+            // explicit Chemical abbreviation choice.
+            let mode = if ["Ac", "Ts", "Z", "Tos"].contains(&spelling) {
                 Mode::Group
             } else {
                 Mode::Auto
@@ -1660,7 +2094,7 @@ fn every_bundled_reverse_spelling_types_as_its_group() -> Result<(), Box<dyn std
         );
         checked += 1;
     }
-    assert_eq!(checked, 214);
+    assert_eq!(checked, 217);
     Ok(())
 }
 
@@ -1801,6 +2235,20 @@ fn contracted(doc: &Document) -> Result<Vec<(String, usize)>, Box<dyn std::error
         .iter()
         .map(|group| (group.label.clone(), group.members.len()))
         .collect())
+}
+
+/// As in RDKit, a bonded D counts as a hydrogen, so CH3-O-D is not OMe on D.
+#[test]
+fn contraction_counts_bonded_deuterium_as_a_hydrogen() -> Result<(), Box<dyn std::error::Error>> {
+    let mut doc = Document::default();
+    let carbon = doc.add_atom("C", Point::default());
+    let oxygen = doc.add_atom("O", Point::new(42., 0.));
+    let deuterium = doc.add_atom("H", Point::new(84., 0.));
+    doc.atom_mut(deuterium).ok_or("Atom")?.isotope = 2;
+    doc.add_bond(carbon, oxygen, 1, "plain");
+    doc.add_bond(oxygen, deuterium, 1, "plain");
+    assert_eq!(contracted(&doc)?, [("Me".to_owned(), 1)]);
+    Ok(())
 }
 
 #[test]
