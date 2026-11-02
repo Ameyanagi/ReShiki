@@ -128,6 +128,8 @@ pub struct Preview {
     camera: Camera,
     /// The graph the preview is allowed to insert, separate from source text.
     identity: String,
+    /// The identity as editable SMILES, without private biaryl axis maps.
+    smiles: String,
     modified: bool,
     /// Each atom's displayed parent locant from the parsed name.
     locants: HashMap<u64, String>,
@@ -137,6 +139,7 @@ impl Preview {
         let (lo, hi) = document.bounds();
         Self {
             modified: identity != record.canonical_smiles,
+            smiles: naming::plain_smiles(&identity),
             locants: locants::display_locants(&record, &document),
             record,
             document,
@@ -289,7 +292,7 @@ impl State {
     }
     fn set_preview(&mut self, preview: Preview) {
         self.locant_hover = None;
-        self.smiles = preview.identity.clone();
+        self.smiles = preview.smiles.clone();
         self.acknowledged = false;
         self.import_alias = None;
         if preview.is_multicomponent() {
@@ -663,6 +666,9 @@ impl App {
                 let record = preview.record.clone();
                 let smiles = if matches!(action, Action::RestorePreview) {
                     record.smiles.clone()
+                } else if self.tab.naming.smiles == preview.smiles {
+                    // Unedited text keeps the identity's biaryl axes.
+                    preview.identity.clone()
                 } else {
                     self.tab.naming.smiles.clone()
                 };
@@ -799,7 +805,7 @@ impl App {
         if preview.needs_acknowledgement() && !self.tab.naming.acknowledged {
             return;
         }
-        if self.tab.naming.smiles != preview.identity {
+        if self.tab.naming.smiles != preview.smiles {
             self.tab.naming.notice = Some(Notice::new(
                 NoticeKind::Retry,
                 "Apply the edited SMILES to the preview before insertion",
@@ -1043,7 +1049,7 @@ impl App {
         let ready = idle
             && self.naming_can_edit()
             && (!needs_ack || state.acknowledged)
-            && state.smiles == preview.identity;
+            && state.smiles == preview.smiles;
         content
             .push(row![
                 Space::new().width(Length::Fill),

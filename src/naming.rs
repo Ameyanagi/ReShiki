@@ -668,6 +668,17 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
     })
 }
 
+/// An identity as editable SMILES. SMILES has no axis layer, so this leaves
+/// out the private biaryl axis maps that `canonical_smiles` may carry.
+pub fn plain_smiles(identity: &str) -> String {
+    let stripped = [molecule_names::AXIS_M, molecule_names::AXIS_P]
+        .iter()
+        .fold(identity.to_owned(), |text, map| {
+            text.replace(&format!(":{map}]"), "]")
+        });
+    canonical_smiles(&stripped).unwrap_or(stripped)
+}
+
 pub fn verify_identity(expected: &str, actual: &str) -> Result<(), String> {
     if canonical_smiles(expected)? != canonical_smiles(actual)? {
         return Err("The source structure differs in connectivity, charge, isotope, tautomer or stereochemistry. No name was assigned".into());

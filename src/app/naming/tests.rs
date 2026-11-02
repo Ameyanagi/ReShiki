@@ -73,7 +73,19 @@ async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), Str
             &parsed.canonical_smiles,
             &naming::structure_smiles(&preview.document)?,
         )?;
+        // The editable field never shows the private axis maps.
+        assert!(!preview.smiles.contains(":9000"), "{}", preview.smiles);
         if name.contains("binaphthalene]-2") {
+            // An unedited Update rebuilds from the identity and keeps the axis.
+            let rebuilt = prepare_preview(
+                LocalEngine::in_process(),
+                parsed.clone(),
+                preview.identity.clone(),
+                Default::default(),
+            )
+            .await
+            .map_err(|error| format!("{name}: {error}"))?;
+            assert_eq!(rebuilt.identity, preview.identity);
             binol.push(preview.identity);
         }
     }
