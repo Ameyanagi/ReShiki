@@ -110,13 +110,12 @@ fn segment(text: &str, range: Range<usize>) -> &str {
 const SUPERSCRIPTS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 const PREFIXES: &[&str] = &[
     "cis", "trans", "endo", "exo", "syn", "anti", "erythro", "threo", "meso", "retro", "sn", "ent",
-    "epi", "rac", "rel", "myo", "scyllo", "chiro", "gluco", "manno", "galacto", "allo", "tert",
-    "sec",
+    "epi", "rac", "rel", "myo", "scyllo", "chiro", "gluco", "manno", "galacto", "allo",
 ];
 const ELEMENTS: &[&str] = &["N", "O", "S", "P", "Se", "Te", "As", "B", "Si"];
 
 fn is_prime(c: char) -> bool {
-    matches!(c, '\'' | '′' | '″' | '‴' | '⁗')
+    matches!(c, '\'' | '′' | '″' | '‴' | '⁗' | '’')
 }
 
 fn superscript_digit(c: char) -> Option<char> {
@@ -319,41 +318,19 @@ fn isotope_at(name: &str, at: usize) -> Option<(NameMarkup, usize)> {
     }
 }
 
-/// Isotope scripts and roman nuclide symbols on the unchanged source string.
-/// The caption parser normalizes Unicode digits; rich copy keeps their original
-/// byte ranges and source spelling while sharing the same recognition.
-pub(crate) struct IsotopeRuns {
-    pub scripts: Vec<(Range<usize>, Script)>,
-    pub symbols: Vec<Range<usize>>,
-}
-
-pub(crate) fn isotope_runs(name: &str) -> IsotopeRuns {
-    let mut scripts = vec![];
+/// Roman nuclide symbols in normalized display text.
+fn nuclide_symbol_ranges(name: &str) -> Vec<Range<usize>> {
     let mut symbols = vec![];
     let mut at = 0;
     while let Some(c) = after(name, at).chars().next() {
         if let Some((isotope, consumed)) = isotope_at(name, at) {
-            let source = before(after(name, at), consumed);
-            let offset = |byte| {
-                at + source
-                    .char_indices()
-                    .nth(before(&isotope.text, byte).chars().count())
-                    .map_or(consumed, |(i, _)| i)
-            };
-            let original = |range: Range<usize>| offset(range.start)..offset(range.end);
             for (range, run) in &isotope.runs {
-                let script = match run {
-                    NameRun::Superscript => Script::Superscript,
-                    NameRun::Subscript => Script::Subscript,
-                    NameRun::Italic | NameRun::SmallCaps => Script::Normal,
-                };
-                scripts.push((original(range.clone()), script));
                 if *run == NameRun::Superscript {
                     let length = after(&isotope.text, range.end)
                         .bytes()
                         .take_while(u8::is_ascii_alphabetic)
                         .count();
-                    symbols.push(original(range.end..range.end + length));
+                    symbols.push(at + range.end..at + range.end + length);
                 }
             }
             at += consumed;
@@ -361,7 +338,7 @@ pub(crate) fn isotope_runs(name: &str) -> IsotopeRuns {
             at += c.len_utf8();
         }
     }
-    IsotopeRuns { scripts, symbols }
+    symbols
 }
 
 fn boundary_before(text: &str, at: usize) -> bool {
@@ -384,7 +361,7 @@ fn numeric_locant(text: &str) -> bool {
     if digits == 0 {
         return false;
     }
-    let rest = after(text, digits);
+    let rest = after(text, digits).trim_start_matches(is_prime);
     let letters = rest.bytes().take_while(u8::is_ascii_lowercase).count();
     let tail = after(rest, letters);
     let tail = if let Some(interior) = tail.strip_prefix('^') {
@@ -501,6 +478,8 @@ fn display_text(name: &str) -> NameMarkup {
                 continue;
             }
         }
+        // An element locant (N¹-) normalizes like its ASCII spelling (N1-).
+        let word = before(name, i).trim_end_matches(|c: char| c.is_ascii_alphabetic());
         if superscript_digit(c).is_some()
             && (preceding_locant(name, i, false)
                 || before(name, i).strip_suffix('λ').is_some_and(|prefix| {
@@ -508,7 +487,12 @@ fn display_text(name: &str) -> NameMarkup {
                         .chars()
                         .next_back()
                         .is_none_or(|c| !c.is_alphabetic())
-                }))
+                })
+                || (ELEMENTS.contains(&segment(name, word.len()..i))
+                    && boundary_before(name, word.len())
+                    && rest
+                        .trim_start_matches(|c| superscript_digit(c).is_some())
+                        .starts_with(|c: char| matches!(c, ',' | '-') || is_prime(c))))
         {
             let start = markup.text.len();
             while i < name.len() {
@@ -609,10 +593,18 @@ fn parenthesized_stereo(text: &str, runs: &mut Vec<(Range<usize>, NameRun)>) {
                     let mut offset = start;
                     let mut descriptors = vec![];
                     let valid = body.split([',', '/']).all(|part| {
-                        let range = stereo_item(part);
+                        // A leading rel-/rac- is already italic as a prefix word.
+                        let lead = part.len() - part.trim_start().len();
+                        let skip = ["rel-", "rac-"]
+                            .into_iter()
+                            .find(|prefix| after(part, lead).starts_with(prefix))
+                            .map_or(0, |prefix| lead + prefix.len());
+                        let range = stereo_item(after(part, skip));
                         if let Some(range) = &range {
-                            descriptors
-                                .push((offset + range.start..offset + range.end, NameRun::Italic));
+                            descriptors.push((
+                                offset + skip + range.start..offset + skip + range.end,
+                                NameRun::Italic,
+                            ));
                         }
                         offset += part.len() + 1;
                         range.is_some()
@@ -689,19 +681,28 @@ pub fn name_markup(name: &str) -> NameMarkup {
             let next = after(text, i + n).chars().next();
             if boundary_before(text, i) {
                 let rest = after(text, i + n);
+                let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
                 let locant = rest.trim_start_matches(|c: char| {
                     c.is_ascii_digit() || superscript_digit(c).is_some()
                 });
                 if (PREFIXES.contains(&word)
-                    && (next.is_none_or(|c| c == '-')
+                    && (next == Some('-')
+                        || (next.is_none() && before(text, i).ends_with('-'))
                         || rest
                             .strip_prefix(',')
-                            .is_some_and(|tail| tail.starts_with(char::is_alphabetic))))
-                    || (["o", "m", "p"].contains(&word) && next == Some('-'))
-                    || (ELEMENTS.contains(&word)
-                        && locant.starts_with(|c: char| matches!(c, ',' | '-') || is_prime(c)))
+                            .is_some_and(|tail| tail.starts_with(char::is_alphanumeric))))
+                    || (["tert", "sec", "o", "m", "p"].contains(&word) && next == Some('-'))
                 {
                     markup.runs.push((i..i + n, NameRun::Italic));
+                } else if ELEMENTS.contains(&word)
+                    && locant.starts_with(|c: char| matches!(c, ',' | '-') || is_prime(c))
+                {
+                    markup.runs.push((i..i + n, NameRun::Italic));
+                    if digits > 0 {
+                        markup
+                            .runs
+                            .push((i + n..i + n + digits, NameRun::Superscript));
+                    }
                 } else if ["D", "L", "DL"].contains(&word) && matches!(next, Some('-' | ',')) {
                     markup.runs.push((i..i + n, NameRun::SmallCaps));
                 }
@@ -713,7 +714,7 @@ pub fn name_markup(name: &str) -> NameMarkup {
     }
     parenthesized_stereo(text, &mut markup.runs);
     fusion_letters(text, &mut markup.runs);
-    let nuclides = isotope_runs(text).symbols;
+    let nuclides = nuclide_symbol_ranges(text);
     markup.runs.retain(|(range, run)| {
         *run != NameRun::Italic
             || !nuclides
@@ -729,13 +730,46 @@ pub fn name_markup(name: &str) -> NameMarkup {
 mod tests {
     use super::*;
 
+    fn assert_ranges(markup: &NameMarkup) {
+        let mut end = 0;
+        for (range, _) in &markup.runs {
+            assert!(range.start < range.end);
+            assert!(end <= range.start);
+            assert!(markup.text.is_char_boundary(range.start));
+            assert!(markup.text.is_char_boundary(range.end));
+            end = range.end;
+        }
+    }
+
     fn parts(markup: &NameMarkup, kind: NameRun) -> Vec<&str> {
+        assert_ranges(markup);
         markup
             .runs
             .iter()
             .filter(|(_, run)| *run == kind)
             .map(|(range, _)| &markup.text[range.clone()])
             .collect()
+    }
+
+    fn styled(markup: &NameMarkup) -> Vec<(&str, NameRun)> {
+        assert_ranges(markup);
+        markup
+            .runs
+            .iter()
+            .map(|(range, run)| (&markup.text[range.clone()], *run))
+            .collect()
+    }
+
+    fn italic(name: &str, expected: &[&str]) {
+        let markup = name_markup(name);
+        assert_eq!(
+            styled(&markup),
+            expected
+                .iter()
+                .map(|part| (*part, NameRun::Italic))
+                .collect::<Vec<_>>(),
+            "{name}"
+        );
     }
 
     #[test]
@@ -997,6 +1031,285 @@ mod tests {
         assert_eq!(
             parts(&name_markup("(2P)-(31P)phosphane"), NameRun::Italic),
             ["P"]
+        );
+    }
+
+    #[test]
+    fn requested_name_examples() {
+        italic("(2R,3S)-…", &["R", "S"]);
+        italic("N,N-dimethylmethanamine", &["N", "N"]);
+        italic("quinolin-2(1H)-one", &["H"]);
+        italic("furo[2,3-b]pyridine", &["b"]);
+        italic("tert-butyl…", &["tert"]);
+        italic("(E)-but-2-ene", &["E"]);
+        let markup = name_markup("N1-ethyl-N2-methylethane-1,2-diamine");
+        assert_eq!(
+            styled(&markup),
+            vec![
+                ("N", NameRun::Italic),
+                ("1", NameRun::Superscript),
+                ("N", NameRun::Italic),
+                ("2", NameRun::Superscript),
+            ]
+        );
+    }
+
+    #[test]
+    fn parenthesized_stereo_sets_keep_locants_and_punctuation_roman() {
+        italic(
+            "(R,S,E,Z,r,s,M,P,R*,ξ,Ξ)-name",
+            &["R", "S", "E", "Z", "r", "s", "M", "P", "R*", "ξ", "Ξ"],
+        );
+        italic("(rel-1R,2S)-(rac)-name", &["rel", "R", "S", "rac"]);
+        italic("(rac-2aR, 12′S)-name", &["rac", "R", "S"]);
+        italic("(1′R,5′aS)-name", &["R", "S"]);
+        italic("((2R,3S))-name", &["R", "S"]);
+    }
+
+    #[test]
+    fn stereo_prefixes_may_be_comma_separated() {
+        italic("2-cis,4-trans-octa-2,4-diene", &["cis", "trans"]);
+        italic("cis,cis-muconic acid", &["cis", "cis"]);
+        assert!(name_markup("tert,name").runs.is_empty());
+    }
+
+    #[test]
+    fn prefixes_require_a_word_boundary_and_following_hyphen() {
+        for prefix in [
+            "cis", "trans", "endo", "exo", "syn", "anti", "erythro", "threo", "meso", "retro",
+            "tert", "sec", "o", "m", "p",
+        ] {
+            italic(&format!("{prefix}-name"), &[prefix]);
+            italic(&format!("name-{prefix}-name"), &[prefix]);
+            assert!(name_markup(&format!("name{prefix}-name")).runs.is_empty());
+            assert!(name_markup(prefix).runs.is_empty());
+        }
+    }
+
+    #[test]
+    fn element_locants_are_standalone_and_preserve_primes() {
+        for element in ["N", "O", "S", "P", "Se", "Te", "As", "B", "Si"] {
+            italic(&format!("{element},{element}-name"), &[element, element]);
+            italic(
+                &format!("({element}′,{element}'-name)"),
+                &[element, element],
+            );
+            assert!(name_markup(&format!("word{element}-name")).runs.is_empty());
+            assert!(name_markup(&format!("{element}ame")).runs.is_empty());
+        }
+        italic("N″,N‴,N⁗,N’-name", &["N", "N", "N", "N"]);
+        assert!(
+            name_markup("Na-name Os-name Sixty-name NH-name")
+                .runs
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn ascii_element_locant_digits_are_superscript_only() {
+        let markup = name_markup("Se12,N3′-name");
+        assert_eq!(
+            styled(&markup),
+            vec![
+                ("Se", NameRun::Italic),
+                ("12", NameRun::Superscript),
+                ("N", NameRun::Italic),
+                ("3", NameRun::Superscript)
+            ]
+        );
+        assert_eq!(markup.runs[0].0, 0..2);
+        assert_eq!(markup.runs[1].0, 2..4);
+        let unicode = name_markup("N¹-ethyl-N²-methyl");
+        assert_eq!(unicode, name_markup("N1-ethyl-N2-methyl"));
+        assert_eq!(parts(&unicode, NameRun::Italic), ["N", "N"]);
+        let markup = name_markup("N⁰,N¹,N²,N³,N⁴,N⁵,N⁶,N⁷,N⁸,N⁹-name");
+        assert_eq!(markup.text, "N0,N1,N2,N3,N4,N5,N6,N7,N8,N9-name");
+        assert_eq!(parts(&markup, NameRun::Italic), ["N"; 10]);
+        assert_eq!(
+            parts(&markup, NameRun::Superscript),
+            ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+        );
+        // Format Chemical Name reparses its own Unicode display.
+        let markup = name_markup("N1-ethyl-N2-methylethane-1,2-diamine");
+        assert_eq!(name_markup(&markup.unicode().text), markup);
+        for text in ["(tert)-butyl", "(sec)"] {
+            assert!(name_markup(text).runs.is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn indicated_hydrogen_requires_numeric_locants() {
+        italic("1H-imidazole", &["H"]);
+        italic("name-12H-name", &["H"]);
+        italic("name(12H)", &["H"]);
+        italic("tetrahydro-1H,3H-furo[3,4-c]furan", &["H", "H", "c"]);
+        italic("1H-purine-2,6,8(3H,7H,9H)-trione", &["H", "H", "H", "H"]);
+        italic("4aH-carbazole 5′H-name", &["H", "H"]);
+        for text in [
+            "H-name",
+            "NH-name",
+            "CH-name",
+            "name1H-name",
+            "1H",
+            "name(1Hname)",
+            "(H)",
+        ] {
+            assert!(name_markup(text).runs.is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn fusion_letter_runs_merge_but_punctuation_stays_roman() {
+        italic("furo[2,3-b:4′,5′-cd′]pyridine", &["b", "cd"]);
+        for text in [
+            "furo[2,3]pyridine",
+            "furo[a-b]pyridine",
+            "furo[2,3-broken word]pyridine",
+            "furo[2,3-b",
+            "furo2,3-b]pyridine",
+        ] {
+            assert!(name_markup(text).runs.is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn ordinary_names_and_unrecognized_stereo_remain_plain() {
+        for text in [
+            "",
+            "ethanol",
+            "cyclohexane",
+            "isopropyl",
+            "2-methylpropan-2-ol",
+            "sulfanyl",
+            "iso-propyl",
+            "cyclo-hexane",
+            "cisplatin",
+            "mesomeric",
+            "Naphthalene",
+            "(helloR)-name",
+            "(2R,word)-name",
+            "R-name E-name",
+        ] {
+            assert!(name_markup(text).runs.is_empty(), "{text}");
+        }
+        italic("(2R)-name (unclosedS", &["R"]);
+    }
+
+    #[test]
+    fn unicode_offsets_are_display_utf8_boundaries() {
+        let markup = name_markup("β-(2ξ,3Ξ)-N12-α");
+        assert_eq!(
+            styled(&markup),
+            vec![
+                ("ξ", NameRun::Italic),
+                ("Ξ", NameRun::Italic),
+                ("N", NameRun::Italic),
+                ("12", NameRun::Superscript)
+            ]
+        );
+        assert_eq!(markup.runs[0].0, 5..7);
+        assert_eq!(markup.runs[1].0, 9..11);
+    }
+
+    #[test]
+    fn isotopes_share_caption_scripts_with_normalized_display_text() {
+        for (text, expected) in [
+            (
+                "(S)-(1-2H1,34S)ethan-1-ol",
+                vec![
+                    ("S", NameRun::Italic),
+                    ("2", NameRun::Superscript),
+                    ("1", NameRun::Subscript),
+                    ("34", NameRun::Superscript),
+                ],
+            ),
+            ("(31P)phosphane", vec![("31", NameRun::Superscript)]),
+            (
+                "(1,1-2H2,18O)methanol",
+                vec![
+                    ("2", NameRun::Superscript),
+                    ("2", NameRun::Subscript),
+                    ("18", NameRun::Superscript),
+                ],
+            ),
+            ("methanol-d4", vec![("4", NameRun::Subscript)]),
+            ("ethan-1-ol-2-13C", vec![("13", NameRun::Superscript)]),
+            (
+                "β-(²H₁)methane",
+                vec![("2", NameRun::Superscript), ("1", NameRun::Subscript)],
+            ),
+        ] {
+            let markup = name_markup(text);
+            assert_eq!(styled(&markup), expected, "{text}");
+        }
+    }
+
+    #[test]
+    fn repeated_element_locants_style_digits_as_superscript() {
+        assert_eq!(
+            styled(&name_markup("N1,N1-dimethyl")),
+            [
+                ("N", NameRun::Italic),
+                ("1", NameRun::Superscript),
+                ("N", NameRun::Italic),
+                ("1", NameRun::Superscript),
+            ]
+        );
+    }
+
+    #[test]
+    fn unnumbered_fusion_edge_remains_italic() {
+        italic("benzo[b]thiophene", &["b"]);
+    }
+
+    #[test]
+    fn racemic_prefix_remains_italic_outside_stereo_parentheses() {
+        italic("rac-(2R)-butan-2-ol", &["rac", "R"]);
+    }
+
+    #[test]
+    fn additional_configuration_prefixes_remain_italic() {
+        italic("myo-inositol", &["myo"]);
+    }
+
+    #[test]
+    fn carbohydrate_configuration_remains_small_caps() {
+        assert_eq!(
+            styled(&name_markup("D-glucose")),
+            [("D", NameRun::SmallCaps)]
+        );
+    }
+
+    #[test]
+    fn terminal_prefix_requires_a_preceding_hyphen() {
+        assert!(name_markup("cis").runs.is_empty());
+        assert_eq!(
+            styled(&name_markup("name-D-gluco")),
+            [("D", NameRun::SmallCaps), ("gluco", NameRun::Italic)]
+        );
+    }
+
+    #[test]
+    fn tert_prefix_requires_a_following_hyphen() {
+        assert!(name_markup("tert,butyl").runs.is_empty());
+    }
+
+    #[test]
+    fn fusion_locants_preserve_primes_and_interior_scripts() {
+        for name in ["(3a^1R/4a′S)-name", "(3a¹R/12′S)-name", "(3a12R/5′aS)-name"] {
+            assert_eq!(parts(&name_markup(name), NameRun::Italic), ["R", "S"]);
+        }
+    }
+
+    #[test]
+    fn isotope_counts_remain_subscript_beside_element_locants() {
+        assert_eq!(
+            styled(&name_markup("(15N2,18O)methanamine")),
+            [
+                ("15", NameRun::Superscript),
+                ("2", NameRun::Subscript),
+                ("18", NameRun::Superscript),
+            ]
         );
     }
 }
