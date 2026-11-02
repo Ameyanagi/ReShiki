@@ -492,6 +492,9 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
             "reference/engine/abbreviations.py" => Some("aromatic-abbreviations-source.py.gz"),
             "reference/engine/cdx_exchange.py" => Some("aromatic-cdx-exchange-source.py.gz"),
             "reference/engine/arrows_exchange.py" => Some("aromatic-arrows-exchange-source.py.gz"),
+            "reference/engine/graphics_exchange.py" => {
+                Some("aromatic-graphics-exchange-source.py.gz")
+            }
             "reference/engine/worker.py" => Some("aromatic-worker-source.py.gz"),
             _ => None,
         };

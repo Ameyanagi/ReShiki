@@ -217,7 +217,11 @@ fn unsupported_long_chain_keeps_its_shape_and_the_import_warning() -> anyhow::Re
     let super::super::Preparation::Complete(prepared) = super::super::prepare(request)? else {
         anyhow::bail!("Import did not complete");
     };
-    super::super::tests::assert_rigid_rotation(&original.positions, &prepared.molecule.positions);
+    let mut expected = original.positions.clone();
+    crate::chemistry::layout_refinement::straighten(&state, &mut expected, None);
+    super::super::tests::assert_rigid_rotation(&original.positions, &expected);
+    crate::chemistry::layout_refinement::conventional_orientation(&state, &mut expected);
+    assert_eq!(prepared.molecule.positions, expected);
     assert_eq!(prepared.warnings, [NOTICE]);
     Ok(())
 }

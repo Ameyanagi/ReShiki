@@ -47,7 +47,7 @@ expected outputs after Rust implementation changes. Python reference-source
 hashes and the complete record stream checksum are checked on replay.
 
 Replay hashes the retained historical template input, abbreviation presets, CDX
-codec, arrow codec and worker sources rather than their evolving live files. The source archives contain
+codec, arrow codec, graphics codec and worker sources rather than their evolving live files. The source archives contain
 exact ReShiki bytes from commit `51fa0991da2507bb00b27c1b420e807468de6423`, under the
 repository's `MIT OR Apache-2.0` license:
 
@@ -59,6 +59,12 @@ repository's `MIT OR Apache-2.0` license:
   decompressed SHA256 `8cf51d43b67b1d7b5e294d3b633e0923771b405ed11f21cd83d4c856736aa48a`.
 - `aromatic-worker-source.py.gz` retains `reference/engine/worker.py`, decompressed
   SHA256 `b5d884be2a8c22c1eb9a64e05f1df375592e7b0a6d16d63dffefe17dcba9ccf5`.
+
+`aromatic-graphics-exchange-source.py.gz` retains `reference/engine/graphics_exchange.py`
+from commit `568513c2333a7f1402eef86fca8ba9efca7f9cea`, decompressed SHA256
+`58f82dd25af31c6a8fda90fd2f33a81e5a688e4579f043b6be51956decf050f5`. The live
+module later gained a partial-charge caption hook for the drawing-exchange oracle,
+which no captured aromaticity request uses.
 
 These are the original recorded hashes in all three fixture headers. The current
 worker adds cubic controls only to CDXML export bounds; its aromaticity handler
