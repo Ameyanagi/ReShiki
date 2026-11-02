@@ -829,6 +829,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::CopyAs(_)
             | Message::CopySmiles
             | Message::CopyChemicalText
+            | Message::FormatChemicalName
             | Message::Paste
             | Message::PastePicture
             | Message::Duplicate
@@ -870,6 +871,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Labels(_)
             | Message::Charge(_)
             | Message::ApplyIsotope
+            | Message::SetIsotope(_)
             | Message::AtomRadical(_)
             | Message::RemoveMark(..)
             | Message::RotateMark(..)

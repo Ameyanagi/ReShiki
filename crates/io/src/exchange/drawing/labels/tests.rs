@@ -13,6 +13,72 @@ fn dummy(label: &str) -> Document {
     document
 }
 
+#[test]
+fn stereo_parentheses_export_as_optional_cdxml_and_cdx_style_runs_and_roundtrip() {
+    for roman in [false, true] {
+        let mut document = Document::default();
+        let a = document.add_atom("C", Point::default());
+        let b = document.add_atom("C", Point::new(42., 0.));
+        document.add_bond(a, b, 2, "plain");
+        document.atom_mut(a).unwrap().cip_label = Some("R".into());
+        document.bonds[0].cip_label = Some("E".into());
+        document.atom_labels.stereo = true;
+        document.atom_labels.roman_stereo_parentheses = roman;
+        let before = document.clone();
+        let indicators = crate::atom_labels::indicators(&document);
+        for metrics in [None, Some(indicators.as_slice())] {
+            let xml = super::super::write(
+                &document,
+                super::super::Options {
+                    atom_indicators: metrics,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let decoded =
+                crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+            for xml in [&xml, &decoded] {
+                let tree = roxmltree::Document::parse(xml).unwrap();
+                let indicators: Vec<_> = tree
+                    .descendants()
+                    .filter(|node| {
+                        node.has_tag_name("objecttag") && node.attribute("Name") == Some("stereo")
+                    })
+                    .collect();
+                assert_eq!(indicators.len(), 2);
+                for ((indicator, owner), cip) in indicators.iter().zip(["n", "b"]).zip(["R", "E"]) {
+                    assert!(indicator.parent().unwrap().has_tag_name(owner));
+                    let runs: Vec<_> = indicator
+                        .descendants()
+                        .filter(|node| node.has_tag_name("s"))
+                        .map(|node| {
+                            (
+                                node.text().unwrap().to_owned(),
+                                node.attribute("face").unwrap().parse::<u8>().unwrap(),
+                            )
+                        })
+                        .collect();
+                    let expected = if roman {
+                        vec![("(".into(), 0), (cip.into(), 2), (")".into(), 0)]
+                    } else {
+                        vec![(format!("({cip})"), 2)]
+                    };
+                    assert_eq!(runs, expected);
+                }
+                let imported = cdxml::import_cdxml(xml).unwrap().document;
+                assert_eq!(imported.atom_labels.roman_stereo_parentheses, roman);
+                assert!(imported.atoms[0].display.stereo.style.italic);
+                assert!(imported.bonds[0].indicator.style.italic);
+                if roman {
+                    let unsupported = xml.replace("face=\"2\"", "face=\"3\"");
+                    assert!(cdxml::import_cdxml(&unsupported).is_err());
+                }
+            }
+        }
+        assert_eq!(document, before);
+    }
+}
+
 fn runs(xml: &str, kind: &str) -> Vec<(String, u8)> {
     let tree = roxmltree::Document::parse(xml).unwrap();
     let atom = tree
@@ -26,6 +92,22 @@ fn runs(xml: &str, kind: &str) -> Vec<(String, u8)> {
             (
                 node.text().unwrap_or_default().into(),
                 node.attribute("face").unwrap().parse().unwrap(),
+            )
+        })
+        .collect()
+}
+
+fn stereo_indicators(xml: &str) -> Vec<(String, String)> {
+    let tree = roxmltree::Document::parse(xml).unwrap();
+    tree.descendants()
+        .filter(|node| node.has_tag_name("objecttag") && node.attribute("Name") == Some("stereo"))
+        .map(|node| {
+            (
+                node.parent().unwrap().tag_name().name().into(),
+                node.descendants()
+                    .filter(|node| node.has_tag_name("s"))
+                    .filter_map(|node| node.text())
+                    .collect(),
             )
         })
         .collect()
@@ -429,4 +511,57 @@ fn label_justification_outranks_other_chemdraw_alignment_tags() {
     assert!(xml.contains("LabelAlignment=\"Right\"") && xml.contains("LabelDisplay=\"Right\""));
     let atom = import_variable(&xml).atoms.first().unwrap().clone();
     assert_eq!(atom.display.label_attachment, LabelAttachment::Left);
+}
+
+#[test]
+fn cdxml_stereo_indicators_use_sequential_bond_descriptors() {
+    for (cip, expected) in [
+        ("e", "(seqTrans)"),
+        ("z", "(seqCis)"),
+        ("E", "(E)"),
+        ("Z", "(Z)"),
+    ] {
+        let mut document = Document::default();
+        let left = document.add_atom("C", Point::default());
+        let right = document.add_atom("C", Point::new(42., 0.));
+        document.add_bond(left, right, 2, "plain");
+        document.atom_labels.stereo = true;
+        document.atom_mut(left).unwrap().cip_label = Some("R".into());
+        document.bonds[0].cip_label = Some(cip.into());
+        let before = document.clone();
+        let xml = super::super::write(&document, Options::default()).unwrap();
+        assert_eq!(
+            stereo_indicators(&xml),
+            [("n".into(), "(R)".into()), ("b".into(), expected.into())],
+            "{cip}"
+        );
+        assert_eq!(document, before);
+    }
+}
+
+#[test]
+fn cdxml_stereo_indicators_follow_axial_descriptor_setting() {
+    use crate::atom_labels::AxialDescriptors;
+    for (cip, ra) in [("M", "(Ra)"), ("P", "(Sa)"), ("m", "(ra)"), ("p", "(sa)")] {
+        let mut document = Document::default();
+        let left = document.add_atom("C", Point::default());
+        let right = document.add_atom("C", Point::new(42., 0.));
+        document.add_bond(left, right, 1, "plain");
+        document.atom_labels.stereo = true;
+        document.bonds[0].cip_label = Some(cip.into());
+        for (mode, expected) in [
+            (AxialDescriptors::Helicity, format!("({cip})")),
+            (AxialDescriptors::Ra, ra.into()),
+        ] {
+            document.atom_labels.axial_descriptors = mode;
+            let before = document.clone();
+            let xml = super::super::write(&document, Options::default()).unwrap();
+            assert_eq!(
+                stereo_indicators(&xml),
+                [("b".into(), expected)],
+                "{cip}: {mode}"
+            );
+            assert_eq!(document, before);
+        }
+    }
 }

@@ -115,6 +115,34 @@ fn partial_charge_symbols_are_searchable_by_delta() {
 }
 
 #[test]
+fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
+    use crate::app::atom_labels::Scope;
+
+    let mut app = app();
+    let _ = app.update(Message::New);
+    app.tab.doc.add_atom("C", Point::default());
+    app.tab.labels.scope = Scope::Selection;
+    app.tab.history = Default::default();
+    for query in ["pseudoasymmetric", "CIP", "r/s", "seqCis", "Ra/Sa"] {
+        search(&mut app, query);
+        assert_eq!(top(&app).name, "Show stereodescriptors", "{query}");
+    }
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert!(app.tab.doc.atom_labels.stereo);
+    assert_eq!(app.tab.labels.scope, Scope::Selection);
+    assert_eq!(app.tab.doc.atoms[0].display.stereo.show, None);
+    let _ = app.update(Message::Undo);
+    assert!(!app.tab.doc.atom_labels.stereo);
+    assert!(!app.tab.history.can_undo());
+
+    run(&mut app, "CIP");
+    search(&mut app, "pseudoasymmetric");
+    assert_eq!(top(&app).name, "Hide stereodescriptors");
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert!(!app.tab.doc.atom_labels.stereo);
+}
+
+#[test]
 fn path_cleanup_catalog_has_selection_commands_and_explicit_upright_axis() {
     for (query, name, upright) in [
         ("Smooth", "Smooth", None),
@@ -2254,4 +2282,30 @@ fn molecular_properties_palette_uses_attachment_composition() {
         app.status
     );
     assert!(!app.error);
+}
+
+#[test]
+fn chemical_name_format_command_requires_selected_text_boxes_and_undoes_once() {
+    let mut app = app();
+    let atom = app.tab.doc.add_atom("C", Point::default());
+    app.tab.doc.annotations.push(reshiki::document::Annotation {
+        id: 2,
+        position: Point::new(0., 50.),
+        text: "N,N'-diethylmethanamine".into(),
+        format: Default::default(),
+    });
+    app.tab.selected = vec![atom];
+    search(&mut app, "Format as chemical name");
+    assert_eq!(top(&app).name, "Format as chemical name");
+    assert!(app.command_unavailable(top(&app)).is_some());
+    app.tab.selected = vec![2];
+    assert!(app.command_unavailable(top(&app)).is_none());
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert_eq!(app.tab.doc.annotations[0].text, "N,N′-diethylmethanamine");
+    assert_eq!(app.tab.doc.annotations[0].format.spans.len(), 2);
+    assert!(!app.commands.open && !app.error, "{}", app.status);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
 }

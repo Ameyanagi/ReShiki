@@ -1,9 +1,58 @@
 //! Explicit reaction membership, independent of where a scheme is drawn.
-use crate::document::Document;
+use crate::document::{Arrow, Document, Point};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 #[cfg(test)]
 mod copy_tests;
+mod hints;
+pub use hints::{ArrowSemanticsHint, ArrowSemanticsHintKind, arrow_semantics_hints};
+
+/// Shared orientation-independent end-side geometry for reaction inference and hints.
+struct EndSides {
+    dx: f64,
+    dy: f64,
+    mx: f64,
+    my: f64,
+    tolerance: f64,
+}
+impl EndSides {
+    fn new(arrow: &Arrow) -> Result<Self, &'static str> {
+        let (dx, dy) = (
+            f64::from(arrow.end.x) - f64::from(arrow.start.x),
+            f64::from(arrow.end.y) - f64::from(arrow.start.y),
+        );
+        let length_squared = dx * dx + dy * dy;
+        if length_squared == 0. {
+            return Err("The reaction arrow needs distinct start and end points.");
+        }
+        Ok(Self {
+            dx,
+            dy,
+            mx: (f64::from(arrow.start.x) + f64::from(arrow.end.x)) * 0.5,
+            my: (f64::from(arrow.start.y) + f64::from(arrow.end.y)) * 0.5,
+            // Scale-relative tolerance for ties, independent of orientation and zoom.
+            tolerance: length_squared * 1e-6,
+        })
+    }
+    fn role(&self, positions: impl Iterator<Item = Point>) -> Result<Role, &'static str> {
+        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+        for point in positions {
+            let side =
+                (f64::from(point.x) - self.mx) * self.dx + (f64::from(point.y) - self.my) * self.dy;
+            lo = lo.min(side);
+            hi = hi.max(side);
+        }
+        if !lo.is_finite() {
+            Err("A molecule has no visible position; assign reaction roles explicitly.")
+        } else if hi < -self.tolerance {
+            Ok(Role::Reactant)
+        } else if lo > self.tolerance {
+            Ok(Role::Product)
+        } else {
+            Err("A molecule overlaps the arrow midpoint; assign reaction roles explicitly.")
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -228,14 +277,7 @@ pub fn copy_reaction(
     {
         return Err("Automatic reaction copy needs one straight forward arrow.");
     }
-    let (dx, dy) = (
-        f64::from(arrow.end.x) - f64::from(arrow.start.x),
-        f64::from(arrow.end.y) - f64::from(arrow.start.y),
-    );
-    let length_squared = dx * dx + dy * dy;
-    if length_squared == 0. {
-        return Err("The reaction arrow needs distinct start and end points.");
-    }
+    let sides = EndSides::new(arrow)?;
     if source.reactions.iter().any(|reaction| {
         Role::ALL
             .into_iter()
@@ -246,37 +288,14 @@ pub fn copy_reaction(
             "Copied molecules have roles on another arrow; select that complete reaction or unassigned molecules.",
         );
     }
-    let (mx, my) = (
-        (f64::from(arrow.start.x) + f64::from(arrow.end.x)) * 0.5,
-        (f64::from(arrow.start.y) + f64::from(arrow.end.y)) * 0.5,
-    );
-    // Scale-relative tolerance for ties, independent of orientation and zoom.
-    let tolerance = length_squared * 1e-6;
     let mut reaction = Reaction::new(arrow.id);
     for members in parts {
-        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
-        for id in &members {
-            let atom = atoms
-                .get(id)
-                .ok_or("Select complete molecules and the reaction arrow before copying.")?;
-            if snapshot.atom_visible(*id) {
-                let side =
-                    (f64::from(atom.position.x) - mx) * dx + (f64::from(atom.position.y) - my) * dy;
-                lo = lo.min(side);
-                hi = hi.max(side);
-            }
-        }
-        let role = if !lo.is_finite() {
-            return Err("A molecule has no visible position; assign reaction roles explicitly.");
-        } else if hi < -tolerance {
-            Role::Reactant
-        } else if lo > tolerance {
-            Role::Product
-        } else {
-            return Err(
-                "A molecule overlaps the arrow midpoint; assign reaction roles explicitly.",
-            );
-        };
+        let role = sides.role(
+            members
+                .iter()
+                .filter(|id| snapshot.atom_visible(**id))
+                .filter_map(|id| atoms.get(id).map(|atom| atom.position)),
+        )?;
         reaction.participants_mut(role).push(Participant {
             atoms: members,
             coefficient: 1,

@@ -80,6 +80,7 @@ fn reference_edits_that_leave_a_named_molecule_in_place_detach_its_offset_captio
             "ethan-1-ol".into(),
             "CCO".into(),
             Default::default(),
+            true,
         )?;
         let caption = |doc: &Document| doc.annotations.iter().find(|a| a.id == id).cloned();
         // Insertion reconciles the new caption into its computed position.

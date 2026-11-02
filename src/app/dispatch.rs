@@ -106,6 +106,7 @@ impl App {
             Message::Element(e) => self.choose_element(e),
             Message::CaptionAction(action) => self.caption_action(action),
             Message::TextStyle(change) => self.apply_text_style(change),
+            Message::FormatChemicalName => self.format_chemical_name(),
             Message::FontSize(value) => self.tab.font_size_input = value,
             Message::ApplyFontSize => self.apply_font_size_input(),
             Message::ClearRingFill => self.apply_ring_color(None),
@@ -180,6 +181,10 @@ impl App {
             Message::SelectAll => self.select_all_objects(),
             Message::Charge(delta) => self.change_charge(delta),
             Message::ApplyIsotope => self.apply_isotope(),
+            Message::SetIsotope(value) => {
+                self.tab.isotope = value.to_string();
+                self.apply_isotope();
+            }
             Message::CopySmiles => return Some(self.copy_smiles()),
             Message::CopyChemicalText => return Some(self.copy_chemical_text()),
             // Tabs wait while the save dialog asks about the tab in front.

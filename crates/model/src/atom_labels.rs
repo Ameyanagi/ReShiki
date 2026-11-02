@@ -3,12 +3,16 @@
 use crate::{
     abbreviations::LabelAlignment,
     document::{Atom, Bond, Document, Point},
-    typography::{ScriptRun, TextStyle},
+    typography::{ScriptRun, TextFormat, TextSpan, TextStyle},
 };
 use serde::{Deserialize, Serialize};
+mod hints;
+pub use hints::{HiddenLabelNotes, hidden_label_notes};
 #[cfg(test)]
 mod placement_tests;
 pub mod refresh;
+#[cfg(test)]
+pub(crate) mod test_support;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -408,6 +412,30 @@ fn yes() -> bool {
 fn is_true(value: &bool) -> bool {
     *value
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AxialDescriptors {
+    #[default]
+    Helicity,
+    Ra,
+}
+impl AxialDescriptors {
+    pub const ALL: [Self; 2] = [Self::Helicity, Self::Ra];
+
+    fn is_helicity(&self) -> bool {
+        *self == Self::Helicity
+    }
+}
+impl std::fmt::Display for AxialDescriptors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Helicity => "M/P (IUPAC preferred)",
+            Self::Ra => "Ra/Sa",
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -417,9 +445,14 @@ pub struct Settings {
     /// Mark perceived stereogenic units without drawn configuration with (?).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mark_undefined_stereocentres: bool,
+    /// Keep stereo punctuation upright while italicizing its descriptor.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub roman_stereo_parentheses: bool,
     /// Chemical atom-map labels are visible on imported mapped reactions.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub maps: bool,
+    #[serde(default, skip_serializing_if = "AxialDescriptors::is_helicity")]
+    pub axial_descriptors: AxialDescriptors,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -428,7 +461,9 @@ impl Default for Settings {
             hydrogens: yes(),
             stereo: false,
             mark_undefined_stereocentres: false,
+            roman_stereo_parentheses: false,
             maps: true,
+            axial_descriptors: AxialDescriptors::default(),
         }
     }
 }
@@ -444,7 +479,38 @@ pub fn stereo_style() -> TextStyle {
         ..number_style()
     }
 }
+/// One style by default; optional upright punctuation around `({cip})` text.
+pub fn indicator_format(text: &str, style: &TextStyle, roman_parentheses: bool) -> TextFormat {
+    let mut format = TextFormat {
+        style: style.clone(),
+        ..Default::default()
+    };
+    if roman_parentheses {
+        format.style.italic = false;
+        let mut descriptor = style.clone();
+        descriptor.italic = true;
+        format.spans.push(TextSpan {
+            start: 1,
+            end: text.len() - 1,
+            style: descriptor,
+        });
+    }
+    format
+}
 
+/// Drawing text for a computed CIP code. Native codes remain unchanged.
+pub fn stereo_text(cip: &str, settings: &Settings) -> String {
+    let text = match (cip, settings.axial_descriptors) {
+        ("e", _) => "seqTrans",
+        ("z", _) => "seqCis",
+        ("M", AxialDescriptors::Ra) => "Ra",
+        ("P", AxialDescriptors::Ra) => "Sa",
+        ("m", AxialDescriptors::Ra) => "ra",
+        ("p", AxialDescriptors::Ra) => "sa",
+        _ => cip,
+    };
+    format!("({text})")
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Number {
     pub text: String,
@@ -764,17 +830,53 @@ pub struct Indicator {
     pub height: f32,
     pub text: String,
     pub style: TextStyle,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub roman_parentheses: bool,
 }
 impl Indicator {
-    pub fn primitive(&self) -> crate::scene::Primitive {
-        crate::scene::Primitive::Text {
-            position: self.origin,
-            text: self.text.clone(),
-            size: self.height,
-            color: self.style.color.rgb(),
-            style: self.style.clone(),
-        }
+    pub fn primitives(&self) -> Vec<crate::scene::Primitive> {
+        let format = indicator_format(&self.text, &self.style, self.roman_parentheses);
+        let mut x = self.origin.x;
+        indicator_runs(&self.text, &format)
+            .map(|(text, style)| {
+                let position = Point::new(x, self.origin.y);
+                x += crate::style::styled_text_width(text, self.height, style);
+                crate::scene::Primitive::Text {
+                    position,
+                    text: text.into(),
+                    size: self.height,
+                    color: style.color.rgb(),
+                    style: style.clone(),
+                }
+            })
+            .collect()
     }
+}
+
+pub(crate) fn indicator_runs<'a>(
+    text: &'a str,
+    format: &'a TextFormat,
+) -> impl Iterator<Item = (&'a str, &'a TextStyle)> {
+    let mut start = 0;
+    let mut remaining = text;
+    format
+        .spans
+        .iter()
+        .flat_map(|span| [span.start, span.end])
+        .chain(std::iter::once(text.len()))
+        .filter_map(move |end| {
+            let (run, rest) = remaining.split_at(end - start);
+            let style = format.at(start);
+            start = end;
+            remaining = rest;
+            (!run.is_empty()).then_some((run, style))
+        })
+}
+
+pub(crate) fn indicator_width(text: &str, height: f32, format: &TextFormat) -> f32 {
+    indicator_runs(text, format)
+        .map(|(text, style)| crate::style::styled_text_width(text, height, style))
+        .sum()
 }
 
 /// Automatic indicator candidate radii, innermost first. Generic ink bounds
@@ -824,7 +926,7 @@ pub(crate) fn bond_indicator_shown(b: &Bond, doc: &Document) -> bool {
 
 /// Unknown markers use the owner's normal stereo layout and visibility, while
 /// keeping the chemical CIP label available only for actual descriptors.
-pub(crate) fn stereo_text<'a>(
+pub(crate) fn stereo_code<'a>(
     cip: Option<&'a str>,
     undefined: bool,
     doc: &Document,
@@ -853,11 +955,11 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
         a.display.number.is_some()
             || map_indicator_shown(a, doc)
             || (stereo_indicator_shown(a, doc)
-                && stereo_text(a.cip_label.as_deref(), a.undefined_stereo, doc).is_some())
+                && stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc).is_some())
     });
     let bond_candidate = doc.bonds.iter().any(|b| {
         bond_indicator_shown(b, doc)
-            && stereo_text(b.cip_label.as_deref(), b.undefined_stereo, doc).is_some()
+            && stereo_code(b.cip_label.as_deref(), b.undefined_stereo, doc).is_some()
     });
     if !atom_candidate && !bond_candidate {
         return Vec::new();
@@ -874,6 +976,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                 n.text.clone(),
                 n.offset,
                 n.style.clone(),
+                false,
             ));
         }
         if map_indicator_shown(a, doc) {
@@ -882,28 +985,31 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                 a.map_num.to_string(),
                 a.display.mapping.offset,
                 a.display.mapping.style.clone(),
+                false,
             ));
         }
         if stereo_indicator_shown(a, doc)
-            && let Some(cip) = stereo_text(a.cip_label.as_deref(), a.undefined_stereo, doc)
+            && let Some(cip) = stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc)
         {
             labels.push((
                 Owner::AtomStereo(a.id),
-                format!("({cip})"),
+                stereo_text(cip, &doc.atom_labels),
                 a.display.stereo.offset,
                 indicator_style(&a.display.stereo.style, cip),
+                doc.atom_labels.roman_stereo_parentheses,
             ));
         }
     }
     for b in doc.bonds.iter().filter(|b| doc.bond_visible(b.a, b.b)) {
         if bond_indicator_shown(b, doc)
-            && let Some(cip) = stereo_text(b.cip_label.as_deref(), b.undefined_stereo, doc)
+            && let Some(cip) = stereo_code(b.cip_label.as_deref(), b.undefined_stereo, doc)
         {
             labels.push((
                 Owner::BondStereo(b.a, b.b),
-                format!("({cip})"),
+                stereo_text(cip, &doc.atom_labels),
                 b.indicator.offset,
                 indicator_style(&b.indicator.style, cip),
+                doc.atom_labels.roman_stereo_parentheses,
             ));
         }
     }
@@ -925,12 +1031,13 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             .filter_map(crate::atom_text::text_ink_bounds),
     );
     // Reserve all manual indicators first, including owners later in atom order.
-    for (owner, text, offset, style) in &labels {
+    for (owner, text, offset, style, roman_parentheses) in &labels {
         if let Some(offset) = offset
             && let Some(anchor) = owner.anchor(doc)
         {
             let height = crate::style::DEFAULT.world(style.size_pt);
-            let width = crate::style::styled_text_width(text, height, style);
+            let format = indicator_format(text, style, *roman_parentheses);
+            let width = indicator_width(text, height, &format);
             let center = anchor.offset(offset.x, offset.y);
             occupied.push((
                 center.offset(-width / 2. - 3., -height / 2. - 3.),
@@ -953,12 +1060,13 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
         .map(|a| a.position)
         .collect();
     let mut result = Vec::new();
-    for (owner, text, offset, style) in labels {
+    for (owner, text, offset, style, roman_parentheses) in labels {
         let Some(anchor) = owner.anchor(doc) else {
             continue;
         };
         let height = crate::style::DEFAULT.world(style.size_pt);
-        let width = crate::style::styled_text_width(&text, height, &style);
+        let format = indicator_format(&text, &style, roman_parentheses);
+        let width = indicator_width(&text, height, &format);
         let outward = if matches!(owner, Owner::Number(_)) {
             outward_extent(width, height)
         } else {
@@ -1057,6 +1165,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             height,
             text,
             style,
+            roman_parentheses,
         });
     }
     result

@@ -43,6 +43,8 @@ pub struct Settings {
     pub smart_guides: bool,
     /// Include advisory IUPAC stereochemical drawing conventions in Check drawing.
     pub iupac_style_notes: bool,
+    /// Typeset chemical names when placing a new caption.
+    pub name_typography: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
 }
@@ -54,6 +56,7 @@ impl Default for Settings {
             arrange_controls: true,
             smart_guides: true,
             iupac_style_notes: false,
+            name_typography: true,
             drawing_style_unit: Default::default(),
         }
     }

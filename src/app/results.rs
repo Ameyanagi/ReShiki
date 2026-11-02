@@ -572,6 +572,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::PreviewOpen(..)
                 | Action::DetailsOpen(..)
                 | Action::CopyName
+                | Action::CopyFormattedName
                 | Action::Caption
                 | Action::Alias(..)
                 | Action::OpenPanel(..)
@@ -681,6 +682,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Element(..)
         | Message::CaptionAction(..)
         | Message::TextStyle(..)
+        | Message::FormatChemicalName
         | Message::FontSize(..)
         | Message::ApplyFontSize
         | Message::ColorScope(..)
@@ -748,6 +750,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Charge(..)
         | Message::Isotope(..)
         | Message::ApplyIsotope
+        | Message::SetIsotope(..)
         | Message::Tabs(..)
         | Message::Close(..)
         | Message::Discard

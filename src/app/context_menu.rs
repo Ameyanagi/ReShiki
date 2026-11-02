@@ -249,6 +249,15 @@ impl App {
             self.molecule_entries(atoms),
             self.structure_entries(atoms, bonds, tilt),
             self.generic_entries(),
+            if self.selected_text_boxes() {
+                vec![command(
+                    "Format as chemical name",
+                    Message::FormatChemicalName,
+                    true,
+                )]
+            } else {
+                vec![]
+            },
             vec![
                 command("Cut", Message::Copy(true), true),
                 Entry::page("Copy as", Page::CopyAs),
@@ -546,7 +555,7 @@ impl App {
             }
             let reason = if format.is_chemical() {
                 match &chemical {
-                    Ok(doc) => format.unavailable_reason(doc),
+                    Ok(doc) => format.unavailable_reason_for_selection(&self.tab.doc, doc),
                     Err(reason) => Some(*reason),
                 }
             } else {

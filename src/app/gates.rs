@@ -415,7 +415,10 @@ impl App {
     fn abbreviation_member_gate(&mut self, message: Message) -> Gate {
         if matches!(
             &message,
-            Message::Charge(_) | Message::AtomRadical(_) | Message::ApplyIsotope
+            Message::Charge(_)
+                | Message::AtomRadical(_)
+                | Message::ApplyIsotope
+                | Message::SetIsotope(_)
         ) && self
             .tab
             .doc
@@ -453,6 +456,7 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             | Message::View(
                 view_settings::Action::Grid
                     | view_settings::Action::SmartGuides(_)
+                    | view_settings::Action::NameTypography(_)
                     | view_settings::Action::Rulers(_)
                     | view_settings::Action::Crosshair(_)
                     | view_settings::Action::RulerUnit(_)

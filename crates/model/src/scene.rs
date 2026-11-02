@@ -208,7 +208,7 @@ pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point,
         .collect();
     for indicator in crate::atom_labels::indicators(doc) {
         if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
-            ink.extend(label_ink_boxes(&[indicator.primitive()]));
+            ink.extend(label_ink_boxes(&indicator.primitives()));
         }
     }
     ink
@@ -2364,7 +2364,7 @@ fn push_atom_labels(
                 .map_or(1., |bond| opacity.bond(bond, 0.5)),
         };
         out.extend(crate::rear_opacity::with_opacity(
-            vec![indicator.primitive()],
+            indicator.primitives(),
             alpha,
         ));
     }

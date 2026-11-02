@@ -58,6 +58,7 @@ fn composed() -> Document {
         "ethan-1-ol".into(),
         "CCO".into(),
         TextFormat::default(),
+        true,
     )
     .unwrap();
     let mut arrow = Arrow::new(

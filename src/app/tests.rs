@@ -515,6 +515,35 @@ fn label_edits_and_indicator_drags_are_atomic_and_do_not_change_chemistry() {
 }
 
 #[test]
+fn axial_stereodescriptors_are_drawing_wide_and_undoable() {
+    use atom_labels::{Action, Scope};
+    use reshiki::atom_labels::AxialDescriptors;
+
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::New);
+    app.tab.doc.add_atom("C", Point::default());
+    app.tab.labels.scope = Scope::Selection;
+    app.tab.history = History::default();
+    let before = app.tab.doc.clone();
+
+    app.label_action(Action::AxialDescriptors(AxialDescriptors::Ra));
+    assert_eq!(
+        app.tab.doc.atom_labels.axial_descriptors,
+        AxialDescriptors::Ra
+    );
+    assert_eq!(app.tab.labels.scope, Scope::Selection);
+    assert!(!chemistry_changed(&before, &app.tab.doc));
+    let _ = app.update(Message::Undo);
+    assert!(same_drawing(&app.tab.doc, &before));
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(
+        app.tab.doc.atom_labels.axial_descriptors,
+        AxialDescriptors::Ra
+    );
+}
+
+#[test]
 fn bond_attachment_applies_to_text_labels_in_scope_as_one_undo_step() {
     use atom_labels::{Action, Scope};
     use reshiki::atom_labels::LabelAttachment;
@@ -3114,4 +3143,24 @@ fn touch_batch_caption_commit_and_later_bond_tap_match_mouse() {
     let _ = touch.update(Message::Undo);
     assert_eq!(touch.tab.doc, original);
     assert!(!touch.tab.history.can_undo());
+}
+
+#[test]
+fn roman_stereo_parentheses_document_option_is_one_undo_step_even_in_selection_scope() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.labels.scope = atom_labels::Scope::Selection;
+    let before = app.tab.doc.clone();
+    assert!(!before.atom_labels.roman_stereo_parentheses);
+    let _ = app.update(Message::Labels(
+        atom_labels::Action::RomanStereoParentheses(true),
+    ));
+    assert!(app.tab.doc.atom_labels.roman_stereo_parentheses);
+    assert!(!app.error, "{}", app.status);
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
 }

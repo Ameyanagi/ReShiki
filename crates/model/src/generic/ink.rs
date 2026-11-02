@@ -6,7 +6,10 @@ use super::{
     variable::variable_ink_clearance,
 };
 use crate::{
-    atom_labels::{bond_indicator_shown, map_indicator_shown, stereo_indicator_shown, stereo_text},
+    atom_labels::{
+        Settings, bond_indicator_shown, map_indicator_shown, stereo_code, stereo_indicator_shown,
+        stereo_text,
+    },
     document::{Atom, Document, Point},
     highlights::{CAPSULE_RADIUS_SCALE, label_shape_from, radius},
 };
@@ -186,7 +189,6 @@ impl<'a> LabelPlan<'a> {
             || a.charge != 0;
         let map_label = map_indicator_shown(a, doc);
         let stereo_label = stereo_indicator_shown(a, doc);
-        let mark_undefined = doc.atom_labels.stereo && doc.atom_labels.mark_undefined_stereocentres;
         let number = a.display.number.as_ref();
         let mut plan = Self {
             atom: a,
@@ -202,8 +204,13 @@ impl<'a> LabelPlan<'a> {
         if plan.skip() {
             return plan;
         }
+        let stereo_chars = if stereo_label {
+            cip_text_bytes(a.cip_label.as_deref(), &doc.atom_labels)
+        } else {
+            0
+        };
         plan.bytes = a.element.len()
-            + stereo_text(a.cip_label.as_deref(), a.undefined_stereo, doc).map_or(0, str::len)
+            + stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc).map_or(0, str::len)
             + a.display.variable.as_ref().map_or(0, String::len)
             + number.map_or(0, |v| v.text.len())
             + a.marks.len().saturating_mul(512);
@@ -221,16 +228,13 @@ impl<'a> LabelPlan<'a> {
         } else {
             0
         };
-        let stereo_font = if stereo_label {
-            a.display.stereo.style.family.len().saturating_mul(
-                stereo_text(a.cip_label.as_deref(), a.undefined_stereo, doc)
-                    .map_or(0, |v| v.len().saturating_add(2))
-                    .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3))
-                    .saturating_add(usize::from(mark_undefined) * 3),
-            )
-        } else {
-            0
-        };
+        let stereo_font = a
+            .display
+            .stereo
+            .style
+            .family
+            .len()
+            .saturating_mul(stereo_chars);
         plan.fonts = main_font
             .saturating_add(map_font)
             .saturating_add(stereo_font)
@@ -274,6 +278,7 @@ impl<'a> LabelPlan<'a> {
                 number.offset,
                 &number.style,
                 true,
+                false,
             );
         }
         if self.map_label {
@@ -284,16 +289,17 @@ impl<'a> LabelPlan<'a> {
                 a.display.mapping.offset,
                 &a.display.mapping.style,
                 false,
+                false,
             );
         }
         if self.stereo_label {
             cip_bounds(
                 &mut bounds,
                 a.position,
-                stereo_text(a.cip_label.as_deref(), a.undefined_stereo, self.doc),
+                a.cip_label.as_deref(),
                 a.display.stereo.offset,
                 &a.display.stereo.style,
-                self.doc.atom_labels.stereo && self.doc.atom_labels.mark_undefined_stereocentres,
+                &self.doc.atom_labels,
             );
         }
         if let Some((lo, hi)) = bounds {
@@ -312,9 +318,21 @@ pub(super) fn atom_bounds(a: &Atom, doc: &Document) -> Result<Option<(Point, Poi
 // by stereo/cip/label.rs. Native refresh may restore them after caches are
 // cleared, including on unrelated fixed components. Bound every enabled style
 // without assigning CIP, inventing a label, or altering persisted caches.
-pub(super) const FUTURE_CIP_LABELS: [&str; 12] = [
-    "(R)", "(S)", "(r)", "(s)", "(E)", "(Z)", "(e)", "(z)", "(M)", "(P)", "(m)", "(p)",
-];
+const FUTURE_CIP_CODES: [&str; 12] = ["R", "S", "r", "s", "E", "Z", "e", "z", "M", "P", "m", "p"];
+
+/// Optional undefined-centre markers may likewise appear after a refresh.
+fn future_codes<'a>(settings: &Settings) -> impl Iterator<Item = &'a str> + use<'a> {
+    let undefined = settings.stereo && settings.mark_undefined_stereocentres;
+    FUTURE_CIP_CODES.into_iter().chain(undefined.then_some("?"))
+}
+
+pub(super) fn cip_text_bytes(saved: Option<&str>, settings: &Settings) -> usize {
+    saved
+        .into_iter()
+        .chain(future_codes(settings))
+        .map(|code| stereo_text(code, settings).len())
+        .sum()
+}
 
 fn cip_bounds(
     bounds: &mut Option<(Point, Point)>,
@@ -322,16 +340,18 @@ fn cip_bounds(
     saved: Option<&str>,
     offset: Option<Point>,
     style: &crate::typography::TextStyle,
-    mark_undefined: bool,
+    settings: &Settings,
 ) {
-    if let Some(label) = saved {
-        indicator_bounds(bounds, anchor, &format!("({label})"), offset, style, false);
-    }
-    for label in FUTURE_CIP_LABELS {
-        indicator_bounds(bounds, anchor, label, offset, style, false);
-    }
-    if mark_undefined {
-        indicator_bounds(bounds, anchor, "(?)", offset, style, false);
+    for code in saved.into_iter().chain(future_codes(settings)) {
+        indicator_bounds(
+            bounds,
+            anchor,
+            &stereo_text(code, settings),
+            offset,
+            style,
+            false,
+            settings.roman_stereo_parentheses,
+        );
     }
 }
 
@@ -342,9 +362,11 @@ fn indicator_bounds(
     offset: Option<Point>,
     style: &crate::typography::TextStyle,
     number: bool,
+    roman_parentheses: bool,
 ) {
     let height = crate::style::DEFAULT.world(style.size_pt);
-    let width = crate::style::styled_text_width(text, height, style);
+    let format = crate::atom_labels::indicator_format(text, style, roman_parentheses);
+    let width = crate::atom_labels::indicator_width(text, height, &format);
     // Automatic indicator candidates have five fixed radii, ending at 3.25h+6,
     // and long atom numbers are justified outward by up to `outward_extent`.
     // Their conservative envelope avoids a second label-placement pass.
@@ -367,13 +389,16 @@ fn indicator_bounds(
     // Actual font ink may overhang its logical advance (italic/underline).
     // Automatic placement can choose any of the fixed candidate centers; grow
     // every actual ink box by the same maximum radius in each direction.
-    let origin = center.offset(-width / 2., -height / 2.);
-    for (lo, hi) in crate::style::text_ink_boxes(text, height, style) {
-        include(
-            bounds,
-            origin.offset(lo.x - across, lo.y - radius),
-            origin.offset(hi.x + across, hi.y + radius),
-        );
+    let mut origin = center.offset(-width / 2., -height / 2.);
+    for (text, style) in crate::atom_labels::indicator_runs(text, &format) {
+        for (lo, hi) in crate::style::text_ink_boxes(text, height, style) {
+            include(
+                bounds,
+                origin.offset(lo.x - across, lo.y - radius),
+                origin.offset(hi.x + across, hi.y + radius),
+            );
+        }
+        origin.x += crate::style::styled_text_width(text, height, style);
     }
 }
 
@@ -442,10 +467,10 @@ pub(super) fn object_bounds(doc: &Document) -> Result<Option<(Point, Point)>, St
             cip_bounds(
                 &mut bounds,
                 Point::new((a.x + z.x) * 0.5, (a.y + z.y) * 0.5),
-                stereo_text(b.cip_label.as_deref(), b.undefined_stereo, doc),
+                b.cip_label.as_deref(),
                 b.indicator.offset,
                 &b.indicator.style,
-                doc.atom_labels.stereo && doc.atom_labels.mark_undefined_stereocentres,
+                &doc.atom_labels,
             );
         }
     }

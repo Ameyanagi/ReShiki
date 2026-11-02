@@ -229,6 +229,7 @@ pub enum Message {
     Element(String),
     CaptionAction(iced::widget::text_editor::Action),
     TextStyle(reshiki::typography::StyleChange),
+    FormatChemicalName,
     FontSize(String),
     ApplyFontSize,
     ColorScope(typography::ColorScope),
@@ -319,6 +320,7 @@ pub enum Message {
     Charge(i32),
     Isotope(String),
     ApplyIsotope,
+    SetIsotope(u32),
     CancelEngine(engine_jobs::Key),
     EngineFinished {
         key: engine_jobs::Key,
