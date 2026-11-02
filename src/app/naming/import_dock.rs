@@ -85,7 +85,7 @@ impl App {
             }
         };
         let multicomponent = preview.is_multicomponent();
-        let mut document = preview.document;
+        let mut document = locants::insertion_document(&preview, self.tab.naming.number_by_locants);
         let omit_caption = caption && preview.identity != preview.record.canonical_smiles;
         let caption_text = if let Some(index) = self.tab.naming.import_alias {
             let Some(alias) = preview.record.synonyms.get(index) else {
@@ -220,6 +220,7 @@ impl App {
                 (idle && !changed && !multicomponent)
                     .then_some(Message::Naming(Action::AddNameBelow(!state.add_name_below))),
             ),
+            self.name_locant_checkbox("import-name-number-by-locants", idle),
             row![
                 button(
                     "import-name-preview",
@@ -371,6 +372,7 @@ impl App {
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
         let mut content = column![
+            self.locant_name(&preview.record.title, LocantTarget::Preview, 13.),
             self.name_preview_canvas(preview, 160.),
             text(crate::app::workspace::atom_bond_counts(
                 preview.document.atoms.len(),

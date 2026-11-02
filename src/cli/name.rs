@@ -27,29 +27,54 @@ pub(crate) async fn run(
     let record = naming::generate_name(&identity, naming::Cancel::default())
         .await
         .map_err(|error| CliError::Failed(error.to_string()))?;
-    if name.json {
+    if name.json || name.locants {
         let status = record.name_status.ok_or_else(|| {
             CliError::Failed("internal error: generated name has no status".into())
         })?;
         let assessment = json!(status);
-        let value = Map::from_iter([(
-            "value".into(),
-            json!({
-                "name": record.title,
-                "preferred": matches!(status, NameStatus::Preferred),
-                "status": assessment.get("status"),
-                "reason": assessment.get("reason"),
-                "detail": status.detail(),
-                "alternatives": record.alternatives.iter().map(|alternative| {
-                    let assessment = json!(alternative.status);
-                    json!({
-                        "name": alternative.name,
-                        "status": assessment.get("status"),
-                        "reason": assessment.get("reason"),
+        let mut value = Map::from_iter([
+            ("name".into(), json!(record.title)),
+            (
+                "preferred".into(),
+                json!(matches!(status, NameStatus::Preferred)),
+            ),
+            ("status".into(), json!(assessment.get("status"))),
+            ("reason".into(), json!(assessment.get("reason"))),
+            ("detail".into(), json!(status.detail())),
+            (
+                "alternatives".into(),
+                record
+                    .alternatives
+                    .iter()
+                    .map(|alternative| {
+                        let assessment = json!(alternative.status);
+                        json!({
+                            "name": alternative.name,
+                            "status": assessment.get("status"),
+                            "reason": assessment.get("reason"),
+                        })
                     })
-                }).collect::<Vec<_>>(),
-            }),
-        )]);
+                    .collect(),
+            ),
+        ]);
+        if name.locants {
+            let locants = record
+                .locants
+                .as_ref()
+                .map(|locants| locants.for_document(&document))
+                .unwrap_or_default();
+            value.insert(
+                "locants".into(),
+                json!(
+                    document
+                        .atoms
+                        .iter()
+                        .map(|atom| locants.get(&atom.id))
+                        .collect::<Vec<_>>()
+                ),
+            );
+        }
+        let value = Map::from_iter([("value".into(), value.into())]);
         writeln!(out, "{}", labelled(value)).map_err(CliError::Stdout)
     } else {
         writeln!(out, "{}", record.title).map_err(CliError::Stdout)

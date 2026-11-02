@@ -765,9 +765,43 @@ fn name_command_lines_parse() {
                     format: format.into(),
                 },
                 json,
+                locants: false,
             })),
             "{tokens:?}"
         );
+    }
+}
+
+#[test]
+fn name_locants_implies_json_output_and_rejects_duplicate_flags() {
+    assert_eq!(
+        parsed(&["name", "--smiles", "OCC", "--locants"]),
+        Ok(Command::Name(Name {
+            input: Input {
+                source: Source::Smiles("OCC".into()),
+                format: "smiles".into(),
+            },
+            json: false,
+            locants: true,
+        }))
+    );
+    assert_eq!(
+        parsed(&["name", "--smiles", "C", "--locants", "--locants"]),
+        Err("--locants given more than once".into())
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_locants_reports_parent_atoms_in_imported_atom_order() {
+    for flags in [vec!["--locants"], vec!["--json", "--locants"]] {
+        let mut tokens = vec!["name", "--smiles", "OCC"];
+        tokens.extend(flags);
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, SUCCESS, "{err}");
+        assert!(err.is_empty(), "{err}");
+        let result: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(result["value"]["name"], "ethanol");
+        assert_eq!(result["value"]["locants"], json!([null, "1", "2"]));
     }
 }
 

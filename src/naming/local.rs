@@ -2,7 +2,7 @@
 //! The browser sends the same request to its naming Web Worker instead.
 #[cfg(not(target_arch = "wasm32"))]
 use super::client::{self, CancelOnDrop, POLL};
-use super::{Error, Provenance, Record, canonical_smiles, worker};
+use super::{Error, Locants, Provenance, Record, canonical_smiles, worker};
 use std::borrow::Cow;
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
@@ -214,6 +214,22 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
         return Err(Error::Rejected(MESSAGE.into()));
     }
     let canonical_smiles = canonical_smiles(&smiles).map_err(Error::Rejected)?;
+    let atom_count = crate::chemistry::smiles::parse(&smiles)
+        .map_err(|error| Error::Worker(error.to_string()))?
+        .graph
+        .atoms
+        .len();
+    if reply.locants.len() != atom_count {
+        return Err(Error::Worker(
+            "Local parser returned locants for a different atom count".into(),
+        ));
+    }
+    // Locants map by constitution, so they keep the parser's SMILES and atom
+    // order even when salt components are reordered below.
+    let locants = Locants {
+        smiles: smiles.clone(),
+        atoms: reply.locants,
+    };
     let mut warnings = Vec::new();
     if let Some(signs) = signs {
         let descriptors = cip_descriptors(name);
@@ -268,6 +284,7 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
         alternatives: vec![],
         omitted_stereo: vec![],
         omitted_units: 0,
+        locants: Some(locants),
         smiles,
         canonical_smiles,
         synonyms,

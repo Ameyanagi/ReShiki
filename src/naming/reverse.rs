@@ -178,6 +178,7 @@ pub(super) fn generated_record(
         omitted_units: candidate.omitted_units,
         smiles: expected.clone(),
         canonical_smiles: expected,
+        locants: reconstructed.locants.clone(),
         synonyms: super::aliases_for_smiles(&reconstructed.smiles).map_err(Error::Worker)?,
         warnings,
         provenance: Provenance::Openclatura,

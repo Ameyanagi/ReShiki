@@ -61,6 +61,7 @@ pub(super) struct Parsed {
     pub message: String,
     pub warnings: Vec<ParserWarning>,
     pub cxsmiles: Option<String>,
+    pub locants: Vec<Option<String>>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -133,14 +134,16 @@ fn parse(name: String) -> Result<Response, String> {
         .collect();
     let serialized = result
         .structure
-        .map(|structure| structure.semantic_cxsmiles())
+        .map(|structure| structure.semantic_cxsmiles_with_locants())
         .transpose();
-    let (status, message, cxsmiles) = match serialized {
-        Ok(cxsmiles) => (status, result.message, cxsmiles),
+    let (status, message, cxsmiles, locants) = match serialized {
+        Ok(Some((cxsmiles, locants))) => (status, result.message, Some(cxsmiles), locants),
+        Ok(None) => (status, result.message, None, vec![]),
         Err(error) => (
             ParserStatus::Failure,
             format!("{} Structure serialization failed: {error}", result.message),
             None,
+            vec![],
         ),
     };
     Ok(Response::Parse(Parsed {
@@ -156,6 +159,7 @@ fn parse(name: String) -> Result<Response, String> {
         message,
         warnings,
         cxsmiles,
+        locants,
     }))
 }
 

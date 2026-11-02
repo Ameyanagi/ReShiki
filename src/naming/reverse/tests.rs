@@ -3,6 +3,31 @@ use crate::naming::NameStatus;
 use serde_json::json;
 
 #[test]
+fn generated_record_keeps_reconstruction_smiles_order_for_locants() {
+    let name = "ethanol";
+    let reply = worker::respond(&super::super::local::parse_request(name).unwrap()).unwrap();
+    let reconstructed = super::super::local::parse_result(name, &reply).unwrap();
+    let expected = "CCO".to_owned();
+    let identity = Identity {
+        smiles: expected.clone(),
+        naming_smiles: None,
+        write_unknown_stereo: false,
+        warnings: vec![],
+    };
+    let candidate = openclatura::Name {
+        text: name.into(),
+        status: NameStatus::Preferred,
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
+    };
+    let generated = generated_record(&identity, expected, candidate, &reconstructed).unwrap();
+    assert!(generated.locants.is_some());
+    assert_eq!(generated.locants, reconstructed.locants);
+    assert_eq!(generated.smiles, "CCO");
+}
+
+#[test]
 fn rule_protocol_checks_profile_input_and_bounded_name() {
     let reply = json!({"operation":"generate","protocol":worker::PROTOCOL,"profile":openclatura::PROFILE,"input":"CCO","result":{"Ok":{"text":"ethanol","status":{"status":"preferred"},"alternatives":[],"omitted_stereo":[],"omitted_units":0}}});
     let generated = parse_response(&serde_json::to_vec(&reply).unwrap(), "CCO").unwrap();

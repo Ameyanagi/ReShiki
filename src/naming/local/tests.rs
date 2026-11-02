@@ -10,7 +10,29 @@ use std::{
 };
 
 fn reply(smiles: &str) -> serde_json::Value {
-    json!({"operation":"parse","protocol":worker::PROTOCOL,"backend":worker::BACKEND,"port_version":worker::PORT_VERSION,"upstream_version":worker::UPSTREAM_VERSION,"upstream_commit":worker::UPSTREAM_COMMIT,"resource_fingerprint":worker::RESOURCE_FINGERPRINT,"options":worker::OPTIONS,"name":"example","status":"SUCCESS","message":"","warnings":[],"cxsmiles":smiles})
+    let count = crate::chemistry::smiles::parse(smiles)
+        .map(|parsed| parsed.graph.atoms.len())
+        .unwrap_or_default();
+    json!({"operation":"parse","protocol":worker::PROTOCOL,"backend":worker::BACKEND,"port_version":worker::PORT_VERSION,"upstream_version":worker::UPSTREAM_VERSION,"upstream_commit":worker::UPSTREAM_COMMIT,"resource_fingerprint":worker::RESOURCE_FINGERPRINT,"options":worker::OPTIONS,"name":"example","status":"SUCCESS","message":"","warnings":[],"cxsmiles":smiles,"locants":vec![None::<String>; count]})
+}
+
+#[test]
+fn worker_parse_round_trip_keeps_parent_locants_in_smiles_order() {
+    let name = "ethanol";
+    let bytes = worker::respond(&parse_request(name).unwrap()).unwrap();
+    let record = parse_result(name, &bytes).unwrap();
+    let locants = record.locants.unwrap();
+    assert_eq!(locants.smiles, record.smiles);
+    let graph = crate::chemistry::smiles::parse(&locants.smiles)
+        .unwrap()
+        .graph;
+    assert_eq!(locants.atoms.len(), graph.atoms.len());
+    for (atom, locant) in graph.atoms.iter().zip(&locants.atoms) {
+        assert_eq!(locant.is_some(), atom.atomic_number == 6);
+    }
+    let mut bad = reply("CCO");
+    bad["locants"] = json!(["1"]);
+    assert!(matches!(parse(bad), Err(Error::Worker(_))));
 }
 fn parse(value: serde_json::Value) -> Result<Record, Error> {
     parse_reply(&serde_json::to_vec(&value).unwrap(), "example")

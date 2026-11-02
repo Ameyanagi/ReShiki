@@ -6,7 +6,7 @@ use crate::{
     molecule_names::{self, IdentityRejection, MAX_NAMING_ATOMS, MAX_SMILES_BYTES, is_tetrahedral},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 mod catalog;
 pub use catalog::VERSION as ALIAS_CATALOG_VERSION;
@@ -240,6 +240,7 @@ pub struct Record {
     pub omitted_units: usize,
     pub smiles: String,
     pub canonical_smiles: String,
+    pub locants: Option<Locants>,
     /// Curated offline aliases, separate from the generated systematic name.
     /// Every entry identifies its source and the exact matched chemical graph.
     pub synonyms: Vec<Alias>,
@@ -272,6 +273,89 @@ impl Record {
             )),
         }
     }
+}
+
+/// Principal-parent locants in the reconstruction's own SMILES atom order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Locants {
+    pub smiles: String,
+    pub atoms: Vec<Option<String>>,
+}
+
+impl Locants {
+    /// Map only the same constitution; drawing order, coordinates, stereo and
+    /// drawn hydrogen atoms (such as those at ring fusions) may differ.
+    pub fn for_document(&self, document: &Document) -> HashMap<u64, String> {
+        let mapped = || {
+            // Fold each plain drawn hydrogen into its one neighbour's count.
+            let mut heavy = document.clone();
+            let folded: Vec<_> = heavy
+                .atoms
+                .iter()
+                .filter(|a| a.element == "H" && a.isotope == 0 && a.charge == 0)
+                .filter_map(|a| {
+                    let mut bonds = heavy.bonds.iter().filter(|b| b.a == a.id || b.b == a.id);
+                    match (bonds.next(), bonds.next()) {
+                        (Some(b), None) => Some((a.id, if b.a == a.id { b.b } else { b.a })),
+                        _ => None,
+                    }
+                })
+                .collect();
+            for &(_, neighbour) in &folded {
+                heavy.atom_mut(neighbour)?.explicit_h += 1;
+            }
+            heavy.delete(&folded.iter().map(|&(h, _)| h).collect::<Vec<_>>());
+            let molecule = chemistry::document::prepare(&heavy).ok()?;
+            // Reading may remove explicit hydrogens, which would shift indices.
+            let source = chemistry::smiles::read(&self.smiles).ok()?.prepared.state;
+            if source.graph.atoms.len() != self.atoms.len() {
+                return None;
+            }
+            let write = |state| {
+                let options = chemistry::smiles::write::Options {
+                    ignore_maps: true,
+                    symbols: chemistry::smiles::symbols::Options {
+                        isomeric: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                chemistry::smiles::write::write(state, options).ok()
+            };
+            let (source, target) = (write(&source)?, write(&molecule.state)?);
+            (source.text == target.text).then(|| {
+                target
+                    .atom_order
+                    .iter()
+                    .zip(&source.atom_order)
+                    .filter_map(|(&target, &source)| {
+                        let locant = self.atoms.get(source)?.as_ref()?;
+                        Some((*molecule.ids.get(target)?, locant.clone()))
+                    })
+                    .collect()
+            })
+        };
+        mapped().unwrap_or_default()
+    }
+}
+
+/// Atom numbers use Unicode superscript digits for OPSIN's interior locants.
+pub fn locant_text(locant: &str) -> String {
+    let mut superscript = false;
+    locant
+        .chars()
+        .filter_map(|c| {
+            if c == '^' {
+                superscript = true;
+                None
+            } else if superscript && c.is_ascii_digit() {
+                "⁰¹²³⁴⁵⁶⁷⁸⁹".chars().nth(c as usize - '0' as usize)
+            } else {
+                superscript = false;
+                Some(c)
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -414,7 +498,11 @@ pub fn document_identity(document: &Document) -> Result<Identity, String> {
 }
 
 fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, String> {
-    let smiles = structure_smiles(document)?;
+    if document.atoms.is_empty() || document.atoms.len() > MAX_NAMING_ATOMS {
+        return Err("Naming supports molecular graphs with 1–512 atoms".into());
+    }
+    let molecule = chemistry::document::prepare(document).map_err(|e| e.to_string())?;
+    let smiles = canonical_state(&molecule.state)?;
     if smiles.contains('.') {
         return Err("Select a single connected molecule; mixtures and disconnected salts are not supported for local naming".into());
     }

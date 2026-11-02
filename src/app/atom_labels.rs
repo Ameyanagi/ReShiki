@@ -2,6 +2,28 @@ use super::*;
 use reshiki::atom_labels::{
     self as labels, AxialDescriptors, Carbons, HydrogenPosition, LabelAttachment, Number,
 };
+use reshiki::naming;
+use std::collections::{HashMap, HashSet};
+
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocantsTicket {
+    epoch: u64,
+    revision: u64,
+    serial: u64,
+}
+
+struct LocantsJob {
+    ticket: LocantsTicket,
+    cancel: naming::Cancel,
+}
+
+struct LocantsPreview {
+    ticket: LocantsTicket,
+    numbers: HashMap<u64, String>,
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Scope {
@@ -22,6 +44,10 @@ pub struct State {
     pub seed: String,
     pub number: String,
     pub size: String,
+    pub ring_atoms_only: bool,
+    locants_serial: u64,
+    locants_job: Option<LocantsJob>,
+    locants_preview: Option<LocantsPreview>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -30,7 +56,49 @@ impl Default for State {
             seed: "1".into(),
             number: String::new(),
             size: "7.5".into(),
+            ring_atoms_only: false,
+            locants_serial: 0,
+            locants_job: None,
+            locants_preview: None,
         }
+    }
+}
+impl State {
+    pub(super) fn locants_running(&self) -> bool {
+        self.locants_job.is_some()
+    }
+
+    pub(super) fn locants_replacements(
+        &self,
+        document: &Document,
+        epoch: u64,
+        revision: u64,
+    ) -> Option<usize> {
+        let preview = self.locants_preview.as_ref()?;
+        if preview.ticket.epoch != epoch || preview.ticket.revision != revision {
+            return None;
+        }
+        Some(
+            document
+                .atoms
+                .iter()
+                .filter(|atom| {
+                    preview.numbers.contains_key(&atom.id) && atom.display.number.is_some()
+                })
+                .count(),
+        )
+    }
+
+    fn cancel_locants(&mut self) {
+        if let Some(job) = self.locants_job.take() {
+            job.cancel.stop();
+        }
+        self.locants_preview = None;
+    }
+}
+impl Drop for State {
+    fn drop(&mut self) {
+        self.cancel_locants();
     }
 }
 #[derive(Debug, Clone)]
@@ -47,6 +115,11 @@ pub enum Action {
     AxialDescriptors(AxialDescriptors),
     Seed(String),
     Number,
+    IupacLocants,
+    RingAtomsOnly(bool),
+    CancelLocants,
+    ReplaceLocants,
+    LocantsFinished(LocantsTicket, Box<Result<HashMap<u64, String>, String>>),
     ClearNumbers,
     Text(String),
     ApplyText,
@@ -57,7 +130,89 @@ pub enum Action {
     ResetPositions,
     ResetOverrides,
 }
+
+async fn generate_locant_numbers(
+    document: Document,
+    atoms: Vec<u64>,
+    ring_atoms_only: bool,
+    cancel: naming::Cancel,
+) -> Result<HashMap<u64, String>, String> {
+    let (identity, selection) = reshiki::task::spawn_blocking(move || {
+        let identity = naming::selected_identity(&document, &atoms)?;
+        let ids = reshiki::editing::analysis_atoms(&document, &atoms);
+        Ok::<_, String>((identity, reshiki::editing::selection(&document, &ids)))
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    let record = naming::generate_name(&identity, cancel)
+        .await
+        .map_err(|error| error.to_string())?;
+    reshiki::task::spawn_blocking(move || {
+        let locants = record
+            .locants
+            .ok_or("The generated name has no parent atom locants")?;
+        filter_locant_numbers(
+            &selection,
+            locants.for_document(&selection),
+            ring_atoms_only,
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// The selection's parent locants, optionally only on ring atoms.
+fn filter_locant_numbers(
+    document: &Document,
+    mut numbers: HashMap<u64, String>,
+    ring_atoms_only: bool,
+) -> Result<HashMap<u64, String>, String> {
+    if ring_atoms_only {
+        let molecule =
+            reshiki::chemistry::document::prepare(document).map_err(|error| error.to_string())?;
+        let rings: HashSet<_> = molecule
+            .state
+            .rings
+            .atoms
+            .iter()
+            .flatten()
+            .filter_map(|&index| molecule.ids.get(index).copied())
+            .collect();
+        numbers.retain(|id, _| rings.contains(id));
+    }
+    if numbers.is_empty() {
+        return Err(if ring_atoms_only {
+            "The selected molecule has no ring atoms with parent locants"
+        } else {
+            "The selected molecule has no mapped parent atom locants"
+        }
+        .into());
+    }
+    Ok(numbers)
+}
+
 impl App {
+    pub(super) fn invalidate_locant_numbering(&mut self) {
+        let current = |ticket: LocantsTicket| {
+            ticket.epoch == self.tab.file_epoch && ticket.revision == self.tab.revision
+        };
+        if self
+            .tab
+            .labels
+            .locants_job
+            .as_ref()
+            .is_some_and(|job| !current(job.ticket))
+            || self
+                .tab
+                .labels
+                .locants_preview
+                .as_ref()
+                .is_some_and(|preview| !current(preview.ticket))
+        {
+            self.tab.labels.cancel_locants();
+        }
+    }
+
     pub(super) fn label_ids(&self) -> Vec<u64> {
         self.tab
             .doc
@@ -69,16 +224,146 @@ impl App {
             .map(|a| a.id)
             .collect()
     }
-    pub(super) fn label_action(&mut self, action: Action) {
-        if let Err(error) = self.change_labels(action) {
-            self.status = error;
+    pub(super) fn label_action(&mut self, action: Action) -> Task<Message> {
+        match action {
+            Action::IupacLocants => return self.number_by_iupac_locants(),
+            Action::RingAtomsOnly(value) => {
+                let pending = self.tab.labels.locants_job.is_some()
+                    || self.tab.labels.locants_preview.is_some();
+                self.tab.labels.cancel_locants();
+                self.tab.labels.ring_atoms_only = value;
+                if pending {
+                    self.status = "IUPAC locant numbering cancelled".into();
+                    self.error = false;
+                }
+            }
+            Action::CancelLocants => {
+                self.tab.labels.cancel_locants();
+                self.status = "IUPAC locant numbering cancelled".into();
+                self.error = false;
+            }
+            Action::ReplaceLocants => {
+                if let Some(preview) = self.tab.labels.locants_preview.take() {
+                    self.apply_locant_numbers(preview);
+                }
+            }
+            Action::LocantsFinished(ticket, result) => {
+                if self.tab.labels.locants_job.as_ref().map(|job| job.ticket) != Some(ticket) {
+                    return Task::none();
+                }
+                self.tab.labels.locants_job = None;
+                if !self.locants_ticket_current(ticket) {
+                    return Task::none();
+                }
+                match *result {
+                    Ok(numbers) => {
+                        let preview = LocantsPreview { ticket, numbers };
+                        if preview.numbers.keys().any(|id| {
+                            self.tab
+                                .doc
+                                .atom(*id)
+                                .is_some_and(|atom| atom.display.number.is_some())
+                        }) {
+                            self.tab.labels.locants_preview = Some(preview);
+                            self.status =
+                                "Review the existing atom numbers before replacing them".into();
+                            self.error = false;
+                        } else {
+                            self.apply_locant_numbers(preview);
+                        }
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                    }
+                }
+            }
+            action => {
+                if let Err(error) = self.change_labels(action) {
+                    self.status = error;
+                    self.error = true;
+                }
+            }
+        }
+        Task::none()
+    }
+
+    fn number_by_iupac_locants(&mut self) -> Task<Message> {
+        if self.tab.labels.locants_running() {
+            return Task::none();
+        }
+        self.tab.labels.cancel_locants();
+        self.tab.labels.locants_serial = self.tab.labels.locants_serial.wrapping_add(1);
+        let ticket = LocantsTicket {
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+            serial: self.tab.labels.locants_serial,
+        };
+        let cancel = naming::Cancel::default();
+        self.tab.labels.locants_job = Some(LocantsJob {
+            ticket,
+            cancel: cancel.clone(),
+        });
+        self.status = "Generating IUPAC parent locants locally…".into();
+        self.error = false;
+        Task::perform(
+            generate_locant_numbers(
+                self.tab.doc.clone(),
+                self.tab.selected.clone(),
+                self.tab.labels.ring_atoms_only,
+                cancel,
+            ),
+            move |result| Message::Labels(Action::LocantsFinished(ticket, Box::new(result))),
+        )
+    }
+
+    fn locants_ticket_current(&mut self, ticket: LocantsTicket) -> bool {
+        if ticket.epoch != self.tab.file_epoch || ticket.revision != self.tab.revision {
+            self.status = "The drawing changed. Request IUPAC locants again".into();
             self.error = true;
+            return false;
+        }
+        true
+    }
+
+    fn apply_locant_numbers(&mut self, preview: LocantsPreview) {
+        if !self.locants_ticket_current(preview.ticket) {
+            return;
+        }
+        if !self.naming_can_edit() {
+            self.status = "Finish the current edit, then request IUPAC locants again".into();
+            self.error = true;
+            return;
+        }
+        let before = self.tab.doc.clone();
+        let count = preview.numbers.len();
+        for atom in &mut self.tab.doc.atoms {
+            if let Some(locant) = preview.numbers.get(&atom.id) {
+                atom.display.number = Some(Number {
+                    text: naming::locant_text(locant),
+                    offset: None,
+                    style: labels::number_style(),
+                });
+            }
+        }
+        self.error = false;
+        self.changed(before);
+        if !self.error {
+            self.status = format!(
+                "IUPAC locants applied to {count} atoms · Undo restores the previous numbers"
+            );
         }
     }
+
     fn change_labels(&mut self, action: Action) -> Result<(), String> {
         let before = self.tab.doc.clone();
         let ids = self.label_ids();
         match action {
+            Action::IupacLocants
+            | Action::RingAtomsOnly(_)
+            | Action::CancelLocants
+            | Action::ReplaceLocants
+            | Action::LocantsFinished(..) => return Ok(()),
             Action::Scope(scope) => self.tab.labels.scope = scope,
             Action::Seed(s) => self.tab.labels.seed = s,
             Action::Text(s) => self.tab.labels.number = s,

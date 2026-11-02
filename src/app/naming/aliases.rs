@@ -4,7 +4,11 @@ use super::*;
 use iced::widget::{column, rich_text, span, text::Span};
 use reshiki::typography::{NameRun, name_markup};
 
-fn chemical_name_spans(name: &str, size: f32, family: &'static str) -> Vec<Span<'static>> {
+pub(super) fn chemical_name_spans(
+    name: &str,
+    size: f32,
+    family: &'static str,
+) -> Vec<Span<'static>> {
     let markup = name_markup(name).unicode();
     let mut spans = vec![];
     let mut end = 0;
@@ -226,8 +230,7 @@ impl App {
                 );
             }
             if let Some(name) = &record.systematic_name {
-                let family = reshiki::style::font_name(&self.tab.doc.drawing_style.font_family);
-                content = content.push(rich_text(chemical_name_spans(name, 13., family)));
+                content = content.push(self.locant_name(name, LocantTarget::Structure, 13.));
             }
             if let Some(status) = record.name_status {
                 content = content.push(hover_hint(

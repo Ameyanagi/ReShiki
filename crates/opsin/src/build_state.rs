@@ -2,7 +2,7 @@
 use crate::{
     OpsinWarning, ParseOptions, ParsingError, WarningKind,
     fragment_manager::FragmentManager,
-    graph::{FragmentId, Graph, GraphError},
+    graph::{AtomId, FragmentId, Graph, GraphError},
     parse_tree::{Arena, NodeId},
     word_rules_omitted_space::{FragmentFacts, OmittedSpaceContext, OutAtomFacts},
 };
@@ -16,6 +16,7 @@ pub struct BuildState {
     pub racemic_group_count: u32,
     pub current_word_rule: Option<String>,
     pub warnings: Vec<OpsinWarning>,
+    pub(crate) principal_parent_atoms: Vec<AtomId>,
 }
 
 impl BuildState {
@@ -27,6 +28,7 @@ impl BuildState {
             racemic_group_count: 1,
             current_word_rule: None,
             warnings: Vec::new(),
+            principal_parent_atoms: Vec::new(),
         }
     }
     pub fn graph(&self) -> &Graph {
