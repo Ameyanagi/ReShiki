@@ -6,6 +6,72 @@ fn candidate(source: &str, bytes: &[u8]) -> ReadCandidate {
         bytes: Ok(bytes.to_vec()),
     }
 }
+
+#[test]
+fn html_clipboard_header_uses_utf8_byte_offsets_and_fragment_markers() {
+    for fragment in [
+        "<span><i>N</i>-ethyl</span>",
+        "<meta charset=\"utf-8\"><span>日本語 β 🧪</span>",
+    ] {
+        let bytes = cf_html(fragment);
+        let text = std::str::from_utf8(&bytes).unwrap();
+        assert!(text.starts_with("Version:0.9\r\n"));
+        let offset = |key: &str| {
+            let value = text
+                .lines()
+                .find_map(|line| line.strip_prefix(key))
+                .unwrap();
+            assert_eq!(value.len(), 10);
+            value.parse::<usize>().unwrap()
+        };
+        let start_html = offset("StartHTML:");
+        let end_html = offset("EndHTML:");
+        let start_fragment = offset("StartFragment:");
+        let end_fragment = offset("EndFragment:");
+        assert_eq!(
+            &bytes[start_html..start_fragment],
+            b"<html><body><!--StartFragment-->"
+        );
+        assert_eq!(&bytes[start_fragment..end_fragment], fragment.as_bytes());
+        assert_eq!(end_fragment - start_fragment, fragment.len());
+        assert_eq!(
+            &bytes[end_fragment..end_html],
+            b"<!--EndFragment--></body></html>"
+        );
+        assert_eq!(&bytes[end_html..], &[0]);
+        assert!(text[..start_html].ends_with("\r\n"));
+    }
+}
+
+#[test]
+fn rich_name_formats_map_to_registered_office_formats_without_entering_paste() {
+    let html = "<span><i>N</i>-日本語</span>";
+    let rtf = br"{\rtf1\ansi {\i N}-ethyl}";
+    let representations = [
+        ("public.html", html.as_bytes()),
+        ("public.rtf", rtf.as_slice()),
+    ]
+    .into_iter()
+    .map(|(kind, bytes)| Representation {
+        kind: kind.into(),
+        data: STANDARD.encode(bytes),
+        read_error: None,
+        embedded: None,
+        source: None,
+    })
+    .collect();
+    let formats = prepare_formats(representations, false).unwrap();
+    assert_eq!(formats.len(), 2);
+    assert_eq!(mapped("public.html"), "HTML Format");
+    assert_eq!(mapped("public.rtf"), "Rich Text Format");
+    assert_eq!(formats[&format("HTML Format").unwrap()], cf_html(html));
+    assert_eq!(formats[&format("Rich Text Format").unwrap()], rtf);
+    for kind in ["public.html", "public.rtf"] {
+        assert!(!priority::READABLE.contains(&kind));
+        assert!(priority::read_formats(&[kind.into()], false).is_err());
+    }
+}
+
 #[test]
 fn explicit_structure_formats_keep_native_bytes_and_unicode_text() {
     for (kind, name, data) in [

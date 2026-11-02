@@ -89,6 +89,8 @@ fn mapped(kind: &str) -> &str {
     match kind {
         "public.png" => "PNG",
         "public.svg-image" => "image/svg+xml",
+        "public.html" => "HTML Format",
+        "public.rtf" => "Rich Text Format",
         "com.adobe.pdf" => "PDF",
         // MOL text is not MDLCT's length-prefixed binary line encoding.
         "com.mdli.molfile" => "chemical/x-mdl-molfile",
@@ -173,6 +175,29 @@ fn decode(data: &str) -> Result<Vec<u8>> {
     }
     Ok(bytes)
 }
+
+fn cf_html(fragment: &str) -> Vec<u8> {
+    const PREFIX: &str = "<html><body><!--StartFragment-->";
+    const SUFFIX: &str = "<!--EndFragment--></body></html>";
+    let header = |start_html, end_html, start_fragment, end_fragment| {
+        format!(
+            "Version:0.9\r\nStartHTML:{start_html:010}\r\nEndHTML:{end_html:010}\r\n\
+             StartFragment:{start_fragment:010}\r\nEndFragment:{end_fragment:010}\r\n"
+        )
+    };
+    // Fixed-width ASCII offsets count UTF-8 bytes from the start of the header.
+    let start_html = header(0, 0, 0, 0).len();
+    let start_fragment = start_html + PREFIX.len();
+    let end_fragment = start_fragment + fragment.len();
+    let end_html = end_fragment + SUFFIX.len();
+    let mut bytes = header(start_html, end_html, start_fragment, end_fragment).into_bytes();
+    bytes.extend_from_slice(PREFIX.as_bytes());
+    bytes.extend_from_slice(fragment.as_bytes());
+    bytes.extend_from_slice(SUFFIX.as_bytes());
+    bytes.push(0);
+    bytes
+}
+
 pub(super) fn bitmap(data: &[u8]) -> Result<image::RgbaImage> {
     let mut reader = image::ImageReader::new(Cursor::new(data)).with_guessed_format()?;
     let mut limits = image::Limits::default();
@@ -318,6 +343,11 @@ fn prepare_formats(
                     .chain(Some(0))
                     .flat_map(u16::to_le_bytes)
                     .collect(),
+            )
+        } else if rep.kind == "public.html" {
+            (
+                format(mapped(&rep.kind))?,
+                cf_html(std::str::from_utf8(&bytes)?),
             )
         } else {
             (format(mapped(&rep.kind))?, bytes)

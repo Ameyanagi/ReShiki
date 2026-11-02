@@ -2,6 +2,53 @@ use super::test_support::{ethanol, record};
 use super::*;
 
 #[tokio::test]
+async fn inspector_copy_name_prepares_rich_text_with_copy_as_gates_and_status() {
+    use iced::futures::StreamExt;
+    use reshiki::clipboard::{CopyFormat, prepare_name};
+
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = ethanol();
+    app.tab.selected = app.tab.doc.all_ids();
+    let name = "N1-ethyl-N2-methylethane-1,2-diamine";
+    let mut generated = record("CCO");
+    generated.systematic_name = Some(name.into());
+    let ticket = Ticket {
+        epoch: app.tab.file_epoch,
+        revision: app.tab.revision,
+        serial: 1,
+    };
+    app.tab.naming.structure = Some((ticket, generated));
+    let before = app.tab.doc.clone();
+    let task = app.naming_action(Action::CopyName);
+    assert_eq!(app.status, "Preparing Name for the clipboard…");
+    assert!(app.copy_as_busy && app.tab.clipboard_busy);
+    assert_eq!(app.naming_action(Action::CopyName).units(), 0);
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    let Some(iced_runtime::Action::Output(Message::CopyAsPrepared(key, result))) =
+        stream.next().await
+    else {
+        panic!("Expected the prepared rich name");
+    };
+    let copy = result.unwrap();
+    // The library tests verify every representation of this prepared rich name.
+    assert_eq!(copy, prepare_name(name.into()));
+    assert_eq!(key.format, CopyFormat::Name);
+    app.copy_as_written(key.clone(), Ok(copy.notices));
+    assert_eq!(app.status, "Selection copied as Name");
+    assert!(!app.copy_as_busy && !app.tab.clipboard_busy && !app.error);
+    app.tab.revision += 1;
+    assert_eq!(
+        app.copy_as_prepared(key, Ok(prepare_name(name.into())))
+            .units(),
+        0
+    );
+    assert!(app.status.contains("Clipboard unchanged"));
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
 async fn name_smiles_preview_uses_the_documents_depiction_options() -> Result<(), String> {
     let smiles = "CC[C@](C)(Br)Cl";
     let options = DrawingOptions {

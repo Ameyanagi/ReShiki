@@ -191,6 +191,37 @@ async fn prepared_text(task: Task<Message>) -> (CopyAsKey, PreparedCopy) {
 }
 
 #[tokio::test]
+async fn copy_as_name_uses_the_local_generator_and_rejects_partial_or_reaction_selection() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let first = app.tab.doc.add_atom("C", Point::default());
+    let second = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    let oxygen = app.tab.doc.add_atom("O", Point::new(84., 0.));
+    app.tab.doc.add_bond(first, second, 1, "plain");
+    app.tab.doc.add_bond(second, oxygen, 1, "plain");
+    app.tab.selected = vec![first, second];
+    assert_eq!(app.copy_as(CopyFormat::Name).units(), 0);
+    assert!(app.error && app.status.contains("complete connected molecule"));
+    app.tab.selected = app.tab.doc.all_ids();
+    let before = app.tab.doc.clone();
+    let task = app.copy_as(CopyFormat::Name);
+    assert_eq!(app.status, "Preparing Name for the clipboard…");
+    assert!(app.copy_as_busy && app.tab.clipboard_busy);
+    let (key, copy) = prepared_text(task).await;
+    assert_eq!(copy, reshiki::clipboard::prepare_name("ethanol".into()));
+    app.copy_as_written(key, Ok(copy.notices));
+    assert_eq!(app.status, "Selection copied as Name");
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+
+    app.tab.doc = text_reaction();
+    app.tab.selected.clear();
+    assert_eq!(app.copy_as(CopyFormat::Name).units(), 0);
+    assert!(app.error && app.status.contains("complete connected molecule"));
+    assert!(!app.copy_as_busy && !app.tab.clipboard_busy);
+}
+
+#[tokio::test]
 async fn alt_c_shortcut_copies_selected_molecular_smiles_with_existing_statuses() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

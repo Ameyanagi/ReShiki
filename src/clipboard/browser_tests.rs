@@ -174,3 +174,21 @@ async fn a_browser_copy_has_the_drawing_pictures_and_smiles_but_no_pdf_or_cdx() 
         ["public.png", "public.svg-image", NATIVE]
     );
 }
+
+#[test]
+fn a_browser_name_copy_keeps_html_and_plain_text_without_rtf() {
+    let text = "(1R)-N6-methyl";
+    let html = r#"<meta charset="utf-8">(1<i>R</i>)-<i>N</i><sup>6</sup>-methyl"#;
+    let representations = [
+        Representation::new("public.utf8-plain-text", text.as_bytes()),
+        Representation::new("public.html", html.as_bytes()),
+        Representation::new("public.rtf", br"{\rtf1 unsupported on the web}"),
+    ];
+    assert_eq!(
+        browser::web_items(&representations).unwrap(),
+        vec![
+            ("text/html", html.as_bytes().to_vec()),
+            ("text/plain", text.as_bytes().to_vec()),
+        ]
+    );
+}

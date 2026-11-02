@@ -20,14 +20,9 @@ fn request(app: &mut App) -> Task<Message> {
     } else {
         // Headless Linux may have no native transport. Exercise the same
         // post-preflight state machine without weakening the public refusal.
-        let key = CopyAsKey {
-            epoch: app.tab.file_epoch,
-            revision: app.tab.revision,
-            format: CopyFormat::Pdf,
-            selected: app.tab.selected.clone(),
-        };
+        let key = app.start_copy_as(CopyFormat::Pdf);
         let snapshot = reshiki::clipboard::selection_or_drawing(&app.tab.doc, &app.tab.selected);
-        app.start_copy_as(key, snapshot, false)
+        app.queue_copy_as(key, snapshot, false)
     }
 }
 
