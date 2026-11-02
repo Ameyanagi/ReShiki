@@ -20,6 +20,7 @@ fn show_ethanol(doc: &mut Document) -> u64 {
         "ethan-1-ol".into(),
         "CCO".into(),
         TextFormat::default(),
+        true,
     )
     .unwrap()
 }
@@ -94,6 +95,87 @@ fn repeated_show_reuses_one_caption_and_hide_is_one_undo_step() {
     assert_eq!(doc, before);
     assert!(history.redo(&mut doc));
     assert_eq!(doc, hidden);
+}
+
+#[test]
+fn formatted_caption_keeps_display_text_through_preview_reconciliation_and_copy() {
+    let mut doc = ethanol();
+    let ids = atoms(&doc);
+    let raw = "(R)-N'-5lambda^6-tricyclo[3.2.2.0^{1,5}]-D-gluco";
+    let caption = show(
+        &mut doc,
+        &ids,
+        raw.into(),
+        "CCO".into(),
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let display = "(R)-N′-5λ6-tricyclo[3.2.2.01,5]-D-gluco";
+    assert_eq!(doc.annotations[0].text, display);
+    assert_eq!(doc.molecule_names[0].text, display);
+    assert!(
+        doc.annotations[0]
+            .format
+            .spans
+            .iter()
+            .any(|s| s.style.italic)
+    );
+    assert!(
+        doc.annotations[0]
+            .format
+            .spans
+            .iter()
+            .any(|s| s.style.script == Script::Superscript)
+    );
+    doc.validate().unwrap();
+    let before = doc.clone();
+    for atom in &mut doc.atoms {
+        atom.position = atom.position.offset(30., 60.);
+    }
+    preview_layout(&mut doc, &ids);
+    reconcile(&mut doc, &before);
+    assert_eq!(doc.molecule_names.len(), 1);
+    assert_eq!(doc.molecule_names[0].text, display);
+    assert_eq!(doc.annotations[0].text, display);
+    let selection = editing::selection(&doc, &ids);
+    assert_eq!(selection.annotations[0].text, display);
+    assert_eq!(selection.molecule_names[0].text, display);
+    let mut pasted = Document::default();
+    editing::append(&mut pasted, &selection, Point::new(120., 80.));
+    pasted.validate().unwrap();
+    assert_eq!(pasted.molecule_names[0].text, pasted.annotations[0].text);
+    let caption_only = editing::selection(&doc, &[caption]);
+    assert_eq!(caption_only.annotations[0].text, display);
+    assert!(caption_only.molecule_names.is_empty());
+    let restored = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(
+        restored.molecule_names[0].text,
+        restored.annotations[0].text
+    );
+    assert_eq!(
+        restored.annotations[0].format.spans,
+        doc.annotations[0].format.spans
+    );
+}
+
+#[test]
+fn disabled_name_typography_preserves_raw_name_and_old_caption_format() {
+    let mut doc = ethanol();
+    let ids = atoms(&doc);
+    let raw = "(R)-N'-5lambda^6-tricyclo[3.2.2.0^{1,5}]-L-alanine";
+    let mut format = TextFormat::default();
+    format.spans.push(crate::typography::TextSpan {
+        start: 0,
+        end: 1,
+        style: format.style.clone(),
+    });
+    show(&mut doc, &ids, raw.into(), "CCO".into(), format, false).unwrap();
+    assert_eq!(doc.annotations[0].text, raw);
+    assert_eq!(doc.molecule_names[0].text, raw);
+    assert!(doc.annotations[0].format.spans.is_empty());
+    assert!(!doc.annotations[0].format.style.formula);
+    assert_eq!(doc.annotations[0].format.style.script, Script::Normal);
 }
 
 #[test]
@@ -233,7 +315,8 @@ fn incorrect_verified_identity_cannot_install_a_caption() {
             &atoms(&before),
             "ethanamine".into(),
             "CCN".into(),
-            TextFormat::default()
+            TextFormat::default(),
+            true,
         )
         .is_err()
     );
@@ -290,6 +373,7 @@ fn changes_to_specified_stereo_or_unknown_stereo_remove_the_old_name() {
         "(2R)-2-hydroxypropanoic acid".into(),
         "C[C@@H](O)C(=O)O".into(),
         TextFormat::default(),
+        true,
     )
     .unwrap();
     let before = doc.clone();

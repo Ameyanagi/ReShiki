@@ -74,6 +74,7 @@ fn pasted_captions_normalize_subscripts_before_native_document_insertion() {
         "H₂O".into(),
         "O".into(),
         TextFormat::default(),
+        true,
     )
     .unwrap();
     let mut app = app();

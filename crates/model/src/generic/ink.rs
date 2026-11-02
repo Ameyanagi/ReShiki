@@ -277,6 +277,7 @@ impl<'a> LabelPlan<'a> {
                 number.offset,
                 &number.style,
                 true,
+                false,
             );
         }
         if self.map_label {
@@ -286,6 +287,7 @@ impl<'a> LabelPlan<'a> {
                 &a.map_num.to_string(),
                 a.display.mapping.offset,
                 &a.display.mapping.style,
+                false,
                 false,
             );
         }
@@ -341,6 +343,7 @@ fn cip_bounds(
             offset,
             style,
             false,
+            settings.roman_stereo_parentheses,
         );
     }
 }
@@ -352,9 +355,11 @@ fn indicator_bounds(
     offset: Option<Point>,
     style: &crate::typography::TextStyle,
     number: bool,
+    roman_parentheses: bool,
 ) {
     let height = crate::style::DEFAULT.world(style.size_pt);
-    let width = crate::style::styled_text_width(text, height, style);
+    let format = crate::atom_labels::indicator_format(text, style, roman_parentheses);
+    let width = crate::atom_labels::indicator_width(text, height, &format);
     // Automatic indicator candidates have five fixed radii, ending at 3.25h+6,
     // and long atom numbers are justified outward by up to `outward_extent`.
     // Their conservative envelope avoids a second label-placement pass.
@@ -377,13 +382,16 @@ fn indicator_bounds(
     // Actual font ink may overhang its logical advance (italic/underline).
     // Automatic placement can choose any of the fixed candidate centers; grow
     // every actual ink box by the same maximum radius in each direction.
-    let origin = center.offset(-width / 2., -height / 2.);
-    for (lo, hi) in crate::style::text_ink_boxes(text, height, style) {
-        include(
-            bounds,
-            origin.offset(lo.x - across, lo.y - radius),
-            origin.offset(hi.x + across, hi.y + radius),
-        );
+    let mut origin = center.offset(-width / 2., -height / 2.);
+    for (text, style) in crate::atom_labels::indicator_runs(text, &format) {
+        for (lo, hi) in crate::style::text_ink_boxes(text, height, style) {
+            include(
+                bounds,
+                origin.offset(lo.x - across, lo.y - radius),
+                origin.offset(hi.x + across, hi.y + radius),
+            );
+        }
+        origin.x += crate::style::styled_text_width(text, height, style);
     }
 }
 

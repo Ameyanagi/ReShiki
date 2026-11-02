@@ -51,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
             name.into(),
             analysis.smiles,
             Default::default(),
+            true,
         )
         .map_err(anyhow::Error::msg)?;
         if model {

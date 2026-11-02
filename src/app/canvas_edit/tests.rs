@@ -54,6 +54,7 @@ fn molecule_caption(doc: &mut Document) -> u64 {
         "methane".into(),
         "C".into(),
         Default::default(),
+        true,
     )
     .unwrap()
 }

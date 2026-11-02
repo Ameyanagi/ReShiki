@@ -248,6 +248,15 @@ impl App {
             self.molecule_entries(atoms),
             self.structure_entries(atoms, bonds, tilt),
             self.generic_entries(),
+            if self.selected_text_boxes() {
+                vec![command(
+                    "Format as chemical name",
+                    Message::FormatChemicalName,
+                    true,
+                )]
+            } else {
+                vec![]
+            },
             vec![
                 command("Cut", Message::Copy(true), true),
                 Entry::page("Copy as", Page::CopyAs),

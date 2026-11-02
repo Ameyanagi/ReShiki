@@ -1000,6 +1000,7 @@ fn resizing_a_captioned_model_keeps_its_name_attached_and_is_one_undo_step() {
         "ethanol".into(),
         "CCO".into(),
         Default::default(),
+        true,
     )
     .unwrap();
     app.tab.selected = app.tab.doc.expand_groups(&atoms);
