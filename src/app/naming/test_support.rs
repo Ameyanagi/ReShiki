@@ -19,6 +19,7 @@ pub(super) fn record(smiles: &str) -> Record {
         name_status: Some(naming::NameStatus::Preferred),
         canonical_smiles: naming::canonical_smiles(smiles).unwrap(),
         smiles: smiles.into(),
+        locants: None,
         synonyms: vec![],
         warnings: vec![],
         provenance: Provenance::Openclatura,

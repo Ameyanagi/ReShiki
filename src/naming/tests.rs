@@ -1,6 +1,63 @@
 use super::*;
 
 #[test]
+fn parent_locants_follow_canonical_atom_order_and_require_the_same_graph() {
+    let mut document = Document::default();
+    let terminal = document.add_atom("C", crate::document::Point::new(0., 0.));
+    let middle = document.add_atom("C", crate::document::Point::new(28., 0.));
+    let oxygen = document.add_atom("O", crate::document::Point::new(42., 24.));
+    document.add_bond(terminal, middle, 1, "plain");
+    document.add_bond(middle, oxygen, 1, "plain");
+    document.atoms.rotate_left(1);
+    let locants = Locants {
+        smiles: "OCC".into(),
+        atoms: vec![None, Some("1".into()), Some("2".into())],
+    };
+    assert_eq!(
+        locants.for_document(&document),
+        HashMap::from([(terminal, "2".into()), (middle, "1".into())])
+    );
+    let mut invalid = locants.clone();
+    invalid.atoms.pop();
+    assert!(invalid.for_document(&document).is_empty());
+    document.atom_mut(oxygen).unwrap().element = "N".into();
+    assert!(locants.for_document(&document).is_empty());
+}
+
+#[tokio::test]
+async fn parent_locants_ignore_drawn_fusion_hydrogens_and_stereo() {
+    // The default depiction draws the fusion hydrogens of cis-decalin as atoms.
+    let response = crate::engine::LocalEngine::in_process()
+        .request(crate::engine::Request::import_smiles(
+            "C1CC[C@H]2CCCC[C@@H]2C1",
+        ))
+        .await
+        .unwrap();
+    let document = response.document.unwrap();
+    assert!(document.atoms.iter().any(|atom| atom.element == "H"));
+    let locants = Locants {
+        smiles: "C1CCC2CCCCC2C1".into(),
+        atoms: ["2", "3", "4", "4a", "5", "6", "7", "8", "8a", "1"]
+            .map(|locant| Some(locant.into()))
+            .into(),
+    };
+    let mapped = locants.for_document(&document);
+    assert_eq!(mapped.len(), 10);
+    assert!(
+        mapped
+            .keys()
+            .all(|id| document.atom(*id).unwrap().element == "C")
+    );
+}
+
+#[test]
+fn interior_locants_use_unicode_superscript_digits() {
+    assert_eq!(locant_text("3a^12"), "3a¹²");
+    assert_eq!(locant_text("4a"), "4a");
+    assert_eq!(locant_text("3a¹"), "3a¹");
+}
+
+#[test]
 fn typed_error_display_preserves_message_bytes() {
     for message in [
         "",

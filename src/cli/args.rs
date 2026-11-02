@@ -58,6 +58,7 @@ pub(crate) struct Input {
 pub(crate) struct Name {
     pub(crate) input: Input,
     pub(crate) json: bool,
+    pub(crate) locants: bool,
 }
 
 /// Where the output goes.
@@ -145,6 +146,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
             Ok(Command::Name(Name {
                 input: input(spec.name, &options)?,
                 json: options.json,
+                locants: options.locants,
             }))
         }
         _ => Err(unknown_command(&lossy)),
@@ -230,6 +232,7 @@ struct Options {
     force: bool,
     receipt: bool,
     json: bool,
+    locants: bool,
 }
 
 /// Splits `tokens` into the command's options and one positional input.
@@ -284,6 +287,7 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--force" => options.force = true,
                 "--receipt" => options.receipt = true,
                 "--json" => options.json = true,
+                "--locants" => options.locants = true,
                 _ => {}
             }
         }

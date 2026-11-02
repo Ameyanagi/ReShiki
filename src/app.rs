@@ -1178,6 +1178,8 @@ impl App {
             self.tab.file_epoch,
             self.tab.revision,
         );
+        self.invalidate_locant_hover();
+        self.invalidate_locant_numbering();
         self.sync_numeric_transforms();
         if refresh_dimensions {
             self.refresh_numeric_dimensions();

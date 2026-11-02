@@ -195,6 +195,7 @@ fn parse_record(name: &str, cid: u64, bytes: &[u8]) -> Result<Record, Error> {
         name_status: None,
         smiles: property.smiles.clone(),
         canonical_smiles: canonical,
+        locants: None,
         synonyms: vec![],
         warnings: vec!["A PubChem database match does not prove that the name has only one possible meaning. Review the complete structure and its specified stereochemistry before inserting.".into()],
         provenance: Provenance::PubChem { cid },

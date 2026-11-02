@@ -136,6 +136,7 @@ MCP server's `file_save` or the app.
 | `--force`           | skill                          | Replace the generated files of an existing skill folder                                                  |
 | `--receipt`         | skill                          | Print one receipt JSON line after writing the skill                                                      |
 | `--json`            | name                           | Print the name and its status as one JSON line                                                           |
+| `--locants`         | name                           | Print JSON with parent locants in input atom order                                                      |
 | `--json`            | help                           | Print the command catalog as one JSON line                                                               |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
@@ -325,7 +326,7 @@ The result has the same fields as the MCP `analyze` tool's
 ## name
 
 ```text
-reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]
+reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json] [--locants]
 ```
 
 `reshiki --cli help name` prints the [full help](agent-reference.md#reshiki---cli-name).
@@ -345,6 +346,8 @@ propanenitrile
 
 `--json` prints one JSON line with the name and its
 [preferred IUPAC name status](chemical-naming-rust.md#preferred-iupac-name-status).
+`--locants` also prints JSON and adds a `locants` array in imported atom order,
+with a string for each principal-parent atom and null for other atoms.
 This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 
 ```json

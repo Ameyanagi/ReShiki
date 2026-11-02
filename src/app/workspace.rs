@@ -280,6 +280,7 @@ impl App {
     fn drawing_canvas(&self) -> Element<'_, Edit> {
         canvas(MoleculeCanvas {
             nmr: self.nmr_canvas(),
+            locant_highlight: self.naming_canvas_highlight(),
             optimizer: self.optimization_canvas(),
             keyboard_target: if self.keyboard_drawing_active() {
                 self.tab.keyboard_drawing.point(self.display_document())
@@ -2240,12 +2241,21 @@ impl App {
                         .size(12)
                         .padding(7),
                     command("Number", Message::Labels(A::Number))
-                        .on_press_maybe((!ids.is_empty()).then_some(Message::Labels(A::Number)))
+                        .on_press_maybe((!ids.is_empty()).then_some(Message::Labels(A::Number))),
+                    command("IUPAC locants", Message::Labels(A::IupacLocants)).on_press_maybe(
+                        (!self.tab.selected.is_empty() && !self.tab.labels.locants_running())
+                            .then_some(Message::Labels(A::IupacLocants))
+                    )
                 ]
                 .spacing(5),
                 text("Sequence follows atom creation/import order.")
                     .size(11)
                     .style(muted_text),
+                checkbox(self.tab.labels.ring_atoms_only)
+                    .label("Ring atoms only")
+                    .text_size(12)
+                    .on_toggle(|value| Message::Labels(A::RingAtomsOnly(value))),
+                self.locant_numbering_controls(),
                 command("Clear numbers", Message::Labels(A::ClearNumbers)),
             ]
             .spacing(9),
@@ -2265,6 +2275,38 @@ impl App {
         }
         body = self.atom_label_stereo_section(body, stereo);
         self.atom_label_indicator_section(body)
+    }
+
+    fn locant_numbering_controls(&self) -> Element<'_, Message> {
+        use super::atom_labels::Action as A;
+        if let Some(count) = self.tab.labels.locants_replacements(
+            &self.tab.doc,
+            self.tab.file_epoch,
+            self.tab.revision,
+        ) {
+            return column![
+                text(format!("Replace {count} existing atom numbers?")).size(12),
+                row![
+                    command("Replace", Message::Labels(A::ReplaceLocants)),
+                    command("Cancel", Message::Labels(A::CancelLocants)),
+                ]
+                .spacing(5),
+            ]
+            .spacing(5)
+            .into();
+        }
+        if self.tab.labels.locants_running() {
+            return row![
+                text("Generating parent locants…")
+                    .size(11)
+                    .style(muted_text),
+                command("Cancel", Message::Labels(A::CancelLocants)),
+            ]
+            .spacing(5)
+            .align_y(Alignment::Center)
+            .into();
+        }
+        Space::new().height(0).into()
     }
 
     fn atom_label_stereo_section<'a>(

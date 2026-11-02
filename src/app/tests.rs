@@ -483,7 +483,7 @@ fn label_edits_and_indicator_drags_are_atomic_and_do_not_change_chemistry() {
     let a = app.tab.doc.add_atom("N", Point::default());
     app.tab.history = History::default();
     let original = app.tab.doc.clone();
-    app.label_action(Action::Number);
+    let _ = app.label_action(Action::Number);
     assert!(!chemistry_changed(&original, &app.tab.doc));
     let numbered = app.tab.doc.clone();
     app.edit(Edit::AtomIndicator(Owner::Number(a), Point::new(20., -30.)));
@@ -505,9 +505,9 @@ fn label_edits_and_indicator_drags_are_atomic_and_do_not_change_chemistry() {
     assert!(same_drawing(&app.tab.doc, &original));
     let _ = app.update(Message::Redo);
     assert!(same_drawing(&app.tab.doc, &numbered));
-    app.label_action(Action::Carbons(Carbons::All));
-    app.label_action(Action::Hydrogens(false));
-    app.label_action(Action::Stereo(true));
+    let _ = app.label_action(Action::Carbons(Carbons::All));
+    let _ = app.label_action(Action::Hydrogens(false));
+    let _ = app.label_action(Action::Stereo(true));
     let _ = app.update(Message::New);
     assert_eq!(app.tab.doc.atom_labels, Default::default());
     assert_eq!(app.current_text_style().size_pt, 10.);
@@ -526,7 +526,7 @@ fn axial_stereodescriptors_are_drawing_wide_and_undoable() {
     app.tab.history = History::default();
     let before = app.tab.doc.clone();
 
-    app.label_action(Action::AxialDescriptors(AxialDescriptors::Ra));
+    let _ = app.label_action(Action::AxialDescriptors(AxialDescriptors::Ra));
     assert_eq!(
         app.tab.doc.atom_labels.axial_descriptors,
         AxialDescriptors::Ra
@@ -565,12 +565,12 @@ fn bond_attachment_applies_to_text_labels_in_scope_as_one_undo_step() {
     assert!(app.label_attachment_picker(&atoms).is_some());
     let element_only: Vec<_> = app.tab.doc.atom(oxygen).into_iter().collect();
     assert!(app.label_attachment_picker(&element_only).is_none());
-    app.label_action(Action::Attachment(LabelAttachment::Character(0)));
+    let _ = app.label_action(Action::Attachment(LabelAttachment::Character(0)));
     let attachment = |app: &App, id| app.tab.doc.atom(id).unwrap().display.label_attachment;
     assert_eq!(attachment(&app, text), LabelAttachment::Character(0));
     assert_eq!(attachment(&app, oxygen), LabelAttachment::Auto);
     assert!(!chemistry_changed(&original, &app.tab.doc));
-    app.label_action(Action::ResetOverrides);
+    let _ = app.label_action(Action::ResetOverrides);
     assert_eq!(attachment(&app, text), LabelAttachment::Auto);
     let _ = app.update(Message::Undo);
     assert_eq!(attachment(&app, text), LabelAttachment::Character(0));

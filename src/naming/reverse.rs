@@ -129,6 +129,7 @@ pub(super) fn generated_record(
         name_status: Some(status),
         smiles: expected.clone(),
         canonical_smiles: expected,
+        locants: reconstructed.locants.clone(),
         synonyms: super::aliases_for_smiles(&reconstructed.smiles).map_err(Error::Worker)?,
         warnings,
         provenance: Provenance::Openclatura,

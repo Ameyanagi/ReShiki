@@ -64,6 +64,8 @@ pub const PORT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct Structure {
     pub graph: graph::Graph,
     pub fragment: graph::FragmentId,
+    /// Parent-group atoms captured before word-rule assembly, excluding suffix atoms.
+    pub principal_parent_atoms: Vec<graph::AtomId>,
 }
 
 impl Structure {
@@ -71,6 +73,18 @@ impl Structure {
     /// Cosmetic atom values (including locants) are intentionally excluded.
     pub fn semantic_cxsmiles(&self) -> Result<String, SerializationError> {
         smiles::write_semantic_cxsmiles(&self.graph, self.fragment)
+    }
+
+    /// Semantic CXSMILES and the first principal-parent locant for each written
+    /// atom, in SMILES order. Folded hydrogens have no entry in this vector.
+    pub fn semantic_cxsmiles_with_locants(
+        &self,
+    ) -> Result<(String, Vec<Option<String>>), SerializationError> {
+        smiles::write_semantic_cxsmiles_with_locants(
+            &self.graph,
+            self.fragment,
+            &self.principal_parent_atoms,
+        )
     }
 }
 

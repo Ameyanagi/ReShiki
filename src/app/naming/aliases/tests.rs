@@ -91,6 +91,7 @@ fn edited_name_can_resolve_current_aliases_without_reopening_details() {
         name_status: None,
         smiles: identity.into(),
         canonical_smiles: identity.into(),
+        locants: None,
         synonyms: naming::aliases_for_smiles(identity).unwrap(),
         warnings: vec![],
         provenance: naming::Provenance::Openclatura,

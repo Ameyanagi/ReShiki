@@ -2,6 +2,29 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn generated_record_keeps_reconstruction_smiles_order_for_locants() {
+    let name = "ethanol";
+    let reply = worker::respond(&super::super::local::parse_request(name).unwrap()).unwrap();
+    let reconstructed = super::super::local::parse_result(name, &reply).unwrap();
+    let expected = "CCO".to_owned();
+    let identity = Identity {
+        smiles: expected.clone(),
+        warnings: vec![],
+    };
+    let generated = generated_record(
+        &identity,
+        expected,
+        name.into(),
+        NameStatus::Preferred,
+        &reconstructed,
+    )
+    .unwrap();
+    assert!(generated.locants.is_some());
+    assert_eq!(generated.locants, reconstructed.locants);
+    assert_eq!(generated.smiles, "CCO");
+}
+
+#[test]
 fn rule_protocol_checks_profile_input_and_bounded_name() {
     let reply = json!({"operation":"generate","protocol":worker::PROTOCOL,"profile":openclatura::PROFILE,"input":"CCO","result":{"Ok":{"text":"ethanol","status":{"status":"preferred"}}}});
     let generated = parse_response(&serde_json::to_vec(&reply).unwrap(), "CCO").unwrap();

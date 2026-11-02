@@ -161,6 +161,12 @@ const NAME_JSON: OptionSpec = OptionSpec {
     ..JSON
 };
 
+const LOCANTS: OptionSpec = OptionSpec {
+    flag: "--locants",
+    help: "Print JSON with parent locants in input atom order.",
+    ..JSON
+};
+
 const INPUT: Operand = Operand {
     name: "INPUT",
     help: "Read a file, or standard input with -; --smiles TEXT supplies text instead.",
@@ -225,8 +231,8 @@ const ANALYZE: CommandSpec = CommandSpec {
 const NAME: CommandSpec = CommandSpec {
     name: "name",
     summary: "Print the systematic name of a structure",
-    usage: "reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]",
-    options: &[SMILES, FROM, NAME_JSON],
+    usage: "reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json] [--locants]",
+    options: &[SMILES, FROM, NAME_JSON, LOCANTS],
     tools: &["import"],
     operand: Some(INPUT),
     body: name_help,
@@ -615,9 +621,10 @@ the openclatura port and printed only after the OPSIN port reconstructs
 the same structure.
 
 Options:
-  --json  Print the name and its status as one JSON line.
+  --json     Print the name and its status as one JSON line.
+  --locants  Print JSON with parent locants in input atom order.
 
-Without --json, prints only the name followed by a newline. With --json,
+Without --json or --locants, prints only the name followed by a newline. With either,
 value contains name, preferred, status, reason and detail:
   preferred      true only when status is preferred.
   status         preferred = the preferred IUPAC name (IUPAC 2013);
@@ -626,6 +633,8 @@ value contains name, preferred, status, reason and detail:
                  unverified = systematic, preference not verified.
   reason         The snake_case naming-rule reason, or null for preferred.
   detail         The status detail sentence.
+With --locants, value also contains locants: one string or null per imported
+atom, in input atom order. Atoms outside the principal parent have null.
 ";
     format!("Usage: {}\n\n{body}", NAME.usage)
 }

@@ -2,7 +2,7 @@
 //! The browser sends the same request to its naming Web Worker instead.
 #[cfg(not(target_arch = "wasm32"))]
 use super::client::{self, CancelOnDrop, POLL};
-use super::{Error, Provenance, Record, canonical_smiles, worker};
+use super::{Error, Locants, Provenance, Record, canonical_smiles, worker};
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
     path::Path,
@@ -192,11 +192,25 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
         return Err(Error::Disconnected(MESSAGE.into()));
     }
     let canonical_smiles = canonical_smiles(&smiles).map_err(Error::Rejected)?;
+    let atom_count = crate::chemistry::smiles::parse(&smiles)
+        .map_err(|error| Error::Worker(error.to_string()))?
+        .graph
+        .atoms
+        .len();
+    if reply.locants.len() != atom_count {
+        return Err(Error::Worker(
+            "Local parser returned locants for a different atom count".into(),
+        ));
+    }
     let synonyms = super::aliases_for_smiles(&canonical_smiles).map_err(Error::Worker)?;
     Ok(Record {
         title: name.into(),
         systematic_name: None,
         name_status: None,
+        locants: Some(Locants {
+            smiles: smiles.clone(),
+            atoms: reply.locants,
+        }),
         smiles,
         canonical_smiles,
         synonyms,

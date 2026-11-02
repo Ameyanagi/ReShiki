@@ -60,7 +60,7 @@ impl App {
             Message::CancelEngine(key) => self.cancel_engine_request(key),
             Message::Abbreviations(action) => return Some(self.abbreviation_action(action)),
             Message::Generic(action) => return Some(self.generic_action(action)),
-            Message::Labels(action) => self.label_action(action),
+            Message::Labels(action) => return Some(self.label_action(action)),
             Message::InspectorScroll(y) => self.scroll_templates(y),
             Message::TemplateNavigate(forward) => return Some(self.navigate_templates(forward)),
             Message::Reaction(action) => return Some(self.reaction_action(action)),
@@ -239,6 +239,7 @@ impl App {
     /// These arms must handle every Owner::Document completion in results.rs.
     pub(super) fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Labels(action) => return self.label_action(action),
             Message::Optimization(action) => return self.optimization_action(action),
             Message::Models3d(action) => return self.models3d_action(action),
             Message::Nmr(action) => return self.nmr_action(action),

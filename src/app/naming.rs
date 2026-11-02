@@ -8,9 +8,11 @@ mod aliases;
 mod import_dock;
 mod online;
 pub use aliases::{AliasAction, AliasTarget};
+mod locants;
 mod molecule_label;
 mod preview;
 use iced::{Element, Length, Task};
+pub use locants::LocantTarget;
 use reshiki::accessibility::{button, text_input};
 use reshiki::{
     chemistry::document::DrawingOptions,
@@ -19,6 +21,7 @@ use reshiki::{
     engine::{LocalEngine, Request},
     naming::{self, Record},
 };
+use std::collections::HashMap;
 
 const PANEL_INTRO: &str = "Parse names locally, or confirm an online lookup.";
 const NAME_HINT: &str = "Ambiguous names and unsupported stereo are rejected.";
@@ -83,6 +86,13 @@ pub enum Action {
     Insert,
     InsertName,
     AddNameBelow(bool),
+    NumberByLocants(bool),
+    HoverLocant {
+        target: LocantTarget,
+        token: usize,
+        locant: String,
+        hovered: bool,
+    },
     PreviewOpen(bool),
     DetailsOpen(bool),
     CopyName,
@@ -111,12 +121,15 @@ pub struct Preview {
     /// The graph the preview is allowed to insert, separate from source text.
     identity: String,
     modified: bool,
+    /// Each atom's displayed parent locant from the parsed name.
+    locants: HashMap<u64, String>,
 }
 impl Preview {
     fn new(record: Record, document: Document, warnings: Vec<String>, identity: String) -> Self {
         let (lo, hi) = document.bounds();
         Self {
             modified: identity != record.canonical_smiles,
+            locants: locants::display_locants(&record, &document),
             record,
             document,
             warnings,
@@ -189,10 +202,15 @@ pub(super) struct State {
     smiles: String,
     acknowledged: bool,
     structure: Option<(Ticket, Record)>,
+    /// The atoms Generate named, and their parent locants once named.
+    structure_atoms: Vec<u64>,
+    structure_locants: HashMap<u64, String>,
     structure_error: Option<String>,
     notice: Option<Notice>,
     label_target: Option<Vec<u64>>,
     add_name_below: bool,
+    number_by_locants: bool,
+    locant_hover: Option<locants::Hover>,
     preview_open: bool,
     details_open: bool,
     import_alias: Option<usize>,
@@ -210,10 +228,14 @@ impl Default for State {
             smiles: String::new(),
             acknowledged: false,
             structure: None,
+            structure_atoms: vec![],
+            structure_locants: HashMap::new(),
             structure_error: None,
             notice: None,
             label_target: None,
             add_name_below: true,
+            number_by_locants: false,
+            locant_hover: None,
             preview_open: false,
             details_open: false,
             import_alias: None,
@@ -234,6 +256,7 @@ impl State {
     }
 
     fn stop_request(&mut self) {
+        self.locant_hover = None;
         self.online_confirmation = None;
         if let Some(cancel) = self.local_cancel.take() {
             cancel.stop();
@@ -252,6 +275,7 @@ impl State {
         self.import_alias = None;
     }
     fn set_preview(&mut self, preview: Preview) {
+        self.locant_hover = None;
         self.smiles = preview.identity.clone();
         self.acknowledged = false;
         self.import_alias = None;
@@ -342,6 +366,7 @@ impl App {
     }
 
     fn naming_ticket(&mut self) -> Ticket {
+        self.tab.naming.locant_hover = None;
         self.tab.naming.online_confirmation = None;
         self.tab.naming.serial = self.tab.naming.serial.wrapping_add(1);
         let ticket = Ticket {
@@ -444,6 +469,9 @@ impl App {
                         self.place_molecule_name(&atoms, record);
                     }
                 } else {
+                    let named =
+                        editing::analysis_document(&self.tab.doc, &self.tab.naming.structure_atoms);
+                    self.tab.naming.structure_locants = locants::display_locants(&record, &named);
                     self.tab.naming.structure = Some((ticket, record));
                 }
             }
@@ -513,6 +541,8 @@ impl App {
                 }
                 let (ticket, cancel) = self.begin_naming(Pending::Generate);
                 self.tab.naming.structure = None;
+                self.tab.naming.structure_atoms =
+                    editing::analysis_atoms(&self.tab.doc, &self.tab.selected);
                 self.tab.naming.structure_error = None;
                 let document = self.tab.doc.clone();
                 let selected = self.tab.selected.clone();
@@ -525,6 +555,7 @@ impl App {
             Action::HideMoleculeName(atoms) => self.hide_molecule_name(&atoms),
             Action::Smiles(smiles) => {
                 let state = &mut self.tab.naming;
+                state.locant_hover = None;
                 if state.smiles != smiles && matches!(state.pending, Some(Pending::Preview(_))) {
                     // A local rebuild must never overwrite newer text or make
                     // its older chemical identity insertable after this edit.
@@ -565,7 +596,15 @@ impl App {
             Action::Insert => self.insert_name_preview(),
             Action::InsertName => return self.insert_name_import(),
             Action::AddNameBelow(value) => self.tab.naming.add_name_below = value,
+            Action::NumberByLocants(value) => self.tab.naming.number_by_locants = value,
+            Action::HoverLocant {
+                target,
+                token,
+                locant,
+                hovered,
+            } => self.hover_name_locant(target, token, locant, hovered),
             Action::PreviewOpen(value) => {
+                self.tab.naming.locant_hover = None;
                 self.tab.naming.preview_open = value;
                 if value && self.tab.naming.preview.is_none() {
                     return self.naming_action(Action::Resolve);
@@ -604,6 +643,7 @@ impl App {
     }
 
     fn edit_name_preview(&mut self, edit: Edit) {
+        self.tab.naming.locant_hover = None;
         if self.tab.naming.pending.is_some() {
             return;
         }
@@ -639,7 +679,7 @@ impl App {
         }
     }
 
-    fn naming_can_edit(&self) -> bool {
+    pub(in crate::app) fn naming_can_edit(&self) -> bool {
         !self.tab.busy
             && self.pending.is_none()
             && self.tab.cleanup.is_none()
@@ -686,7 +726,7 @@ impl App {
             self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
             return;
         }
-        let document = preview.document.clone();
+        let document = locants::insertion_document(preview, self.tab.naming.number_by_locants);
         let title = preview.record.title.clone();
         let before = self.tab.doc.clone();
         let Some(selected) = self.insert_beside_drawing(&document) else {
@@ -832,7 +872,7 @@ impl App {
             text(preview.record.provenance.label())
                 .size(11)
                 .style(muted_text),
-            text(&preview.record.title).size(14),
+            self.locant_name(&preview.record.title, LocantTarget::Preview, 14.),
             self.name_preview_canvas(preview, 180.),
             text(PREVIEW_HINT).size(11).style(muted_text),
             text_input(
@@ -883,6 +923,7 @@ impl App {
                 Some(Message::Naming(Action::Acknowledge(!state.acknowledged))),
             ));
         }
+        content = content.push(self.name_locant_checkbox("naming.number-by-locants", idle));
         let ready = idle
             && self.naming_can_edit()
             && (!needs_ack || state.acknowledged)
@@ -910,15 +951,17 @@ impl App {
         preview: &'a Preview,
         height: f32,
     ) -> Element<'a, Message> {
-        let drawing: Element<'a, Edit> = canvas(preview::Preview(MoleculeCanvas::preview(
+        let mut molecule = MoleculeCanvas::preview(
             &preview.document,
             &preview.selected,
             preview.camera,
             self.name_preview_styles(),
-        )))
-        .width(Length::Fill)
-        .height(height)
-        .into();
+        );
+        molecule.locant_highlight = self.name_preview_highlight();
+        let drawing: Element<'a, Edit> = canvas(preview::Preview(molecule))
+            .width(Length::Fill)
+            .height(height)
+            .into();
         container(drawing.map(|edit| Message::Naming(Action::PreviewEdit(edit))))
             .style(container::bordered_box)
             .into()
