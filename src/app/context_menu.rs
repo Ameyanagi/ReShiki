@@ -11,6 +11,7 @@ mod cascade;
 mod cascade_tests;
 use reshiki::{
     bonds::BondPreset,
+    chemistry::stereo_lint,
     editing::{Arrange, Transform},
 };
 
@@ -404,11 +405,16 @@ impl App {
         let submenu = Entry::page;
         let mut entries = vec![];
         if atoms {
-            entries.push(command(
-                "Redraw stereo bonds",
-                Message::Stereo(super::stereo::Action::Redraw),
-                !self.tab.busy,
-            ));
+            let molecules = reshiki::reactions::molecules(&self.tab.doc, &self.tab.selected);
+            if self.tab.doc.bonds.iter().any(|bond| {
+                stereo_lint::stereobond(bond) && molecules.iter().any(|ids| ids.contains(&bond.a))
+            }) {
+                entries.push(command(
+                    "Redraw stereo bonds",
+                    Message::Stereo(super::stereo::Action::Redraw),
+                    !self.tab.busy,
+                ));
+            }
             entries.extend(
                 self.selected_join_commands()
                     .into_iter()

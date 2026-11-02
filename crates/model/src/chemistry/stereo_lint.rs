@@ -82,7 +82,8 @@ pub fn atom_name(document: &Document, id: u64) -> String {
         .unwrap_or_else(|| format!("atom {id}"))
 }
 
-fn stereobond(bond: &Bond) -> bool {
+/// Whether a bond's drawing style carries a defined stereo direction.
+pub fn stereobond(bond: &Bond) -> bool {
     !bond.projection
         && bond.order == 1
         && matches!(

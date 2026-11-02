@@ -36,9 +36,26 @@ fn redraw_stereo_bonds_is_available_for_atom_selections_and_dispatches() {
     assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
     let atom = app.tab.doc.add_atom("C", World::default());
     app.tab.selected = vec![atom];
+    assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    let f = app.tab.doc.add_atom("F", World::new(28., 0.));
+    let cl = app.tab.doc.add_atom("Cl", World::new(-14., -24.));
+    let br = app.tab.doc.add_atom("Br", World::new(-14., 24.));
+    app.tab.doc.add_bond(atom, f, 1, "plain");
+    app.tab.doc.add_bond(atom, cl, 1, "plain");
+    app.tab.doc.add_bond(atom, br, 1, "plain");
+    assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    app.tab.doc.bonds[0].display = "wedge".into();
+    let other = app.tab.doc.add_atom("C", World::new(200., 0.));
+    app.tab.selected = vec![other];
+    assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    // An atom elsewhere in the same molecule still offers Redraw.
+    app.tab.selected = vec![cl];
     assert!(labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
     run_item(&mut app, Page::Main, "Redraw stereo bonds").unwrap();
-    assert_eq!(app.status, "No stereocentres to redraw");
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "Redrew stereo bonds at 1 stereocentre");
+    app.tab.selected = vec![other, br];
+    assert_eq!(enabled(&app, Page::Main, "Redraw stereo bonds"), Some(true));
     app.tab.busy = true;
     assert_eq!(
         enabled(&app, Page::Main, "Redraw stereo bonds"),
@@ -246,7 +263,6 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Chemical names…",
             "Select molecule",
             "—",
-            "Redraw stereo bonds",
             "Join selected atoms or bonds",
             "Merge selected atoms",
             "Show as",
