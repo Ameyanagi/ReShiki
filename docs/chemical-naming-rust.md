@@ -129,9 +129,11 @@ Import tab.
   caption; explicit one-letter peptide mode uses its translated three-letter
   sequence as the title. Expansion never supplies a generated systematic name
   or a curated alias. Side-chain peptide protection is outside this grammar.
-- Generated names cover one connected molecule: chains, rings, ring
+- Generated names cover one complete molecule or a charge-balanced salt: chains, rings, ring
   assemblies, spiro, bridged and fused ring systems, with charges and R/S and
-  E/Z stereo. Salts and mixtures, isotope-labeled molecules and a few stereo,
+  E/Z stereo, supported mono-/diradicals, and parenthesised isotope descriptors.
+  Binary salts name the cations before the anions, including repeated ions.
+  Mixtures, net-charged sets, neutral components mixed with ions and a few stereo,
   charge and ring states that the name could misdescribe give an error
   instead of a name.
 - Generated names are systematic. They are not always the preferred IUPAC name.
@@ -226,13 +228,31 @@ done by `crates/chemistry`: SMILES parsing, kekulization, ring perception,
 stereo perception and the CIP labeler, including r/s. The copyright and license
 are in `licenses/openclatura/` and `NOTICE`.
 
-The port names one connected molecule of up to 512 atoms: chains, monocycles,
+The port names molecular graphs of up to 512 atoms: chains, monocycles,
 heterocycles, ring assemblies, spiro systems, von Baeyer (bicyclo, tricyclo)
 systems and fused ring systems, including retained names such as `naphthalene`
 or `1H-indole`, fusion names such as `pyrazolo[3,4-d]pyrimidine`, hydro
 prefixes, indicated hydrogen and bridged fused parents. It covers functional
-groups, charges and ions, and R/S, r/s and E/Z. It declines salts and mixtures,
-isotope labels, and the cases where upstream's own name would describe another
+groups, charges and ions, and R/S, r/s and E/Z. It also names:
+
+- charge-balanced salts, cations before anions with multiplying prefixes
+  (`sodium acetate`, `disodium sulfate`), checked against the whole
+  disconnected graph.
+- neutral mono- and diradicals on chains, monocycles and simple heteroatom or
+  acyl centres with P-71 names (`propan-2-yl`, `phenoxyl`, `methanaminyl`).
+  Only the generation check parses radicals; Import → Name does not.
+- radical ions with the descriptive RC-85.1 form (`benzene radical cation`)
+  when one charge and one unpaired electron sit on the same atom or on the
+  two ends of a broken π bond. The recovered neutral name is the one checked,
+  and the name is marked not preferred.
+- isotopically substituted structures with parenthesised nuclide descriptors
+  (`(2H3)methanol`, P-82), marked preference-unverified. The CLI option
+  `--isotope-style boughton` gives `methanol-d4` instead, marked not preferred.
+  Captions show mass numbers as superscripts and counts as subscripts.
+
+It declines mixtures, neutral components mixed with ions, isotope positions on
+branches or repeated suffix atoms, isotope-labelled radicals, and the cases
+where upstream's own name would describe another
 structure: nitrogen and ring lone-pair stereocentres, some ring stereo, r/s on
 von Baeyer parents, and some charge, hydrogen and localized pi states. Each
 such place is marked `Upstream divergence` in the source. The text matches

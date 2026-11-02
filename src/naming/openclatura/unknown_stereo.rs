@@ -71,7 +71,10 @@ pub(super) fn annotate(state: &perception::State, mol: &mut Molecule) -> Result<
 
 /// An early hook in the ordinary entry point. Ordinary atom maps have no
 /// naming meaning; only the reserved markers emitted by document_identity do.
-pub(super) fn name_smiles(smiles: &str) -> Result<Option<Name>, String> {
+pub(super) fn name_smiles(
+    smiles: &str,
+    style: crate::naming::IsotopeStyle,
+) -> Result<Option<Name>, String> {
     if ![":900001]", ":900002]", ":900003]"]
         .iter()
         .any(|marker| smiles.contains(marker))
@@ -81,7 +84,7 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Option<Name>, String> {
     // Keep the ordinary size and supported-semantics gate ahead of parsing
     // the internal marker transport, just as in graph_io::read_smiles.
     let unspecified = crate::naming::canonical_smiles(smiles)?;
-    let mut normal = super::name_smiles(&unspecified)?;
+    let mut normal = super::name_smiles_with_style(&unspecified, style)?;
     let status = normal.status;
     normal.status = NameStatus::NotPreferred(NameReason::UnknownConfiguration);
     let mol = graph_io::read_smiles(smiles)?;

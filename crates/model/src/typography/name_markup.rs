@@ -7,6 +7,7 @@ pub enum NameRun {
     Italic,
     SmallCaps,
     Superscript,
+    Subscript,
 }
 
 /// Display text with ordered, nonoverlapping UTF-8 byte ranges.
@@ -33,6 +34,7 @@ impl NameMarkup {
                         style.size_pt = (style.size_pt * 0.8).max(4.);
                     }
                     NameRun::Superscript => style.script = Script::Superscript,
+                    NameRun::Subscript => style.script = Script::Subscript,
                 }
                 TextSpan {
                     start: range.start,
@@ -65,6 +67,20 @@ impl NameMarkup {
                         '7' => '⁷',
                         '8' => '⁸',
                         '9' => '⁹',
+                        _ => c,
+                    }
+                } else if *run == NameRun::Subscript {
+                    match c {
+                        '0' => '₀',
+                        '1' => '₁',
+                        '2' => '₂',
+                        '3' => '₃',
+                        '4' => '₄',
+                        '5' => '₅',
+                        '6' => '₆',
+                        '7' => '₇',
+                        '8' => '₈',
+                        '9' => '₉',
                         _ => c,
                     }
                 } else {
@@ -108,6 +124,244 @@ fn superscript_digit(c: char) -> Option<char> {
         .iter()
         .position(|&digit| digit == c)
         .map(|i| char::from(b'0' + i as u8))
+}
+
+fn subscript_digit(c: char) -> Option<char> {
+    "₀₁₂₃₄₅₆₇₈₉"
+        .chars()
+        .position(|digit| digit == c)
+        .map(|i| char::from(b'0' + i as u8))
+}
+
+fn isotope_digit(c: char) -> Option<char> {
+    if c.is_ascii_digit() {
+        Some(c)
+    } else {
+        superscript_digit(c).or_else(|| subscript_digit(c))
+    }
+}
+
+fn digit_run(text: &str) -> (String, usize) {
+    let mut digits = String::new();
+    let mut bytes = 0;
+    for c in text.chars() {
+        let Some(digit) = isotope_digit(c) else { break };
+        digits.push(digit);
+        bytes += c.len_utf8();
+    }
+    (digits, bytes)
+}
+
+fn nuclide_symbol(mass: &str, symbol: &str) -> bool {
+    mass.parse()
+        .is_ok_and(|mass| reshiki_chemistry::isotopes::is_known_nuclide(symbol, mass))
+}
+
+/// Boughton descriptors follow the parent and can themselves carry locants.
+/// Requiring the descriptor to reach the end (or another isotope suffix)
+/// keeps ordinary indicated hydrogen such as `-1H-indole` untouched.
+fn boughton_nuclide(text: &str) -> Option<(NameMarkup, usize)> {
+    let (mass, mass_bytes) = digit_run(text);
+    let (symbol, symbol_bytes) = if mass.is_empty() {
+        (text.starts_with('d').then_some("d")?, 1)
+    } else {
+        let tail = after(text, mass_bytes);
+        if !tail.starts_with(|c: char| c.is_ascii_uppercase()) {
+            return None;
+        }
+        let length = 1 + usize::from(tail.as_bytes().get(1).is_some_and(u8::is_ascii_lowercase));
+        let symbol = before(tail, length);
+        if !nuclide_symbol(&mass, symbol) {
+            return None;
+        }
+        (symbol, length)
+    };
+    let (count, count_bytes) = digit_run(after(text, mass_bytes + symbol_bytes));
+    if symbol == "d" && count.is_empty() {
+        return None;
+    }
+    let consumed = mass_bytes + symbol_bytes + count_bytes;
+    let tail = after(text, consumed);
+    if !tail.is_empty()
+        && !tail.strip_prefix('-').is_some_and(|tail| {
+            tail.starts_with(|c: char| {
+                c.is_ascii_digit() || superscript_digit(c).is_some() || c == 'd'
+            })
+        })
+    {
+        return None;
+    }
+    let mut runs = vec![];
+    if !mass.is_empty() {
+        runs.push((0..mass.len(), NameRun::Superscript));
+    }
+    if !count.is_empty() {
+        let start = mass.len() + symbol.len();
+        runs.push((start..start + count.len(), NameRun::Subscript));
+    }
+    Some((
+        NameMarkup {
+            text: format!("{mass}{symbol}{count}"),
+            runs,
+        },
+        consumed,
+    ))
+}
+
+/// Recognize a complete parenthesised nuclide descriptor before treating its
+/// H as indicated hydrogen. Nuclide symbols are roman (P-81.2), while their
+/// mass and count use separate, exportable script spans.
+fn isotope_group(text: &str) -> Option<(NameMarkup, usize)> {
+    let body = text.strip_prefix('(')?;
+    let close = body.find(')')?;
+    let body = before(body, close);
+    let normalized: String = body
+        .chars()
+        .map(|c| {
+            superscript_digit(c)
+                .or_else(|| subscript_digit(c))
+                .unwrap_or(c)
+        })
+        .collect();
+    let mut runs = vec![];
+    let mut start = 0;
+    while start < normalized.len() {
+        let mut found = None;
+        for (relative, _) in after(&normalized, start).char_indices() {
+            let at = start + relative;
+            let tail = after(&normalized, at);
+            let mass_len = tail.bytes().take_while(u8::is_ascii_digit).count();
+            if mass_len == 0 {
+                continue;
+            }
+            let prefix = segment(&normalized, start..at);
+            if !prefix.is_empty()
+                && !prefix.strip_suffix('-').is_some_and(|locants| {
+                    locants
+                        .split(',')
+                        .all(|locant| numeric_locant(locant) || ELEMENTS.contains(&locant))
+                })
+            {
+                continue;
+            }
+            let symbol_tail = after(tail, mass_len);
+            let Some(first) = symbol_tail.chars().next() else {
+                continue;
+            };
+            if !first.is_ascii_uppercase() {
+                continue;
+            }
+            let symbol_len = 1 + usize::from(
+                symbol_tail
+                    .as_bytes()
+                    .get(1)
+                    .is_some_and(u8::is_ascii_lowercase),
+            );
+            let symbol = before(symbol_tail, symbol_len);
+            if !nuclide_symbol(before(tail, mass_len), symbol) {
+                continue;
+            }
+            let count_len = after(symbol_tail, symbol_len)
+                .bytes()
+                .take_while(u8::is_ascii_digit)
+                .count();
+            let end = at + mass_len + symbol_len + count_len;
+            if end != normalized.len() && !after(&normalized, end).starts_with(',') {
+                continue;
+            }
+            found = Some((at, mass_len, symbol_len, count_len, end));
+            break;
+        }
+        let (at, mass_len, symbol_len, count_len, end) = found?;
+        runs.push((at + 1..at + mass_len + 1, NameRun::Superscript));
+        if count_len > 0 {
+            let count = at + mass_len + symbol_len + 1;
+            runs.push((count..count + count_len, NameRun::Subscript));
+        }
+        start = end + usize::from(end < normalized.len());
+        if start == normalized.len() && end < normalized.len() {
+            return None;
+        }
+    }
+    if runs.is_empty() {
+        return None;
+    }
+    Some((
+        NameMarkup {
+            text: format!("({normalized})"),
+            runs,
+        },
+        close + 2,
+    ))
+}
+
+fn isotope_at(name: &str, at: usize) -> Option<(NameMarkup, usize)> {
+    let rest = after(name, at);
+    if before(name, at).ends_with('-')
+        && let Some(isotope) = boughton_nuclide(rest)
+    {
+        return Some(isotope);
+    }
+    let indicated_hydrogen = before(name, at).ends_with(|c: char| c.is_ascii_digit())
+        && rest
+            .strip_prefix('(')
+            .and_then(|body| body.split_once(')'))
+            .is_some_and(|(body, tail)| {
+                tail.starts_with('-')
+                    && body
+                        .split(',')
+                        .all(|locant| locant.strip_suffix('H').is_some_and(numeric_locant))
+            });
+    if indicated_hydrogen {
+        None
+    } else {
+        isotope_group(rest)
+    }
+}
+
+/// Isotope scripts and roman nuclide symbols on the unchanged source string.
+/// The caption parser normalizes Unicode digits; rich copy keeps their original
+/// byte ranges and source spelling while sharing the same recognition.
+pub(crate) struct IsotopeRuns {
+    pub scripts: Vec<(Range<usize>, Script)>,
+    pub symbols: Vec<Range<usize>>,
+}
+
+pub(crate) fn isotope_runs(name: &str) -> IsotopeRuns {
+    let mut scripts = vec![];
+    let mut symbols = vec![];
+    let mut at = 0;
+    while let Some(c) = after(name, at).chars().next() {
+        if let Some((isotope, consumed)) = isotope_at(name, at) {
+            let source = before(after(name, at), consumed);
+            let offset = |byte| {
+                at + source
+                    .char_indices()
+                    .nth(before(&isotope.text, byte).chars().count())
+                    .map_or(consumed, |(i, _)| i)
+            };
+            let original = |range: Range<usize>| offset(range.start)..offset(range.end);
+            for (range, run) in &isotope.runs {
+                let script = match run {
+                    NameRun::Superscript => Script::Superscript,
+                    NameRun::Subscript => Script::Subscript,
+                    NameRun::Italic | NameRun::SmallCaps => Script::Normal,
+                };
+                scripts.push((original(range.clone()), script));
+                if *run == NameRun::Superscript {
+                    let length = after(&isotope.text, range.end)
+                        .bytes()
+                        .take_while(u8::is_ascii_alphabetic)
+                        .count();
+                    symbols.push(original(range.end..range.end + length));
+                }
+            }
+            at += consumed;
+        } else {
+            at += c.len_utf8();
+        }
+    }
+    IsotopeRuns { scripts, symbols }
 }
 
 fn boundary_before(text: &str, at: usize) -> bool {
@@ -178,6 +432,18 @@ fn display_text(name: &str) -> NameMarkup {
     while i < name.len() {
         let rest = after(name, i);
         let Some(c) = rest.chars().next() else { break };
+        if let Some((isotope, consumed)) = isotope_at(name, i) {
+            let offset = markup.text.len();
+            markup.text.push_str(&isotope.text);
+            markup.runs.extend(
+                isotope
+                    .runs
+                    .into_iter()
+                    .map(|(range, run)| (range.start + offset..range.end + offset, run)),
+            );
+            i += consumed;
+            continue;
+        }
         let lambda = ["lambda^", "lambda", "λ^", "λ"]
             .into_iter()
             .find_map(|prefix| rest.strip_prefix(prefix).map(|tail| (prefix.len(), tail)));
@@ -447,6 +713,13 @@ pub fn name_markup(name: &str) -> NameMarkup {
     }
     parenthesized_stereo(text, &mut markup.runs);
     fusion_letters(text, &mut markup.runs);
+    let nuclides = isotope_runs(text).symbols;
+    markup.runs.retain(|(range, run)| {
+        *run != NameRun::Italic
+            || !nuclides
+                .iter()
+                .any(|symbol| range.start < symbol.end && symbol.start < range.end)
+    });
     markup.runs.sort_by_key(|(range, _)| range.start);
     markup.runs.dedup();
     markup
@@ -634,5 +907,96 @@ mod tests {
         format.style.size_pt = 4.;
         markup.apply_to(&mut format);
         format.validate(&markup.text).unwrap();
+    }
+
+    #[test]
+    fn isotope_mass_and_count_are_separate_roman_script_spans() {
+        for (name, unicode, masses, counts) in [
+            ("(14C)methane", "(¹⁴C)methane", vec!["14"], vec![]),
+            ("(2H1)methane", "(²H₁)methane", vec!["2"], vec!["1"]),
+            (
+                "(S)-(1-2H1)ethan-1-ol",
+                "(S)-(1-²H₁)ethan-1-ol",
+                vec!["2"],
+                vec!["1"],
+            ),
+            (
+                "(1,1-2H2,18O)methanol",
+                "(1,1-²H₂,¹⁸O)methanol",
+                vec!["2", "18"],
+                vec!["2"],
+            ),
+            (
+                "(N-2H1,15N)methanamine",
+                "(N-²H₁,¹⁵N)methanamine",
+                vec!["2", "15"],
+                vec!["1"],
+            ),
+        ] {
+            let markup = name_markup(name);
+            assert_eq!(markup.text, name);
+            assert_eq!(parts(&markup, NameRun::Superscript), masses);
+            assert_eq!(parts(&markup, NameRun::Subscript), counts);
+            assert_eq!(markup.unicode().text, unicode);
+            assert_eq!(name_markup(unicode), markup);
+            let mut format = TextFormat::default();
+            markup.apply_to(&mut format);
+            format.validate(&markup.text).unwrap();
+            for (range, run) in &markup.runs {
+                let style = format.at(range.start);
+                if matches!(run, NameRun::Superscript | NameRun::Subscript) {
+                    assert!(!style.italic);
+                }
+            }
+        }
+        assert_eq!(
+            parts(&name_markup("(2H1)methane"), NameRun::Italic),
+            Vec::<&str>::new()
+        );
+        assert_eq!(
+            parts(&name_markup("(S)-(N-2H1)ethanamide"), NameRun::Italic),
+            ["S", "N"]
+        );
+        assert_eq!(name_markup("methanol-d4").unicode().text, "methanol-d₄");
+        assert_eq!(name_markup("methanol-d₄"), name_markup("methanol-d4"));
+        assert_eq!(
+            name_markup("ethan-1-ol-2-13C").unicode().text,
+            "ethan-1-ol-2-¹³C"
+        );
+        assert_eq!(
+            name_markup("ethane-1-13C-1,1-d2").unicode().text,
+            "ethane-1-¹³C-1,1-d₂"
+        );
+        for text in ["(13C prose)", "(1,2)", "(18Ox)", "(13C,)", "1H2O"] {
+            assert!(name_markup(text).runs.is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn nuclide_symbols_remain_roman_beside_stereodescriptors() {
+        for name in ["(34S)", "(31P)", "(1-2H1,34S)"] {
+            let markup = name_markup(name);
+            assert_eq!(
+                parts(&markup, NameRun::Italic),
+                Vec::<&str>::new(),
+                "{name}"
+            );
+            let mut format = TextFormat::default();
+            markup.apply_to(&mut format);
+            format.validate(&markup.text).unwrap();
+            assert_eq!(name_markup(&markup.unicode().text), markup);
+        }
+        assert_eq!(
+            parts(&name_markup("(2S)-(34S)butane"), NameRun::Italic),
+            ["S"]
+        );
+        assert_eq!(
+            parts(&name_markup("(2S)butane"), NameRun::Superscript),
+            Vec::<&str>::new()
+        );
+        assert_eq!(
+            parts(&name_markup("(2P)-(31P)phosphane"), NameRun::Italic),
+            ["P"]
+        );
     }
 }

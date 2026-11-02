@@ -26,7 +26,8 @@ use std::collections::HashMap;
 const PANEL_INTRO: &str = "Parse names locally, or confirm an online lookup.";
 const NAME_HINT: &str = "Ambiguous names and unsupported stereo are rejected.";
 const PREVIEW_HINT: &str = "Drag atoms to arrange the layout.";
-const STRUCTURE_HINT: &str = "One connected molecule; each name is checked by parsing it back.";
+const STRUCTURE_HINT: &str =
+    "One complete molecule or a charge-balanced salt; each name is checked by parsing it back.";
 const MULTICOMPONENT_HINT: &str =
     "Components are inserted separately. A name below is unavailable for this result.";
 

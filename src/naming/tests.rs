@@ -1,5 +1,28 @@
 use super::*;
 
+#[tokio::test]
+async fn whole_drawing_and_all_ion_selection_generate_the_same_salt() {
+    let mut doc = Document::default();
+    let sodium = doc.add_atom("Na", crate::document::Point::default());
+    let chloride = doc.add_atom("Cl", crate::document::Point::new(80., 0.));
+    doc.atom_mut(sodium).unwrap().charge = 1;
+    doc.atom_mut(chloride).unwrap().charge = -1;
+    let whole = document_identity(&doc).unwrap();
+    let selected = selected_identity(&doc, &[sodium, chloride]).unwrap();
+    assert_eq!(whole.smiles, selected.smiles);
+    let record = generate_name(&selected, Cancel::default()).await.unwrap();
+    assert_eq!(record.title, "sodium chloride");
+    assert_eq!(record.name_status, Some(NameStatus::Preferred));
+    doc.atom_mut(chloride).unwrap().charge = 0;
+    assert!(
+        document_identity(&doc)
+            .unwrap_err()
+            .contains("charge-balanced salt")
+    );
+    doc.atom_mut(chloride).unwrap().charge = 1;
+    assert!(document_identity(&doc).is_err());
+}
+
 #[test]
 fn parent_locants_follow_canonical_atom_order_and_require_the_same_graph() {
     let mut document = Document::default();
@@ -97,7 +120,6 @@ fn graph_identity_preserves_stereo_isotopes_charges_and_tautomers() -> Result<()
     }
     for text in [
         "*C",
-        "[CH3]",
         "C~C",
         "CCO>>CC=O",
         "CCO |$;;OH$|",
@@ -374,7 +396,7 @@ fn identity_characterization_table() {
             Err("Invalid drawing: Invalid stereocenter neighbor mapping"),
         ),
         ("wavy", Ok("CCO")),
-        ("radical", Err(UNSUPPORTED)),
+        ("radical", Ok("[CH2]CO")),
         ("query", Err(UNSUPPORTED)),
         ("mapped", Ok("CCO")),
         ("unknown", Ok("CC=CC")),
@@ -413,7 +435,7 @@ fn canonical_state_preserves_rejection_order_and_writer_errors() {
     let doc = identity_case_document("plain");
     let base = chemistry::document::prepare(&doc).unwrap().state;
     let mut state = base.clone();
-    state.graph.atoms[0].radical_electrons = 1;
+    state.graph.atoms[0].radical_electrons = 3;
     state.properties.atoms[0].unknown = true;
     state.metadata.atoms[0].chiral_tag = 3;
     assert_eq!(canonical_state(&state).unwrap_err(), UNSUPPORTED);

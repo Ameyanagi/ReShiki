@@ -45,6 +45,48 @@ pub(super) fn name_component_with_citation(
     }
 }
 
+/// Isotope descriptors must use the numbering chosen by this same pipeline.
+/// Shortcut names have no proven locant map and are handled separately by the
+/// isotope adapter only when their atom position is unambiguous.
+pub(super) struct IsotopeParentName {
+    pub text: String,
+    pub locants: BTreeMap<usize, String>,
+    pub rendered_parent: String,
+}
+
+pub(super) fn name_component_with_atom_locants(
+    mol: &Molecule,
+    component_atoms: &AtomSet,
+) -> Result<IsotopeParentName, String> {
+    match component_pipeline(mol, component_atoms, None, None)? {
+        ComponentResult::Shortcut(name) => Ok(IsotopeParentName {
+            rendered_parent: name.clone(),
+            text: name,
+            locants: BTreeMap::new(),
+        }),
+        ComponentResult::Plan(mut plan) => {
+            // P-82.6.1.1: when isotopic modification requires a locant, the
+            // constitutional locants must be explicit as well.
+            plan.parts.omit_redundant_locants = false;
+            plan.parts.isotope_explicit_locants = true;
+            plan.parts.elided_substituent_locants.clear();
+            plan.parts.elided_unsaturation_locants.clear();
+            plan.parts.elide_principal_group_locants = false;
+            let (text, rendered_parent) = render_component_and_parent(
+                mol,
+                &mut plan.parts,
+                &plan.numbered_path,
+                &plan.locant_map,
+            )?;
+            Ok(IsotopeParentName {
+                text,
+                locants: plan.locant_map,
+                rendered_parent,
+            })
+        }
+    }
+}
+
 struct SpiroProjection<'a> {
     junction: usize,
     required_core: Option<&'a AtomSet>,
@@ -399,7 +441,16 @@ pub(super) fn render_component_parent(
     numbered: &[usize],
     locants: &BTreeMap<usize, String>,
 ) -> Result<String, String> {
-    let name = super::assembler::assemble_name_raw(parts)?;
+    render_component_and_parent(mol, parts, numbered, locants).map(|(name, _)| name)
+}
+
+fn render_component_and_parent(
+    mol: &Molecule,
+    parts: &mut super::assembly_parts::AssemblyParts,
+    numbered: &[usize],
+    locants: &BTreeMap<usize, String>,
+) -> Result<(String, String), String> {
+    let (name, parent) = super::assembler::assemble_name_with_parent(parts)?;
     let represented: AtomSet = parts
         .a_prefixes
         .iter()
@@ -427,7 +478,7 @@ pub(super) fn render_component_parent(
     let name = super::ionic_naming::apply_cationic_imino_names(&name, mol)?;
     let name = super::assembler::post_process_name(&name);
     super::assembler::mark_assembled_name(mol, parts);
-    Ok(name)
+    Ok((name, super::assembler::post_process_name(&parent)))
 }
 
 fn collect_component_branch_substituents(

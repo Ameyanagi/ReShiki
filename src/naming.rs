@@ -32,12 +32,23 @@ pub mod worker;
 #[cfg(not(target_arch = "wasm32"))]
 pub use {
     local::{Cancel, resolve_name},
-    reverse::generate_name,
+    reverse::{generate_name, generate_name_with_options},
 };
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
-pub use browser::{Cancel, generate_name, resolve_name, set_worker, worker_loading};
+pub use browser::{
+    Cancel, generate_name, generate_name_with_options, resolve_name, set_worker, worker_loading,
+};
+
+/// Notation used for isotopically substituted structures.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IsotopeStyle {
+    #[default]
+    Iupac,
+    Boughton,
+}
 
 /// Desktop workers do not download a naming module.
 #[cfg(not(target_arch = "wasm32"))]
@@ -120,6 +131,10 @@ pub enum NameReason {
     AtomOrder,
     AmineChalcogenide,
     PrincipalGroupTie,
+    IsotopePlacement,
+    BoughtonIsotope,
+    RadicalIon,
+    AnionParent,
     RelativeRingStereo,
     UnknownConfiguration,
 }
@@ -182,6 +197,18 @@ impl NameReason {
             }
             Self::PrincipalGroupTie => {
                 "Equally senior principal groups, such as a chain and a ring carboxylic acid, were chosen by atom order; the preferred parent (P-44.1) has not been verified."
+            }
+            Self::IsotopePlacement => {
+                "The isotope descriptor reconstructs the exact structure, but its preferred placement and numbering under P-82.2 and P-82.6 have not been verified."
+            }
+            Self::BoughtonIsotope => {
+                "Uses Boughton/CAS isotope notation; IUPAC prefers parenthesised nuclide descriptors (P-80, P-82.2)."
+            }
+            Self::RadicalIon => {
+                "Uses the descriptive ‘radical cation’ or ‘radical anion’ form (RC-85.1); preferred systematic radical-ion names use the cumulative ionic and radical suffixes of P-75 (including the cation suffixes in P-73)."
+            }
+            Self::AnionParent => {
+                "The preferred parent, suffix and retained-name choice for this hydroxy- or acid-derived anion have not been verified (P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."
             }
         }
     }
@@ -460,7 +487,7 @@ fn bound_atom_tokens(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Require a complete connected molecule. Abbreviation selection expands to
+/// Require complete molecules or salt ions. Abbreviation selection expands to
 /// its complete underlying graph; display labels never replace chemical atoms.
 pub fn selected_identity(document: &Document, selected: &[u64]) -> Result<Identity, String> {
     let ids: HashSet<_> = editing::analysis_atoms(document, selected)
@@ -503,8 +530,8 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
     }
     let molecule = chemistry::document::prepare(document).map_err(|e| e.to_string())?;
     let smiles = canonical_state(&molecule.state)?;
-    if smiles.contains('.') {
-        return Err("Select a single connected molecule; mixtures and disconnected salts are not supported for local naming".into());
+    if smiles.contains('.') && !molecule_names::charge_balanced_salt(document) {
+        return Err("Select one complete molecule or a charge-balanced salt; neutral components, mixtures, net-charged sets and zwitterions mixed with ions are unsupported".into());
     }
     let mut marked = molecule_names::unspecified_unknown_stereo(&molecule.state);
     let mut unknown = vec![0; marked.metadata.atoms.len()];

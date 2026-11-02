@@ -3,13 +3,14 @@
 //! The returned spans contain only inferred styling. All offsets refer to the
 //! original UTF-8 string, and locant separators and ordinary name text stay roman.
 
-use crate::typography::{Script, TextSpan, TextStyle};
+use crate::typography::{Script, TextSpan, TextStyle, isotope_runs};
 use std::ops::Range;
 
 const ITALIC: u8 = 1;
 const SUPERSCRIPT: u8 = 2;
+const SUBSCRIPT: u8 = 4;
 
-/// Infer italic descriptors and superscript element locants in a chemical name.
+/// Infer italic descriptors, element locants and isotope scripts in a chemical name.
 ///
 /// This deliberately recognizes a small set of nomenclature conventions rather
 /// than interpreting the name. It never rewrites characters, including existing
@@ -20,6 +21,17 @@ pub fn name_markup(text: &str) -> Vec<TextSpan> {
     mark_prefixes_and_elements(text, &mut marks);
     mark_indicated_hydrogen(text, &mut marks);
     mark_fusion_descriptors(text, &mut marks);
+    let isotopes = isotope_runs(text);
+    for range in isotopes.symbols {
+        marks.get_mut(range).unwrap_or_default().fill(0);
+    }
+    for (range, run) in isotopes.scripts {
+        marks.get_mut(range).unwrap_or_default().fill(match run {
+            Script::Superscript => SUPERSCRIPT,
+            Script::Subscript => SUBSCRIPT,
+            Script::Normal => 0,
+        });
+    }
 
     let mut spans: Vec<TextSpan> = vec![];
     for (start, character) in text.char_indices() {
@@ -31,6 +43,8 @@ pub fn name_markup(text: &str) -> Vec<TextSpan> {
             italic: mark & ITALIC != 0,
             script: if mark & SUPERSCRIPT != 0 {
                 Script::Superscript
+            } else if mark & SUBSCRIPT != 0 {
+                Script::Subscript
             } else {
                 Script::Normal
             },
@@ -479,5 +493,44 @@ mod tests {
         let spans = name_markup(text);
         assert_eq!((spans[0].start, spans[0].end), (5, 7));
         assert_eq!((spans[1].start, spans[1].end), (9, 11));
+    }
+
+    #[test]
+    fn isotopes_share_caption_scripts_without_changing_source_text() {
+        for (text, expected) in [
+            (
+                "(S)-(1-2H1,34S)ethan-1-ol",
+                vec![
+                    ("S", Script::Normal),
+                    ("2", Script::Superscript),
+                    ("1", Script::Subscript),
+                    ("34", Script::Superscript),
+                ],
+            ),
+            ("(31P)phosphane", vec![("31", Script::Superscript)]),
+            (
+                "(1,1-2H2,18O)methanol",
+                vec![
+                    ("2", Script::Superscript),
+                    ("2", Script::Subscript),
+                    ("18", Script::Superscript),
+                ],
+            ),
+            ("methanol-d4", vec![("4", Script::Subscript)]),
+            ("ethan-1-ol-2-13C", vec![("13", Script::Superscript)]),
+            (
+                "β-(²H₁)methane",
+                vec![("²", Script::Superscript), ("₁", Script::Subscript)],
+            ),
+        ] {
+            assert_eq!(styled(text), expected, "{text}");
+            for span in name_markup(text) {
+                assert_eq!(
+                    span.style.italic,
+                    span.style.script == Script::Normal,
+                    "{text}"
+                );
+            }
+        }
     }
 }

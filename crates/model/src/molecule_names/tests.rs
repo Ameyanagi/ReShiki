@@ -26,6 +26,115 @@ fn show_ethanol(doc: &mut Document) -> u64 {
 }
 
 #[test]
+fn salt_caption_keeps_all_ions_through_layout_copy_and_chemical_edits() {
+    let mut doc = Document::default();
+    let sodium = doc.add_atom("Na", Point::default());
+    let chloride = doc.add_atom("Cl", Point::new(80., 0.));
+    doc.atom_mut(sodium).unwrap().charge = 1;
+    doc.atom_mut(chloride).unwrap().charge = -1;
+    let ids = vec![sodium, chloride];
+    assert!(charge_balanced_salt(&doc));
+    let smiles = identity(&doc, &ids).unwrap();
+    let caption = show(
+        &mut doc,
+        &ids,
+        "sodium chloride".into(),
+        smiles,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    let before = doc.clone();
+    for atom in &mut doc.atoms {
+        atom.position.x += 30.;
+    }
+    reconcile(&mut doc, &before);
+    assert_eq!(doc.molecule_names[0].atoms, ids);
+    assert_eq!(include_annotations(&doc, &ids), [sodium, chloride, caption]);
+    let copy = editing::selection(&doc, &include_annotations(&doc, &ids));
+    assert_eq!(copy.molecule_names.len(), 1);
+    validate(&copy).unwrap();
+    let before = doc.clone();
+    doc.atom_mut(chloride).unwrap().charge = 0;
+    reconcile(&mut doc, &before);
+    assert!(doc.molecule_names.is_empty());
+    assert!(doc.annotations.is_empty());
+}
+
+fn assert_overlapping_ion_caption_is_replaced(salt_last: bool) {
+    let mut doc = Document::default();
+    let sodium = doc.add_atom("Na", Point::default());
+    let chloride = doc.add_atom("Cl", Point::new(80., 0.));
+    doc.atom_mut(sodium).unwrap().charge = 1;
+    doc.atom_mut(chloride).unwrap().charge = -1;
+    let ion = [sodium];
+    let salt = [sodium, chloride];
+    let (previous_atoms, latest_atoms, latest_text) = if salt_last {
+        (&ion[..], &salt[..], "sodium chloride")
+    } else {
+        (&salt[..], &ion[..], "sodium(1+)")
+    };
+    let previous_identity = identity(&doc, previous_atoms).unwrap();
+    let previous = show(
+        &mut doc,
+        previous_atoms,
+        "previous name".into(),
+        previous_identity,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    // A salt caption must replace every overlapping component caption.
+    let mut previous_captions = vec![previous];
+    if salt_last {
+        let chloride_identity = identity(&doc, &[chloride]).unwrap();
+        previous_captions.push(
+            show(
+                &mut doc,
+                &[chloride],
+                "chloride".into(),
+                chloride_identity,
+                TextFormat::default(),
+                true,
+            )
+            .unwrap(),
+        );
+    }
+    let latest_identity = identity(&doc, latest_atoms).unwrap();
+    let latest = show(
+        &mut doc,
+        latest_atoms,
+        latest_text.into(),
+        latest_identity,
+        TextFormat::default(),
+        true,
+    )
+    .unwrap();
+    doc.validate().unwrap();
+    assert_eq!(doc.molecule_names.len(), 1);
+    assert_eq!(doc.annotations.len(), 1);
+    assert!(
+        previous_captions
+            .iter()
+            .all(|id| !doc.annotations.iter().any(|caption| caption.id == *id))
+    );
+    let name = label(&doc, latest_atoms).unwrap();
+    assert_eq!(name.annotation, latest);
+    assert_eq!(name.text, latest_text);
+    assert_eq!(doc.annotations[0].text, latest_text);
+}
+
+#[test]
+fn sodium_caption_is_replaced_by_overlapping_salt_caption() {
+    assert_overlapping_ion_caption_is_replaced(true);
+}
+
+#[test]
+fn salt_caption_is_replaced_by_overlapping_sodium_caption() {
+    assert_overlapping_ion_caption_is_replaced(false);
+}
+
+#[test]
 fn preview_caption_layout_does_not_check_chemical_identity_or_change_associations() {
     let mut doc = ethanol();
     let caption = show_ethanol(&mut doc);
@@ -537,7 +646,7 @@ fn identity_characterization_table() {
             Err("Invalid drawing: Invalid stereocenter neighbor mapping"),
         ),
         ("wavy", Ok("CCO")),
-        ("radical", Err(UNSUPPORTED)),
+        ("radical", Ok("[CH2]CO")),
         ("query", Err(UNSUPPORTED)),
         ("mapped", Ok("CCO")),
         ("unknown", Ok("CC=CC")),

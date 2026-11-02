@@ -28,6 +28,9 @@ mod graph_kernel;
 mod heteroatom_subgraphs;
 mod identity_validation;
 mod ionic_naming;
+mod isotope_naming;
+mod radical_ions;
+pub(super) use radical_ions::recover as recover_radical_ion;
 mod locant_elision;
 mod locants;
 mod molecule;
@@ -41,6 +44,7 @@ mod polycycle_topology;
 mod principal_groups;
 mod principal_suffixes;
 mod python_int_set;
+mod radical_naming;
 mod retained_derivative_hydrogen;
 mod retained_fused_production;
 mod retained_fused_templates;
@@ -52,6 +56,7 @@ mod ring_renderer;
 mod rules;
 mod small_ring_stereo;
 mod special_cases;
+mod species;
 mod spiro_subgraph;
 mod subgraph_tools;
 mod unknown_stereo;
@@ -69,55 +74,69 @@ pub(super) struct Name {
     pub alternatives: Vec<crate::naming::AlternativeName>,
     pub omitted_stereo: Vec<String>,
     pub omitted_units: usize,
+    #[serde(default)]
+    pub verification: Option<Verification>,
 }
 
+/// Descriptive radical-ion names are checked against their recovered neutral.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Verification {
+    pub name: String,
+    pub smiles: String,
+}
+
+#[cfg(test)]
 pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
-    if let Some(name) = unknown_stereo::name_smiles(smiles)? {
+    name_smiles_with_style(smiles, crate::naming::IsotopeStyle::Iupac)
+}
+
+pub(super) fn name_smiles_with_style(
+    smiles: &str,
+    style: crate::naming::IsotopeStyle,
+) -> Result<Name, String> {
+    if let Some(name) = unknown_stereo::name_smiles(smiles, style)? {
         return Ok(name);
+    }
+    let canonical = super::canonical_smiles(smiles)?;
+    if canonical.contains('.') {
+        return species::name_salt(&canonical, style);
+    }
+    if let Some(name) = species::monatomic_cation(&canonical, false)? {
+        return Ok(name);
+    }
+    if let Some((neutral, suffix)) = radical_ions::recover(&canonical)? {
+        let name = name_smiles_with_style(&neutral, style)?;
+        return Ok(Name {
+            text: format!("{} {suffix}", name.text),
+            status: crate::naming::NameStatus::NotPreferred(crate::naming::NameReason::RadicalIon),
+            alternatives: vec![],
+            omitted_stereo: vec![],
+            omitted_units: 0,
+            verification: Some(Verification {
+                name: name.text,
+                smiles: neutral,
+            }),
+        });
     }
     let mol = graph_io::read_smiles(smiles)?;
     if mol.atoms.values().any(|atom| atom.isotope.is_some()) {
-        return Err("openclatura: isotopic naming not ported".into());
+        return isotope_naming::name_smiles(smiles, style);
     }
     // Match upstream require_validated_chalcogens before any shortcut can consume Po.
     if mol.atoms.values().any(|atom| atom.symbol == "Po") {
         return Err("openclatura: polonium nomenclature is not validated".into());
     }
-    ionic_naming::validate_heteroatom_oxo_charge_states(&mol)?;
-    // Upstream divergence: nitrogen stereocentres and ring stereocentres with a
-    // lone pair (for example three single bonds on P, As, S+) read back through OPSIN as
-    // another stereoisomer, or lose their descriptor.
-    let cyclic = chains::get_cyclic_atoms(&mol, &molecule::AtomSet::new());
-    if mol.atoms.values().any(|atom| {
-        atom.has_stereo()
-            && (atom.symbol == "N"
-                || !atom.is_carbon()
-                    && cyclic.contains(&atom.idx)
-                    && mol.degree(atom.idx) == 3
-                    && has_nonbonding_pair(atom, 3)
-                    && mol
-                        .get_neighbors(atom.idx)
-                        .iter()
-                        .all(|&n| mol.bond_order(atom.idx, n) == 1))
-    }) {
-        return Err("openclatura: N and ring lone-pair stereocentres are not validated".into());
+    if let Some(name) = radical_naming::name_radical(&mol)? {
+        return Ok(name);
     }
+    validate_parent(&mol)?;
     let components = graph_io::get_connected_components(&mol);
     if components.len() != 1 {
         return Err("openclatura: expected one connected component".into());
     }
     let text = component_namer::name_component(&mol, &components[0])?;
-    if has_multiplicative_pin(&mol) {
-        mol.mark_name(crate::naming::NameStatus::NotPreferred(
-            crate::naming::NameReason::Multiplicative,
-        ));
-    }
-    // 1,1'-biphenyl is the only ring assembly name the namer writes.
-    if text != "1,1'-biphenyl" && has_ring_assembly(&mol) {
-        mol.mark_name(crate::naming::NameStatus::NotPreferred(
-            crate::naming::NameReason::RingAssembly,
-        ));
-    }
+    assess_parent_name(&mol, &text);
     let status = mol.name_status();
     let mut alternatives = vec![];
     if mol.has_relative_ring_alternative() {
@@ -140,7 +159,47 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
         alternatives,
         omitted_stereo: vec![],
         omitted_units: 0,
+        verification: None,
     })
+}
+
+/// Keep the isotope parent on the ordinary engine's existing validation path.
+pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
+    ionic_naming::validate_heteroatom_oxo_charge_states(mol)?;
+    // Upstream divergence: nitrogen stereocentres and ring stereocentres with a
+    // lone pair (for example three single bonds on P, As, S+) read back through OPSIN as
+    // another stereoisomer, or lose their descriptor.
+    let cyclic = chains::get_cyclic_atoms(mol, &molecule::AtomSet::new());
+    if mol.atoms.values().any(|atom| {
+        atom.has_stereo()
+            && (atom.symbol == "N"
+                || !atom.is_carbon()
+                    && cyclic.contains(&atom.idx)
+                    && mol.degree(atom.idx) == 3
+                    && has_nonbonding_pair(atom, 3)
+                    && mol
+                        .get_neighbors(atom.idx)
+                        .iter()
+                        .all(|&n| mol.bond_order(atom.idx, n) == 1))
+    }) {
+        return Err("openclatura: N and ring lone-pair stereocentres are not validated".into());
+    }
+    Ok(())
+}
+
+pub(super) fn assess_parent_name(mol: &molecule::Molecule, text: &str) {
+    species::assess_anion_parent(mol, text);
+    if has_multiplicative_pin(mol) {
+        mol.mark_name(crate::naming::NameStatus::NotPreferred(
+            crate::naming::NameReason::Multiplicative,
+        ));
+    }
+    // 1,1'-biphenyl is the only ring assembly name the namer writes.
+    if text != "1,1'-biphenyl" && has_ring_assembly(mol) {
+        mol.mark_name(crate::naming::NameStatus::NotPreferred(
+            crate::naming::NameReason::RingAssembly,
+        ));
+    }
 }
 
 /// Rewrite the namer's enclosing parentheses in the IUPAC nesting order
@@ -927,7 +986,6 @@ mod tests {
             "S123(CC1)(CC2)CC3",
             "[c-]1ccccc1-c1ccccc1",
             "C1CCC2(CC1)CCCC2.C",
-            "[13CH2]1CCC2(CC1)CCCC2",
         ] {
             assert!(name_smiles(smiles).is_err(), "{smiles}");
         }

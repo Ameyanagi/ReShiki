@@ -983,7 +983,7 @@ fn copy_as_name_menu_requires_a_complete_molecule() {
         }));
         if !expected {
             assert!(app.context_entries(Page::CopyAs).iter().any(|entry| {
-                matches!(entry, Entry::Hint(reason) if reason.contains("complete connected molecule"))
+                matches!(entry, Entry::Hint(reason) if reason.contains("charge-balanced salt"))
             }));
         }
     }

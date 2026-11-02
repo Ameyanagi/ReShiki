@@ -67,12 +67,32 @@ pub async fn resolve_name(name: &str, cancel: Cancel) -> Result<Record, Error> {
     local::parse_result(name, &output)
 }
 
+/// Parse a generated name in the generation-verification mode, which also
+/// admits salts and radicals.
+pub(super) async fn resolve_generated(name: &str, cancel: Cancel) -> Result<Record, Error> {
+    let output = exchange(
+        &local::verification_request(name)?,
+        &cancel,
+        GENERATE_CANCELLED,
+    )
+    .await?;
+    local::verification_result(name, &output)
+}
+
 /// As on the desktop, a name is returned only after the parser exactly
 /// reconstructs the structure from it.
 pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record, Error> {
+    generate_name_with_options(identity, super::IsotopeStyle::Iupac, cancel).await
+}
+
+pub async fn generate_name_with_options(
+    identity: &Identity,
+    style: super::IsotopeStyle,
+    cancel: Cancel,
+) -> Result<Record, Error> {
     let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
     let input = identity.naming_smiles.as_deref().unwrap_or(&expected);
-    let request = reverse::generate_request(input)?;
+    let request = reverse::generate_request_with_style(input, style)?;
     let output = exchange(&request, &cancel, GENERATE_CANCELLED).await?;
     let candidate = reverse::parse_response(&output, input)?;
     reverse::reconstruct(identity, expected, candidate, &cancel).await

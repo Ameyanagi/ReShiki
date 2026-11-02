@@ -9,11 +9,24 @@ pub(super) fn target(doc: &Document, hit: &[u64], selected: &[u64]) -> Option<Ve
         .copied()
         .filter(|id| doc.atom(*id).is_some())
         .collect();
-    let component = reshiki::molecule_names::component(doc, *atoms.first()?);
-    atoms
+    let mut complete = std::collections::HashSet::new();
+    for atom in atoms {
+        if !complete.contains(&atom) {
+            complete.extend(reshiki::molecule_names::component(doc, atom));
+        }
+    }
+    let component: Vec<_> = doc
+        .atoms
         .iter()
-        .all(|id| component.contains(id))
-        .then_some(component)
+        .filter(|a| complete.contains(&a.id))
+        .map(|a| a.id)
+        .collect();
+    let connected = reshiki::molecule_names::component(doc, *component.first()?);
+    (component.len() == connected.len()
+        || reshiki::molecule_names::charge_balanced_salt(&editing::analysis_document(
+            doc, &component,
+        )))
+    .then_some(component)
 }
 
 impl App {

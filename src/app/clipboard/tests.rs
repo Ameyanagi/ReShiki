@@ -201,7 +201,7 @@ async fn copy_as_name_uses_the_local_generator_and_rejects_partial_or_reaction_s
     app.tab.doc.add_bond(second, oxygen, 1, "plain");
     app.tab.selected = vec![first, second];
     assert_eq!(app.copy_as(CopyFormat::Name).units(), 0);
-    assert!(app.error && app.status.contains("complete connected molecule"));
+    assert!(app.error && app.status.contains("charge-balanced salt"));
     app.tab.selected = app.tab.doc.all_ids();
     let before = app.tab.doc.clone();
     let task = app.copy_as(CopyFormat::Name);
@@ -217,7 +217,7 @@ async fn copy_as_name_uses_the_local_generator_and_rejects_partial_or_reaction_s
     app.tab.doc = text_reaction();
     app.tab.selected.clear();
     assert_eq!(app.copy_as(CopyFormat::Name).units(), 0);
-    assert!(app.error && app.status.contains("complete connected molecule"));
+    assert!(app.error && app.status.contains("charge-balanced salt"));
     assert!(!app.copy_as_busy && !app.tab.clipboard_busy);
 }
 

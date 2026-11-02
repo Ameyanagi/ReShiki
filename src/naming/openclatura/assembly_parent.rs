@@ -616,6 +616,9 @@ pub fn format_unsaturations(
     (stem, pieces.concat())
 }
 pub fn always_print_substituent_locant(parts: &AssemblyParts) -> bool {
+    if parts.isotope_explicit_locants {
+        return true;
+    }
     if parts.parent_length == 1 {
         return false;
     }
@@ -827,6 +830,7 @@ pub fn format_principal_suffix(
     locs.sort_by_key(|l| parse_locant(l));
     let mut omit = parts.parent_length == 1;
     if !omit
+        && !parts.isotope_explicit_locants
         && locs == ["1"]
         && (!group.suffix_with_locant
             || (parts.is_ring
@@ -872,6 +876,9 @@ pub fn format_principal_suffix(
     ))
 }
 fn redundant_unsaturation(parts: &AssemblyParts) -> bool {
+    if parts.isotope_explicit_locants {
+        return false;
+    }
     if parts.is_spiro_component
         || parts.unsaturations.len() != 1
         || parts.unsaturations[0].locants.len() != 1

@@ -106,6 +106,26 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
     ));
 }
 
+#[test]
+fn generation_verification_accepts_salts_and_radicals_without_relaxing_import() {
+    // Import accepts salts on its own terms; radicals stay generation-only.
+    for (name, smiles, imports) in [
+        ("sodium acetate", "CC(=O)[O-].[Na+]", true),
+        ("methyl", "[CH3]", false),
+    ] {
+        let request = verification_request(name).unwrap();
+        let output = worker::respond(&request).unwrap();
+        let record = verification_result(name, &output).unwrap();
+        super::super::verify_identity(smiles, &record.smiles).unwrap();
+        assert!(
+            parse_result(name, &output).is_err(),
+            "Verification reply passed as strict import"
+        );
+        let strict = worker::respond(&parse_request(name).unwrap()).unwrap();
+        assert_eq!(parse_result(name, &strict).is_ok(), imports, "{name}");
+    }
+}
+
 /// Independently written graphs encode substituent positions, ring topology
 /// and known CIP priorities. They are not copied from OPSIN's generated SMILES.
 #[tokio::test]

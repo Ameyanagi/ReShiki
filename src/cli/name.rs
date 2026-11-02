@@ -24,9 +24,13 @@ pub(crate) async fn run(
     let handle = session.import_text(text, format, err).await?;
     let document = session.document(handle)?;
     let identity = naming::document_identity(&document).map_err(CliError::Failed)?;
-    let record = naming::generate_name(&identity, naming::Cancel::default())
-        .await
-        .map_err(|error| CliError::Failed(error.to_string()))?;
+    let record = naming::generate_name_with_options(
+        &identity,
+        name.isotope_style,
+        naming::Cancel::default(),
+    )
+    .await
+    .map_err(|error| CliError::Failed(error.to_string()))?;
     if name.json || name.locants {
         let status = record.name_status.ok_or_else(|| {
             CliError::Failed("internal error: generated name has no status".into())

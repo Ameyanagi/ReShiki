@@ -6,6 +6,19 @@ fn atom_ids(doc: &Document) -> Vec<u64> {
 }
 
 #[test]
+fn complete_salt_selection_is_a_caption_target() {
+    let mut doc = Document::default();
+    let sodium = doc.add_atom("Na", Point::default());
+    let chloride = doc.add_atom("Cl", Point::new(80., 0.));
+    doc.atom_mut(sodium).unwrap().charge = 1;
+    doc.atom_mut(chloride).unwrap().charge = -1;
+    let ids = vec![sodium, chloride];
+    assert_eq!(target(&doc, &[], &ids), Some(ids));
+    doc.atom_mut(chloride).unwrap().charge = 0;
+    assert_eq!(target(&doc, &[], &[sodium, chloride]), None);
+}
+
+#[test]
 fn clicked_molecule_is_independent_of_multi_selection_and_logical_groups() {
     let mut doc = ethanol();
     let first = atom_ids(&doc);

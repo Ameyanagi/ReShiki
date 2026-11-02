@@ -152,6 +152,7 @@ async fn generated_fusion_hydrogens_preserve_formula_inchi_and_naming_outcomes()
                 "protocol": 4,
                 "profile": "openclatura 0.4.3 Rust port",
                 "smiles": identity.smiles,
+                "isotope_style": "iupac",
             });
             let response =
                 naming::worker::respond(&serde_json::to_vec(&request).map_err(|e| e.to_string())?)?;
