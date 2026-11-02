@@ -244,9 +244,330 @@ fn disconnected_imports_turn_as_one_body() -> anyhow::Result<()> {
         Default::default(),
     )?
     .positions;
-    let positions = coordinates(&state, &input.reaction_properties)?.positions;
+    // This regression belongs to the bounded straightening stage. Fresh
+    // imports subsequently orient and repack disconnected components.
+    let mut positions = original.clone();
+    chemistry::layout_refinement::straighten(&state, &mut positions, None);
     assert_ne!(positions, original);
     assert_rigid_rotation(&original, &positions);
+    Ok(())
+}
+
+fn imported_smiles(text: &str) -> anyhow::Result<Box<Prepared>> {
+    let Preparation::Complete(prepared) = prepare(Request::import("smiles", text))? else {
+        anyhow::bail!("{text}: import deferred");
+    };
+    Ok(prepared)
+}
+
+fn document_atom(document: &Document, id: u64) -> &crate::document::Atom {
+    document.atoms.iter().find(|atom| atom.id == id).unwrap()
+}
+
+fn average_document_bond_length(document: &Document) -> f32 {
+    document
+        .bonds
+        .iter()
+        .map(|bond| {
+            document_atom(document, bond.a)
+                .position
+                .distance(document_atom(document, bond.b).position)
+        })
+        .sum::<f32>()
+        / document.bonds.len() as f32
+}
+
+#[test]
+fn explicit_mol_and_cdxml_imports_preserve_nonconventional_coordinates() -> anyhow::Result<()> {
+    let input = smiles::read("[Na+].CC(=O)[O-]")?;
+    let mut molecule = molecule(input.prepared.state)?;
+    // Draw the carboxylate on the left, its carbonyl oxygen down, and sodium
+    // far to the left of the entire acetate. Fresh-layout refinements would
+    // change both the molecular orientation and the component placement.
+    molecule.positions = [
+        (-6., 2.),
+        (2., 0.),
+        (0.5, 0.),
+        (-0.25, -1.299),
+        (-0.25, 1.299),
+    ]
+    .map(|(x, y)| Point3 { x, y, z: 0. })
+    .to_vec();
+    let source = finish_molecule(molecule, &input.prepared.dummy_labels, Default::default())?;
+    let (mol, fallback) =
+        molfile::write_drawing_absolute(&source.molecule, &source.document, Default::default())?;
+    assert!(!fallback);
+    let cdxml = crate::exchange::drawing::write(&source.document, Default::default())?;
+    for (format, text) in [("mol", mol), ("cdxml", cdxml)] {
+        let Preparation::Complete(imported) = prepare(Request::import(format, &text))? else {
+            anyhow::bail!("{format}: explicit-coordinate import deferred");
+        };
+        assert_eq!(imported.document.atoms.len(), source.document.atoms.len());
+        let before_origin = source.document.atoms[0].position;
+        let after_origin = imported.document.atoms[0].position;
+        for (before, after) in source.document.atoms.iter().zip(&imported.document.atoms) {
+            assert_eq!(
+                (&before.element, before.charge),
+                (&after.element, after.charge),
+                "{format}"
+            );
+            // CDXML export adds a page-margin translation. Comparing every
+            // atom relative to sodium retains the exact drawing geometry and
+            // counterion placement while allowing that shared translation.
+            let dx = (before.position.x - before_origin.x) - (after.position.x - after_origin.x);
+            let dy = (before.position.y - before_origin.y) - (after.position.y - after_origin.y);
+            assert!(
+                dx.hypot(dy) < 0.003,
+                "{format}: atom {} moved by ({dx}, {dy}) relative to sodium",
+                before.id
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn sodium_benzoate_import_places_counterion_right_at_one_bond_length() -> anyhow::Result<()> {
+    for text in ["[Na+].[O-]C(=O)c1ccccc1", "[O-]C(=O)c1ccccc1.[Na+]"] {
+        let prepared = imported_smiles(text)?;
+        let document = &prepared.document;
+        let sodium = document
+            .atoms
+            .iter()
+            .find(|atom| atom.element == "Na")
+            .unwrap();
+        let oxygen = document
+            .atoms
+            .iter()
+            .find(|atom| atom.element == "O" && atom.charge == -1)
+            .unwrap();
+        assert!(
+            document
+                .atoms
+                .iter()
+                .filter(|atom| atom.id != sodium.id)
+                .all(|atom| atom.position.x < sodium.position.x),
+            "{text}: the entire benzoate must be left of sodium"
+        );
+        let separation = sodium.position.distance(oxygen.position);
+        let bond_length = average_document_bond_length(document);
+        assert!(
+            (separation - bond_length).abs() < bond_length * 1e-4,
+            "{text}: Na–O− separation {separation} must equal a real bond length {bond_length}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn counterion_is_not_placed_across_a_bond() -> anyhow::Result<()> {
+    // The amide N's free bisector points into the bicycle, where the spot one
+    // bond length away clears every atom but lies on a ring bond.
+    let prepared = imported_smiles("[Na+].[N-]1CC2CCC1CC2")?;
+    let document = &prepared.document;
+    let sodium = document
+        .atoms
+        .iter()
+        .find(|atom| atom.element == "Na")
+        .unwrap()
+        .position;
+    let length = average_document_bond_length(document);
+    for bond in &document.bonds {
+        let (a, b) = (
+            document_atom(document, bond.a).position,
+            document_atom(document, bond.b).position,
+        );
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let t =
+            (((sodium.x - a.x) * dx + (sodium.y - a.y) * dy) / (dx * dx + dy * dy)).clamp(0., 1.);
+        assert!(
+            (a.x + t * dx - sodium.x).hypot(a.y + t * dy - sodium.y) >= length * 0.5,
+            "Na+ sits on bond {}–{}",
+            bond.a,
+            bond.b
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn disconnected_imports_put_larger_components_first_then_cations_on_ties() -> anyhow::Result<()> {
+    // The size rule takes precedence for a neutral acid and for an organic
+    // cation whose small chloride counterion appeared first in the input.
+    for (text, small_element) in [
+        ("OC(=O)c1ccccc1.[Na+]", "Na"),
+        ("[Na+].OC(=O)c1ccccc1", "Na"),
+        ("[Cl-].C[N+](C)(C)C", "Cl"),
+        ("C[N+](C)(C)C.[Cl-]", "Cl"),
+    ] {
+        let prepared = imported_smiles(text)?;
+        let small = prepared
+            .document
+            .atoms
+            .iter()
+            .find(|atom| atom.element == small_element)
+            .unwrap();
+        assert!(
+            prepared
+                .document
+                .atoms
+                .iter()
+                .filter(|atom| atom.id != small.id)
+                .all(|atom| atom.position.x < small.position.x),
+            "{text}: the larger component must be entirely left of {small_element}"
+        );
+    }
+    for text in ["[Na+].[Cl-]", "[Cl-].[Na+]"] {
+        let prepared = imported_smiles(text)?;
+        let atoms = &prepared.document.atoms;
+        let sodium = atoms.iter().find(|atom| atom.element == "Na").unwrap();
+        let chloride = atoms.iter().find(|atom| atom.element == "Cl").unwrap();
+        assert!(sodium.position.x < chloride.position.x, "{text}");
+        assert!(
+            (sodium.position.y - chloride.position.y).abs() < 1e-5,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn ethyl_benzoate_import_orients_ring_bottom_left_and_carbonyl_up() -> anyhow::Result<()> {
+    let prepared = imported_smiles("CCOC(=O)c1ccccc1")?;
+    let document = &prepared.document;
+    let molecule = &prepared.molecule;
+    let ring = molecule
+        .state
+        .rings
+        .atoms
+        .iter()
+        .find(|ring| ring.len() == 6)
+        .unwrap();
+    let ring_center = ring.iter().fold((0., 0.), |(x, y), &index| {
+        let point = document_atom(document, molecule.ids[index]).position;
+        (x + point.x, y + point.y)
+    });
+    let ring_center = (
+        ring_center.0 / ring.len() as f32,
+        ring_center.1 / ring.len() as f32,
+    );
+    let oxygens: Vec<_> = document
+        .atoms
+        .iter()
+        .filter(|atom| atom.element == "O")
+        .collect();
+    let oxygen_center = (
+        oxygens.iter().map(|atom| atom.position.x).sum::<f32>() / oxygens.len() as f32,
+        oxygens.iter().map(|atom| atom.position.y).sum::<f32>() / oxygens.len() as f32,
+    );
+    let molecule_y = document
+        .atoms
+        .iter()
+        .map(|atom| atom.position.y)
+        .sum::<f32>()
+        / document.atoms.len() as f32;
+    assert!(
+        ring_center.0 < oxygen_center.0,
+        "ring must be left of the ester oxygens"
+    );
+    // Document coordinates increase downwards, opposite to depiction's y axis.
+    assert!(
+        ring_center.1 > oxygen_center.1,
+        "ring must be visually below the ester oxygens"
+    );
+    assert!(
+        ring_center.1 > molecule_y,
+        "ring must be visually below the molecule centroid"
+    );
+    let carbonyl = document
+        .bonds
+        .iter()
+        .find(|bond| {
+            bond.order == 2
+                && [bond.a, bond.b]
+                    .iter()
+                    .any(|&id| document_atom(document, id).element == "O")
+        })
+        .unwrap();
+    let (a, b) = (
+        document_atom(document, carbonyl.a),
+        document_atom(document, carbonyl.b),
+    );
+    let (oxygen, carbon) = if a.element == "O" { (a, b) } else { (b, a) };
+    assert!(
+        oxygen.position.y < carbon.position.y,
+        "carbonyl oxygen must be visually above carbon"
+    );
+    Ok(())
+}
+
+#[test]
+fn conventionally_reoriented_chiral_import_keeps_visible_stereochemistry() -> anyhow::Result<()> {
+    let mut selected_reflection = false;
+    for text in ["C[C@H](N)C(=O)O", "O=C(O)[C@@H](O)c1ccccc1"] {
+        let input = smiles::read(text)?;
+        let state = &input.prepared.state;
+        let expected = smiles::write::write(state, Default::default())?.text;
+        // Reproduce the import pipeline through straighten, immediately before
+        // conventional orientation, rather than comparing to raw depiction.
+        let ranks: Vec<_> = input
+            .reaction_properties
+            .iter()
+            .map(|pairs| depict::ranks::AtomProperties::from_pairs(pairs))
+            .collect();
+        let original =
+            depict::compute_with_rank_properties(state, &ranks, None, Default::default())?;
+        let points = template_retry::improve(state, &ranks, original.positions, 1.5);
+        let mut before = chain_layout::improve(state, &ranks, points).positions;
+        chemistry::layout_refinement::straighten(state, &mut before, None);
+        let prepared = imported_smiles(text)?;
+        let after = &prepared.molecule.positions;
+        // A non-collinear triple distinguishes a reflection from translation
+        // or a 180-degree rotation, without assuming which atom owns a wedge.
+        let triple = (1..before.len())
+            .find_map(|a| {
+                (a + 1..before.len()).find_map(|b| {
+                    (cross(&before[0], &before[a], &before[b]).abs() > 1e-6).then_some((a, b))
+                })
+            })
+            .unwrap();
+        let (a, b) = triple;
+        selected_reflection |=
+            cross(&before[0], &before[a], &before[b]) * cross(&after[0], &after[a], &after[b]) < 0.;
+        assert_eq!(
+            smiles::write::write(
+                &molecular::prepare(&prepared.document)?.state,
+                Default::default()
+            )?
+            .text,
+            expected,
+            "{text}: generated document stereochemistry"
+        );
+        let mut visible = prepared.document;
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        for bond in &mut visible.bonds {
+            bond.stereo = None;
+            bond.stereo_atoms.clear();
+        }
+        assert!(
+            visible
+                .bonds
+                .iter()
+                .any(|bond| matches!(bond.display.as_str(), "wedge" | "hash")),
+            "{text}: the generated drawing must display its stereocenter"
+        );
+        assert_eq!(
+            smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+            expected,
+            "{text}: visible wedges/hash must preserve stereo after reorientation"
+        );
+    }
+    assert!(
+        selected_reflection,
+        "the regression must exercise an actually selected reflection after straighten"
+    );
     Ok(())
 }
 

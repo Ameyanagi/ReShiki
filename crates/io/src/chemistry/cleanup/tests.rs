@@ -370,6 +370,136 @@ fn clean(
     })
 }
 
+fn drawing_at(text: &str, xy: &[(f64, f64)]) -> anyhow::Result<Document> {
+    let input = smiles::read(text)?;
+    let molecule = Molecule {
+        rdkit_version: crate::chemistry::RDKIT_VERSION,
+        ids: (1..=xy.len() as u64).collect(),
+        positions: xy.iter().map(|&(x, y)| Point3 { x, y, z: 0. }).collect(),
+        state: input.prepared.state,
+    };
+    let drawing = molecular::for_import(&molecule, false, &input.prepared.dummy_labels)?;
+    let labels = drawing.labels()?;
+    Ok(drawing.finish(labels)?)
+}
+
+#[test]
+fn cleanup_conventional_orientation_requires_keep_orientation_off() -> anyhow::Result<()> {
+    // Molfile coordinates: the acid group points left and its C=O points down.
+    let source = drawing_at("CC(=O)O", &[(2., 0.), (1., 0.), (1., -1.), (0., 0.)])?;
+    let before = positions(&source);
+    let kept = prepare(&source, Options::default(), &[])?.finish(vec![before.clone()])?;
+    assert!(Options::default().keep_orientation);
+    assert_eq!(kept.document, source);
+    let cleaned = prepare(
+        &source,
+        Options {
+            keep_orientation: false,
+            ..Default::default()
+        },
+        &[],
+    )?
+    .finish(vec![before.clone()])?;
+    let after = &cleaned.molecule.as_ref().unwrap().positions;
+    assert!(after[3].x > after[0].x, "The acid group must point right");
+    assert!(
+        after[2].y > after[1].y,
+        "C=O must point up in molfile coordinates"
+    );
+    assert_eq!(centroid(after), centroid(&before));
+    assert_eq!(
+        identity(cleaned.molecule.as_ref().unwrap())?,
+        identity(&molecular::prepare(&source)?)?
+    );
+    Ok(())
+}
+
+#[test]
+fn cleanup_conventional_orientation_never_moves_a_fixed_part() -> anyhow::Result<()> {
+    let source = drawing_at("CC(=O)O", &[(2., 0.), (1., 0.), (1., -1.), (0., 0.)])?;
+    let selected = source.atoms[1..]
+        .iter()
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>();
+    let cleaned = prepare(
+        &source,
+        Options {
+            scope: Scope::SelectedAtoms,
+            keep_orientation: false,
+        },
+        &selected,
+    )?
+    .finish(vec![positions(&source)])?;
+    // One fixed atom still lets straighten rotate; it must disable the new pass.
+    assert_eq!(cleaned.document, source);
+    Ok(())
+}
+
+#[test]
+fn cleanup_reorients_components_without_rearranging_them() -> anyhow::Result<()> {
+    let source = drawing_at(
+        "[Na+].[O-]C(=O)C",
+        &[(-20., 11.), (0., 0.), (1., 0.), (1., -1.), (2., 0.)],
+    )?;
+    let before = positions(&source);
+    let cleaned = prepare(
+        &source,
+        Options {
+            keep_orientation: false,
+            ..Default::default()
+        },
+        &[],
+    )?
+    .finish(vec![before[..1].to_vec(), before[1..].to_vec()])?;
+    assert_eq!(cleaned.document.atoms[0], source.atoms[0]);
+    let after = &cleaned.molecule.as_ref().unwrap().positions;
+    assert_eq!(centroid(&after[1..]), centroid(&before[1..]));
+    assert!(after[1].x > after[4].x);
+    assert!(after[3].y > after[2].y);
+    Ok(())
+}
+
+#[test]
+fn cleanup_conventional_reflection_rewedges_visible_stereochemistry() -> anyhow::Result<()> {
+    // C=O is already up; putting the acid group right requires reflection in X.
+    let source = drawing_at(
+        "C[C@H](O)C(=O)O",
+        &[(3., 0.), (2., 0.), (2., -1.), (1., 0.), (1., 1.), (0., 0.)],
+    )?;
+    let cleaned = prepare(
+        &source,
+        Options {
+            keep_orientation: false,
+            ..Default::default()
+        },
+        &[],
+    )?
+    .finish(vec![positions(&source)])?;
+    let after = cleaned.molecule.as_ref().unwrap();
+    assert!(after.positions[5].x > after.positions[0].x);
+    assert!(after.positions[4].y > after.positions[3].y);
+    assert_eq!(identity(after)?, identity(&molecular::prepare(&source)?)?);
+    let mut visible = cleaned.document.clone();
+    for atom in &mut visible.atoms {
+        atom.stereo = None;
+    }
+    assert_eq!(identity(&molecular::prepare(&visible)?)?, identity(after)?);
+    let wedges = source
+        .bonds
+        .iter()
+        .zip(&cleaned.document.bonds)
+        .filter(|(before, _)| matches!(before.display.as_str(), "wedge" | "hash"))
+        .collect::<Vec<_>>();
+    assert!(!wedges.is_empty());
+    for (before, after) in wedges {
+        assert!(matches!(
+            (before.display.as_str(), after.display.as_str()),
+            ("wedge", "hash") | ("hash", "wedge")
+        ));
+    }
+    Ok(())
+}
+
 #[test]
 fn keeping_orientation_leaves_substituted_six_rings_on_the_grid() -> anyhow::Result<()> {
     for text in [PROPYLBENZENE, ASPIRIN] {

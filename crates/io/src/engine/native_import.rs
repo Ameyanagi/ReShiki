@@ -362,6 +362,8 @@ fn coordinates(
     let positions = template_retry::improve(state, &ranks, conformer.positions, 1.5);
     let mut layout = chain_layout::improve(state, &ranks, positions);
     chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
+    chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
+    chemistry::layout_refinement::arrange_components(state, &mut layout.positions);
     Ok(layout)
 }
 

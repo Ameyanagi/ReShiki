@@ -1,7 +1,7 @@
 //! ReShiki readability refinements after native depiction.
 //!
-//! Align bond directions and repair inward terminal substituents without
-//! changing chemical state or the reference depictor stages.
+//! Align and orient fresh layouts, arrange their components, and repair inward
+//! terminal substituents without changing chemistry or reference depiction.
 use super::{depict::geometry::Coordinates, stereo::Point3, stereo::perception::State};
 use std::{
     collections::{HashMap, HashSet},
@@ -106,6 +106,354 @@ pub(crate) fn straighten(state: &State, points: &mut [Point3], pivot: Option<usi
         point.x = center.x + cos * x - sin * y;
         point.y = center.y + sin * x + cos * y;
     }
+}
+
+fn adjacency(state: &State) -> Option<Vec<Vec<usize>>> {
+    let mut adjacent = vec![Vec::new(); state.graph.atoms.len()];
+    for bond in &state.graph.bonds {
+        adjacent.get_mut(bond.a)?.push(bond.b);
+        adjacent.get_mut(bond.b)?.push(bond.a);
+    }
+    Some(adjacent)
+}
+
+fn components(adjacent: &[Vec<usize>]) -> Option<Vec<Vec<usize>>> {
+    let mut seen = vec![false; adjacent.len()];
+    let mut result = Vec::new();
+    for start in 0..adjacent.len() {
+        if *seen.get(start)? {
+            continue;
+        }
+        *seen.get_mut(start)? = true;
+        let mut pending = vec![start];
+        let mut atoms = Vec::new();
+        while let Some(atom) = pending.pop() {
+            atoms.push(atom);
+            for &other in adjacent.get(atom)? {
+                if !*seen.get(other)? {
+                    *seen.get_mut(other)? = true;
+                    pending.push(other);
+                }
+            }
+        }
+        atoms.sort_unstable();
+        result.push(atoms);
+    }
+    Some(result)
+}
+
+fn bond_length(state: &State, points: &[Point3]) -> f64 {
+    if state.graph.bonds.is_empty() {
+        return 1.5;
+    }
+    state
+        .graph
+        .bonds
+        .iter()
+        .filter_map(|bond| points.get(bond.a).zip(points.get(bond.b)))
+        .map(|(a, b)| (b.x - a.x).hypot(b.y - a.y))
+        .sum::<f64>()
+        / state.graph.bonds.len() as f64
+}
+
+fn centroid(points: &[Point3], atoms: &[usize]) -> Point3 {
+    Point3 {
+        x: atoms
+            .iter()
+            .filter_map(|&id| points.get(id))
+            .map(|p| p.x)
+            .sum::<f64>()
+            / atoms.len() as f64,
+        y: atoms
+            .iter()
+            .filter_map(|&id| points.get(id))
+            .map(|p| p.y)
+            .sum::<f64>()
+            / atoms.len() as f64,
+        z: 0.,
+    }
+}
+
+/// Choose grid-preserving reflections about each component's centroid (#844).
+/// Signed preferences score heteroatoms right (4), each exocyclic C=O/C=N up
+/// (3), the largest ring system left/bottom (2/1), and fused-ring heteroatoms
+/// right/bottom (1/1). Offsets below 0.1 bond length do not vote; identity wins
+/// ties. Coordinates here are molfile-style y-up; drawing construction later
+/// inverts y and assigns wedges from stereo state at the final positions.
+pub(crate) fn conventional_orientation(state: &State, points: &mut [Point3]) {
+    let _ = (|| -> Option<()> {
+        let adjacent = adjacency(state)?;
+        let components = components(&adjacent)?;
+        let mut component_of = vec![0; points.len()];
+        for (index, atoms) in components.iter().enumerate() {
+            for &id in atoms {
+                *component_of.get_mut(id)? = index;
+            }
+        }
+        let tolerance = bond_length(state, points) * 0.1;
+        let sign = |offset: f64| {
+            if offset.abs() < tolerance {
+                0
+            } else if offset > 0. {
+                1
+            } else {
+                -1
+            }
+        };
+        let hetero = |id: usize| {
+            state
+                .graph
+                .atoms
+                .get(id)
+                .is_some_and(|atom| !matches!(atom.atomic_number, 1 | 6))
+        };
+        let mut scores = vec![(0, 0); components.len()];
+        let centers: Vec<_> = components
+            .iter()
+            .map(|atoms| centroid(points, atoms))
+            .collect();
+        for (index, atoms) in components.iter().enumerate() {
+            let heteroatoms: Vec<_> = atoms.iter().copied().filter(|&id| hetero(id)).collect();
+            if !heteroatoms.is_empty() {
+                scores.get_mut(index)?.0 +=
+                    4 * sign(centroid(points, &heteroatoms).x - centers.get(index)?.x);
+            }
+        }
+        let ring_bonds: HashSet<_> = state
+            .rings
+            .atoms
+            .iter()
+            .flat_map(|ring| {
+                ring.iter()
+                    .zip(ring.iter().cycle().skip(1))
+                    .take(ring.len())
+                    .map(|(&a, &b)| (a.min(b), a.max(b)))
+            })
+            .collect();
+        for bond in &state.graph.bonds {
+            if bond.order != 2 || ring_bonds.contains(&(bond.a.min(bond.b), bond.a.max(bond.b))) {
+                continue;
+            }
+            for (carbon, branch) in [(bond.a, bond.b), (bond.b, bond.a)] {
+                if state.graph.atoms.get(carbon)?.atomic_number == 6
+                    && (state.graph.atoms.get(branch)?.atomic_number == 7
+                        || state.graph.atoms.get(branch)?.atomic_number == 8
+                            && adjacent.get(branch)?.len() == 1)
+                {
+                    scores.get_mut(*component_of.get(carbon)?)?.1 +=
+                        3 * sign(points.get(branch)?.y - points.get(carbon)?.y);
+                }
+            }
+        }
+        // Rings sharing any atom form one system, including spiro junctions.
+        let mut memberships = vec![Vec::new(); points.len()];
+        for (index, ring) in state.rings.atoms.iter().enumerate() {
+            for &atom in ring {
+                memberships.get_mut(atom)?.push(index);
+            }
+        }
+        let mut seen_rings = vec![false; state.rings.atoms.len()];
+        let mut seen_atoms = vec![false; points.len()];
+        let mut largest = vec![0; components.len()];
+        let mut ring_scores = vec![(0, 0); components.len()];
+        for start in 0..state.rings.atoms.len() {
+            if *seen_rings.get(start)? {
+                continue;
+            }
+            *seen_rings.get_mut(start)? = true;
+            let mut pending = vec![start];
+            let mut atoms = Vec::new();
+            let mut edges = HashSet::new();
+            let mut fused = false;
+            while let Some(ring) = pending.pop() {
+                let ring = state.rings.atoms.get(ring)?;
+                for (&a, &b) in ring
+                    .iter()
+                    .zip(ring.iter().cycle().skip(1))
+                    .take(ring.len())
+                {
+                    fused |= !edges.insert((a.min(b), a.max(b)));
+                }
+                for &atom in ring {
+                    if !*seen_atoms.get(atom)? {
+                        *seen_atoms.get_mut(atom)? = true;
+                        atoms.push(atom);
+                        for &other in memberships.get(atom)? {
+                            if !*seen_rings.get(other)? {
+                                *seen_rings.get_mut(other)? = true;
+                                pending.push(other);
+                            }
+                        }
+                    }
+                }
+            }
+            let index = *component_of.get(*atoms.first()?)?;
+            let center = centroid(points, &atoms);
+            if atoms.len() > *largest.get(index)? {
+                *largest.get_mut(index)? = atoms.len();
+                *ring_scores.get_mut(index)? = (
+                    -2 * sign(center.x - centers.get(index)?.x),
+                    -sign(center.y - centers.get(index)?.y),
+                );
+            }
+            let heteroatoms: Vec<_> = atoms.into_iter().filter(|&id| hetero(id)).collect();
+            if fused && !heteroatoms.is_empty() {
+                let heterocenter = centroid(points, &heteroatoms);
+                scores.get_mut(index)?.0 += sign(heterocenter.x - center.x);
+                scores.get_mut(index)?.1 -= sign(heterocenter.y - center.y);
+            }
+        }
+        for (index, atoms) in components.iter().enumerate() {
+            let (x, y) = (
+                scores.get(index)?.0 + ring_scores.get(index)?.0,
+                scores.get(index)?.1 + ring_scores.get(index)?.1,
+            );
+            let (mut best, mut variant) = (x + y, (1, 1));
+            for (sx, sy) in [(-1, 1), (1, -1), (-1, -1)] {
+                let score = sx * x + sy * y;
+                if score > best {
+                    (best, variant) = (score, (sx, sy));
+                }
+            }
+            if variant == (1, 1) {
+                continue;
+            }
+            let center = centers.get(index)?;
+            for &id in atoms {
+                let point = points.get_mut(id)?;
+                point.x = center.x + f64::from(variant.0) * (point.x - center.x);
+                point.y = center.y + f64::from(variant.1) * (point.y - center.y);
+            }
+        }
+        Some(())
+    })();
+}
+
+/// Arrange fresh import components by decreasing heavy-atom count, then charge
+/// sign (cation, neutral, anion) on exact size ties, retaining input order for
+/// other ties (#843). Align bounding-box centers with a one-bond gap, then pair
+/// monoatomic ions with available opposite charges along their free bisectors.
+pub(crate) fn arrange_components(state: &State, points: &mut [Point3]) {
+    let _ = (|| -> Option<()> {
+        let adjacent = adjacency(state)?;
+        let mut components = components(&adjacent)?;
+        if components.len() < 2 {
+            return Some(());
+        }
+        let length = bond_length(state, points);
+        components.sort_by_cached_key(|atoms| {
+            let heavy = atoms
+                .iter()
+                .filter_map(|&id| state.graph.atoms.get(id))
+                .filter(|atom| atom.atomic_number > 1)
+                .count();
+            let charge: i32 = atoms
+                .iter()
+                .filter_map(|&id| state.graph.atoms.get(id))
+                .map(|atom| i32::from(atom.charge))
+                .sum();
+            (std::cmp::Reverse(heavy), std::cmp::Reverse(charge.signum()))
+        });
+        let mut left = points.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+        let bottom = points.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        let top = points.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+        let baseline = (bottom + top) * 0.5;
+        for atoms in &components {
+            let min_x = atoms
+                .iter()
+                .filter_map(|&id| points.get(id))
+                .map(|p| p.x)
+                .fold(f64::INFINITY, f64::min);
+            let max_x = atoms
+                .iter()
+                .filter_map(|&id| points.get(id))
+                .map(|p| p.x)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let min_y = atoms
+                .iter()
+                .filter_map(|&id| points.get(id))
+                .map(|p| p.y)
+                .fold(f64::INFINITY, f64::min);
+            let max_y = atoms
+                .iter()
+                .filter_map(|&id| points.get(id))
+                .map(|p| p.y)
+                .fold(f64::NEG_INFINITY, f64::max);
+            for &id in atoms {
+                let point = points.get_mut(id)?;
+                point.x += left - min_x;
+                point.y += baseline - (min_y + max_y) * 0.5;
+            }
+            left += max_x - min_x + length;
+        }
+        let sites: Vec<_> = components
+            .iter()
+            .filter(|part| part.len() > 1)
+            .flatten()
+            .copied()
+            .filter(|&id| {
+                state
+                    .graph
+                    .atoms
+                    .get(id)
+                    .is_some_and(|atom| atom.charge != 0)
+            })
+            .collect();
+        let mut paired = HashSet::new();
+        for atoms in &components {
+            let &[ion] = atoms.as_slice() else {
+                continue;
+            };
+            let charge = state.graph.atoms.get(ion)?.charge;
+            if charge == 0 {
+                continue;
+            }
+            for &atom in &sites {
+                if paired.contains(&atom)
+                    || state.graph.atoms.get(atom)?.charge.signum() != -charge.signum()
+                {
+                    continue;
+                }
+                let origin = *points.get(atom)?;
+                let (mut x, mut y) = (0., 0.);
+                for &neighbor in adjacent.get(atom)? {
+                    let neighbor = points.get(neighbor)?;
+                    let (dx, dy) = (neighbor.x - origin.x, neighbor.y - origin.y);
+                    let distance = dx.hypot(dy);
+                    x -= dx / distance;
+                    y -= dy / distance;
+                }
+                let distance = x.hypot(y);
+                if distance < 1e-9 {
+                    continue;
+                }
+                let target = Point3 {
+                    x: origin.x + length * x / distance,
+                    y: origin.y + length * y / distance,
+                    z: points.get(ion)?.z,
+                };
+                // Keep the ion clear of atoms and of bonds passing between them.
+                let clear_of_atoms = points.iter().enumerate().all(|(id, p)| {
+                    id == ion || (p.x - target.x).hypot(p.y - target.y) >= length * 0.5
+                });
+                let clear_of_bonds = state.graph.bonds.iter().all(|bond| {
+                    let (Some(a), Some(b)) = (points.get(bond.a), points.get(bond.b)) else {
+                        return true;
+                    };
+                    let (dx, dy) = (b.x - a.x, b.y - a.y);
+                    let t = (((target.x - a.x) * dx + (target.y - a.y) * dy) / (dx * dx + dy * dy))
+                        .clamp(0., 1.);
+                    (a.x + t * dx - target.x).hypot(a.y + t * dy - target.y) >= length * 0.5
+                });
+                if clear_of_atoms && clear_of_bonds {
+                    *points.get_mut(ion)? = target;
+                    paired.insert(atom);
+                    break;
+                }
+            }
+        }
+        Some(())
+    })();
 }
 
 pub(crate) fn bridged(state: &State) -> bool {
@@ -355,6 +703,175 @@ mod tests {
         )?
         .positions;
         Ok((state, positions))
+    }
+
+    #[test]
+    fn conventional_variants_converge_without_changing_component_geometry() -> anyhow::Result<()> {
+        let state = smiles::read("CC(=O)O")?.prepared.state;
+        let preferred =
+            [(0., 0.), (1., 0.), (1., 1.), (2., 0.)].map(|(x, y)| Point3 { x, y, z: 0. });
+        let center = centroid(&preferred, &[0, 1, 2, 3]);
+        for (sx, sy) in [(1., 1.), (-1., 1.), (1., -1.), (-1., -1.)] {
+            let mut points = preferred.map(|p| Point3 {
+                x: center.x + sx * (p.x - center.x),
+                y: center.y + sy * (p.y - center.y),
+                z: p.z,
+            });
+            conventional_orientation(&state, &mut points);
+            assert_eq!(points, preferred);
+        }
+        let mut symmetric = preferred;
+        let state = smiles::read("CCCC")?.prepared.state;
+        conventional_orientation(&state, &mut symmetric);
+        assert_eq!(symmetric, preferred, "Identity must win when no rule votes");
+        let state = smiles::read("CCO")?.prepared.state;
+        let mut noise = [
+            Point3 {
+                x: -1.5,
+                y: 0.,
+                z: 0.,
+            },
+            Point3 {
+                x: 1.5,
+                y: 0.,
+                z: 0.,
+            },
+            Point3 {
+                x: -0.01,
+                y: 0.,
+                z: 0.,
+            },
+        ];
+        let before = noise;
+        conventional_orientation(&state, &mut noise);
+        assert_eq!(
+            noise, before,
+            "Small centroid offsets must not flip a layout"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn conventional_ring_preferences_join_spiro_rings_and_lower_fused_heteroatoms()
+    -> anyhow::Result<()> {
+        let state = smiles::read("C1CCC2(CC1)CCCC2CCc1ccccc1")?.prepared.state;
+        let (first, second) = (&state.rings.atoms[0], &state.rings.atoms[1]);
+        assert!(first.iter().any(|id| second.contains(id)));
+        let system: HashSet<_> = first.iter().chain(second).copied().collect();
+        assert!(system.len() > state.rings.atoms[2].len());
+        let mut points: Vec<_> = (0..state.graph.atoms.len())
+            .map(|id| {
+                let offset = if system.contains(&id) { 3. } else { -3. };
+                Point3 {
+                    x: offset + id as f64 * 0.01,
+                    y: offset,
+                    z: 0.,
+                }
+            })
+            .collect();
+        conventional_orientation(&state, &mut points);
+        let whole = centroid(&points, &(0..points.len()).collect::<Vec<_>>());
+        let system = centroid(&points, &system.into_iter().collect::<Vec<_>>());
+        assert!(system.x < whole.x && system.y < whole.y);
+
+        let state = smiles::read("c1ccc2ncccc2c1")?.prepared.state;
+        assert_eq!(state.rings.atoms.len(), 2);
+        let nitrogen = state
+            .graph
+            .atoms
+            .iter()
+            .position(|a| a.atomic_number == 7)
+            .unwrap();
+        let mut points = vec![Point3::default(); state.graph.atoms.len()];
+        points[nitrogen].y = 1.5;
+        conventional_orientation(&state, &mut points);
+        assert!(
+            points[nitrogen].y < 0.,
+            "Fused-ring heteroatoms prefer the bottom"
+        );
+
+        let state = smiles::read("C1CCC2(CC1)CCNC2")?.prepared.state;
+        assert_eq!(state.rings.atoms.len(), 2);
+        let nitrogen = state
+            .graph
+            .atoms
+            .iter()
+            .position(|a| a.atomic_number == 7)
+            .unwrap();
+        let mut points = vec![Point3::default(); state.graph.atoms.len()];
+        points[nitrogen].y = 1.5;
+        let before = points.clone();
+        conventional_orientation(&state, &mut points);
+        assert_eq!(points, before, "Spiro rings share no fused edge");
+        Ok(())
+    }
+
+    #[test]
+    fn conventional_double_branches_include_substituted_imines_but_exclude_ring_bonds()
+    -> anyhow::Result<()> {
+        let state = smiles::read("CC=NC")?.prepared.state;
+        let mut points =
+            [(0., 0.), (1.5, 0.), (1.5, -1.5), (3., -1.5)].map(|(x, y)| Point3 { x, y, z: 0. });
+        conventional_orientation(&state, &mut points);
+        assert!(
+            points[2].y > points[1].y,
+            "Nonterminal imine N must prefer up"
+        );
+        for text in ["C1=NCCC1", "C=[O+]C"] {
+            let state = smiles::read(text)?.prepared.state;
+            let mut points = vec![Point3::default(); state.graph.atoms.len()];
+            points[1].y = -1.5;
+            let before = points.clone();
+            conventional_orientation(&state, &mut points);
+            assert_eq!(points, before, "{text}: no exocyclic terminal branch");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn component_row_uses_real_bond_lengths_and_stable_charge_size_order() -> anyhow::Result<()> {
+        let state = smiles::read("Cl.CN.[Na+].[Cl-].O")?.prepared.state;
+        let mut points = vec![Point3::default(); state.graph.atoms.len()];
+        points[2].x = 2.4;
+        points[2].y = 1.8;
+        arrange_components(&state, &mut points);
+        // CN has two heavy atoms. The one-heavy-atom ties are cation, neutral
+        // Cl then O in input order, and anion; implicit H on HCl is not heavy.
+        let order = [1, 3, 0, 5, 4];
+        for pair in order.windows(2) {
+            let right = if pair[0] == 1 {
+                points[2].x
+            } else {
+                points[pair[0]].x
+            };
+            assert!((points[pair[1]].x - right - 3.).abs() < 1e-12);
+        }
+        let baseline = (points[1].y + points[2].y) * 0.5;
+        for &id in &order[1..] {
+            assert!((points[id].y - baseline).abs() < 1e-12);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn counterions_require_clear_bisectors_and_pair_each_charge_once() -> anyhow::Result<()> {
+        for blocked in [false, true] {
+            let state = smiles::read("[Na+].[Na+].[O-]CC")?.prepared.state;
+            let mut points = vec![Point3::default(); 5];
+            points[3].x = 1.5;
+            points[4].x = if blocked { -1.5 } else { 3. };
+            let length = bond_length(&state, &points);
+            arrange_components(&state, &mut points);
+            let distances =
+                [0, 1].map(|id| (points[id].x - points[2].x).hypot(points[id].y - points[2].y));
+            if blocked {
+                assert!(distances.iter().all(|&d| d > length));
+            } else {
+                assert!((distances[0] - length).abs() < 1e-12);
+                assert!(distances[1] > length);
+            }
+        }
+        Ok(())
     }
 
     #[test]
