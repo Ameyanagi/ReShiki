@@ -1,5 +1,6 @@
 //! Built-in molecules and attachment geometry, shared by preview and placement.
 mod aromatic;
+mod coordination;
 #[cfg(test)]
 mod placement_parity_tests;
 mod porphine;
@@ -444,6 +445,7 @@ static BUNDLED: LazyLock<Result<Vec<Template>, String>> = LazyLock::new(|| {
             .map_err(|e| format!("Bundled templates could not be read: {e}"))?;
     templates.extend(crate::haworth::templates()?);
     templates.push(porphine::template()?);
+    templates.extend(coordination::templates()?);
     Ok(templates)
 });
 pub fn builtin_error() -> Option<&'static str> {
@@ -1081,9 +1083,19 @@ impl Attachment<'_> {
             {
                 continue;
             }
-            if !compatible(source, target)
-                || valence(part, source.id) + valence(doc, id) > capacity(target)
+            // A coordination frame's metal adopts the drawing metal's identity.
+            let shareable = if crate::joining::coordination_metal(source)
+                && crate::joining::coordination_metal(target)
             {
+                source.stereo.is_none()
+                    && target.stereo.is_none()
+                    && part.abbreviation(source.id).is_none()
+                    && doc.abbreviation(id).is_none()
+            } else {
+                compatible(source, target)
+                    && valence(part, source.id) + valence(doc, id) <= capacity(target)
+            };
+            if !shareable {
                 continue;
             }
             let anchor_bond = part

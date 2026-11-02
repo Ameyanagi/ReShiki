@@ -33,7 +33,9 @@ Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**.
 
 On an aromatic edge, solid/hashed/hollow wedges, bold, parallel hashes and wavy styles preserve the aromatic bond order. They depict the ring's projection without assigning tetrahedral stereochemistry. The aromatic circle or partial inner curve remains visible, including after a 3D tilt. Clicking the same wedge again reverses its direction; Single restores a plain edge while keeping the ring aromatic. Explicit Double/Triple and coordination presets still change the bond order.
 
-This behavior is shared by bond clicks, drag previews, committed drags and Properties, with Undo/Redo. Native files and SVG/PNG/PDF retain the appearance. CDXML/CDX currently reject these projection styles explicitly; restore plain edges before editable exchange. Ordinary single-bond wedges retain their stereochemical meaning.
+This behavior is shared by bond clicks, drag previews, committed drags and Properties, with Undo/Redo. Native files and SVG/PNG/PDF retain the appearance. CDXML/CDX preserve aromatic bold edges and solid wedges, bold double bonds, supported Haworth projections and single-bond projection wedges/hashes whose narrow end is an unassigned coordination metal. Other projection styles still require plain edges before editable file export. Coordination-frame wedges carry no tetrahedral stereo; ordinary single-bond wedges retain their stereochemical meaning.
+
+Export marks such a metal with ChemDraw's no-stereocentre flag (`AS="N"`). On import, a flagged metal's single-bond wedges/hashes are read without tetrahedral stereo and become projections, as do metal wedges that specify no tetrahedral centre (for example at a six-coordinate metal). Unflagged wedges at a four-coordinate metal keep their tetrahedral meaning.
 
 ## Native and chemical representation
 

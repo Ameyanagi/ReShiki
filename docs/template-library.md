@@ -18,6 +18,8 @@ In empty space, the chosen source anchor lands at the pointer; Auto centers the 
 
 The live molecular/graphic preview is tinted green and a preview strip distinguishes it from committed objects. An invalid target reports its reason before release. Placement commits the saved colors, including black JACS defaults. Each placement is one Undo step. **Keep placing** is enabled by default, so successive clicks reuse the chosen template, anchor and connection mode. Turn it off for a single insertion; Escape returns to Select. A drag also cancels on focus loss or release outside the canvas.
 
+**Coordination geometry** provides square planar ML₄ (SP-4), trigonal bipyramidal ML₅ (TBPY-5) and octahedral ML₆ (OC-6) frames following the [IUPAC drawing recommendations](https://iupac.qmul.ac.uk/drawing/stereo.html). Choose **Share an atom** with the frame's metal centre selected, then click a metal in the drawing; its element, charge and identity are retained. Relabel the carbon ligand ends as needed. These are depiction-only frames: solid/hashed wedges show projection and assign no tetrahedral R/S or non-tetrahedral stereochemistry. SVG retains the wedges; CDXML/CDX exchange retains them without assigning tetrahedral stereo at the metal.
+
 ## Author and maintain
 
 1. Select the desired atoms, captions, arrows and/or graphics, then choose **Save selection as template**. Existing nested/integral groups are retained when their members are included. The form captures this selection immediately.
@@ -50,8 +52,8 @@ Original update validation: **89 Rust tests**, including exact-anchor regioisome
 
 ## Remaining limits
 
-- The library now contains 106 built-ins. Common rings, two chair projections, 20 neutral free amino acids, five nucleobases, 12 [Haworth carbohydrate entries](haworth-projections.md), macrocycles (including [Porphine (21H,23H)](porphine-core.md); search `porphyrin`) and ligands are included; nucleotide/DNA/RNA assemblies, peptide construction and many specialized families remain missing. See [catalog and ring presets](ring-presets.md).
-- Attachment still requires matching supported elements, charge/isotope and available valence; it excludes stereocenters, explicit-H/mapped sites and unsupported target bond styles. General aromatic re-kekulization and arbitrary post-insertion joining remain incomplete.
+- The library now contains 109 built-ins. Common rings, two chair projections, 20 neutral free amino acids, five nucleobases, 12 [Haworth carbohydrate entries](haworth-projections.md), macrocycles (including [Porphine (21H,23H)](porphine-core.md); search `porphyrin`), ligands and three coordination frames are included; nucleotide/DNA/RNA assemblies, peptide construction and many specialized families remain missing. See [catalog and ring presets](ring-presets.md).
+- Ordinary attachment requires matching supported elements, charge/isotope and available valence; it excludes stereocenters, explicit-H/mapped sites and unsupported target bond styles. Metal-to-metal atom sharing also accepts differing elements and charges while retaining the drawing atom's identity. General aromatic re-kekulization and arbitrary post-insertion joining remain incomplete.
 - There is no modifier-driven free resizing during placement or viewport auto-pan. Selection handles can resize a placed instance.
 - Captions remain upright under rotation, and the existing annotation model does not support arbitrary rotated text.
 - Collections contain at most 2048 custom templates, each with at most 10000 drawing objects; imports are limited to 32 MB. There is no shared cloud library or third-party palette/CDX interchange.
