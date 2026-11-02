@@ -15,6 +15,9 @@ fn record() -> Record {
         title: "ethanol".into(),
         systematic_name: None,
         name_status: None,
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         provenance: Provenance::OpsinRust,
         ..super::super::test_support::record("CCO")
     }

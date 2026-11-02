@@ -76,6 +76,7 @@ pub enum Action {
     DismissOnline,
     OpenOnlineSource,
     Generate,
+    WriteUnknownStereo(bool),
     ShowMoleculeName(Vec<u64>),
     HideMoleculeName(Vec<u64>),
     Smiles(String),
@@ -351,12 +352,14 @@ async fn generate_for_atoms(
     document: Document,
     atoms: Vec<u64>,
     cancel: naming::Cancel,
+    write_unknown_stereo: bool,
 ) -> Result<Outcome, naming::Error> {
-    let identity =
+    let mut identity =
         reshiki::task::spawn_blocking(move || naming::selected_identity(&document, &atoms))
             .await
             .map_err(|error| naming::Error::Worker(error.to_string()))?
             .map_err(naming::Error::Rejected)?;
+    identity.write_unknown_stereo = write_unknown_stereo;
     naming::generate_name(&identity, cancel)
         .await
         .map(Outcome::Structure)
@@ -574,6 +577,15 @@ impl App {
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
+            Action::WriteUnknownStereo(enabled) => {
+                self.appearance.write_unknown_stereo = enabled;
+                self.tab.naming.structure = None;
+                if let Err(error) = self.appearance.save() {
+                    self.status =
+                        format!("Could not save unknown configuration preference: {error}");
+                    self.error = true;
+                }
+            }
             Action::Generate => {
                 if self.tab.naming.pending.is_some() {
                     return Task::none();
@@ -584,7 +596,12 @@ impl App {
                 let document = self.tab.doc.clone();
                 let selected = self.tab.selected.clone();
                 return Task::perform(
-                    generate_for_atoms(document, selected, cancel),
+                    generate_for_atoms(
+                        document,
+                        selected,
+                        cancel,
+                        self.appearance.write_unknown_stereo,
+                    ),
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
@@ -772,7 +789,7 @@ impl App {
         self.error = false;
     }
 
-    fn insert_name_caption(&mut self, alias: Option<usize>) {
+    fn insert_name_caption(&mut self, choice: Option<aliases::CaptionName>) {
         if !self.naming_can_show_molecule() {
             return;
         }
@@ -793,11 +810,15 @@ impl App {
             return;
         }
         let atoms = editing::analysis_atoms(&self.tab.doc, &self.tab.selected);
-        if let Some(index) = alias {
-            let Some(alias) = record.synonyms.get(index) else {
-                return;
+        if let Some(choice) = choice {
+            let name = match choice {
+                aliases::CaptionName::Alias(index) => record.synonyms.get(index).map(|a| &a.name),
+                aliases::CaptionName::Alternative(index) => {
+                    record.alternatives.get(index).map(|a| &a.name)
+                }
             };
-            self.place_molecule_caption(&atoms, alias.name.clone(), record.canonical_smiles);
+            let Some(name) = name else { return };
+            self.place_molecule_caption(&atoms, name.clone(), record.canonical_smiles);
         } else {
             self.place_molecule_name(&atoms, record);
         }
@@ -891,6 +912,14 @@ impl App {
         let structure = column![
             section("STRUCTURE → NAME"),
             text(STRUCTURE_HINT).size(11).style(muted_text),
+            accessible_checkbox(
+                "naming.write-unknown-stereo",
+                "Write Ξ/ξ for unknown configuration",
+                self.appearance.write_unknown_stereo,
+                idle.then_some(Message::Naming(Action::WriteUnknownStereo(
+                    !self.appearance.write_unknown_stereo,
+                ))),
+            ),
             accessible_command(
                 "naming.generate",
                 "Generate selected structure name locally",

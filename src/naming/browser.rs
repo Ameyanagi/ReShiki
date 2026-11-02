@@ -71,23 +71,11 @@ pub async fn resolve_name(name: &str, cancel: Cancel) -> Result<Record, Error> {
 /// reconstructs the structure from it.
 pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record, Error> {
     let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
-    let request = reverse::generate_request(&expected)?;
+    let input = identity.naming_smiles.as_deref().unwrap_or(&expected);
+    let request = reverse::generate_request(input)?;
     let output = exchange(&request, &cancel, GENERATE_CANCELLED).await?;
-    let candidate = reverse::parse_response(&output, &expected)?;
-    let reconstructed =
-        resolve_name(&candidate.text, cancel)
-            .await
-            .map_err(|error| match error {
-                Error::Cancelled(_) => Error::Cancelled(GENERATE_CANCELLED.into()),
-                error => error,
-            })?;
-    reverse::generated_record(
-        identity,
-        expected,
-        candidate.text,
-        candidate.status,
-        &reconstructed,
-    )
+    let candidate = reverse::parse_response(&output, input)?;
+    reverse::reconstruct(identity, expected, candidate, &cancel).await
 }
 
 /// What the worker posted: `null` once loaded, then the response bytes or

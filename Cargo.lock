@@ -3192,6 +3192,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "regex",
+ "reshiki-chemistry",
  "roxmltree",
  "serde_json",
 ]

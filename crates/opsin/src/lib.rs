@@ -26,6 +26,7 @@ pub mod fused_ring_builder;
 pub mod fused_ring_numberer;
 pub mod graph;
 pub mod isotope_specification_parser;
+mod modern_cip;
 pub mod parse_rules;
 pub mod parse_tree;
 pub mod phane_amplifier;

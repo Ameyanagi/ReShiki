@@ -15,6 +15,8 @@ fn non_ascii(ch: char) -> Option<&'static str> {
         '\u{3bc}' => "mu",
         '\u{3bd}' => "nu",
         '\u{3be}' => "xi",
+        // Upstream divergence: P-91.2 also uses uppercase Ξ for unknown R/S or E/Z.
+        '\u{39e}' => "xi",
         '\u{3bf}' => "omicron",
         '\u{3c0}' => "pi",
         '\u{3c1}' => "rho",

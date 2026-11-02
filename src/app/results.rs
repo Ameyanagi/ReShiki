@@ -581,7 +581,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::AskOnline
                 | Action::ConfirmOnline(..)
                 | Action::DismissOnline
-                | Action::OpenOnlineSource => None,
+                | Action::OpenOnlineSource
+                | Action::WriteUnknownStereo(_) => None,
             }
         }
         Message::ThemeFile(action) => {

@@ -38,6 +38,7 @@ fn appearance_preferences_survive_file_reload_independently() {
                 iupac_style_notes: true,
                 two_decimal_weight: true,
                 name_typography: false,
+                write_unknown_stereo: true,
                 drawing_style_unit: Unit::Millimetres,
             };
             settings.save_to(&path).unwrap();
@@ -48,6 +49,7 @@ fn appearance_preferences_survive_file_reload_independently() {
             assert!(loaded.iupac_style_notes);
             assert!(loaded.two_decimal_weight);
             assert!(!loaded.name_typography);
+            assert!(loaded.write_unknown_stereo);
             assert_eq!(loaded.drawing_style_unit, Unit::Millimetres);
         }
     }
@@ -93,6 +95,7 @@ fn older_preferences_keep_interface_choice_and_default_to_light_canvas() {
         assert_eq!(loaded.canvas_theme, CanvasTheme::Light);
         assert!(!loaded.iupac_style_notes);
         assert!(loaded.name_typography);
+        assert!(!loaded.write_unknown_stereo);
     }
     for invalid in ["", "not JSON", r#"{"canvas_theme":"future-mode"}"#] {
         std::fs::write(&path, invalid).unwrap();

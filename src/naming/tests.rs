@@ -101,7 +101,7 @@ fn selections_cannot_silently_truncate_a_molecule() -> Result<(), String> {
     verify_identity("CCO.O", &structure_smiles(&doc)?)?;
     assert!(document_identity(&doc).is_err());
     doc.bonds[0].display = "wavy".into();
-    assert!(selected_identity(&doc, &[a, b, o]).is_err());
+    assert_eq!(selected_identity(&doc, &[a, b, o])?.smiles, "CCO");
     Ok(())
 }
 
@@ -304,7 +304,6 @@ fn identity_case_document(case: &str) -> Document {
 fn identity_characterization_table() {
     const UNSUPPORTED: &str =
         "Naming does not support query atoms, radicals, exotic bonds or relative stereo groups";
-    const UNKNOWN: &str = "Resolve unknown stereochemistry before generating a name; wavy stereo cannot be sent as unspecified stereo";
     for (case, expected) in [
         ("plain", Ok("CCO")),
         ("isotope", Ok("[13CH3]CO")),
@@ -317,14 +316,11 @@ fn identity_characterization_table() {
             "allene",
             Err("Invalid drawing: Invalid stereocenter neighbor mapping"),
         ),
-        (
-            "wavy",
-            Err("Resolve wavy/unknown stereochemistry before generating a name"),
-        ),
+        ("wavy", Ok("CCO")),
         ("radical", Err(UNSUPPORTED)),
         ("query", Err(UNSUPPORTED)),
         ("mapped", Ok("CCO")),
-        ("unknown", Err(UNKNOWN)),
+        ("unknown", Ok("CC=CC")),
     ] {
         let doc = identity_case_document(case);
         let actual = document_identity(&doc).map(|identity| identity.smiles);
@@ -334,10 +330,8 @@ fn identity_characterization_table() {
             "{case}"
         );
         if let Ok(molecule) = chemistry::document::prepare(&doc) {
-            // Exercise the actual state path as well as document pre-checks.
-            // Wavy bonds are rejected at the document boundary even when
-            // preparation finds no stereocenter to mark unknown.
-            let state_expected = if case == "wavy" { Ok("CCO") } else { expected };
+            // The state and document paths omit exactly the same unknown units.
+            let state_expected = expected;
             assert_eq!(
                 canonical_state(&molecule.state)
                     .as_deref()
@@ -358,7 +352,6 @@ fn identity_characterization_table() {
 fn canonical_state_preserves_rejection_order_and_writer_errors() {
     const UNSUPPORTED: &str =
         "Naming does not support query atoms, radicals, exotic bonds or relative stereo groups";
-    const UNKNOWN: &str = "Resolve unknown stereochemistry before generating a name; wavy stereo cannot be sent as unspecified stereo";
     const NONCLASSICAL: &str = "Naming supports tetrahedral and ordinary alkene stereochemistry only; other stereo classes cannot be discarded";
     let doc = identity_case_document("plain");
     let base = chemistry::document::prepare(&doc).unwrap().state;
@@ -368,14 +361,14 @@ fn canonical_state_preserves_rejection_order_and_writer_errors() {
     state.metadata.atoms[0].chiral_tag = 3;
     assert_eq!(canonical_state(&state).unwrap_err(), UNSUPPORTED);
     state.graph.atoms[0].radical_electrons = 0;
-    assert_eq!(canonical_state(&state).unwrap_err(), UNKNOWN);
+    assert_eq!(canonical_state(&state).unwrap_err(), NONCLASSICAL);
     state.properties.atoms[0].unknown = false;
     assert_eq!(canonical_state(&state).unwrap_err(), NONCLASSICAL);
     state.metadata.atoms[0].chiral_tag = 0;
     state.metadata.bonds[0].stereo = 6;
     assert_eq!(canonical_state(&state).unwrap_err(), NONCLASSICAL);
     state.metadata.bonds[0].unknown_stereo = true;
-    assert_eq!(canonical_state(&state).unwrap_err(), UNKNOWN);
+    assert_eq!(canonical_state(&state).unwrap_err(), NONCLASSICAL);
 
     let mut state = base;
     state.metadata.atoms.clear();
@@ -389,4 +382,97 @@ fn canonical_state_preserves_rejection_order_and_writer_errors() {
     .unwrap_err()
     .to_string();
     assert_eq!(canonical_state(&state).unwrap_err(), writer_error);
+}
+
+fn known_and_wavy_stereo_document() -> Document {
+    let input = chemistry::smiles::read("C[C@@H](O)[C@H](Cl)C").unwrap();
+    let state = input.prepared.state;
+    let positions = chemistry::depict::compute(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        Default::default(),
+    )
+    .unwrap()
+    .positions;
+    let molecule = chemistry::document::Molecule {
+        rdkit_version: chemistry::RDKIT_VERSION,
+        ids: (1..=positions.len() as u64).collect(),
+        state,
+        positions,
+    };
+    let drawing = chemistry::document::for_generated(
+        &molecule,
+        &input.prepared.dummy_labels,
+        Default::default(),
+    )
+    .unwrap();
+    let labels = drawing.labels().unwrap();
+    let mut doc = drawing.finish(labels).unwrap();
+    for bond in &mut doc.bonds {
+        if bond.a == 2 && bond.order == 1 {
+            bond.display = "plain".into();
+        }
+        if [bond.a, bond.b].contains(&2) && [bond.a, bond.b].contains(&3) {
+            bond.a = 2;
+            bond.b = 3;
+            bond.display = "wavy".into();
+        }
+    }
+    doc
+}
+
+#[test]
+fn unknown_document_identity_keeps_known_stereo_and_only_internal_maps() {
+    let mut doc = known_and_wavy_stereo_document();
+    for atom in &mut doc.atoms {
+        atom.map_num = 42;
+    }
+    let identity = document_identity(&doc).unwrap();
+    let expected = canonical_smiles("CC(O)[C@H](Cl)C").unwrap();
+    assert_eq!(identity.smiles, expected);
+    assert!(!identity.write_unknown_stereo);
+    let marked = identity.naming_smiles.unwrap();
+    assert_eq!(canonical_smiles(&marked).unwrap(), expected);
+    let raw = chemistry::smiles::parse(&marked).unwrap();
+    let maps: Vec<_> = raw
+        .metadata
+        .atoms
+        .iter()
+        .filter_map(|atom| (atom.map_number != 0).then_some(atom.map_number))
+        .collect();
+    assert_eq!(maps, [900_001]);
+    let name = openclatura::name_smiles(&marked).unwrap();
+    assert_eq!(name.text, "(3R)-3-chlorobutan-2-ol");
+    assert_eq!(name.omitted_stereo, ["2"]);
+    assert_eq!(name.alternatives[0].name, "(2Ξ,3R)-3-chlorobutan-2-ol");
+}
+
+#[test]
+fn crossed_and_either_alkenes_preserve_unknown_bond_markers() {
+    for crossed in [false, true] {
+        let mut doc = identity_case_document("unknown");
+        if crossed {
+            doc.bonds[1].stereo = None;
+            doc.bonds[1].stereo_authoritative = false;
+            doc.bonds[1].display = "wavy".into();
+        }
+        let identity = document_identity(&doc).unwrap();
+        assert_eq!(identity.smiles, "CC=CC");
+        let name = openclatura::name_smiles(identity.naming_smiles.as_deref().unwrap()).unwrap();
+        assert_eq!(name.omitted_stereo, ["2=3"]);
+        assert_eq!(name.alternatives[0].name, "(2Ξ)-but-2-ene");
+    }
+}
+
+#[test]
+fn unknown_bond_that_cannot_be_e_z_is_not_marked() {
+    // 2-methylbut-2-ene drawn with an unknown (either) double bond.
+    let mut doc = identity_case_document("unknown");
+    let c2 = doc.bonds[1].a;
+    let methyl = doc.add_atom("C", crate::document::Point::new(28., 28.));
+    doc.add_bond(c2, methyl, 1, "plain");
+    let identity = document_identity(&doc).unwrap();
+    assert_eq!(identity.smiles, canonical_smiles("CC=C(C)C").unwrap());
+    assert_eq!(identity.naming_smiles, None);
 }

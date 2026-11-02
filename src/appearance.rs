@@ -47,6 +47,8 @@ pub struct Settings {
     pub two_decimal_weight: bool,
     /// Typeset chemical names when placing a new caption.
     pub name_typography: bool,
+    /// Write IUPAC Ξ/ξ descriptors for explicitly unknown configuration.
+    pub write_unknown_stereo: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
 }
@@ -60,6 +62,7 @@ impl Default for Settings {
             iupac_style_notes: false,
             two_decimal_weight: false,
             name_typography: true,
+            write_unknown_stereo: false,
             drawing_style_unit: Default::default(),
         }
     }

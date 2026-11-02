@@ -275,6 +275,35 @@ fn upstream_stereochemistry_bracket_cases() {
     }
 }
 #[test]
+fn pseudo_descriptors_preserve_case_without_reclassifying_isotope_spellings() {
+    for (input, locant, value) in [
+        ("(3r)", "3", "r"),
+        ("(3as)", "3a", "s"),
+        ("(Nr)", "N", "r"),
+        ("(79Br)", "79b", "R"),
+        ("(75As)", "75a", "S"),
+    ] {
+        let mut arena = Arena::default();
+        let sub = arena.grouping(SUBSTITUENT_EL);
+        token(
+            &mut arena,
+            sub,
+            STEREOCHEMISTRY_EL,
+            input,
+            &[(TYPE_ATR, STEREOCHEMISTRYBRACKET_TYPE_VAL)],
+        );
+        ComponentGenerator::new(&mut arena, &mut ComponentGenerationContext::default())
+            .process_stereochemistry(sub)
+            .unwrap();
+        let descriptors = arena.children_named(sub, STEREOCHEMISTRY_EL);
+        assert_eq!(descriptors.len(), 1, "{input}");
+        let descriptor = &arena[descriptors[0]];
+        assert_eq!(descriptor.attribute(LOCANT_ATR), Some(locant), "{input}");
+        assert_eq!(descriptor.attribute(VALUE_ATR), Some(value), "{input}");
+    }
+}
+
+#[test]
 fn upstream_exclusive_racemic_and_relative_terms() {
     for (input, kind) in [
         ("rel-", REL_TYPE_VAL),
