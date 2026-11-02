@@ -67,7 +67,7 @@ responses are ignored and rescheduled; refresh does not change selection,
 document dirtiness, drawn bond orders or Undo/Redo. Invalid chemistry produces
 an inspector error. Unassigned centers have no label.
 
-Enantiomorphic double bonds display *seqCis*/*seqTrans*; native files and
+Enantiomorphic double bonds display _seqCis_/_seqTrans_; native files and
 machine-facing exports retain the internal `z`/`e` codes. **Axial descriptors**
 chooses **M/P (IUPAC preferred)** or **Ra/Sa** for the whole drawing, independently
 of the selected scope. M maps to Ra and P to Sa; lowercase m/p map to ra/sa.
