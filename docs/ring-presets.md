@@ -1,6 +1,6 @@
 # Ring presets and expanded template catalog
 
-The current library contains 106 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), macrocycles, free-base porphine and ligands. The original 81-entry milestone is described below.
+The current library contains 122 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), macrocycles, free-base porphine and ligands. The original ring-tool milestone is described below.
 
 JACS / ACS remains the default. The new chair and cyclopentadiene tools use 14.4 pt edges (42 world units), Arial 10 pt labels and 0.6 pt lines unless the user changes the preferred bond length.
 
@@ -22,13 +22,15 @@ The regular 3–8 member tool rotates the same way when dragged on empty space o
 
 ## Catalog
 
-There are 79 chemical catalog entries plus the two generated chair projections, for **81 built-ins**. Collections cover the original rings/small molecules, additional cycloalkanes and unsaturated rings, common heterocycles, bicyclic/cage structures, all 20 standard amino acids and five nucleobases.
+There are 108 chemical catalog entries, two generated chair projections and 12 Haworth entries, for **122 built-ins**. Collections cover rings/small molecules, cycloalkanes and unsaturated rings, common heterocycles, bicyclic/cage structures, all 20 standard amino acids, five nucleobases, macrocycles and ligands. Retained fused parents include anthracene, phenanthrene, azulene, indene, fluorene, pyrene, carbazole, acridine, quinazoline, quinoxaline, benzimidazole, indazole, chromene, dibenzofuran and dibenzothiophene.
 
 Names, formulas, standard InChIKeys, SMILES and source URLs are frozen in [template-catalog.json](../assets/template-catalog.json). These chemical facts were retrieved from the [PubChem PUG REST service](https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest). The amino-acid generator uses RDKit's documented [L-protein sequence flavor](https://www.rdkit.org/docs/source/rdkit.Chem.rdmolfiles.html). Its formula and standard InChIKey must agree with the corresponding PubChem record before generation succeeds. Glycine is achiral; the other amino-acid entries retain L stereochemistry. Entries are neutral free amino acids, not connected peptide residues.
 
-`uv run --locked python scripts/regenerate_templates.py` regenerates the stored molecular coordinates without network access. It validates every catalog entry first and only then replaces `assets/templates.json`. The chair toolbar and library use the same Rust geometry generator.
+`uv run --locked python scripts/regenerate_templates.py` updates the stored templates without network access. It validates catalog formulas and standard InChIKeys, reuses unchanged stored documents and generates coordinates for changed or new structures before replacing `assets/templates.json`. Per-entry drawing SMILES select the 9H tautomers of purine, adenine and guanine while retaining their frozen PubChem facts; 7H-Purine remains available separately. Orientation metadata places the new fused parents in the IUPAC FR-5.2 orientation. The chair toolbar and library use the same Rust geometry generator.
 
-Search includes amino-acid three-letter codes and other stored keywords. Exact names/codes rank before prefix and substring matches, so `Phe` brings phenylalanine ahead of thiophene. Entry notes state meaningful distinctions such as L configuration and unspecified decalin ring-junction stereochemistry. Built-in IDs retain the original group/name identity, so existing favorites continue working; user-authored templates remain in the separate local collection.
+Search includes IUPAC names, von Baeyer names, amino-acid codes and biochemical symbols such as `Ade`, `Glcp` and `a-D-Glcp` / `α-D-Glcp`. Superscript digits and caret/braces spellings fold to plain digits. Exact names/codes rank before prefix and substring matches, so `Phe` brings phenylalanine ahead of thiophene. Entry notes state meaningful distinctions such as L configuration and unspecified decalin ring-junction stereochemistry. Built-in IDs retain the original group/name identity, including renamed 9H entries, so existing favorites continue working; user-authored templates remain in the separate local collection.
+
+Ring templates, including crown ethers, cyclen and cyclam (not porphine), carry static atom locants for the large template source preview and attachment labels such as **Attach at N-9**. Substituents are unnumbered. Locants stay out of the drawing, thumbnails, join panel and exports. Acridine uses N-10 and decalin uses naphthalene-style 4a/8a fusion locants.
 
 The catalog does not yet provide sugar stereoisomer families, DNA/RNA assemblies, peptide synthesis/sequence assembly, semantic protecting-group nicknames, polymer templates or many specialized chemical families.
 

@@ -7,7 +7,15 @@
     "formula": "C6H6",
     "inchikey": "UHOVQNZJYSORNB-UHFFFAOYSA-N",
     "pubchem_cid": 241,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/241"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/241",
+    "locants": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+    ]
   },
   {
     "group": "Rings",
@@ -17,7 +25,15 @@
     "formula": "C5H5N",
     "inchikey": "JUJWROOIHBZHMG-UHFFFAOYSA-N",
     "pubchem_cid": 1049,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1049"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1049",
+    "locants": [
+      "4",
+      "5",
+      "6",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Rings",
@@ -27,7 +43,17 @@
     "formula": "C4H5N",
     "inchikey": "KAESVJOAVNADME-UHFFFAOYSA-N",
     "pubchem_cid": 8027,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8027"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8027",
+    "keywords": [
+      "1H-pyrrole"
+    ],
+    "locants": [
+      "4",
+      "5",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Rings",
@@ -37,7 +63,14 @@
     "formula": "C4H4O",
     "inchikey": "YLQBMQCUIZJEEH-UHFFFAOYSA-N",
     "pubchem_cid": 8029,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8029"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8029",
+    "locants": [
+      "4",
+      "5",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Rings",
@@ -47,7 +80,14 @@
     "formula": "C4H4S",
     "inchikey": "YTPLMLYBLZKORZ-UHFFFAOYSA-N",
     "pubchem_cid": 8030,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8030"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8030",
+    "locants": [
+      "4",
+      "5",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Rings",
@@ -57,7 +97,14 @@
     "formula": "C5H10",
     "inchikey": "RGSFGYAAUTVSQA-UHFFFAOYSA-N",
     "pubchem_cid": 9253,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9253"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9253",
+    "locants": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+    ]
   },
   {
     "group": "Rings",
@@ -67,7 +114,15 @@
     "formula": "C6H12",
     "inchikey": "XDTMQSROBMDMFD-UHFFFAOYSA-N",
     "pubchem_cid": 8078,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8078"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8078",
+    "locants": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+    ]
   },
   {
     "group": "Rings",
@@ -77,7 +132,19 @@
     "formula": "C10H8",
     "inchikey": "UFWIBTONFRDIAS-UHFFFAOYSA-N",
     "pubchem_cid": 931,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/931"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/931",
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "1",
+      "2",
+      "3",
+      "4",
+      "4a",
+      "5"
+    ]
   },
   {
     "group": "Small molecules",
@@ -127,7 +194,12 @@
     "formula": "C3H6",
     "inchikey": "LVZWSLJZHVFIQJ-UHFFFAOYSA-N",
     "pubchem_cid": 6351,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6351"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6351",
+    "locants": [
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Cycloalkanes",
@@ -137,7 +209,13 @@
     "formula": "C4H8",
     "inchikey": "PMPVIKIVABFJJI-UHFFFAOYSA-N",
     "pubchem_cid": 9250,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9250"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9250",
+    "locants": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "group": "Cycloalkanes",
@@ -147,7 +225,16 @@
     "formula": "C7H14",
     "inchikey": "DMEGYFMYUHOHGS-UHFFFAOYSA-N",
     "pubchem_cid": 9265,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9265"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9265",
+    "locants": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7"
+    ]
   },
   {
     "group": "Cycloalkanes",
@@ -157,7 +244,17 @@
     "formula": "C8H16",
     "inchikey": "WJTCGQSWYFHTAC-UHFFFAOYSA-N",
     "pubchem_cid": 9266,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9266"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9266",
+    "locants": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8"
+    ]
   },
   {
     "group": "Unsaturated rings",
@@ -167,7 +264,14 @@
     "formula": "C5H6",
     "inchikey": "ZSWFCLXCOIISFI-UHFFFAOYSA-N",
     "pubchem_cid": 7612,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7612"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7612",
+    "locants": [
+      "5",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "group": "Unsaturated rings",
@@ -177,7 +281,15 @@
     "formula": "C6H10",
     "inchikey": "HGCIXCUEYOPUTN-UHFFFAOYSA-N",
     "pubchem_cid": 8079,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8079"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8079",
+    "locants": [
+      "4",
+      "5",
+      "6",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Unsaturated rings",
@@ -187,7 +299,15 @@
     "formula": "C6H8",
     "inchikey": "MGNZXYYWBUKAII-UHFFFAOYSA-N",
     "pubchem_cid": 11605,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/11605"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/11605",
+    "locants": [
+      "5",
+      "6",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -197,7 +317,15 @@
     "formula": "C4H4N2",
     "inchikey": "PBMFSQRYOILNGV-UHFFFAOYSA-N",
     "pubchem_cid": 9259,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9259"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9259",
+    "locants": [
+      "4",
+      "5",
+      "6",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -207,7 +335,15 @@
     "formula": "C4H4N2",
     "inchikey": "CZPWVGJYEJSRLH-UHFFFAOYSA-N",
     "pubchem_cid": 9260,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9260"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9260",
+    "locants": [
+      "5",
+      "6",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -217,7 +353,15 @@
     "formula": "C4H4N2",
     "inchikey": "KYQCOXFCLRTKLS-UHFFFAOYSA-N",
     "pubchem_cid": 9261,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9261"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9261",
+    "locants": [
+      "5",
+      "6",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -227,7 +371,17 @@
     "formula": "C3H4N2",
     "inchikey": "WTKZEGDFNFYCGP-UHFFFAOYSA-N",
     "pubchem_cid": 1048,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1048"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1048",
+    "keywords": [
+      "1H-pyrazole"
+    ],
+    "locants": [
+      "4",
+      "5",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -237,7 +391,17 @@
     "formula": "C3H4N2",
     "inchikey": "RAXXELZNTBOGNW-UHFFFAOYSA-N",
     "pubchem_cid": 795,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/795"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/795",
+    "keywords": [
+      "1H-imidazole"
+    ],
+    "locants": [
+      "5",
+      "4",
+      "3",
+      "2",
+      "1"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -247,7 +411,17 @@
     "formula": "C3H3NO",
     "inchikey": "ZCQWOFVYLHDMMC-UHFFFAOYSA-N",
     "pubchem_cid": 9255,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9255"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9255",
+    "keywords": [
+      "1,3-oxazole"
+    ],
+    "locants": [
+      "4",
+      "5",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -257,7 +431,17 @@
     "formula": "C3H3NO",
     "inchikey": "CTAPFRYPJLPFDF-UHFFFAOYSA-N",
     "pubchem_cid": 9254,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9254"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9254",
+    "keywords": [
+      "1,2-oxazole"
+    ],
+    "locants": [
+      "4",
+      "5",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -267,7 +451,17 @@
     "formula": "C3H3NS",
     "inchikey": "FZWLAAWBMGSTSO-UHFFFAOYSA-N",
     "pubchem_cid": 9256,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9256"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9256",
+    "keywords": [
+      "1,3-thiazole"
+    ],
+    "locants": [
+      "4",
+      "5",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -277,7 +471,17 @@
     "formula": "C3H3NS",
     "inchikey": "ZLTPDFXIESTBQG-UHFFFAOYSA-N",
     "pubchem_cid": 67515,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/67515"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/67515",
+    "keywords": [
+      "1,2-thiazole"
+    ],
+    "locants": [
+      "4",
+      "5",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -287,7 +491,21 @@
     "formula": "C8H7N",
     "inchikey": "SIKJAQJRHWYJAI-UHFFFAOYSA-N",
     "pubchem_cid": 798,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/798"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/798",
+    "keywords": [
+      "1H-indole"
+    ],
+    "locants": [
+      "5",
+      "6",
+      "7",
+      "7a",
+      "3a",
+      "4",
+      "3",
+      "2",
+      "1"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -297,7 +515,19 @@
     "formula": "C9H7N",
     "inchikey": "SMWDFEZZVXVKRB-UHFFFAOYSA-N",
     "pubchem_cid": 7047,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7047"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7047",
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "4a",
+      "5",
+      "4",
+      "3",
+      "2",
+      "1"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -307,7 +537,19 @@
     "formula": "C9H7N",
     "inchikey": "AWJUIBRHMBBTKR-UHFFFAOYSA-N",
     "pubchem_cid": 8405,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8405"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8405",
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "1",
+      "2",
+      "3",
+      "4",
+      "4a",
+      "5"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -317,7 +559,18 @@
     "formula": "C8H6O",
     "inchikey": "IANQTJSKSUMEQM-UHFFFAOYSA-N",
     "pubchem_cid": 9223,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9223"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9223",
+    "locants": [
+      "5",
+      "6",
+      "7",
+      "7a",
+      "3a",
+      "4",
+      "3",
+      "2",
+      "1"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -327,17 +580,114 @@
     "formula": "C8H6S",
     "inchikey": "FCEHBMOGCRZNNI-UHFFFAOYSA-N",
     "pubchem_cid": 7221,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7221"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7221",
+    "locants": [
+      "5",
+      "6",
+      "7",
+      "7a",
+      "3a",
+      "4",
+      "3",
+      "2",
+      "1"
+    ]
   },
   {
     "group": "Heterocycles",
-    "name": "Purine",
+    "name": "9H-Purine",
     "query": "Purine",
     "smiles": "C1=C2C(=NC=N1)N=CN2",
     "formula": "C5H4N4",
     "inchikey": "KDCGOANMDULRCW-UHFFFAOYSA-N",
     "pubchem_cid": 1044,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1044"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1044",
+    "id": "builtin:Heterocycles/Purine",
+    "tautomer_smiles": "c1ncnc2[nH]cnc12",
+    "keywords": [
+      "Purine"
+    ],
+    "note": "Drawn as the 9H tautomer; N9 is the nucleoside attachment site.",
+    "locants": [
+      "6",
+      "1",
+      "2",
+      "3",
+      "4",
+      "9",
+      "8",
+      "7",
+      "5"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          8
+        ],
+        [
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      ],
+      "below": [
+        5
+      ]
+    }
+  },
+  {
+    "group": "Heterocycles",
+    "name": "7H-Purine",
+    "query": "Purine",
+    "smiles": "C1=C2C(=NC=N1)N=CN2",
+    "formula": "C5H4N4",
+    "inchikey": "KDCGOANMDULRCW-UHFFFAOYSA-N",
+    "pubchem_cid": 1044,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1044",
+    "keywords": [
+      "Purine"
+    ],
+    "note": "Drawn as the 7H tautomer from the frozen PubChem SMILES.",
+    "locants": [
+      "6",
+      "5",
+      "4",
+      "3",
+      "2",
+      "1",
+      "9",
+      "8",
+      "7"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        [
+          1,
+          2,
+          6,
+          7,
+          8
+        ]
+      ],
+      "below": [
+        6
+      ]
+    }
   },
   {
     "group": "Heterocycles",
@@ -347,7 +697,14 @@
     "formula": "C4H9N",
     "inchikey": "RWRDLPDLKQPQOW-UHFFFAOYSA-N",
     "pubchem_cid": 31268,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/31268"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/31268",
+    "locants": [
+      "3",
+      "4",
+      "5",
+      "1",
+      "2"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -357,7 +714,15 @@
     "formula": "C5H11N",
     "inchikey": "NQRYJNQNLNOLGT-UHFFFAOYSA-N",
     "pubchem_cid": 8082,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8082"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8082",
+    "locants": [
+      "4",
+      "5",
+      "6",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -367,7 +732,15 @@
     "formula": "C4H10N2",
     "inchikey": "GLUUGHFHXGJENI-UHFFFAOYSA-N",
     "pubchem_cid": 4837,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/4837"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/4837",
+    "locants": [
+      "5",
+      "6",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -377,7 +750,15 @@
     "formula": "C4H9NO",
     "inchikey": "YNAVUWVOSKDBBP-UHFFFAOYSA-N",
     "pubchem_cid": 8083,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8083"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8083",
+    "locants": [
+      "5",
+      "6",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -387,7 +768,18 @@
     "formula": "C4H8O",
     "inchikey": "WYURNTSHIVDZCO-UHFFFAOYSA-N",
     "pubchem_cid": 8028,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8028"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8028",
+    "keywords": [
+      "oxolane",
+      "THF"
+    ],
+    "locants": [
+      "3",
+      "4",
+      "5",
+      "1",
+      "2"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -397,7 +789,18 @@
     "formula": "C5H10O",
     "inchikey": "DHXVGJBLRPWPCS-UHFFFAOYSA-N",
     "pubchem_cid": 8894,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8894"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8894",
+    "keywords": [
+      "oxane"
+    ],
+    "locants": [
+      "4",
+      "5",
+      "6",
+      "1",
+      "2",
+      "3"
+    ]
   },
   {
     "group": "Heterocycles",
@@ -407,7 +810,15 @@
     "formula": "C4H8O2",
     "inchikey": "RYHBNJHYFVUHQT-UHFFFAOYSA-N",
     "pubchem_cid": 31275,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/31275"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/31275",
+    "locants": [
+      "5",
+      "6",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "group": "Bicyclics and cages",
@@ -417,7 +828,19 @@
     "formula": "C7H12",
     "inchikey": "UMRZSTCPUPJPOJ-UHFFFAOYSA-N",
     "pubchem_cid": 9233,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9233"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9233",
+    "keywords": [
+      "bicyclo[2.2.1]heptane"
+    ],
+    "locants": [
+      "5",
+      "6",
+      "1",
+      "2",
+      "3",
+      "4",
+      "7"
+    ]
   },
   {
     "group": "Bicyclics and cages",
@@ -427,7 +850,14 @@
     "formula": "C5H8",
     "inchikey": "MKCBRYIXFFGIKN-UHFFFAOYSA-N",
     "pubchem_cid": 136153,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/136153"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/136153",
+    "locants": [
+      "4",
+      "1",
+      "2",
+      "3",
+      "5"
+    ]
   },
   {
     "group": "Bicyclics and cages",
@@ -437,7 +867,22 @@
     "formula": "C10H16",
     "inchikey": "ORILYTVJVMAKLC-UHFFFAOYSA-N",
     "pubchem_cid": 9238,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9238"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9238",
+    "keywords": [
+      "tricyclo[3.3.1.1³,⁷]decane"
+    ],
+    "locants": [
+      "9",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "10"
+    ]
   },
   {
     "group": "Bicyclics and cages",
@@ -447,7 +892,20 @@
     "formula": "C8H8",
     "inchikey": "TXWRERCHRDBNLG-UHFFFAOYSA-N",
     "pubchem_cid": 136090,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/136090"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/136090",
+    "keywords": [
+      "pentacyclo[4.2.0.0²,⁵.0³,⁸.0⁴,⁷]octane"
+    ],
+    "locants": [
+      "1",
+      "2",
+      "3",
+      "8",
+      "7",
+      "6",
+      "5",
+      "4"
+    ]
   },
   {
     "group": "Bicyclics and cages",
@@ -457,27 +915,128 @@
     "formula": "C10H18",
     "inchikey": "NNBZCPXTIHJBJL-UHFFFAOYSA-N",
     "pubchem_cid": 7044,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7044"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7044",
+    "keywords": [
+      "decahydronaphthalene",
+      "bicyclo[4.4.0]decane"
+    ],
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "1",
+      "2",
+      "3",
+      "4",
+      "4a",
+      "5"
+    ]
   },
   {
     "group": "Nucleobases",
-    "name": "Adenine",
+    "name": "Adenine (9H)",
     "query": "Adenine",
     "smiles": "C1=NC2=NC=NC(=C2N1)N",
     "formula": "C5H5N5",
     "inchikey": "GFFGJBXGBJISGV-UHFFFAOYSA-N",
     "pubchem_cid": 190,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/190"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/190",
+    "id": "builtin:Nucleobases/Adenine",
+    "tautomer_smiles": "Nc1ncnc2[nH]cnc12",
+    "keywords": [
+      "Adenine",
+      "Ade",
+      "9H-purin-6-amine"
+    ],
+    "note": "Drawn as the 9H tautomer; N9 is the nucleoside attachment site.",
+    "locants": [
+      null,
+      "6",
+      "1",
+      "2",
+      "3",
+      "4",
+      "9",
+      "8",
+      "7",
+      "5"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          1,
+          2,
+          3,
+          4,
+          5,
+          9
+        ],
+        [
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      ],
+      "below": [
+        6
+      ]
+    }
   },
   {
     "group": "Nucleobases",
-    "name": "Guanine",
+    "name": "Guanine (9H)",
     "query": "Guanine",
     "smiles": "C1=NC2=C(N1)C(=O)NC(=N2)N",
     "formula": "C5H5N5O",
     "inchikey": "UYTPUPDQBNUYGX-UHFFFAOYSA-N",
     "pubchem_cid": 135398634,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/135398634"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/135398634",
+    "id": "builtin:Nucleobases/Guanine",
+    "tautomer_smiles": "Nc1nc2[nH]cnc2c(=O)[nH]1",
+    "keywords": [
+      "Guanine",
+      "Gua",
+      "2-amino-1,9-dihydro-6H-purin-6-one"
+    ],
+    "note": "Drawn as the 9H tautomer; N9 is the nucleoside attachment site.",
+    "locants": [
+      null,
+      "2",
+      "3",
+      "4",
+      "9",
+      "8",
+      "7",
+      "5",
+      "6",
+      null,
+      "1"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          1,
+          2,
+          3,
+          7,
+          8,
+          10
+        ],
+        [
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      ],
+      "below": [
+        4
+      ]
+    }
   },
   {
     "group": "Nucleobases",
@@ -487,7 +1046,20 @@
     "formula": "C4H5N3O",
     "inchikey": "OPTASPLRGRRNAP-UHFFFAOYSA-N",
     "pubchem_cid": 597,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/597"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/597",
+    "keywords": [
+      "Cyt"
+    ],
+    "locants": [
+      "5",
+      "4",
+      "3",
+      "2",
+      null,
+      "1",
+      "6",
+      null
+    ]
   },
   {
     "group": "Nucleobases",
@@ -497,7 +1069,21 @@
     "formula": "C5H6N2O2",
     "inchikey": "RWQNBRDOKXIBIV-UHFFFAOYSA-N",
     "pubchem_cid": 1135,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1135"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1135",
+    "keywords": [
+      "Thy"
+    ],
+    "locants": [
+      null,
+      "5",
+      "6",
+      "1",
+      "2",
+      null,
+      "3",
+      "4",
+      null
+    ]
   },
   {
     "group": "Nucleobases",
@@ -507,7 +1093,20 @@
     "formula": "C4H4N2O2",
     "inchikey": "ISAKRJDGNUQOIC-UHFFFAOYSA-N",
     "pubchem_cid": 1174,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1174"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1174",
+    "keywords": [
+      "Ura"
+    ],
+    "locants": [
+      "5",
+      "6",
+      "1",
+      "2",
+      null,
+      "3",
+      "4",
+      null
+    ]
   },
   {
     "group": "Small molecules",
@@ -922,7 +1521,21 @@
     "formula": "C8H16O4",
     "inchikey": "XQQZRZQVBFHBHL-UHFFFAOYSA-N",
     "pubchem_cid": 9269,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9269"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9269",
+    "locants": [
+      "11",
+      "12",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ]
   },
   {
     "name": "15-Crown-5",
@@ -937,7 +1550,24 @@
     "formula": "C10H20O5",
     "inchikey": "VFTFKUDGYRBSAL-UHFFFAOYSA-N",
     "pubchem_cid": 36336,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/36336"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/36336",
+    "locants": [
+      "14",
+      "15",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13"
+    ]
   },
   {
     "name": "18-Crown-6",
@@ -952,7 +1582,27 @@
     "formula": "C12H24O6",
     "inchikey": "XEZNGIUYQVAUSS-UHFFFAOYSA-N",
     "pubchem_cid": 28557,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/28557"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/28557",
+    "locants": [
+      "17",
+      "18",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ]
   },
   {
     "name": "Cyclen",
@@ -966,7 +1616,21 @@
     "formula": "C8H20N4",
     "inchikey": "QBPPRVHXOZRESW-UHFFFAOYSA-N",
     "pubchem_cid": 64963,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/64963"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/64963",
+    "locants": [
+      "11",
+      "12",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ]
   },
   {
     "name": "Cyclam",
@@ -980,7 +1644,23 @@
     "formula": "C10H24N4",
     "inchikey": "MDAXKAUIABOHTD-UHFFFAOYSA-N",
     "pubchem_cid": 64964,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/64964"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/64964",
+    "locants": [
+      "13",
+      "14",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
   },
   {
     "name": "2,2'-Bipyridine",
@@ -1009,7 +1689,23 @@
     "formula": "C12H8N2",
     "inchikey": "DGEZNRSVGBDHLK-UHFFFAOYSA-N",
     "pubchem_cid": 1318,
-    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1318"
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1318",
+    "locants": [
+      "3",
+      "4",
+      "4a",
+      "10b",
+      "10a",
+      "6a",
+      "7",
+      "8",
+      "9",
+      "10",
+      "6",
+      "5",
+      "1",
+      "2"
+    ]
   },
   {
     "name": "2,2':6',2\"-Terpyridine",
@@ -1102,5 +1798,745 @@
     "note": "Free-base 21H,23H-porphine: opposite N–H sites, equal bond lengths and a symmetric planar core. No metal or substituents.",
     "source": "https://opsin.ch.cam.ac.uk/opsin/21H%2C23H-porphine.json",
     "corroborating_source": "https://pubchem.ncbi.nlm.nih.gov/substance/135024075"
+  },
+  {
+    "name": "Anthracene",
+    "query": "anthracene",
+    "smiles": "C1=CC=C2C=C3C=CC=CC3=CC2=C1",
+    "formula": "C14H10",
+    "inchikey": "MWPLVEDNUUSJAV-UHFFFAOYSA-N",
+    "pubchem_cid": 8418,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8418",
+    "group": "Rings",
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "9",
+      "9a",
+      "1",
+      "2",
+      "3",
+      "4",
+      "4a",
+      "10",
+      "10a",
+      "5"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          12,
+          13
+        ],
+        [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ]
+      ],
+      "above": [
+        4
+      ]
+    }
+  },
+  {
+    "name": "Phenanthrene",
+    "query": "phenanthrene",
+    "smiles": "C1=CC=C2C(=C1)C=CC3=CC=CC=C32",
+    "formula": "C14H10",
+    "inchikey": "YNPNZTXNASCQKK-UHFFFAOYSA-N",
+    "pubchem_cid": 995,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/995",
+    "group": "Rings",
+    "locants": [
+      "2",
+      "3",
+      "4",
+      "4a",
+      "10a",
+      "1",
+      "10",
+      "9",
+      "8a",
+      "8",
+      "7",
+      "6",
+      "5",
+      "4b"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        [
+          3,
+          4,
+          6,
+          7,
+          8,
+          13
+        ]
+      ],
+      "above": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ]
+    }
+  },
+  {
+    "name": "Azulene",
+    "query": "azulene",
+    "smiles": "C1=CC=C2C=CC=C2C=C1",
+    "formula": "C10H8",
+    "inchikey": "CUFNKYGDVFVPHO-UHFFFAOYSA-N",
+    "pubchem_cid": 9231,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9231",
+    "group": "Rings",
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "1",
+      "2",
+      "3",
+      "3a",
+      "4",
+      "5"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          7,
+          8,
+          9
+        ],
+        [
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      ],
+      "above": [
+        4
+      ]
+    }
+  },
+  {
+    "name": "Indene (1H)",
+    "query": "1H-indene",
+    "smiles": "C1C=CC2=CC=CC=C21",
+    "formula": "C9H8",
+    "inchikey": "YBYIRNPNPLQARY-UHFFFAOYSA-N",
+    "pubchem_cid": 7219,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7219",
+    "group": "Rings",
+    "keywords": [
+      "1H-indene",
+      "Indene"
+    ],
+    "locants": [
+      "1",
+      "2",
+      "3",
+      "3a",
+      "4",
+      "5",
+      "6",
+      "7",
+      "7a"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        [
+          0,
+          1,
+          2,
+          3,
+          8
+        ]
+      ],
+      "above": [
+        0
+      ]
+    }
+  },
+  {
+    "name": "Fluorene (9H)",
+    "query": "9H-fluorene",
+    "smiles": "C1C2=CC=CC=C2C3=CC=CC=C31",
+    "formula": "C13H10",
+    "inchikey": "NIHNNTQXNPWCJQ-UHFFFAOYSA-N",
+    "pubchem_cid": 6853,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6853",
+    "group": "Rings",
+    "keywords": [
+      "9H-fluorene",
+      "Fluorene"
+    ],
+    "locants": [
+      "9",
+      "9a",
+      "1",
+      "2",
+      "3",
+      "4",
+      "4a",
+      "4b",
+      "5",
+      "6",
+      "7",
+      "8",
+      "8a"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      ],
+      "above": [
+        0
+      ]
+    }
+  },
+  {
+    "name": "Pyrene",
+    "query": "pyrene",
+    "smiles": "C1=CC2=C3C(=C1)C=CC4=CC=CC(=C43)C=C2",
+    "formula": "C16H10",
+    "inchikey": "BBEAQIROQSPTKN-UHFFFAOYSA-N",
+    "pubchem_cid": 31423,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/31423",
+    "group": "Rings",
+    "locants": [
+      "2",
+      "3",
+      "3a",
+      "3a¹",
+      "10a",
+      "1",
+      "10",
+      "9",
+      "8a",
+      "8",
+      "7",
+      "6",
+      "5a",
+      "5a¹",
+      "5",
+      "4"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        [
+          2,
+          3,
+          12,
+          13,
+          14,
+          15
+        ]
+      ],
+      "above": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  {
+    "name": "Carbazole (9H)",
+    "query": "9H-carbazole",
+    "smiles": "C1=CC=C2C(=C1)C3=CC=CC=C3N2",
+    "formula": "C12H9N",
+    "inchikey": "UJOBWOGCFQCDNV-UHFFFAOYSA-N",
+    "pubchem_cid": 6854,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6854",
+    "group": "Heterocycles",
+    "keywords": [
+      "9H-carbazole",
+      "Carbazole"
+    ],
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "4b",
+      "5",
+      "4a",
+      "4",
+      "3",
+      "2",
+      "1",
+      "9a",
+      "9"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        [
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ]
+      ],
+      "above": [
+        12
+      ]
+    }
+  },
+  {
+    "name": "Acridine",
+    "query": "acridine",
+    "smiles": "C1=CC=C2C(=C1)C=C3C=CC=CC3=N2",
+    "formula": "C13H9N",
+    "inchikey": "DZBUGLKDJFMEHC-UHFFFAOYSA-N",
+    "pubchem_cid": 9215,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9215",
+    "group": "Heterocycles",
+    "locants": [
+      "7",
+      "6",
+      "5",
+      "10a",
+      "8a",
+      "8",
+      "9",
+      "9a",
+      "1",
+      "2",
+      "3",
+      "4",
+      "4a",
+      "10"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        [
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ]
+      ],
+      "below": [
+        13
+      ]
+    }
+  },
+  {
+    "name": "Quinazoline",
+    "query": "quinazoline",
+    "smiles": "C1=CC=C2C(=C1)C=NC=N2",
+    "formula": "C8H6N2",
+    "inchikey": "JWVCLYRUEFBMGU-UHFFFAOYSA-N",
+    "pubchem_cid": 9210,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9210",
+    "group": "Heterocycles",
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "4a",
+      "5",
+      "4",
+      "3",
+      "2",
+      "1"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        [
+          3,
+          4,
+          6,
+          7,
+          8,
+          9
+        ]
+      ],
+      "above": [
+        9
+      ]
+    }
+  },
+  {
+    "name": "Quinoxaline",
+    "query": "quinoxaline",
+    "smiles": "C1=CC=C2C(=C1)N=CC=N2",
+    "formula": "C8H6N2",
+    "inchikey": "XSCHRSMBECNVNS-UHFFFAOYSA-N",
+    "pubchem_cid": 7045,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7045",
+    "group": "Heterocycles",
+    "locants": [
+      "6",
+      "7",
+      "8",
+      "8a",
+      "4a",
+      "5",
+      "4",
+      "3",
+      "2",
+      "1"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        [
+          3,
+          4,
+          6,
+          7,
+          8,
+          9
+        ]
+      ],
+      "above": [
+        9
+      ]
+    }
+  },
+  {
+    "name": "Benzimidazole (1H)",
+    "query": "1H-benzimidazole",
+    "smiles": "C1=CC=C2C(=C1)NC=N2",
+    "formula": "C7H6N2",
+    "inchikey": "HYZJCKYKOHLVJF-UHFFFAOYSA-N",
+    "pubchem_cid": 5798,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/5798",
+    "group": "Heterocycles",
+    "keywords": [
+      "1H-benzimidazole",
+      "Benzimidazole"
+    ],
+    "locants": [
+      "6",
+      "5",
+      "4",
+      "3a",
+      "7a",
+      "7",
+      "1",
+      "2",
+      "3"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        [
+          3,
+          4,
+          6,
+          7,
+          8
+        ]
+      ],
+      "above": [
+        6
+      ]
+    }
+  },
+  {
+    "name": "Indazole (1H)",
+    "query": "1H-indazole",
+    "smiles": "C1=CC=C2C(=C1)C=NN2",
+    "formula": "C7H6N2",
+    "inchikey": "BAXOFTOLAUCFNW-UHFFFAOYSA-N",
+    "pubchem_cid": 9221,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9221",
+    "group": "Heterocycles",
+    "keywords": [
+      "1H-indazole",
+      "Indazole"
+    ],
+    "locants": [
+      "5",
+      "6",
+      "7",
+      "7a",
+      "3a",
+      "4",
+      "3",
+      "2",
+      "1"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        [
+          3,
+          4,
+          6,
+          7,
+          8
+        ]
+      ],
+      "above": [
+        8
+      ]
+    }
+  },
+  {
+    "name": "Chromene (2H)",
+    "query": "2H-chromene",
+    "smiles": "C1C=CC2=CC=CC=C2O1",
+    "formula": "C9H8O",
+    "inchikey": "KYNSBQPICQTCGU-UHFFFAOYSA-N",
+    "pubchem_cid": 9211,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9211",
+    "group": "Heterocycles",
+    "keywords": [
+      "2H-chromene",
+      "Chromene",
+      "2H-1-benzopyran"
+    ],
+    "locants": [
+      "2",
+      "3",
+      "4",
+      "4a",
+      "5",
+      "6",
+      "7",
+      "8",
+      "8a",
+      "1"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        [
+          0,
+          1,
+          2,
+          3,
+          8,
+          9
+        ]
+      ],
+      "above": [
+        9
+      ]
+    }
+  },
+  {
+    "name": "Dibenzofuran",
+    "query": "dibenzofuran",
+    "smiles": "C1=CC=C2C(=C1)C3=CC=CC=C3O2",
+    "formula": "C12H8O",
+    "inchikey": "TXCDCPKCNAJMEE-UHFFFAOYSA-N",
+    "pubchem_cid": 568,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/568",
+    "group": "Heterocycles",
+    "keywords": [
+      "dibenzo[b,d]furan"
+    ],
+    "locants": [
+      "2",
+      "3",
+      "4",
+      "4a",
+      "9b",
+      "1",
+      "9a",
+      "9",
+      "8",
+      "7",
+      "6",
+      "5a",
+      "5"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      ],
+      "below": [
+        12
+      ]
+    }
+  },
+  {
+    "name": "Dibenzothiophene",
+    "query": "dibenzothiophene",
+    "smiles": "C1=CC=C2C(=C1)C3=CC=CC=C3S2",
+    "formula": "C12H8S",
+    "inchikey": "IYYZUPMFVPLQIF-UHFFFAOYSA-N",
+    "pubchem_cid": 3023,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/3023",
+    "group": "Heterocycles",
+    "keywords": [
+      "dibenzo[b,d]thiophene"
+    ],
+    "locants": [
+      "2",
+      "3",
+      "4",
+      "4a",
+      "9b",
+      "1",
+      "9a",
+      "9",
+      "8",
+      "7",
+      "6",
+      "5a",
+      "5"
+    ],
+    "orientation": {
+      "axis": [
+        [
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      ],
+      "below": [
+        12
+      ]
+    }
   }
 ]
