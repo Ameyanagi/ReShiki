@@ -7849,7 +7849,7 @@
     "group": "Bicyclics and cages",
     "smiles": "C1C2CC3CC1CC(C2)C3",
     "keywords": [
-      "tricyclo[3.3.1.1³,⁷]decane"
+      "tricyclo[3.3.1.1\u00b3,\u2077]decane"
     ],
     "note": "",
     "document": {
@@ -8147,7 +8147,7 @@
     "group": "Bicyclics and cages",
     "smiles": "C12C3C4C1C1C2C3C41",
     "keywords": [
-      "pentacyclo[4.2.0.0²,⁵.0³,⁸.0⁴,⁷]octane"
+      "pentacyclo[4.2.0.0\u00b2,\u2075.0\u00b3,\u2078.0\u2074,\u2077]octane"
     ],
     "note": "",
     "document": {
@@ -25025,7 +25025,7 @@
       "1": "2",
       "2": "3",
       "3": "3a",
-      "15": "3a¹",
+      "15": "3a\u00b9",
       "13": "10a",
       "14": "1",
       "12": "10",
@@ -25035,7 +25035,7 @@
       "8": "7",
       "7": "6",
       "6": "5a",
-      "16": "5a¹",
+      "16": "5a\u00b9",
       "5": "5",
       "4": "4"
     }

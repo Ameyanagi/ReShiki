@@ -153,5 +153,5 @@ for entry in catalog:
         if "orientation" in entry:
             orient(template["document"], mapping, entry["orientation"])
     library.append(template)
-path.write_text(json.dumps(library, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+path.write_text(json.dumps(library, indent=2) + "\n")
 print(f"Regenerated {len(library)} templates")
