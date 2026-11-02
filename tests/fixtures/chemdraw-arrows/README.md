@@ -11,9 +11,10 @@ GUI capture. Its retrosynthesis head, tail, shape, fill, and double shaft come
 from ChemDraw 26's `chooseArrowTool_Large_Retrosynthetic` and
 `chooseArrowTool_Small_Retrosynthetic` entries in
 `SpecialPurpose/GUI/Common/XML/Commands/CommandDefinitions.xml`. The exact tool
-definition is retained in the fixture's comment. The drawing uses representative
-12 pt head and spacing values, encoded as `1200` in this reader's saved-file
-hundredths of a point. It does not establish how ChemDraw converts its tool
+definition is retained in the fixture's comment. The drawing uses ChemDraw's saved
+arrowhead parameters (`600`, `525`, `150`) and the 2 pt shaft spacing (`200`) of
+ChemDraw's saved equilibrium arrow in `arrows-chemdraw.cdxml`, chosen so the head
+spans both shafts. It does not establish how ChemDraw converts its tool
 settings into saved-file dimensions; copying `12` literally would produce an
 unsupported 0.12 pt head and spacing in the existing reader.
 The superseded legacy graphic and document header follow ChemDraw's saved

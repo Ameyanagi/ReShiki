@@ -28,8 +28,9 @@ async fn constructed_chemdraw_retrosynthesis_and_hollow_arrows_keep_their_kinds(
     assert_eq!(retro.appearance().head, Head::Full);
     assert_eq!(retro.appearance().tail, Head::None);
     assert_eq!(retro.appearance().shape, HeadShape::Open);
-    assert_eq!(retro.appearance().head_length_pt, 12.);
-    assert_eq!(retro.appearance().gap_pt, 12.);
+    assert_eq!(retro.appearance().head_length_pt, 6.);
+    assert_eq!(retro.appearance().head_width_pt, 1.5);
+    assert_eq!(retro.appearance().gap_pt, 2.);
     let hollow = &document.arrows[1];
     assert_eq!(hollow.kind, "forward");
     assert_eq!(hollow.appearance().head, Head::Full);
