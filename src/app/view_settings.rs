@@ -8,6 +8,7 @@ pub enum Action {
     /// Flips the grid regardless of the checkbox value.
     Grid,
     SmartGuides(bool),
+    TwoDecimalWeight(bool),
     NameTypography(bool),
     Rulers(bool),
     Crosshair(bool),
@@ -21,6 +22,7 @@ impl App {
         match action {
             Action::Grid => self.grid = !self.grid,
             Action::SmartGuides(enabled) => self.set_smart_guides(enabled),
+            Action::TwoDecimalWeight(enabled) => self.set_two_decimal_weight(enabled),
             Action::NameTypography(enabled) => {
                 self.appearance.name_typography = enabled;
                 if let Err(error) = self.appearance.save() {
@@ -65,6 +67,13 @@ impl App {
         self.appearance.smart_guides = enabled;
         if let Err(error) = self.appearance.save() {
             self.status = format!("Could not save smart guides preference: {error}");
+            self.error = true;
+        }
+    }
+    fn set_two_decimal_weight(&mut self, enabled: bool) {
+        self.appearance.two_decimal_weight = enabled;
+        if let Err(error) = self.appearance.save() {
+            self.status = format!("Could not save molecular weight display preference: {error}");
             self.error = true;
         }
     }

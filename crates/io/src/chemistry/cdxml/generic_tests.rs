@@ -162,27 +162,34 @@ fn polymer_members_and_crossings_round_trip_then_expand() {
         },
     )
     .unwrap();
-    let x = xml(&d);
-    assert!(x.contains("bracketedgroup"));
-    let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&x).unwrap()).unwrap();
-    let read = import(&decoded);
-    assert_eq!(
-        read.generic.repeats[0].members,
-        d.generic.repeats[0].members
-    );
-    assert_eq!(
-        read.generic.repeats[0].crossings,
-        d.generic.repeats[0].crossings
-    );
-    assert_eq!(read.generic.repeats[0].count, d.generic.repeats[0].count);
-    assert_eq!(
-        crate::generic::expand(&read, Default::default())
-            .unwrap()
-            .iter()
-            .map(|d| d.atoms.len())
-            .collect::<Vec<_>>(),
-        vec![4, 6, 8]
-    );
+    for superscript in [None, Some("‡")] {
+        d.graphics[0].superscript = superscript.map(str::to_string);
+        let x = xml(&d);
+        assert!(x.contains("bracketedgroup"));
+        let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&x).unwrap()).unwrap();
+        let read = import(&decoded);
+        assert_eq!(
+            read.generic.repeats[0].members,
+            d.generic.repeats[0].members
+        );
+        assert_eq!(
+            read.generic.repeats[0].crossings,
+            d.generic.repeats[0].crossings
+        );
+        assert_eq!(read.generic.repeats[0].count, d.generic.repeats[0].count);
+        assert_eq!(
+            read.annotations.iter().any(|label| label.text == "‡"),
+            superscript.is_some()
+        );
+        assert_eq!(
+            crate::generic::expand(&read, Default::default())
+                .unwrap()
+                .iter()
+                .map(|d| d.atoms.len())
+                .collect::<Vec<_>>(),
+            vec![4, 6, 8]
+        );
+    }
 }
 
 #[test]

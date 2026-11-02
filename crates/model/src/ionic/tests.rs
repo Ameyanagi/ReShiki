@@ -1,6 +1,47 @@
 use super::*;
 use crate::{abbreviations::Abbreviation, atom_labels::refresh::Refresh};
 
+#[test]
+fn ion_bracket_charge_requires_one_complete_component_and_formats_the_net_charge() {
+    let (mut doc, c, o, metal) = methoxide("Na");
+    doc.bonds.retain(|bond| bond.a != o || bond.b != metal);
+    for (charge, text) in [(-2, "2−"), (-1, "−"), (1, "+"), (3, "3+")] {
+        doc.atom_mut(o).unwrap().charge = charge;
+        assert_eq!(bracket_charge(&doc, &[c, o]), Ok((vec![c, o], text.into())));
+    }
+    // A generated name caption joins a complete selection but is not an atom.
+    let caption = doc.next_id();
+    doc.annotations.push(crate::document::Annotation {
+        id: caption,
+        position: Point::new(-20., 40.),
+        text: "methanolate".into(),
+        format: Default::default(),
+    });
+    doc.molecule_names
+        .push(crate::molecule_names::MoleculeName {
+            annotation: caption,
+            atoms: vec![c, o],
+            smiles: "C[O-]".into(),
+            text: "methanolate".into(),
+        });
+    for selection in [vec![c, o], vec![c, o, caption]] {
+        assert_eq!(bracket_charge(&doc, &selection).unwrap().0, vec![c, o]);
+    }
+    assert!(bracket_charge(&doc, &[]).is_err());
+    assert!(bracket_charge(&doc, &[o]).is_err());
+    assert!(bracket_charge(&doc, &[c, o, metal]).is_err());
+    // Logical grouping cannot turn separate chemical components into one ion.
+    doc.group_selection(&[c, o, metal]).unwrap();
+    assert!(bracket_charge(&doc, &[c, o, metal]).is_err());
+    assert!(bracket_charge(&doc, &[c, o]).is_err());
+    doc.groups.clear();
+    doc.atom_mut(c).unwrap().charge = -3;
+    assert_eq!(
+        bracket_charge(&doc, &[c, o]),
+        Err("The selected component has no net formal charge".into())
+    );
+}
+
 fn methoxide(metal: &str) -> (Document, u64, u64, u64) {
     let mut doc = Document::default();
     let c = doc.add_atom("C", Point::new(-42., 0.));

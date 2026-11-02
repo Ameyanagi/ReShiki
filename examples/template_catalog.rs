@@ -48,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
             group: get("group")?.into(),
             smiles: smiles.into(),
             keywords: serde_json::from_value(fact.get("keywords").cloned().unwrap_or_default())?,
+            low_rank_keywords: Vec::new(),
             note: get("note")?.into(),
             locants: Default::default(),
             document: response.document.context("Missing drawing")?,

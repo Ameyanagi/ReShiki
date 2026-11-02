@@ -13,6 +13,41 @@ fn partial_tool(kind: SymbolKind) -> Drawing {
 }
 
 #[test]
+fn singlet_keeps_the_diradical_glyph_and_single_electron_symbols_clear_it() {
+    let mut doc = Document::default();
+    let style = doc.drawing_style.clone();
+    let id = doc.add_atom("C", p(0., 0.));
+    let atom = doc.atom_mut(id).unwrap();
+    attach(atom, SymbolKind::Diradical, p(10., -10.)).unwrap();
+    assert_eq!(atom.radical_electrons, 2);
+    assert!(!atom.singlet);
+    let triplet = styled_mark_parts(atom, &style);
+    let atom = doc.atom_mut(id).unwrap();
+    atom.singlet = true;
+    assert_eq!(
+        format!("{:?}", styled_mark_parts(atom, &style)),
+        format!("{triplet:?}")
+    );
+    attach(atom, SymbolKind::Diradical, p(10., -10.)).unwrap();
+    assert!(atom.singlet);
+    let source = doc.clone();
+    let copied = editing::append(&mut doc, &source, p(100., 0.));
+    assert!(doc.atom(copied[0]).unwrap().singlet);
+    for kind in [
+        SymbolKind::Radical,
+        SymbolKind::RadicalCation,
+        SymbolKind::RadicalAnion,
+    ] {
+        let mut changed = source.clone();
+        let atom = changed.atom_mut(id).unwrap();
+        attach(atom, kind, p(10., -10.)).unwrap();
+        assert_eq!(atom.radical_electrons, 1);
+        assert!(!atom.singlet);
+        changed.validate().unwrap();
+    }
+}
+
+#[test]
 fn partial_charges_are_annotations_and_keep_the_atom_chemistry_and_label() {
     for kind in [SymbolKind::PartialPositive, SymbolKind::PartialNegative] {
         let mut doc = Document::default();

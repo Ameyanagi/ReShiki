@@ -155,8 +155,14 @@ pub(super) fn element_glyph_hit(
     atom: &Atom,
     doc: &Document,
     runs: &[Primitive],
+    symbol: &str,
     point: Point,
 ) -> bool {
+    let symbol = if doc.abbreviation(atom.id).is_some() {
+        atom.element.as_str()
+    } else {
+        symbol
+    };
     let (content, range) = if let Some(group) = doc.abbreviation(atom.id) {
         let content = group.text(doc);
         (
@@ -164,15 +170,15 @@ pub(super) fn element_glyph_hit(
             crate::abbreviations::anchor_range(content, group.faces_left(doc)),
         )
     } else if atom.display.variable.is_none() {
-        (atom.element.as_str(), 0..atom.element.len())
+        (symbol, 0..symbol.len())
     } else {
         return false;
     };
-    if content.get(range.clone()) != Some(atom.element.as_str()) {
+    if content.get(range.clone()) != Some(symbol) {
         return false;
     }
     let start = content[..range.start].chars().count();
-    let end = start + atom.element.chars().count();
+    let end = start + symbol.chars().count();
     let mut index = 0;
     let mut picked = String::new();
     let mut hit = false;
@@ -204,5 +210,5 @@ pub(super) fn element_glyph_hit(
             index += 1;
         }
     }
-    hit && picked == atom.element
+    hit && picked == symbol
 }

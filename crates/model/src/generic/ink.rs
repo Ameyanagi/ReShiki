@@ -475,7 +475,7 @@ pub(super) fn object_bounds(doc: &Document) -> Result<Option<(Point, Point)>, St
         }
     }
     for g in &doc.graphics {
-        let (lo, hi) = g.bounds();
+        let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
         finite(lo)?;
         finite(hi)?;
         include(&mut bounds, lo, hi);

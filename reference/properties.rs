@@ -41,7 +41,37 @@ fn agrees_with_rdkit_for_every_isotope_templates_and_hydrogen_representations() 
         "Regenerate the atomic data when updating RDKit"
     );
     assert!(reference.cases.len() > 3500);
+    // The generated RDKit table stays an independent oracle. Correct only the
+    // six deliberate CIAAW nominal-average overrides, using RDKit's own
+    // unlabelled single-atom cases to determine each mass difference.
+    let mass_deltas = [
+        (43, 97.),
+        (105, 270.),
+        (108, 270.),
+        (113, 286.),
+        (115, 289.),
+        (117, 293.),
+    ]
+    .map(|(number, average)| {
+        let name = format!("element {number}, isotope 0");
+        let case = reference.cases.iter().find(|case| case.name == name);
+        (
+            number,
+            average - case.expect("RDKit single-atom case").expected.mass,
+        )
+    });
     for case in reference.cases {
+        let mass_correction = mass_deltas
+            .iter()
+            .map(|&(number, delta)| {
+                let count = case
+                    .atoms
+                    .iter()
+                    .filter(|atom| atom.atomic_number == number && atom.isotope == 0)
+                    .count();
+                count as f64 * delta
+            })
+            .sum::<f64>();
         for actual in [
             properties(&case.atoms).map_err(anyhow::Error::msg)?,
             properties(&case.graph.atom_facts().map_err(anyhow::Error::msg)?)
@@ -56,7 +86,7 @@ fn agrees_with_rdkit_for_every_isotope_templates_and_hydrogen_representations() 
             // Native wheels may fuse multiply-adds (e.g. the final H contribution).
             // Permit only floating-point noise, never formula/isotope/count changes.
             for (value, expected) in [
-                (actual.mass, case.expected.mass),
+                (actual.mass, case.expected.mass + mass_correction),
                 (actual.exact_mass, case.expected.exact_mass),
             ] {
                 assert!(

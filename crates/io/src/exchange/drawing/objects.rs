@@ -251,7 +251,14 @@ impl Writer<'_> {
         for atom in &doc.atoms {
             for mark in &atom.marks {
                 self.spend(doc.atoms.len())?;
-                if let Some(text) = match mark.kind {
+                let kind = match mark.kind {
+                    MarkKind::Charge | MarkKind::CircledCharge if atom.display.hide_charge => {
+                        continue;
+                    }
+                    MarkKind::RadicalIon if atom.display.hide_charge => MarkKind::Radical,
+                    kind => kind,
+                };
+                if let Some(text) = match kind {
                     MarkKind::PartialPositive => Some("δ+"),
                     MarkKind::PartialNegative => Some("δ−"),
                     _ => None,
@@ -273,7 +280,7 @@ impl Writer<'_> {
                     )?;
                     continue;
                 }
-                let (symbol, attribute) = match mark.kind {
+                let (symbol, attribute) = match kind {
                     MarkKind::Charge | MarkKind::CircledCharge => {
                         if atom.charge == 0 {
                             continue;
@@ -286,7 +293,7 @@ impl Writer<'_> {
                         (
                             format!(
                                 "{}{}",
-                                if mark.kind == MarkKind::CircledCharge {
+                                if kind == MarkKind::CircledCharge {
                                     "Circle"
                                 } else {
                                     ""
@@ -526,7 +533,10 @@ impl Writer<'_> {
                 [(_, paths)] if matches!(paths.as_slice(), [(_, false)]) => g.heads.as_ref(),
                 _ => None,
             };
-            let parent = if parsed.len() > 1
+            let parent = if g
+                .superscript_label(&doc.drawing_style.text_style())
+                .is_some()
+                || parsed.len() > 1
                 || parsed
                     .iter()
                     .any(|(paint, paths)| paths.len() > 1 || paint.fill.is_some())
@@ -571,11 +581,53 @@ impl Writer<'_> {
                     }
                 }
             }
+            self.bracket_superscript(g, parent, z)?;
             if let Some(n) = object {
                 self.objects.push((g.id, n));
             }
         }
         Ok(middle)
+    }
+    pub(super) fn bracket_superscript(
+        &mut self,
+        graphic: &crate::graphics::Graphic,
+        parent: Key,
+        z: usize,
+    ) -> Result<()> {
+        let Some(label) = graphic.superscript_label(&self.doc.drawing_style.text_style()) else {
+            return Ok(());
+        };
+        // Scripted CDXML text is anchored on the unraised nominal baseline.
+        let baseline = label.position.offset(
+            0.,
+            crate::style::text_ascent(&label.style)
+                + crate::style::DEFAULT.world(label.style.size_pt) * 0.3,
+        );
+        let far = label.position.offset(
+            crate::style::styled_text_width(label.text, label.size, &label.style),
+            label.size,
+        );
+        let id = self.id()?;
+        self.text(
+            parent,
+            label.text,
+            &TextFormat {
+                style: label.style,
+                ..Default::default()
+            },
+            [
+                ("id", id),
+                ("Z", z.to_string()),
+                ("InterpretChemically", "no".into()),
+                ("CaptionJustification", "Left".into()),
+                ("p", self.position(baseline)),
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(label.position), self.position(far)),
+                ),
+            ],
+        )?;
+        Ok(())
     }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn curve(

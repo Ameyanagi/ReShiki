@@ -214,6 +214,7 @@ pub enum Message {
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),
+    AtomSinglet(bool),
     ToggleInspector,
     Inspector(InspectorTab),
     Imports(import::Action),
@@ -256,6 +257,9 @@ pub enum Message {
     Ungroup,
     IntegralGroup(bool),
     AddFrame(reshiki::graphics::GraphicKind),
+    BracketIon,
+    DrawChargeSeparated(Vec<u64>),
+    NormalizeDepiction,
     View(view_settings::Action),
     Appearance(crate::appearance::Mode),
     CanvasTheme(reshiki::canvas_theme::CanvasTheme),
@@ -270,6 +274,7 @@ pub enum Message {
     Save,
     Export(&'static str),
     CopySmiles,
+    CopyAnalysis,
     CopyChemicalText,
     Copy(bool),
     CopyImage,
@@ -1371,6 +1376,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         attachment,
         charge,
         radical_electrons,
+        singlet,
         marks,
         mark_serial,
         isotope,
@@ -1391,6 +1397,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         && *attachment == b.attachment
         && *charge == b.charge
         && *radical_electrons == b.radical_electrons
+        && *singlet == b.singlet
         && *marks == b.marks
         && *mark_serial == b.mark_serial
         && *isotope == b.isotope
@@ -1439,6 +1446,8 @@ fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
 }
 
+#[cfg(test)]
+mod depiction_tests;
 #[cfg(test)]
 mod drawing_polish_qa;
 #[cfg(test)]

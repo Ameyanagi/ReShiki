@@ -8,6 +8,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 mod hints;
 pub use hints::{HiddenLabelNotes, hidden_label_notes};
+mod hydrogen_isotopes;
+pub use hydrogen_isotopes::HydrogenIsotopeLabels;
 #[cfg(test)]
 mod placement_tests;
 pub mod refresh;

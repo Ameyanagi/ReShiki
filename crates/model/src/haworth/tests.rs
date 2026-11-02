@@ -27,6 +27,60 @@ fn recognized_haworth_atoms_include_ring_and_direct_substituents() -> anyhow::Re
     Ok(())
 }
 
+#[test]
+fn inward_pyranose_labels_clear_each_other_and_unrelated_bonds() -> anyhow::Result<()> {
+    use anyhow::Context;
+    let length = crate::style::DEFAULT.bond_length_world;
+    let mut checked = 0;
+    for template in templates()
+        .map_err(anyhow::Error::msg)?
+        .into_iter()
+        .filter(|t| t.name.ends_with(", ring H") || t.name.contains("-L-"))
+    {
+        let doc = &template.document;
+        // Include condensed-group anchors and explicit methyl carbons, but
+        // exclude atoms and internal bonds hidden by those groups.
+        let labels: Vec<_> = doc
+            .atoms
+            .iter()
+            .filter(|a| {
+                doc.atom_visible(a.id)
+                    && (doc.abbreviation(a.id).is_some() || crate::atom_labels::visible(a, doc))
+            })
+            .collect();
+        for (i, atom) in labels.iter().enumerate() {
+            for other in &labels[i + 1..] {
+                assert!(
+                    atom.position.distance(other.position) >= 0.9 * length,
+                    "{}: labels {} and {} are too close",
+                    template.name,
+                    atom.id,
+                    other.id
+                );
+            }
+            for bond in doc
+                .bonds
+                .iter()
+                .filter(|b| b.a != atom.id && b.b != atom.id && doc.bond_visible(b.a, b.b))
+            {
+                let a = doc.atom(bond.a).context("Bond endpoint")?.position;
+                let b = doc.atom(bond.b).context("Bond endpoint")?.position;
+                assert!(
+                    crate::graphics::segment_distance(atom.position, a, b) >= 0.35 * length,
+                    "{}: label {} is too close to bond {}–{}",
+                    template.name,
+                    atom.id,
+                    bond.a,
+                    bond.b
+                );
+            }
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 28);
+    Ok(())
+}
+
 fn label_ring_intersections(doc: &Document) -> anyhow::Result<Vec<(u64, u64, u64)>> {
     use anyhow::Context;
     let mut intersections = Vec::new();
@@ -249,6 +303,148 @@ fn retyping_a_group_keeps_its_alignment() -> anyhow::Result<()> {
             .alignment = alignment;
         let (_, _, retyped) = typed_group(&grouped, id, "OMe")?;
         assert_eq!(retyped, alignment, "{id}");
+    }
+    Ok(())
+}
+
+#[test]
+fn original_ten_sugar_documents_are_byte_identical() -> anyhow::Result<()> {
+    let documents: Vec<_> = [
+        Sugar::Glucose,
+        Sugar::Galactose,
+        Sugar::Mannose,
+        Sugar::Ribose,
+        Sugar::Fructose,
+    ]
+    .into_iter()
+    .flat_map(|sugar| {
+        [Anomer::Alpha, Anomer::Beta]
+            .into_iter()
+            .map(move |anomer| sugar_document(sugar, anomer, 42.))
+    })
+    .collect::<Result<_, _>>()
+    .map_err(anyhow::Error::msg)?;
+    assert_eq!(
+        serde_json::to_vec(&documents)?,
+        include_bytes!("../../../../tests/fixtures/haworth-original-documents.json")
+    );
+    Ok(())
+}
+
+#[test]
+fn explicit_ring_hydrogens_are_opposite_and_have_complete_neighbor_orders() -> anyhow::Result<()> {
+    for sugar in [
+        Sugar::Glucose,
+        Sugar::Galactose,
+        Sugar::Mannose,
+        Sugar::Ribose,
+        Sugar::Fructose,
+        Sugar::Deoxyribose,
+        Sugar::Xylose,
+        Sugar::Fucose,
+        Sugar::Rhamnose,
+        Sugar::GlcNAc,
+        Sugar::GalNAc,
+        Sugar::GlucuronicAcid,
+    ] {
+        for anomer in [Anomer::Alpha, Anomer::Beta] {
+            let omitted = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+            let full = sugar_document_with_options(
+                sugar,
+                anomer,
+                42.,
+                HaworthOptions {
+                    ring_hydrogens: true,
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            let ring_size = if sugar.ring() == Ring::Five { 5 } else { 6 };
+            for atom in full.atoms.iter().take(ring_size - 1) {
+                let branches: Vec<_> = full
+                    .bonds
+                    .iter()
+                    .filter_map(|b| {
+                        let other = if b.a == atom.id {
+                            b.b
+                        } else if b.b == atom.id {
+                            b.a
+                        } else {
+                            return None;
+                        };
+                        (!full
+                            .bonds
+                            .iter()
+                            .filter(|b| b.projection)
+                            .any(|b| b.a == other || b.b == other))
+                        .then(|| full.atom(other))
+                        .flatten()
+                    })
+                    .collect();
+                assert_eq!(branches.len(), 2, "{sugar:?} {anomer:?} ring C{}", atom.id);
+                assert!(
+                    (branches[0].position.y - atom.position.y)
+                        * (branches[1].position.y - atom.position.y)
+                        < 0.
+                );
+                assert!(branches.iter().all(|b| b.position.x == atom.position.x));
+                assert_eq!(
+                    branches.iter().filter(|a| a.element == "H").count(),
+                    if branches.iter().all(|a| a.element == "H") {
+                        2
+                    } else if matches!(sugar, Sugar::Fructose) && atom.id == full.atoms[0].id {
+                        0
+                    } else {
+                        1
+                    }
+                );
+                if let Some(stereo) = &atom.stereo {
+                    assert_eq!(stereo.neighbors.len(), 4);
+                    assert_eq!(
+                        stereo.winding,
+                        omitted
+                            .atom(atom.id)
+                            .unwrap()
+                            .stereo
+                            .as_ref()
+                            .unwrap()
+                            .winding
+                    );
+                    for id in &stereo.neighbors {
+                        assert!(
+                            full.bonds
+                                .iter()
+                                .any(|b| b.a == atom.id && b.b == *id
+                                    || b.b == atom.id && b.a == *id)
+                        );
+                    }
+                } else {
+                    assert!(branches.iter().all(|a| a.element == "H"));
+                }
+            }
+            assert_eq!(
+                full.atoms.iter().filter(|a| a.stereo.is_some()).count(),
+                omitted.atoms.iter().filter(|a| a.stereo.is_some()).count()
+            );
+            assert_eq!(
+                interchange::export_bonds(&full)
+                    .map_err(anyhow::Error::msg)?
+                    .len(),
+                ring_size
+            );
+            let mut restored = full.clone();
+            for atom in &mut restored.atoms {
+                atom.stereo = None;
+            }
+            assert!(interchange::restore(&mut restored));
+            for atom in &full.atoms {
+                assert_eq!(
+                    atom.stereo,
+                    restored.atom(atom.id).unwrap().stereo,
+                    "{sugar:?} {anomer:?} {}",
+                    atom.id
+                );
+            }
+        }
     }
     Ok(())
 }

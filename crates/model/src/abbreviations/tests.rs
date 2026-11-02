@@ -42,6 +42,18 @@ fn reversed_charged_labels_anchor_on_their_atom() {
     assert_eq!(&thiocyanate[anchor_range(thiocyanate, true)], "S");
 }
 
+#[test]
+fn iupac_peptide_aliases_anchor_on_their_oxygen() {
+    for (text, left) in [
+        ("OBzl", false),
+        ("BzlO", true),
+        ("OBut", false),
+        ("ButO", true),
+    ] {
+        assert_eq!(&text[anchor_range(text, left)], "O", "{text}");
+    }
+}
+
 fn shortcut_examples() -> Document {
     Document::from_json(include_bytes!(
         "../../../../assets/examples/shortcut-examples.rsk"

@@ -42,6 +42,59 @@ pub enum Cleanup {
 pub(super) const SYMMETRISE_HINT: &str =
     "Average across the best mirror axis · Shift: upright axis";
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Superscript {
+    #[default]
+    None,
+    TransitionState,
+    Positive,
+    Negative,
+    RadicalPositive,
+    RadicalNegative,
+    Custom,
+}
+
+impl Superscript {
+    const ALL: [Self; 7] = [
+        Self::None,
+        Self::TransitionState,
+        Self::Positive,
+        Self::Negative,
+        Self::RadicalPositive,
+        Self::RadicalNegative,
+        Self::Custom,
+    ];
+
+    pub(super) fn of(text: Option<&str>) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|choice| *choice != Self::Custom && choice.text("") == text)
+            .unwrap_or(Self::Custom)
+    }
+
+    pub(super) fn text(self, custom: &str) -> Option<&str> {
+        match self {
+            Self::None => None,
+            Self::TransitionState => Some("‡"),
+            Self::Positive => Some("+"),
+            Self::Negative => Some("−"),
+            Self::RadicalPositive => Some("•+"),
+            Self::RadicalNegative => Some("•−"),
+            Self::Custom => (!custom.is_empty()).then_some(custom),
+        }
+    }
+}
+
+impl std::fmt::Display for Superscript {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::None => "None",
+            Self::Custom => "Custom…",
+            choice => choice.text("").unwrap_or_default(),
+        })
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum ColorField {
     Stroke,
@@ -49,7 +102,7 @@ pub(super) enum ColorField {
 }
 
 /// Graphic style and scientific-symbol inputs, nested under `Message::Graphics`.
-/// Only `Style` commits inline and join drafts.
+/// Applied style and superscript changes commit inline and join drafts.
 #[derive(Debug, Clone)]
 pub enum Action {
     Style(GraphicChange),
@@ -65,6 +118,9 @@ pub enum Action {
     HeadNumber(HeadField, String),
     ApplyHeadNumber(HeadField),
     Sides(BracketSides),
+    Superscript(Superscript),
+    SuperscriptText(String),
+    ApplySuperscript,
     Path(path::Action),
     Cleanup(Cleanup),
     ScientificKind(GraphicKind),
@@ -106,6 +162,14 @@ impl App {
             Action::AttachSymbols(value) => self.tab.attach_symbols = value,
             Action::SnapOrbitals(value) => self.tab.snap_orbitals = value,
             Action::Sides(sides) => self.set_graphic_sides(sides),
+            Action::Superscript(choice) => {
+                self.tab.bracket_superscript = choice;
+                if choice != Superscript::Custom {
+                    self.apply_bracket_superscript();
+                }
+            }
+            Action::SuperscriptText(text) => self.tab.bracket_superscript_input = text,
+            Action::ApplySuperscript => self.apply_bracket_superscript(),
             Action::Path(action) => self.path_action(action),
             Action::Cleanup(command) => self.cleanup_paths(command),
         }
@@ -336,7 +400,7 @@ impl App {
         {
             panel = panel.push(self.path_controls());
         }
-        if kind.brackets() {
+        if kind.brackets() || selected.iter().any(|g| g.kind.brackets()) {
             panel = panel.push(
                 crate::appearance::pick_list(
                     [BracketSides::Both, BracketSides::Left, BracketSides::Right],
@@ -346,6 +410,33 @@ impl App {
                 .text_size(12)
                 .padding(6),
             );
+            panel = panel
+                .push(text("Superscript").size(11).style(muted_text))
+                .push(
+                    crate::appearance::pick_list(
+                        Superscript::ALL,
+                        Some(self.tab.bracket_superscript),
+                        |choice| Message::Graphics(Action::Superscript(choice)),
+                    )
+                    .text_size(12)
+                    .padding(6)
+                    .width(Length::Fill),
+                );
+            if self.tab.bracket_superscript == Superscript::Custom {
+                panel = panel.push(
+                    reshiki::accessibility::text_input(
+                        "bracket-superscript",
+                        "Bracket superscript",
+                        "Custom superscript",
+                        &self.tab.bracket_superscript_input,
+                    )
+                    .style(crate::appearance::input_style)
+                    .on_input(|text| Message::Graphics(Action::SuperscriptText(text)))
+                    .on_submit(Message::Graphics(Action::ApplySuperscript))
+                    .size(12)
+                    .padding(6),
+                );
+            }
         }
         // Editing points ends with Done in the context row or Escape.
         if self.tool != Tool::EditPoints
@@ -370,6 +461,7 @@ impl App {
                         "Drag to draw · Shift makes a circle."
                     }
                     GraphicKind::Arc => "Drag the endpoints to adjust the curve.",
+                    _ if kind.brackets() => "Enter applies typed widths, colors and superscripts.",
                     _ => "Enter applies typed widths and colors.",
                 })
                 .size(11)
@@ -413,6 +505,16 @@ impl App {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Properties;
             }
+        }
+        if let Some(bracket) = self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .find(|g| self.tab.selected.contains(&g.id) && g.kind.brackets())
+        {
+            self.tab.bracket_superscript = Superscript::of(bracket.superscript.as_deref());
+            self.tab.bracket_superscript_input = bracket.superscript.clone().unwrap_or_default();
         }
         self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
         let heads = self
@@ -532,6 +634,19 @@ impl App {
         self.tab.bracket_sides = sides;
         for g in self.selected_graphics_mut() {
             g.sides = sides;
+        }
+        self.changed(before);
+    }
+
+    fn apply_bracket_superscript(&mut self) {
+        let text = self
+            .tab
+            .bracket_superscript
+            .text(&self.tab.bracket_superscript_input)
+            .map(str::to_owned);
+        let before = self.tab.doc.clone();
+        for graphic in self.selected_graphics_mut().filter(|g| g.kind.brackets()) {
+            graphic.superscript = text.clone();
         }
         self.changed(before);
     }

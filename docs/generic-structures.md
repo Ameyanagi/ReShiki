@@ -52,6 +52,26 @@ A number gives one length; `1-3` gives every length from 1 to 3. Use `n` for an
 indefinite polymer. **Clear repeating unit** removes the definition; the
 bracket stays.
 
+### Bracket annotations and ions
+
+The **Brackets** palette includes **Transition state [ ]‡**. Select brackets,
+parentheses or braces and choose **Superscript** in **Properties** for ‡, +,
+−, •+, •− or custom text. The annotation follows the bracket geometry and
+leaves atom charges unchanged.
+
+Select one complete charged molecule and choose **Bracket ion** from the
+command palette, the right-click menu or **Properties → Grouping & frames**.
+This adds fitted brackets with the net charge, groups the result and hides local
+charge labels. **Show charge labels** in **Atom labels & numbering** restores
+them. CDXML exports keep the formal charges and group the bracket with its text.
+
+**Normalize depiction**, in the command palette and **Properties → Labels &
+chemistry**, draws qualifying nitrogen oxides and pentavalent azides in
+charge-separated form. It acts on selected nitrogen atoms, or the whole
+drawing with no selection. A qualifying atom also offers **Draw as
+charge-separated** in its right-click menu. Each command is one Undo step;
+sulfur and phosphorus oxides and metal dative bonds stay as drawn.
+
 ### Expand
 
 1. Clear the selection to expand the whole drawing. To expand only some

@@ -46,6 +46,27 @@ fn generated(text: &str, options: DrawingOptions) -> anyhow::Result<Document> {
 }
 
 #[test]
+fn drawing_reconstruction_keeps_singlet_beside_the_unchanged_chemistry_graph() -> anyhow::Result<()>
+{
+    let mut doc = Document::default();
+    let carbon = doc.add_atom("C", Point::default());
+    for position in [Point::new(-36., 21.), Point::new(36., 21.)] {
+        let chlorine = doc.add_atom("Cl", position);
+        doc.add_bond(carbon, chlorine, 1, "plain");
+    }
+    let atom = doc.atom_mut(carbon).unwrap();
+    atom.radical_electrons = 2;
+    atom.singlet = true;
+    let molecule = prepare(&doc)?;
+    assert_eq!(molecule.state.graph.atoms[0].radical_electrons, 2);
+    let draft = for_drawing(&molecule, &doc)?;
+    let reconstructed = draft.clone().finish(labels(&draft))?;
+    assert!(reconstructed.atom(carbon).unwrap().singlet);
+    assert_eq!(prepare(&reconstructed)?.state.graph, molecule.state.graph);
+    Ok(())
+}
+
+#[test]
 fn four_substituent_wedge_pair_preserves_configuration() -> anyhow::Result<()> {
     let one = generated("CC[C@](C)(Br)Cl", DrawingOptions::default())?;
     let pair = generated(

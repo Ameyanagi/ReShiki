@@ -390,6 +390,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Name(..)
                 | Action::Font(..)
                 | Action::ChargeBeforeRadical(..)
+                | Action::HydrogenIsotopes(..)
                 | Action::Input(..)
                 | Action::CommitField(..)
                 | Action::DisplayUnit(..)
@@ -669,6 +670,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::RemoveMark(..)
         | Message::RotateMark(..)
         | Message::AtomRadical(..)
+        | Message::AtomSinglet(..)
         | Message::ToggleInspector
         | Message::Inspector(..)
         | Message::InsertInput
@@ -709,6 +711,9 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Ungroup
         | Message::IntegralGroup(..)
         | Message::AddFrame(..)
+        | Message::BracketIon
+        | Message::DrawChargeSeparated(_)
+        | Message::NormalizeDepiction
         | Message::View(..)
         | Message::Appearance(..)
         | Message::CanvasTheme(..)
@@ -722,6 +727,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Save
         | Message::Export(..)
         | Message::CopySmiles
+        | Message::CopyAnalysis
         | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage
