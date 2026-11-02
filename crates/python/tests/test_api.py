@@ -22,6 +22,20 @@ def png_size(data: bytes) -> tuple[int, int]:
     return struct.unpack(">II", data[16:24])
 
 
+@pytest.mark.parametrize("mode", ["auto", "letters", "mass_numbers"])
+def test_hydrogen_isotope_style_modes_preserve_chemical_identity(mode: str) -> None:
+    style = reshiki.Style("JACS / ACS", hydrogen_isotopes=mode)
+    assert style.values.get("hydrogen_isotopes", "auto") == mode
+    molecule = reshiki.Molecule.from_smiles("[2H]C").with_style(style)
+    atom = next(atom for atom in json.loads(molecule.rsk())["atoms"] if atom["element"] == "H")
+    assert atom["isotope"] == 2
+    assert "[2H]" in molecule.smiles()
+    reset = molecule.with_style(hydrogen_isotopes="auto")
+    assert "hydrogen_isotopes" not in json.loads(reset.rsk()).get("drawing_style", {})
+    with pytest.raises(ValueError):
+        reshiki.Style("JACS / ACS", hydrogen_isotopes="D/T")
+
+
 @pytest.mark.parametrize(
     ("filename", "formula"),
     [

@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    atom_labels::{Carbons, HydrogenPosition, Owner},
+    atom_labels::{Carbons, HydrogenIsotopeLabels, HydrogenPosition, Owner},
     typography::{Script, TextAlign, TextSpan},
 };
 
@@ -91,6 +91,7 @@ impl Writer<'_> {
     pub(super) fn atoms(&mut self, graph: &crate::chemistry::graph::Graph) -> Result<()> {
         let doc = self.doc;
         let valences = graph.provisional_valences().map_err(invalid)?;
+        let isotope_labels = HydrogenIsotopeLabels::new(doc);
         let mut degrees: HashMap<u64, usize> = HashMap::new();
         for b in &doc.bonds {
             for id in [b.a, b.b] {
@@ -278,12 +279,13 @@ impl Writer<'_> {
                 .unwrap_or_else(|| doc.drawing_style.text_style());
             s.script = Script::Normal;
             s.formula = false;
-            let isotope = if a.isotope != 0 {
+            let isotope_symbol = isotope_labels.symbol(a);
+            let isotope = if a.isotope != 0 && isotope_symbol.is_none() {
                 a.isotope.to_string()
             } else {
                 String::new()
             };
-            let mut label = format!("{isotope}{}", a.element);
+            let mut label = format!("{isotope}{}", isotope_symbol.unwrap_or(a.element.as_str()));
             let mut spans = Vec::new();
             if !isotope.is_empty() {
                 spans.push(TextSpan {

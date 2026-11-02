@@ -130,6 +130,7 @@ fn from_chemdraw_xml(xml: &str, name: &str) -> Result<DrawingStyle, String> {
         two_wedge_stereocentres: presentation.two_wedge_stereocentres,
         ring_fusion_hydrogens: presentation.ring_fusion_hydrogens,
         wavy_unknown_alkenes: presentation.wavy_unknown_alkenes,
+        hydrogen_isotopes: presentation.hydrogen_isotopes,
         ..Default::default()
     };
     style.set_bond_length(number("BondLength")?);

@@ -51,7 +51,10 @@ pub fn merge(base: &DrawingStyle, overrides: &str) -> Result<DrawingStyle, Strin
         if !fields.contains_key(field)
             && !matches!(
                 field,
-                "two_wedge_stereocentres" | "ring_fusion_hydrogens" | "wavy_unknown_alkenes"
+                "two_wedge_stereocentres"
+                    | "ring_fusion_hydrogens"
+                    | "wavy_unknown_alkenes"
+                    | "hydrogen_isotopes"
             )
         {
             return Err(format!("Unknown style option {key:?}"));

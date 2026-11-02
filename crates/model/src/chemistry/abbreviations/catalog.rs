@@ -128,12 +128,16 @@ impl Preset {
         }
         let prepared =
             smiles::prepare(&entry.smiles).map_err(|error| format!("Invalid SMILES: {error}"))?;
-        check_fragment(&prepared)?;
+        check_fragment(&prepared, entry.contract)?;
         // A removed [H] atom would leave an explicit count on its neighbor,
         // which the query reads as a bracket hydrogen count.
-        if smiles::parse(&entry.smiles)
-            .is_ok_and(|parsed| parsed.graph.atoms.iter().any(|a| a.atomic_number == 1))
-        {
+        if smiles::parse(&entry.smiles).is_ok_and(|parsed| {
+            parsed
+                .graph
+                .atoms
+                .iter()
+                .any(|a| a.atomic_number == 1 && a.isotope == 0)
+        }) {
             return Err("Write hydrogens implicitly or as bracket counts, not as [H]".into());
         }
         let (atoms, bonds) = matcher::query(&prepared.state).map_err(|e| e.to_string())?;
@@ -217,19 +221,24 @@ fn reserved(spelling: &str) -> bool {
         || crate::common_groups::LABELS.contains(&spelling)
         || crate::ligands::LABELS.contains(&spelling)
         || crate::atom_text::is_formula_group(spelling)
+        || crate::atom_text::is_nuclide(spelling)
 }
 
 /// Reject what a planar collapsed group cannot carry: stereo, atom maps,
 /// enhanced-stereo groups, or a second fragment.
-fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
+fn check_fragment(prepared: &Prepared, contract: bool) -> std::result::Result<(), String> {
     let state = &prepared.state;
     let graph = &state.graph;
     if graph.atoms.iter().any(|atom| atom.radical_electrons > 0) {
         return Err("Radicals are not supported in groups".into());
     }
-    // Matching ignores isotopes, so the label would also claim ordinary atoms.
-    if graph.atoms.iter().any(|atom| atom.isotope != 0) {
-        return Err("Isotopes are not supported in groups".into());
+    // Isotope groups are entry-only: automatic contraction deliberately leaves
+    // isotope-marked atoms visible. Their explicit atoms survive replacement.
+    if contract && graph.atoms.iter().any(|atom| atom.isotope != 0) {
+        return Err(
+            "Isotopes are not supported in groups with contraction enabled; set contract to false"
+                .into(),
+        );
     }
     // Replacement keeps the drawing's single attachment bond.
     if graph

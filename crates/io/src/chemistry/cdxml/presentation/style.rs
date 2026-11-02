@@ -1,4 +1,5 @@
 use super::{Error, Fonts, Result, bounded, numeric};
+use crate::style::HydrogenIsotopes;
 use roxmltree::Node;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
@@ -26,6 +27,8 @@ pub struct NativeDrawingStyle {
     #[serde(default, skip_serializing_if = "is_false")]
     pub wavy_unknown_alkenes: bool,
     pub png_dpi: u32,
+    #[serde(default, skip_serializing_if = "HydrogenIsotopes::is_auto")]
+    pub hydrogen_isotopes: HydrogenIsotopes,
 }
 fn yes() -> bool {
     true
@@ -105,6 +108,7 @@ impl NativeDrawingStyle {
             wavy_unknown_alkenes: self.wavy_unknown_alkenes,
             png_dpi: self.png_dpi,
             charge_before_radical: false,
+            hydrogen_isotopes: self.hydrogen_isotopes,
         };
         result.validate().map_err(Error::Document)?;
         Ok(result)
@@ -155,6 +159,18 @@ pub fn drawing_style(root: Node<'_, '_>) -> Result<NativeDrawingStyle> {
                 }
             };
         }
+    }
+    if let Some(text) = root.attribute("ReShikiHydrogenIsotopes") {
+        style.hydrogen_isotopes = match text {
+            "auto" => HydrogenIsotopes::Auto,
+            "letters" => HydrogenIsotopes::Letters,
+            "mass_numbers" => HydrogenIsotopes::MassNumbers,
+            _ => {
+                return Err(Error::Document(
+                    "Invalid drawing style ReShikiHydrogenIsotopes".into(),
+                ));
+            }
+        };
     }
     style.bond_length_world = style.bond_length_pt / POINTS_PER_WORLD;
     if style != defaults {

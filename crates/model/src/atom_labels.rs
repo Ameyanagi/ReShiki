@@ -6,6 +6,8 @@ use crate::{
     typography::{ScriptRun, TextStyle},
 };
 use serde::{Deserialize, Serialize};
+mod hydrogen_isotopes;
+pub use hydrogen_isotopes::HydrogenIsotopeLabels;
 #[cfg(test)]
 mod placement_tests;
 pub mod refresh;

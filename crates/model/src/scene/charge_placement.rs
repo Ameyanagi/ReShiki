@@ -1,8 +1,8 @@
 //! Placement of automatic charges around label ink and incident bonds.
 
 use super::{
-    Atom, Document, LabelFrame, Point, Primitive, atom_label_runs_with_charge_layout, label_end,
-    label_ink_boxes, label_trims_bonds,
+    Atom, Document, HydrogenIsotopeLabels, LabelFrame, Point, Primitive, label_end,
+    label_ink_boxes, label_runs, label_trims_bonds, visible,
 };
 
 #[derive(Clone, Copy)]
@@ -19,6 +19,7 @@ pub(super) enum ChargeLayout {
 pub(super) fn place_automatic_charge(
     a: &Atom,
     doc: &Document,
+    isotopes: &HydrogenIsotopeLabels,
     frame: LabelFrame<'_>,
     core: &[Primitive],
     charge: &mut [Primitive],
@@ -45,10 +46,12 @@ pub(super) fn place_automatic_charge(
             let end = label_end(a.position, ux, uy, &core_boxes, length, margin);
             let trim = (end.x - a.position.x) * ux + (end.y - a.position.y) * uy;
             let other_core = if label_trims_bonds(other, doc, None) {
-                label_ink_boxes(&atom_label_runs_with_charge_layout(
+                label_ink_boxes(&label_runs(
                     other,
                     doc,
                     ChargeLayout::Omitted,
+                    isotopes,
+                    || visible(other, doc),
                 ))
             } else {
                 vec![]
@@ -103,10 +106,12 @@ pub(super) fn place_automatic_charge(
     }
     for other in &neighbors {
         // Unplaced neighbor runs avoid recursive charge/indicator placement.
-        occupied.extend(label_ink_boxes(&atom_label_runs_with_charge_layout(
+        occupied.extend(label_ink_boxes(&label_runs(
             other,
             doc,
             ChargeLayout::Unplaced,
+            isotopes,
+            || visible(other, doc),
         )));
     }
     let gap = frame.size * 0.12;
@@ -126,10 +131,12 @@ pub(super) fn place_automatic_charge(
     let neighbor_cores: Vec<_> = neighbors
         .iter()
         .flat_map(|other| {
-            label_ink_boxes(&atom_label_runs_with_charge_layout(
+            label_ink_boxes(&label_runs(
                 other,
                 doc,
                 ChargeLayout::Omitted,
+                isotopes,
+                || visible(other, doc),
             ))
         })
         .collect();

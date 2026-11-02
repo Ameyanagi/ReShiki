@@ -78,6 +78,64 @@ fn formula_group(text: &str) -> Option<(&'static str, &'static str)> {
     }
 }
 
+fn mass_digit(c: char) -> Option<char> {
+    match c {
+        '0'..='9' => Some(c),
+        '⁰' => Some('0'),
+        '¹' => Some('1'),
+        '²' => Some('2'),
+        '³' => Some('3'),
+        '⁴' => Some('4'),
+        '⁵' => Some('5'),
+        '⁶' => Some('6'),
+        '⁷' => Some('7'),
+        '⁸' => Some('8'),
+        '⁹' => Some('9'),
+        _ => None,
+    }
+}
+
+/// Split a nuclide into its mass number and ordinary element/hydride spelling.
+/// Isotope masses come from the same table used for molecular properties.
+fn nuclide(text: &str) -> Result<Option<(u16, &str)>, String> {
+    if matches!(text, "D" | "T") {
+        return Ok(Some((if text == "D" { 2 } else { 3 }, "H")));
+    }
+    let end = text
+        .char_indices()
+        .find(|(_, c)| mass_digit(*c).is_none())
+        .map_or(text.len(), |(index, _)| index);
+    if end == 0 || end == text.len() {
+        return Ok(None);
+    }
+    let body = text.get(end..).ok_or("Invalid nuclide symbol")?;
+    let explicit = hydride::parse(body)?;
+    let element = explicit.as_ref().map_or(body, |h| h.element.as_str());
+    let Some(number) = crate::chemistry::ELEMENTS
+        .iter()
+        .position(|entry| entry.symbol == element && element != "*")
+    else {
+        return Ok(None);
+    };
+    let mass: String = text
+        .chars()
+        .take_while(|c| mass_digit(*c).is_some())
+        .filter_map(mass_digit)
+        .collect();
+    let isotope = mass.parse::<u16>().ok().filter(|&isotope| {
+        crate::chemistry::ISOTOPES
+            .binary_search_by_key(&(number as u8, isotope), |&(n, i, _)| (n, i))
+            .is_ok()
+    });
+    isotope.map(|isotope| Some((isotope, body))).ok_or_else(|| {
+        format!("{text} is not a known nuclide. Enter a known mass number for {element}, or choose Text label.")
+    })
+}
+
+pub(crate) fn is_nuclide(text: &str) -> bool {
+    nuclide(text).is_ok_and(|parsed| parsed.is_some())
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Mode {
     #[default]
@@ -99,10 +157,20 @@ impl std::fmt::Display for Mode {
 pub fn description(text: &str, runs: &[ScriptRun], mode: Mode) -> &'static str {
     let generic = (mode == Mode::Group || mode == Mode::Auto && runs.is_empty())
         && !catalog_text(text.trim());
+    let isotope = mode != Mode::Text
+        && if mode == Mode::Auto && !runs.is_empty() {
+            trimmed_label_scripts(text, runs)
+                .and_then(|(text, runs)| manual_chemical_entry(text, &runs))
+                .is_ok_and(|chemical| chemical.is_some_and(|text| is_nuclide(&text)))
+        } else {
+            is_nuclide(text.trim())
+        };
     if generic && text.contains(',') {
         "A finite list of element or chemical group alternatives. Expand generic structures generates each combination."
     } else if mode == Mode::Text {
         "Text on a dummy atom; existing bonds stay connected."
+    } else if isotope {
+        "An atom of the entered isotope. Type the element alone to restore its natural isotope composition."
     } else if generic && repeat_label(text.trim()) {
         "A repeat of one atom over the typed count range. Expand generic structures generates each count."
     } else if crate::ligands::LABELS.contains(&text.trim()) {
@@ -125,7 +193,7 @@ pub fn description(text: &str, runs: &[ScriptRun], mode: Mode) -> &'static str {
 /// Suggests the labels of the catalog groups that the text names, such as
 /// "Did you mean Morph?" for morpholino. Names never type as groups.
 pub fn suggestions(text: &str, mode: Mode) -> Vec<String> {
-    if mode == Mode::Text || known_group(text.trim()) {
+    if mode == Mode::Text || known_group(text.trim()) || is_nuclide(text.trim()) {
         return vec![];
     }
     crate::abbreviations::named(text)
@@ -160,13 +228,19 @@ fn repeat_label(text: &str) -> bool {
     ) && (1..=32).contains(&label.chars().count())
         && !group_label(label)
         && !crate::ligands::LABELS.contains(&label)
-        && (ELEMENTS.contains(&label) || label == "*" || hydride::parse(label).is_ok())
+        && nuclide(label).is_ok()
+        && (ELEMENTS.contains(&label)
+            || label == "*"
+            || is_nuclide(label)
+            || hydride::parse(label).is_ok())
 }
 
 /// Text in the charged element or hydride grammar (Pd2+, NH4-2) is one
 /// charged atom, so generic labels never read its digits as a link range.
 pub(crate) fn charged_label(text: &str) -> bool {
-    hydride::parse(text.trim()).is_ok_and(|parsed| parsed.is_some_and(|h| h.charge != 0))
+    let text = text.trim();
+    let body = nuclide(text).ok().flatten().map_or(text, |(_, body)| body);
+    hydride::parse(body).is_ok_and(|parsed| parsed.is_some_and(|h| h.charge != 0))
 }
 
 /// Returns a complete candidate; failures never partially modify the drawing.
@@ -204,14 +278,20 @@ fn apply_entry(
             "This is a tracked attachment point. Edit the atom bonded to it instead.".into(),
         );
     }
-    let element = ELEMENTS.contains(&text) || text == "*";
+    let nuclide = if mode != Mode::Text {
+        nuclide(text)?
+    } else {
+        None
+    };
+    let body = nuclide.map_or(text, |(_, body)| body);
+    let element = ELEMENTS.contains(&body) || body == "*";
     let sided = mode != Mode::Text && wrong_side(doc, id, text);
     if sided && mode == Mode::Group {
         return Err("Read from this bond, NC is an isocyanide and OCN a cyanate, which have no catalog group. Type CN or NCO, or choose Text label.".into());
     }
     let formula = (mode != Mode::Text).then(|| formula_group(text)).flatten();
     let explicit = if mode != Mode::Text && !element {
-        hydride::parse(text)
+        hydride::parse(body)
     } else {
         Ok(None)
     };
@@ -241,7 +321,7 @@ fn apply_entry(
         return Ok(result);
     }
     if replaced_group.is_none()
-        && (mode == Mode::Group
+        && (mode == Mode::Group && nuclide.is_none()
             || formula.is_some()
             || mode == Mode::Auto && !element && !sided && known_group(text))
     {
@@ -353,7 +433,7 @@ fn apply_entry(
     let new_element = if let Some(h) = &explicit {
         h.element.as_str()
     } else if mode != Mode::Text && element {
-        text
+        body
     } else {
         "*"
     };
@@ -369,7 +449,13 @@ fn apply_entry(
     let a = result
         .atom_mut(id)
         .ok_or("The atom is no longer available")?;
-    let previous = (a.element.clone(), a.charge, a.explicit_h, a.no_implicit);
+    let previous = (
+        a.element.clone(),
+        a.isotope,
+        a.charge,
+        a.explicit_h,
+        a.no_implicit,
+    );
     if a.element != new_element {
         a.element = new_element.into();
         a.charge = 0;
@@ -381,6 +467,11 @@ fn apply_entry(
         a.stereo = None;
     }
     a.display.set_variable(variable);
+    if let Some((isotope, _)) = nuclide {
+        a.isotope = u32::from(isotope);
+    } else if mode != Mode::Text && (element || explicit.is_some()) {
+        a.isotope = 0;
+    }
     if let Some(h) = &explicit {
         a.explicit_h = h.hydrogens;
         a.no_implicit = true;
@@ -390,7 +481,7 @@ fn apply_entry(
         a.display.hide_charge = false;
     } else if mode != Mode::Text && element && new_element != "*" {
         a.explicit_h = 0;
-        a.no_implicit = false;
+        a.no_implicit = nuclide.is_some() && new_element == "H";
     }
     if new_element == "*" {
         a.no_implicit = true;
@@ -410,7 +501,14 @@ fn apply_entry(
         a.display.carbons = Some(crate::atom_labels::Carbons::All);
     }
     if replaced_group.is_some()
-        || previous != (a.element.clone(), a.charge, a.explicit_h, a.no_implicit)
+        || previous
+            != (
+                a.element.clone(),
+                a.isotope,
+                a.charge,
+                a.explicit_h,
+                a.no_implicit,
+            )
     {
         let affected = replaced_group.map_or(std::slice::from_ref(&id), |g| g.members.as_slice());
         stereo::invalidate(doc, &mut result, affected)?;
@@ -434,18 +532,7 @@ pub fn apply_with_scripts(
     if text.chars().any(char::is_control) {
         return Err("Use a single line of printable text".into());
     }
-    // Store the trimmed label, as plain entry does, with the runs moved along.
-    let lead = text.len() - text.trim_start().len();
-    let text = text.trim();
-    let runs: Vec<ScriptRun> = runs
-        .iter()
-        .map(|run| ScriptRun {
-            start: run.start.clamp(lead, lead + text.len()) - lead,
-            end: run.end.clamp(lead, lead + text.len()) - lead,
-            script: run.script,
-        })
-        .collect();
-    let runs = crate::typography::normalize_label_scripts(text, &runs)?;
+    let (text, runs) = trimmed_label_scripts(text, runs)?;
     if runs.is_empty() {
         return apply(doc, id, text, mode);
     }
@@ -464,11 +551,46 @@ pub fn apply_with_scripts(
     Ok(result)
 }
 
+/// Trim as plain entry does, moving manual script ranges with the text.
+fn trimmed_label_scripts<'a>(
+    text: &'a str,
+    runs: &[ScriptRun],
+) -> Result<(&'a str, Vec<ScriptRun>), String> {
+    let lead = text.len() - text.trim_start().len();
+    let text = text.trim();
+    let runs: Vec<_> = runs
+        .iter()
+        .map(|run| ScriptRun {
+            start: run.start.clamp(lead, lead + text.len()) - lead,
+            end: run.end.clamp(lead, lead + text.len()) - lead,
+            script: run.script,
+        })
+        .collect();
+    Ok((
+        text,
+        crate::typography::normalize_label_scripts(text, &runs)?,
+    ))
+}
+
 /// The chemical spelling of manually scripted input, when atom entry accepts it.
 /// Caption previews use this same classification without applying an edit.
 fn manual_chemical_entry(text: &str, runs: &[ScriptRun]) -> Result<Option<String>, String> {
     if let Some(chemical) = manual_chemical_text(text, runs) {
-        let element = ELEMENTS.contains(&chemical.as_str()) || chemical == "*";
+        // Lowered leading digits are text, not a mass number.
+        let mass_end = text
+            .char_indices()
+            .find(|(_, c)| mass_digit(*c).is_none())
+            .map_or(text.len(), |(index, _)| index);
+        if mass_end > 0
+            && runs
+                .iter()
+                .any(|run| run.script == Script::Subscript && run.start < mass_end)
+        {
+            return Ok(None);
+        }
+        let isotope = nuclide(&chemical)?;
+        let body = isotope.map_or(chemical.as_str(), |(_, body)| body);
+        let element = ELEMENTS.contains(&body) || body == "*";
         let digit = |c: char| {
             c.is_ascii_digit()
                 || ('₀'..='₉').contains(&c)
@@ -493,14 +615,14 @@ fn manual_chemical_entry(text: &str, runs: &[ScriptRun]) -> Result<Option<String
             .iter()
             .any(|run| lowered(run).is_some_and(|s| s.chars().any(digit)));
         let lowered_element_count = lowered_count
-            && chemical
+            && body
                 .find(|c: char| !c.is_ascii_alphabetic())
-                .and_then(|end| chemical.get(..end))
+                .and_then(|end| body.get(..end))
                 .is_some_and(|symbol| symbol != "H" && ELEMENTS.contains(&symbol));
         let explicit = if element || lowered_element_count {
             None
         } else {
-            hydride::parse(&chemical)?
+            hydride::parse(body)?
         };
         if element || explicit.is_some() {
             return Ok(Some(chemical));
@@ -512,6 +634,31 @@ fn manual_chemical_entry(text: &str, runs: &[ScriptRun]) -> Result<Option<String
 /// A trailing manual superscript distinguishes a charge from an H count:
 /// NH with lowered 4 and raised 2+ enters the unambiguous grammar NH4+2.
 fn manual_chemical_text(text: &str, runs: &[ScriptRun]) -> Option<String> {
+    if let Some(mass) = runs.first().filter(|run| {
+        run.start == 0
+            && run.end < text.len()
+            && run.script == Script::Superscript
+            && text
+                .get(..run.end)
+                .is_some_and(|s| s.chars().all(|c| mass_digit(c).is_some()))
+    }) {
+        let prefix: String = text
+            .get(..mass.end)?
+            .chars()
+            .filter_map(mass_digit)
+            .collect();
+        let body = text.get(mass.end..)?;
+        let shifted: Vec<_> = runs
+            .iter()
+            .skip(1)
+            .map(|run| ScriptRun {
+                start: run.start - mass.end,
+                end: run.end - mass.end,
+                script: run.script,
+            })
+            .collect();
+        return Some(prefix + &manual_chemical_text(body, &shifted)?);
+    }
     let Some(charge) = runs
         .last()
         .filter(|run| run.script == Script::Superscript && run.end == text.len())
