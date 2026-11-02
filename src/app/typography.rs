@@ -4,7 +4,9 @@ use iced::widget::{Row, column, row, text, text_editor};
 use iced::{Alignment, Length};
 use reshiki::abbreviations::LabelAlignment;
 use reshiki::palette::{Color as Paint, Palette};
-use reshiki::typography::{Script, StyleChange, TextAlign, TextFormat, TextStyle};
+use reshiki::typography::{
+    NameMarkup, NameRun, Script, StyleChange, TextAlign, TextFormat, TextStyle,
+};
 use std::ops::Range;
 
 #[cfg(test)]
@@ -474,6 +476,44 @@ impl App {
             }
         }
         members
+    }
+
+    pub(super) fn selected_text_boxes(&self) -> bool {
+        self.tab
+            .doc
+            .annotations
+            .iter()
+            .any(|label| self.tab.selected.contains(&label.id))
+    }
+
+    pub(super) fn format_chemical_name(&mut self) {
+        let before = self.tab.doc.clone();
+        for label in &mut self.tab.doc.annotations {
+            if self.tab.selected.contains(&label.id) {
+                let text = NameMarkup {
+                    text: label.text.clone(),
+                    runs: label
+                        .format
+                        .spans
+                        .iter()
+                        .filter(|span| span.style.script == Script::Superscript)
+                        .map(|span| (span.start..span.end, NameRun::Superscript))
+                        .collect(),
+                }
+                .unicode()
+                .text;
+                let markup = reshiki::typography::name_markup(&text);
+                markup.apply_to(&mut label.format);
+                for name in &mut self.tab.doc.molecule_names {
+                    if name.annotation == label.id && name.text == label.text {
+                        name.text = markup.text.clone();
+                    }
+                }
+                label.text = markup.text;
+            }
+        }
+        self.changed(before);
+        self.sync_typography();
     }
 
     pub(super) fn apply_text_style(&mut self, change: StyleChange) {

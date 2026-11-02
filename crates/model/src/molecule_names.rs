@@ -6,7 +6,7 @@
 use crate::{
     chemistry,
     document::{Annotation, Document, Point},
-    typography::{Script, TextAlign, TextFormat},
+    typography::{Script, TextAlign, TextFormat, name_markup},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -224,6 +224,7 @@ pub fn show(
     text: String,
     smiles: String,
     mut format: TextFormat,
+    name_typography: bool,
 ) -> Result<u64, String> {
     if text.trim().is_empty() || text.len() > 32_768 || identity(doc, atoms)? != smiles {
         return Err("The generated name does not match this molecule".into());
@@ -240,6 +241,13 @@ pub fn show(
         .max(8.);
     format.alignment = TextAlign::Center;
     format.name_breaks = true;
+    let text = if name_typography {
+        let markup = name_markup(&text);
+        markup.apply_to(&mut format);
+        markup.text
+    } else {
+        text
+    };
     // Wrap long names while keeping every line centered below the molecule.
     format.width_pt = None;
     let natural_width = crate::typography::layout(&text, &format).width;

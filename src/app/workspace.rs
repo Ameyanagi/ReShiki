@@ -2243,6 +2243,12 @@ impl App {
                     .on_toggle(|v| Message::Labels(A::Stereo(v))),
             )
             .push(
+                checkbox(self.tab.doc.atom_labels.roman_stereo_parentheses)
+                    .label("Upright stereo parentheses (whole drawing)")
+                    .text_size(12)
+                    .on_toggle(|v| Message::Labels(A::RomanStereoParentheses(v))),
+            )
+            .push(
                 text("Labels update after chemical edits. Unassigned centers have no R/S label.")
                     .size(11)
                     .style(muted_text),
@@ -2334,6 +2340,15 @@ impl App {
                         .size(14)
                         .text_size(12),
                     "Snap dragged objects to other objects' edges, centers and equal gaps · Hold Option/Alt to move freely",
+                    tooltip::Position::Top,
+                ),
+                hover_hint(
+                    checkbox(self.appearance.name_typography)
+                        .label("Chemical name typography")
+                        .on_toggle(|on| Message::View(super::view_settings::Action::NameTypography(on)))
+                        .size(14)
+                        .text_size(12),
+                    "Italic descriptors, primes and superscripts in name captions",
                     tooltip::Position::Top,
                 ),
                 checkbox(self.guides.rulers)

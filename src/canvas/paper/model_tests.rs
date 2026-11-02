@@ -36,6 +36,7 @@ fn selected_shown_model_explains_gestures_before_pressing_anywhere_on_canvas() {
         "ethane".into(),
         "CC".into(),
         Default::default(),
+        true,
     )
     .unwrap();
     let selected = doc.expand_groups(&atoms);
@@ -178,6 +179,7 @@ fn caption_follows_held_model_resize_at_the_same_position_as_the_commit() {
         "ethane".into(),
         "CC".into(),
         Default::default(),
+        true,
     )
     .unwrap();
     let ids = reshiki::molecule_names::include_annotations(&doc, &atoms);

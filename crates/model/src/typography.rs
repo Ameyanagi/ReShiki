@@ -3,6 +3,9 @@ use crate::{document::Point, style};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
+mod name_markup;
+pub use name_markup::{NameMarkup, NameRun, name_markup};
+
 /// Conservative recognition for newly typed standalone neutral formulas.
 /// Captions, units, reaction conditions and unknown symbols remain plain text.
 pub fn is_formula(text: &str) -> bool {
@@ -535,13 +538,14 @@ pub fn formula_script(previous: char, c: char, lowered: bool) -> Script {
 
 /// Whether a line may wrap between `before` and `after`: after whitespace, or
 /// next to a CJK character, which needs no spaces between words, but never
-/// before a kana voicing mark. Name captions also break after '-' and ','.
-fn breaks_between(before: char, after: char, name_breaks: bool) -> bool {
+/// before a kana voicing mark. `name_break` allows a chemical-name break.
+fn breaks_between(before: char, after: char, name_break: bool) -> bool {
     !matches!(after, '\u{3099}'..='\u{309C}' | '\u{FF9E}' | '\u{FF9F}')
-        && (before.is_whitespace()
-            || cjk(before)
-            || cjk(after)
-            || (name_breaks && matches!(before, '-' | ',')))
+        && (before.is_whitespace() || cjk(before) || cjk(after) || name_break)
+}
+
+fn locant_character(c: char) -> bool {
+    c.is_alphanumeric() || matches!(c, '\'' | '′' | '″' | '‴')
 }
 
 fn cjk(c: char) -> bool {
@@ -552,52 +556,95 @@ fn cjk(c: char) -> bool {
 
 /// One layout feeds canvas, hit testing, selection, SVG, PDF and PNG.
 pub fn layout(text: &str, format: &TextFormat) -> Layout {
+    layout_with_metrics(text, format, style::glyph_metrics)
+}
+
+fn layout_with_metrics(
+    text: &str,
+    format: &TextFormat,
+    glyph_metrics: impl Fn(char, &TextStyle) -> (&'static str, f32),
+) -> Layout {
     let mut lines: Vec<Vec<(char, TextStyle, f32)>> = vec![vec![]];
     let max_width = format.width_pt.map(|w| style::DEFAULT.world(w));
     let mut width = 0.0;
     let mut formula_digit = false;
     let mut previous = ' ';
+    let mut before_previous = ' ';
+    let mut parentheses = 0usize;
+    let mut brackets = 0usize;
     // Characters kept on the line at its last allowed break.
     let mut break_at = None;
+    // Protected name punctuation is usable only if this line has no preferred
+    // break and would otherwise overflow. Keep its position through a split.
+    let mut name_fallback_at = None;
     for (index, c) in text.char_indices() {
         if c == '\n' {
             lines.push(vec![]);
             width = 0.0;
             break_at = None;
+            name_fallback_at = None;
             previous = ' ';
+            before_previous = ' ';
             formula_digit = false;
             continue;
         }
+        let before = previous;
         let mut s = format.at(index).clone();
         if s.formula && s.script == Script::Normal {
             s.script = formula_script(previous, c, formula_digit);
             formula_digit = s.script == Script::Subscript;
         }
         previous = c;
-        let (family, advance) = style::glyph_metrics(c, &s);
+        let (family, advance) = glyph_metrics(c, &s);
         s.family = family.into();
         let advance = advance * s.size();
         if let Some(line) = lines.last()
-            && line
-                .last()
-                .is_some_and(|(last, _, _)| breaks_between(*last, c, format.name_breaks))
+            && !line.is_empty()
         {
-            break_at = Some(line.len());
+            let name_punctuation = format.name_breaks && matches!(before, '-' | ',');
+            // Locant sets and bracketed groups stay whole; a closed group may
+            // end a line before the next word.
+            let preferred_name_break = parentheses == 0
+                && brackets == 0
+                && ((name_punctuation
+                    && !(before == ','
+                        && locant_character(before_previous)
+                        && locant_character(c)))
+                    || (format.name_breaks && matches!(before, ')' | ']') && c.is_alphabetic()));
+            if breaks_between(before, c, preferred_name_break) {
+                break_at = Some(line.len());
+            }
+            if name_punctuation && breaks_between(before, c, true) {
+                name_fallback_at = Some(line.len());
+            }
         }
-        // Break only between words (or around CJK characters); a word wider
-        // than the box overflows it instead of being cut mid-word.
+        // Prefer word, CJK and unprotected name boundaries. An indivisible word
+        // wider than the box still overflows instead of being cut mid-word.
         if max_width.is_some_and(|limit| width + advance > limit)
-            && let Some(split) = break_at.take()
+            && let Some(split) = break_at.take().or(name_fallback_at)
             && let Some(line) = lines.last_mut()
         {
             let overflow = line.split_off(split);
             width = overflow.iter().map(|(_, _, w)| w).sum();
             lines.push(overflow);
+            name_fallback_at = name_fallback_at
+                .and_then(|at| at.checked_sub(split))
+                .filter(|at| *at > 0);
         }
         if let Some(line) = lines.last_mut() {
             line.push((c, s, advance));
         }
         width += advance;
+        before_previous = before;
+        if format.name_breaks {
+            match c {
+                '(' => parentheses += 1,
+                ')' => parentheses = parentheses.saturating_sub(1),
+                '[' => brackets += 1,
+                ']' => brackets = brackets.saturating_sub(1),
+                _ => {}
+            }
+        }
     }
     let natural_width = lines
         .iter()
@@ -637,6 +684,9 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
         };
         for (c, s, advance) in line {
             let shift = match s.script {
+                Script::Normal if s.size() < size => {
+                    (size - s.size()) * style::text_ascent(&s) / s.size()
+                }
                 Script::Normal => 0.0,
                 Script::Subscript => size * 0.35,
                 Script::Superscript => -size * 0.3,
@@ -671,3 +721,122 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod name_break_tests {
+    use super::{Layout, TextFormat, layout_with_metrics};
+
+    fn test_layout(text: &str, format: &TextFormat) -> Layout {
+        // The built-in fallback metric keeps these checks independent of any
+        // installed fonts, including the Unicode locant and CJK examples.
+        layout_with_metrics(text, format, |_, _| ("Arial", 0.6))
+    }
+
+    fn width_pt(text: &str) -> f32 {
+        test_layout(text, &TextFormat::default()).width * crate::style::DEFAULT.points_per_world()
+    }
+
+    fn lines(text: &str, width_pt: f32, name_breaks: bool) -> Vec<String> {
+        let format = TextFormat {
+            width_pt: Some(width_pt),
+            name_breaks,
+            ..Default::default()
+        };
+        let mut lines: Vec<(f32, String)> = vec![];
+        for fragment in test_layout(text, &format).fragments {
+            match lines.last_mut() {
+                Some((y, line)) if (*y - fragment.position.y).abs() < 0.001 => {
+                    line.push_str(&fragment.text);
+                }
+                _ => lines.push((fragment.position.y, fragment.text)),
+            }
+        }
+        lines.into_iter().map(|(_, line)| line).collect()
+    }
+
+    #[test]
+    fn name_breaks_keep_locant_commas_after_a_preferred_hyphen() {
+        for locants in ["2,4", "N,N", "2',4'", "2′,4″", "2″,4‴", "N¹,N²", "N⁰,N⁹"] {
+            let text = format!("hexa-{locants}-diene");
+            let comma = text.find(',').unwrap() + 1;
+            let next = text[comma..].chars().next().unwrap().to_string();
+            // Overflow just after the comma, where the old rule split locants.
+            let width = width_pt(&text[..comma]) + width_pt(&next) * 0.5;
+            let wrapped = lines(&text, width, true);
+            assert_eq!(wrapped[0], "hexa-", "{text}: {wrapped:?}");
+            assert!(
+                wrapped.iter().any(|line| line.contains(locants)),
+                "{text}: {wrapped:?}"
+            );
+            assert_eq!(wrapped.concat(), text);
+        }
+
+        // A closed fusion descriptor may end a line before the parent name.
+        let text = "furo[2,3-b]pyridine";
+        let width = width_pt("furo[2,3-b]p") - width_pt("p") * 0.5;
+        assert_eq!(lines(text, width, true), ["furo[2,3-b]", "pyridine"]);
+
+        let text = "hexa-,(group)";
+        let width = width_pt("hexa-,") + width_pt("(") * 0.5;
+        assert_eq!(lines(text, width, true)[0], "hexa-,");
+    }
+
+    #[test]
+    fn name_breaks_keep_stereo_and_fusion_groups_after_a_preferred_hyphen() {
+        for (group, partial, next) in [
+            ("(2R,3S)", "(2R,", "3"),
+            ("(propan-2-yl)", "(propan-2-", "y"),
+            ("[1,2-a]", "[1,2-", "a"),
+            ("[(2R,3S)-1,2-a]", "[(2R,3S)-1,2-", "a"),
+        ] {
+            let text = format!("hexa-{group}-diene");
+            let width = width_pt(&format!("hexa-{partial}")) + width_pt(next) * 0.5;
+            assert!(width_pt(&format!("{group}-")) < width);
+            let wrapped = lines(&text, width, true);
+            assert_eq!(wrapped[0], "hexa-", "{text}: {wrapped:?}");
+            assert!(
+                wrapped.iter().any(|line| line.contains(group)),
+                "{text}: {wrapped:?}"
+            );
+            assert_eq!(wrapped.concat(), text);
+        }
+    }
+
+    #[test]
+    fn name_breaks_use_protected_punctuation_when_a_segment_overflows() {
+        let text = "(1,2,3,4,5,6,7,8,9,10)";
+        let width = width_pt("(1,2,") + width_pt("3") * 0.5;
+        let wrapped = lines(text, width, true);
+        assert_eq!(wrapped[0], "(1,2,");
+        assert!(wrapped.len() > 2, "{wrapped:?}");
+        assert_eq!(wrapped.concat(), text);
+        for line in &wrapped {
+            assert!(width_pt(line) <= width + 0.001, "{line}");
+        }
+
+        // The fallback comma survives moving a suffix after the preferred '-'.
+        let text = "hexa-(1,2mmmmmmmmmmmmmmmmmmmm)";
+        let width = width_pt("hexa-(1,") + width_pt("2") * 0.5;
+        let wrapped = lines(text, width, true);
+        assert_eq!(&wrapped[..2], ["hexa-", "(1,"]);
+        assert_eq!(wrapped.concat(), text);
+        // The remaining long word keeps the ordinary overflow behavior.
+        assert_eq!(wrapped.len(), 3);
+    }
+
+    #[test]
+    fn name_breaks_leave_ordinary_text_wrapping_unchanged() {
+        let text = "hexa-2,4-diene";
+        let width = width_pt("hexa-2,") + width_pt("4") * 0.5;
+        assert_eq!(lines(text, width, false), [text]);
+        for text in [
+            "alpha beta gamma delta",
+            "日本語の長い説明文です",
+            "ﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞ",
+        ] {
+            let plain = lines(text, 30., false);
+            assert!(plain.len() > 1, "{text}: {plain:?}");
+            assert_eq!(lines(text, 30., true), plain);
+        }
+    }
+}

@@ -4,6 +4,38 @@ use super::{
 };
 
 #[test]
+fn small_caps_name_fragments_share_the_normal_text_baseline() {
+    use super::{TextFormat, layout, name_markup};
+    let markup = name_markup("L-alanine");
+    let mut format = TextFormat::default();
+    markup.apply_to(&mut format);
+    let laid_out = layout(&markup.text, &format);
+    assert_eq!(laid_out.fragments.len(), 2);
+    let small_caps = &laid_out.fragments[0];
+    let normal = &laid_out.fragments[1];
+    assert_eq!(small_caps.text, "L");
+    assert_eq!(normal.text, "-alanine");
+    let baseline = |fragment: &super::TextFragment| {
+        fragment.position.y + crate::style::text_ascent(&fragment.style)
+    };
+    assert!((baseline(small_caps) - baseline(normal)).abs() < 1e-3);
+}
+
+#[test]
+fn uniform_size_normal_fragments_stay_at_line_top() {
+    use super::{StyleChange, TextFormat, layout};
+    let text = "normal text";
+    let mut format = TextFormat::default();
+    format.apply(text, Some(0..6), &StyleChange::Bold(true));
+    let laid_out = layout(text, &format);
+    assert_eq!(laid_out.fragments.len(), 2);
+    for fragment in &laid_out.fragments {
+        assert_eq!(fragment.style.script, Script::Normal);
+        assert_eq!(fragment.position.y, 0.);
+    }
+}
+
+#[test]
 fn unicode_subscript_digits_store_ascii_with_the_manual_script_layout() {
     use super::{TextFormat, layout, normalize_subscript_digits};
     for (input, expected, start, end) in
@@ -350,7 +382,7 @@ fn generated_names_wrap_only_at_chemical_punctuation() {
             "{text}"
         );
         if index + 1 < lines.len() {
-            assert!(text.ends_with(['-', ',']), "{text}");
+            assert!(text.ends_with(['-', ',', ')', ']']), "{text}");
         }
     }
     for word in ["methyl", "propan", "cyclohexan"] {

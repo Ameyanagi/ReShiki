@@ -40,6 +40,7 @@ pub enum Action {
     Position(HydrogenPosition),
     Attachment(LabelAttachment),
     Stereo(bool),
+    RomanStereoParentheses(bool),
     Seed(String),
     Number,
     ClearNumbers,
@@ -171,6 +172,9 @@ impl App {
                     b.indicator.show = (self.tab.labels.scope == Scope::Selection).then_some(value);
                 }
                 self.tab.labels_dirty = true;
+            }
+            Action::RomanStereoParentheses(value) => {
+                self.tab.doc.atom_labels.roman_stereo_parentheses = value;
             }
             Action::Number => {
                 let sequence = labels::sequence(&self.tab.labels.seed, ids.len())?;

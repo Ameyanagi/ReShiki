@@ -85,6 +85,7 @@ fn composed_attached_methanol_caption_and_maps_remap_without_reassigning_local_m
         "methanol".into(),
         "CO".into(),
         TextFormat::default(),
+        true,
     )
     .unwrap();
     arrow_anchors::reconcile(&mut source);

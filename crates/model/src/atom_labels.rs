@@ -3,7 +3,7 @@
 use crate::{
     abbreviations::LabelAlignment,
     document::{Atom, Bond, Document, Point},
-    typography::{ScriptRun, TextStyle},
+    typography::{ScriptRun, TextFormat, TextSpan, TextStyle},
 };
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
@@ -414,6 +414,9 @@ pub struct Settings {
     pub carbons: Carbons,
     pub hydrogens: bool,
     pub stereo: bool,
+    /// Keep stereo punctuation upright while italicizing its descriptor.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub roman_stereo_parentheses: bool,
     /// Chemical atom-map labels are visible on imported mapped reactions.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub maps: bool,
@@ -424,6 +427,7 @@ impl Default for Settings {
             carbons: Carbons::Skeletal,
             hydrogens: yes(),
             stereo: false,
+            roman_stereo_parentheses: false,
             maps: true,
         }
     }
@@ -439,6 +443,24 @@ pub fn stereo_style() -> TextStyle {
         italic: true,
         ..number_style()
     }
+}
+/// One style by default; optional upright punctuation around `({cip})` text.
+pub fn indicator_format(text: &str, style: &TextStyle, roman_parentheses: bool) -> TextFormat {
+    let mut format = TextFormat {
+        style: style.clone(),
+        ..Default::default()
+    };
+    if roman_parentheses {
+        format.style.italic = false;
+        let mut descriptor = style.clone();
+        descriptor.italic = true;
+        format.spans.push(TextSpan {
+            start: 1,
+            end: text.len() - 1,
+            style: descriptor,
+        });
+    }
+    format
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Number {
@@ -759,17 +781,53 @@ pub struct Indicator {
     pub height: f32,
     pub text: String,
     pub style: TextStyle,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub roman_parentheses: bool,
 }
 impl Indicator {
-    pub fn primitive(&self) -> crate::scene::Primitive {
-        crate::scene::Primitive::Text {
-            position: self.origin,
-            text: self.text.clone(),
-            size: self.height,
-            color: self.style.color.rgb(),
-            style: self.style.clone(),
-        }
+    pub fn primitives(&self) -> Vec<crate::scene::Primitive> {
+        let format = indicator_format(&self.text, &self.style, self.roman_parentheses);
+        let mut x = self.origin.x;
+        indicator_runs(&self.text, &format)
+            .map(|(text, style)| {
+                let position = Point::new(x, self.origin.y);
+                x += crate::style::styled_text_width(text, self.height, style);
+                crate::scene::Primitive::Text {
+                    position,
+                    text: text.into(),
+                    size: self.height,
+                    color: style.color.rgb(),
+                    style: style.clone(),
+                }
+            })
+            .collect()
     }
+}
+
+pub(crate) fn indicator_runs<'a>(
+    text: &'a str,
+    format: &'a TextFormat,
+) -> impl Iterator<Item = (&'a str, &'a TextStyle)> {
+    let mut start = 0;
+    let mut remaining = text;
+    format
+        .spans
+        .iter()
+        .flat_map(|span| [span.start, span.end])
+        .chain(std::iter::once(text.len()))
+        .filter_map(move |end| {
+            let (run, rest) = remaining.split_at(end - start);
+            let style = format.at(start);
+            start = end;
+            remaining = rest;
+            (!run.is_empty()).then_some((run, style))
+        })
+}
+
+pub(crate) fn indicator_width(text: &str, height: f32, format: &TextFormat) -> f32 {
+    indicator_runs(text, format)
+        .map(|(text, style)| crate::style::styled_text_width(text, height, style))
+        .sum()
 }
 
 /// Automatic indicator candidate radii, innermost first. Generic ink bounds
@@ -847,6 +905,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                 n.text.clone(),
                 n.offset,
                 n.style.clone(),
+                false,
             ));
         }
         if map_indicator_shown(a, doc) {
@@ -855,6 +914,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                 a.map_num.to_string(),
                 a.display.mapping.offset,
                 a.display.mapping.style.clone(),
+                false,
             ));
         }
         if stereo_indicator_shown(a, doc)
@@ -865,6 +925,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                 format!("({cip})"),
                 a.display.stereo.offset,
                 a.display.stereo.style.clone(),
+                doc.atom_labels.roman_stereo_parentheses,
             ));
         }
     }
@@ -877,6 +938,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                 format!("({cip})"),
                 b.indicator.offset,
                 b.indicator.style.clone(),
+                doc.atom_labels.roman_stereo_parentheses,
             ));
         }
     }
@@ -898,12 +960,13 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             .filter_map(crate::atom_text::text_ink_bounds),
     );
     // Reserve all manual indicators first, including owners later in atom order.
-    for (owner, text, offset, style) in &labels {
+    for (owner, text, offset, style, roman_parentheses) in &labels {
         if let Some(offset) = offset
             && let Some(anchor) = owner.anchor(doc)
         {
             let height = crate::style::DEFAULT.world(style.size_pt);
-            let width = crate::style::styled_text_width(text, height, style);
+            let format = indicator_format(text, style, *roman_parentheses);
+            let width = indicator_width(text, height, &format);
             let center = anchor.offset(offset.x, offset.y);
             occupied.push((
                 center.offset(-width / 2. - 3., -height / 2. - 3.),
@@ -926,12 +989,13 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
         .map(|a| a.position)
         .collect();
     let mut result = Vec::new();
-    for (owner, text, offset, style) in labels {
+    for (owner, text, offset, style, roman_parentheses) in labels {
         let Some(anchor) = owner.anchor(doc) else {
             continue;
         };
         let height = crate::style::DEFAULT.world(style.size_pt);
-        let width = crate::style::styled_text_width(&text, height, &style);
+        let format = indicator_format(&text, &style, roman_parentheses);
+        let width = indicator_width(&text, height, &format);
         let outward = if matches!(owner, Owner::Number(_)) {
             outward_extent(width, height)
         } else {
@@ -1030,6 +1094,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             height,
             text,
             style,
+            roman_parentheses,
         });
     }
     result

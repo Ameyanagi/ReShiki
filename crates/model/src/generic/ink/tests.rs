@@ -130,3 +130,36 @@ fn atom_bounds_cover_long_automatic_numbers_on_either_side() {
         }
     }
 }
+
+#[test]
+fn cip_bounds_cover_roman_parentheses_on_atom_and_bond_indicators() {
+    use crate::atom_labels::Owner;
+    for roman in [false, true] {
+        for offset in [None, Some(Point::new(-30., 40.))] {
+            let mut doc = Document::default();
+            let a = doc.add_atom("C", Point::default());
+            let b = doc.add_atom("C", Point::new(42., 0.));
+            doc.add_bond(a, b, 2, "plain");
+            doc.atom_labels.stereo = true;
+            doc.atom_labels.roman_stereo_parentheses = roman;
+            let atom = doc.atom_mut(a).unwrap();
+            atom.cip_label = Some("R".into());
+            atom.display.stereo.offset = offset;
+            atom.display.stereo.style.size_pt = 36.;
+            doc.bonds[0].cip_label = Some("E".into());
+            doc.bonds[0].indicator.offset = offset;
+            doc.bonds[0].indicator.style.size_pt = 36.;
+            for indicator in crate::atom_labels::indicators(&doc) {
+                let bounds = match indicator.owner {
+                    Owner::AtomStereo(id) => atom_bounds(doc.atom(id).unwrap(), &doc).unwrap(),
+                    Owner::BondStereo(..) => object_bounds(&doc).unwrap(),
+                    _ => panic!("unexpected indicator"),
+                }
+                .unwrap();
+                for ink in crate::scene::label_ink_boxes(&indicator.primitives()) {
+                    crate::generic::drawing_test_support::contained(bounds, ink);
+                }
+            }
+        }
+    }
+}

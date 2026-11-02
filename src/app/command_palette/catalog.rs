@@ -65,6 +65,7 @@ pub(crate) enum Need {
     Nothing,
     Blocked(&'static str),
     Selection,
+    TextBoxes,
     /// A selection the Scale field can resize: none of it shown only in 3D.
     Resizable,
     Flippable,
@@ -900,6 +901,16 @@ fn edits() -> Vec<Command> {
             Message::Arrange(arrange),
         ));
     }
+    list.push(
+        send(
+            "Format as chemical name",
+            Category::Edit,
+            "Typeset descriptors, primes and superscripts in selected text boxes",
+            "name typography italic locants annotation",
+            Message::FormatChemicalName,
+        )
+        .need(Need::TextBoxes),
+    );
     for (name, change) in [
         ("Bold text", StyleChange::Bold(true)),
         ("Italic text", StyleChange::Italic(true)),

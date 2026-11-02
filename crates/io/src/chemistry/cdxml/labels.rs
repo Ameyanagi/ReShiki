@@ -128,6 +128,19 @@ fn inherited(tree: &Tree, element: usize) -> super::Result<Attributes> {
 fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
 }
+fn roman_stereo_parentheses(value: &NativeText) -> bool {
+    let [span] = value.format.spans.as_slice() else {
+        return false;
+    };
+    let mut descriptor = value.format.style.clone();
+    descriptor.italic = true;
+    !value.format.style.italic
+        && value.text.starts_with('(')
+        && value.text.ends_with(')')
+        && span.start == 1
+        && span.end == value.text.len() - 1
+        && span.style == descriptor
+}
 
 /// Read appearance using prepared atoms and positions AFTER conformer scaling.
 /// `bond_endpoints` is the existing drawing's bond list in its original order.
@@ -165,6 +178,7 @@ where
             hydrogens: !yes(&root_attrs, "HideImplicitHydrogens")?,
             stereo: yes(&root_attrs, "ShowAtomStereo")?,
             maps: true,
+            roman_stereo_parentheses: false,
         },
         atoms: Vec::new(),
         bonds: Vec::new(),
@@ -321,7 +335,12 @@ where
             let source = *ordinals
                 .get(text)
                 .ok_or_else(|| invalid("Missing source text ordinal"))?;
-            let value = read_text(source, &attrs).map_err(LabelsError::Text)?;
+            let mut value = read_text(source, &attrs).map_err(LabelsError::Text)?;
+            if name == Some("stereo") && roman_stereo_parentheses(&value) {
+                output.atom_labels.roman_stereo_parentheses = true;
+                value.format.spans.clear();
+                value.format.style.italic = true;
+            }
             if !value.format.spans.is_empty() || value.format.style.script != Script::Normal {
                 return Err(
                     invalid("Mixed formatting in atom indicators is not supported yet").into(),
