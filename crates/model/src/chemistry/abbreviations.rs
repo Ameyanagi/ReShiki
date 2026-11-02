@@ -208,7 +208,18 @@ pub fn find_with_policy(
         return Err(invalid("Selection size limit exceeded"));
     }
     let selected: HashSet<_> = selection.iter().copied().collect();
-    let hydrogens = matcher::total_hydrogens(&molecule.state);
+    // RDKit's hydrogen-count query also counts bonded hydrogen atoms, such as a D.
+    let graph = &molecule.state.graph;
+    let mut hydrogens = matcher::total_hydrogens(&molecule.state);
+    for bond in &graph.bonds {
+        for (atom, other) in [(bond.a, bond.b), (bond.b, bond.a)] {
+            if graph.atoms.get(other).is_some_and(|a| a.atomic_number == 1)
+                && let Some(count) = hydrogens.get_mut(atom)
+            {
+                *count += 1;
+            }
+        }
+    }
     let target = matcher::Target::new(&molecule.state.graph, &molecule.state.rings, &hydrogens)?;
     let mut work = matcher::Work::default();
     let mut candidates = Vec::new();

@@ -2105,6 +2105,20 @@ fn contracted(doc: &Document) -> Result<Vec<(String, usize)>, Box<dyn std::error
         .collect())
 }
 
+/// As in RDKit, a bonded D counts as a hydrogen, so CH3-O-D is not OMe on D.
+#[test]
+fn contraction_counts_bonded_deuterium_as_a_hydrogen() -> Result<(), Box<dyn std::error::Error>> {
+    let mut doc = Document::default();
+    let carbon = doc.add_atom("C", Point::default());
+    let oxygen = doc.add_atom("O", Point::new(42., 0.));
+    let deuterium = doc.add_atom("H", Point::new(84., 0.));
+    doc.atom_mut(deuterium).ok_or("Atom")?.isotope = 2;
+    doc.add_bond(carbon, oxygen, 1, "plain");
+    doc.add_bond(oxygen, deuterium, 1, "plain");
+    assert_eq!(contracted(&doc)?, [("Me".to_owned(), 1)]);
+    Ok(())
+}
+
 #[test]
 fn contraction_falls_back_when_a_larger_group_cannot_apply()
 -> Result<(), Box<dyn std::error::Error>> {
