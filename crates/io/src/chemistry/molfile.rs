@@ -55,14 +55,14 @@ fn at<T>(items: &[T], index: usize) -> Result<&T, Error> {
 /// conventions. V3000 is automatic for dative bonds, large graphs/coordinates.
 /// Queries, enhanced stereo groups and non-tetrahedral tags are not drawing data.
 pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
-    write_part(molecule, options, false, &[], false, false)
+    write_part(molecule, options, false, &[], &[], false, false)
 }
 
 /// Drawing stereocenters describe a specific configuration. Mark them absolute
 /// so consumers such as ChemDraw do not interpret the file as a racemate.
 /// Keep `write` unchanged for RDKit-compatible reference output.
 pub fn write_absolute(molecule: &Molecule, options: Options) -> Result<String, Error> {
-    write_part(molecule, options, false, &[], true, false)
+    write_part(molecule, options, false, &[], &[], true, false)
 }
 
 /// Molecular interchange needs a stereochemically valid 2D conformer even when
@@ -90,6 +90,17 @@ fn write_drawing_part(
     attachments: &[crate::attachments::Attachment],
     absolute: bool,
 ) -> Result<(String, bool), Error> {
+    let singlet_ids: HashSet<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| atom.singlet)
+        .map(|atom| atom.id)
+        .collect();
+    let singlets: Vec<_> = molecule
+        .ids
+        .iter()
+        .map(|id| singlet_ids.contains(id))
+        .collect();
     let depths: HashMap<_, _> = doc.atoms.iter().map(|atom| (atom.id, atom.depth)).collect();
     let haworth_atoms = crate::haworth::interchange::recognized_atoms(doc);
     // Haworth depth is drawing perspective. If any exported atom belongs to
@@ -112,7 +123,15 @@ fn write_drawing_part(
                         .ok_or_else(|| invalid("Missing MOL drawing atom"))?,
                 ) / document::WORLD_PER_DEPICT_UNIT;
             }
-            let output = write_part(&spatial, options, reaction, attachments, absolute, true)?;
+            let output = write_part(
+                &spatial,
+                options,
+                reaction,
+                attachments,
+                &singlets,
+                absolute,
+                true,
+            )?;
             let block = if reaction {
                 // RXN CTABs have no 3D header hint. Let the written Z values
                 // select perception, including rounding at the depth threshold.
@@ -151,7 +170,15 @@ fn write_drawing_part(
         molecule
     };
     Ok((
-        write_part(molecule, options, reaction, attachments, absolute, false)?,
+        write_part(
+            molecule,
+            options,
+            reaction,
+            attachments,
+            &singlets,
+            absolute,
+            false,
+        )?,
         meaningful,
     ))
 }
@@ -278,6 +305,7 @@ fn write_part(
     options: Options,
     reaction: bool,
     attachments: &[crate::attachments::Attachment],
+    singlets: &[bool],
     absolute: bool,
     is_3d: bool,
 ) -> Result<String, Error> {
@@ -442,7 +470,12 @@ fn write_part(
             if atom.isotope != 0 {
                 write!(output, " MASS={}", isotope_mass(atom))?;
             }
-            if let Some(radical) = radical_code(atom, at(valences, i)?, *at(&degrees, i)?) {
+            if let Some(radical) = radical_code(
+                atom,
+                at(valences, i)?,
+                *at(&degrees, i)?,
+                singlets.get(i).copied().unwrap_or(false),
+            ) {
                 write!(output, " RAD={radical}")?;
             }
             if valence != 0 {
@@ -531,7 +564,7 @@ fn write_part(
         }
         output.push_str("M  V30 END CTAB\n");
     } else {
-        properties(&mut output, graph, valences, &degrees)?;
+        properties(&mut output, graph, valences, &degrees, singlets)?;
     }
     if !reaction {
         output.push_str("M  END\n");
@@ -570,10 +603,16 @@ fn nondefault_valence(atom: &Atom, cache: &Valence, degree: usize) -> Result<u32
     })
 }
 
-fn radical_code(atom: &Atom, cache: &Valence, degree: usize) -> Option<i32> {
+fn radical_code(atom: &Atom, cache: &Valence, degree: usize, singlet: bool) -> Option<i32> {
+    // Readers infer a triplet on a bare isolated atom, so only a singlet needs RAD there.
     (atom.radical_electrons != 0
-        && (degree != 0 || atom.explicit_hydrogens != 0 || cache.implicit_hydrogens != 0))
-        .then_some(if atom.radical_electrons % 2 == 1 {
+        && (singlet
+            || degree != 0
+            || atom.explicit_hydrogens != 0
+            || cache.implicit_hydrogens != 0))
+        .then_some(if singlet {
+            1
+        } else if atom.radical_electrons % 2 == 1 {
             2
         } else {
             3
@@ -606,6 +645,7 @@ fn properties(
     graph: &Graph,
     cache: &[Valence],
     degrees: &[usize],
+    singlets: &[bool],
 ) -> Result<(), Error> {
     let (mut charges, mut radicals, mut isotopes) = (Vec::new(), Vec::new(), Vec::new());
     for (i, atom) in graph.atoms.iter().enumerate() {
@@ -615,7 +655,12 @@ fn properties(
                 flush(output, "CHG", &mut charges)?;
             }
         }
-        if let Some(code) = radical_code(atom, at(cache, i)?, *at(degrees, i)?) {
+        if let Some(code) = radical_code(
+            atom,
+            at(cache, i)?,
+            *at(degrees, i)?,
+            singlets.get(i).copied().unwrap_or(false),
+        ) {
             radicals.push((i + 1, code));
             if radicals.len() == 8 {
                 flush(output, "RAD", &mut radicals)?;

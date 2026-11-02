@@ -70,6 +70,16 @@ pub struct Drawing {
     bond_indices: Vec<usize>,
 }
 impl Drawing {
+    /// Restore file spin states without changing the chemistry graph.
+    pub fn with_singlets(mut self, singlets: &[bool]) -> Result<Self, Error> {
+        if singlets.len() != self.document.atoms.len() {
+            return Err(invalid("Drawing spin state dimensions changed"));
+        }
+        for (atom, &singlet) in self.document.atoms.iter_mut().zip(singlets) {
+            atom.singlet = singlet;
+        }
+        Ok(self)
+    }
     pub fn with_generic(mut self, generic: &crate::generic::Generic) -> Result<Self, Error> {
         self.document.generic = generic.clone();
         for site in &generic.alternatives {
@@ -693,6 +703,7 @@ fn reconstruct_atoms(
                 charge: i32::from(a.charge),
                 isotope: u32::from(a.isotope),
                 radical_electrons: a.radical_electrons,
+                singlet: a.radical_electrons == 2 && old.is_some_and(|a| a.singlet),
                 explicit_h: u32::from(a.explicit_hydrogens),
                 no_implicit: a.no_implicit,
                 aromatic: a.aromatic,

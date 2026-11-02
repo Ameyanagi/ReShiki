@@ -60,6 +60,7 @@ impl SmilesReaction {
                     annotations: molfile::FileAnnotations {
                         generic: Default::default(),
                         chemdraw_directions: Vec::new(),
+                        singlets: vec![false; n],
                         attachments: Vec::new(),
                         is_3d,
                         attachment_points: vec![None; n],

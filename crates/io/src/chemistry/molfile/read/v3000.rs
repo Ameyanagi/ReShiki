@@ -235,6 +235,7 @@ fn atom_properties(
                 let code = r.integer(value)?;
                 if code != 0 {
                     atom.radical_electrons = radical(code)?;
+                    props.singlet = code == 1;
                 }
             }
             "MASS" => {

@@ -432,6 +432,7 @@ impl PythonEngine {
         let file = molfile::FileAnnotations {
             generic: Default::default(),
             chemdraw_directions: Vec::new(),
+            singlets: vec![false; n],
             attachments: Vec::new(),
             is_3d: false,
             attachment_points: vec![None; n],

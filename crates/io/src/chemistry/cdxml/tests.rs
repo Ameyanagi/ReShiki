@@ -1,5 +1,39 @@
 use super::*;
 
+#[test]
+fn cdxml_preserves_singlet_and_triplet_spin() {
+    for (radical, singlet) in [("Singlet", true), ("Triplet", false)] {
+        let xml = format!(
+            "<CDXML BondLength='30'><page><fragment id='1'>\
+             <n id='2' p='0 0' Element='6' Radical='{radical}' NumHydrogens='2'/>\
+             </fragment></page></CDXML>"
+        );
+        let parsed = read(&xml).unwrap();
+        assert_eq!(parsed.fragments[0].graph.atoms[0].radical_electrons, 2);
+        assert_eq!(parsed.fragments[0].singlets, [singlet]);
+        let chemical = import_cdxml(&xml).unwrap().document;
+        let prepared = prepare_drawing(&xml).unwrap();
+        let drawing = assemble_cdxml(&prepared)
+            .unwrap()
+            .into_unchecked_drawing()
+            .unwrap();
+        for document in [chemical, drawing] {
+            assert_eq!(document.atoms[0].radical_electrons, 2);
+            assert_eq!(document.atoms[0].singlet, singlet);
+            let (exported, _) = crate::exchange::drawing::write_clipboard(&document).unwrap();
+            let tree = roxmltree::Document::parse(&exported).unwrap();
+            let atom = tree
+                .descendants()
+                .find(|node| node.has_tag_name("n"))
+                .unwrap();
+            assert_eq!(atom.attribute("Radical"), Some(radical));
+            let reopened = import_cdxml(&exported).unwrap().document;
+            assert_eq!(reopened.atoms[0].radical_electrons, 2);
+            assert_eq!(reopened.atoms[0].singlet, singlet);
+        }
+    }
+}
+
 fn substituted_double_xml(position: &str) -> String {
     format!(
         "<CDXML BondLength='30'><page><fragment id='1'>\

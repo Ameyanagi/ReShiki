@@ -481,8 +481,8 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
             atom.marks.retain(|m|!m.kind.charge());
             if matches!(kind,SymbolKind::CirclePlus|SymbolKind::CircleMinus) {MarkKind::CircledCharge} else {MarkKind::Charge}
         }
-        SymbolKind::Radical|SymbolKind::Diradical=>{atom.radical_electrons=if kind==SymbolKind::Radical {1} else {2};atom.marks.retain(|m|!m.kind.radical());MarkKind::Radical}
-        SymbolKind::RadicalCation|SymbolKind::RadicalAnion=>{atom.radical_electrons=1;atom.charge=if kind==SymbolKind::RadicalCation {1} else {-1};atom.marks.retain(|m|!m.kind.radical()&&!m.kind.charge());MarkKind::RadicalIon}
+        SymbolKind::Radical|SymbolKind::Diradical=>{atom.radical_electrons=if kind==SymbolKind::Radical {1} else {2};atom.singlet&=atom.radical_electrons==2;atom.marks.retain(|m|!m.kind.radical());MarkKind::Radical}
+        SymbolKind::RadicalCation|SymbolKind::RadicalAnion=>{atom.radical_electrons=1;atom.singlet=false;atom.charge=if kind==SymbolKind::RadicalCation {1} else {-1};atom.marks.retain(|m|!m.kind.radical()&&!m.kind.charge());MarkKind::RadicalIon}
         SymbolKind::LonePair=>MarkKind::LonePair,SymbolKind::LonePairBar=>MarkKind::LonePairBar,
         SymbolKind::PartialPositive=>MarkKind::PartialPositive,SymbolKind::PartialNegative=>MarkKind::PartialNegative,
         _=>return Err("This symbol is a drawing annotation. Use free placement; explicit H bonds carry stereochemistry.".into()),

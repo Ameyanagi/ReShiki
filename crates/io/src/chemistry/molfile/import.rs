@@ -49,7 +49,9 @@ impl Imported {
             .map_err(|error| ReadError::Chemistry(error.to_string()))?;
         let state = &self.molecule.state;
         let n = state.graph.atoms.len();
-        if self.annotations.dummy_labels.len() != n || self.annotations.attachment_points.len() != n
+        if self.annotations.dummy_labels.len() != n
+            || self.annotations.attachment_points.len() != n
+            || self.annotations.singlets.len() != n
         {
             return Err(invalid("MOL display annotation dimensions changed"));
         }
@@ -198,6 +200,7 @@ impl Imported {
             select(&self.annotations.attachment_points, &removed.kept_atoms)?;
         self.annotations.dummy_labels =
             select(&self.annotations.dummy_labels, &removed.kept_atoms)?;
+        self.annotations.singlets = select(&self.annotations.singlets, &removed.kept_atoms)?;
         if !self.annotations.chemdraw_directions.is_empty() {
             self.annotations.chemdraw_directions =
                 select(&self.annotations.chemdraw_directions, &removed.kept_bonds)?;

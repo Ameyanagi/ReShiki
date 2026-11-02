@@ -51,6 +51,7 @@ impl Part {
                 .collect::<anyhow::Result<_>>()?,
             bond_ids: Vec::new(),
             fuse_labels: vec![None; graph.atoms.len()],
+            singlets: vec![false; graph.atoms.len()],
             metadata: Metadata::unspecified(&graph),
             directions: Vec::new(),
             positions: self.positions,

@@ -338,6 +338,78 @@ async fn calculate(app: &mut App) {
     let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(result))));
 }
 
+#[test]
+fn spin_selection_shows_singlet_triplet_or_mixed() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Default::default());
+    let b = app.tab.doc.add_atom("C", Default::default());
+    for atom in &mut app.tab.doc.atoms {
+        atom.radical_electrons = 2;
+    }
+    let selected =
+        |doc: &Document| SpinState::selection(&[doc.atom(a).unwrap(), doc.atom(b).unwrap()]);
+    assert_eq!(selected(&app.tab.doc), Some(SpinState::Triplet));
+    app.tab.doc.atom_mut(a).unwrap().singlet = true;
+    assert_eq!(selected(&app.tab.doc), None);
+    app.tab.selected = vec![a, b];
+    let _ = app.update(Message::AtomSinglet(true));
+    assert_eq!(selected(&app.tab.doc), Some(SpinState::Singlet));
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        selected(&app.tab.doc),
+        None,
+        "Undo restores mixed spin states"
+    );
+    let _ = app.update(Message::AtomSinglet(false));
+    assert_eq!(selected(&app.tab.doc), Some(SpinState::Triplet));
+}
+
+#[tokio::test]
+async fn singlet_unpaired_count_uses_only_singlets_in_the_analyzed_scope() {
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    app.tab.doc = app
+        .engine
+        .execute(Request::import_smiles("[CH2].[CH2].[CH2].[CH3]"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let ids: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    for id in &ids[..2] {
+        let atom = app.tab.doc.atom_mut(*id).unwrap();
+        assert_eq!(atom.radical_electrons, 2);
+        atom.singlet = true;
+    }
+    calculate(&mut app).await;
+    let analysis = app.property_analysis().unwrap();
+    assert_eq!(
+        analysis.unpaired_electrons, 7,
+        "Chemistry remains unchanged"
+    );
+    assert_eq!(unpaired_electrons(&app.tab.doc, analysis, None), 3);
+
+    for (selection, raw, shown) in [
+        (vec![ids[0]], 2, 0),
+        (vec![ids[1], ids[2]], 4, 2),
+        (vec![ids[2], ids[3]], 3, 3),
+    ] {
+        app.tab.selected = selection;
+        calculate(&mut app).await;
+        let key = app.property_request_key();
+        let selected = key.atoms.iter().copied().collect();
+        let analysis = app.property_analysis().unwrap();
+        assert_eq!(analysis.unpaired_electrons, raw);
+        assert_eq!(
+            unpaired_electrons(&app.tab.doc, analysis, Some(&selected)),
+            shown
+        );
+    }
+    assert!(!app.tab.history.can_undo());
+}
+
 #[tokio::test]
 async fn whole_drawing_properties_are_lazy_cached_and_never_modify_labels() {
     let (mut app, _) = App::new();

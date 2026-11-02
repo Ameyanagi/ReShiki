@@ -142,6 +142,7 @@ impl Writer<'_> {
                     "Radical",
                     match a.radical_electrons {
                         1 => "Doublet",
+                        2 if a.singlet => "Singlet",
                         2 => "Triplet",
                         _ => return Err(invalid("Unsupported radical count")),
                     },

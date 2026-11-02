@@ -68,6 +68,10 @@ pub struct Atom {
     pub charge: i32,
     #[serde(default)]
     pub radical_electrons: u8,
+    /// Spin state of two nonbonding electrons; meaningful only when
+    /// `radical_electrons == 2`. False (triplet) is the default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub singlet: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub marks: Vec<crate::scientific::AtomMark>,
     /// High-water mark: deleting an annotation never reuses its attachment ID.
@@ -447,6 +451,7 @@ impl Document {
             attachment: None,
             charge: 0,
             radical_electrons: 0,
+            singlet: false,
             marks: vec![],
             mark_serial: 0,
             isotope: 0,
@@ -783,6 +788,7 @@ impl Document {
                 return Err("Unsupported atom CIP label".into());
             }
             if a.radical_electrons > 2
+                || (a.singlet && a.radical_electrons != 2)
                 || a.marks.len() > 12
                 || a.marks.iter().any(|m| {
                     !m.offset.x.is_finite()

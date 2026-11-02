@@ -104,6 +104,7 @@ pub fn from_selection(
             dummy.explicit_h = 0;
             dummy.label_h = 0;
             dummy.radical_electrons = 0;
+            dummy.singlet = false;
             dummy.aromatic = false;
             dummy.stereo = None;
             dummy.map_num = 0;

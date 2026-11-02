@@ -86,6 +86,7 @@ impl App {
             Message::RotateMark(id, index) => self.rotate_mark(id, index),
             Message::RemoveMark(id, index) => self.remove_mark(id, index),
             Message::AtomRadical(value) => self.set_radical(value),
+            Message::AtomSinglet(value) => self.set_singlet(value),
             Message::ToggleInspector => return Some(self.toggle_inspector()),
             Message::Inspector(tab) => {
                 if tab == InspectorTab::Predict {

@@ -287,6 +287,7 @@ fn fragment(node: Node<'_, '_>, bond_length: f64) -> Result<Fragment> {
             atoms: Vec::new(),
             bonds: Vec::new(),
         },
+        singlets: Vec::new(),
         metadata: Metadata::default(),
         directions: Vec::new(),
         positions: Vec::new(),
@@ -313,6 +314,9 @@ fn fragment(node: Node<'_, '_>, bond_length: f64) -> Result<Fragment> {
             },
         );
         result.graph.atoms.push(atom(child)?);
+        result
+            .singlets
+            .push(child.attribute("Radical") == Some("Singlet"));
         let (position, is_3d) = position(child)?;
         result.positions.push(position);
         result.is_3d |= is_3d;

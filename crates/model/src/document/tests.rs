@@ -1,6 +1,52 @@
 use super::*;
 
 #[test]
+fn singlet_atoms_round_trip_and_legacy_atoms_default_to_triplet() {
+    let legacy = serde_json::json!({
+        "id": 1,
+        "element": "C",
+        "position": { "x": 0., "y": 0. },
+        "radical_electrons": 2
+    });
+    let atom: Atom = serde_json::from_value(legacy).unwrap();
+    assert!(!atom.singlet);
+    assert!(
+        serde_json::to_value(&atom)
+            .unwrap()
+            .get("singlet")
+            .is_none()
+    );
+    let mut doc = Document::default();
+    doc.atoms.push(atom);
+    doc.atoms[0].singlet = true;
+    doc.validate().unwrap();
+    let json = doc.file_json().unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&json).unwrap()["atoms"][0]["singlet"],
+        true
+    );
+    let reopened = Document::from_native_file(&json).unwrap();
+    assert!(reopened.atoms[0].singlet);
+    assert_eq!(reopened.atoms[0].radical_electrons, 2);
+}
+
+#[test]
+fn singlet_requires_two_nonbonding_electrons() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("C", Point::default());
+    for electrons in [0, 1, 3] {
+        let atom = doc.atom_mut(id).unwrap();
+        atom.radical_electrons = electrons;
+        atom.singlet = true;
+        assert_eq!(
+            doc.validate().unwrap_err(),
+            "Invalid atom radical count or mark position"
+        );
+        assert!(Document::from_native_file(&doc.file_json().unwrap()).is_err());
+    }
+}
+
+#[test]
 fn manual_atom_label_scripts_round_trip_native_files_and_empty_runs_are_omitted()
 -> Result<(), String> {
     use crate::typography::{Script, ScriptRun};

@@ -49,6 +49,79 @@ fn v2000_chain(atoms: usize) -> String {
 }
 
 #[test]
+fn v2000_preserves_singlet_and_triplet_spin() -> anyhow::Result<()> {
+    for (code, electrons, singlet) in [(1, 2, true), (2, 1, false), (3, 2, false)] {
+        let text = format!(
+            "\n     RDKit          2D\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n\
+             {}\n{}\n{}\n  1  2  1  0\n  1  3  1  0\nM  RAD  1   1   {code}\nM  END\n",
+            v2000_atom(0., 0., "C"),
+            v2000_atom(1.5, 0., "Cl"),
+            v2000_atom(-1.5, 0., "Cl"),
+        );
+        let imported = read(&text)?;
+        assert_eq!(imported.annotations.singlets, [singlet, false, false]);
+        assert_eq!(
+            imported.molecule.state.graph.atoms[0].radical_electrons,
+            electrons
+        );
+        let (document, _) = imported.clone().display_document()?;
+        assert_eq!(document.atoms[0].radical_electrons, electrons);
+        assert_eq!(document.atoms[0].singlet, singlet);
+        if electrons == 2 {
+            assert_eq!(document.atoms[0].label_h, 0);
+            assert_eq!(document.atoms[0].charge, 0);
+        }
+        let output = write_document(&document)?;
+        assert!(
+            output.contains(&format!("M  RAD  1   1   {code}")),
+            "{output}"
+        );
+        let (reopened, _) = read(&output)?.display_document()?;
+        assert_eq!(reopened.atoms[0].radical_electrons, electrons);
+        assert_eq!(reopened.atoms[0].singlet, singlet);
+    }
+    Ok(())
+}
+
+#[test]
+fn v3000_preserves_singlet_and_triplet_spin() -> anyhow::Result<()> {
+    for (code, singlet) in [(1, true), (3, false)] {
+        let text = format!(
+            "\n     RDKit          2D\n\n  0  0  0  0  0  0  0  0  0  0999 V3000\n\
+             M  V30 BEGIN CTAB\nM  V30 COUNTS 1 0 0 0 0\nM  V30 BEGIN ATOM\n\
+             M  V30 1 C 0 0 0 0 RAD={code} VAL=2\nM  V30 END ATOM\n\
+             M  V30 END CTAB\nM  END\n"
+        );
+        let imported = read(&text)?;
+        assert_eq!(imported.annotations.singlets, [singlet]);
+        let (document, molecule) = imported.display_document()?;
+        assert_eq!(document.atoms[0].radical_electrons, 2);
+        assert_eq!(document.atoms[0].singlet, singlet);
+        let (output, _) =
+            write_drawing_absolute(&molecule, &document, Options { force_v3000: true })?;
+        assert_eq!(output.contains(" RAD=1"), singlet, "{output}");
+        let (reopened, _) = read(&output)?.display_document()?;
+        assert_eq!(reopened.atoms[0].radical_electrons, 2);
+        assert_eq!(reopened.atoms[0].singlet, singlet);
+    }
+    Ok(())
+}
+
+#[test]
+fn hydrogen_folding_preserves_singlet_spin() -> anyhow::Result<()> {
+    let text = v2000_chain(2)
+        .replacen(" C ", " H ", 1)
+        .replace("M  END", "M  RAD  1   2   1\nM  END");
+    let imported = read(&text)?.for_display()?;
+    assert_eq!(imported.annotations.singlets, [true]);
+    let (document, _) = imported.display_document()?;
+    assert_eq!(document.atoms.len(), 1);
+    assert!(document.atoms[0].singlet);
+    assert_eq!(document.atoms[0].radical_electrons, 2);
+    Ok(())
+}
+
+#[test]
 fn pasted_cpp7_preserves_the_complete_import_and_formula() -> anyhow::Result<()> {
     let standard = read(CPP7)?;
     assert_eq!(standard.molecule.state.graph.atoms.len(), 42);
@@ -291,6 +364,7 @@ fn attachment_indices_keep_member_order_and_missing_target_errors() {
             Options { force_v3000: true },
             true,
             std::slice::from_ref(&attachment),
+            &[],
             false,
             false,
         )
@@ -309,6 +383,7 @@ fn attachment_indices_keep_member_order_and_missing_target_errors() {
                 Options { force_v3000: true },
                 true,
                 &[missing],
+                &[],
                 false,
                 false
             )
@@ -675,6 +750,7 @@ fn reaction_export_keeps_3d_participant_depth_and_2d_bytes() -> anyhow::Result<(
         Options { force_v3000: true },
         true,
         &[],
+        &[],
         false,
         false,
     )?;
@@ -686,6 +762,7 @@ fn reaction_export_keeps_3d_participant_depth_and_2d_bytes() -> anyhow::Result<(
         &product,
         Options { force_v3000: true },
         true,
+        &[],
         &[],
         false,
         false,

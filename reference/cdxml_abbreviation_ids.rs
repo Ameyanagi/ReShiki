@@ -72,6 +72,7 @@ fn fragments(atoms: &[u8], sizes: &[usize]) -> anyhow::Result<Vec<cdxml::Fragmen
                 .collect::<Result<Vec<_>, _>>()?,
             bond_ids: Vec::new(),
             fuse_labels: vec![None; size],
+            singlets: vec![false; size],
             graph,
             metadata,
             directions: Vec::new(),

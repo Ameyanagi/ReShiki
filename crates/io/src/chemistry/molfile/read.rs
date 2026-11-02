@@ -52,6 +52,10 @@ pub struct FileAnnotations {
     /// Excluded from the RDKit-compatible serialized parser snapshot.
     #[serde(skip)]
     pub chemdraw_directions: Vec<Direction>,
+    /// Spin state is drawing metadata; the chemical graph stores only the
+    /// radical electron count. Excluded from RDKit-compatible snapshots.
+    #[serde(skip)]
+    pub singlets: Vec<bool>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<crate::attachments::Attachment>,
     pub is_3d: bool,
@@ -118,6 +122,7 @@ impl Imported {
             self.annotations.is_3d,
             &self.annotations.dummy_labels,
         )?
+        .with_singlets(&self.annotations.singlets)?
         .with_attachments(&self.annotations.attachments)?
         .with_generic(&self.annotations.generic)
     }
@@ -247,6 +252,7 @@ enum FileQuery {
 #[derive(Default)]
 struct FileAtom {
     valence: i32,
+    singlet: bool,
     hyd_override: bool,
     attachment: Option<i32>,
     dummy_label: Option<String>,
@@ -547,6 +553,7 @@ impl Parsed {
                     .collect(),
                 is_3d,
                 attachment_points: self.atoms.iter().map(|a| a.attachment).collect(),
+                singlets: self.atoms.iter().map(|a| a.singlet).collect(),
                 dummy_labels: self.atoms.into_iter().map(|a| a.dummy_label).collect(),
             },
         })

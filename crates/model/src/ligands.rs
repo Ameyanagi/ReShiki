@@ -115,6 +115,7 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
     point.no_implicit = true;
     point.aromatic = false;
     point.radical_electrons = 0;
+    point.singlet = false;
     point.stereo = None;
     point.cip_label = None;
     point.display.set_variable(None);

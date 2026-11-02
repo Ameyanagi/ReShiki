@@ -29,6 +29,7 @@ impl App {
             }
             if mark.kind.radical() {
                 a.radical_electrons = 0;
+                a.singlet = false;
             }
             if mark.kind.charge() || mark.kind.radical() {
                 a.explicit_h = 0;
@@ -49,8 +50,24 @@ impl App {
             .filter(|a| self.tab.selected.contains(&a.id))
         {
             atom.radical_electrons = value;
+            if value != 2 {
+                atom.singlet = false;
+            }
             atom.explicit_h = 0;
             atom.no_implicit = false;
+        }
+        self.changed(before);
+    }
+    pub(super) fn set_singlet(&mut self, value: bool) {
+        let before = self.tab.doc.clone();
+        for atom in self
+            .tab
+            .doc
+            .atoms
+            .iter_mut()
+            .filter(|a| self.tab.selected.contains(&a.id) && a.radical_electrons == 2)
+        {
+            atom.singlet = value;
         }
         self.changed(before);
     }
@@ -107,3 +124,6 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

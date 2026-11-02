@@ -131,6 +131,7 @@ fn atom_record(r: &Reader<'_>, line: &str, tokens: Option<&[&str]>) -> Result<At
         },
         props: FileAtom {
             valence,
+            singlet: false,
             hyd_override: false,
             attachment: None,
             dummy_label: dummy_label(symbol),
@@ -289,7 +290,13 @@ fn properties(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                             atom.charge =
                                 i8::try_from(value).map_err(|_| r.invalid("Excessive charge"))?
                         }
-                        "RAD" => atom.radical_electrons = radical(value)?,
+                        "RAD" => {
+                            atom.radical_electrons = radical(value)?;
+                            p.atoms
+                                .get_mut(index)
+                                .ok_or_else(|| r.invalid("Missing radical atom"))?
+                                .singlet = value == 1;
+                        }
                         "ISO" if value >= 0 => {
                             atom.isotope =
                                 u16::try_from(value).map_err(|_| r.invalid("Excessive isotope"))?

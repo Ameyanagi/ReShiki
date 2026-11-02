@@ -260,6 +260,7 @@ fn combine(parts: &[Fragment]) -> Result<Combined> {
             .filter(|n| *n <= 300_000)
             .ok_or_else(|| error(Combination, PreparationCause::Limit))?;
         if part.positions.len() != part.graph.atoms.len()
+            || part.singlets.len() != part.graph.atoms.len()
             || part.metadata.atoms.len() != part.graph.atoms.len()
             || part.metadata.bonds.len() != part.graph.bonds.len()
             || part.directions.len() != part.graph.bonds.len()

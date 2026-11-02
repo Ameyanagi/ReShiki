@@ -668,6 +668,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::RemoveMark(..)
         | Message::RotateMark(..)
         | Message::AtomRadical(..)
+        | Message::AtomSinglet(..)
         | Message::ToggleInspector
         | Message::Inspector(..)
         | Message::InsertInput
