@@ -7,6 +7,7 @@ pub enum Action {
     Select(usize),
     Reverse,
     Redraw,
+    Invert,
     IupacStyleNotes(bool),
 }
 
@@ -59,6 +60,9 @@ fn summaries(notes: &[Note]) -> Vec<String> {
                 }
                 Kind::ReEntrant => format!("{count} stereobond{plural} at re-entrant ring atoms"),
                 Kind::TShape => format!("T-shaped wedge geometry at {count} centre{plural}"),
+                Kind::AlleneBothEnds => {
+                    format!("{count} allene{plural} with stereo bonds at both ends")
+                }
             }
         })
         .collect()
@@ -93,6 +97,7 @@ impl App {
             }
             Action::Reverse => self.reverse_stereo_notes(),
             Action::Redraw => self.redraw_stereo_bonds(),
+            Action::Invert => self.invert_configuration(),
             Action::IupacStyleNotes(enabled) => {
                 self.appearance.iupac_style_notes = enabled;
                 self.tab.stereo_notes.clear();
@@ -105,6 +110,27 @@ impl App {
                     self.status = format!("Could not save IUPAC style notes preference: {error}");
                     self.error = true;
                 }
+            }
+        }
+    }
+
+    fn invert_configuration(&mut self) {
+        let [id] = self.tab.selected.as_slice() else {
+            self.status = "Select one atom with a defined configuration".into();
+            self.error = true;
+            return;
+        };
+        let before = self.tab.doc.clone();
+        match reshiki::stereochemistry::invert_configuration(&mut self.tab.doc, *id) {
+            Ok(()) => {
+                self.changed(before);
+                if !self.error {
+                    self.status = "Configuration inverted · Undo restores the original".into();
+                }
+            }
+            Err(error) => {
+                self.status = error;
+                self.error = true;
             }
         }
     }

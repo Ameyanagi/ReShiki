@@ -28,7 +28,16 @@ impl Aromatic {
     pub fn finish(self) -> Result<AromaticEdit, Error> {
         let before = write::write(&self.before.state, write::Options::default())?.text;
         let after = write::write(&self.after.state, write::Options::default())?.text;
-        if before.is_empty() || before != after {
+        // SMILES has no atropisomer layer; a ring display can drop an axis wedge.
+        let axes = |m: &Molecule| {
+            m.state
+                .metadata
+                .bonds
+                .iter()
+                .map(|b| matches!(b.stereo, 6 | 7).then_some(b.stereo))
+                .collect::<Vec<_>>()
+        };
+        if before.is_empty() || before != after || axes(&self.before) != axes(&self.after) {
             return Err(Error::IdentityChanged);
         }
         Ok(AromaticEdit {

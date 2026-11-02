@@ -5,7 +5,10 @@
 //! A fingerprint only rejects candidates; an injective graph mapping, including
 //! structural stereo, must succeed before a later product can be discarded.
 use super::Work;
-use crate::chemistry::document::Molecule;
+use crate::chemistry::{
+    document::Molecule,
+    stereo::{allene, cip::configuration::parity4},
+};
 use std::{
     collections::{HashMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
@@ -112,6 +115,7 @@ struct SearchAtom {
 struct Identity {
     atoms: Vec<AtomKey>,
     winding: Vec<u8>,
+    allenes: HashMap<usize, (u32, [usize; 4])>,
     edges: Vec<Edge>,
     // Preserve preparation's bond insertion order for tetrahedral parity.
     adjacent: Vec<Vec<Link>>,
@@ -156,11 +160,12 @@ impl Identity {
             || state.valences.len() != n
             || state.properties.atoms.len() != n
             || !state.metadata.groups.is_empty()
-            || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
+            || state.metadata.atoms.iter().enumerate().any(|(i, a)| {
+                !allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
+            })
             || state.metadata.bonds.iter().any(|b| b.stereo > 5)
         {
-            // Document preparation currently excludes these classes. Never
-            // silently use a plain graph if that contract grows in the future.
+            // Biaryl bond axes and enhanced stereo require separate identities.
             return Err(invalid());
         }
         let mut degrees = vec![0usize; n];
@@ -208,8 +213,26 @@ impl Identity {
         }
         let mut atoms = Vec::with_capacity(n);
         let mut winding = Vec::with_capacity(n);
+        let mut allenes = HashMap::new();
         for (index, atom) in state.graph.atoms.iter().enumerate() {
             let meta = at(&state.metadata.atoms, index)?;
+            if meta.chiral_tag == 5 {
+                work.charge(size_of::<(usize, (u32, [usize; 4]))>().saturating_mul(2))?;
+                let ends = allene::terminals(&state.graph, index).ok_or_else(invalid)?;
+                let carriers = allene::carriers(&state.graph, index).ok_or_else(invalid)?;
+                let [a, b, c, d] = carriers;
+                let [near, far] = ends;
+                let carriers = [
+                    a.unwrap_or(near),
+                    b.unwrap_or(near),
+                    c.unwrap_or(far),
+                    d.unwrap_or(far),
+                ];
+                allenes.insert(
+                    index,
+                    (meta.chiral_permutation.ok_or_else(invalid)?, carriers),
+                );
+            }
             let mut neighborhood = [0u32; 10];
             for link in at(&adjacent, index)? {
                 let kind = at(&edges, link.bond)?.kind_at(index);
@@ -292,6 +315,7 @@ impl Identity {
         Ok(Self {
             atoms,
             winding,
+            allenes,
             edges,
             adjacent,
             search,
@@ -406,6 +430,21 @@ impl Identity {
                 continue;
             }
             let target = *at(mapping, atom)?;
+            if tag == 5 {
+                let (config, carriers) = self.allenes.get(&atom).ok_or_else(invalid)?;
+                let Some((other_config, other_carriers)) = other.allenes.get(&target) else {
+                    return Ok(false);
+                };
+                let mut mapped = [0; 4];
+                for (target, &carrier) in mapped.iter_mut().zip(carriers) {
+                    *target = *at(mapping, carrier)?;
+                }
+                let parity = parity4(&mapped, other_carriers).map_err(|e| e.to_string())?;
+                if parity == 0 || (config != other_config) != (parity == 1) {
+                    return Ok(false);
+                }
+                continue;
+            }
             let neighbors = at(&self.adjacent, atom)?;
             let target_neighbors = at(&other.adjacent, target)?;
             let degree = neighbors.len();

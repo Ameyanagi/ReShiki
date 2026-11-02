@@ -7,6 +7,41 @@ use crate::{
 };
 
 #[test]
+fn dl_descriptors_fit_the_generic_ink_envelope() {
+    for roman in [false, true] {
+        for inverted in [false, true] {
+            let mut doc =
+                crate::fischer::document(crate::fischer::Compound::LAlanine, 42.).unwrap();
+            let center = crate::fischer::recognize(&doc).crosses[0].center;
+            if inverted {
+                let stereo = doc.atom_mut(center).unwrap().stereo.as_mut().unwrap();
+                stereo.winding = if stereo.winding == "ccw" { "cw" } else { "ccw" }.into();
+            }
+            doc.atom_labels.stereo = true;
+            doc.atom_labels.dl_descriptors = true;
+            doc.atom_labels.roman_stereo_parentheses = roman;
+            let refresh =
+                crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default()).unwrap();
+            assert!(refresh.notice.is_none());
+            refresh.apply(&mut doc);
+            let before = doc.clone();
+            let (lo, hi) = atom_bounds(doc.atom(center).unwrap(), &doc)
+                .unwrap()
+                .unwrap();
+            let indicator = crate::atom_labels::indicators(&doc)
+                .into_iter()
+                .find(|i| i.owner == crate::atom_labels::Owner::AtomStereo(center))
+                .unwrap();
+            assert_eq!(indicator.text, if inverted { "D (R)" } else { "L (S)" });
+            assert!(indicator.origin.x >= lo.x && indicator.origin.y >= lo.y);
+            assert!(indicator.origin.x + indicator.width <= hi.x);
+            assert!(indicator.origin.y + indicator.height <= hi.y);
+            assert_eq!(doc, before);
+        }
+    }
+}
+
+#[test]
 fn optional_unknown_indicators_fit_the_generic_ink_envelope() {
     let mut doc = chain(&["C", "C"]);
     doc.atom_labels.stereo = true;
@@ -235,4 +270,43 @@ fn cip_bounds_cover_roman_parentheses_on_atom_and_bond_indicators() {
             }
         }
     }
+}
+
+#[test]
+fn steroid_alpha_beta_indicators_and_future_ink_fit_generic_bounds() {
+    with_fonts(|| {
+        for roman in [false, true] {
+            let mut doc = Document::default();
+            doc.drawing_style.font_family = "Liberation Sans".into();
+            doc.atom_labels.stereo = true;
+            doc.atom_labels.steroid_alpha_beta = true;
+            doc.atom_labels.roman_stereo_parentheses = roman;
+            let id = doc.add_atom("C", Point::default());
+            let atom = doc.atom_mut(id).unwrap();
+            atom.display.stereo.style.family = "Liberation Sans".into();
+            atom.display.stereo.style.size_pt = 36.;
+            atom.display.stereo.offset = Some(Point::new(-80., 70.));
+            // Pay and measure the envelope before background perception adds
+            // a locant label, as generic expansion does for fixed components.
+            let future = atom_bounds(doc.atom(id).unwrap(), &doc).unwrap().unwrap();
+            let atom = doc.atom_mut(id).unwrap();
+            atom.cip_label = Some("R".into());
+            atom.steroid_label = Some("17β".into());
+            let actual = atom_bounds(doc.atom(id).unwrap(), &doc).unwrap().unwrap();
+            let [indicator] = crate::atom_labels::indicators(&doc).try_into().unwrap();
+            assert_eq!(indicator.text, "17β");
+            assert!(indicator.style.italic);
+            assert!(
+                crate::atom_labels::indicator_format(&indicator.text, &indicator.style, roman)
+                    .spans
+                    .is_empty()
+            );
+            let ink = crate::scene::label_ink_boxes(&indicator.primitives());
+            assert!(!ink.is_empty());
+            for bounds in ink {
+                crate::generic::drawing_test_support::contained(actual, bounds);
+                crate::generic::drawing_test_support::contained(future, bounds);
+            }
+        }
+    });
 }

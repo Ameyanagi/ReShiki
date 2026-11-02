@@ -77,6 +77,60 @@ fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
 }
 
 #[test]
+fn fischer_and_inversion_commands_are_searchable_and_targeted() {
+    let mut app = app();
+    for name in [
+        "Convert to Wedge Drawing",
+        "Convert to Fischer Projection",
+        "Invert Configuration Here",
+    ] {
+        search(&mut app, name);
+        let command = &app.commands.items[row(&app, name)];
+        assert_eq!(command.category, Category::Edit);
+    }
+    let document = reshiki::fischer::document(reshiki::fischer::Compound::LAlanine, 42.).unwrap();
+    let center = document
+        .atoms
+        .iter()
+        .find(|atom| atom.stereo.is_some())
+        .unwrap()
+        .id;
+    app.tab.doc = document;
+    app.tab.selected = vec![center];
+    let before = app.tab.doc.clone();
+    run(&mut app, "Invert Configuration Here");
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    app.step_history(false);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn dl_descriptors_toggle_for_the_whole_drawing_and_undo_through_the_palette() {
+    let mut app = app();
+    app.tab.doc = reshiki::fischer::document(reshiki::fischer::Compound::DGlucose, 42.).unwrap();
+    app.tab.labels.scope = super::super::atom_labels::Scope::Selection;
+    app.tab.selected = vec![app.tab.doc.atoms[0].id];
+    let before = app.tab.doc.clone();
+    assert!(!before.atom_labels.dl_descriptors);
+
+    run(&mut app, "Show D/L for amino acids and sugars");
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.doc.atom_labels.dl_descriptors);
+    assert_eq!(
+        app.tab.labels.scope,
+        super::super::atom_labels::Scope::Selection
+    );
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    for atom in &app.tab.doc.atoms {
+        assert_eq!(atom.display, before.atom(atom.id).unwrap().display);
+    }
+    app.step_history(false);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn ionic_and_centred_charge_commands_follow_selection_eligibility() {
     let mut app = app();
     let o = app.tab.doc.add_atom("O", Point::default());
@@ -176,6 +230,26 @@ fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
     assert_eq!(top(&app).name, "Hide stereodescriptors");
     let _ = app.update(Message::Commands(Action::Submit));
     assert!(!app.tab.doc.atom_labels.stereo);
+}
+
+#[test]
+fn steroid_alpha_beta_is_searchable_and_undoable() {
+    let mut app = app();
+    let _ = app.update(Message::New);
+    app.tab.doc.add_atom("C", Point::default());
+    app.tab.history = Default::default();
+    for query in ["steroid", "alpha beta", "gonane"] {
+        search(&mut app, query);
+        row(&app, "Show steroid α/β");
+    }
+    search(&mut app, "Show steroid α/β");
+    assert_eq!(top(&app).name, "Show steroid α/β");
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert!(app.tab.doc.atom_labels.steroid_alpha_beta);
+    let _ = app.update(Message::Undo);
+    assert!(!app.tab.doc.atom_labels.steroid_alpha_beta);
+    let _ = app.update(Message::Redo);
+    assert!(app.tab.doc.atom_labels.steroid_alpha_beta);
 }
 
 #[test]

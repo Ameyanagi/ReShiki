@@ -384,6 +384,7 @@ pub enum Job {
     Insert,
     Analyze,
     Clean(cleanup::CleanupJob),
+    Projection(&'static str),
     Export(&'static str),
 }
 /// What the save dialog's answer continues.
@@ -1364,11 +1365,12 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
         && *color == b.color
 }
 
-/// Compares atoms without their computed hydrogen count and CIP label.
+/// Compares atoms without their computed hydrogen count and stereo labels.
 fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
     let reshiki::document::Atom {
         display,
         cip_label: _,
+        steroid_label: _,
         undefined_stereo: _,
         id,
         element,

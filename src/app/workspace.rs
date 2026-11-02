@@ -354,7 +354,7 @@ impl App {
     }
 
     fn cleanup_bar<'a>(&'a self, preview: &'a super::CleanupPreview) -> Element<'a, Message> {
-        use reshiki::cleanup::Scope;
+        use reshiki::cleanup::{Orientation, Scope};
         let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
         let mut bar = column![
             row![
@@ -375,11 +375,14 @@ impl App {
             .spacing(10)
             .align_y(Alignment::Center),
             row![
-                checkbox(preview.job.options.keep_orientation)
-                    .label("Keep orientation")
-                    .text_size(11)
-                    .size(13)
-                    .on_toggle(|keep| Message::Cleanup(super::cleanup::Action::Orientation(keep))),
+                text("Orientation").size(11),
+                crate::appearance::pick_list(
+                    [Orientation::Keep, Orientation::Free, Orientation::Iupac],
+                    Some(preview.job.options.orientation()),
+                    |mode| Message::Cleanup(super::cleanup::Action::Orientation(mode)),
+                )
+                .text_size(11)
+                .width(170),
                 Space::new().width(Length::Fill),
                 accessible_command("cleanup.cancel", "Cancel cleanup preview", "Cancel")
                     .on_press(Message::Cleanup(super::cleanup::Action::Cancel)),
@@ -396,6 +399,13 @@ impl App {
                 .style(muted_text),
         ]
         .spacing(6);
+        if preview.job.options.orientation() == Orientation::Iupac {
+            bar = bar.push(
+                text("Largest fused ring system: horizontal row, extra rings upper right (FR-5.2)")
+                    .size(11)
+                    .style(muted_text),
+            );
+        }
         for warning in &preview.warnings {
             bar = bar.push(text(warning).size(11).style(muted_text));
         }
@@ -2339,6 +2349,12 @@ impl App {
                 tooltip::Position::Left,
             ))
             .push(
+                checkbox(self.tab.doc.atom_labels.dl_descriptors)
+                    .label("Show D/L for amino acids and sugars")
+                    .text_size(12)
+                    .on_toggle(|v| Message::Labels(A::DlDescriptors(v))),
+            )
+            .push(
                 checkbox(self.tab.doc.atom_labels.roman_stereo_parentheses)
                     .label("Upright stereo parentheses (whole drawing)")
                     .text_size(12)
@@ -2350,6 +2366,14 @@ impl App {
                     .text_size(12)
                     .on_toggle_maybe((stereo && self.tab.doc.atom_labels.stereo).then_some(|v| Message::Labels(A::MarkUndefined(v)))),
             )
+            .push(hover_hint(
+                checkbox(self.tab.doc.atom_labels.steroid_alpha_beta)
+                    .label("Steroid α/β (3β, 5α…)")
+                    .text_size(12)
+                    .on_toggle_maybe(stereo.then_some(|v| Message::Labels(A::SteroidAlphaBeta(v)))),
+                "α: below the ring plane, β: above it, in standard steroid orientation; other centres keep R/S",
+                tooltip::Position::Left,
+            ))
             .push(
                 text("Labels update after chemical edits. (?) marks undefined configuration when enabled.")
                     .size(11)

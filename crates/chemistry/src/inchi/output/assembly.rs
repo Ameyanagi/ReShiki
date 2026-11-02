@@ -306,7 +306,57 @@ pub fn assemble(output: &Output) -> Result<Assembly, Error> {
                 }
                 at_mut(&mut state.metadata.atoms, center)?.chiral_tag = tag;
             }
-            3 => assembled.warnings.push(Warning::IgnoredAllene),
+            3 => {
+                if !matches!(stereo.parity, 1 | 2) {
+                    continue;
+                }
+                let Some(center) = stereo.central_atom else {
+                    assembled.warnings.push(Warning::IgnoredAllene);
+                    continue;
+                };
+                let center = index(center, output.atoms.len())?;
+                // The shared axis helpers scan insertion-ordered bonds. Charge
+                // their scans to the same budget as other raw stereo work.
+                work.spend(state.graph.bonds.len().saturating_mul(8))?;
+                let Some(terminals) = stereo::allene::terminals(&state.graph, center) else {
+                    assembled.warnings.push(Warning::IgnoredAllene);
+                    continue;
+                };
+                let Some(carriers) = stereo::allene::carriers(&state.graph, center) else {
+                    assembled.warnings.push(Warning::IgnoredAllene);
+                    continue;
+                };
+                let [first, left, right, last] =
+                    stereo.neighbors.map(|atom| index(atom, output.atoms.len()));
+                let [first, left, right, last] = [first?, left?, right?, last?];
+                if [left, right] != terminals && [right, left] != terminals {
+                    return Err(invalid("Allene stereo terminals do not match its center"));
+                }
+                let (left_carriers, right_carriers) = if left == terminals[0] {
+                    (&carriers[..2], &carriers[2..])
+                } else {
+                    (&carriers[2..], &carriers[..2])
+                };
+                // A repeated terminal denotes its implicit H; actual native
+                // output normally expands those hydrogens into graph atoms.
+                let first = (first != left).then_some(first);
+                let last = (last != right).then_some(last);
+                let a = left_carriers
+                    .iter()
+                    .position(|&carrier| carrier == first)
+                    .ok_or_else(|| invalid("Missing allene carrier"))?;
+                let b = right_carriers
+                    .iter()
+                    .position(|&carrier| carrier == last)
+                    .ok_or_else(|| invalid("Missing allene carrier"))?;
+                let mut permutation = if stereo.parity == 2 { 1 } else { 2 };
+                if (a == 1) != (b == 1) {
+                    permutation = 3 - permutation;
+                }
+                let metadata = at_mut(&mut state.metadata.atoms, center)?;
+                metadata.chiral_tag = 5;
+                metadata.chiral_permutation = Some(permutation);
+            }
             kind => assembled.warnings.push(Warning::UnknownStereoType(kind)),
         }
     }

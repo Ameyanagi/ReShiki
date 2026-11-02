@@ -243,7 +243,8 @@ fn assignments(
     Some(result)
 }
 
-fn equivalent(a: &AtomStereo, b: &AtomStereo) -> bool {
+/// Compare validated tetrahedral configurations by their neighbor-order parity.
+pub fn equivalent(a: &AtomStereo, b: &AtomStereo) -> bool {
     if a.neighbors.len() != b.neighbors.len() {
         return false;
     }
@@ -319,6 +320,7 @@ fn apply(doc: &mut Document, recognized: Recognized) -> bool {
         if recognized.atoms.contains(&atom.id) {
             atom.stereo = recognized.stereo.get(&atom.id).cloned();
             atom.cip_label = None;
+            atom.steroid_label = None;
             atom.undefined_stereo = false;
         }
     }

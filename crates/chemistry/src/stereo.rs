@@ -5,6 +5,7 @@
 //!
 //! Cleanup repairs annotations; the drawing pass reads wedged-bond geometry.
 //! Absolute configurations remain separate. Results never edit the caller's data.
+pub mod allene;
 pub mod cip;
 mod drawing;
 pub use drawing::wedging;
@@ -76,6 +77,13 @@ pub(crate) fn chirality_cached(
     let mut clean_groups = false;
     for (id, atom) in result.atoms.iter_mut().enumerate() {
         let maximum = match atom.chiral_tag {
+            5 => {
+                if allene::terminals(graph, id).is_none() {
+                    atom.chiral_tag = 0;
+                    atom.chiral_permutation = None;
+                }
+                Some(2)
+            }
             1 | 2 | 4 => {
                 if *at(hybridizations, id)? != Hybridization::Sp3 {
                     atom.chiral_tag = 0;

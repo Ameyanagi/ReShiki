@@ -569,6 +569,7 @@ impl Writer<'_> {
     pub(super) fn labels(&mut self) -> Result<()> {
         let doc = self.doc;
         let settings = &doc.atom_labels;
+        let atom_stereo = crate::atom_labels::atom_stereo_texts(doc);
         for (k, v) in carbon_attributes(settings.carbons) {
             self.tree.set(0, k, v)?;
         }
@@ -618,11 +619,11 @@ impl Writer<'_> {
             }
             let show = d.stereo.show.unwrap_or(settings.stereo);
             self.tree.set(n, "ShowAtomStereo", yes(show))?;
-            if show && let Some(cip) = &a.cip_label {
+            if show && let Some(text) = atom_stereo.get(&a.id) {
                 self.indicator(
                     n,
                     Owner::AtomStereo(a.id),
-                    &stereo_text(cip, settings),
+                    text,
                     &d.stereo.style,
                     d.stereo.offset,
                     a.position.into(),
@@ -707,12 +708,18 @@ impl Writer<'_> {
                 ("TagType", "Unknown".into()),
             ],
         )?;
-        let format = crate::atom_labels::indicator_format(
-            text,
-            &style,
-            self.doc.atom_labels.roman_stereo_parentheses
-                && matches!(owner, Owner::AtomStereo(_) | Owner::BondStereo(..)),
-        );
+        let format = if matches!(owner, Owner::Number(_)) {
+            TextFormat {
+                style,
+                ..Default::default()
+            }
+        } else {
+            crate::atom_labels::indicator_format(
+                text,
+                &style,
+                self.doc.atom_labels.roman_stereo_parentheses,
+            )
+        };
         self.text(
             tag,
             text,

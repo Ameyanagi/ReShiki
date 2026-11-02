@@ -22,6 +22,7 @@ use cosmolkit_inchi::{
 };
 use serde::{Deserialize, Serialize};
 
+mod allene;
 #[cfg(test)]
 mod tests;
 
@@ -548,14 +549,16 @@ fn text(bytes: Vec<u8>) -> Result<String, String> {
 /// Run only in the isolated helper: the caller enforces time and heap limits.
 pub fn generate(input: &Molecule) -> Result<Generated, String> {
     input.validate().map_err(|e| e.to_string())?;
+    let allene = allene::prepare(input)?;
+    let state = allene.as_ref().unwrap_or(&input.state);
     let conformers = input
         .positions
         .as_ref()
         .map(|p| vec![p.iter().map(|p| [p.x, p.y, p.z]).collect()])
         .unwrap_or_default();
-    let molecule = to_adapter(&input.state, conformers, &[]).map_err(|e| e.message)?;
+    let molecule = to_adapter(state, conformers, &[]).map_err(|e| e.message)?;
     let mut toolkit = Toolkit {
-        state: Some(input.state.clone()),
+        state: Some(state.clone()),
         unspecified: vec![],
     };
     let result =
@@ -571,6 +574,11 @@ pub fn generate(input: &Molecule) -> Result<Generated, String> {
 }
 /// Return the dependency's molecular result; raw C records are intentionally
 /// not fabricated because the dependency does not expose that API.
+///
+/// The pinned molecular reader discards allene 0D records and supplies an
+/// explicit diagnostic, retained below. The detached raw-output adapter can
+/// reconstruct their configurations, but this scalar API does not expose
+/// those records, so native allene import needs an upstream API extension.
 pub fn read(inchi: &str, options: output::Options) -> Result<Imported, String> {
     let mut toolkit = Toolkit::default();
     let result = cosmolkit_inchi::mol_from_inchi(

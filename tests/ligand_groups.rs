@@ -143,6 +143,7 @@ async fn cleanup_preserves_collapsed_expanded_and_variable_attachments() -> anyh
                     request.cleanup = Some(Options {
                         scope,
                         keep_orientation: false,
+                        ..Options::default()
                     });
                     request.selected_ids = Some(vec![member]);
                     // No identifier helper should be discovered or started.
@@ -191,6 +192,7 @@ fn cleanup_can_move_an_independent_molecule_without_moving_the_complex() -> anyh
             Options {
                 scope,
                 keep_orientation: false,
+                ..Options::default()
             },
             &[a, b, c],
         )?;

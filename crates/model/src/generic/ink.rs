@@ -7,8 +7,8 @@ use super::{
 };
 use crate::{
     atom_labels::{
-        Settings, bond_indicator_shown, map_indicator_shown, stereo_code, stereo_indicator_shown,
-        stereo_text,
+        Settings, atom_stereo_code, bond_indicator_shown, map_indicator_shown,
+        stereo_indicator_shown, stereo_text,
     },
     document::{Atom, Document, Point},
     highlights::{CAPSULE_RADIUS_SCALE, label_shape_from, radius},
@@ -205,12 +205,12 @@ impl<'a> LabelPlan<'a> {
             return plan;
         }
         let stereo_chars = if stereo_label {
-            cip_text_bytes(a.cip_label.as_deref(), &doc.atom_labels)
+            cip_text_bytes(atom_stereo_code(a, doc), &doc.atom_labels, true)
         } else {
             0
         };
         plan.bytes = a.element.len()
-            + stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc).map_or(0, str::len)
+            + atom_stereo_code(a, doc).map_or(0, str::len)
             + a.display.variable.as_ref().map_or(0, String::len)
             + number.map_or(0, |v| v.text.len())
             + a.marks.len().saturating_mul(512);
@@ -296,10 +296,11 @@ impl<'a> LabelPlan<'a> {
             cip_bounds(
                 &mut bounds,
                 a.position,
-                a.cip_label.as_deref(),
+                atom_stereo_code(a, self.doc),
                 a.display.stereo.offset,
                 &a.display.stereo.style,
                 &self.doc.atom_labels,
+                true,
             );
         }
         if let Some((lo, hi)) = bounds {
@@ -319,19 +320,40 @@ pub(super) fn atom_bounds(a: &Atom, doc: &Document) -> Result<Option<(Point, Poi
 // cleared, including on unrelated fixed components. Bound every enabled style
 // without assigning CIP, inventing a label, or altering persisted caches.
 const FUTURE_CIP_CODES: [&str; 12] = ["R", "S", "r", "s", "E", "Z", "e", "z", "M", "P", "m", "p"];
+const FUTURE_STEROID_CODES: [&str; 34] = [
+    "1α", "1β", "2α", "2β", "3α", "3β", "4α", "4β", "5α", "5β", "6α", "6β", "7α", "7β", "8α", "8β",
+    "9α", "9β", "10α", "10β", "11α", "11β", "12α", "12β", "13α", "13β", "14α", "14β", "15α", "15β",
+    "16α", "16β", "17α", "17β",
+];
 
-/// Optional undefined-centre markers may likewise appear after a refresh.
-fn future_codes<'a>(settings: &Settings) -> impl Iterator<Item = &'a str> + use<'a> {
+/// Optional undefined-centre markers and, on atoms, steroid labels may likewise
+/// appear after a refresh.
+fn future_codes<'a>(settings: &Settings, atom: bool) -> impl Iterator<Item = &'a str> + use<'a> {
     let undefined = settings.stereo && settings.mark_undefined_stereocentres;
-    FUTURE_CIP_CODES.into_iter().chain(undefined.then_some("?"))
+    let steroid = atom && settings.steroid_alpha_beta;
+    FUTURE_CIP_CODES
+        .into_iter()
+        .chain(undefined.then_some("?"))
+        .chain(FUTURE_STEROID_CODES.into_iter().filter(move |_| steroid))
 }
 
-pub(super) fn cip_text_bytes(saved: Option<&str>, settings: &Settings) -> usize {
+pub(super) fn cip_text_bytes(saved: Option<&str>, settings: &Settings, atom: bool) -> usize {
     saved
         .into_iter()
-        .chain(future_codes(settings))
-        .map(|code| stereo_text(code, settings).len())
+        .chain(future_codes(settings, atom))
+        .flat_map(|code| cip_text_variants(code, settings))
+        .map(|text| text.len())
         .sum()
+}
+
+fn cip_text_variants(code: &str, settings: &Settings) -> impl Iterator<Item = String> {
+    let text = stereo_text(code, settings);
+    let dl = settings.dl_descriptors && matches!(code, "R" | "S");
+    let names = [
+        dl.then(|| format!("D {text}")),
+        dl.then(|| format!("L {text}")),
+    ];
+    std::iter::once(text).chain(names.into_iter().flatten())
 }
 
 fn cip_bounds(
@@ -341,17 +363,22 @@ fn cip_bounds(
     offset: Option<Point>,
     style: &crate::typography::TextStyle,
     settings: &Settings,
+    atom: bool,
 ) {
-    for code in saved.into_iter().chain(future_codes(settings)) {
-        indicator_bounds(
-            bounds,
-            anchor,
-            &stereo_text(code, settings),
-            offset,
-            style,
-            false,
-            settings.roman_stereo_parentheses,
-        );
+    for code in saved.into_iter().chain(future_codes(settings, atom)) {
+        // A later chemistry refresh may recognize D/L. Reserve both names and
+        // the plain CIP label without assigning configuration to a generic.
+        for text in cip_text_variants(code, settings) {
+            indicator_bounds(
+                bounds,
+                anchor,
+                &text,
+                offset,
+                style,
+                false,
+                settings.roman_stereo_parentheses,
+            );
+        }
     }
 }
 
@@ -365,7 +392,14 @@ fn indicator_bounds(
     roman_parentheses: bool,
 ) {
     let height = crate::style::DEFAULT.world(style.size_pt);
-    let format = crate::atom_labels::indicator_format(text, style, roman_parentheses);
+    let format = if number {
+        crate::typography::TextFormat {
+            style: style.clone(),
+            ..Default::default()
+        }
+    } else {
+        crate::atom_labels::indicator_format(text, style, roman_parentheses)
+    };
     let width = crate::atom_labels::indicator_width(text, height, &format);
     // Automatic indicator candidates have five fixed radii, ending at 3.25h+6,
     // and long atom numbers are justified outward by up to `outward_extent`.
@@ -471,6 +505,7 @@ pub(super) fn object_bounds(doc: &Document) -> Result<Option<(Point, Point)>, St
                 b.indicator.offset,
                 &b.indicator.style,
                 &doc.atom_labels,
+                false,
             );
         }
     }

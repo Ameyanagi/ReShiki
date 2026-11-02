@@ -485,7 +485,7 @@ async fn cleanup_keeps_the_hidden_drawing_of_a_molecule_shown_in_3d() {
     doc.models.push(model);
     crate::models3d::require_version(&mut doc);
     assert!(set_display(&mut doc, 0, Display::ThreeD));
-    let engine = LocalEngine::default();
+    let engine = LocalEngine::in_process();
     let clean = |scope, selected: Vec<u64>| {
         let mut request = Request::molecule("clean", doc.clone());
         request.selected_ids = Some(selected);

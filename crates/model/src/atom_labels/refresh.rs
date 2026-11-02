@@ -20,10 +20,18 @@ pub const GENERIC_NOTICE: &str =
 /// The assigned CIP descriptor and the separate undefined-configuration flag.
 type ComputedStereo = (Option<String>, bool);
 
+#[derive(Clone, Debug)]
+struct ComputedAtom {
+    hydrogens: u32,
+    cip: Option<String>,
+    undefined: bool,
+    steroid: Option<String>,
+}
+
 #[derive(Debug, Default)]
 pub struct Refresh {
     cache: HashMap<u64, Arc<Entry>>,
-    atoms: HashMap<u64, (u32, Option<String>, bool)>,
+    atoms: HashMap<u64, ComputedAtom>,
     bonds: HashMap<(u64, u64), ComputedStereo>,
     pub notice: Option<String>,
 }
@@ -36,7 +44,7 @@ struct Entry {
 
 #[derive(Debug, Default)]
 struct Computed {
-    atoms: Vec<(u64, u32, Option<String>, bool)>,
+    atoms: Vec<(u64, ComputedAtom)>,
     bonds: Vec<((u64, u64), ComputedStereo)>,
 }
 
@@ -44,9 +52,17 @@ fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
 }
 
-/// Refreshes only the optional editor markers after an analysis response has
+/// Refreshes optional drawing conventions after an analysis response has
 /// replaced computed chemical labels. Ordinary refresh keeps this off-thread.
-pub fn refresh_undefined_stereo(document: &mut Document) {
+pub fn refresh_optional_stereo(document: &mut Document) {
+    let mut steroid = HashMap::new();
+    if document.atom_labels.steroid_alpha_beta {
+        for component in components(document).0 {
+            if let Ok(molecule) = chemistry::prepare(&component) {
+                steroid.extend(super::steroid::labels(&molecule, document));
+            }
+        }
+    }
     let undefined = if document.atom_labels.mark_undefined_stereocentres {
         crate::chemistry::stereo_lint::undefined(document)
     } else {
@@ -60,6 +76,7 @@ pub fn refresh_undefined_stereo(document: &mut Document) {
         .collect();
     for atom in &mut document.atoms {
         atom.undefined_stereo = atoms.contains(&atom.id);
+        atom.steroid_label = steroid.remove(&atom.id);
     }
     for bond in &mut document.bonds {
         bond.undefined_stereo = bonds.contains(&pair(bond.a, bond.b));
@@ -107,12 +124,7 @@ impl Refresh {
                 });
             match &entry.result {
                 Ok(computed) => {
-                    refresh.atoms.extend(
-                        computed
-                            .atoms
-                            .iter()
-                            .map(|(id, h, cip, undefined)| (*id, (*h, cip.clone(), *undefined))),
-                    );
+                    refresh.atoms.extend(computed.atoms.iter().cloned());
                     refresh.bonds.extend(computed.bonds.iter().cloned());
                 }
                 Err(error) => {
@@ -136,10 +148,12 @@ impl Refresh {
     pub fn apply(&self, document: &mut Document) {
         for atom in &mut document.atoms {
             atom.undefined_stereo = false;
-            if let Some((h, cip, undefined)) = self.atoms.get(&atom.id) {
-                atom.label_h = *h;
-                atom.cip_label.clone_from(cip);
-                atom.undefined_stereo = *undefined;
+            atom.steroid_label = None;
+            if let Some(computed) = self.atoms.get(&atom.id) {
+                atom.label_h = computed.hydrogens;
+                atom.cip_label.clone_from(&computed.cip);
+                atom.undefined_stereo = computed.undefined;
+                atom.steroid_label.clone_from(&computed.steroid);
             }
         }
         for bond in &mut document.bonds {
@@ -195,7 +209,7 @@ pub fn label_hydrogens(document: &Document, id: u64) -> Option<u32> {
     computed
         .atoms
         .into_iter()
-        .find_map(|(atom, h, _, _)| (atom == id).then_some(h))
+        .find_map(|(atom, computed)| (atom == id).then_some(computed.hydrogens))
 }
 
 /// Works out the hydrogen labels of the molecules an edit from `before`
@@ -256,6 +270,7 @@ pub fn refresh_edited(before: &Document, document: &mut Document) {
         // This synchronous edit repair consumes only hydrogens. Leave the
         // optional stereogenic-unit pass to the ordinary background refresh.
         component.atom_labels.mark_undefined_stereocentres = false;
+        component.atom_labels.steroid_alpha_beta = false;
         if component.atoms.iter().any(|a| edited.contains(&a.id))
             && !component
                 .atoms
@@ -263,7 +278,12 @@ pub fn refresh_edited(before: &Document, document: &mut Document) {
                 .any(|a| distance_atoms.contains(&a.id))
             && let Ok(computed) = compute(&component)
         {
-            hydrogens.extend(computed.atoms.into_iter().map(|(id, h, _, _)| (id, h)));
+            hydrogens.extend(
+                computed
+                    .atoms
+                    .into_iter()
+                    .map(|(id, atom)| (id, atom.hydrogens)),
+            );
         }
     }
     for atom in &mut document.atoms {
@@ -288,6 +308,11 @@ fn compute(source: &Document) -> Result<Computed, String> {
     let drawing = chemistry::for_drawing(&molecule, source).map_err(|e| e.to_string())?;
     let labels = drawing.labels().map_err(|e| e.to_string())?;
     let checked = drawing.finish(labels).map_err(|e| e.to_string())?;
+    let mut steroid = if source.atom_labels.steroid_alpha_beta {
+        super::steroid::labels(&molecule, &checked)
+    } else {
+        HashMap::new()
+    };
     // Possible-centre perception is an optional editor aid. Keep it out of
     // ordinary label refreshes and never place a question mark in CIP output.
     let undefined = if source.atom_labels.mark_undefined_stereocentres {
@@ -308,9 +333,12 @@ fn compute(source: &Document) -> Result<Computed, String> {
             .map(|a| {
                 (
                     a.id,
-                    a.label_h,
-                    a.cip_label,
-                    undefined_atoms.contains(&a.id),
+                    ComputedAtom {
+                        hydrogens: a.label_h,
+                        cip: a.cip_label,
+                        undefined: undefined_atoms.contains(&a.id),
+                        steroid: steroid.remove(&a.id),
+                    },
                 )
             })
             .collect(),
@@ -358,6 +386,7 @@ pub(crate) fn components(document: &Document) -> (Vec<Document>, bool) {
         // presentation settings remain outside the chemical snapshot.
         part.atom_labels.mark_undefined_stereocentres =
             document.atom_labels.mark_undefined_stereocentres;
+        part.atom_labels.steroid_alpha_beta = document.atom_labels.steroid_alpha_beta;
         result.push(part);
     }
     // Mark dependencies using the existing atom/component index before any
@@ -384,6 +413,7 @@ pub(crate) fn components(document: &Document) -> (Vec<Document>, bool) {
         let mut atom = atom.clone();
         atom.label_h = 0;
         atom.cip_label = None;
+        atom.steroid_label = None;
         atom.undefined_stereo = false;
         atom.display = Default::default();
         atom.text_style = None;

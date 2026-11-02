@@ -79,6 +79,94 @@ fn stereo_parentheses_export_as_optional_cdxml_and_cdx_style_runs_and_roundtrip(
     }
 }
 
+#[test]
+fn dl_descriptors_export_upright_prefixes_and_import_generated_style_runs() {
+    for (sugar, prefix) in [("D-glucopyranose", "D"), ("L-fucopyranose", "L")] {
+        for roman in [false, true] {
+            let mut document = crate::haworth::templates()
+                .unwrap()
+                .into_iter()
+                .find(|template| template.name.contains(sugar))
+                .unwrap()
+                .document;
+            document.atom_labels.stereo = true;
+            document.atom_labels.dl_descriptors = true;
+            document.atom_labels.roman_stereo_parentheses = roman;
+            let refresh =
+                crate::atom_labels::refresh::Refresh::calculate(&document, &Default::default())
+                    .unwrap();
+            assert!(refresh.notice.is_none());
+            refresh.apply(&mut document);
+            let indicators = crate::atom_labels::indicators(&document);
+            let text = &indicators
+                .iter()
+                .find(|indicator| indicator.text.starts_with(&format!("{prefix} ")))
+                .unwrap()
+                .text;
+            let cip = text
+                .trim_start_matches(&format!("{prefix} ("))
+                .trim_end_matches(')');
+            let before = document.clone();
+            for metrics in [None, Some(indicators.as_slice())] {
+                let xml = super::super::write(
+                    &document,
+                    super::super::Options {
+                        atom_indicators: metrics,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                let decoded =
+                    crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+                for xml in [&xml, &decoded] {
+                    let tree = roxmltree::Document::parse(xml).unwrap();
+                    let indicator = tree
+                        .descendants()
+                        .filter(|node| {
+                            node.has_tag_name("objecttag")
+                                && node.attribute("Name") == Some("stereo")
+                        })
+                        .find(|node| {
+                            node.descendants()
+                                .filter(|node| node.has_tag_name("s"))
+                                .filter_map(|node| node.text())
+                                .collect::<String>()
+                                == *text
+                        })
+                        .unwrap();
+                    let runs: Vec<_> = indicator
+                        .descendants()
+                        .filter(|node| node.has_tag_name("s"))
+                        .map(|node| {
+                            (
+                                node.text().unwrap().to_owned(),
+                                node.attribute("face").unwrap().parse::<u8>().unwrap(),
+                            )
+                        })
+                        .collect();
+                    let expected = if roman {
+                        vec![(format!("{prefix} ("), 0), (cip.into(), 2), (")".into(), 0)]
+                    } else {
+                        vec![(format!("{prefix} "), 0), (format!("({cip})"), 2)]
+                    };
+                    assert_eq!(runs, expected);
+                    let imported = cdxml::import_cdxml(xml).unwrap().document;
+                    assert_eq!(imported.atom_labels.roman_stereo_parentheses, roman);
+                    assert!(!imported.atom_labels.dl_descriptors);
+                    assert!(
+                        imported
+                            .atoms
+                            .iter()
+                            .filter(|a| a.stereo.is_some())
+                            .all(|a| { a.display.stereo.style.italic })
+                    );
+                }
+            }
+            assert_eq!(document, before);
+        }
+    }
+}
+
 fn runs(xml: &str, kind: &str) -> Vec<(String, u8)> {
     let tree = roxmltree::Document::parse(xml).unwrap();
     let atom = tree
@@ -561,6 +649,38 @@ fn cdxml_stereo_indicators_follow_axial_descriptor_setting() {
                 [("b".into(), expected)],
                 "{cip}: {mode}"
             );
+            assert_eq!(document, before);
+        }
+    }
+}
+
+#[test]
+fn steroid_alpha_beta_exports_to_cdxml_and_cdx_without_parentheses() {
+    let mut document = Document::default();
+    let a = document.add_atom("C", Point::default());
+    let b = document.add_atom("C", Point::new(42., 0.));
+    document.add_bond(a, b, 2, "plain");
+    document.atom_labels.stereo = true;
+    document.atom_mut(a).unwrap().cip_label = Some("S".into());
+    document.atom_mut(a).unwrap().steroid_label = Some("3β".into());
+    document.bonds[0].cip_label = Some("E".into());
+    for enabled in [false, true] {
+        document.atom_labels.steroid_alpha_beta = enabled;
+        for roman in [false, true] {
+            document.atom_labels.roman_stereo_parentheses = roman;
+            let before = document.clone();
+            let xml = super::super::write(&document, Options::default()).unwrap();
+            let decoded =
+                crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+            for xml in [&xml, &decoded] {
+                assert_eq!(
+                    stereo_indicators(xml),
+                    [
+                        ("n".into(), if enabled { "3β" } else { "(S)" }.into()),
+                        ("b".into(), "(E)".into()),
+                    ],
+                );
+            }
             assert_eq!(document, before);
         }
     }

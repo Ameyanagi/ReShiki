@@ -6,7 +6,7 @@ use super::{
     document::{self, Molecule},
     graph::{Atom, Graph, Valence},
     kekulize::Direction,
-    stereo::{perception::RingKind, wedging},
+    stereo::{allene, perception::RingKind, wedging},
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -53,7 +53,7 @@ fn at<T>(items: &[T], index: usize) -> Result<&T, Error> {
 
 /// Write a prepared 2D molecule using the default publication interchange
 /// conventions. V3000 is automatic for dative bonds, large graphs/coordinates.
-/// Queries, enhanced stereo groups and non-tetrahedral tags are not drawing data.
+/// Queries, enhanced stereo groups and unsupported atom stereo are not drawing data.
 pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
     write_part(molecule, options, false, &[], &[], false, false)
 }
@@ -336,8 +336,10 @@ fn write_part(
         || source.conjugated.len() != e
         || source.rings.kind != RingKind::Symmetric
         || !source.metadata.groups.is_empty()
-        || source.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
-        || source.metadata.bonds.iter().any(|b| b.stereo > 5)
+        || source.metadata.atoms.iter().enumerate().any(|(center, a)| {
+            !allene::supported(&source.graph, center, a.chiral_tag, a.chiral_permutation)
+        })
+        || source.metadata.bonds.iter().any(|b| b.stereo > 7)
     {
         return Err(invalid("Molecule dimensions or annotations changed"));
     }
@@ -425,7 +427,7 @@ fn write_part(
                 .metadata
                 .atoms
                 .iter()
-                .any(|a| matches!(a.chiral_tag, 1 | 2)),
+                .any(|a| matches!(a.chiral_tag, 1 | 2 | 5)),
     );
     let mut output = if reaction {
         String::new()

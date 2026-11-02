@@ -273,6 +273,7 @@ impl Presentation {
             let mut size = std::mem::size_of::<crate::document::Atom>()
                 .saturating_add(a.element.len())
                 .saturating_add(a.cip_label.as_ref().map_or(0, String::len))
+                .saturating_add(a.steroid_label.as_ref().map_or(0, String::len))
                 .saturating_add(records::<u64>(a.centroid.len()))
                 .saturating_add(records::<crate::scientific::AtomMark>(a.marks.len()))
                 .saturating_add(optional_style(a.text_style.as_ref()))
@@ -799,7 +800,7 @@ pub(super) fn charge_ink_work(doc: &Document, work: &mut Work) -> Result<(), Str
         // Fresh labels can restore displayed descriptors on an unrelated fixed
         // bond after installation. Pay their finite glyph/font envelope before
         // measurement; assigning CIP or preparing a second Molecule is absent.
-        let labels = cip_text_bytes(b.cip_label.as_deref(), &doc.atom_labels);
+        let labels = cip_text_bytes(b.cip_label.as_deref(), &doc.atom_labels, false);
         reserve(
             labels.saturating_mul(32).saturating_add(
                 labels

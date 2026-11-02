@@ -46,9 +46,12 @@ pub async fn execute(
     config: Option<native_response::Config>,
 ) -> Result<Response, Error> {
     let request = request.into();
-    let cleaned = crate::task::spawn_blocking(move || prepare(&request)).await??;
+    let mut cleaned = crate::task::spawn_blocking(move || prepare(&request)).await??;
     let analysis = match cleaned.molecule {
         Some(molecule) => {
+            cleaned
+                .warnings
+                .extend(native_response::identifier_notices(&molecule, false));
             Some(native_response::analyze_prepared(Arc::new(molecule), config).await?)
         }
         None if cleaned.analysis_policy == cleanup::AnalysisPolicy::SelectedChemistry
