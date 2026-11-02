@@ -442,6 +442,9 @@ pub struct Settings {
     pub carbons: Carbons,
     pub hydrogens: bool,
     pub stereo: bool,
+    /// Mark perceived stereogenic units without drawn configuration with (?).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mark_undefined_stereocentres: bool,
     /// Keep stereo punctuation upright while italicizing its descriptor.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub roman_stereo_parentheses: bool,
@@ -457,6 +460,7 @@ impl Default for Settings {
             carbons: Carbons::Skeletal,
             hydrogens: yes(),
             stereo: false,
+            mark_undefined_stereocentres: false,
             roman_stereo_parentheses: false,
             maps: true,
             axial_descriptors: AxialDescriptors::default(),
@@ -920,6 +924,27 @@ pub(crate) fn bond_indicator_shown(b: &Bond, doc: &Document) -> bool {
     b.indicator.show.unwrap_or(doc.atom_labels.stereo)
 }
 
+/// Unknown markers use the owner's normal stereo layout and visibility, while
+/// keeping the chemical CIP label available only for actual descriptors.
+pub(crate) fn stereo_code<'a>(
+    cip: Option<&'a str>,
+    undefined: bool,
+    doc: &Document,
+) -> Option<&'a str> {
+    cip.or(
+        (undefined && doc.atom_labels.stereo && doc.atom_labels.mark_undefined_stereocentres)
+            .then_some("?"),
+    )
+}
+
+fn indicator_style(style: &TextStyle, text: &str) -> TextStyle {
+    let mut style = style.clone();
+    if text == "?" {
+        style.color = crate::palette::Color::Custom([128; 3]);
+    }
+    style
+}
+
 /// Try outward positions first, then minimize label/bond collisions. Long
 /// atom-number text is justified away from the atom. Manual offsets remain
 /// exact. The same positions are used by canvas and all exports.
@@ -929,12 +954,13 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
     let atom_candidate = doc.atoms.iter().any(|a| {
         a.display.number.is_some()
             || map_indicator_shown(a, doc)
-            || (stereo_indicator_shown(a, doc) && a.cip_label.is_some())
+            || (stereo_indicator_shown(a, doc)
+                && stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc).is_some())
     });
-    let bond_candidate = doc
-        .bonds
-        .iter()
-        .any(|b| bond_indicator_shown(b, doc) && b.cip_label.is_some());
+    let bond_candidate = doc.bonds.iter().any(|b| {
+        bond_indicator_shown(b, doc)
+            && stereo_code(b.cip_label.as_deref(), b.undefined_stereo, doc).is_some()
+    });
     if !atom_candidate && !bond_candidate {
         return Vec::new();
     }
@@ -963,26 +989,26 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             ));
         }
         if stereo_indicator_shown(a, doc)
-            && let Some(cip) = &a.cip_label
+            && let Some(cip) = stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc)
         {
             labels.push((
                 Owner::AtomStereo(a.id),
                 stereo_text(cip, &doc.atom_labels),
                 a.display.stereo.offset,
-                a.display.stereo.style.clone(),
+                indicator_style(&a.display.stereo.style, cip),
                 doc.atom_labels.roman_stereo_parentheses,
             ));
         }
     }
     for b in doc.bonds.iter().filter(|b| doc.bond_visible(b.a, b.b)) {
         if bond_indicator_shown(b, doc)
-            && let Some(cip) = &b.cip_label
+            && let Some(cip) = stereo_code(b.cip_label.as_deref(), b.undefined_stereo, doc)
         {
             labels.push((
                 Owner::BondStereo(b.a, b.b),
                 stereo_text(cip, &doc.atom_labels),
                 b.indicator.offset,
-                b.indicator.style.clone(),
+                indicator_style(&b.indicator.style, cip),
                 doc.atom_labels.roman_stereo_parentheses,
             ));
         }
@@ -1148,9 +1174,11 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
 pub fn clear_computed(doc: &mut Document) {
     for a in &mut doc.atoms {
         a.cip_label = None;
+        a.undefined_stereo = false;
     }
     for b in &mut doc.bonds {
         b.cip_label = None;
+        b.undefined_stereo = false;
     }
     crate::arrow_anchors::reconcile(doc);
 }
@@ -1158,7 +1186,7 @@ pub fn refresh_computed(doc: &mut Document, checked: &Document) {
     copy_computed(doc, checked);
     crate::arrow_anchors::reconcile(doc);
 }
-/// Copies `checked`'s computed H counts and CIP labels by atom id and bond,
+/// Copies `checked`'s computed H counts and stereo labels by atom id and bond,
 /// without moving anything that depends on their ink.
 pub fn copy_computed(doc: &mut Document, checked: &Document) {
     let atoms: std::collections::HashMap<_, _> = checked.atoms.iter().map(|a| (a.id, a)).collect();
@@ -1178,6 +1206,8 @@ pub fn copy_computed(doc: &mut Document, checked: &Document) {
             .get(&(b.a.min(b.b), b.a.max(b.b)))
             .and_then(|s| s.cip_label.clone());
     }
+    // Engine documents never carry the optional editor markers.
+    refresh::refresh_undefined_stereo(doc);
 }
 
 /// Slab clipping catches a bond crossing a label between sample points.

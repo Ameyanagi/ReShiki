@@ -403,6 +403,7 @@ fn rejects_dangling_bond_and_duplicate_ids() {
         z_order: 0,
         indicator: Default::default(),
         cip_label: None,
+        undefined_stereo: false,
         a,
         b: 50,
         order: 1,

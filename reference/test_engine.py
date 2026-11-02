@@ -197,7 +197,7 @@ class ChemistryTests(unittest.TestCase):
     def test_builtin_catalog_matches_frozen_pubchem_formula_and_stereochemistry(self):
         catalog = json.loads((ROOT / "assets/template-catalog.json").read_text(encoding="utf-8"))
         library = json.loads((ROOT / "assets/templates.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(catalog), 92)
+        self.assertEqual(len(catalog), 108)
         model_catalog = [item for item in catalog if item.get("geometry") == "model:porphine"]
         generated_catalog = [item for item in catalog if item.get("geometry") != "model:porphine"]
         self.assertEqual([item["name"] for item in model_catalog], ["Porphine (21H,23H)"])
@@ -323,6 +323,7 @@ class ChemistryTests(unittest.TestCase):
             with self.subTest(kind=kind, change=change):
                 a["kind"] = kind
                 a["style"] = {**appearance(dict(kind=kind)), **change}
+                a["control"] = {"x": 90, "y": 40} if kind == "retro" else None
                 with self.assertRaises(ValueError):
                     handle(dict(protocol=1, operation="export", format="cdxml", document=doc))
         xml = (ROOT / "tests/fixtures/arrows-chemdraw.cdxml").read_text(encoding="utf-8")

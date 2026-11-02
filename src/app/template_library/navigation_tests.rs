@@ -607,7 +607,7 @@ fn search_all_preserves_query_filter_and_browse_history() {
             filter,
             ..State::default()
         });
-        assert_eq!(expected.len(), if filter == Filter::All { 7 } else { 2 });
+        assert_eq!(expected.len(), if filter == Filter::All { 9 } else { 2 });
         assert!(expected.contains("L-Phenylalanine"));
         assert!(scoped.is_subset(&expected));
 
@@ -693,4 +693,200 @@ fn browser_mouse_buttons_have_the_correct_direction() {
         navigation_event(&Event::Mouse(ButtonPressed(Button::Left))),
         None
     );
+}
+
+#[test]
+fn iupac_and_biochemical_aliases_are_exact_search_matches() {
+    let mut state = State::default();
+    for (name, aliases) in [
+        ("Indole", &["1H-indole"][..]),
+        ("Pyrrole", &["1H-pyrrole"]),
+        ("Imidazole", &["1H-imidazole"]),
+        ("Pyrazole", &["1H-pyrazole"]),
+        ("Oxazole", &["1,3-oxazole"]),
+        ("Isoxazole", &["1,2-oxazole"]),
+        ("Thiazole", &["1,3-thiazole"]),
+        ("Isothiazole", &["1,2-thiazole"]),
+        ("Tetrahydrofuran", &["oxolane"]),
+        ("Tetrahydropyran", &["oxane"]),
+        ("Norbornane", &["bicyclo[2.2.1]heptane"]),
+        (
+            "Adamantane",
+            &[
+                "tricyclo[3.3.1.1^{3,7}]decane",
+                "tricyclo[3.3.1.1^3,7]decane",
+                "tricyclo[3.3.1.1³,⁷]decane",
+                "tricyclo[3.3.1.13,7]decane",
+            ],
+        ),
+        ("Decalin", &["decahydronaphthalene", "bicyclo[4.4.0]decane"]),
+        (
+            "Cubane",
+            &["pentacyclo[4.2.0.0^{2,5}.0^{3,8}.0^{4,7}]octane"],
+        ),
+        ("9H-Purine", &["9H-purine"]),
+        ("7H-Purine", &["7H-purine"]),
+        ("Adenine (9H)", &["Ade"]),
+        ("Guanine (9H)", &["Gua"]),
+        ("Cytosine", &["Cyt"]),
+        ("Thymine", &["Thy"]),
+        ("Uracil", &["Ura"]),
+    ] {
+        let (index, template) = LIBRARY
+            .iter()
+            .enumerate()
+            .find(|(_, t)| t.name == name)
+            .unwrap();
+        for alias in aliases {
+            state.query = format!("  {}  ", alias.to_uppercase());
+            assert!(state.matches(index, template), "{name}: {alias}");
+            assert_eq!(state.search_rank(template), 0, "{name}: {alias}");
+        }
+    }
+}
+
+#[test]
+fn superscript_search_folds_candidates_as_well_as_queries() {
+    let mut template = LIBRARY[0].clone();
+    template.name = "Printed von Baeyer name".into();
+    template.keywords = vec!["tricyclo[3.3.1.1³,⁷]decane".into()];
+    let mut state = State::default();
+    for query in [
+        "tricyclo[3.3.1.1^{3,7}]decane",
+        "tricyclo[3.3.1.1^3,7]decane",
+    ] {
+        state.query = query.into();
+        assert!(state.matches(0, &template));
+        assert_eq!(state.search_rank(&template), 0);
+    }
+    assert_eq!(search_fold("⁰¹²³⁴⁵⁶⁷⁸⁹"), "0123456789");
+}
+
+#[test]
+fn haworth_symbols_rank_matching_ring_and_anomer_exactly() {
+    let mut state = State::default();
+    for (sugar, symbol, ring_symbol) in [
+        ("glucopyranose", "Glc", "Glcp"),
+        ("galactopyranose", "Gal", "Galp"),
+        ("mannopyranose", "Man", "Manp"),
+        ("ribofuranose", "Rib", "Ribf"),
+        ("fructofuranose", "Fru", "Fruf"),
+    ] {
+        for (anomer, prefixes) in [("α", ["a", "α", "alpha"]), ("β", ["b", "β", "beta"])] {
+            let name = format!("{anomer}-D-{sugar} · Haworth");
+            let (index, template) = LIBRARY
+                .iter()
+                .enumerate()
+                .find(|(_, t)| t.name == name)
+                .unwrap();
+            for alias in [symbol.to_owned(), ring_symbol.to_owned()]
+                .into_iter()
+                .chain(prefixes.map(|prefix| format!("{prefix}-D-{ring_symbol}")))
+            {
+                state.query = alias;
+                assert!(state.matches(index, template), "{name}: {}", state.query);
+                assert_eq!(state.search_rank(template), 0, "{name}: {}", state.query);
+            }
+            state.query = format!("{}-D-{ring_symbol}", if anomer == "α" { "b" } else { "a" });
+            assert_ne!(state.search_rank(template), 0, "{name}: {}", state.query);
+            for wrong in [
+                format!("a-L-{ring_symbol}"),
+                format!(
+                    "{symbol}{}",
+                    if ring_symbol.ends_with('p') { 'f' } else { 'p' }
+                ),
+            ] {
+                state.query = wrong;
+                assert!(!state.matches(index, template), "{name}: {}", state.query);
+            }
+        }
+        state.query = symbol.into();
+        for (index, template) in LIBRARY
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| t.name.contains("scaffold"))
+        {
+            assert!(!state.matches(index, template));
+        }
+    }
+}
+
+#[test]
+fn mixed_aromatic_heterocycles_keep_their_heterocycle_collection() {
+    for name in ["Chromene (2H)", "Indole", "Carbazole (9H)", "Dibenzofuran"] {
+        let template = LIBRARY.iter().find(|t| t.name == name).unwrap();
+        assert_eq!(
+            categories(template).collect::<Vec<_>>(),
+            ["Aromatics", "Heterocycles"],
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn source_anchor_labels_use_parent_locants_and_fall_back_without_them() {
+    let template = LIBRARY.iter().find(|t| t.name == "Quinoline").unwrap();
+    let atom = |locant: &str| {
+        *template
+            .locants
+            .iter()
+            .find(|(_, value)| value.as_str() == locant)
+            .unwrap()
+            .0
+    };
+    let c3 = atom("3");
+    let c4 = atom("4");
+    assert_eq!(anchor_label(template, Anchor::Atom(c3)), "Attach at C-3");
+    assert_eq!(
+        anchor_label(template, Anchor::Bond(c3, c4)),
+        "Attach at C-3–C-4"
+    );
+    assert_eq!(
+        anchor_label(template, Anchor::Atom(atom("1"))),
+        "Attach at N-1"
+    );
+    assert_eq!(anchor_label(template, Anchor::Auto), "Automatic attachment");
+    let mut unnumbered = template.clone();
+    unnumbered.locants.clear();
+    assert_eq!(
+        anchor_label(&unnumbered, Anchor::Atom(c3)),
+        format!("Atom {c3}")
+    );
+    assert_eq!(
+        anchor_label(&unnumbered, Anchor::Bond(c3, c4)),
+        format!("Bond {c3}–{c4}")
+    );
+}
+
+#[test]
+fn renamed_tautomers_keep_existing_favorite_ids() {
+    let favorites = [
+        "builtin:Heterocycles/Purine",
+        "builtin:Nucleobases/Adenine",
+        "builtin:Nucleobases/Guanine",
+    ];
+    let library = Library::from_bytes(
+        &serde_json::to_vec(&serde_json::json!({
+            "version": 1, "templates": [], "favorites": favorites,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let state = State {
+        library,
+        filter: Filter::Favorites,
+        ..State::default()
+    };
+    for (name, id) in ["9H-Purine", "Adenine (9H)", "Guanine (9H)"]
+        .into_iter()
+        .zip(favorites)
+    {
+        let (index, template) = LIBRARY
+            .iter()
+            .enumerate()
+            .find(|(_, t)| t.name == name)
+            .unwrap();
+        assert_eq!(template.id, id);
+        assert!(state.matches(index, template));
+    }
 }

@@ -1,4 +1,15 @@
 use super::*;
+
+#[test]
+fn arrow_semantics_tooltip_symbols_are_plain_text() {
+    for symbol in ['⇌', '↔', '⇒'] {
+        assert!(
+            !super::super::shortcuts::symbol(symbol),
+            "Chemical arrow {symbol} must keep the tooltip's normal text font"
+        );
+    }
+}
+
 #[test]
 fn remembered_tools_and_shape_presets_do_not_change_selected_objects() {
     let (mut app, _) = App::new();

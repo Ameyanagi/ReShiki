@@ -437,6 +437,7 @@ pub(crate) fn reconcile_label_changes(before: &Document, after: &mut Document) {
                                 || a.label_h != b.label_h
                                 || a.map_num != b.map_num
                                 || a.cip_label != b.cip_label
+                                || a.undefined_stereo != b.undefined_stereo
                                 || a.text_style != b.text_style
                                 || a.display != b.display
                                 || a.marks != b.marks
@@ -446,7 +447,9 @@ pub(crate) fn reconcile_label_changes(before: &Document, after: &mut Document) {
                 }) || before.atom_labels != after.atom_labels
                     || before.drawing_style != after.drawing_style
                     || before.bonds.iter().zip(&after.bonds).any(|(a, b)| {
-                        (a.indicator != b.indicator || a.cip_label != b.cip_label)
+                        (a.indicator != b.indicator
+                            || a.cip_label != b.cip_label
+                            || a.undefined_stereo != b.undefined_stereo)
                             && reaction
                                 .participants(*role)
                                 .iter()

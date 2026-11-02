@@ -39,8 +39,26 @@ impl Oracle {
         Ok(Self { child, output })
     }
     fn request(&mut self, request: &Request) -> anyhow::Result<Value> {
+        let mut value = serde_json::to_value(request)?;
+        if let Some(doc) = &request.document {
+            // Caption advances accompany source paths; the Python oracle does not load fonts.
+            let advances: std::collections::BTreeMap<_, _> = doc
+                .graphics
+                .iter()
+                .filter_map(|g| {
+                    let reshiki::graphics::GraphicKind::Symbol(kind) = g.kind else {
+                        return None;
+                    };
+                    kind.partial_charge_text()
+                        .map(|text| (g.id, f64::from(reshiki::style::text_width(text, 0.85))))
+                })
+                .collect();
+            if !advances.is_empty() {
+                value["partial_charge_advances"] = serde_json::to_value(advances)?;
+            }
+        }
         let input = self.child.stdin.as_mut().context("Missing oracle input")?;
-        serde_json::to_writer(&mut *input, &serde_json::to_value(request)?)?;
+        serde_json::to_writer(&mut *input, &value)?;
         input.write_all(b"\n")?;
         input.flush()?;
         let mut line = String::new();
@@ -579,6 +597,96 @@ fn dative_export_order_allowance_uses_source_index_and_direction() -> anyhow::Re
         compare_xml_with_source(&actual, expected, "changed source direction", Some(&source))
             .is_err()
     );
+    Ok(())
+}
+
+#[test]
+fn retrosynthesis_drawing_output_matches_reference() -> anyhow::Result<()> {
+    use reshiki::{
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+        grouping::Group,
+    };
+    let mut oracle = Oracle::new()?;
+    let mut retro = Arrow::new(
+        1,
+        Point::new(-30., 20.),
+        Point::new(150., -40.),
+        Preset::Retro,
+        ArrowStyle::preset(Preset::Retro),
+    );
+    retro.straighten();
+    let mut cases = Vec::new();
+    for (control, cubic, supported) in [
+        (None, None, true),
+        (retro.control, None, true),
+        (
+            Some(retro.start.lerp(retro.end, 0.3).offset(0., 0.0005)),
+            None,
+            true,
+        ),
+        (Some(Point::new(60., -80.)), None, false),
+        (
+            None,
+            Some([
+                retro.start.lerp(retro.end, 1. / 3.),
+                retro.start.lerp(retro.end, 2. / 3.),
+            ]),
+            false,
+        ),
+    ] {
+        retro.control = control;
+        retro.cubic = cubic;
+        cases.push((retro.clone(), supported));
+    }
+    // Adjacent f32 controls straddle the f64 chord-distance tolerance.
+    for (y, supported) in [(207.333_07, false), (207.333_08, true)] {
+        let mut arrow = Arrow::new(
+            1,
+            Point::new(456.139_9, 354.675_05),
+            Point::new(-178.492_69, -136.462_25),
+            Preset::Retro,
+            ArrowStyle::preset(Preset::Retro),
+        );
+        arrow.control = Some(Point::new(265.750_73, y));
+        cases.push((arrow, supported));
+    }
+    for (retro, supported) in cases {
+        for grouped in [false, true] {
+            let mut doc = Document {
+                arrows: vec![
+                    retro.clone(),
+                    Arrow::new(
+                        2,
+                        Point::new(-30., 80.),
+                        Point::new(150., 80.),
+                        Preset::Forward,
+                        ArrowStyle::preset(Preset::Forward),
+                    ),
+                ],
+                ..Default::default()
+            };
+            if grouped {
+                doc.groups.push(Group {
+                    id: 3,
+                    members: vec![1, 2],
+                    integral: true,
+                });
+            }
+            let request = Request::molecule("export", doc.clone());
+            let expected = oracle.request(&request)?;
+            let actual = drawing::write(&doc, drawing::Options::from(&request));
+            assert_eq!(actual.is_ok(), supported, "{actual:?}");
+            assert_eq!(expected.get("output").is_some(), supported, "{expected}");
+            if supported {
+                compare_xml(
+                    &actual?,
+                    expected["output"].as_str().context("Missing output")?,
+                    "retrosynthesis",
+                )?;
+            }
+        }
+    }
     Ok(())
 }
 
