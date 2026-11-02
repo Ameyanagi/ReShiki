@@ -684,6 +684,9 @@ fn layout_with_metrics(
         };
         for (c, s, advance) in line {
             let shift = match s.script {
+                Script::Normal if s.size() < size => {
+                    (size - s.size()) * style::text_ascent(&s) / s.size()
+                }
                 Script::Normal => 0.0,
                 Script::Subscript => size * 0.35,
                 Script::Superscript => -size * 0.3,

@@ -4,7 +4,7 @@ use super::*;
 use iced::widget::{column, rich_text, span, text::Span};
 use reshiki::typography::{NameRun, name_markup};
 
-fn chemical_name_spans(name: &str, size: f32) -> Vec<Span<'static>> {
+fn chemical_name_spans(name: &str, size: f32, family: &'static str) -> Vec<Span<'static>> {
     let markup = name_markup(name).unicode();
     let mut spans = vec![];
     let mut end = 0;
@@ -13,7 +13,7 @@ fn chemical_name_spans(name: &str, size: f32) -> Vec<Span<'static>> {
             return;
         }
         let mut text = text.to_owned();
-        // Keep font changes within words visible to cosmic-text, as in the palette.
+        // Keep font changes within words visible to cosmic-text.
         if !text.ends_with(char::is_whitespace) && suffix.starts_with(|c: char| !c.is_whitespace())
         {
             text.push('\u{2060}');
@@ -24,7 +24,7 @@ fn chemical_name_spans(name: &str, size: f32) -> Vec<Span<'static>> {
             } else {
                 iced::font::Style::Normal
             },
-            ..iced::Font::with_name(reshiki::style::ui_font_family())
+            ..iced::Font::with_name(family)
         };
         spans.push(
             span(text)
@@ -109,6 +109,7 @@ impl App {
         record: &'a Record,
     ) -> Element<'a, Message> {
         let available = self.alias_record(target).is_some();
+        let family = reshiki::style::font_name(&self.tab.doc.drawing_style.font_family);
         let prefix = match target {
             AliasTarget::Import => "import-name",
             AliasTarget::Structure => "naming",
@@ -126,7 +127,7 @@ impl App {
                 target == AliasTarget::Import && self.tab.naming.import_alias == Some(index);
             content = content.push(
                 column![
-                    rich_text(chemical_name_spans(&alias.name, 12.)),
+                    rich_text(chemical_name_spans(&alias.name, 12., family)),
                     // The source line carries the attribution the licenses
                     // require, so it stays under every alias.
                     text(alias.source.label()).size(11).style(muted_text),
@@ -205,7 +206,8 @@ impl App {
                 );
             }
             if let Some(name) = &record.systematic_name {
-                content = content.push(rich_text(chemical_name_spans(name, 13.)));
+                let family = reshiki::style::font_name(&self.tab.doc.drawing_style.font_family);
+                content = content.push(rich_text(chemical_name_spans(name, 13., family)));
             }
             if let Some(status) = record.name_status {
                 content = content.push(hover_hint(

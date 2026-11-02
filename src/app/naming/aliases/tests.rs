@@ -372,6 +372,7 @@ fn inspector_name_spans_share_italics_small_caps_primes_and_unicode_superscripts
     let spans = chemical_name_spans(
         "L-(2R)-N'-5lambda^6-3a^1-tricyclo[3.2.2.0^{1,5}]nonane",
         13.,
+        "Arial",
     );
     let text = spans
         .iter()
@@ -385,6 +386,11 @@ fn inspector_name_spans_share_italics_small_caps_primes_and_unicode_superscripts
         .map(|span| span.text.as_ref().replace('\u{2060}', ""))
         .collect::<Vec<_>>();
     assert_eq!(italic, ["R", "N"]);
+    assert!(
+        spans
+            .iter()
+            .all(|span| span.font.unwrap().family == iced::font::Family::Name("Arial"))
+    );
     assert_eq!(spans[0].size, Some(iced::Pixels(13. * 0.8)));
     assert_eq!(spans[0].font.unwrap().style, iced::font::Style::Normal);
     assert!(
@@ -393,6 +399,22 @@ fn inspector_name_spans_share_italics_small_caps_primes_and_unicode_superscripts
             .skip(1)
             .all(|span| span.size == Some(iced::Pixels(13.)))
     );
+}
+
+#[test]
+fn inspector_name_spans_use_the_caption_family_for_upright_and_italic_runs() {
+    let family = "Caption Test Family";
+    let spans = chemical_name_spans("(2E)-N,N-dimethylbut-2-enamide", 13., family);
+    for span in &spans {
+        assert_eq!(span.font.unwrap().family, iced::font::Family::Name(family));
+    }
+    let italic = spans
+        .iter()
+        .filter(|span| span.font.unwrap().style == iced::font::Style::Italic)
+        .map(|span| span.text.as_ref().replace('\u{2060}', ""))
+        .collect::<Vec<_>>();
+    assert_eq!(italic, ["E", "N", "N"]);
+    assert_eq!(spans[0].font.unwrap().style, iced::font::Style::Normal);
 }
 
 #[tokio::test]

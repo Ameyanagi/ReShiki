@@ -178,7 +178,7 @@ fn display_text(name: &str) -> NameMarkup {
     while i < name.len() {
         let rest = after(name, i);
         let Some(c) = rest.chars().next() else { break };
-        let lambda = ["lambda^", "λ^", "λ"]
+        let lambda = ["lambda^", "lambda", "λ^", "λ"]
             .into_iter()
             .find_map(|prefix| rest.strip_prefix(prefix).map(|tail| (prefix.len(), tail)));
         if let Some((prefix, tail)) = lambda
@@ -525,7 +525,9 @@ mod tests {
             "x^{1,5}",
             "3a^foo",
             "lambda^x",
+            "lambdax",
             "polylambda^5",
+            "polylambda5",
             "poly5lambda^6",
             "polyλ5",
             "poly5λ6",
@@ -562,6 +564,24 @@ mod tests {
 
     #[test]
     fn superscript_encodings_share_caption_and_unicode_ranges() {
+        for (name, text, superscript, unicode) in [
+            (
+                "hexafluoro-lambda6-sulfane",
+                "hexafluoro-λ6-sulfane",
+                "6",
+                "hexafluoro-λ⁶-sulfane",
+            ),
+            ("1lambda4-thiopyran", "1λ4-thiopyran", "4", "1λ⁴-thiopyran"),
+        ] {
+            let markup = name_markup(name);
+            assert_eq!(markup.text, text, "{name}");
+            assert_eq!(
+                parts(&markup, NameRun::Superscript),
+                [superscript],
+                "{name}"
+            );
+            assert_eq!(markup.unicode().text, unicode, "{name}");
+        }
         let markup = name_markup("(R)-5lambda^6-tricyclo[3.2.2.0^{1,5}]-3a^12-N'-D-gluco");
         assert_eq!(markup.text, "(R)-5λ6-tricyclo[3.2.2.01,5]-3a12-N′-D-gluco");
         assert_eq!(parts(&markup, NameRun::Superscript), ["6", "1,5", "12"]);
