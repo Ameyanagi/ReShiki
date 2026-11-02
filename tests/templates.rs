@@ -10,7 +10,7 @@ fn template(name: &str) -> &'static Document {
 
 #[test]
 fn biological_template_collections_have_the_documented_coverage() {
-    assert_eq!(LIBRARY.len(), 192);
+    assert_eq!(LIBRARY.len(), 195);
     for (group, count) in [
         ("Amino acids", 21),
         ("Carbohydrates", 50),
@@ -874,6 +874,166 @@ fn new_fused_templates_store_the_requested_orientation() {
                 .all(|a| (atom.position.y - a.position.y) * direction > 0.01),
             "{name}: locant {locant} must have the requested vertical orientation"
         );
+    }
+}
+
+#[test]
+fn coordination_frame_shares_a_metal_center_and_keeps_target_identity() {
+    use reshiki::{
+        scientific::{AtomMark, MarkKind},
+        templates::{Anchor, Connection},
+        typography::TextStyle,
+    };
+
+    let frame = LIBRARY
+        .iter()
+        .find(|t| t.name == "Octahedral ML₆ (OC-6)")
+        .unwrap();
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::new(-120., 0.));
+    let metal = doc.add_atom("Pt", Point::new(70., 35.));
+    let target = doc.atom_mut(metal).unwrap();
+    target.charge = 2;
+    target.isotope = 195;
+    target.map_num = 8;
+    target.text_style = Some(TextStyle {
+        bold: true,
+        size_pt: 11.,
+        ..TextStyle::default()
+    });
+    target.mark_serial = 1;
+    target.marks.push(AtomMark {
+        id: Some(1),
+        kind: MarkKind::PartialPositive,
+        offset: Point::new(12., -10.),
+        angle: 0.,
+        size_pt: None,
+    });
+    let before = doc.clone();
+    let target = doc.atom(metal).unwrap();
+    doc.validate().unwrap();
+
+    for mode in [Connection::ShareAtom, Connection::Auto] {
+        for anchor in [frame.anchor, Anchor::Auto] {
+            let (placed, ids) = frame
+                .place(&doc, target.position, None, 5., anchor, mode)
+                .unwrap();
+            assert_eq!(placed.atom(metal), Some(target));
+            assert_eq!(placed.atoms.len(), doc.atoms.len() + 6);
+            assert_eq!(placed.bonds.len(), doc.bonds.len() + 6);
+            assert_eq!(ids.len(), frame.document.all_ids().len());
+            assert_eq!(ids[0], metal);
+            assert!(placed.bonds.iter().all(|b| b.a == metal || b.b == metal));
+            assert!(!placed.atoms.iter().any(|a| a.element == "Co"));
+            placed.validate().unwrap();
+        }
+    }
+    assert_eq!(doc, before);
+}
+
+#[test]
+fn coordination_frame_metal_center_rejects_nonmetal_and_covalent_connection() {
+    use reshiki::templates::{Anchor, Connection};
+
+    let frame = LIBRARY
+        .iter()
+        .find(|t| t.name == "Octahedral ML₆ (OC-6)")
+        .unwrap();
+    for element in ["C", "N", "O"] {
+        let mut doc = Document::default();
+        let atom = doc.add_atom(element, Point::new(70., 35.));
+        let before = doc.clone();
+        for mode in [Connection::ShareAtom, Connection::Auto] {
+            assert!(
+                frame
+                    .place(
+                        &doc,
+                        doc.atom(atom).unwrap().position,
+                        None,
+                        5.,
+                        frame.anchor,
+                        mode,
+                    )
+                    .is_err(),
+                "{mode} must not share a metal source with {element}"
+            );
+        }
+        assert_eq!(doc, before);
+    }
+    let mut doc = Document::default();
+    let metal = doc.add_atom("Pt", Point::new(70., 35.));
+    doc.atom_mut(metal).unwrap().charge = 2;
+    let before = doc.clone();
+    assert!(
+        frame
+            .place(
+                &doc,
+                doc.atom(metal).unwrap().position,
+                None,
+                5.,
+                frame.anchor,
+                Connection::Connect,
+            )
+            .is_err()
+    );
+    let ligand = frame
+        .document
+        .atoms
+        .iter()
+        .find(|a| a.element == "C")
+        .unwrap();
+    for mode in [Connection::ShareAtom, Connection::Auto] {
+        assert!(
+            frame
+                .place(
+                    &doc,
+                    doc.atom(metal).unwrap().position,
+                    None,
+                    5.,
+                    Anchor::Atom(ligand.id),
+                    mode,
+                )
+                .is_err(),
+            "{mode} must not share a nonmetal source with Pt"
+        );
+    }
+    assert_eq!(doc, before);
+}
+
+#[test]
+fn coordination_frame_requires_abbreviated_metal_ports_to_be_expanded() {
+    use reshiki::templates::Connection;
+
+    let frame = LIBRARY
+        .iter()
+        .find(|t| t.name == "Octahedral ML₆ (OC-6)")
+        .unwrap();
+    let mut doc = Document::default();
+    let metal = doc.add_atom("Pt", Point::new(70., 35.));
+    let mut abbreviated_doc = doc.clone();
+    abbreviated_doc.contract(&[metal], "M", "").unwrap();
+    let mut abbreviated_frame = frame.clone();
+    abbreviated_frame.document.contract(&[1], "M", "").unwrap();
+
+    for (frame, doc) in [(frame, &abbreviated_doc), (&abbreviated_frame, &doc)] {
+        let before = doc.clone();
+        let source_before = frame.clone();
+        for mode in [Connection::ShareAtom, Connection::Auto] {
+            assert!(
+                frame
+                    .place(
+                        doc,
+                        doc.atom(metal).unwrap().position,
+                        None,
+                        5.,
+                        frame.anchor,
+                        mode,
+                    )
+                    .is_err()
+            );
+        }
+        assert_eq!(doc, &before);
+        assert_eq!(frame, &source_before);
     }
 }
 

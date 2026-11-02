@@ -193,6 +193,7 @@ impl CdxmlScene {
             // Aromatic import uses a narrower rule than bonds::dative_projects.
             if bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge")
                 || bond.is_dative() && dative_projects(&bond.display)
+                || crate::coordination_geometry::frame_bond(document, &bond)
             {
                 bond.projection = true;
             }

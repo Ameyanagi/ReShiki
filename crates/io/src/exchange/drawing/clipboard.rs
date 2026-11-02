@@ -34,6 +34,7 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
         if bond.projection
             && bond.display != "plain"
             && bond.order != 5
+            && !crate::coordination_geometry::frame_bond(source, bond)
             && !haworth.contains(&i)
             && !(bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge"))
             && !(bond.order == 2 && bond.display == "bold")

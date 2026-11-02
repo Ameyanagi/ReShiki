@@ -1,6 +1,6 @@
 # Ring presets and expanded template catalog
 
-The current library contains 192 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), nucleosides/nucleotides, steroids, macrocycles, free-base porphine and ligands. The original ring-tool milestone is described below.
+The current library contains 195 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), nucleosides/nucleotides, steroids, macrocycles, free-base porphine, ligands and [coordination geometry frames](template-library.md). The original ring-tool milestone is described below.
 
 JACS / ACS remains the default. The new chair and cyclopentadiene tools use 14.4 pt edges (42 world units), Arial 10 pt labels and 0.6 pt lines unless the user changes the preferred bond length.
 
@@ -22,7 +22,7 @@ The regular 3–8 member tool rotates the same way when dragged on empty space o
 
 ## Catalog
 
-There are 109 chemical catalog entries, two generated chair projections, 50 Haworth entries, 15 nucleosides/nucleotides and 16 steroid drawings, for **192 built-ins**. Collections cover rings/small molecules, cycloalkanes and unsaturated rings, common heterocycles, bicyclic/cage structures, all 20 standard amino acids plus L-selenocysteine, five nucleobases, macrocycles and ligands. Retained fused parents include anthracene, phenanthrene, azulene, indene, fluorene, pyrene, carbazole, acridine, quinazoline, quinoxaline, benzimidazole, indazole, chromene, dibenzofuran and dibenzothiophene. The biological collections are described in [Template library](template-library.md#biological-templates).
+There are 109 chemical catalog entries, two generated chair projections, 50 Haworth entries, 15 nucleosides/nucleotides, 16 steroid drawings and three coordination geometry frames, for **195 built-ins**. Collections cover rings/small molecules, cycloalkanes and unsaturated rings, common heterocycles, bicyclic/cage structures, all 20 standard amino acids plus L-selenocysteine, five nucleobases, macrocycles and ligands. Retained fused parents include anthracene, phenanthrene, azulene, indene, fluorene, pyrene, carbazole, acridine, quinazoline, quinoxaline, benzimidazole, indazole, chromene, dibenzofuran and dibenzothiophene. The biological collections are described in [Template library](template-library.md#biological-templates).
 
 Names, formulas, standard InChIKeys, SMILES and source URLs are frozen in [template-catalog.json](../assets/template-catalog.json). These chemical facts were retrieved from the [PubChem PUG REST service](https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest). The amino-acid generator uses RDKit's documented [L-protein sequence flavor](https://www.rdkit.org/docs/source/rdkit.Chem.rdmolfiles.html). Its formula and standard InChIKey must agree with the corresponding PubChem record before generation succeeds. Glycine is achiral; the other amino-acid entries retain L stereochemistry. Entries are neutral free amino acids, not connected peptide residues.
 
