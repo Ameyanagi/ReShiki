@@ -857,7 +857,17 @@ impl<'a> ComponentGenerator<'a> {
             let symbol = &c[2];
             if matches(symbol, RS) {
                 self.add(n, TYPE_ATR, R_OR_S_TYPE_VAL);
-                let mut symbol = symbol.to_uppercase().replace('/', "");
+                // The grammar also ranks isotope spellings such as (79Br)
+                // as stereochemistry. Keep their upstream normalization.
+                let element = descriptor.trim_start_matches(|c: char| c.is_ascii_digit());
+                let isotope = element.len() < descriptor.len()
+                    && crate::graph::Element::from_symbol(element).is_some();
+                // Preserve actual pseudoasymmetric descriptors for full CIP.
+                let mut symbol = if matches!(symbol, "r" | "s") && !isotope {
+                    symbol.to_string()
+                } else {
+                    symbol.to_uppercase().replace('/', "")
+                };
                 let mut local = group;
                 if ["RS", "SR", "RANDS", "SANDR"].contains(&symbol.as_str()) {
                     if local.is_none() {

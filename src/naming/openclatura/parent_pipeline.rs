@@ -391,6 +391,9 @@ fn build_parent_parts(
             .insert(locant.clone(), atom.isotope);
         if let Some(stereo) = &atom.stereo {
             parts.stereo_features.push((locant.clone(), stereo.clone()));
+            if root.is_none() && matches!(stereo.as_str(), "Ξ" | "ξ") {
+                mol.record_unknown_unit(locant.clone());
+            }
         }
         if atom.charge != 0 {
             parts.parent_charges.push(ParentChargeItem {
@@ -432,19 +435,46 @@ fn add_relative_ring_stereo(
     {
         return Err("openclatura: unresolved multicyclic stereochemistry not ported".into());
     }
-    // Upstream divergence: decline von Baeyer pseudoasymmetry that OPSIN loses or reads as another isomer.
-    if (parts.is_bicycle
-        || super::ring_renderer::is_von_baeyer_descriptor(parts.polycycle_descriptor.as_deref()))
-        && path.iter().any(|idx| {
-            mol.atoms[idx]
-                .stereo
-                .as_deref()
-                .is_some_and(|label| label == "r" || label == "s")
+    if !parts.is_simple_ring() {
+        return Ok(());
+    }
+    let relative: Vec<_> = path
+        .iter()
+        .copied()
+        .filter(|idx| {
+            let atom = &mol.atoms[idx];
+            atom.raw_stereo.is_some() && matches!(atom.stereo.as_deref(), None | Some("r" | "s"))
+        })
+        .collect();
+    if relative.len() == 2
+        && relative.iter().all(|&idx| {
+            mol.get_neighbors(idx)
+                .iter()
+                .filter(|n| !parts.parent_atom_ids.contains(n))
+                .count()
+                == 1
         })
     {
-        return Err("openclatura: pseudoasymmetric von Baeyer centres are not validated".into());
-    }
-    if !parts.is_simple_ring() {
+        let has_cip = relative
+            .iter()
+            .all(|idx| matches!(mol.atoms[idx].stereo.as_deref(), Some("r" | "s")));
+        if has_cip && !mol.use_relative_ring_names() {
+            mol.mark_relative_ring_alternative();
+        }
+        if mol.use_relative_ring_names() || !has_cip {
+            let term = if relative_ring_face(mol, parts, path, relative[0])?
+                == relative_ring_face(mol, parts, path, relative[1])?
+            {
+                "cis"
+            } else {
+                "trans"
+            };
+            parts
+                .stereo_features
+                .retain(|(locant, _)| !relative.iter().any(|idx| &locants[idx] == locant));
+            parts.relative_stereo_prefixes.push(term.into());
+            mol.mark_name(NameStatus::NotPreferred(NameReason::RelativeRingStereo));
+        }
         return Ok(());
     }
     let scoped =
@@ -466,31 +496,14 @@ fn add_relative_ring_stereo(
     if raw.len() != 2 {
         return Err("openclatura: unresolved ring stereochemistry not ported".into());
     }
-    if raw.iter().all(|&idx| {
-        mol.get_neighbors(idx)
-            .iter()
-            .filter(|n| !parts.parent_atom_ids.contains(n))
-            .count()
-            == 1
-    }) {
-        // Upstream divergence: normalize traversal-dependent tetrahedral tags before comparing ring faces.
-        let face = |idx| relative_ring_face(mol, parts, path, idx);
-        let term = if face(raw[0])? == face(raw[1])? {
-            "cis"
-        } else {
-            "trans"
-        };
-        parts.relative_stereo_prefixes.push(term.into());
-    } else {
-        for idx in raw {
-            let label = mol
-                .accurate_cip
-                .get(&idx)
-                .ok_or("openclatura: local small-ring CIP labeling not ported")?;
-            parts
-                .stereo_features
-                .push((locants[&idx].clone(), label.clone()));
-        }
+    for idx in raw {
+        let label = mol
+            .accurate_cip
+            .get(&idx)
+            .ok_or("openclatura: local small-ring CIP labeling not ported")?;
+        parts
+            .stereo_features
+            .push((locants[&idx].clone(), label.clone()));
     }
     Ok(())
 }
@@ -595,18 +608,145 @@ mod tests {
 
     #[test]
     fn relative_ring_stereo_is_independent_of_smiles_neighbor_order() {
-        for (smiles, expected) in [
-            ("C[C@H]1C[C@@H](C)C1", "cis-1,3-dimethylcyclobutane"),
-            ("C[C@H]1C[C@H](C1)C", "cis-1,3-dimethylcyclobutane"),
-            ("C[C@H]1C[C@H](C)C1", "trans-1,3-dimethylcyclobutane"),
-            ("C[C@H]1C[C@@H](C1)C", "trans-1,3-dimethylcyclobutane"),
+        for (smiles, expected, alternative) in [
+            (
+                "C[C@H]1C[C@@H](C)C1",
+                "(1s,3s)-1,3-dimethylcyclobutane",
+                "cis-1,3-dimethylcyclobutane",
+            ),
+            (
+                "C[C@H]1C[C@H](C1)C",
+                "(1s,3s)-1,3-dimethylcyclobutane",
+                "cis-1,3-dimethylcyclobutane",
+            ),
+            (
+                "C[C@H]1C[C@H](C)C1",
+                "(1r,3r)-1,3-dimethylcyclobutane",
+                "trans-1,3-dimethylcyclobutane",
+            ),
+            (
+                "C[C@H]1C[C@@H](C1)C",
+                "(1r,3r)-1,3-dimethylcyclobutane",
+                "trans-1,3-dimethylcyclobutane",
+            ),
         ] {
+            assert_relative_ring_name(smiles, expected, alternative);
+        }
+    }
+
+    fn assert_relative_ring_name(smiles: &str, expected: &str, alternative: &str) {
+        let name = name_smiles(smiles).unwrap();
+        assert_eq!(name.text, expected, "{smiles}");
+        // The primary name keeps the rest of its rule path's status.
+        assert_ne!(
+            name.status,
+            NameStatus::NotPreferred(NameReason::RelativeRingStereo),
+            "{smiles}"
+        );
+        assert_eq!(
+            name.alternatives.len(),
+            1,
+            "{smiles}: {:?}",
+            name.alternatives
+        );
+        assert_eq!(name.alternatives[0].name, alternative, "{smiles}");
+        assert_eq!(
+            name.alternatives[0].status,
+            NameStatus::NotPreferred(NameReason::RelativeRingStereo),
+            "{smiles}"
+        );
+        let identity = crate::naming::canonical_smiles(smiles).unwrap();
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            let request = crate::naming::local::parse_request(text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(text, &reply).unwrap();
             assert_eq!(
-                name_smiles(smiles).map(|name| name.text).as_deref(),
-                Ok(expected),
-                "{smiles}"
+                identity,
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{smiles}: {text}"
             );
         }
+    }
+
+    #[test]
+    fn relative_ring_diols_and_tert_butyl_alcohol_use_canvas_cip_labels() {
+        for (smiles, expected, alternative) in [
+            (
+                "O[C@H]1C[C@@H](O)C1",
+                "(1s,3s)-cyclobutane-1,3-diol",
+                "cis-cyclobutane-1,3-diol",
+            ),
+            (
+                "O[C@H]1C[C@H](O)C1",
+                "(1r,3r)-cyclobutane-1,3-diol",
+                "trans-cyclobutane-1,3-diol",
+            ),
+            (
+                "O[C@H]1CC[C@@H](O)CC1",
+                "(1s,4s)-cyclohexane-1,4-diol",
+                "cis-cyclohexane-1,4-diol",
+            ),
+            (
+                "O[C@H]1CC[C@H](O)CC1",
+                "(1r,4r)-cyclohexane-1,4-diol",
+                "trans-cyclohexane-1,4-diol",
+            ),
+            (
+                "O[C@H]1CC[C@@H](C(C)(C)C)CC1",
+                "(1s,4s)-4-(tert-butyl)cyclohexanol",
+                "cis-4-(tert-butyl)cyclohexanol",
+            ),
+            (
+                "O[C@H]1CC[C@H](C(C)(C)C)CC1",
+                "(1r,4r)-4-(tert-butyl)cyclohexanol",
+                "trans-4-(tert-butyl)cyclohexanol",
+            ),
+        ] {
+            assert_relative_ring_name(smiles, expected, alternative);
+            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+            for (&idx, label) in &mol.accurate_cip {
+                assert_eq!(
+                    mol.atoms[&idx].stereo.as_deref(),
+                    Some(label.as_str()),
+                    "{smiles}: atom {idx}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn relative_ring_substituents_keep_cip_and_cis_trans_alternatives() {
+        assert_relative_ring_name(
+            "CC(=O)N[C@H]1C[C@@H](C)C1",
+            "N-[(1s,3s)-3-methylcyclobutyl]acetamide",
+            "N-(cis-3-methylcyclobutyl)acetamide",
+        );
+    }
+
+    #[test]
+    fn relative_ring_fallback_is_explicitly_not_preferred() {
+        let mut mol = super::super::graph_io::read_smiles("C[C@H]1C[C@@H](C)C1").unwrap();
+        for atom in mol.atoms.values_mut() {
+            atom.stereo = None;
+        }
+        mol.accurate_cip.clear();
+        let path = [1, 2, 3, 5];
+        let locants = BTreeMap::from([
+            (1, "1".into()),
+            (2, "2".into()),
+            (3, "3".into()),
+            (5, "4".into()),
+        ]);
+        let mut parts = AssemblyParts::new(path.len());
+        parts.is_ring = true;
+        parts.parent_atom_ids = path.into_iter().collect();
+        add_relative_ring_stereo(&mol, &mut parts, &path, &locants).unwrap();
+        assert_eq!(parts.relative_stereo_prefixes, ["cis"]);
+        assert!(parts.stereo_features.is_empty());
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::NotPreferred(NameReason::RelativeRingStereo)
+        );
     }
 
     #[test]
@@ -657,23 +797,99 @@ mod tests {
     }
 
     #[test]
-    fn von_baeyer_parents_decline_pseudoasymmetric_centres() {
-        for smiles in [
-            "C12=C3C4=C1[C@@H]1[C@H]2[C@H]3N41",
-            "CN1[C@@H]2CC[C@H]1C[C@@H](OC(=O)[C@@H](CO)c1ccccc1)C2",
+    fn von_baeyer_pseudoasymmetric_centres_use_canvas_cip_and_round_trip() {
+        for (smiles, expected, pseudo_atoms) in [
+            (
+                "CN1[C@@H]2CC[C@H]1C[C@@H](O)C2",
+                "(1R,3r,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-ol",
+                vec![(7, "r")],
+            ),
+            (
+                "CN1[C@@H]2CC[C@H]1C[C@H](O)C2",
+                "(1R,3s,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-ol",
+                vec![(7, "s")],
+            ),
+            (
+                "N1[C@@H]2CC[C@H]1C[C@H](O)C2",
+                "(1R,3s,5S)-8-azabicyclo[3.2.1]octan-3-ol",
+                vec![(6, "s")],
+            ),
+            (
+                "CN1[C@@H]2CC[C@H]1C[C@@H](OC(=O)[C@H](CO)c1ccccc1)C2",
+                "(1R,3r,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-yl (2S)-3-hydroxy-2-phenylpropanoate",
+                vec![(7, "r")],
+            ),
+            // RCSB CCD OW0 CACTVS SMILES retains the pseudoasymmetric C7.
+            (
+                "CN1[C@@H]2C[C@H](C[C@H]1[C@@H]3O[C@H]23)OC(=O)[C@H](CO)c4ccccc4",
+                "(1R,2R,4S,5S,7s)-9-methyl-3-oxa-9-azatricyclo[3.3.1.0^{2,4}]nonan-7-yl (2S)-3-hydroxy-2-phenylpropanoate",
+                vec![(4, "s")],
+            ),
+            (
+                "O[C@H]1[C@@H]2CC[C@H]1C[C@@H](O)C2",
+                "(1R,3r,5S,8r)-bicyclo[3.2.1]octane-3,8-diol",
+                vec![(1, "r"), (7, "r")],
+            ),
+            (
+                "O[C@@H]1[C@@H]2CC[C@H]1C[C@@H](O)C2",
+                "(1R,3r,5S,8s)-bicyclo[3.2.1]octane-3,8-diol",
+                vec![(1, "s"), (7, "r")],
+            ),
+            (
+                "C12=C3C4=C1[C@@H]1[C@H]2[C@H]3N41",
+                "(2S,3s,8R)-1-azapentacyclo[4.2.0.0^{3,8}.0^{4,7}.0^{2,5}]octa-4(7),5-diene",
+                vec![(5, "s")],
+            ),
         ] {
+            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+            for (atom, label) in pseudo_atoms {
+                // graph_io uses the same full CIP labeler as the canvas.
+                assert_eq!(
+                    mol.accurate_cip.get(&atom).map(String::as_str),
+                    Some(label),
+                    "{smiles}: {atom}"
+                );
+            }
+            let name = name_smiles(smiles).unwrap().text;
+            assert_eq!(name, expected, "{smiles}");
+            let request = crate::naming::local::parse_request(&name).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name, &reply).unwrap();
             assert_eq!(
-                name_smiles(smiles).unwrap_err(),
-                "openclatura: pseudoasymmetric von Baeyer centres are not validated",
-                "{smiles}",
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{name}",
             );
         }
     }
 
     #[test]
-    fn bicyclic_parents_decline_unresolved_relative_stereochemistry() {
-        for smiles in ["C1CC[C@H]2CCCCC[C@H](CC1)OCCC2", "C1C[C@H]2CC[C@@H]12"] {
-            assert!(name_smiles(smiles).is_err(), "{smiles}");
+    fn multicyclic_pseudoasymmetric_centres_round_trip() {
+        for (smiles, expected) in [
+            (
+                "C1CC[C@H]2CCCCC[C@H](CC1)OCCC2",
+                "(1r,7r)-13-oxabicyclo[5.5.4]hexadecane",
+            ),
+            ("C1C[C@H]2CC[C@@H]12", "(1s,4s)-bicyclo[2.2.0]hexane"),
+            (
+                "C[C@H]1C2(CC2)[C@@H](C)C13CC3",
+                "(4s,8s)-4,8-dimethyldispiro[2.1.2.1]octane",
+            ),
+            (
+                "C[C@H]1C2(CC2)[C@H](C)C13CC3",
+                "(4r,8r)-4,8-dimethyldispiro[2.1.2.1]octane",
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap().text;
+            assert_eq!(name, expected, "{smiles}");
+            let request = crate::naming::local::parse_request(&name).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{name}",
+            );
         }
     }
 

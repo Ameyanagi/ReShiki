@@ -175,10 +175,10 @@ the openclatura port and printed only after the OPSIN port reconstructs
 the same structure.
 
 Options:
-  --json  Print the name and its status as one JSON line.
+  --json  Print the name, its status and verified alternatives as one JSON line.
 
 Without --json, prints only the name followed by a newline. With --json,
-value contains name, preferred, status, reason and detail:
+value contains name, preferred, status, reason, detail and alternatives:
   preferred      true only when status is preferred.
   status         preferred = the preferred IUPAC name (IUPAC 2013);
                  not_preferred = systematic, known not to be the preferred
@@ -186,6 +186,7 @@ value contains name, preferred, status, reason and detail:
                  unverified = systematic, preference not verified.
   reason         The snake_case naming-rule reason, or null for preferred.
   detail         The status detail sentence.
+  alternatives   Other verified names, each with name, status and reason.
 ```
 
 ### reshiki --cli info
