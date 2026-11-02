@@ -96,19 +96,14 @@ pub fn categories(template: &reshiki::templates::Template) -> impl Iterator<Item
 /// Match both printed and plain-text von Baeyer superscript locants.
 fn search_fold(text: &str) -> String {
     text.chars()
-        .filter_map(|c| match c {
-            '^' | '{' | '}' => None,
-            '⁰' => Some('0'),
-            '¹' => Some('1'),
-            '²' => Some('2'),
-            '³' => Some('3'),
-            '⁴' => Some('4'),
-            '⁵' => Some('5'),
-            '⁶' => Some('6'),
-            '⁷' => Some('7'),
-            '⁸' => Some('8'),
-            '⁹' => Some('9'),
-            _ => Some(c),
+        .filter(|c| !matches!(c, '^' | '{' | '}'))
+        // Superscript digits, written as escapes so no interface font needs them.
+        .map(|c| match c {
+            '\u{2070}' | '\u{2074}'..='\u{2079}' => char::from(b'0' + (c as u32 - 0x2070) as u8),
+            '\u{00B9}' => '1',
+            '\u{00B2}' => '2',
+            '\u{00B3}' => '3',
+            _ => c,
         })
         .flat_map(char::to_lowercase)
         .collect()
