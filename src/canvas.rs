@@ -584,6 +584,8 @@ pub struct PreviewStyles<'a> {
 
 pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
+    /// Session-only feedback from the hovered locant in a chemical name.
+    pub(crate) locant_highlight: &'a [u64],
     pub(crate) optimizer: Option<optimization::Context<'a>>,
     /// Keyboard input routing; the marker waits for pointer or key interaction.
     pub(crate) keyboard_target: Option<World>,
@@ -633,6 +635,7 @@ impl<'a> MoleculeCanvas<'a> {
     ) -> Self {
         Self {
             nmr: None,
+            locant_highlight: &[],
             optimizer: None,
             keyboard_target: None,
             keyboard_marker: false,
@@ -736,6 +739,25 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         .with_canvas(self.doc.canvas_theme)
         .with_text_cache(&state.text);
         self.draw_paper(&mut frame, state, paper, cursor);
+        for &id in self.locant_highlight {
+            let Some(atom) = self.doc.atom(id).filter(|_| self.doc.atom_visible(id)) else {
+                continue;
+            };
+            let point = self.camera.screen(atom.position, paper);
+            frame.fill(
+                &Path::circle(point, 11.),
+                Color {
+                    a: 0.18,
+                    ..overlay::ACCENT
+                },
+            );
+            frame.stroke(
+                &Path::circle(point, 11.),
+                Stroke::default()
+                    .with_width(2.)
+                    .with_color(overlay::ACCENT_STRONG),
+            );
+        }
         if let Some(context) = self.optimizer {
             optimization::draw_pins(self, context, &mut frame, paper);
         }

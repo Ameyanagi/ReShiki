@@ -781,6 +781,12 @@ fn editor_bounds(
 /// Finish the current label before commands that change its editing context.
 /// Background results and view/typography controls keep the draft intact.
 pub(super) fn commits_draft(message: &Message) -> bool {
+    if matches!(
+        message,
+        Message::Labels(super::atom_labels::Action::LocantsFinished(..))
+    ) {
+        return false;
+    }
     matches!(
         message,
         Message::Pages(

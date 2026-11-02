@@ -102,6 +102,9 @@ pub fn substituent_locant_string(
     {
         return String::new();
     }
+    if parts.isotope_explicit_locants {
+        return locs.join(",");
+    }
     if parts.parent_length == 2
         && !parts.is_ring
         && !parts.is_substituent

@@ -6,7 +6,7 @@
 //! hints, lower-case atoms have spare valency, and leading/trailing bonds are
 //! out atoms. This is intentionally different from a generic SMILES parser.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::api::SerializationError;
 use crate::graph::{
@@ -656,7 +656,30 @@ pub fn write_semantic_cxsmiles(
     graph: &Graph,
     fragment: FragmentId,
 ) -> Result<String, SerializationError> {
-    Writer::new(graph, fragment)?.write()
+    Writer::new(graph, fragment)?
+        .write()
+        .map(|(smiles, _)| smiles)
+}
+
+/// Serializes principal-parent locants alongside the same semantic CXSMILES,
+/// following the writer's traversal rather than construction atom order.
+pub fn write_semantic_cxsmiles_with_locants(
+    graph: &Graph,
+    fragment: FragmentId,
+    principal_parent_atoms: &[AtomId],
+) -> Result<(String, Vec<Option<String>>), SerializationError> {
+    let (smiles, output_order) = Writer::new(graph, fragment)?.write()?;
+    let parent: HashSet<_> = principal_parent_atoms.iter().copied().collect();
+    let locants = output_order
+        .into_iter()
+        .map(|atom| {
+            parent
+                .contains(&atom)
+                .then(|| graph.atom(atom).locants.first().cloned())
+                .flatten()
+        })
+        .collect();
+    Ok((smiles, locants))
 }
 
 struct Writer<'a> {
@@ -814,7 +837,7 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn write(mut self) -> Result<String, SerializationError> {
+    fn write(mut self) -> Result<(String, Vec<AtomId>), SerializationError> {
         let mut roots = Vec::new();
         let atoms = self.graph.fragment(self.fragment).atoms.clone();
         for &atom in &atoms {
@@ -837,7 +860,7 @@ impl<'a> Writer<'a> {
             self.traverse(root)?;
         }
         self.extended_layer()?;
-        Ok(self.output)
+        Ok((self.output, self.output_order))
     }
 
     fn assign_stereo_directions(&mut self) -> Result<(), SerializationError> {

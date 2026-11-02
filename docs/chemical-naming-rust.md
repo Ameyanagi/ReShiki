@@ -129,9 +129,11 @@ Import tab.
   caption; explicit one-letter peptide mode uses its translated three-letter
   sequence as the title. Expansion never supplies a generated systematic name
   or a curated alias. Side-chain peptide protection is outside this grammar.
-- Generated names cover one connected molecule: chains, rings, ring
+- Generated names cover one complete molecule or a charge-balanced salt: chains, rings, ring
   assemblies, spiro, bridged and fused ring systems, with charges and R/S and
-  E/Z stereo. Salts and mixtures, isotope-labeled molecules and a few stereo,
+  E/Z stereo, supported mono-/diradicals, and parenthesised isotope descriptors.
+  Binary salts name the cations before the anions, including repeated ions.
+  Mixtures, net-charged sets, neutral components mixed with ions and a few stereo,
   charge and ring states that the name could misdescribe give an error
   instead of a name.
 - Generated names are systematic. They are not always the preferred IUPAC name.
@@ -226,13 +228,31 @@ done by `crates/chemistry`: SMILES parsing, kekulization, ring perception,
 stereo perception and the CIP labeler, including r/s. The copyright and license
 are in `licenses/openclatura/` and `NOTICE`.
 
-The port names one connected molecule of up to 512 atoms: chains, monocycles,
+The port names molecular graphs of up to 512 atoms: chains, monocycles,
 heterocycles, ring assemblies, spiro systems, von Baeyer (bicyclo, tricyclo)
 systems and fused ring systems, including retained names such as `naphthalene`
 or `1H-indole`, fusion names such as `pyrazolo[3,4-d]pyrimidine`, hydro
 prefixes, indicated hydrogen and bridged fused parents. It covers functional
-groups, charges and ions, and R/S, r/s and E/Z. It declines salts and mixtures,
-isotope labels, and the cases where upstream's own name would describe another
+groups, charges and ions, and R/S, r/s and E/Z. It also names:
+
+- charge-balanced salts, cations before anions with multiplying prefixes
+  (`sodium acetate`, `disodium sulfate`), checked against the whole
+  disconnected graph.
+- neutral mono- and diradicals on chains, monocycles and simple heteroatom or
+  acyl centres with P-71 names (`propan-2-yl`, `phenoxyl`, `methanaminyl`).
+  Only the generation check parses radicals; Import → Name does not.
+- radical ions with the descriptive RC-85.1 form (`benzene radical cation`)
+  when one charge and one unpaired electron sit on the same atom or on the
+  two ends of a broken π bond. The recovered neutral name is the one checked,
+  and the name is marked not preferred.
+- isotopically substituted structures with parenthesised nuclide descriptors
+  (`(2H3)methanol`, P-82), marked preference-unverified. The CLI option
+  `--isotope-style boughton` gives `methanol-d4` instead, marked not preferred.
+  Captions show mass numbers as superscripts and counts as subscripts.
+
+It declines mixtures, neutral components mixed with ions, isotope positions on
+branches or repeated suffix atoms, isotope-labelled radicals, and the cases
+where upstream's own name would describe another
 structure: nitrogen and ring lone-pair stereocentres, some ring stereo, r/s on
 von Baeyer parents, and some charge, hydrogen and localized pi states. Each
 such place is marked `Upstream divergence` in the source. The text matches
@@ -245,6 +265,23 @@ and specified stereo. Otherwise you see an error and no name. Generation runs
 under the same worker limits as parsing, so a very large ring system can time
 out. Comprehensive IUPAC coverage is not claimed. Unspecified stereo remains
 unspecified.
+
+Cyclic phanes can also have an alternative name, such as
+`1,4(1,3)-dibenzenacyclohexaphane`. This first implementation supports benzene,
+pyridine, furan and thiophene amplificants joined by saturated carbon, O, S or
+NH linkers, when collapsing the amplificants leaves one simple ring of at least
+six nodes and no amplificant is attached through adjacent atoms (that makes a
+fused system, P-52.2.5.2.1). It declines
+substituents, charges, isotopes, stereo, unsaturated linkers and additional ring
+topology. Each alternative is independently parsed by strict OPSIN and appears
+only if it reconstructs the exact graph. The inspector offers a Copy button,
+and `name --json` includes the names in `value.alternatives`. If ordinary naming
+fails, a qualifying phane name can supply the main name instead. A cyclophane
+needs at least six nodes, two or more rings and a mancude ring, and its
+preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). An ordinary name
+with a phane alternative is therefore marked not preferred, and the phane name
+itself is marked unverified until its numbering is checked. Phane names are
+separate from curated aliases.
 
 ### Preferred IUPAC name status
 
@@ -443,17 +480,21 @@ convention, so an older reader may save the caption as ordinary text.
 
 ### Alias catalog
 
-The bundled catalog contains 40 retained or functional-class names for 30
-identities, including `ethyl alcohol` for ethanol. Each alias displays its
+The bundled catalog contains 97 retained or functional-class names for 85
+identities, including amino acids, explicit sugar anomers and nucleobase
+tautomers, as well as `ethyl alcohol` for ethanol. Each alias displays its
 source, version, record and license. The
 [complete catalog and provenance](../src/naming/catalog/README.md) record the
 selected OPSIN data (MIT license) and one ChEBI equivalence (CC BY 4.0). The S,
-R and unspecified lactic acid graphs have separate entries. Neither charge nor
+R and unspecified lactic acid graphs have separate entries. Biochemical names
+retain exact stereochemistry and tautomers; qualified names distinguish asset
+tautomers that OPSIN's plain names do not reconstruct. Neither charge nor
 isotope variants inherit the neutral, unlabeled alias. Reaction map labels do
 not change chemical identity. Looking up aliases needs no network connection,
 Java, Python or other program. **Resolve name** is disabled while parsing and
 for empty input. Changing preview chemistry prevents using aliases from the
 original graph. After chemistry changes, generate a new name before using it.
+The `name --json` CLI output includes the matched names in `value.aliases`.
 
 ### Records
 

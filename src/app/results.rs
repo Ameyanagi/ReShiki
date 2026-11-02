@@ -38,7 +38,7 @@ enum Completion {
     Properties,
     /// Imports(Loaded).
     Imports,
-    /// Naming(Finished).
+    /// Naming(Finished) and Labels(LocantsFinished).
     Naming,
     /// ClipboardRead, ClipboardWritten, CopyAsPrepared and CopyAsWritten.
     Clipboard,
@@ -500,6 +500,39 @@ fn completion(message: &Message) -> Option<Completion> {
             }
         }
         Message::LabelsReady(..) => Some(Completion::Labels),
+        Message::Labels(action) => {
+            use super::atom_labels::Action;
+            match action {
+                Action::LocantsFinished(..) => Some(Completion::Naming),
+                Action::Scope(..)
+                | Action::Carbons(..)
+                | Action::Hydrogens(..)
+                | Action::Charges(..)
+                | Action::Position(..)
+                | Action::Attachment(..)
+                | Action::Stereo(..)
+                | Action::DlDescriptors(..)
+                | Action::MarkUndefined(..)
+                | Action::SteroidAlphaBeta(..)
+                | Action::RomanStereoParentheses(..)
+                | Action::AxialDescriptors(..)
+                | Action::Seed(..)
+                | Action::Number
+                | Action::IupacLocants
+                | Action::RingAtomsOnly(..)
+                | Action::CancelLocants
+                | Action::ReplaceLocants
+                | Action::ClearNumbers
+                | Action::Text(..)
+                | Action::ApplyText
+                | Action::Size(..)
+                | Action::ApplySize
+                | Action::ToolbarStyle
+                | Action::PositionIndicators
+                | Action::ResetPositions
+                | Action::ResetOverrides => None,
+            }
+        }
         Message::Templates(action) => {
             use super::template_library::Action;
             match action {
@@ -571,6 +604,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Insert
                 | Action::InsertName
                 | Action::AddNameBelow(..)
+                | Action::NumberByLocants(..)
+                | Action::HoverLocant { .. }
                 | Action::PreviewOpen(..)
                 | Action::DetailsOpen(..)
                 | Action::CopyName
@@ -654,7 +689,6 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::MakeIonic
         | Message::CenterRingCharge
         | Message::Abbreviations(..)
-        | Message::Labels(..)
         | Message::TemplateNavigate(..)
         | Message::InspectorScroll(..)
         | Message::ResetBondDrawing

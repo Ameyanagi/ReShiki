@@ -74,6 +74,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("opsin", "graph_upstream_parser"): 0,
     ("opsin", "graph_upstream_writer"): 0,
     ("opsin", "name_to_structure"): 0,
+    ("opsin", "parent_locants"): 0,
     ("opsin", "phanes"): 0,
     ("opsin", "preprocessing"): 0,
     ("opsin", "processing_brackets"): 0,

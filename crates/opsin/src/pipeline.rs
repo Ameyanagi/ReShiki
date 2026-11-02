@@ -84,6 +84,7 @@ fn interpret_candidate(
         Structure {
             graph: state.fragment_manager.graph,
             fragment,
+            principal_parent_atoms: state.principal_parent_atoms,
         },
         state.warnings,
     ))

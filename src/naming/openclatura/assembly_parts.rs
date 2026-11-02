@@ -124,6 +124,8 @@ pub struct AssemblyParts {
     pub parent_bond_ids_by_locants: BTreeMap<(String, String), usize>,
     pub proof_locant_map: bool,
     pub omit_redundant_locants: bool,
+    /// P-82.6.1.1: positional isotopes require the constitutional locants too.
+    pub isotope_explicit_locants: bool,
     pub elided_substituent_locants: BTreeSet<String>,
     pub elided_unsaturation_locants: BTreeSet<String>,
     pub elide_principal_group_locants: bool,
@@ -184,6 +186,7 @@ impl AssemblyParts {
             parent_bond_ids_by_locants: BTreeMap::new(),
             proof_locant_map: false,
             omit_redundant_locants: true,
+            isotope_explicit_locants: false,
             elided_substituent_locants: BTreeSet::new(),
             elided_unsaturation_locants: BTreeSet::new(),
             elide_principal_group_locants: false,

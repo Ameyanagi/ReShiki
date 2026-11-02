@@ -19,6 +19,7 @@ pub(super) const UPSTREAM_VERSION: &str = opsin::UPSTREAM_VERSION;
 pub(super) const UPSTREAM_COMMIT: &str = opsin::UPSTREAM_COMMIT;
 pub(super) const RESOURCE_FINGERPRINT: &str = opsin::RESOURCE_FINGERPRINT;
 pub(super) const OPTIONS: &str = "strict-semantic-cx1";
+pub(super) const GENERATION_OPTIONS: &str = "generation-radicals-semantic-cx1";
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
@@ -27,10 +28,15 @@ pub(super) enum Request {
         protocol: u32,
         name: String,
     },
+    Verify {
+        protocol: u32,
+        name: String,
+    },
     Generate {
         protocol: u32,
         profile: String,
         smiles: String,
+        isotope_style: super::IsotopeStyle,
     },
 }
 #[derive(Serialize, Deserialize)]
@@ -61,6 +67,7 @@ pub(super) struct Parsed {
     pub message: String,
     pub warnings: Vec<ParserWarning>,
     pub cxsmiles: Option<String>,
+    pub locants: Vec<Option<String>>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -106,14 +113,16 @@ pub(super) fn check_name(name: &str, error: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn parse(name: String) -> Result<Response, String> {
+fn parse(name: String, generation: bool) -> Result<Response, String> {
     check_name(
         &name,
         "Enter a chemical name of at most 2048 bytes without control characters",
     )?;
     // Grammar initialization is inside the bounded native allocator, never a foreign runtime.
     let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
-    let result = parser.parse(&name, &opsin::ParseOptions::strict());
+    let mut options = opsin::ParseOptions::strict();
+    options.allow_radicals = generation;
+    let result = parser.parse(&name, &options);
     let status = match result.status {
         opsin::Status::Success => ParserStatus::Success,
         opsin::Status::Warning => ParserStatus::Warning,
@@ -133,14 +142,16 @@ fn parse(name: String) -> Result<Response, String> {
         .collect();
     let serialized = result
         .structure
-        .map(|structure| structure.semantic_cxsmiles())
+        .map(|structure| structure.semantic_cxsmiles_with_locants())
         .transpose();
-    let (status, message, cxsmiles) = match serialized {
-        Ok(cxsmiles) => (status, result.message, cxsmiles),
+    let (status, message, cxsmiles, locants) = match serialized {
+        Ok(Some((cxsmiles, locants))) => (status, result.message, Some(cxsmiles), locants),
+        Ok(None) => (status, result.message, None, vec![]),
         Err(error) => (
             ParserStatus::Failure,
             format!("{} Structure serialization failed: {error}", result.message),
             None,
+            vec![],
         ),
     };
     Ok(Response::Parse(Parsed {
@@ -150,12 +161,18 @@ fn parse(name: String) -> Result<Response, String> {
         upstream_version: UPSTREAM_VERSION.into(),
         upstream_commit: UPSTREAM_COMMIT.into(),
         resource_fingerprint: RESOURCE_FINGERPRINT.into(),
-        options: OPTIONS.into(),
+        options: if generation {
+            GENERATION_OPTIONS
+        } else {
+            OPTIONS
+        }
+        .into(),
         name: result.input,
         status,
         message,
         warnings,
         cxsmiles,
+        locants,
     }))
 }
 
@@ -178,13 +195,15 @@ pub fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
     }
     let request: Request = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
     let response = match request {
-        Request::Parse { protocol, name } if protocol == PROTOCOL => parse(name),
+        Request::Parse { protocol, name } if protocol == PROTOCOL => parse(name, false),
+        Request::Verify { protocol, name } if protocol == PROTOCOL => parse(name, true),
         Request::Generate {
             protocol,
             profile,
             smiles,
+            isotope_style,
         } if protocol == PROTOCOL && profile == openclatura::PROFILE => {
-            let result = openclatura::name_smiles(&smiles)
+            let result = openclatura::name_smiles_with_style(&smiles, isotope_style)
                 .and_then(|name| {
                     check_name(&name.text, "the name exceeds the supported length")?;
                     Ok(name)

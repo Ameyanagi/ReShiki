@@ -58,6 +58,8 @@ pub(crate) struct Input {
 pub(crate) struct Name {
     pub(crate) input: Input,
     pub(crate) json: bool,
+    pub(crate) locants: bool,
+    pub(crate) isotope_style: crate::naming::IsotopeStyle,
 }
 
 /// Where the output goes.
@@ -145,6 +147,12 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
             Ok(Command::Name(Name {
                 input: input(spec.name, &options)?,
                 json: options.json,
+                locants: options.locants,
+                isotope_style: match options.isotope_style.as_deref().map(OsStr::to_str) {
+                    None | Some(Some("iupac")) => crate::naming::IsotopeStyle::Iupac,
+                    Some(Some("boughton")) => crate::naming::IsotopeStyle::Boughton,
+                    _ => return Err("--isotope-style must be iupac or boughton".into()),
+                },
             }))
         }
         _ => Err(unknown_command(&lossy)),
@@ -226,10 +234,12 @@ struct Options {
     height: Option<OsString>,
     name: Option<OsString>,
     executable: Option<OsString>,
+    isotope_style: Option<OsString>,
     pages: bool,
     force: bool,
     receipt: bool,
     json: bool,
+    locants: bool,
 }
 
 /// Splits `tokens` into the command's options and one positional input.
@@ -276,6 +286,7 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--height" => options.height = Some(value),
                 "--name" => options.name = Some(value),
                 "--executable" => options.executable = Some(value),
+                "--isotope-style" => options.isotope_style = Some(value),
                 _ => options.output = Some(value),
             }
         } else {
@@ -284,6 +295,7 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--force" => options.force = true,
                 "--receipt" => options.receipt = true,
                 "--json" => options.json = true,
+                "--locants" => options.locants = true,
                 _ => {}
             }
         }

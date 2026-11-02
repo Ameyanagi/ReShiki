@@ -101,10 +101,10 @@ impl Measurements {
         }
         let start = Instant::now();
         let result = (|| {
-            let request = super::local::parse_request(name).map_err(|e| e.to_string())?;
+            let request = super::local::verification_request(name).map_err(|e| e.to_string())?;
             let reply = super::worker::respond(&request)?;
-            let parsed =
-                super::local::parse_result(name, &reply).map_err(|e| format!("{name}: {e}"))?;
+            let parsed = super::local::verification_result(name, &reply)
+                .map_err(|e| format!("{name}: {e}"))?;
             super::canonical_smiles(&parsed.smiles)
         })();
         self.parsing_time += start.elapsed();
@@ -177,6 +177,13 @@ impl Measurements {
         match generated {
             Err(reason) => result.reason = reason,
             Ok(name) => {
+                for alternative in name.alternatives.iter().map(|n| &n.name) {
+                    let actual = self
+                        .parse_name(alternative)
+                        .unwrap_or_else(|error| panic!("{alternative}: {error}"));
+                    super::verify_identity(&expected, &actual)
+                        .unwrap_or_else(|error| panic!("{alternative}: {error}"));
+                }
                 result.status = Some(name.status);
                 result.name = name.text;
                 match self.parse_name(&result.name) {

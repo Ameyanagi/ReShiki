@@ -38,6 +38,27 @@ impl Builder<'_> {
         if rules.is_empty() {
             return Err(error("Molecule contains no word rules!?"));
         }
+        // Component processing has assembled and numbered fused parents, but
+        // word-rule assembly has not yet incorporated their substituents.
+        // Suffixes may already have merged, retaining their original atom type.
+        self.assembly.state.principal_parent_atoms = self
+            .assembly
+            .arena
+            .descendants_named(rules[0], "root")
+            .first()
+            .and_then(|&root| self.assembly.arena.first_child_named(root, "group"))
+            .and_then(|group| self.assembly.arena[group].fragment)
+            .map(|parent| {
+                self.assembly
+                    .graph()
+                    .fragment(parent)
+                    .atoms
+                    .iter()
+                    .copied()
+                    .filter(|&atom| self.assembly.graph().atom(atom).atom_type != "suffix")
+                    .collect()
+            })
+            .unwrap_or_default();
         for &rule in &rules {
             self.process_word_rule_children_then_rule(rule)?;
         }

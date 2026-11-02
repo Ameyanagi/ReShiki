@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
 mod name_markup;
+pub(crate) use name_markup::isotope_runs;
 pub use name_markup::{NameMarkup, NameRun, name_markup};
 
 /// Conservative recognition for newly typed standalone neutral formulas.

@@ -765,10 +765,78 @@ fn name_command_lines_parse() {
                     format: format.into(),
                 },
                 json,
+                locants: false,
+                isotope_style: crate::naming::IsotopeStyle::Iupac,
             })),
             "{tokens:?}"
         );
     }
+}
+
+#[test]
+fn name_locants_implies_json_output_and_rejects_duplicate_flags() {
+    assert_eq!(
+        parsed(&["name", "--smiles", "OCC", "--locants"]),
+        Ok(Command::Name(Name {
+            input: Input {
+                source: Source::Smiles("OCC".into()),
+                format: "smiles".into(),
+            },
+            json: false,
+            locants: true,
+            isotope_style: crate::naming::IsotopeStyle::Iupac,
+        }))
+    );
+    assert_eq!(
+        parsed(&["name", "--smiles", "C", "--locants", "--locants"]),
+        Err("--locants given more than once".into())
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_locants_reports_parent_atoms_in_imported_atom_order() {
+    for flags in [vec!["--locants"], vec!["--json", "--locants"]] {
+        let mut tokens = vec!["name", "--smiles", "OCC"];
+        tokens.extend(flags);
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, SUCCESS, "{err}");
+        assert!(err.is_empty(), "{err}");
+        let result: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(result["value"]["name"], "ethanol");
+        assert_eq!(result["value"]["locants"], json!([null, "1", "2"]));
+    }
+}
+
+#[test]
+fn isotope_style_command_line_is_explicit_and_checked() {
+    for (value, expected) in [
+        ("iupac", crate::naming::IsotopeStyle::Iupac),
+        ("boughton", crate::naming::IsotopeStyle::Boughton),
+    ] {
+        let Ok(Command::Name(name)) =
+            parsed(&["name", "--smiles", "[2H]C", "--isotope-style", value])
+        else {
+            panic!("{value}")
+        };
+        assert_eq!(name.isotope_style, expected);
+    }
+    assert_eq!(
+        parsed(&["name", "--smiles", "C", "--isotope-style", "cas"]),
+        Err("--isotope-style must be iupac or boughton".into())
+    );
+    assert!(parsed(&["name", "--smiles", "C", "--isotope-style"]).is_err());
+    assert!(
+        parsed(&[
+            "name",
+            "--smiles",
+            "C",
+            "--isotope-style",
+            "iupac",
+            "--isotope-style",
+            "boughton"
+        ])
+        .is_err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -783,13 +851,54 @@ async fn name_prints_one_plain_name_without_a_banner() {
 async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
     use crate::naming::{NameReason, NameStatus};
 
-    for (smiles, expected, status, reason) in [
-        ("CCO", "ethanol", NameStatus::Preferred, Value::Null),
+    for (smiles, expected, status, reason, aliases, alternatives) in [
+        (
+            "CCO",
+            "ethanol",
+            NameStatus::Preferred,
+            Value::Null,
+            json!(["ethanol", "ethyl alcohol"]),
+            json!([]),
+        ),
+        (
+            "CC(=O)[O-].[Na+]",
+            "sodium acetate",
+            NameStatus::Preferred,
+            Value::Null,
+            json!([]),
+            json!([]),
+        ),
+        (
+            "[13CH3]CO",
+            "(2-13C)ethan-1-ol",
+            NameStatus::Unverified(NameReason::IsotopePlacement),
+            json!("isotope_placement"),
+            json!([]),
+            json!([]),
+        ),
         (
             "CC(=NN)C",
             "propan-2-one hydrazone",
             NameStatus::NotPreferred(NameReason::FunctionalClass),
             json!("functional_class"),
+            json!([]),
+            json!([]),
+        ),
+        (
+            "C1Cc2ccc(cc2)CCc2ccc1cc2",
+            "1,4(1,4)-dibenzenacyclohexaphane",
+            NameStatus::Unverified(NameReason::Phane),
+            json!("phane"),
+            json!([]),
+            json!([]),
+        ),
+        (
+            "C1Cc2cccc(c2)CCc2cccc1c2",
+            "tricyclo[9.3.1.1^{4,8}]hexadeca-1(15),4(16),5,7,11,13-hexaene",
+            NameStatus::NotPreferred(NameReason::Phane),
+            json!("phane"),
+            json!([]),
+            json!([{"name": "1,4(1,3)-dibenzenacyclohexaphane", "status": "unverified", "reason": "phane"}]),
         ),
     ] {
         let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
@@ -812,7 +921,8 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
         );
         assert_eq!(value["reason"], reason, "{smiles}");
         assert_eq!(value["detail"], status.detail(), "{smiles}");
-        assert_eq!(value["alternatives"], json!([]), "{smiles}");
+        assert_eq!(value["aliases"], aliases, "{smiles}");
+        assert_eq!(value["alternatives"], alternatives, "{smiles}");
         assert_eq!(result["experimental"], true);
         assert_eq!(result["api"]["stability"], "experimental");
         assert_eq!(
@@ -823,9 +933,23 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn name_json_keeps_biochemical_aliases_stereospecific() {
+    for (smiles, aliases) in [
+        ("N[C@@H](C)C(=O)O", json!(["L-alanine"])),
+        ("N[C@H](C)C(=O)O", json!([])),
+        ("NC(C)C(=O)O", json!([])),
+    ] {
+        let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
+        assert_eq!(code, SUCCESS, "{smiles}: {err}");
+        let result: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(result["value"]["aliases"], aliases, "{smiles}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn name_declined_inputs_fail_without_stdout() {
     // Import would drop the allene stereo; the raw SMILES check declines it.
-    for smiles in ["CC.O", "[13CH3]CO", "FC=[C@AL1]=CF"] {
+    for smiles in ["CC.O", "[13CH3]C1CCCCC1", "FC=[C@AL1]=CF"] {
         for json in [false, true] {
             let mut tokens = vec!["name", "--smiles", smiles];
             if json {
@@ -837,6 +961,24 @@ async fn name_declined_inputs_fail_without_stdout() {
             assert!(err.starts_with("reshiki: error: "), "{tokens:?}: {err}");
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_boughton_option_controls_the_generated_name_and_status() {
+    let (code, out, err) = call(&[
+        "name",
+        "--smiles",
+        "[2H]C([2H])([2H])O[2H]",
+        "--isotope-style",
+        "boughton",
+        "--json",
+    ])
+    .await;
+    assert_eq!(code, SUCCESS, "{err}");
+    let result: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(result["value"]["name"], "methanol-d4");
+    assert_eq!(result["value"]["status"], "not_preferred");
+    assert_eq!(result["value"]["reason"], "boughton_isotope");
 }
 
 #[test]

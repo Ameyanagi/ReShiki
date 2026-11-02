@@ -7,7 +7,7 @@ use std::borrow::Cow;
 mod chemdoodle;
 
 const TEXT: &str = "public.utf8-plain-text";
-const NAME_REASON: &str = "Name needs one complete connected molecule.";
+const NAME_REASON: &str = "Name needs one complete molecule or a charge-balanced salt.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CopyFormat {
@@ -155,7 +155,8 @@ fn name_reason(doc: &Document) -> Option<&'static str> {
     let connected = doc.atoms.first().is_some_and(|atom| {
         crate::molecule_names::component(doc, atom.id).len() == doc.atoms.len()
     });
-    (!doc.reactions.is_empty() || !connected).then_some(NAME_REASON)
+    (!doc.reactions.is_empty() || !(connected || crate::molecule_names::charge_balanced_salt(doc)))
+        .then_some(NAME_REASON)
 }
 
 fn reaction_reason(doc: &Document) -> Option<&'static str> {

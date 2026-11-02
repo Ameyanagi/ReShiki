@@ -667,6 +667,1442 @@
           ]
         }
       ]
+    },
+    {
+      "id": "l-alanine",
+      "smiles": "C[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-alanine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "alan"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-arginine",
+      "smiles": "C(C[C@@H](C(=O)O)N)CN=C(N)N",
+      "aliases": [
+        {
+          "name": "N(5)-(diaminomethylidene)-L-ornithine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "ornith"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            },
+            {
+              "file": "simpleSubstituents.xml",
+              "token": "amino"
+            },
+            {
+              "file": "alkanes.xml",
+              "token": "meth"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "ylidene"
+            },
+            {
+              "file": "multipliers.xml",
+              "token": "di"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-asparagine",
+      "smiles": "C([C@@H](C(=O)O)N)C(=O)N",
+      "aliases": [
+        {
+          "name": "L-asparagine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "asparag"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-aspartic-acid",
+      "smiles": "C([C@@H](C(=O)O)N)C(=O)O",
+      "aliases": [
+        {
+          "name": "L-aspartic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "aspart"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-cysteine",
+      "smiles": "C([C@@H](C(=O)O)N)S",
+      "aliases": [
+        {
+          "name": "L-cysteine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "cyste"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-glutamine",
+      "smiles": "C(CC(=O)N)[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-glutamine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "glutam"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-glutamic-acid",
+      "smiles": "C(CC(=O)O)[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-glutamic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "glutam"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glycine",
+      "smiles": "C(C(=O)O)N",
+      "aliases": [
+        {
+          "name": "glycine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "glyc"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-histidine-3h",
+      "smiles": "C1=C(NC=N1)C[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "3-(1H-imidazol-5-yl)-L-alanine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "alan"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            },
+            {
+              "file": "arylSubstituents.xml",
+              "token": "imidaz"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-isoleucine",
+      "smiles": "CC[C@H](C)[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-isoleucine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "isoleuc"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-leucine",
+      "smiles": "CC(C)C[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-leucine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "leuc"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-lysine",
+      "smiles": "C(CCN)C[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-lysine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "lys"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-methionine",
+      "smiles": "CSCC[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-methionine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "methion"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-phenylalanine",
+      "smiles": "C1=CC=C(C=C1)C[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-phenylalanine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "phenylalan"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-proline",
+      "smiles": "C1C[C@H](NC1)C(=O)O",
+      "aliases": [
+        {
+          "name": "L-proline",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "prol"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-serine",
+      "smiles": "C([C@@H](C(=O)O)N)O",
+      "aliases": [
+        {
+          "name": "L-serine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "ser"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-threonine",
+      "smiles": "C[C@H]([C@@H](C(=O)O)N)O",
+      "aliases": [
+        {
+          "name": "L-threonine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "threon"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-tryptophan",
+      "smiles": "C1=CC=C2C(=C1)C(=CN2)C[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-tryptophan",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "tryptoph"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "unsaturators.xml",
+              "token": "an"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-tyrosine",
+      "smiles": "C1=CC(=CC=C1C[C@@H](C(=O)O)N)O",
+      "aliases": [
+        {
+          "name": "L-tyrosine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "tyros"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-valine",
+      "smiles": "CC(C)[C@@H](C(=O)O)N",
+      "aliases": [
+        {
+          "name": "L-valine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "val"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "adenine-9h",
+      "smiles": "Nc1ncnc2[nH]cnc12",
+      "aliases": [
+        {
+          "name": "9H-adenine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "adenin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "adenine-7h",
+      "smiles": "C1=NC2=NC=NC(=C2N1)N",
+      "aliases": [
+        {
+          "name": "adenine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "adenin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        },
+        {
+          "name": "7H-adenine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "adenin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "guanine-9h",
+      "smiles": "Nc1nc2[nH]cnc2c(=O)[nH]1",
+      "aliases": [
+        {
+          "name": "9H-guanine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "guanin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "guanine-7h",
+      "smiles": "C1=NC2=C(N1)C(=O)NC(=N2)N",
+      "aliases": [
+        {
+          "name": "guanine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "guanin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        },
+        {
+          "name": "7H-guanine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "guanin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cytosine-3h",
+      "smiles": "C1=C(NC(=O)N=C1)N",
+      "aliases": [
+        {
+          "name": "3H-cytosine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "cytosin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thymine",
+      "smiles": "CC1=CNC(=O)NC1=O",
+      "aliases": [
+        {
+          "name": "thymine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "thymin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "uracil",
+      "smiles": "C1=CNC(=O)NC1=O",
+      "aliases": [
+        {
+          "name": "uracil",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "uracil"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-d-glucopyranose",
+      "smiles": "C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-D-glucopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "gluc"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-d-glucopyranose",
+      "smiles": "C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-D-glucopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "gluc"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-d-galactopyranose",
+      "smiles": "C([C@@H]1[C@@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-D-galactopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "galact"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-d-galactopyranose",
+      "smiles": "C([C@@H]1[C@@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-D-galactopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "galact"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-d-mannopyranose",
+      "smiles": "C([C@@H]1[C@H]([C@@H]([C@@H]([C@H](O1)O)O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-D-mannopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "mann"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-d-mannopyranose",
+      "smiles": "C([C@@H]1[C@H]([C@@H]([C@@H]([C@@H](O1)O)O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-D-mannopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "mann"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-d-ribofuranose",
+      "smiles": "C([C@@H]1[C@H]([C@H]([C@H](O1)O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-D-ribofuranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "rib"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "furan"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-d-ribofuranose",
+      "smiles": "C([C@@H]1[C@H]([C@H]([C@@H](O1)O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-D-ribofuranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "rib"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "furan"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-d-fructofuranose",
+      "smiles": "C([C@@H]1[C@H]([C@@H]([C@@](O1)(CO)O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-D-fructofuranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "fruct"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "furan"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-d-fructofuranose",
+      "smiles": "C([C@@H]1[C@H]([C@@H]([C@](O1)(CO)O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-D-fructofuranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "fruct"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "furan"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-histidine-opsin",
+      "smiles": "N[C@@H](CC1=CNC=N1)C(=O)O",
+      "aliases": [
+        {
+          "name": "L-histidine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "histid"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-arginine-opsin",
+      "smiles": "N[C@@H](CCCNC(N)=N)C(=O)O",
+      "aliases": [
+        {
+          "name": "L-arginine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "argin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cytosine-opsin",
+      "smiles": "N1C(=O)N=C(N)C=C1",
+      "aliases": [
+        {
+          "name": "cytosine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "cytosin"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "e"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "l-selenocysteine",
+      "smiles": "N[C@@H](C[SeH])C(=O)O",
+      "aliases": [
+        {
+          "name": "L-selenocysteine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "aminoAcids.xml",
+              "token": "selenocyste"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "ine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "2-deoxy-alpha-d-ribofuranose",
+      "smiles": "C1[C@@H]([C@H](O[C@@H]1O)CO)O",
+      "aliases": [
+        {
+          "name": "2-deoxy-α-D-ribofuranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "rib"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "furan"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "deoxy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "2-deoxy-beta-d-ribofuranose",
+      "smiles": "C1[C@@H]([C@H](O[C@H]1O)CO)O",
+      "aliases": [
+        {
+          "name": "2-deoxy-β-D-ribofuranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "rib"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "furan"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "deoxy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-d-xylopyranose",
+      "smiles": "C1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-D-xylopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "xyl"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-d-xylopyranose",
+      "smiles": "C1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-D-xylopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "xyl"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-l-fucopyranose",
+      "smiles": "C[C@H]1[C@H]([C@H]([C@@H]([C@@H](O1)O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-L-fucopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "fuc"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-l-fucopyranose",
+      "smiles": "C[C@H]1[C@H]([C@H]([C@@H]([C@H](O1)O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-L-fucopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "fuc"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-l-rhamnopyranose",
+      "smiles": "C[C@H]1[C@@H]([C@H]([C@H]([C@@H](O1)O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-L-rhamnopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "rhamn"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-l-rhamnopyranose",
+      "smiles": "C[C@H]1[C@@H]([C@H]([C@H]([C@H](O1)O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-L-rhamnopyranose",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "rhamn"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "ose"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "l"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "n-acetyl-alpha-d-glucosamine",
+      "smiles": "CC(=O)N[C@@H]1[C@H]([C@@H]([C@H](O[C@@H]1O)CO)O)O",
+      "aliases": [
+        {
+          "name": "N-acetyl-α-D-glucosamine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "glucosamine"
+            },
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "acet"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "n-acetyl-beta-d-glucosamine",
+      "smiles": "CC(=O)N[C@@H]1[C@H]([C@@H]([C@H](O[C@H]1O)CO)O)O",
+      "aliases": [
+        {
+          "name": "N-acetyl-β-D-glucosamine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "glucosamine"
+            },
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "acet"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "n-acetyl-alpha-d-galactosamine",
+      "smiles": "CC(=O)N[C@@H]1[C@H]([C@H]([C@H](O[C@@H]1O)CO)O)O",
+      "aliases": [
+        {
+          "name": "N-acetyl-α-D-galactosamine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "galactosamine"
+            },
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "acet"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "n-acetyl-beta-d-galactosamine",
+      "smiles": "CC(=O)N[C@@H]1[C@H]([C@H]([C@H](O[C@H]1O)CO)O)O",
+      "aliases": [
+        {
+          "name": "N-acetyl-β-D-galactosamine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "galactosamine"
+            },
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "acet"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alpha-d-glucopyranuronic-acid",
+      "smiles": "[C@@H]1([C@@H]([C@H](O[C@@H]([C@@H]1O)O)C(=O)O)O)O",
+      "aliases": [
+        {
+          "name": "α-D-glucopyranuronic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "gluc"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "uronic acid"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "beta-d-glucopyranuronic-acid",
+      "smiles": "[C@@H]1([C@@H]([C@H](O[C@H]([C@@H]1O)O)C(=O)O)O)O",
+      "aliases": [
+        {
+          "name": "β-D-glucopyranuronic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carbohydrates.xml",
+              "token": "gluc"
+            },
+            {
+              "file": "carbohydrates.xml",
+              "token": "pyran"
+            },
+            {
+              "file": "carbohydrateSuffixes.xml",
+              "token": "uronic acid"
+            },
+            {
+              "file": "miscTokens.xml",
+              "token": "d"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

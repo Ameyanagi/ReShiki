@@ -1,9 +1,9 @@
 Offline retained-name catalog: ReShiki retained aliases 1
 
 OPSIN-derived names, token references and chemical data in
-src/naming/catalog/data.json are selected and adapted from OPSIN 2.9.0:
+src/naming/catalog/data.json are selected and adapted from OPSIN 3.0-SNAPSHOT:
 https://github.com/dan2097/opsin
-Pinned commit: b91b610af5ab07560fedb20730d7aef46bb2bca0
+Pinned commit: 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
 Copyright 2017 Daniel Lowe. Licensed under MIT. The complete original license
 is crates/opsin/LICENSE and is included in binary distribution notices.
 
@@ -12,6 +12,14 @@ rules into complete names. Some resource tokens are stems, not complete names.
 The accompanying independent authored graphs and strict parser checks validate
 those expansions. This selection does not modify the upstream resources and
 is not a complete copy of OPSIN's retained-name vocabulary.
+The initial small-molecule selection used OPSIN 2.9.0 at commit
+b91b610af5ab07560fedb20730d7aef46bb2bca0; provenance.json retains that pin.
+Biochemical reference graphs come from the bundled template and Haworth sugar
+catalogs. All aliases are checked against the current bundled OPSIN resources.
+The catalog contains 85 independently specified chemical identities and 97
+curated names. Separate strict OPSIN default graphs for L-histidine, L-arginine
+and cytosine retain those plain aliases, while the frozen template tautomers
+retain their own explicit aliases. No tautomer equivalence is inferred.
 
 The exact (+)-lactic acid / S-lactic acid equivalence and its molecular graph
 are selected from ChEBI:422, EMBL-EBI, last modified 18 April 2024:

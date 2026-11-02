@@ -136,6 +136,7 @@ MCP server's `file_save` or the app.
 | `--force`           | skill                          | Replace the generated files of an existing skill folder                                                  |
 | `--receipt`         | skill                          | Print one receipt JSON line after writing the skill                                                      |
 | `--json`            | name                           | Print the name and its status as one JSON line                                                           |
+| `--locants`         | name                           | Print JSON with parent locants in input atom order                                                       |
 | `--json`            | help                           | Print the command catalog as one JSON line                                                               |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
@@ -326,7 +327,7 @@ The result has the same fields as the MCP `analyze` tool's
 ## name
 
 ```text
-reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]
+reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json] [--locants]
 ```
 
 `reshiki --cli help name` prints the [full help](agent-reference.md#reshiki---cli-name).
@@ -344,8 +345,11 @@ $ reshiki --cli name --smiles 'CCC#N'
 propanenitrile
 ```
 
-`--json` prints one JSON line with the name and its
-[preferred IUPAC name status](chemical-naming-rust.md#preferred-iupac-name-status).
+`--json` prints one JSON line with the name, its
+[preferred IUPAC name status](chemical-naming-rust.md#preferred-iupac-name-status)
+and any alternative generated names and curated aliases matching the exact isomeric graph.
+`--locants` also prints JSON and adds a `locants` array in imported atom order,
+with a string for each principal-parent atom and null for other atoms.
 This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 
 ```json
@@ -356,6 +360,8 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
   },
   "experimental": true,
   "value": {
+    "aliases": [],
+    "alternatives": [],
     "detail": "Uses a functional-class form such as a hydrazone, a chiral sulfoxide, a mixed chalcogen peroxide or a phosphane oxide with halide or alkoxy ligands; preferred IUPAC names use substitutive or acid-derived forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane, [(phenylselanyl)tellanyl]benzene or dimethylphosphinic fluoride (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2, P-68.3.2.3.1).",
     "name": "propan-2-one hydrazone",
     "preferred": false,
@@ -365,13 +371,15 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 }
 ```
 
-| Field       | Meaning                                                                                                    |
-| ----------- | ---------------------------------------------------------------------------------------------------------- |
-| `name`      | The name, exactly as plain output prints it                                                                |
-| `preferred` | `true` only when `status` is `preferred`                                                                   |
-| `status`    | `preferred`, `not_preferred` (known not to be the preferred IUPAC name) or `unverified`                    |
-| `reason`    | The rule family behind `not_preferred` or `unverified`, such as `functional_class`; `null` for `preferred` |
-| `detail`    | One sentence that explains the status                                                                      |
+| Field          | Meaning                                                                                                    |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| `name`         | The name, exactly as plain output prints it                                                                |
+| `preferred`    | `true` only when `status` is `preferred`                                                                   |
+| `status`       | `preferred`, `not_preferred` (known not to be the preferred IUPAC name) or `unverified`                    |
+| `reason`       | The rule family behind `not_preferred` or `unverified`, such as `functional_class`; `null` for `preferred` |
+| `detail`       | One sentence that explains the status                                                                      |
+| `aliases`      | Curated alias names for this exact graph; an empty array when no catalog entry matches                     |
+| `alternatives` | Other generated names independently reconstructed to this exact graph; otherwise an empty array            |
 
 ## info
 

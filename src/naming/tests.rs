@@ -1,5 +1,85 @@
 use super::*;
 
+#[tokio::test]
+async fn whole_drawing_and_all_ion_selection_generate_the_same_salt() {
+    let mut doc = Document::default();
+    let sodium = doc.add_atom("Na", crate::document::Point::default());
+    let chloride = doc.add_atom("Cl", crate::document::Point::new(80., 0.));
+    doc.atom_mut(sodium).unwrap().charge = 1;
+    doc.atom_mut(chloride).unwrap().charge = -1;
+    let whole = document_identity(&doc).unwrap();
+    let selected = selected_identity(&doc, &[sodium, chloride]).unwrap();
+    assert_eq!(whole.smiles, selected.smiles);
+    let record = generate_name(&selected, Cancel::default()).await.unwrap();
+    assert_eq!(record.title, "sodium chloride");
+    assert_eq!(record.name_status, Some(NameStatus::Preferred));
+    doc.atom_mut(chloride).unwrap().charge = 0;
+    assert!(
+        document_identity(&doc)
+            .unwrap_err()
+            .contains("charge-balanced salt")
+    );
+    doc.atom_mut(chloride).unwrap().charge = 1;
+    assert!(document_identity(&doc).is_err());
+}
+
+#[test]
+fn parent_locants_follow_canonical_atom_order_and_require_the_same_graph() {
+    let mut document = Document::default();
+    let terminal = document.add_atom("C", crate::document::Point::new(0., 0.));
+    let middle = document.add_atom("C", crate::document::Point::new(28., 0.));
+    let oxygen = document.add_atom("O", crate::document::Point::new(42., 24.));
+    document.add_bond(terminal, middle, 1, "plain");
+    document.add_bond(middle, oxygen, 1, "plain");
+    document.atoms.rotate_left(1);
+    let locants = Locants {
+        smiles: "OCC".into(),
+        atoms: vec![None, Some("1".into()), Some("2".into())],
+    };
+    assert_eq!(
+        locants.for_document(&document),
+        HashMap::from([(terminal, "2".into()), (middle, "1".into())])
+    );
+    let mut invalid = locants.clone();
+    invalid.atoms.pop();
+    assert!(invalid.for_document(&document).is_empty());
+    document.atom_mut(oxygen).unwrap().element = "N".into();
+    assert!(locants.for_document(&document).is_empty());
+}
+
+#[tokio::test]
+async fn parent_locants_ignore_drawn_fusion_hydrogens_and_stereo() {
+    // The default depiction draws the fusion hydrogens of cis-decalin as atoms.
+    let response = crate::engine::LocalEngine::in_process()
+        .request(crate::engine::Request::import_smiles(
+            "C1CC[C@H]2CCCC[C@@H]2C1",
+        ))
+        .await
+        .unwrap();
+    let document = response.document.unwrap();
+    assert!(document.atoms.iter().any(|atom| atom.element == "H"));
+    let locants = Locants {
+        smiles: "C1CCC2CCCCC2C1".into(),
+        atoms: ["2", "3", "4", "4a", "5", "6", "7", "8", "8a", "1"]
+            .map(|locant| Some(locant.into()))
+            .into(),
+    };
+    let mapped = locants.for_document(&document);
+    assert_eq!(mapped.len(), 10);
+    assert!(
+        mapped
+            .keys()
+            .all(|id| document.atom(*id).unwrap().element == "C")
+    );
+}
+
+#[test]
+fn interior_locants_use_unicode_superscript_digits() {
+    assert_eq!(locant_text("3a^12"), "3a¹²");
+    assert_eq!(locant_text("4a"), "4a");
+    assert_eq!(locant_text("3a¹"), "3a¹");
+}
+
 #[test]
 fn typed_error_display_preserves_message_bytes() {
     for message in [
@@ -40,7 +120,6 @@ fn graph_identity_preserves_stereo_isotopes_charges_and_tautomers() -> Result<()
     }
     for text in [
         "*C",
-        "[CH3]",
         "C~C",
         "CCO>>CC=O",
         "CCO |$;;OH$|",
@@ -317,7 +396,7 @@ fn identity_characterization_table() {
             Err("Invalid drawing: Invalid stereocenter neighbor mapping"),
         ),
         ("wavy", Ok("CCO")),
-        ("radical", Err(UNSUPPORTED)),
+        ("radical", Ok("[CH2]CO")),
         ("query", Err(UNSUPPORTED)),
         ("mapped", Ok("CCO")),
         ("unknown", Ok("CC=CC")),
@@ -356,7 +435,7 @@ fn canonical_state_preserves_rejection_order_and_writer_errors() {
     let doc = identity_case_document("plain");
     let base = chemistry::document::prepare(&doc).unwrap().state;
     let mut state = base.clone();
-    state.graph.atoms[0].radical_electrons = 1;
+    state.graph.atoms[0].radical_electrons = 3;
     state.properties.atoms[0].unknown = true;
     state.metadata.atoms[0].chiral_tag = 3;
     assert_eq!(canonical_state(&state).unwrap_err(), UNSUPPORTED);

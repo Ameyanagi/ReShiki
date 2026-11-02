@@ -3047,6 +3047,11 @@ fn anhydride_component_name(
         }
         let left = anhydride_half_name(mol, descriptor.centers[0], &bridge)?;
         let right = anhydride_half_name(mol, descriptor.centers[1], &bridge)?;
+        // Anhydride names cite acid names (P-65.7.1). A half named for another
+        // principal group, such as a nitrile, would read as a separate compound.
+        if !left.ends_with("ic") || !right.ends_with("ic") {
+            continue;
+        }
         let Some(class) = anhydride_class_name(mol, path) else {
             continue;
         };

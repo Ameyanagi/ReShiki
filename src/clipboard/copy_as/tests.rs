@@ -37,15 +37,26 @@ fn name_needs_one_connected_molecule_without_a_reaction() {
         Some(NAME_REASON)
     );
     let other = doc.add_atom("N", Point::new(240., 0.));
-    assert_eq!(
-        format.unavailable_reason(&doc),
-        Some("Name needs one complete connected molecule.")
-    );
+    assert_eq!(format.unavailable_reason(&doc), Some(NAME_REASON));
     doc.add_bond(doc.atoms[0].id, other, 1, "plain");
     doc.reactions.push(Reaction::new(99));
     assert!(format.unavailable_reason(&doc).is_some());
     doc.reactions.clear();
     assert_eq!(format.unavailable_reason(&doc), None);
+}
+
+#[tokio::test]
+async fn name_copy_accepts_a_complete_drawn_salt() {
+    let mut doc = Document::default();
+    let sodium = doc.add_atom("Na", Point::default());
+    let chloride = doc.add_atom("Cl", Point::new(80., 0.));
+    doc.atom_mut(sodium).unwrap().charge = 1;
+    doc.atom_mut(chloride).unwrap().charge = -1;
+    assert_eq!(CopyFormat::Name.unavailable_reason(&doc), None);
+    let copy = prepare_as(LocalEngine::default(), doc, CopyFormat::Name)
+        .await
+        .unwrap();
+    assert_eq!(copy, prepare_name("sodium chloride".into()));
 }
 
 #[test]
@@ -69,6 +80,41 @@ fn prepared_name_has_plain_html_and_rtf() {
     );
     let rtf = String::from_utf8(copy.representations[1].bytes().unwrap()).unwrap();
     assert!(rtf.contains("{\\i N}{\\super 1}-ethyl-{\\i N}{\\super 2}"));
+}
+
+#[test]
+fn prepared_name_formats_isotope_masses_counts_and_roman_symbols() {
+    for (name, html, rtf) in [
+        (
+            "(S)-(1-2H1,34S)ethan-1-ol",
+            "(<i>S</i>)-(1-<sup>2</sup>H<sub>1</sub>,<sup>34</sup>S)ethan-1-ol",
+            r"({\i S})-(1-{\super 2}H{\sub 1},{\super 34}S)ethan-1-ol",
+        ),
+        (
+            "(31P)phosphane",
+            "(<sup>31</sup>P)phosphane",
+            r"({\super 31}P)phosphane",
+        ),
+        (
+            "methanol-d4",
+            "methanol-d<sub>4</sub>",
+            r"methanol-d{\sub 4}",
+        ),
+    ] {
+        let copy = prepare_name(name.into());
+        assert_eq!(copy.text(), Some(name));
+        assert_eq!(copy.representations[2].bytes().unwrap(), name.as_bytes());
+        assert_eq!(
+            String::from_utf8(copy.representations[0].bytes().unwrap()).unwrap(),
+            format!("<meta charset=\"utf-8\">{html}"),
+            "{name}"
+        );
+        assert_eq!(
+            String::from_utf8(copy.representations[1].bytes().unwrap()).unwrap(),
+            format!("{{\\rtf1\\ansi\\uc1 {rtf}}}"),
+            "{name}"
+        );
+    }
 }
 
 #[tokio::test]

@@ -6,7 +6,7 @@ use crate::{
     molecule_names::{self, IdentityRejection, MAX_NAMING_ATOMS, MAX_SMILES_BYTES, is_tetrahedral},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 mod catalog;
 pub use catalog::VERSION as ALIAS_CATALOG_VERSION;
@@ -32,12 +32,23 @@ pub mod worker;
 #[cfg(not(target_arch = "wasm32"))]
 pub use {
     local::{Cancel, resolve_name},
-    reverse::generate_name,
+    reverse::{generate_name, generate_name_with_options},
 };
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
-pub use browser::{Cancel, generate_name, resolve_name, set_worker, worker_loading};
+pub use browser::{
+    Cancel, generate_name, generate_name_with_options, resolve_name, set_worker, worker_loading,
+};
+
+/// Notation used for isotopically substituted structures.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IsotopeStyle {
+    #[default]
+    Iupac,
+    Boughton,
+}
 
 /// Desktop workers do not download a naming module.
 #[cfg(not(target_arch = "wasm32"))]
@@ -120,6 +131,11 @@ pub enum NameReason {
     AtomOrder,
     AmineChalcogenide,
     PrincipalGroupTie,
+    IsotopePlacement,
+    BoughtonIsotope,
+    RadicalIon,
+    AnionParent,
+    Phane,
     RelativeRingStereo,
     UnknownConfiguration,
 }
@@ -183,6 +199,21 @@ impl NameReason {
             Self::PrincipalGroupTie => {
                 "Equally senior principal groups, such as a chain and a ring carboxylic acid, were chosen by atom order; the preferred parent (P-44.1) has not been verified."
             }
+            Self::IsotopePlacement => {
+                "The isotope descriptor reconstructs the exact structure, but its preferred placement and numbering under P-82.2 and P-82.6 have not been verified."
+            }
+            Self::BoughtonIsotope => {
+                "Uses Boughton/CAS isotope notation; IUPAC prefers parenthesised nuclide descriptors (P-80, P-82.2)."
+            }
+            Self::RadicalIon => {
+                "Uses the descriptive ‘radical cation’ or ‘radical anion’ form (RC-85.1); preferred systematic radical-ion names use the cumulative ionic and radical suffixes of P-75 (including the cation suffixes in P-73)."
+            }
+            Self::AnionParent => {
+                "The preferred parent, suffix and retained-name choice for this hydroxy- or acid-derived anion have not been verified (P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."
+            }
+            Self::Phane => {
+                "The structure is a cyclophane: at least six nodes, two or more rings and a mancude ring. Cyclic phane names rank above fused, bridged fused and von Baeyer names, so the preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). ReShiki has not verified the numbering and citation order of its phane name."
+            }
         }
     }
 }
@@ -240,6 +271,7 @@ pub struct Record {
     pub omitted_units: usize,
     pub smiles: String,
     pub canonical_smiles: String,
+    pub locants: Option<Locants>,
     /// Curated offline aliases, separate from the generated systematic name.
     /// Every entry identifies its source and the exact matched chemical graph.
     pub synonyms: Vec<Alias>,
@@ -272,6 +304,89 @@ impl Record {
             )),
         }
     }
+}
+
+/// Principal-parent locants in the reconstruction's own SMILES atom order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Locants {
+    pub smiles: String,
+    pub atoms: Vec<Option<String>>,
+}
+
+impl Locants {
+    /// Map only the same constitution; drawing order, coordinates, stereo and
+    /// drawn hydrogen atoms (such as those at ring fusions) may differ.
+    pub fn for_document(&self, document: &Document) -> HashMap<u64, String> {
+        let mapped = || {
+            // Fold each plain drawn hydrogen into its one neighbour's count.
+            let mut heavy = document.clone();
+            let folded: Vec<_> = heavy
+                .atoms
+                .iter()
+                .filter(|a| a.element == "H" && a.isotope == 0 && a.charge == 0)
+                .filter_map(|a| {
+                    let mut bonds = heavy.bonds.iter().filter(|b| b.a == a.id || b.b == a.id);
+                    match (bonds.next(), bonds.next()) {
+                        (Some(b), None) => Some((a.id, if b.a == a.id { b.b } else { b.a })),
+                        _ => None,
+                    }
+                })
+                .collect();
+            for &(_, neighbour) in &folded {
+                heavy.atom_mut(neighbour)?.explicit_h += 1;
+            }
+            heavy.delete(&folded.iter().map(|&(h, _)| h).collect::<Vec<_>>());
+            let molecule = chemistry::document::prepare(&heavy).ok()?;
+            // Reading may remove explicit hydrogens, which would shift indices.
+            let source = chemistry::smiles::read(&self.smiles).ok()?.prepared.state;
+            if source.graph.atoms.len() != self.atoms.len() {
+                return None;
+            }
+            let write = |state| {
+                let options = chemistry::smiles::write::Options {
+                    ignore_maps: true,
+                    symbols: chemistry::smiles::symbols::Options {
+                        isomeric: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                chemistry::smiles::write::write(state, options).ok()
+            };
+            let (source, target) = (write(&source)?, write(&molecule.state)?);
+            (source.text == target.text).then(|| {
+                target
+                    .atom_order
+                    .iter()
+                    .zip(&source.atom_order)
+                    .filter_map(|(&target, &source)| {
+                        let locant = self.atoms.get(source)?.as_ref()?;
+                        Some((*molecule.ids.get(target)?, locant.clone()))
+                    })
+                    .collect()
+            })
+        };
+        mapped().unwrap_or_default()
+    }
+}
+
+/// Atom numbers use Unicode superscript digits for OPSIN's interior locants.
+pub fn locant_text(locant: &str) -> String {
+    let mut superscript = false;
+    locant
+        .chars()
+        .filter_map(|c| {
+            if c == '^' {
+                superscript = true;
+                None
+            } else if superscript && c.is_ascii_digit() {
+                "⁰¹²³⁴⁵⁶⁷⁸⁹".chars().nth(c as usize - '0' as usize)
+            } else {
+                superscript = false;
+                Some(c)
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -376,7 +491,7 @@ fn bound_atom_tokens(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Require a complete connected molecule. Abbreviation selection expands to
+/// Require complete molecules or salt ions. Abbreviation selection expands to
 /// its complete underlying graph; display labels never replace chemical atoms.
 pub fn selected_identity(document: &Document, selected: &[u64]) -> Result<Identity, String> {
     let ids: HashSet<_> = editing::analysis_atoms(document, selected)
@@ -419,8 +534,8 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
     }
     let molecule = chemistry::document::prepare(document).map_err(|e| e.to_string())?;
     let smiles = canonical_state(&molecule.state)?;
-    if smiles.contains('.') {
-        return Err("Select a single connected molecule; mixtures and disconnected salts are not supported for local naming".into());
+    if smiles.contains('.') && !molecule_names::charge_balanced_salt(document) {
+        return Err("Select one complete molecule or a charge-balanced salt; neutral components, mixtures, net-charged sets and zwitterions mixed with ions are unsupported".into());
     }
     let mut marked = molecule_names::unspecified_unknown_stereo(&molecule.state);
     let mut unknown = vec![0; marked.metadata.atoms.len()];

@@ -2,7 +2,7 @@
 //! The browser sends the same request to its naming Web Worker instead.
 #[cfg(not(target_arch = "wasm32"))]
 use super::client::{self, CancelOnDrop, POLL};
-use super::{Error, Provenance, Record, canonical_smiles, worker};
+use super::{Error, Locants, Provenance, Record, canonical_smiles, worker};
 use std::borrow::Cow;
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
@@ -38,6 +38,17 @@ impl Cancel {
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn resolve_name(name: &str, cancel: Cancel) -> Result<Record, Error> {
     resolve_with(name, cancel, &SLOTS, run).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) async fn resolve_generated(name: &str, cancel: Cancel) -> Result<Record, Error> {
+    resolve_with(name, cancel, &SLOTS, |name, cancel| {
+        let request = verification_request(name)?;
+        let output =
+            client::run_worker("reshiki-verify-name-", &request, cancel, worker::executable)?;
+        verification_result(name, &output)
+    })
+    .await
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -99,6 +110,19 @@ pub(super) fn parse_request(name: &str) -> Result<Vec<u8>, Error> {
     .map_err(|error| Error::Worker(error.to_string()))
 }
 
+pub(super) fn verification_request(name: &str) -> Result<Vec<u8>, Error> {
+    checked_name(name)?;
+    serde_json::to_vec(&worker::Request::Verify {
+        protocol: worker::PROTOCOL,
+        name: name.into(),
+    })
+    .map_err(|error| Error::Worker(error.to_string()))
+}
+
+pub(super) fn verification_result(name: &str, output: &[u8]) -> Result<Record, Error> {
+    parse_reply_with_mode(output, name, true)
+}
+
 /// The record for the worker's reply to `parse_request(name)`.
 pub(super) fn parse_result(name: &str, output: &[u8]) -> Result<Record, Error> {
     certify_name(name, parse_reply(output, &parser_name(name)?)?)
@@ -147,6 +171,10 @@ fn certify_name(name: &str, mut record: Record) -> Result<Record, Error> {
 }
 
 fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
+    parse_reply_with_mode(bytes, name, false)
+}
+
+fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<Record, Error> {
     if bytes.len() > OUTPUT_LIMIT {
         return Err(Error::Worker(
             "Local parser response exceeds the supported limit".into(),
@@ -166,7 +194,12 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
         || reply.upstream_version != worker::UPSTREAM_VERSION
         || reply.upstream_commit != worker::UPSTREAM_COMMIT
         || reply.resource_fingerprint != worker::RESOURCE_FINGERPRINT
-        || reply.options != worker::OPTIONS
+        || reply.options
+            != if generation {
+                worker::GENERATION_OPTIONS
+            } else {
+                worker::OPTIONS
+            }
         || reply.name != name
     {
         return Err(Error::Worker(
@@ -214,6 +247,35 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
         return Err(Error::Rejected(MESSAGE.into()));
     }
     let canonical_smiles = canonical_smiles(&smiles).map_err(Error::Rejected)?;
+    let atom_count = crate::chemistry::smiles::parse(&smiles)
+        .map_err(|error| Error::Worker(error.to_string()))?
+        .graph
+        .atoms
+        .len();
+    if reply.locants.len() != atom_count {
+        return Err(Error::Worker(
+            "Local parser returned locants for a different atom count".into(),
+        ));
+    }
+    // Locants map by constitution, so they keep the parser's SMILES and atom
+    // order even when salt components are reordered below.
+    let locants = Locants {
+        smiles: smiles.clone(),
+        atoms: reply.locants,
+    };
+    if !generation
+        && crate::chemistry::smiles::prepare(&canonical_smiles)
+            .map_err(|error| Error::Rejected(error.to_string()))?
+            .state
+            .graph
+            .atoms
+            .iter()
+            .any(|atom| atom.radical_electrons != 0)
+    {
+        return Err(Error::Rejected(
+            "Importing radical names is not supported by the strict parser".into(),
+        ));
+    }
     let mut warnings = Vec::new();
     if let Some(signs) = signs {
         let descriptors = cip_descriptors(name);
@@ -268,6 +330,7 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
         alternatives: vec![],
         omitted_stereo: vec![],
         omitted_units: 0,
+        locants: Some(locants),
         smiles,
         canonical_smiles,
         synonyms,
