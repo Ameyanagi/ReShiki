@@ -269,7 +269,7 @@ impl Drawing {
         for (bond, index) in self.document.bonds.iter_mut().zip(&self.bond_indices) {
             let label = at(&labels.bonds, *index)?;
             let chemical = at(&graph.bonds, *index)?;
-            if label.stereo > 5
+            if label.stereo > 7
                 || !matches!(label.stereo_atoms.len(), 0 | 2)
                 || label.stereo_atoms.len() == 2
                     && (!edges.contains(&(chemical.a, *at(&label.stereo_atoms, 0)?))
@@ -295,6 +295,7 @@ fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
 }
 fn stereo_name(code: u8) -> Option<String> {
+    // Axial tags (6/7) are recomputed from wedges, not stored on the document.
     match code {
         2 => Some("z"),
         3 => Some("e"),
@@ -476,7 +477,7 @@ pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
     }
     if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
-        || state.metadata.bonds.iter().any(|b| b.stereo > 5)
+        || state.metadata.bonds.iter().any(|b| b.stereo > 7)
         || !state.metadata.groups.is_empty()
     {
         return Err(invalid(

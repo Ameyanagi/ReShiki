@@ -101,9 +101,11 @@ Desktop exports provide measured positions. Protocol clients that omit the
 
 CIP assignments use the Rust implementation, independently checked against [RDKit's CIP labeler](https://www.rdkit.org/docs/source/rdkit.Chem.rdCIPLabeler.html). The numbered phenylalanine interchange fixture retains `C9H11NO2`, the same InChIKey, 12 atom-owned numbers and an `(S)` label.
 
-Limits: tetrahedral R/S/r/s, ordinary double-bond E/Z and enantiomorphic
-double-bond seqCis/seqTrans are supported. Allene,
-atropisomer and enhanced-group stereochemistry are not implemented. Unknown
+Limits: tetrahedral R/S/r/s, ordinary double-bond E/Z, enantiomorphic
+double-bond seqCis/seqTrans and biaryl atropisomer M/P are supported. Biaryl
+axes require an authored wedge or hash originating at an axis atom; distant
+substituent wedges do not specify the axis. Rotation barriers are not inferred.
+Allene and enhanced-group stereochemistry are not implemented. Unknown
 object tags, unsupported indicator formatting and ambiguous atom matches are
 rejected. Dense diagrams can still need manual indicator positioning. Numbering
 is an explicit command; it does not automatically renumber after every edit.

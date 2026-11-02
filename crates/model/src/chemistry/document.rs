@@ -24,6 +24,8 @@ pub use output::{for_import_scene, for_import_with_attachments, kekule, validate
 pub const WORLD_PER_DEPICT_UNIT: f64 = 28.0;
 
 #[cfg(test)]
+pub(crate) mod atrop_tests;
+#[cfg(test)]
 mod tests;
 
 #[derive(Debug, thiserror::Error)]
@@ -309,6 +311,24 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
         false,
     )
     .map_err(Error::Stereo)?;
+    // Axis wedges are drawing input, so every prepare perceives them afresh.
+    // Remove provisional tags on small rings, as sanitized file imports do.
+    if let Ok(metadata) = stereo::detect_atropisomers(
+        &drawn.graph,
+        &drawn.metadata,
+        &sanitized.directions,
+        Some(&stereo::wedging::Conformer {
+            positions: input.positions.clone(),
+            is_3d: false,
+        }),
+    ) && let Ok(metadata) = stereo::atropisomers(
+        &drawn.graph,
+        &metadata,
+        &sanitized.hybridizations,
+        &sanitized.rings,
+    ) {
+        drawn.metadata = metadata;
+    }
     let edges: HashSet<_> = drawn
         .graph
         .bonds
@@ -414,7 +434,7 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
     .map_err(Error::Stereo)?;
     if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
-        || state.metadata.bonds.iter().any(|b| b.stereo > 5)
+        || state.metadata.bonds.iter().any(|b| b.stereo > 7)
         || !state.metadata.groups.is_empty()
     {
         return Err(invalid(

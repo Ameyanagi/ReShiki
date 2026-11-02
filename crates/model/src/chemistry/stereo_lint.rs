@@ -405,6 +405,16 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
         let ids = &component.molecule.ids;
         let directions: Vec<_> = source.bonds.iter().map(direction).collect();
         let geometry = component.geometry(&directions);
+        // Biaryl axis wedges (ST-1.7) start at an sp2 axis atom, not a centre.
+        let state = &component.molecule.state;
+        let axial: HashSet<_> = state
+            .graph
+            .bonds
+            .iter()
+            .zip(&state.metadata.bonds)
+            .filter(|(_, m)| matches!(m.stereo, 6 | 7))
+            .flat_map(|(b, _)| [b.a, b.b])
+            .collect();
         let mut groups = vec![Vec::new(); ids.len()];
         for (index, (bond, graph_bond)) in source
             .bonds
@@ -417,7 +427,7 @@ pub fn check(document: &Document, style: bool) -> Vec<Note> {
                 if let Some(group) = groups.get_mut(a) {
                     group.push(index);
                 }
-                if !component.centre(a) {
+                if !component.centre(a) && !axial.contains(&a) {
                     let valid_reverse = component.centre(b) && {
                         let mut reversed = component.molecule.state.graph.clone();
                         let Some(edge) = reversed.bonds.get_mut(index) else {
@@ -701,11 +711,21 @@ pub fn redraw(source: &Document, selected: &[u64]) -> Result<(Document, usize), 
             continue;
         };
         let state = &molecule.state;
+        // Keep the author's biaryl axis wedges; only stereocentre bonds move.
+        let axial: HashSet<_> = state
+            .graph
+            .bonds
+            .iter()
+            .zip(&state.metadata.bonds)
+            .filter(|(_, m)| matches!(m.stereo, 6 | 7))
+            .flat_map(|(b, _)| [b.a, b.b])
+            .collect();
         let directions = state
             .directions
             .iter()
-            .map(|&d| {
-                if matches!(d, Direction::Wedge | Direction::Hash) {
+            .zip(&state.graph.bonds)
+            .map(|(&d, b)| {
+                if matches!(d, Direction::Wedge | Direction::Hash) && !axial.contains(&b.a) {
                     Direction::None
                 } else {
                     d

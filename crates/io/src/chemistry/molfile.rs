@@ -309,7 +309,7 @@ fn write_part(
         || source.rings.kind != RingKind::Symmetric
         || !source.metadata.groups.is_empty()
         || source.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
-        || source.metadata.bonds.iter().any(|b| b.stereo > 5)
+        || source.metadata.bonds.iter().any(|b| b.stereo > 7)
     {
         return Err(invalid("Molecule dimensions or annotations changed"));
     }

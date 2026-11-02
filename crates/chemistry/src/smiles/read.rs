@@ -341,7 +341,7 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
     if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || clean.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
-        || clean.metadata.bonds.iter().any(|b| b.stereo > 5)
+        || clean.metadata.bonds.iter().any(|b| b.stereo > 7)
         || !clean.metadata.groups.is_empty()
     {
         return Err(Error::Unsupported(

@@ -477,3 +477,17 @@ fn atom_maps_do_not_make_equivalent_ligands_stereogenic() {
     document.bonds[0].display = "wedge".into();
     assert!(has(&document, false, Kind::NoEffect));
 }
+
+#[test]
+fn biaryl_axis_wedges_are_not_ineffective() {
+    for display in ["wedge", "hash"] {
+        let document = crate::chemistry::document::atrop_tests::binol(display);
+        assert!(!has(&document, false, Kind::NoEffect));
+        assert!(!has(&document, false, Kind::Reversed));
+        let axis = |document: &Document| {
+            document::prepare(document).map(|m| m.state.metadata.bonds[22].stereo)
+        };
+        let (redrawn, _) = redraw(&document, &[]).unwrap();
+        assert_eq!(axis(&redrawn).unwrap(), axis(&document).unwrap());
+    }
+}

@@ -513,7 +513,7 @@ impl Parsed {
         }
         if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
             || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
-            || state.metadata.bonds.iter().any(|b| b.stereo > 5)
+            || state.metadata.bonds.iter().any(|b| b.stereo > 7)
             || !state.metadata.groups.is_empty()
         {
             return Err(ReadError::Unsupported(

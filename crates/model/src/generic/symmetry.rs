@@ -159,8 +159,8 @@ impl Identity {
             || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
             || state.metadata.bonds.iter().any(|b| b.stereo > 5)
         {
-            // Document preparation currently excludes these classes. Never
-            // silently use a plain graph if that contract grows in the future.
+            // Identity comparison handles tetrahedral and alkene stereo only;
+            // axial tags require neighbor parity beyond the axis endpoints.
             return Err(invalid());
         }
         let mut degrees = vec![0usize; n];

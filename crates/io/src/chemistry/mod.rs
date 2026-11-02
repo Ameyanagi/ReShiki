@@ -6,3 +6,6 @@ pub mod cleanup;
 pub(crate) mod layout_refinement;
 pub mod molfile;
 pub mod reaction;
+
+#[cfg(test)]
+mod axial_tests;
