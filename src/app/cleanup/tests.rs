@@ -1,7 +1,11 @@
 use super::*;
+use crate::{
+    app::{InspectorTab, atom_labels},
+    canvas::Edit,
+};
 use iced::futures::StreamExt;
 use reshiki::{
-    document::Document,
+    document::{Document, Point},
     engine::LocalEngine,
     fischer::{self, Compound},
 };
@@ -14,6 +18,106 @@ fn app(document: Document) -> App {
     app.tab.history = Default::default();
     app.tab.selected.clear();
     app
+}
+
+async fn dispatch(app: &mut App, message: Message) {
+    let mut tasks = vec![app.update(message)];
+    while let Some(task) = tasks.pop() {
+        if let Some(mut stream) = iced_runtime::task::into_stream(task) {
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    tasks.push(app.update(message));
+                }
+            }
+        }
+    }
+}
+
+async fn placed_fischer_converts_to_three_arm_centers(name: &str, count: usize) {
+    let mut app = app(Document::default());
+    let index = app
+        .templates
+        .library
+        .iter()
+        .position(|template| template.name == name)
+        .unwrap();
+    dispatch(&mut app, Message::InsertTemplate(index)).await;
+    dispatch(
+        &mut app,
+        Message::Canvas(Edit::Template(Point::new(180., 120.), None)),
+    )
+    .await;
+    assert!(!app.error, "{name}: {}", app.status);
+    app.tab.doc.atom_labels.stereo = true;
+    dispatch(&mut app, Message::SelectAll).await;
+    // Opening Labels for the selection makes its checkbox set per-object overrides.
+    dispatch(&mut app, Message::Inspector(InspectorTab::Labels)).await;
+    assert_eq!(app.tab.labels.scope, atom_labels::Scope::Selection);
+    dispatch(&mut app, Message::Labels(atom_labels::Action::Stereo(true))).await;
+    dispatch(&mut app, Message::Analyze).await;
+    assert!(!app.error, "{name}: {}", app.status);
+    assert!(app.tab.doc.atom_labels.stereo);
+    let centers = fischer::marked_centers(&app.tab.doc);
+    assert_eq!(centers.len(), count, "{name}");
+    assert!(
+        centers
+            .iter()
+            .all(|id| app.tab.doc.atom(*id).unwrap().cip_label.is_some())
+    );
+    let identity = app.tab.analysis.as_ref().unwrap().inchikey.clone();
+    dispatch(&mut app, Message::Cleanup(Action::ToWedge)).await;
+    assert!(!app.error, "{name}: {}", app.status);
+    assert_eq!(
+        app.tab.analysis.as_ref().unwrap().inchikey,
+        identity,
+        "{name}"
+    );
+    for center in centers {
+        let atom = app.tab.doc.atom(center).unwrap();
+        let vectors: Vec<_> = app
+            .tab
+            .doc
+            .bonds
+            .iter()
+            .filter_map(|bond| {
+                if bond.a == center {
+                    Some(bond.b)
+                } else if bond.b == center {
+                    Some(bond.a)
+                } else {
+                    None
+                }
+            })
+            .map(|id| {
+                let p = app.tab.doc.atom(id).unwrap().position;
+                (
+                    f64::from(p.x - atom.position.x),
+                    f64::from(p.y - atom.position.y),
+                )
+            })
+            .collect();
+        assert_eq!(vectors.len(), 3, "{name} centre {center}");
+        for (index, &(ax, ay)) in vectors.iter().enumerate() {
+            for &(bx, by) in &vectors[index + 1..] {
+                let cosine = (ax * bx + ay * by) / (ax.hypot(ay) * bx.hypot(by));
+                assert!(
+                    cosine >= 165_f64.to_radians().cos(),
+                    "{name} centre {center} retains an angle of {} degrees",
+                    cosine.clamp(-1., 1.).acos().to_degrees()
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn placed_alanine_fischer_converts_to_three_arm_centers() {
+    placed_fischer_converts_to_three_arm_centers("L-alanine · Fischer", 1).await;
+}
+
+#[tokio::test]
+async fn placed_glucose_fischer_converts_to_three_arm_centers() {
+    placed_fischer_converts_to_three_arm_centers("aldehydo-D-glucose · Fischer", 4).await;
 }
 
 async fn convert(app: &mut App, action: Action) {

@@ -152,6 +152,37 @@ fn dl_cysteine_stereo_stays_with_its_alpha_carbon() {
         assert_eq!(indicator.owner, Owner::AtomStereo(2));
         assert_eq!(indicator.text, "L (R)");
         assert_stereo_clear(&doc, &indicator);
+        let hash = doc
+            .bonds
+            .iter()
+            .find(|bond| bond.a == 2 && bond.b == 1)
+            .unwrap();
+        assert_eq!(hash.display, "hash");
+        let a = doc.atom(hash.a).unwrap().position;
+        let b = doc.atom(hash.b).unwrap().position;
+        let mut bars = 0;
+        for primitive in crate::scene::primitives(&doc) {
+            let crate::scene::Primitive::Line(start, end, width) = primitive else {
+                continue;
+            };
+            let midpoint = Point::new((start.x + end.x) / 2., (start.y + end.y) / 2.);
+            // Select the rendered hash bars, including their stroke width,
+            // rather than checking only the underlying bond centerline.
+            if crate::graphics::segment_distance(midpoint, a, b) > 0.01 {
+                continue;
+            }
+            bars += 1;
+            let gap = 3. + width / 2.;
+            let lo = indicator.origin.offset(-gap, -gap);
+            let hi = indicator
+                .origin
+                .offset(indicator.width + gap, indicator.height + gap);
+            assert!(
+                !segment_hits_rect(start, end, lo, hi),
+                "{indicator:?} is too close to hashed C–N bar {start:?}..{end:?}"
+            );
+        }
+        assert!(bars >= 3, "the C–N hash must have visible bars");
         let own = doc.atom(2).unwrap().position;
         doc.atom_labels.dl_descriptors = false;
         let [plain] = indicators(&doc).try_into().unwrap();

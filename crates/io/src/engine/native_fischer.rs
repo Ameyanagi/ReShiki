@@ -119,8 +119,6 @@ pub fn wedge_request(request: &Request) -> Result<Request> {
             || hydrogen.charge != 0
             || hydrogen.radical_electrons != 0
             || hydrogen.map_num != 0
-            || !hydrogen.display.is_default()
-            || hydrogen.text_style.is_some()
         {
             continue;
         }
@@ -133,9 +131,7 @@ pub fn wedge_request(request: &Request) -> Result<Request> {
         let (_, bond) = source
             .bond_between(*center, hydrogen.id)
             .ok_or(Error::Selection)?;
-        let mut plain = crate::document::Bond::plain(bond.a, bond.b, 1, "plain");
-        plain.projection = true;
-        if *bond != plain {
+        if bond.order != 1 || matches!(bond.display.as_str(), "wedge" | "hash") {
             continue;
         }
         // Cleanup validation rejects other dangling references, but does not

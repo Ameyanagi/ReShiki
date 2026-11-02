@@ -1097,7 +1097,14 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
     let segments: Vec<_> = doc
         .bonds
         .iter()
-        .filter_map(|b| Some((*positions.get(&b.a)?, *positions.get(&b.b)?, b.order)))
+        .filter_map(|b| {
+            Some((
+                *positions.get(&b.a)?,
+                *positions.get(&b.b)?,
+                b.order,
+                b.display.as_str(),
+            ))
+        })
         .collect();
     // Atoms hidden in collapsed groups cannot claim a map number.
     let visible: Vec<_> = doc
@@ -1195,11 +1202,16 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                             * (hi.y.min(b.y) - lo.y.max(a.y)).max(0.);
                         score += overlap * 10.;
                     }
-                    for &(a, b, order) in &segments {
+                    for &(a, b, order, display) in &segments {
                         // Include space for the secondary line of double bonds.
                         // Wider D/L labels can use the existing 3-unit clearance
-                        // around single bonds without reserving a second line.
-                        let padding = if dl && order == 1 { 0. } else { 4. };
+                        // around plain single bonds. Wedges and hashes need room
+                        // for the ink extending beyond their centerline.
+                        let padding = if dl && order == 1 && display == "plain" {
+                            0.
+                        } else {
+                            4.
+                        };
                         if segment_hits_rect(
                             a,
                             b,
