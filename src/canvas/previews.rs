@@ -99,10 +99,29 @@ impl TemplateAnchorPreview<'_> {
                     .max_by(|a, b| {
                         (a.cos() * ox + a.sin() * oy).total_cmp(&(b.cos() * ox + b.sin() * oy))
                     })?;
-                let offset = if atom.element == "C" { 14. } else { 19. };
-                let (dx, dy) = (angle.cos() * offset, angle.sin() * offset);
+                let (dx, dy) = (angle.cos(), angle.sin());
                 let p = camera.screen(atom.position, bounds);
-                Some((locant.as_str(), Point::new(p.x + dx, p.y + dy)))
+                // Step past the atom's whole label (e.g. the H of N-H), padded by
+                // the 9 px locant's half extents, where the ray leaves that box.
+                let half = (locant.chars().count() as f32 * 2.75 + 2., 6.5);
+                let offset = reshiki::scene::atom_label_ink_bounds(atom, self.document)
+                    .map(|(lo, hi)| {
+                        let (lo, hi) = (camera.screen(lo, bounds), camera.screen(hi, bounds));
+                        [
+                            (dx, p.x, lo.x - half.0, hi.x + half.0),
+                            (dy, p.y, lo.y - half.1, hi.y + half.1),
+                        ]
+                        .into_iter()
+                        .filter(|(d, ..)| d.abs() > 1e-3)
+                        .map(|(d, p, lo, hi)| (if d > 0. { hi } else { lo } - p) / d)
+                        .fold(f32::INFINITY, f32::min)
+                    })
+                    .unwrap_or(0.)
+                    .max(if atom.element == "C" { 14. } else { 19. });
+                Some((
+                    locant.as_str(),
+                    Point::new(p.x + dx * offset, p.y + dy * offset),
+                ))
             })
             .collect()
     }

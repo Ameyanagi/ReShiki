@@ -828,6 +828,70 @@ fn template_source_locants_sit_in_open_gaps_and_join_preview_omits_them() {
 }
 
 #[test]
+fn template_source_locants_clear_atom_labels_and_preview_edges() {
+    reshiki::style::add_font(
+        include_bytes!("../../crates/model/fonts/LiberationSans-Regular.ttf").to_vec(),
+    )
+    .unwrap();
+    let mut failures = Vec::new();
+    for template in reshiki::templates::LIBRARY
+        .iter()
+        .filter(|t| !t.locants.is_empty())
+    {
+        // Measure labels with a repository font, even on CI machines without Arial.
+        let mut doc = template.document.clone();
+        doc.drawing_style.font_family = "Liberation Sans".into();
+        for style in doc.atoms.iter_mut().filter_map(|a| a.text_style.as_mut()) {
+            style.family = "Liberation Sans".into();
+        }
+        let preview = TemplateAnchorPreview {
+            document: &doc,
+            anchor: reshiki::templates::Anchor::Auto,
+            locants: Some(&template.locants),
+        };
+        let bounds = Rectangle::with_size(iced::Size::new(220., 145.));
+        let camera = preview.camera(bounds);
+        let label_boxes: Vec<_> = doc
+            .atoms
+            .iter()
+            .filter_map(|a| reshiki::scene::atom_label_ink_bounds(a, &doc))
+            .map(|(lo, hi)| {
+                let (lo, hi) = (camera.screen(lo, bounds), camera.screen(hi, bounds));
+                Rectangle::new(lo, iced::Size::new(hi.x - lo.x, hi.y - lo.y))
+            })
+            .collect();
+        let labels = preview.locant_labels(camera, bounds);
+        assert_eq!(labels.len(), template.locants.len(), "{}", template.name);
+        let boxes: Vec<_> = labels
+            .iter()
+            .map(|&(locant, p)| {
+                // Font-independent upper bound for centered 9 px text.
+                let half_width = locant.chars().count() as f32 * 2.75;
+                Rectangle::new(
+                    Point::new(p.x - half_width, p.y - 4.5),
+                    iced::Size::new(half_width * 2., 9.),
+                )
+            })
+            .collect();
+        for (i, (&(locant, _), rect)) in labels.iter().zip(&boxes).enumerate() {
+            let name = &template.name;
+            if !bounds.contains(rect.position())
+                || !bounds.contains(Point::new(rect.x + rect.width, rect.y + rect.height))
+            {
+                failures.push(format!("{name} / {locant}: clipped"));
+            }
+            if label_boxes.iter().any(|label| rect.intersects(label)) {
+                failures.push(format!("{name} / {locant}: covers an atom label"));
+            }
+            if boxes[i + 1..].iter().any(|other| rect.intersects(other)) {
+                failures.push(format!("{name} / {locant}: overlaps another locant"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
 fn aromatic_drag_carries_the_same_xyz_as_the_live_preview() -> Result<(), String> {
     use reshiki::projection::growth::{self, Plane};
     let mut doc = reshiki::rings::Preset::Benzene.document(42., false);
