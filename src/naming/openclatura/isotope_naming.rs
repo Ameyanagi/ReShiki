@@ -81,7 +81,7 @@ fn same_atom(mol: &Molecule, a: usize, b: usize) -> bool {
         && a.total_h_count == b.total_h_count
         && a.is_aromatic == b.is_aromatic
         && a.stereo == b.stereo
-        && a.raw_stereo == b.raw_stereo
+        && (matches!(a.stereo.as_deref(), Some("R" | "S")) || a.raw_stereo == b.raw_stereo)
         && mol.degree(a.idx) == mol.degree(b.idx)
 }
 

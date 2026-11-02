@@ -15,8 +15,154 @@ use crate::graph::{
 use crate::parse_tree::{Arena, NodeId};
 use crate::stereo_analyser::{StereoBond, StereoCentre};
 use crate::xml_declarations::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+
+/// Numbered [2.2.1] or [3.2.1] cage. Coordinates are only a
+/// parity reference: bridgeheads lie on x, long bridges at +y/-y, short at +z.
+struct BicyclicCage {
+    atoms: Vec<AtomId>,
+    points: Vec<[f64; 3]>,
+    bridgehead: usize,
+}
+impl BicyclicCage {
+    fn find(graph: &Graph, fragment: FragmentId) -> Option<Self> {
+        for longest in [2, 3] {
+            let count = longest + 5;
+            let Some(atoms) = (1..=count)
+                .map(|n| graph.atom_by_locant(fragment, &n.to_string()))
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
+            let bridgehead = longest + 1;
+            let mut edges = BTreeSet::new();
+            for i in 0..count - 2 {
+                edges.insert((i, i + 1));
+            }
+            edges.insert((0, count - 2));
+            edges.insert((0, count - 1));
+            edges.insert((bridgehead, count - 1));
+            let valid = (0..count).all(|i| {
+                (i + 1..count).all(|j| {
+                    let bond = graph.bond_between(atoms[i], atoms[j]);
+                    if edges.contains(&(i, j)) {
+                        bond.is_some()
+                    } else {
+                        bond.is_none()
+                    }
+                })
+            });
+            if !valid {
+                continue;
+            }
+            // An extra path between cage atoms would make a different polycycle.
+            let mut visited: BTreeSet<_> = atoms.iter().copied().collect();
+            let mut extra_path = false;
+            for &atom in &atoms {
+                for neighbour in graph.neighbours(atom) {
+                    if !visited.insert(neighbour) {
+                        continue;
+                    }
+                    let mut stack = vec![neighbour];
+                    let mut attachments = BTreeSet::new();
+                    while let Some(current) = stack.pop() {
+                        for next in graph.neighbours(current) {
+                            if atoms.contains(&next) {
+                                attachments.insert(next);
+                            } else if visited.insert(next) {
+                                stack.push(next);
+                            }
+                        }
+                    }
+                    if attachments.len() > 1 {
+                        extra_path = true
+                    }
+                }
+            }
+            if extra_path {
+                continue;
+            }
+            let mut points = vec![[0.; 3]; count];
+            points[0] = [-1., 0., 0.];
+            points[bridgehead] = [1., 0., 0.];
+            for (i, point) in points.iter_mut().enumerate().take(bridgehead).skip(1) {
+                let x = -1. + 2. * i as f64 / bridgehead as f64;
+                *point = [x, 1. - x * x, 0.];
+            }
+            points[bridgehead + 1] = [1. / 3., -8. / 9., 0.];
+            points[bridgehead + 2] = [-1. / 3., -8. / 9., 0.];
+            points[count - 1] = [0., 0., 1.];
+            return Some(Self {
+                atoms,
+                points,
+                bridgehead,
+            });
+        }
+        None
+    }
+    fn substituent(&self, graph: &Graph, index: usize) -> Option<AtomId> {
+        if index == 0 || index == self.bridgehead {
+            return None;
+        }
+        let external: Vec<_> = graph
+            .neighbours(self.atoms[index])
+            .into_iter()
+            .filter(|a| !self.atoms.contains(a))
+            .collect();
+        if external.len() != 2 {
+            return None;
+        }
+        let heavy: Vec<_> = external
+            .into_iter()
+            .filter(|a| graph.atom(*a).element != Element::H)
+            .collect();
+        (heavy.len() == 1).then(|| heavy[0])
+    }
+    fn parity(
+        &self,
+        graph: &Graph,
+        index: usize,
+        substituent: Option<(AtomId, f64)>,
+    ) -> Result<AtomParity> {
+        let atom = self.atoms[index];
+        let neighbours = graph.neighbours(atom);
+        let references: [AtomId; 4] = neighbours.clone().try_into().map_err(|_| {
+            StereochemistryError::Uninterpretable(
+                "Cage stereochemistry requires tetrahedral atoms".into(),
+            )
+        })?;
+        let points: Vec<_> = neighbours
+            .into_iter()
+            .map(|neighbour| {
+                if let Some(i) = self.atoms.iter().position(|&a| a == neighbour) {
+                    return self.points[i];
+                }
+                let mut point = self.points[index];
+                if let Some((target, direction)) = substituent {
+                    let axis = if index == self.atoms.len() - 1 { 1 } else { 2 };
+                    point[axis] += if neighbour == target {
+                        direction
+                    } else {
+                        -direction
+                    };
+                } else {
+                    point[0] += if index == 0 { -1. } else { 1. };
+                }
+                point
+            })
+            .collect();
+        let delta =
+            |i: usize| std::array::from_fn::<_, 3, _>(|axis| points[i][axis] - points[3][axis]);
+        let [a, b, c] = [delta(0), delta(1), delta(2)];
+        let determinant = a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
+            + a[2] * (b[0] * c[1] - b[1] * c[0]);
+        Ok(AtomParity::new(
+            atom_references(references),
+            if determinant > 0. { 1 } else { -1 },
+        ))
+    }
+}
 
 /// Upstream warning mode catches StereochemistryException (including CIP
 /// errors), but not StructureBuildingException or an inconsistent graph.
@@ -59,6 +205,7 @@ pub struct StereochemistryHandler<'a> {
     pub not_explicitly_defined_stereo_centre_map: BTreeMap<AtomId, StereoCentre>,
     pub not_explicitly_defined_stereo_bond_map: BTreeMap<BondId, StereoBond>,
     pseudo_stereo_centres: Vec<(AtomId, String)>,
+    preassigned_pseudo_stereo_centres: Vec<(AtomId, String)>,
 }
 impl<'a> StereochemistryHandler<'a> {
     pub fn new(
@@ -75,6 +222,7 @@ impl<'a> StereochemistryHandler<'a> {
             not_explicitly_defined_stereo_centre_map: atoms.clone(),
             not_explicitly_defined_stereo_bond_map: bonds.clone(),
             pseudo_stereo_centres: Vec::new(),
+            preassigned_pseudo_stereo_centres: Vec::new(),
             atom_stereo_centre_map: atoms,
             bond_stereo_bond_map: bonds,
         }
@@ -168,8 +316,11 @@ impl<'a> StereochemistryHandler<'a> {
         let mut carbohydrate = Vec::new();
         let mut global = Vec::new();
         let mut pseudo = Vec::new();
+        let mut cage = Vec::new();
         for &id in elements {
-            if self.attr(id, TYPE_ATR) == R_OR_S_TYPE_VAL
+            if self.attr(id, TYPE_ATR) == ENDO_EXO_SYN_ANTI_TYPE_VAL {
+                cage.push(id)
+            } else if self.attr(id, TYPE_ATR) == R_OR_S_TYPE_VAL
                 && matches!(self.attr(id, VALUE_ATR).as_str(), "r" | "s")
             {
                 pseudo.push(id)
@@ -191,6 +342,10 @@ impl<'a> StereochemistryHandler<'a> {
             self.process_carbohydrate_stereochemistry(&carbohydrate)?
         }
         for id in unlocanted {
+            let result = self.match_stereochemistry(id);
+            self.warning_or_error(result)?
+        }
+        for id in cage {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
@@ -246,12 +401,99 @@ impl<'a> StereochemistryHandler<'a> {
             CISORTRANS_TYPE_VAL=>{if !self.assign_cis_trans_on_ring(id)?{self.assign_stereo_bond(id)?}},
             ALPHA_OR_BETA_TYPE_VAL=>self.assign_alpha_beta_xi_stereochem(id)?,DLSTEREOCHEMISTRY_TYPE_VAL=>self.assign_dl_stereochem(id)?,
             RAC_TYPE_VAL=>self.apply_global_rac_or_rel(id,StereoGroupType::Racemic)?,REL_TYPE_VAL=>self.apply_global_rac_or_rel(id,StereoGroupType::Relative)?,
-            ENDO_EXO_SYN_ANTI_TYPE_VAL|RELATIVECISTRANS_TYPE_VAL|AXIAL_TYPE_VAL=>return stereo(format!("{kind} stereochemistry is not currently interpretable by OPSIN")),
+            ENDO_EXO_SYN_ANTI_TYPE_VAL=>self.assign_cage_stereochemistry(id)?,
+            RELATIVECISTRANS_TYPE_VAL|AXIAL_TYPE_VAL=>return stereo(format!("{kind} stereochemistry is not currently interpretable by OPSIN")),
             OPTICALROTATION_TYPE_VAL=>self.state.add_warning(WarningKind::StereochemistryIgnored,format!("Optical rotation cannot be algorithmically used to assign stereochemistry. This term was ignored: {}",self.arena.value(id))),
             _=>return structure(format!("Unexpected stereochemistry type: {kind}"))
         }
         self.arena.detach(id);
         Ok(())
+    }
+    /// These relative descriptors define the rigid cage, including its two
+    /// bridgeheads. Absolute descriptors processed earlier choose its mirror.
+    fn assign_cage_stereochemistry(&mut self, id: NodeId) -> Result {
+        let value = self.attr(id, VALUE_ATR);
+        let locant = self.attribute(id, LOCANT_ATR);
+        let fragments = self
+            .possible_fragments(id)?
+            .into_iter()
+            .chain(self.later_word_fragments(id, true)?);
+        for fragment in fragments {
+            let Some(cage) = BicyclicCage::find(self.graph(), fragment) else {
+                continue;
+            };
+            let target = if let Some(ref locant) = locant {
+                self.graph()
+                    .atom_by_locant(fragment, locant)
+                    .and_then(|atom| cage.atoms.iter().position(|&a| a == atom))
+            } else {
+                let candidates: Vec<_> = (0..cage.atoms.len())
+                    .filter(|&i| cage.substituent(self.graph(), i).is_some())
+                    .collect();
+                (candidates.len() == 1).then(|| candidates[0])
+            };
+            let Some(target) = target else { continue };
+            let Some(substituent) = cage.substituent(self.graph(), target) else {
+                return stereo("Cage descriptor requires one unambiguous substituent on a bridge");
+            };
+            let short_bridge = target == cage.atoms.len() - 1;
+            let direction = match (short_bridge, value.as_str()) {
+                (false, "exo") | (true, "syn") => 1.,
+                (false, "endo") | (true, "anti") => -1.,
+                _ => {
+                    return stereo(
+                        "Endo/exo applies to the longer bridges; syn/anti applies to the shortest bridge",
+                    );
+                }
+            };
+            let mut parities = Vec::new();
+            for bridgehead in [0, cage.bridgehead] {
+                parities.push((
+                    cage.atoms[bridgehead],
+                    cage.parity(self.graph(), bridgehead, None)?,
+                ));
+            }
+            parities.push((
+                cage.atoms[target],
+                cage.parity(self.graph(), target, Some((substituent, direction)))?,
+            ));
+            let mut mirror = None;
+            for (atom, proposed) in &parities {
+                if let Some(existing) = &self.graph().atom(*atom).parity {
+                    let alignment = if check_equivalency_of_atom_refs_and_parity(
+                        &existing.atom_refs,
+                        existing.parity,
+                        &proposed.atom_refs,
+                        proposed.parity,
+                    ) {
+                        1
+                    } else {
+                        -1
+                    };
+                    if mirror.is_some_and(|previous| previous != alignment) {
+                        return stereo("Contradictory cage stereochemistry");
+                    }
+                    mirror = Some(alignment);
+                }
+            }
+            for (atom, mut parity) in parities {
+                parity.parity *= mirror.unwrap_or(1);
+                if self.graph().atom(atom).parity.is_none() {
+                    self.state.graph_mut().atom_mut(atom).parity = Some(parity);
+                }
+                self.atom_stereo_centre_map
+                    .entry(atom)
+                    .or_insert(StereoCentre {
+                        atom,
+                        true_stereo_centre: false,
+                    });
+                self.not_explicitly_defined_stereo_centre_map.remove(&atom);
+            }
+            return Ok(());
+        }
+        stereo(
+            "Endo/exo/syn/anti is supported only for substituted bicyclo[2.2.1]heptane and bicyclo[3.2.1]octane cages",
+        )
     }
     fn apply_global_rac_or_rel(&mut self, id: NodeId, kind: StereoGroupType) -> Result {
         let mut word = self.arena[id].parent;
@@ -349,6 +591,7 @@ impl<'a> StereochemistryHandler<'a> {
         let available = |a: &AtomId| {
             self.not_explicitly_defined_stereo_centre_map
                 .contains_key(a)
+                || (pseudo && locant.is_some() && self.graph().atom(*a).parity.is_some())
                 || (pseudo
                     && !self.atom_stereo_centre_map.contains_key(a)
                     && crate::stereo_analyser::is_possibly_stereogenic(self.graph(), *a))
@@ -367,6 +610,18 @@ impl<'a> StereochemistryHandler<'a> {
         };
         if let Some(atom) = atom {
             if pseudo {
+                // Cage descriptors may already have fixed this centre. Check
+                // its label after all lowercase centres are seeded, preserving
+                // the existing parity even if the descriptor contradicts it.
+                if !self
+                    .not_explicitly_defined_stereo_centre_map
+                    .contains_key(&atom)
+                    && self.graph().atom(atom).parity.is_some()
+                {
+                    self.preassigned_pseudo_stereo_centres
+                        .push((atom, value.into()));
+                    return Ok(true);
+                }
                 let mut neighbours = self.graph().neighbours(atom);
                 if neighbours.len() == 3 {
                     neighbours.push(atom);
@@ -417,9 +672,15 @@ impl<'a> StereochemistryHandler<'a> {
                 }
             }
         }
-        if !self.pseudo_stereo_centres.is_empty() {
+        if !self.pseudo_stereo_centres.is_empty()
+            || !self.preassigned_pseudo_stereo_centres.is_empty()
+        {
             let labels = crate::modern_cip::atom_labels(self.graph())?;
-            for (atom, expected) in &self.pseudo_stereo_centres {
+            for (atom, expected) in self
+                .pseudo_stereo_centres
+                .iter()
+                .chain(&self.preassigned_pseudo_stereo_centres)
+            {
                 if labels.get(atom) != Some(expected) {
                     return stereo("Contradictory pseudoasymmetric stereochemistry");
                 }

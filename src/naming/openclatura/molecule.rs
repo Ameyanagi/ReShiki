@@ -21,6 +21,8 @@ struct NamingBudget {
     relative_ring_names: Cell<bool>,
     unknown_units: RefCell<BTreeSet<String>>,
     relative_ring_alternative: Cell<bool>,
+    endo_exo_names: Cell<bool>,
+    endo_exo_alternative: RefCell<Option<AtomSet>>,
 }
 
 impl Default for NamingBudget {
@@ -32,6 +34,8 @@ impl Default for NamingBudget {
             relative_ring_names: Cell::new(false),
             unknown_units: RefCell::default(),
             relative_ring_alternative: Cell::new(false),
+            endo_exo_names: Cell::new(false),
+            endo_exo_alternative: RefCell::default(),
         }
     }
 }
@@ -174,6 +178,33 @@ impl Molecule {
 
     pub(super) fn set_relative_ring_names(&self, enabled: bool) {
         self.naming_budget.relative_ring_names.set(enabled);
+    }
+
+    pub(super) fn mark_endo_exo_alternative(&self, cage: &AtomSet) {
+        *self.naming_budget.endo_exo_alternative.borrow_mut() = Some(cage.clone());
+    }
+
+    pub(super) fn has_endo_exo_alternative(&self) -> bool {
+        // Fragment naming shares this budget. Check against the complete
+        // source graph here, so an acid-side fragment cannot hide stereo on
+        // the alcohol side of an ester (or any other external group).
+        self.naming_budget
+            .endo_exo_alternative
+            .borrow()
+            .as_ref()
+            .is_some_and(|cage| {
+                self.atoms
+                    .values()
+                    .all(|atom| !atom.has_stereo() || cage.contains(&atom.idx))
+            })
+    }
+
+    pub(super) fn use_endo_exo_names(&self) -> bool {
+        self.naming_budget.endo_exo_names.get()
+    }
+
+    pub(super) fn set_endo_exo_names(&self, enabled: bool) {
+        self.naming_budget.endo_exo_names.set(enabled);
     }
 
     pub(super) fn name_status(&self) -> NameStatus {

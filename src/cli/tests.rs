@@ -1749,3 +1749,45 @@ async fn name_json_reports_relative_ring_alternatives() {
     assert_eq!(code, SUCCESS, "{err}");
     assert_eq!(out, "(1s,3s)-1,3-dimethylcyclobutane\n");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_json_reports_endo_exo_alternatives() {
+    for (smiles, primary, alternative) in [
+        (
+            "O[C@H]1C[C@@H]2CC[C@H]1C2",
+            "(1S,2S,4R)-bicyclo[2.2.1]heptan-2-ol",
+            "bicyclo[2.2.1]heptan-2-exo-ol",
+        ),
+        (
+            "O[C@@H]1C[C@@H]2CC[C@H]1C2",
+            "(1S,2R,4R)-bicyclo[2.2.1]heptan-2-ol",
+            "bicyclo[2.2.1]heptan-2-endo-ol",
+        ),
+        (
+            "CN1[C@@H]2CC[C@H]1C[C@@H](O)C2",
+            "(1R,3r,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-ol",
+            "8-methyl-8-azabicyclo[3.2.1]octan-3-endo-ol",
+        ),
+        (
+            "CN1[C@@H]2CC[C@H]1C[C@H](O)C2",
+            "(1R,3s,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-ol",
+            "8-methyl-8-azabicyclo[3.2.1]octan-3-exo-ol",
+        ),
+    ] {
+        let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
+        assert_eq!(code, SUCCESS, "{err}");
+        let result: Value = serde_json::from_str(out.trim()).unwrap();
+        assert_eq!(result["value"]["name"], primary);
+        assert_eq!(result["value"]["status"], "preferred");
+        assert_eq!(result["value"]["preferred"], true);
+        assert_eq!(
+            result["value"]["alternatives"],
+            json!([{
+                "name": alternative,
+                "status": "not_preferred",
+                "reason": "endo_exo_stereo",
+            }]),
+            "{smiles}"
+        );
+    }
+}

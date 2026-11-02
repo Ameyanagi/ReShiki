@@ -151,8 +151,12 @@ pub(super) async fn reconstruct(
     let mut alternatives = vec![];
     for alternative in std::mem::take(&mut candidate.alternatives) {
         match reconstruct_name(&alternative.name, cancel).await {
-            Ok(parsed) if super::verify_identity(&expected, &parsed.smiles).is_ok() => {
-                alternatives.push(alternative);
+            Ok(parsed) => {
+                if verify_alternative_identity(&expected, &parsed.smiles, alternative.status)
+                    .is_ok()
+                {
+                    alternatives.push(alternative);
+                }
             }
             Err(error @ Error::Cancelled(_)) => return Err(error),
             _ => {}
@@ -173,6 +177,28 @@ pub(super) async fn reconstruct(
     let mut record = generated_record(identity, expected, candidate, &primary)?;
     record.alternatives = alternatives;
     Ok(record)
+}
+
+pub(super) fn verify_alternative_identity(
+    expected: &str,
+    actual: &str,
+    status: NameStatus,
+) -> Result<(), String> {
+    let exact = super::verify_identity(expected, actual);
+    if exact.is_ok() || status != NameStatus::NotPreferred(super::NameReason::EndoExoStereo) {
+        return exact;
+    }
+    // These relative descriptors identify either enantiomer of the cage.
+    // Invert every tetrahedral centre together.
+    let mut mirror = String::with_capacity(expected.len());
+    let mut chars = expected.chars().peekable();
+    while let Some(c) = chars.next() {
+        mirror.push(c);
+        if c == '@' && chars.next_if_eq(&'@').is_none() {
+            mirror.push('@');
+        }
+    }
+    super::verify_identity(&mirror, actual)
 }
 
 async fn reconstruct_name(name: &str, cancel: &super::Cancel) -> Result<Record, Error> {

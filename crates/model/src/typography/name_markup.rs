@@ -696,7 +696,7 @@ pub fn name_markup(name: &str) -> NameMarkup {
                     && (next.is_none_or(|c| c == '-')
                         || rest
                             .strip_prefix(',')
-                            .is_some_and(|tail| tail.starts_with(char::is_alphabetic))))
+                            .is_some_and(|tail| tail.starts_with(char::is_alphanumeric))))
                     || (["o", "m", "p"].contains(&word) && next == Some('-'))
                     || (ELEMENTS.contains(&word)
                         && locant.starts_with(|c: char| matches!(c, ',' | '-') || is_prime(c)))
@@ -755,6 +755,16 @@ mod tests {
             ("furo[2,3-b]pyridine", vec!["b"]),
             ("tetrahydro-1H,3H-furo[3,4-c]furan", vec!["H", "H", "c"]),
             ("trans,trans-muconic acid", vec!["trans", "trans"]),
+            ("bicyclo[2.2.1]heptan-2-exo-ol", vec!["exo"]),
+            (
+                "2-endo-bromo-7-anti-fluorobicyclo[2.2.1]heptane",
+                vec!["endo", "anti"],
+            ),
+            ("8-syn-methylbicyclo[3.2.1]octane", vec!["syn"]),
+            (
+                "5-endo,7-anti-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
+                vec!["endo", "anti", "exo"],
+            ),
             ("(3a^1R,4S)-indene", vec!["R", "S"]),
             ("(3a¹R)-indene", vec!["R"]),
             ("N1,N1-dimethyl", vec!["N", "N"]),

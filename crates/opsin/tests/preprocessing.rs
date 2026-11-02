@@ -116,3 +116,80 @@ fn superscript_replacements_observe_original_input_context() {
         assert_eq!(preprocess(input).unwrap(), expected, "{input}");
     }
 }
+
+#[test]
+fn cage_suffix_stereochemistry_shares_the_suffix_locant() {
+    for (name, expected) in [
+        (
+            "bicyclo[2.2.1]heptan-2-exo-ol",
+            "(2-exo)-bicyclo[2.2.1]heptan-2-ol",
+        ),
+        (
+            "8-azabicyclo[3.2.1]octan-3-endo-ol",
+            "(3-endo)-8-azabicyclo[3.2.1]octan-3-ol",
+        ),
+        (
+            "bicyclo[2.2.2]octan-2-exo-ol",
+            "bicyclo[2.2.2]octan-2-exo-ol",
+        ),
+        (
+            "bicyclo[3.2.1]octane-3-endo,8-syn-diol",
+            "(3-endo,8-syn)-bicyclo[3.2.1]octane-3,8-diol",
+        ),
+        (
+            "bicyclo[3.2.1]octane-3-endo,8-diol",
+            "(3-endo)-bicyclo[3.2.1]octane-3,8-diol",
+        ),
+        (
+            "3-endo,8-syn-dimethylbicyclo[3.2.1]octane",
+            "(3-endo,8-syn)-3,8-dimethylbicyclo[3.2.1]octane",
+        ),
+        (
+            "2,3-dichloro-5-exo,6-endo-dimethylbicyclo[2.2.1]heptane",
+            "(5-exo,6-endo)-2,3-dichloro-5,6-dimethylbicyclo[2.2.1]heptane",
+        ),
+        (
+            "(2-exo,3-endo)-bicyclo[2.2.1]heptane-2,3-diol",
+            "(2-exo,3-endo)-bicyclo[2.2.1]heptane-2,3-diol",
+        ),
+        (
+            "8-methyl-8-azabicyclo[3.2.1]octan-3-endo-yl acetate",
+            "(3-endo)-8-methyl-8-azabicyclo[3.2.1]octan-3-yl acetate",
+        ),
+    ] {
+        assert_eq!(preprocess(name).unwrap(), expected);
+    }
+}
+
+#[test]
+fn cage_descriptors_stay_in_their_enclosing_group() {
+    for (name, expected) in [
+        (
+            "2-(bicyclo[2.2.1]heptan-2-exo-yl)-3-(bicyclo[2.2.1]heptan-2-exo-yl)propan-1-ol",
+            "2-((2-exo)-bicyclo[2.2.1]heptan-2-yl)-3-((2-exo)-bicyclo[2.2.1]heptan-2-yl)propan-1-ol",
+        ),
+        (
+            "2-(bicyclo[2.2.1]heptan-2-exo-yl)-3-(bicyclo[2.2.1]heptan-2-endo-yl)propan-1-ol",
+            "2-((2-exo)-bicyclo[2.2.1]heptan-2-yl)-3-((2-endo)-bicyclo[2.2.1]heptan-2-yl)propan-1-ol",
+        ),
+        (
+            "2-(bicyclo[2.2.2]octan-2-exo-yl)-3-(bicyclo[2.2.1]heptan-2-yl)propan-1-ol",
+            "2-(bicyclo[2.2.2]octan-2-exo-yl)-3-(bicyclo[2.2.1]heptan-2-yl)propan-1-ol",
+        ),
+        (
+            "2-[3-(bicyclo[2.2.1]heptan-2-endo-yl)propyl]bicyclo[2.2.1]heptan-2-exo-ol",
+            "(2-exo)-2-[3-((2-endo)-bicyclo[2.2.1]heptan-2-yl)propyl]bicyclo[2.2.1]heptan-2-ol",
+        ),
+        (
+            "2-(3-endo,8-syn-dimethylbicyclo[3.2.1]octan-2-yl)ethan-1-ol",
+            "2-((3-endo,8-syn)-3,8-dimethylbicyclo[3.2.1]octan-2-yl)ethan-1-ol",
+        ),
+        (
+            "2-[bicyclo[2.2.1]heptan-2-exo-yl]ethan-1-ol",
+            "2-[(2-exo)-bicyclo[2.2.1]heptan-2-yl]ethan-1-ol",
+        ),
+    ] {
+        assert_eq!(preprocess(name).unwrap(), expected, "{name}");
+        assert_eq!(preprocess(expected).unwrap(), expected, "{expected}");
+    }
+}

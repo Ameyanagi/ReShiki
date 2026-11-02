@@ -417,6 +417,7 @@ fn build_parent_parts(
             }
         }
     }
+    super::endo_exo_stereo::add_alternative(mol, &mut parts, numbered_path, locants);
     add_relative_ring_stereo(mol, &mut parts, numbered_path, locants)?;
     Ok(parts)
 }

@@ -7,6 +7,105 @@ use std::sync::LazyLock;
 static JAVA_DECIMAL_DIGIT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\A\p{Nd}\z").expect("Java decimal digit category"));
 
+// The pinned grammar accepts cage descriptors as prefixes, while the suffix
+// spelling shares its locant with both the descriptor and suffix.
+static CAGE_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)bicyclo\[(?:2\.2\.1|3\.2\.1)\]").expect("Supported bicyclic cage")
+});
+static CAGE_LOCANT_DESCRIPTORS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)[0-9]+(?:-(?:endo|exo|syn|anti))?(?:,[0-9]+(?:-(?:endo|exo|syn|anti))?)*")
+        .expect("Cage locant descriptors")
+});
+
+fn normalize_cage_descriptors(input: &str) -> String {
+    input
+        .split(' ')
+        .map(|word| {
+            if !CAGE_NAME.is_match(word) {
+                return word.to_string();
+            }
+            // A descriptor belongs to the innermost group containing it. In
+            // particular, a cage in another substituent must not enable this
+            // rewrite or receive the resulting stereochemistry prefix.
+            let mut scopes = vec![(0, None, Vec::new())];
+            let mut scope_at = vec![0; word.len()];
+            let mut stack = vec![(0, ' ')];
+            for (index, ch) in word.char_indices() {
+                scope_at[index] = stack.last().unwrap().0;
+                match ch {
+                    '(' | '[' | '{' => {
+                        let scope = scopes.len();
+                        scopes.push((index + ch.len_utf8(), None, Vec::new()));
+                        stack.push((scope, ch));
+                    }
+                    ')' | ']' | '}' => {
+                        let opener = match ch {
+                            ')' => '(',
+                            ']' => '[',
+                            _ => '{',
+                        };
+                        if stack.last().unwrap().1 != opener {
+                            return word.to_string();
+                        }
+                        stack.pop();
+                    }
+                    _ => {}
+                }
+            }
+            if stack.len() != 1 {
+                return word.to_string();
+            }
+            for cage in CAGE_NAME.find_iter(word) {
+                scopes[scope_at[cage.start()]].1.get_or_insert(cage.start());
+            }
+            let mut replacements = Vec::new();
+            for terms in CAGE_LOCANT_DESCRIPTORS.find_iter(word) {
+                let scope = &mut scopes[scope_at[terms.start()]];
+                let Some(cage_start) = scope.1 else {
+                    continue;
+                };
+                if !word[terms.end()..].starts_with('-')
+                    || (terms.start() != scope.0 && !word[..terms.start()].ends_with('-'))
+                    || (terms.start() < cage_start && !terms.as_str().contains(','))
+                {
+                    continue;
+                }
+                let mut locants = Vec::new();
+                let mut defined = Vec::new();
+                for term in terms.as_str().split(',') {
+                    if let Some((locant, _)) = term.split_once('-') {
+                        locants.push(locant);
+                        defined.push(term);
+                    } else {
+                        locants.push(term);
+                    }
+                }
+                if defined.is_empty() {
+                    continue;
+                }
+                scope.2.extend(defined);
+                replacements.push((terms.start(), terms.end(), locants.join(",")));
+            }
+            for (start, _, descriptors) in scopes {
+                if !descriptors.is_empty() {
+                    replacements.push((start, start, format!("({})-", descriptors.join(","))));
+                }
+            }
+            replacements.sort_by_key(|replacement| (replacement.0, replacement.1));
+            let mut rewritten = String::new();
+            let mut cursor = 0;
+            for (start, end, replacement) in replacements {
+                rewritten.push_str(&word[cursor..start]);
+                rewritten.push_str(&replacement);
+                cursor = end;
+            }
+            rewritten.push_str(&word[cursor..]);
+            rewritten
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub fn preprocess(name: &str) -> Result<String, ParsingError> {
     // Java String.trim removes only characters <= U+0020.
     let name = name.trim_matches(|c| c <= '\u{20}');
@@ -75,7 +174,9 @@ pub fn preprocess(name: &str) -> Result<String, ParsingError> {
         replaced.push(ch);
         i += 1;
     }
-    normalize_representation(&replaced)
+    Ok(normalize_cage_descriptors(&normalize_representation(
+        &replaced,
+    )?))
 }
 
 fn superscript_digit_to_digit(ch: char) -> Option<char> {

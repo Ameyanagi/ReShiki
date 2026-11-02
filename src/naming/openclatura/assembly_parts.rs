@@ -111,6 +111,7 @@ pub struct AssemblyParts {
     pub substituents: Vec<SubstituentItem>,
     pub stereo_features: Vec<(String, String)>,
     pub relative_stereo_prefixes: Vec<String>,
+    pub endo_exo_descriptors: BTreeMap<String, &'static str>,
     pub indicated_hydrogens: Vec<String>,
     pub hydro_operations: Vec<HydroOperation>,
     pub parent_charges: Vec<ParentChargeItem>,
@@ -173,6 +174,7 @@ impl AssemblyParts {
             substituents: vec![],
             stereo_features: vec![],
             relative_stereo_prefixes: vec![],
+            endo_exo_descriptors: BTreeMap::new(),
             indicated_hydrogens: vec![],
             hydro_operations: vec![],
             parent_charges: vec![],
@@ -198,5 +200,20 @@ impl AssemblyParts {
 
     pub fn is_simple_ring(&self) -> bool {
         self.is_ring && !self.is_bicycle && !self.is_spiro && !self.is_polycycle
+    }
+
+    pub(super) fn stereochemical_locants(&self, locants: &[String]) -> String {
+        locants
+            .iter()
+            .map(|locant| self.stereochemical_locant(locant))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    pub(super) fn stereochemical_locant(&self, locant: &str) -> String {
+        self.endo_exo_descriptors.get(locant).map_or_else(
+            || locant.to_owned(),
+            |descriptor| format!("{locant}-{descriptor}"),
+        )
     }
 }

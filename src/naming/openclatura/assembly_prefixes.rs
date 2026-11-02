@@ -86,6 +86,12 @@ pub fn substituent_locant_string(
     locs: &[String],
     grouped_count: usize,
 ) -> String {
+    if locs
+        .iter()
+        .any(|locant| parts.endo_exo_descriptors.contains_key(locant))
+    {
+        return parts.stereochemical_locants(locs);
+    }
     if parts.elided_substituent_locants.contains(name) {
         return String::new();
     }

@@ -425,6 +425,64 @@ async fn alternatives_require_independent_reconstruction() {
 }
 
 #[tokio::test]
+async fn only_endo_exo_alternatives_accept_the_complete_mirror_image() {
+    use crate::naming::{AlternativeName, NameReason};
+    let smiles = "O[C@H]1C[C@@H]2CC[C@H]1C2";
+    let primary = "(1S,2S,4R)-bicyclo[2.2.1]heptan-2-ol";
+    let mirror = "(1R,2R,4S)-bicyclo[2.2.1]heptan-2-ol";
+    let diastereomer = "(1S,2R,4R)-bicyclo[2.2.1]heptan-2-ol";
+    let relative = NameStatus::NotPreferred(NameReason::EndoExoStereo);
+    let identity = Identity {
+        smiles: smiles.into(),
+        naming_smiles: None,
+        write_unknown_stereo: false,
+        warnings: vec![],
+    };
+    let candidate = openclatura::Name {
+        text: primary.into(),
+        status: NameStatus::Preferred,
+        alternatives: [
+            (mirror, relative),
+            (
+                mirror,
+                NameStatus::NotPreferred(NameReason::RelativeRingStereo),
+            ),
+            (mirror, NameStatus::Unverified(NameReason::EndoExoStereo)),
+            (mirror, NameStatus::Preferred),
+            (diastereomer, relative),
+            ("bicyclo[2.2.1]heptan-2-ol", relative),
+            ("ethanol", relative),
+        ]
+        .into_iter()
+        .map(|(name, status)| AlternativeName {
+            name: name.into(),
+            status,
+        })
+        .collect(),
+        omitted_stereo: vec![],
+        omitted_units: 0,
+        verification: None,
+    };
+    let record = reconstruct(
+        &identity,
+        super::super::canonical_smiles(smiles).unwrap(),
+        candidate,
+        &Cancel::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(record.title, primary);
+    assert_eq!(record.name_status, Some(NameStatus::Preferred));
+    assert_eq!(
+        record.alternatives,
+        [AlternativeName {
+            name: mirror.into(),
+            status: relative,
+        }]
+    );
+}
+
+#[tokio::test]
 async fn unknown_configuration_preference_selects_the_verified_primary() {
     use crate::naming::NameReason;
     let input = "C[CH:900001](O)[C@H](Cl)C";
