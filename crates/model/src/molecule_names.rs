@@ -50,7 +50,7 @@ pub fn canonical_identity(
         .graph
         .atoms
         .iter()
-        .any(|atom| atom.atomic_number == 0 || atom.radical_electrons != 0)
+        .any(|atom| atom.atomic_number == 0 || atom.radical_electrons > 2)
         || state
             .graph
             .bonds
@@ -77,15 +77,134 @@ pub fn canonical_identity(
         atom.map_number = 0;
         atom.map_present = false;
     }
-    chemistry::smiles::write::write(
+    let smiles = chemistry::smiles::write::write(
         &state,
         chemistry::smiles::write::Options {
             ignore_maps: true,
             ..Default::default()
         },
     )
-    .map(|smiles| smiles.text)
-    .map_err(|error| IdentityRejection::Write(error.to_string()))
+    .map_err(|error| IdentityRejection::Write(error.to_string()))?;
+    if state
+        .graph
+        .atoms
+        .iter()
+        .any(|atom| atom.radical_electrons != 0)
+    {
+        // Plain SMILES encodes radicals through a valence deficit, rather than
+        // an explicit electron field. Admit a radical only when that encoding
+        // reconstructs every atom's exact electron count, including atoms that
+        // have no radicals. Traversal order supplies the source-to-reader map.
+        let reconstructed = chemistry::smiles::prepare(&smiles.text)
+            .map_err(|_| IdentityRejection::UnsupportedAtomsOrBonds)?;
+        if smiles.atom_order.len() != reconstructed.state.graph.atoms.len()
+            || smiles
+                .atom_order
+                .iter()
+                .zip(&reconstructed.state.graph.atoms)
+                .enumerate()
+                .any(|(target_index, (&source, target))| {
+                    state.graph.atoms.get(source).is_none_or(|atom| {
+                        let source_hydrogens = state.valences.get(source).map(|valence| {
+                            u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens
+                        });
+                        let target_hydrogens =
+                            reconstructed
+                                .state
+                                .valences
+                                .get(target_index)
+                                .map(|valence| {
+                                    u32::from(target.explicit_hydrogens)
+                                        + valence.implicit_hydrogens
+                                });
+                        atom.atomic_number != target.atomic_number
+                            || atom.charge != target.charge
+                            || atom.isotope != target.isotope
+                            || atom.radical_electrons != target.radical_electrons
+                            || source_hydrogens != target_hydrogens
+                    })
+                })
+        {
+            return Err(IdentityRejection::UnsupportedAtomsOrBonds);
+        }
+    }
+    Ok(smiles.text)
+}
+
+#[cfg(test)]
+mod canonical_identity_tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_radical_identities_preserve_electrons_and_positions() {
+        for input in [
+            "[CH3]",
+            "C[CH]C",
+            "[CH2]",
+            "[CH2]CC[CH2]",
+            "[CH]1CCCCC1",
+            "[c]1ccccc1",
+            "[NH2]",
+            "C[NH]",
+            "[OH]",
+            "C[O]",
+            "[SH]",
+            "C[S]",
+            "C[C]=O",
+        ] {
+            let source = chemistry::smiles::prepare(input).unwrap().state;
+            let identity = canonical_identity(&source).unwrap();
+            let reconstructed = chemistry::smiles::prepare(&identity).unwrap().state;
+            assert_eq!(
+                canonical_identity(&reconstructed).unwrap(),
+                identity,
+                "{input}"
+            );
+            let electrons = |state: &chemistry::stereo::perception::State| {
+                state
+                    .graph
+                    .atoms
+                    .iter()
+                    .map(|atom| atom.radical_electrons)
+                    .sum::<u8>()
+            };
+            assert_eq!(electrons(&source), electrons(&reconstructed), "{input}");
+            assert!(electrons(&source) > 0, "{input}");
+        }
+        assert_ne!(
+            canonical_identity(&chemistry::smiles::prepare("[CH2]CCC").unwrap().state),
+            canonical_identity(&chemistry::smiles::prepare("C[CH]CC").unwrap().state),
+        );
+        assert_ne!(
+            canonical_identity(&chemistry::smiles::prepare("[CH2]").unwrap().state),
+            canonical_identity(&chemistry::smiles::prepare("[CH3]").unwrap().state),
+        );
+    }
+
+    #[test]
+    fn same_atom_benzene_charge_and_radical_is_refused() {
+        let mut source = chemistry::smiles::prepare("c1ccccc1").unwrap().state;
+        source.graph.atoms[0].charge = 1;
+        source.graph.atoms[0].radical_electrons = 1;
+        // Plain SMILES cannot write a charged radical on an aromatic CH, so the
+        // identity is refused rather than becoming an ordinary cation.
+        assert_eq!(
+            canonical_identity(&source),
+            Err(IdentityRejection::UnsupportedAtomsOrBonds)
+        );
+    }
+
+    #[test]
+    fn rejects_an_electron_state_that_plain_smiles_cannot_reconstruct() {
+        let mut source = chemistry::smiles::prepare("[CH3].[O]").unwrap().state;
+        // An explicit closed-shell atomic oxygen is not the inferred oxygen
+        // diradical represented by [O]. It cannot share that identity.
+        source.graph.atoms[1].radical_electrons = 0;
+        assert_eq!(
+            canonical_identity(&source),
+            Err(IdentityRejection::UnsupportedAtomsOrBonds)
+        );
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -133,6 +252,49 @@ fn same_atoms(a: &[u64], b: &[u64]) -> bool {
     a.len() == b.len() && a.iter().all(|id| b.contains(id))
 }
 
+/// A union of whole components, with every atom still present in the drawing.
+fn complete_components(doc: &Document, atoms: &[u64]) -> bool {
+    let ids: HashSet<_> = atoms.iter().copied().collect();
+    !ids.is_empty()
+        && ids.len() == atoms.len()
+        && atoms.iter().all(|id| doc.atom(*id).is_some())
+        && !doc
+            .bonds
+            .iter()
+            .any(|b| ids.contains(&b.a) != ids.contains(&b.b))
+}
+
+/// Several ions with no neutral or zwitterionic component and zero total charge.
+pub fn charge_balanced_salt(doc: &Document) -> bool {
+    let mut pending: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
+    let mut total = 0;
+    let mut count = 0;
+    while let Some(&seed) = pending.iter().next() {
+        let ids = component(doc, seed);
+        let mut charge = 0;
+        let mut positive = false;
+        let mut negative = false;
+        for id in ids {
+            pending.remove(&id);
+            let Some(atom) = doc.atom(id) else {
+                return false;
+            };
+            charge += atom.charge;
+            positive |= atom.charge > 0;
+            negative |= atom.charge < 0;
+            if atom.radical_electrons != 0 {
+                return false;
+            }
+        }
+        if charge == 0 || positive && negative {
+            return false;
+        }
+        total += charge;
+        count += 1;
+    }
+    count > 1 && total == 0
+}
+
 pub fn label<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a MoleculeName> {
     doc.molecule_names
         .iter()
@@ -161,8 +323,7 @@ thread_local! { pub(crate) static IDENTITY_ENTRIES: std::cell::Cell<usize> = con
 fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
     #[cfg(test)]
     IDENTITY_ENTRIES.with(|v| v.set(v.get() + 1));
-    let seed = atoms.first().copied().ok_or("Select a molecule")?;
-    if atoms.len() > MAX_NAMING_ATOMS || !same_atoms(&component(doc, seed), atoms) {
+    if atoms.len() > MAX_NAMING_ATOMS || !complete_components(doc, atoms) {
         return Err("The named molecule changed its connected component".into());
     }
     // Use the shared fragment path so abbreviations and unresolved semantic
@@ -266,6 +427,17 @@ pub fn show(
         format,
     };
     caption.position = position(doc, atoms, &caption).ok_or("The molecule has no bounds")?;
+    // A name may cover several disconnected ions. The newest request replaces
+    // any existing component or salt captions that share even one atom.
+    let replaced: Vec<_> = doc
+        .molecule_names
+        .iter()
+        .filter(|name| name.annotation != id && name.atoms.iter().any(|atom| atoms.contains(atom)))
+        .map(|name| name.annotation)
+        .collect();
+    if !replaced.is_empty() {
+        doc.delete(&replaced);
+    }
     if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == id) {
         *current = caption;
     } else {
@@ -382,15 +554,10 @@ pub(crate) fn certify_inherited(
         return Err("Prepared insertion changed name associations".into());
     }
     for (old, new) in source.molecule_names.iter().zip(&part.molecule_names) {
-        let seed = old
-            .atoms
-            .first()
-            .copied()
-            .ok_or("Empty inherited named component")?;
-        let complete: HashSet<_> = component(source, seed).into_iter().collect();
-        if complete.len() != old.atoms.len() || old.atoms.iter().any(|id| !complete.contains(id)) {
+        if !complete_components(source, &old.atoms) {
             return Err("Prepared insertion requires a complete inherited named component".into());
         }
+        let complete: HashSet<_> = old.atoms.iter().copied().collect();
         let ids: Option<Vec<_>> = old
             .atoms
             .iter()

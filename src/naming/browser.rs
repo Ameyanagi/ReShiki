@@ -70,23 +70,40 @@ pub async fn resolve_name(name: &str, cancel: Cancel) -> Result<Record, Error> {
 /// As on the desktop, a name is returned only after the parser exactly
 /// reconstructs the structure from it.
 pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record, Error> {
+    generate_name_with_options(identity, super::IsotopeStyle::Iupac, cancel).await
+}
+
+pub async fn generate_name_with_options(
+    identity: &Identity,
+    style: super::IsotopeStyle,
+    cancel: Cancel,
+) -> Result<Record, Error> {
     let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
-    let request = reverse::generate_request(&expected)?;
+    let request = reverse::generate_request_with_style(&expected, style)?;
     let output = exchange(&request, &cancel, GENERATE_CANCELLED).await?;
     let candidate = reverse::parse_response(&output, &expected)?;
-    let reconstructed =
-        resolve_name(&candidate.text, cancel)
-            .await
-            .map_err(|error| match error {
-                Error::Cancelled(_) => Error::Cancelled(GENERATE_CANCELLED.into()),
-                error => error,
-            })?;
+    let parser_name = candidate
+        .verification
+        .as_ref()
+        .map_or(&candidate.text, |v| &v.name);
+    let output = exchange(
+        &local::verification_request(parser_name)?,
+        &cancel,
+        GENERATE_CANCELLED,
+    )
+    .await
+    .map_err(|error| match error {
+        Error::Cancelled(_) => Error::Cancelled(GENERATE_CANCELLED.into()),
+        error => error,
+    })?;
+    let reconstructed = local::verification_result(parser_name, &output)?;
     reverse::generated_record(
         identity,
         expected,
         candidate.text,
         candidate.status,
         &reconstructed,
+        candidate.verification.as_ref().map(|v| v.smiles.as_str()),
     )
 }
 

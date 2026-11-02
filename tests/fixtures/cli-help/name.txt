@@ -1,13 +1,15 @@
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]
+Usage: reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--isotope-style STYLE] [--json]
 
-Prints the systematic name of one connected molecule. The input is read as
-for convert (reshiki --cli help convert). The name is generated locally by
+Prints the systematic name of one complete molecule or a charge-balanced salt.
+The input is read as for convert (reshiki --cli help convert). The name is generated locally by
 the openclatura port and printed only after the OPSIN port reconstructs
 the same structure.
+For descriptive radical-ion names, it verifies the recovered neutral parent.
 
 Options:
   --json  Print the name and its status as one JSON line.
+  --isotope-style STYLE  Use iupac (default) or boughton isotope notation.
 
 Without --json, prints only the name followed by a newline. With --json,
 value contains name, preferred, status, reason and detail:

@@ -226,7 +226,6 @@ mod tests {
             "C1C[CH+]1",
             "C[NH+2]C",
             "C[Si-](C)(C)C",
-            "C[B-](C)C",
             "[Mg+]",
             "[NaH+]",
             "[ClH-]",
@@ -278,7 +277,7 @@ mod tests {
             ("C[Si](C)(C)C", "tetramethylsilane"),
             ("[NH4+]", "ammonium"),
             ("[O-2]", "oxide"),
-            ("[Ca+2]", "calcium"),
+            ("[Ca+2]", "calcium(2+)"),
             ("[N-]1[NH+]=CC=C1", "1H-pyrazol-1-ide-2-ium"),
         ] {
             assert_eq!(

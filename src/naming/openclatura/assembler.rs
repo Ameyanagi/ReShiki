@@ -547,6 +547,13 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     format!("{mods} {word}")
 }
 pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
+    assemble_name_with_parent(parts).map(|(name, _)| name)
+}
+
+/// Keep the rendered parent boundary for isotope descriptor placement.
+pub(super) fn assemble_name_with_parent(
+    parts: &mut AssemblyParts,
+) -> Result<(String, String), String> {
     super::assembly_charge::prepare_fusion_charge_assembly(parts)?;
     let fused_ion_candidate = select_fused_ion_operation(parts);
     if let Some(candidate) = &fused_ion_candidate {
@@ -615,7 +622,7 @@ pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
     if !relative.is_empty() {
         word = format!("{}-{word}", relative.join("-"));
     }
-    Ok(add_front_modifiers(parts, &word))
+    Ok((add_front_modifiers(parts, &word), core))
 }
 #[cfg(test)]
 pub fn assemble_name(parts: &mut AssemblyParts) -> Result<String, String> {

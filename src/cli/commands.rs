@@ -161,6 +161,15 @@ const NAME_JSON: OptionSpec = OptionSpec {
     ..JSON
 };
 
+const ISOTOPE_STYLE: OptionSpec = OptionSpec {
+    flag: "--isotope-style",
+    value: Some("STYLE"),
+    help: "Isotope notation: iupac (default) or boughton.",
+    default: Some(|| "iupac".into()),
+    sets: None,
+    equivalent: None,
+};
+
 const INPUT: Operand = Operand {
     name: "INPUT",
     help: "Read a file, or standard input with -; --smiles TEXT supplies text instead.",
@@ -225,8 +234,8 @@ const ANALYZE: CommandSpec = CommandSpec {
 const NAME: CommandSpec = CommandSpec {
     name: "name",
     summary: "Print the systematic name of a structure",
-    usage: "reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]",
-    options: &[SMILES, FROM, NAME_JSON],
+    usage: "reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--isotope-style STYLE] [--json]",
+    options: &[SMILES, FROM, ISOTOPE_STYLE, NAME_JSON],
     tools: &["import"],
     operand: Some(INPUT),
     body: name_help,
@@ -609,13 +618,15 @@ fn analyze_help() -> String {
 
 fn name_help() -> String {
     let body = "\
-Prints the systematic name of one connected molecule. The input is read as
-for convert (reshiki --cli help convert). The name is generated locally by
+Prints the systematic name of one complete molecule or a charge-balanced salt.
+The input is read as for convert (reshiki --cli help convert). The name is generated locally by
 the openclatura port and printed only after the OPSIN port reconstructs
 the same structure.
+For descriptive radical-ion names, it verifies the recovered neutral parent.
 
 Options:
   --json  Print the name and its status as one JSON line.
+  --isotope-style STYLE  Use iupac (default) or boughton isotope notation.
 
 Without --json, prints only the name followed by a newline. With --json,
 value contains name, preferred, status, reason and detail:

@@ -390,7 +390,6 @@ mod tests {
         for text in [
             "",
             "C.C",
-            "[CH3]",
             "[C@H](F)Cl",
             "FC=[C@AL1]=CF",
             "C |a:0|",
