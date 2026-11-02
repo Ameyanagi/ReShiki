@@ -208,7 +208,8 @@ impl Builder<'_> {
                 source.annotations.is_3d,
                 &source.annotations.dummy_labels,
                 attachments,
-            )?;
+            )?
+            .with_singlets(&source.annotations.singlets)?;
             let mut positions: Vec<_> = molecule
                 .positions
                 .iter()

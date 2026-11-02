@@ -47,6 +47,10 @@ def catalog():
                     assert value == atom.GetDegree()
                 elif name == "AtomInNRings":
                     data["rings"] = value
+                elif name == "AtomIsotope":
+                    # Entry-only isotope groups retain this in composition,
+                    # separate from the serialized base query.
+                    assert comparison == "=" and value == atom.GetIsotope()
                 else:
                     raise AssertionError(atom.DescribeQuery())
             atoms.append(data)

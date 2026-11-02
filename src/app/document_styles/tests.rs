@@ -1,6 +1,107 @@
 use super::*;
 
 #[test]
+fn hydrogen_isotope_modes_preview_cancel_apply_and_undo_without_changing_atoms() {
+    use reshiki::document::Point;
+
+    for mode in [HydrogenIsotopes::Letters, HydrogenIsotopes::MassNumbers] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let id = app.tab.doc.add_atom("H", Point::new(0., 0.));
+        app.tab.doc.atom_mut(id).unwrap().isotope = 2;
+        let before = app.tab.doc.clone();
+        app.tab.saved = before.clone();
+        app.tab.history = Default::default();
+        send(&mut app, Action::Open);
+        send(&mut app, Action::HydrogenIsotopes(HydrogenIsotopes::Auto));
+        assert!(
+            !app.tab
+                .styles
+                .editor
+                .as_ref()
+                .unwrap()
+                .apply_semantics_requested
+        );
+        send(&mut app, Action::HydrogenIsotopes(mode));
+        let draft = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+        assert_eq!(draft.hydrogen_isotopes, mode);
+        assert_eq!(draft.name, "Custom");
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.dirty());
+        send(&mut app, Action::Cancel);
+        assert_eq!(app.tab.doc, before);
+
+        send(&mut app, Action::Open);
+        assert_eq!(
+            app.tab.styles.editor.as_ref().unwrap().hydrogen_isotopes,
+            HydrogenIsotopes::Auto
+        );
+        send(&mut app, Action::HydrogenIsotopes(mode));
+        send(&mut app, Action::Apply);
+        assert!(!app.error, "{}", app.status);
+        let after = app.tab.doc.clone();
+        assert_eq!(after.drawing_style, draft);
+        assert_eq!(after.atoms, before.atoms);
+        assert_eq!(after.bonds, before.bonds);
+        assert!(app.dirty());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+
+        send(&mut app, Action::Open);
+        assert_eq!(
+            app.tab.styles.editor.as_ref().unwrap().hydrogen_isotopes,
+            mode
+        );
+        let revision = app.tab.revision;
+        send(&mut app, Action::Apply);
+        assert_eq!(app.tab.doc, after);
+        assert_eq!(app.tab.revision, revision);
+    }
+}
+
+#[test]
+fn hydrogen_isotope_modes_reset_with_presets_and_load_from_native_styles() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    send(&mut app, Action::Open);
+    for preset in Preset::ALL {
+        send(
+            &mut app,
+            Action::HydrogenIsotopes(HydrogenIsotopes::Letters),
+        );
+        send(&mut app, Action::Preset(preset));
+        let editor = app.tab.styles.editor.as_ref().unwrap();
+        assert_eq!(editor.hydrogen_isotopes, HydrogenIsotopes::Auto);
+        assert_eq!(editor.candidate().unwrap(), preset.style());
+    }
+    send(
+        &mut app,
+        Action::HydrogenIsotopes(HydrogenIsotopes::MassNumbers),
+    );
+    let draft = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+    let name = std::path::Path::new("isotopes.reshiki-style");
+    let bytes = reshiki::document_styles::to_bytes(name, &draft).unwrap();
+    let loaded = reshiki::document_styles::load_bytes(name, bytes).unwrap();
+    assert_eq!(loaded, draft);
+    send(&mut app, Action::Preset(Preset::Jacs));
+    let (serial, epoch) = (app.tab.styles.serial, app.tab.file_epoch);
+    send(&mut app, Action::Loaded(serial, epoch, Ok(Some(loaded))));
+    assert_eq!(
+        app.tab.styles.editor.as_ref().unwrap().candidate().unwrap(),
+        draft
+    );
+    assert_eq!(
+        app.tab.doc.drawing_style.hydrogen_isotopes,
+        HydrogenIsotopes::Auto
+    );
+    send(&mut app, Action::Apply);
+    assert_eq!(app.tab.doc.drawing_style, draft);
+}
+
+#[test]
 fn radical_order_is_a_previewed_document_style_with_undo() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

@@ -271,6 +271,7 @@ impl State {
                 categories(t)
                     .chain([t.name.as_str(), t.group.as_str(), t.smiles.as_str()])
                     .chain(t.keywords.iter().map(String::as_str))
+                    .chain(t.low_rank_keywords.iter().map(String::as_str))
                     .any(|text| search_fold(text).contains(word))
             })
     }

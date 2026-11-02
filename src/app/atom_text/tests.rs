@@ -701,23 +701,70 @@ async fn rich_label_editor_and_script_controls_expose_accessible_actions() {
 
 #[test]
 fn accepting_an_unchanged_label_preserves_imported_atom_properties() -> Result<(), String> {
-    for element in ["H", "N", "Pt"] {
+    for (element, isotope) in [("H", 2), ("N", 15), ("Pt", 195)] {
         let (mut app, _) = App::new();
         let id = app.tab.doc.add_atom(element, Point::default());
         let atom = app.tab.doc.atom_mut(id).ok_or("Atom")?;
         atom.no_implicit = true;
         atom.charge = 1;
-        atom.isotope = 2;
+        atom.isotope = isotope;
         let before = app.tab.doc.clone();
         let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
         assert_eq!(
             app.tab.atom_text.as_ref().ok_or("Draft")?.input,
-            format!("{element}+")
+            format!("{isotope}{element}+")
         );
         let _ = app.update(Message::AtomText(Action::Apply));
         assert_eq!(app.tab.doc, before);
     }
     Ok(())
+}
+
+#[test]
+fn nuclides_and_hydride_charges_apply_through_the_label_editor() {
+    for (label, element, isotope, hydrogens, charge) in [
+        ("D", "H", 2, 0, 0),
+        ("T", "H", 3, 0, 0),
+        ("13C", "C", 13, 0, 0),
+        ("¹³C", "C", 13, 0, 0),
+        ("15N", "N", 15, 0, 0),
+        ("PH₂²⁻", "P", 0, 2, -2),
+        ("AlH₆³⁻", "Al", 0, 6, -3),
+        ("NH4 2+", "N", 0, 4, 2),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let id = app.tab.doc.add_atom("C", Point::default());
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+        let _ = app.update(Message::AtomText(Action::Input(label.into())));
+        let _ = app.update(Message::AtomText(Action::Apply));
+        assert!(app.tab.atom_text.is_none(), "{label}");
+        let atom = app.tab.doc.atom(id).unwrap();
+        assert_eq!(atom.element, element, "{label}");
+        assert_eq!(atom.isotope, isotope, "{label}");
+        assert_eq!(atom.explicit_h, hydrogens, "{label}");
+        assert_eq!(atom.charge, charge, "{label}");
+        assert!(atom.display.variable.is_none(), "{label}");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before, "{label}");
+    }
+}
+
+#[test]
+fn a_leading_superscript_in_the_rich_editor_applies_as_an_isotope() {
+    let (mut app, id) = rich_label("13C");
+    let _ = app.update(Message::AtomText(Action::Mode(Mode::Auto)));
+    editor_action(&mut app, Input::Move(Motion::DocumentStart));
+    editor_action(&mut app, Input::Select(Motion::Right));
+    editor_action(&mut app, Input::Select(Motion::Right));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert!(app.tab.atom_text.is_none());
+    let atom = app.tab.doc.atom(id).unwrap();
+    assert_eq!(atom.element, "C");
+    assert_eq!(atom.isotope, 13);
+    assert!(atom.display.variable.is_none());
 }
 
 #[test]

@@ -1,6 +1,6 @@
 # Ring presets and expanded template catalog
 
-The current library contains 122 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), macrocycles, free-base porphine and ligands. The original ring-tool milestone is described below.
+The current library contains 195 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), nucleosides/nucleotides, steroids, macrocycles, free-base porphine, ligands and [coordination geometry frames](template-library.md). The original ring-tool milestone is described below.
 
 JACS / ACS remains the default. The new chair and cyclopentadiene tools use 14.4 pt edges (42 world units), Arial 10 pt labels and 0.6 pt lines unless the user changes the preferred bond length.
 
@@ -22,7 +22,7 @@ The regular 3–8 member tool rotates the same way when dragged on empty space o
 
 ## Catalog
 
-There are 108 chemical catalog entries, two generated chair projections and 12 Haworth entries, for **122 built-ins**. Collections cover rings/small molecules, cycloalkanes and unsaturated rings, common heterocycles, bicyclic/cage structures, all 20 standard amino acids, five nucleobases, macrocycles and ligands. Retained fused parents include anthracene, phenanthrene, azulene, indene, fluorene, pyrene, carbazole, acridine, quinazoline, quinoxaline, benzimidazole, indazole, chromene, dibenzofuran and dibenzothiophene.
+There are 109 chemical catalog entries, two generated chair projections, 50 Haworth entries, 15 nucleosides/nucleotides, 16 steroid drawings and three coordination geometry frames, for **195 built-ins**. Collections cover rings/small molecules, cycloalkanes and unsaturated rings, common heterocycles, bicyclic/cage structures, all 20 standard amino acids plus L-selenocysteine, five nucleobases, macrocycles and ligands. Retained fused parents include anthracene, phenanthrene, azulene, indene, fluorene, pyrene, carbazole, acridine, quinazoline, quinoxaline, benzimidazole, indazole, chromene, dibenzofuran and dibenzothiophene. The biological collections are described in [Template library](template-library.md#biological-templates).
 
 Names, formulas, standard InChIKeys, SMILES and source URLs are frozen in [template-catalog.json](../assets/template-catalog.json). These chemical facts were retrieved from the [PubChem PUG REST service](https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest). The amino-acid generator uses RDKit's documented [L-protein sequence flavor](https://www.rdkit.org/docs/source/rdkit.Chem.rdmolfiles.html). Its formula and standard InChIKey must agree with the corresponding PubChem record before generation succeeds. Glycine is achiral; the other amino-acid entries retain L stereochemistry. Entries are neutral free amino acids, not connected peptide residues.
 
@@ -32,13 +32,13 @@ Search includes IUPAC names, von Baeyer names, amino-acid codes and biochemical 
 
 Ring templates, including crown ethers, cyclen and cyclam (not porphine), carry static atom locants for the large template source preview and attachment labels such as **Attach at N-9**. Substituents are unnumbered. Locants stay out of the drawing, thumbnails, join panel and exports. Acridine uses N-10 and decalin uses naphthalene-style 4a/8a fusion locants.
 
-The catalog does not yet provide sugar stereoisomer families, DNA/RNA assemblies, peptide synthesis/sequence assembly, semantic protecting-group nicknames, polymer templates or many specialized chemical families.
+The catalog includes named D/L sugar stereoisomers, nucleosides/nucleotides, steroid parents and common peptide protecting-group aliases. DNA/RNA chain assembly, peptide synthesis/sequence assembly, polymer templates and many specialized chemical families remain unavailable.
 
 ## Verification
 
 A CDXML fixture in `tests/fixtures/` contains both chair orientations and a cyclopentadiene: 17 atoms, 17 bonds, three rings and formula C17H30. Its atom coordinates and molecular identity survive interchange.
 
-Automated tests cover equal JACS edge lengths, mirrored/reflex chair geometry, free rotation, shared-atom/fused-bond attachment at nondefault scale, whole-ring connection through oxygen, full-valence rejection, shifted diene bonds, native/CDXML geometry, input gestures and Undo/Redo. Every catalog structure is checked through analyze/cleanup against its frozen PubChem formula and standard InChIKey; all 20 amino acids additionally retain identity through MOL exchange. The complete suite passes **111 Rust and 32 Python tests**.
+Automated tests cover equal JACS edge lengths, mirrored/reflex chair geometry, free rotation, shared-atom/fused-bond attachment at nondefault scale, whole-ring connection through oxygen, full-valence rejection, shifted diene bonds, native/CDXML geometry, input gestures and Undo/Redo. Every catalog structure is checked through analyze/cleanup against its frozen PubChem formula and standard InChIKey; all 21 amino acids additionally retain identity through MOL exchange. The original milestone passed **111 Rust and 32 Python tests**; the suites have since expanded.
 
 ReShiki desktop verification created a chair fused onto a drawn bond, a freely rotated second chair, cyclopentadiene and an Option-dragged chair connected through oxygen. The saved drawing has 24 atoms, 24 bonds and formula C23H42O; all bond lengths measure 42 world units within 0.001. The oxygen remains oxygen. A separate library placement of L-phenylalanine preserves its formula and standard InChIKey. Evidence is in `artifacts/rings-qa-20260920/desktop-rings.reshiki`, `desktop-phenylalanine.reshiki` and `option-chair-preview.png`. The ring drawing's PNG and rendered PDF were visually inspected.
 

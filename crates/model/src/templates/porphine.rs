@@ -79,6 +79,7 @@ pub(super) fn template() -> Result<Template, String> {
         name: facts.name,
         smiles: facts.smiles,
         keywords: facts.keywords,
+        low_rank_keywords: Vec::new(),
         note: facts.note,
         locants: Default::default(),
         document,

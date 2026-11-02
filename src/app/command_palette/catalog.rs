@@ -804,6 +804,19 @@ fn edits() -> Vec<Command> {
             Message::ClearHighlights,
         )
         .alias(&["noh"]),
+        send(
+            "Normalize depiction",
+            Edit,
+            "Draw qualifying nitrogen centers as charge-separated in the selection or whole drawing",
+            "nitro oxide nitrone azide dipolar nitrogen structure",
+            Message::NormalizeDepiction,
+        ),
+        selection(
+            "Bracket ion",
+            "Bracket one complete charged component and hide its local charge labels",
+            "charge ion bracket structure",
+            Message::BracketIon,
+        ),
         selection(
             "Frame selection",
             "Draw a rectangle around the selection",
@@ -1310,6 +1323,15 @@ fn view(app: &App) -> Vec<Command> {
             "snap align",
             Message::View(view_settings::Action::SmartGuides(
                 !app.appearance.smart_guides,
+            )),
+        ),
+        send(
+            "Toggle 2-decimal molecular weight",
+            View,
+            "Switch molecular weight between 2 and 3 decimal places",
+            "MW mass precision rounding display",
+            Message::View(view_settings::Action::TwoDecimalWeight(
+                !app.appearance.two_decimal_weight,
             )),
         ),
         send(

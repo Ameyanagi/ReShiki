@@ -132,6 +132,11 @@ the whole lobe without a halo.
   filled orbital lobes and rotated marks.
 - SMILES/MOL/CDXML keep supported one/two-unpaired-electron chemistry;
   molecular formats omit drawing annotations.
+- An atom with two nonbonding electrons is a triplet unless **Atom details →
+  Spin state** marks it singlet. `.rsk`, MOL (`RAD 1`/`RAD 3`, V2000 and V3000)
+  and CDXML (`Radical="Singlet"`/`"Triplet"`) keep the spin state; SMILES and
+  InChI cannot. Both states draw the same two dots, and Molecular properties
+  counts a singlet as 0 unpaired electrons.
 - Partial charges export to CDXML/CDX as uninterpreted δ+ / δ− text. An attached
   partial charge becomes a free caption in those formats; `.rsk` retains its
   atom attachment. A stretched or mirrored free partial charge exports as

@@ -10,7 +10,10 @@ use std::collections::{HashMap, HashSet};
 mod atom_merge;
 pub use atom_merge::{merge_atoms, merge_atoms_at};
 mod coordination;
-pub use coordination::{Coordination, coordinate_atoms, coordination_donor, coordination_metal};
+pub use coordination::{
+    Coordination, coordinate_atoms, coordination_donor, coordination_metal,
+    coordination_metal_element,
+};
 mod plan;
 pub use plan::{JoinPlan, join_plan};
 

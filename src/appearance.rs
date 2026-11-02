@@ -43,6 +43,8 @@ pub struct Settings {
     pub smart_guides: bool,
     /// Include advisory IUPAC stereochemical drawing conventions in Check drawing.
     pub iupac_style_notes: bool,
+    /// Display molecular weight with two decimal places instead of three.
+    pub two_decimal_weight: bool,
     /// Typeset chemical names when placing a new caption.
     pub name_typography: bool,
     /// Display/input preference for the five physical Drawing Style fields.
@@ -56,6 +58,7 @@ impl Default for Settings {
             arrange_controls: true,
             smart_guides: true,
             iupac_style_notes: false,
+            two_decimal_weight: false,
             name_typography: true,
             drawing_style_unit: Default::default(),
         }

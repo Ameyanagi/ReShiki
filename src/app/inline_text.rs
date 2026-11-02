@@ -828,6 +828,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::CopyImage
             | Message::CopyAs(_)
             | Message::CopySmiles
+            | Message::CopyAnalysis
             | Message::CopyChemicalText
             | Message::FormatChemicalName
             | Message::Paste
@@ -840,6 +841,9 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Ungroup
             | Message::IntegralGroup(_)
             | Message::AddFrame(_)
+            | Message::BracketIon
+            | Message::DrawChargeSeparated(_)
+            | Message::NormalizeDepiction
             | Message::ObjectToolbar(super::object_toolbar::Action::Layer(_))
             | Message::Transform(_)
             | Message::Arrange(_)
@@ -879,7 +883,11 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::BondPosition(_)
             | Message::ReverseBonds
             | Message::BondDepth(_)
-            | Message::Graphics(super::graphics::Action::Style(_))
+            | Message::Graphics(
+                super::graphics::Action::Style(_)
+                    | super::graphics::Action::Superscript(_)
+                    | super::graphics::Action::ApplySuperscript,
+            )
             | Message::ArrowAction(_)
             | Message::ArrowLabelGap(
                 super::arrow_labels::Action::Apply

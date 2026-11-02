@@ -93,6 +93,8 @@ pub struct NativeGraphic {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sides: Option<BracketSides>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub superscript: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub phase: Option<Phase>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phase_flipped: Option<bool>,
@@ -135,6 +137,7 @@ impl NativeGraphic {
             axis_y: self.axis_y.into_document(),
             style,
             sides: self.sides.unwrap_or_default(),
+            superscript: self.superscript,
             phase: self.phase.unwrap_or_default(),
             phase_flipped: self.phase_flipped.unwrap_or(false),
             layer: self.layer.into_document()?,
@@ -286,6 +289,7 @@ impl Reader<'_, '_> {
             axis_y,
             style: Some(style),
             sides: Some(BracketSides::Both),
+            superscript: None,
             phase: None,
             phase_flipped: None,
             layer: self.layer(el)?,
