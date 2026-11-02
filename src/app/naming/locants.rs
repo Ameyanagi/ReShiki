@@ -120,10 +120,10 @@ pub(super) fn display_locants(record: &Record, document: &Document) -> HashMap<u
         .unwrap_or_default()
 }
 
-/// The parts of `spans` (without word joiners) inside `range` of their text.
+/// Slice joiner-free spans by display offsets, restoring joiners within the result.
 fn range_spans(spans: &[Span<'static>], range: Range<usize>) -> Vec<Span<'static>> {
     let mut offset = 0;
-    spans
+    let mut parts = spans
         .iter()
         .filter_map(|span| {
             let start = offset;
@@ -135,7 +135,19 @@ fn range_spans(spans: &[Span<'static>], range: Range<usize>) -> Vec<Span<'static
                 part
             })
         })
-        .collect()
+        .peekable();
+    let mut joined = vec![];
+    while let Some(mut part) = parts.next() {
+        if !part.text.ends_with(char::is_whitespace)
+            && parts
+                .peek()
+                .is_some_and(|next| next.text.starts_with(|c: char| !c.is_whitespace()))
+        {
+            part.text.to_mut().push('\u{2060}');
+        }
+        joined.push(part);
+    }
+    joined
 }
 
 fn hover_segment<'a, R: iced::advanced::Renderer + 'a>(
@@ -265,9 +277,6 @@ impl App {
     ) -> Element<'a, Message> {
         let family = reshiki::style::font_name(&self.tab.doc.drawing_style.font_family);
         let mut spans = super::aliases::chemical_name_spans(name, size, family);
-        for span in &mut spans {
-            span.text = Cow::Owned(span.text.replace('\u{2060}', ""));
-        }
         let displayed = reshiki::typography::name_markup(name).unicode().text;
         let available = self.locant_map(target);
         let tokens: Vec<_> = tokens(&displayed)
@@ -278,6 +287,9 @@ impl App {
             .collect();
         if tokens.is_empty() {
             return rich_text(spans).into();
+        }
+        for span in &mut spans {
+            span.text = Cow::Owned(span.text.replace('\u{2060}', ""));
         }
         let hovered = self.current_locant_hover(target);
         let mut segments: Vec<Element<'a, Message>> = vec![];

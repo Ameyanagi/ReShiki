@@ -105,14 +105,16 @@ fn splitting_formatted_name_spans_preserves_full_name_typography() {
         split
             .iter()
             .map(|span| span.text.as_ref())
-            .collect::<String>(),
+            .collect::<String>()
+            .replace('\u{2060}', ""),
         displayed
     );
     let italic = split
         .iter()
         .filter(|span| span.font.unwrap().style == iced::font::Style::Italic)
         .map(|span| span.text.as_ref())
-        .collect::<String>();
+        .collect::<String>()
+        .replace('\u{2060}', "");
     assert_eq!(italic, "RN");
     assert!(
         split
@@ -120,6 +122,30 @@ fn splitting_formatted_name_spans_preserves_full_name_typography() {
             .all(|span| span.font.unwrap().family == iced::font::Family::Name("Test Family"))
     );
     assert_eq!(split[0].size, Some(iced::Pixels(13. * 0.8)));
+}
+
+#[test]
+fn splitting_indicated_hydrogen_locant_preserves_in_word_font_change() {
+    let name = "5-chloro-1H-indole";
+    let mut spans = super::super::aliases::chemical_name_spans(name, 13., "Test Family");
+    for span in &mut spans {
+        span.text = Cow::Owned(span.text.replace('\u{2060}', ""));
+    }
+    let token = tokens(name)
+        .into_iter()
+        .find(|token| token.locant == "1")
+        .unwrap();
+    assert_eq!(&name[token.range.clone()], "1H");
+    let split = range_spans(&spans, token.range);
+    assert_eq!(
+        split
+            .iter()
+            .map(|span| span.text.as_ref())
+            .collect::<Vec<_>>(),
+        ["1\u{2060}", "H"]
+    );
+    assert_eq!(split[0].font.unwrap().style, iced::font::Style::Normal);
+    assert_eq!(split[1].font.unwrap().style, iced::font::Style::Italic);
 }
 
 async fn indole_preview() -> Result<Preview, String> {
