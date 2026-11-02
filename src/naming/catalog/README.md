@@ -1,7 +1,7 @@
 # Offline retained-name catalog
 
-`ReShiki retained aliases 1` is a finite local index: 30 chemical identities and
-40 curated names. It supplements the existing systematic-name generator;
+`ReShiki retained aliases 1` is a finite local index: 70 chemical identities and
+82 curated names. It supplements the existing systematic-name generator;
 it is not a general synonym database or a preferred-name authority.
 
 The application matches canonical isomeric graph identity, including specified
@@ -15,16 +15,43 @@ invalid molecular identity remains an error.
 ## Sources and adaptation
 
 Each alias in [data.json](data.json) cites a source. OPSIN aliases are selected
-from the bundled OPSIN MIT resources. They were selected from OPSIN 2.9.0
-(commit `b91b610af5ab07560fedb20730d7aef46bb2bca0`, the hashes in
-[provenance.json](provenance.json)); the bundled parser now tracks OPSIN main at
-`42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91`, which keeps every cited token, and
-alias source links point at that commit. The evidence gives exact resource
-files and token spellings. A stem can require the cited suffix or functional
-class to form the complete alias: for example, `ethyl alcohol` combines
-`eth`, `yl` and `alcohol`. These selections do not modify or exhaust the
-upstream vocabulary. Resource hashes and the catalog checksum are in
-[provenance.json](provenance.json).
+from the bundled OPSIN MIT resources, pinned to OPSIN `3.0-SNAPSHOT`
+(commit `42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91`, the resource hashes and
+fingerprint in [provenance.json](provenance.json)). The initial small-molecule
+selection used OPSIN 2.9.0 (`b91b610af5ab07560fedb20730d7aef46bb2bca0`);
+its original pin remains in the provenance, while every shipping alias is
+validated against the current bundled parser and resources. Alias source links
+point at the current pin. Evidence gives exact resource files and token
+spellings. A stem can require a cited suffix or functional class to form the
+complete alias: for example, `ethyl alcohol` combines `eth`, `yl` and `alcohol`.
+These selections do not modify or exhaust the upstream vocabulary.
+
+The biochemical reference graphs and spellings come from the frozen
+[template catalog](../../../assets/template-catalog.json) (20 neutral free
+amino acids and five nucleobases) and
+[Haworth sugars](../../../assets/haworth-sugars.json) (ten explicit anomers).
+`tautomer_smiles` takes precedence where the template specifies it, matching
+the graph used by the application. Both asset files have pinned hashes in the
+provenance. Amino-acid names retain their `L-` designation except achiral
+glycine; template UI capitalization is normalized to conventional lowercase
+stems (`L-alanine`, `glycine`). Sugar names retain the asset's Greek α/β spelling.
+
+The bundled OPSIN plain names `adenine` and `guanine` strictly parse to the
+**7H** graphs, so only those exact graphs receive the plain aliases. The usual
+**9H** template graphs receive `9H-adenine` and `9H-guanine`. Their frozen 7H
+alternatives also receive `7H-adenine` and `7H-guanine`. Every locanted alias
+must reconstruct its own graph; no names are copied between tautomers.
+
+Three further frozen asset graphs differ from the plain OPSIN defaults:
+cytosine has the 3H tautomer and L-histidine has the opposite imidazole N-H
+tautomer, while arginine places its
+guanidine double bond on the chain nitrogen. The catalog therefore uses
+`3H-cytosine`, `3-(1H-imidazol-5-yl)-L-alanine` and
+`N(5)-(diaminomethylidene)-L-ornithine` for those exact reference graphs. The
+plain `cytosine`, `L-histidine` and `L-arginine` spellings each have a separate,
+independently specified record for the exact default graph from the strict
+bundled OPSIN parser. The template records retain their original graphs and
+aliases; matching never moves a name between these tautomers.
 
 The one `(+)-lactic acid` alias uses the existing retained-name fact from
 [ChEBI:422](https://www.ebi.ac.uk/chebi/CHEBI:422), record modified 18 April 2024,
@@ -74,28 +101,82 @@ specified; names are not reverse-generated to manufacture the expected graph.
 | glyoxal            | `glyoxal`                                | `O=CC=O`                 |
 | ethanolamine       | `ethanolamine`, `monoethanolamine`       | `NCCO`                   |
 
+## Biochemical coverage
+
+The order here follows the appended catalog records. Configuration and tautomer
+labels describe distinct graph identities, rather than display-only qualifiers.
+
+| Record                  | Curated names                           | Explicit reference graph                           |
+| ----------------------- | --------------------------------------- | -------------------------------------------------- |
+| l-alanine               | `L-alanine`                             | `C[C@@H](C(=O)O)N`                                 |
+| l-arginine              | `N(5)-(diaminomethylidene)-L-ornithine` | `C(C[C@@H](C(=O)O)N)CN=C(N)N`                      |
+| l-asparagine            | `L-asparagine`                          | `C([C@@H](C(=O)O)N)C(=O)N`                         |
+| l-aspartic-acid         | `L-aspartic acid`                       | `C([C@@H](C(=O)O)N)C(=O)O`                         |
+| l-cysteine              | `L-cysteine`                            | `C([C@@H](C(=O)O)N)S`                              |
+| l-glutamine             | `L-glutamine`                           | `C(CC(=O)N)[C@@H](C(=O)O)N`                        |
+| l-glutamic-acid         | `L-glutamic acid`                       | `C(CC(=O)O)[C@@H](C(=O)O)N`                        |
+| glycine                 | `glycine`                               | `C(C(=O)O)N`                                       |
+| l-histidine-3h          | `3-(1H-imidazol-5-yl)-L-alanine`        | `C1=C(NC=N1)C[C@@H](C(=O)O)N`                      |
+| l-isoleucine            | `L-isoleucine`                          | `CC[C@H](C)[C@@H](C(=O)O)N`                        |
+| l-leucine               | `L-leucine`                             | `CC(C)C[C@@H](C(=O)O)N`                            |
+| l-lysine                | `L-lysine`                              | `C(CCN)C[C@@H](C(=O)O)N`                           |
+| l-methionine            | `L-methionine`                          | `CSCC[C@@H](C(=O)O)N`                              |
+| l-phenylalanine         | `L-phenylalanine`                       | `C1=CC=C(C=C1)C[C@@H](C(=O)O)N`                    |
+| l-proline               | `L-proline`                             | `C1C[C@H](NC1)C(=O)O`                              |
+| l-serine                | `L-serine`                              | `C([C@@H](C(=O)O)N)O`                              |
+| l-threonine             | `L-threonine`                           | `C[C@H]([C@@H](C(=O)O)N)O`                         |
+| l-tryptophan            | `L-tryptophan`                          | `C1=CC=C2C(=C1)C(=CN2)C[C@@H](C(=O)O)N`            |
+| l-tyrosine              | `L-tyrosine`                            | `C1=CC(=CC=C1C[C@@H](C(=O)O)N)O`                   |
+| l-valine                | `L-valine`                              | `CC(C)[C@@H](C(=O)O)N`                             |
+| adenine-9h              | `9H-adenine`                            | `Nc1ncnc2[nH]cnc12`                                |
+| adenine-7h              | `adenine`, `7H-adenine`                 | `C1=NC2=NC=NC(=C2N1)N`                             |
+| guanine-9h              | `9H-guanine`                            | `Nc1nc2[nH]cnc2c(=O)[nH]1`                         |
+| guanine-7h              | `guanine`, `7H-guanine`                 | `C1=NC2=C(N1)C(=O)NC(=N2)N`                        |
+| cytosine-3h             | `3H-cytosine`                           | `C1=C(NC(=O)N=C1)N`                                |
+| thymine                 | `thymine`                               | `CC1=CNC(=O)NC1=O`                                 |
+| uracil                  | `uracil`                                | `C1=CNC(=O)NC1=O`                                  |
+| alpha-d-glucopyranose   | `α-D-glucopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O`   |
+| beta-d-glucopyranose    | `β-D-glucopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O`  |
+| alpha-d-galactopyranose | `α-D-galactopyranose`                   | `C([C@@H]1[C@@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O`  |
+| beta-d-galactopyranose  | `β-D-galactopyranose`                   | `C([C@@H]1[C@@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O` |
+| alpha-d-mannopyranose   | `α-D-mannopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@@H]([C@H](O1)O)O)O)O)O`  |
+| beta-d-mannopyranose    | `β-D-mannopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@@H]([C@@H](O1)O)O)O)O)O` |
+| alpha-d-ribofuranose    | `α-D-ribofuranose`                      | `C([C@@H]1[C@H]([C@H]([C@H](O1)O)O)O)O`            |
+| beta-d-ribofuranose     | `β-D-ribofuranose`                      | `C([C@@H]1[C@H]([C@H]([C@@H](O1)O)O)O)O`           |
+| alpha-d-fructofuranose  | `α-D-fructofuranose`                    | `C([C@@H]1[C@H]([C@@H]([C@@](O1)(CO)O)O)O)O`       |
+| beta-d-fructofuranose   | `β-D-fructofuranose`                    | `C([C@@H]1[C@H]([C@@H]([C@](O1)(CO)O)O)O)O`        |
+| l-histidine-opsin       | `L-histidine`                           | `N[C@@H](CC1=CNC=N1)C(=O)O`                        |
+| l-arginine-opsin        | `L-arginine`                            | `N[C@@H](CCCNC(N)=N)C(=O)O`                        |
+| cytosine-opsin          | `cytosine`                              | `N1C(=O)N=C(N)C=C1`                                |
+
 ## Validation
 
 `catalog_identity_is_order_invariant_without_relaxing_stereo_charge_or_isotopes`
 checks order/map invariance, separate S/R/unspecified and E/Z entries, and
 missing isotope/charge/uncatalogued variants.
 `every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph`
-checks each source token and strict native parser reconstruction of every
-complete OPSIN alias. The ChEBI optical alias uses its explicit S normalization;
-the application's retained-name tests cover that complete import path.
+checks every exact source token and strict native parser reconstruction of
+every complete OPSIN alias, with success status and no warnings. The ChEBI
+optical alias uses its explicit S normalization; the application's retained-name
+tests cover that complete import path.
 
-Initialization is bounded to 64 KiB, 40 identities and five aliases per identity.
-The shipping data is smaller. All graphs pass the existing 512-atom naming
-identity preflight. The catalog has no mutable external resource or network
-fallback. Adding records requires explicit graph, provenance/license review
-and these reconstruction tests.
+`catalog_provenance_pins_the_shipping_data_and_all_cited_resources` checks
+catalog counts, the data checksum, the active OPSIN pin and fingerprint, every
+cited resource hash, and the two reference-asset hashes.
+`biochemical_aliases_match_the_exact_template_and_haworth_asset_graphs` requires
+coverage of every selected asset graph.
+`biochemical_aliases_keep_configuration_and_purine_tautomers_distinct` checks
+that L-alanine aliases do not reach D, unspecified or zwitterionic alanine,
+that 9H/7H adenine and guanine remain separate, and that α/β-D-glucopyranose
+and unspecified anomeric configuration remain separate.
+`biochemical_plain_opsin_defaults_keep_template_tautomers_distinct` checks
+strict parser reconstruction and exact alias coverage of the three plain-name
+default graphs, keeps their frozen template tautomers and aliases separate,
+and rejects opposite or unspecified amino-acid configuration and zwitterionic
+protonation.
 
-Both catalog regressions passed in the 26-test v2 naming-library suite. Catalog,
-parser and identity source remained unchanged for the v3 Details-control
-revision; its 28 app tests and five explicit renderer tests passed separately.
-Qualified macOS native checks and independent saved-file audits verified the
-ethanol and S-lactic graphs and linked alias captions. Final v3 also verified
-R/unspecified/no-alias Details results without inserting those graphs. This
-follow-up is merged, unreleased, in [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309). See the
-[review and compact identity audit](../../../docs/changes/offline-name-synonyms.md)
-for the exact producers, capture conditions, history attribution and limits.
+Initialization is bounded to 64 KiB, 128 identities and five aliases per
+identity. The shipping data is smaller. All graphs pass the existing 512-atom
+naming identity preflight. The catalog has no mutable external resource or
+network fallback. Adding records requires an explicit graph, provenance/license
+review and these reconstruction tests.

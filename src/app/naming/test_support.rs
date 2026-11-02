@@ -20,6 +20,7 @@ pub(super) fn record(smiles: &str) -> Record {
         canonical_smiles: naming::canonical_smiles(smiles).unwrap(),
         smiles: smiles.into(),
         synonyms: vec![],
+        alternative_names: vec![],
         warnings: vec![],
         provenance: Provenance::Openclatura,
     }

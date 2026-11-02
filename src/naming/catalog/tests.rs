@@ -41,48 +41,19 @@ fn catalog_identity_is_order_invariant_without_relaxing_stereo_charge_or_isotope
 fn every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph()
 -> Result<(), String> {
     let data: Catalog = serde_json::from_str(DATA).unwrap();
-    assert_eq!(data.entries.len(), 30);
+    assert_eq!(data.entries.len(), 70);
     assert_eq!(
         data.entries
             .iter()
             .map(|entry| entry.aliases.len())
             .sum::<usize>(),
-        40
+        82
     );
     let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
     for entry in &data.entries {
         for alias in &entry.aliases {
             for evidence in &alias.evidence {
-                let xml = match evidence.file.as_str() {
-                    "alkanes.xml" => {
-                        include_str!("../../../crates/opsin/resources/xml/alkanes.xml")
-                    }
-                    "arylGroups.xml" => {
-                        include_str!("../../../crates/opsin/resources/xml/arylGroups.xml")
-                    }
-                    "carboxylicAcids.xml" => {
-                        include_str!("../../../crates/opsin/resources/xml/carboxylicAcids.xml")
-                    }
-                    "functionalTerms.xml" => {
-                        include_str!("../../../crates/opsin/resources/xml/functionalTerms.xml")
-                    }
-                    "groupStemsAllowingInlineSuffixes.xml" => include_str!(
-                        "../../../crates/opsin/resources/xml/groupStemsAllowingInlineSuffixes.xml"
-                    ),
-                    "inlineSuffixes.xml" => {
-                        include_str!("../../../crates/opsin/resources/xml/inlineSuffixes.xml")
-                    }
-                    "simpleCyclicGroups.xml" => {
-                        include_str!("../../../crates/opsin/resources/xml/simpleCyclicGroups.xml")
-                    }
-                    "simpleGroups.xml" => {
-                        include_str!("../../../crates/opsin/resources/xml/simpleGroups.xml")
-                    }
-                    "suffixes.xml" => {
-                        include_str!("../../../crates/opsin/resources/xml/suffixes.xml")
-                    }
-                    _ => panic!("Unpinned resource {}", evidence.file),
-                };
+                let xml = pinned_resource(&evidence.file);
                 let resource = roxmltree::Document::parse_with_options(
                     xml,
                     roxmltree::ParsingOptions {
@@ -142,6 +113,238 @@ fn every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph(
                 }
             );
         }
+    }
+    Ok(())
+}
+
+fn pinned_resource(file: &str) -> &'static str {
+    match file {
+        "alkanes.xml" => include_str!("../../../crates/opsin/resources/xml/alkanes.xml"),
+        "aminoAcids.xml" => include_str!("../../../crates/opsin/resources/xml/aminoAcids.xml"),
+        "arylSubstituents.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/arylSubstituents.xml")
+        }
+        "arylGroups.xml" => include_str!("../../../crates/opsin/resources/xml/arylGroups.xml"),
+        "carbohydrateSuffixes.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/carbohydrateSuffixes.xml")
+        }
+        "carbohydrates.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/carbohydrates.xml")
+        }
+        "carboxylicAcids.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/carboxylicAcids.xml")
+        }
+        "functionalTerms.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/functionalTerms.xml")
+        }
+        "groupStemsAllowingInlineSuffixes.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/groupStemsAllowingInlineSuffixes.xml")
+        }
+        "inlineSuffixes.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/inlineSuffixes.xml")
+        }
+        "miscTokens.xml" => include_str!("../../../crates/opsin/resources/xml/miscTokens.xml"),
+        "multipliers.xml" => include_str!("../../../crates/opsin/resources/xml/multipliers.xml"),
+        "simpleCyclicGroups.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/simpleCyclicGroups.xml")
+        }
+        "simpleGroups.xml" => include_str!("../../../crates/opsin/resources/xml/simpleGroups.xml"),
+        "simpleSubstituents.xml" => {
+            include_str!("../../../crates/opsin/resources/xml/simpleSubstituents.xml")
+        }
+        "suffixes.xml" => include_str!("../../../crates/opsin/resources/xml/suffixes.xml"),
+        "unsaturators.xml" => include_str!("../../../crates/opsin/resources/xml/unsaturators.xml"),
+        _ => panic!("Unpinned resource {file}"),
+    }
+}
+
+#[test]
+fn catalog_provenance_pins_the_shipping_data_and_all_cited_resources() {
+    use sha2::{Digest, Sha256};
+
+    let sha256 = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+    let provenance: serde_json::Value =
+        serde_json::from_str(include_str!("provenance.json")).unwrap();
+    let data: Catalog = serde_json::from_str(DATA).unwrap();
+    assert_eq!(provenance["entry_count"], data.entries.len());
+    assert_eq!(
+        provenance["alias_count"],
+        data.entries
+            .iter()
+            .map(|entry| entry.aliases.len())
+            .sum::<usize>()
+    );
+    assert_eq!(provenance["data_sha256"], sha256(DATA.as_bytes()));
+    assert_eq!(provenance["opsin"]["version"], opsin::UPSTREAM_VERSION);
+    assert_eq!(provenance["opsin"]["commit"], opsin::UPSTREAM_COMMIT);
+    assert_eq!(
+        provenance["opsin"]["resource_fingerprint"],
+        opsin::RESOURCE_FINGERPRINT
+    );
+    let resources = provenance["opsin"]["resources"].as_array().unwrap();
+    for resource in resources {
+        let file = resource["path"]
+            .as_str()
+            .unwrap()
+            .rsplit('/')
+            .next()
+            .unwrap();
+        assert_eq!(
+            resource["sha256"],
+            sha256(pinned_resource(file).as_bytes()),
+            "{file}"
+        );
+    }
+    for entry in &data.entries {
+        for alias in &entry.aliases {
+            assert!(alias.source != Source::Opsin || !alias.evidence.is_empty());
+            for evidence in &alias.evidence {
+                assert!(
+                    resources.iter().any(|resource| {
+                        resource["path"].as_str().unwrap().rsplit('/').next()
+                            == Some(evidence.file.as_str())
+                    }),
+                    "Unhashed evidence file {}",
+                    evidence.file
+                );
+            }
+        }
+    }
+    for (path, content) in [
+        (
+            "assets/template-catalog.json",
+            include_str!("../../../assets/template-catalog.json"),
+        ),
+        (
+            "assets/haworth-sugars.json",
+            include_str!("../../../assets/haworth-sugars.json"),
+        ),
+    ] {
+        let reference = provenance["reference_graphs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|reference| reference["path"] == path)
+            .unwrap();
+        assert_eq!(reference["sha256"], sha256(content.as_bytes()), "{path}");
+    }
+}
+
+#[test]
+fn biochemical_aliases_match_the_exact_template_and_haworth_asset_graphs() -> Result<(), String> {
+    let templates: serde_json::Value =
+        serde_json::from_str(include_str!("../../../assets/template-catalog.json")).unwrap();
+    let sugars: serde_json::Value =
+        serde_json::from_str(include_str!("../../../assets/haworth-sugars.json")).unwrap();
+    let templates: Vec<_> = templates
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["group"] == "Amino acids" || entry["group"] == "Nucleobases")
+        .collect();
+    assert_eq!(templates.len(), 25);
+    assert_eq!(sugars.as_array().unwrap().len(), 10);
+    for entry in templates.into_iter().chain(sugars.as_array().unwrap()) {
+        let asset_name = entry["name"].as_str().unwrap();
+        let alias = match asset_name {
+            "Adenine (9H)" => "9H-adenine",
+            "Guanine (9H)" => "9H-guanine",
+            "Cytosine" => "3H-cytosine",
+            "L-Histidine" => "3-(1H-imidazol-5-yl)-L-alanine",
+            "L-Arginine" => "N(5)-(diaminomethylidene)-L-ornithine",
+            _ => asset_name,
+        };
+        let smiles = entry["tautomer_smiles"]
+            .as_str()
+            .or_else(|| entry["smiles"].as_str())
+            .unwrap();
+        let found = names(smiles)?;
+        assert!(
+            found.iter().any(|name| name.eq_ignore_ascii_case(alias)),
+            "{asset_name}: {found:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn biochemical_aliases_keep_configuration_and_purine_tautomers_distinct() -> Result<(), String> {
+    assert_eq!(names("C[C@@H](C(=O)O)N")?, ["L-alanine"]);
+    assert_eq!(names("N[C@@H](C)C(=O)O")?, ["L-alanine"]);
+    assert!(names("C[C@H](C(=O)O)N")?.is_empty());
+    assert!(names("CC(C(=O)O)N")?.is_empty());
+    assert!(names("C[C@@H](C(=O)[O-])[NH3+]")?.is_empty());
+    assert_eq!(names("Nc1ncnc2[nH]cnc12")?, ["9H-adenine"]);
+    assert_eq!(names("C1=NC2=NC=NC(=C2N1)N")?, ["adenine", "7H-adenine"]);
+    assert_eq!(names("Nc1nc2[nH]cnc2c(=O)[nH]1")?, ["9H-guanine"]);
+    assert_eq!(
+        names("C1=NC2=C(N1)C(=O)NC(=N2)N")?,
+        ["guanine", "7H-guanine"]
+    );
+    let alpha = "C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O";
+    let beta = "C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O";
+    assert_eq!(names(alpha)?, ["α-D-glucopyranose"]);
+    assert_eq!(names(beta)?, ["β-D-glucopyranose"]);
+    assert_ne!(canonical_smiles(alpha)?, canonical_smiles(beta)?);
+    assert!(names("C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O")?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn biochemical_plain_opsin_defaults_keep_template_tautomers_distinct() -> Result<(), String> {
+    let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+    for (name, independent_graph, template_graph, template_alias) in [
+        (
+            "cytosine",
+            "N1C(=O)N=C(N)C=C1",
+            "C1=C(NC(=O)N=C1)N",
+            "3H-cytosine",
+        ),
+        (
+            "L-histidine",
+            "N[C@@H](CC1=CNC=N1)C(=O)O",
+            "C1=C(NC=N1)C[C@@H](C(=O)O)N",
+            "3-(1H-imidazol-5-yl)-L-alanine",
+        ),
+        (
+            "L-arginine",
+            "N[C@@H](CCCNC(N)=N)C(=O)O",
+            "C(C[C@@H](C(=O)O)N)CN=C(N)N",
+            "N(5)-(diaminomethylidene)-L-ornithine",
+        ),
+    ] {
+        let result = parser.parse(name, &opsin::ParseOptions::strict());
+        assert_eq!(
+            result.status,
+            opsin::Status::Success,
+            "{name}: {}",
+            result.message
+        );
+        assert!(result.warnings.is_empty(), "{name}: {:?}", result.warnings);
+        let actual = result
+            .structure
+            .ok_or("Missing biochemical default graph")?
+            .semantic_cxsmiles()
+            .map_err(|error| error.to_string())?;
+        super::super::verify_identity(independent_graph, &actual)?;
+        assert_eq!(names(independent_graph)?, [name]);
+        assert_eq!(names(&actual)?, [name]);
+        assert_eq!(names(template_graph)?, [template_alias]);
+        assert_ne!(
+            canonical_smiles(independent_graph)?,
+            canonical_smiles(template_graph)?,
+            "Merged the {name} default and template tautomers"
+        );
+    }
+    for absent in [
+        "N[C@H](CC1=CNC=N1)C(=O)O",
+        "NC(CC1=CNC=N1)C(=O)O",
+        "[NH3+][C@@H](CC1=CNC=N1)C(=O)[O-]",
+        "N[C@H](CCCNC(N)=N)C(=O)O",
+        "NC(CCCNC(N)=N)C(=O)O",
+        "[NH3+][C@@H](CCCNC(N)=N)C(=O)[O-]",
+    ] {
+        assert!(names(absent)?.is_empty(), "Assigned an alias to {absent}");
     }
     Ok(())
 }

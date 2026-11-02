@@ -62,7 +62,53 @@ pub(super) fn parse_response(bytes: &[u8], smiles: &str) -> Result<openclatura::
     let name = response.result.map_err(Error::Rejected)?;
     worker::check_name(&name.text, "Local name generation returned an invalid name")
         .map_err(Error::Worker)?;
+    for alternative in &name.alternatives {
+        worker::check_name(
+            alternative,
+            "Local name generation returned an invalid alternative",
+        )
+        .map_err(Error::Worker)?;
+    }
     Ok(name)
+}
+
+async fn reconstruct_name(name: &str, cancel: &super::Cancel) -> Result<Record, Error> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let decoder = super::Cancel::default();
+        tokio::select! {
+            result = super::resolve_name(name, decoder.clone()) => result,
+            () = cancel.cancelled() => {
+                decoder.stop();
+                Err(Error::Cancelled("Local name generation was cancelled".into()))
+            },
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    super::resolve_name(name, cancel.clone())
+        .await
+        .map_err(|error| match error {
+            Error::Cancelled(_) => Error::Cancelled("Local name generation was cancelled".into()),
+            error => error,
+        })
+}
+
+pub(super) async fn verified_alternatives(
+    expected: &str,
+    alternatives: &[String],
+    cancel: &super::Cancel,
+) -> Result<Vec<String>, Error> {
+    let mut verified = vec![];
+    for name in alternatives {
+        match reconstruct_name(name, cancel).await {
+            Ok(record) if super::verify_identity(expected, &record.smiles).is_ok() => {
+                verified.push(name.clone());
+            }
+            Err(error @ Error::Cancelled(_)) => return Err(error),
+            _ => {}
+        }
+    }
+    Ok(verified)
 }
 
 /// A name is returned only after the pinned local decoder exactly reconstructs
@@ -86,21 +132,14 @@ pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record
             "Local name generation was cancelled".into(),
         ));
     }
-    // Use a separate token: resolve_name's drop guard stops its own operation,
-    // while this guard continues to cover cancellation of the whole pipeline.
-    let decoder = Cancel::default();
-    let reconstructed = tokio::select! {
-        result = super::resolve_name(&candidate.text, decoder.clone()) => result?,
-        () = cancel.cancelled() => {
-            decoder.stop();
-            return Err(Error::Cancelled("Local name generation was cancelled".into()));
-        },
-    };
+    let reconstructed = reconstruct_name(&candidate.text, &cancel).await?;
+    let alternatives = verified_alternatives(&expected, &candidate.alternatives, &cancel).await?;
     let record = generated_record(
         identity,
         expected,
         candidate.text,
         candidate.status,
+        alternatives,
         &reconstructed,
     );
     drop(stop);
@@ -114,6 +153,7 @@ pub(super) fn generated_record(
     expected: String,
     candidate: String,
     status: NameStatus,
+    alternative_names: Vec<String>,
     reconstructed: &Record,
 ) -> Result<Record, Error> {
     super::verify_identity(&expected, &reconstructed.smiles)
@@ -127,6 +167,7 @@ pub(super) fn generated_record(
         title: candidate.clone(),
         systematic_name: Some(candidate),
         name_status: Some(status),
+        alternative_names,
         smiles: expected.clone(),
         canonical_smiles: expected,
         synonyms: super::aliases_for_smiles(&reconstructed.smiles).map_err(Error::Worker)?,

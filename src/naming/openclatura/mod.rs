@@ -37,6 +37,7 @@ mod numbering;
 mod parent_pipeline;
 mod parent_selection;
 mod perception;
+mod phane;
 mod polycycle_topology;
 mod principal_groups;
 mod principal_suffixes;
@@ -65,6 +66,8 @@ pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
 pub(super) struct Name {
     pub text: String,
     pub status: crate::naming::NameStatus,
+    #[serde(default)]
+    pub alternatives: Vec<String>,
 }
 
 pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
@@ -99,7 +102,19 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
     if components.len() != 1 {
         return Err("openclatura: expected one connected component".into());
     }
-    let text = component_namer::name_component(&mol, &components[0])?;
+    let phane = phane::name(&mol);
+    let text = match component_namer::name_component(&mol, &components[0]) {
+        Ok(text) => text,
+        Err(error) => {
+            return phane.map_or(Err(error), |text| {
+                Ok(Name {
+                    text,
+                    status: crate::naming::NameStatus::Unverified(crate::naming::NameReason::Phane),
+                    alternatives: vec![],
+                })
+            });
+        }
+    };
     if has_multiplicative_pin(&mol) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::Multiplicative,
@@ -111,9 +126,15 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
             crate::naming::NameReason::RingAssembly,
         ));
     }
+    if phane.is_some() {
+        mol.mark_name(crate::naming::NameStatus::NotPreferred(
+            crate::naming::NameReason::Phane,
+        ));
+    }
     Ok(Name {
         text: nest_enclosing_marks(&text),
         status: mol.name_status(),
+        alternatives: phane.into_iter().collect(),
     })
 }
 

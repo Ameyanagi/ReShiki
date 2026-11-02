@@ -40,6 +40,8 @@ pub(crate) async fn run(
                 "status": assessment.get("status"),
                 "reason": assessment.get("reason"),
                 "detail": status.detail(),
+                "aliases": record.synonyms.iter().map(|alias| &alias.name).collect::<Vec<_>>(),
+                "alternatives": record.alternative_names,
             }),
         )]);
         writeln!(out, "{}", labelled(value)).map_err(CliError::Stdout)

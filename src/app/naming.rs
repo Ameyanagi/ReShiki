@@ -87,6 +87,7 @@ pub enum Action {
     DetailsOpen(bool),
     CopyName,
     CopyFormattedName,
+    CopyAlternativeName(usize),
     Caption,
     Alias(AliasAction),
     /// Selects this molecule and opens the Chemical names inspector.
@@ -592,6 +593,14 @@ impl App {
                 }
             }
             Action::Caption => self.insert_name_caption(None),
+            Action::CopyAlternativeName(index) => {
+                if let Some(name) = self
+                    .alias_record(AliasTarget::Structure)
+                    .and_then(|record| record.alternative_names.get(index))
+                {
+                    return iced::clipboard::write(name.clone());
+                }
+            }
             Action::Alias(action) => return self.naming_alias_action(action),
             Action::OpenPanel(atoms) => {
                 // Structure → name works on the selection.

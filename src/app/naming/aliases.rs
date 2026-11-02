@@ -60,7 +60,7 @@ pub enum AliasAction {
 }
 
 impl App {
-    fn alias_record(&self, target: AliasTarget) -> Option<&Record> {
+    pub(super) fn alias_record(&self, target: AliasTarget) -> Option<&Record> {
         if self.tab.naming.pending.is_some() {
             return None;
         }
@@ -246,6 +246,33 @@ impl App {
                 .spacing(4)
                 .wrap(),
             );
+            if !record.alternative_names.is_empty() {
+                let available = self.alias_record(AliasTarget::Structure).is_some();
+                let family = reshiki::style::font_name(&self.tab.doc.drawing_style.font_family);
+                let mut alternatives =
+                    column![section("ALTERNATIVE NAME · PHANE NOMENCLATURE")].spacing(6);
+                for (index, name) in record.alternative_names.iter().enumerate() {
+                    alternatives = alternatives.push(
+                        column![
+                            rich_text(chemical_name_spans(name, 12., family)),
+                            text("Phane name (P-51.4) · preference not verified")
+                                .size(11)
+                                .style(muted_text),
+                            accessible_command(
+                                format!("naming.alternative-copy-{index}"),
+                                format!("Copy phane name {name}"),
+                                "Copy"
+                            )
+                            .on_press_maybe(
+                                available
+                                    .then_some(Message::Naming(Action::CopyAlternativeName(index)))
+                            ),
+                        ]
+                        .spacing(3),
+                    );
+                }
+                content = content.push(alternatives);
+            }
             content = content.push(self.alias_controls(AliasTarget::Structure, record));
         }
         content.into()

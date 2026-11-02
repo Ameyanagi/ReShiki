@@ -1,23 +1,44 @@
 {
   "catalog": "ReShiki retained aliases 1",
   "schema": 1,
-  "entry_count": 30,
-  "alias_count": 40,
-  "data_sha256": "e13c114c52d69a9aad844eca19284c12539187821b29af9a0e7b5e0a6773686a",
+  "entry_count": 70,
+  "alias_count": 82,
+  "data_sha256": "8db090eaff160c08bb02aa5234bcf990f3fccebf8db1259841c2ed7396318243",
   "opsin": {
-    "version": "2.9.0",
-    "commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+    "version": "3.0-SNAPSHOT",
+    "commit": "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91",
     "license": "MIT",
     "copyright": "2017 Daniel Lowe",
-    "resource_fingerprint": "4269b61bf110f01d9fab808a13bac1aa4e29ec34800a7ff7cac5925d3774b9a4",
+    "resource_fingerprint": "bc977c95bd647cd90048215a2a82baa7d173c5373991ebc01690a0fe4137b062",
+    "initial_selection": {
+      "version": "2.9.0",
+      "commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+      "resource_fingerprint": "4269b61bf110f01d9fab808a13bac1aa4e29ec34800a7ff7cac5925d3774b9a4"
+    },
     "resources": [
       {
         "path": "crates/opsin/resources/xml/alkanes.xml",
         "sha256": "2b047195ac805959da5410d3b96f896abb98ec51e502714f8cb6dbed08241fb8"
       },
       {
+        "path": "crates/opsin/resources/xml/aminoAcids.xml",
+        "sha256": "2829fc6ba1562f090f38c2f89488255fc6d0a709251a502005759121462880fd"
+      },
+      {
         "path": "crates/opsin/resources/xml/arylGroups.xml",
-        "sha256": "f6fff80ed347fde1d499aa7145b39387c38b8b8845992f27321123a7778a21db"
+        "sha256": "16b7b7c03673499fcfd6ee0bee17c7bd1583224cebf2fd9e409e6610e840a7e8"
+      },
+      {
+        "path": "crates/opsin/resources/xml/arylSubstituents.xml",
+        "sha256": "a6c26a40a518e770d5bd443d6f705c9d98bf78c302b0dacc2f7a94795d0e412f"
+      },
+      {
+        "path": "crates/opsin/resources/xml/carbohydrateSuffixes.xml",
+        "sha256": "8f6a0d37c0b2cc608a416fd6557937c6538326eaa9263c8eb2285093769c3df5"
+      },
+      {
+        "path": "crates/opsin/resources/xml/carbohydrates.xml",
+        "sha256": "7d015e7f3480f4f84612251bb5a6f0734253cf7ed4d383983f97637ac897d86d"
       },
       {
         "path": "crates/opsin/resources/xml/carboxylicAcids.xml",
@@ -25,7 +46,7 @@
       },
       {
         "path": "crates/opsin/resources/xml/functionalTerms.xml",
-        "sha256": "c2982e6d2e3ba12e6c1898367f86466fc5c6716f53b48f971fc55b3a2df087b3"
+        "sha256": "1aff14ca9925c609780c50e82d8c6b4b555848155504972c96a5c50ab1451257"
       },
       {
         "path": "crates/opsin/resources/xml/groupStemsAllowingInlineSuffixes.xml",
@@ -36,16 +57,32 @@
         "sha256": "9d5ce3bc345dd15ed6a8be0a6b46a22007b1801c190519164f45369eb0c37a9c"
       },
       {
+        "path": "crates/opsin/resources/xml/miscTokens.xml",
+        "sha256": "c46a740d8d94b45a07aa1327891183430809809ed119b86fed8e374967649709"
+      },
+      {
+        "path": "crates/opsin/resources/xml/multipliers.xml",
+        "sha256": "c2401556d2111cf7dbd94a2e6d6ec5dc96bdee999373a892bbdd08d62e62ed12"
+      },
+      {
         "path": "crates/opsin/resources/xml/simpleCyclicGroups.xml",
         "sha256": "9d2529668f7c1e59ba3d0b2ac276b4b9f11f31467f26295362729aec608e586d"
       },
       {
         "path": "crates/opsin/resources/xml/simpleGroups.xml",
-        "sha256": "c9edef1f9d068c7591e3d72038e40e186e81d693bd62452702548e04bb3d6ff5"
+        "sha256": "1c776c51de9fe2e2114042e1ee4fc7afe8906b685346d88c2a94c33fd106bd61"
+      },
+      {
+        "path": "crates/opsin/resources/xml/simpleSubstituents.xml",
+        "sha256": "41348a77f2135ad2047f836b52ca2c5db983bcb26c44e04e1694818d24066876"
       },
       {
         "path": "crates/opsin/resources/xml/suffixes.xml",
-        "sha256": "99a599e58c3dd6c244fa4d8f27ba4583d07ccc943d4a62b3a6cc9855e59ecd82"
+        "sha256": "6a76924255cceee29e99917d5808c4ae904d071243cf367d387f977992634b08"
+      },
+      {
+        "path": "crates/opsin/resources/xml/unsaturators.xml",
+        "sha256": "d528b967c52d64a434563dc237d0a28e0784d1916784772381fe545c9bdf6bc1"
       }
     ]
   },
@@ -64,7 +101,23 @@
   "adaptations": [
     "Finite selected OPSIN retained names and complete functional-class names; per-alias source token references remain in data.json.",
     "Independent explicit graphs index complete names; catalog order defines stable display order.",
-    "One existing ChEBI retained (+)-lactic acid equivalence is selected; no other optical signs are inferred."
+    "One existing ChEBI retained (+)-lactic acid equivalence is selected; no other optical signs are inferred.",
+    "Twenty amino-acid template identities, five usual nucleobase identities and ten Haworth sugar identities use the frozen asset SMILES (tautomer_smiles when specified).",
+    "The separate frozen 7H adenine and guanine graphs retain plain OPSIN names, whose bundled tokens encode 7H; explicit 9H and 7H aliases never relax tautomer identity.",
+    "Amino-acid D/L and sugar anomer/absolute configuration are matched exactly; unspecified and opposite configurations are not inferred.",
+    "Template UI title case is normalized to conventional biochemical lowercase stems; L- prefixes and Greek sugar spelling remain explicit.",
+    "Frozen cytosine uses 3H-cytosine. Frozen histidine has the opposite imidazole N-H tautomer to OPSIN histidine and uses 3-(1H-imidazol-5-yl)-L-alanine. Frozen arginine has the chain-imino guanidine tautomer and uses N(5)-(diaminomethylidene)-L-ornithine. These template graphs and aliases remain separate from plain OPSIN defaults.",
+    "Three independent explicit graphs additionally index the strict bundled OPSIN defaults for L-histidine, L-arginine and cytosine. Each plain alias must reconstruct its own exact graph; no tautomer, stereochemistry or protonation relaxation is used."
   ],
-  "validation_status": "Authored regression tests; runtime validation pending the assigned Cargo lane."
+  "validation_status": "Strict native OPSIN reconstruction, pinned resource and asset hashes, and exact biochemical graph regressions are enforced by the catalog library tests.",
+  "reference_graphs": [
+    {
+      "path": "assets/template-catalog.json",
+      "sha256": "eb7ad684eb754bdd4a41d5281d0b1f46c86f568d85e99481edff251f1bba4744"
+    },
+    {
+      "path": "assets/haworth-sugars.json",
+      "sha256": "e48b6b997f4b52bdee24ca9cba41ffed63b4cc49f363830917f7e90ec1ce1016"
+    }
+  ]
 }

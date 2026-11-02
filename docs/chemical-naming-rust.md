@@ -168,6 +168,23 @@ under the same worker limits as parsing, so a very large ring system can time
 out. Comprehensive IUPAC coverage is not claimed. Unspecified stereo remains
 unspecified.
 
+Cyclic phanes can also have an alternative name, such as
+`1,4(1,3)-dibenzenacyclohexaphane`. This first implementation supports benzene,
+pyridine, furan and thiophene amplificants joined by saturated carbon, O, S or
+NH linkers, when collapsing the amplificants leaves one simple ring of at least
+six nodes and no amplificant is attached through adjacent atoms (that makes a
+fused system, P-52.2.5.2.1). It declines
+substituents, charges, isotopes, stereo, unsaturated linkers and additional ring
+topology. Each alternative is independently parsed by strict OPSIN and appears
+only if it reconstructs the exact graph. The inspector offers a Copy button,
+and `name --json` includes the names in `value.alternatives`. If ordinary naming
+fails, a qualifying phane name can supply the main name instead. A cyclophane
+needs at least six nodes, two or more rings and a mancude ring, and its
+preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). An ordinary name
+with a phane alternative is therefore marked not preferred, and the phane name
+itself is marked unverified until its numbering is checked. Phane names are
+separate from curated aliases.
+
 ### Preferred IUPAC name status
 
 Every generated name carries a status that says how it relates to the
@@ -365,17 +382,21 @@ convention, so an older reader may save the caption as ordinary text.
 
 ### Alias catalog
 
-The bundled catalog contains 40 retained or functional-class names for 30
-identities, including `ethyl alcohol` for ethanol. Each alias displays its
+The bundled catalog contains 82 retained or functional-class names for 70
+identities, including amino acids, explicit sugar anomers and nucleobase
+tautomers, as well as `ethyl alcohol` for ethanol. Each alias displays its
 source, version, record and license. The
 [complete catalog and provenance](../src/naming/catalog/README.md) record the
 selected OPSIN data (MIT license) and one ChEBI equivalence (CC BY 4.0). The S,
-R and unspecified lactic acid graphs have separate entries. Neither charge nor
+R and unspecified lactic acid graphs have separate entries. Biochemical names
+retain exact stereochemistry and tautomers; qualified names distinguish asset
+tautomers that OPSIN's plain names do not reconstruct. Neither charge nor
 isotope variants inherit the neutral, unlabeled alias. Reaction map labels do
 not change chemical identity. Looking up aliases needs no network connection,
 Java, Python or other program. **Resolve name** is disabled while parsing and
 for empty input. Changing preview chemistry prevents using aliases from the
 original graph. After chemistry changes, generate a new name before using it.
+The `name --json` CLI output includes the matched names in `value.aliases`.
 
 ### Records
 

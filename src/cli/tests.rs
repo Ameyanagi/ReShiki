@@ -772,13 +772,38 @@ async fn name_prints_one_plain_name_without_a_banner() {
 async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
     use crate::naming::{NameReason, NameStatus};
 
-    for (smiles, expected, status, reason) in [
-        ("CCO", "ethanol", NameStatus::Preferred, Value::Null),
+    for (smiles, expected, status, reason, aliases, alternatives) in [
+        (
+            "CCO",
+            "ethanol",
+            NameStatus::Preferred,
+            Value::Null,
+            json!(["ethanol", "ethyl alcohol"]),
+            json!([]),
+        ),
         (
             "CC(=NN)C",
             "propan-2-one hydrazone",
             NameStatus::NotPreferred(NameReason::FunctionalClass),
             json!("functional_class"),
+            json!([]),
+            json!([]),
+        ),
+        (
+            "C1Cc2ccc(cc2)CCc2ccc1cc2",
+            "1,4(1,4)-dibenzenacyclohexaphane",
+            NameStatus::Unverified(NameReason::Phane),
+            json!("phane"),
+            json!([]),
+            json!([]),
+        ),
+        (
+            "C1Cc2cccc(c2)CCc2cccc1c2",
+            "tricyclo[9.3.1.1^{4,8}]hexadeca-1(15),4(16),5,7,11,13-hexaene",
+            NameStatus::NotPreferred(NameReason::Phane),
+            json!("phane"),
+            json!([]),
+            json!(["1,4(1,3)-dibenzenacyclohexaphane"]),
         ),
     ] {
         let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
@@ -801,12 +826,28 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
         );
         assert_eq!(value["reason"], reason, "{smiles}");
         assert_eq!(value["detail"], status.detail(), "{smiles}");
+        assert_eq!(value["aliases"], aliases, "{smiles}");
+        assert_eq!(value["alternatives"], alternatives, "{smiles}");
         assert_eq!(result["experimental"], true);
         assert_eq!(result["api"]["stability"], "experimental");
         assert_eq!(
             result["api"]["operation_api"],
             crate::envelope::OPERATION_API_VERSION
         );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_json_keeps_biochemical_aliases_stereospecific() {
+    for (smiles, aliases) in [
+        ("N[C@@H](C)C(=O)O", json!(["L-alanine"])),
+        ("N[C@H](C)C(=O)O", json!([])),
+        ("NC(C)C(=O)O", json!([])),
+    ] {
+        let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
+        assert_eq!(code, SUCCESS, "{smiles}: {err}");
+        let result: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(result["value"]["aliases"], aliases, "{smiles}");
     }
 }
 

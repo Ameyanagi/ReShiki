@@ -573,6 +573,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::DetailsOpen(..)
                 | Action::CopyName
                 | Action::CopyFormattedName
+                | Action::CopyAlternativeName(..)
                 | Action::Caption
                 | Action::Alias(..)
                 | Action::OpenPanel(..)

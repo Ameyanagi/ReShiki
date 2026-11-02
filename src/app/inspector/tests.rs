@@ -379,6 +379,67 @@ async fn calculate(app: &mut App) {
 }
 
 #[tokio::test]
+async fn molecular_classes_expose_pyroglutamate_and_cache_by_property_scope() {
+    let (mut app, _) = App::new();
+    let result = app
+        .engine
+        .execute(Request::import_smiles("COC(=O)[C@@H]1CCC(=O)N1"))
+        .await
+        .unwrap();
+    app.tab.doc = result.document.unwrap();
+    app.tab.analysis = result.analysis;
+    let before = app.tab.doc.clone();
+    let terms = |app: &App| {
+        app.property_classes()
+            .into_iter()
+            .map(|class| class.term)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(terms(&app), ["lactam", "amide", "ester"]);
+    assert_eq!(terms(&app), ["lactam", "amide", "ester"]);
+    assert_eq!(app.tab.inspector_ui.classes.borrow().calculations, 1);
+
+    app.tab.revision += 1;
+    app.tab.inspector_ui.advance_revision(
+        app.tab.file_epoch,
+        app.tab.revision - 1,
+        app.tab.revision,
+    );
+    assert_eq!(terms(&app), ["lactam", "amide", "ester"]);
+    assert_eq!(app.tab.inspector_ui.classes.borrow().calculations, 1);
+
+    app.tab.selected = vec![app.tab.doc.atoms[0].id];
+    assert!(
+        terms(&app).is_empty(),
+        "Await the selected fragment's properties"
+    );
+    calculate(&mut app).await;
+    assert!(
+        terms(&app).is_empty(),
+        "A lone carbon has no compound class"
+    );
+    assert_eq!(app.tab.inspector_ui.classes.borrow().calculations, 2);
+    app.tab.selected.clear();
+    assert_eq!(terms(&app), ["lactam", "amide", "ester"]);
+    assert_eq!(app.tab.doc, before);
+
+    let result = app
+        .engine
+        .execute(Request::import_smiles("CCO"))
+        .await
+        .unwrap();
+    app.tab.doc = result.document.unwrap();
+    app.tab.analysis = result.analysis;
+    app.tab.revision += 1;
+    assert_eq!(terms(&app), ["alcohol"]);
+    assert_eq!(app.tab.inspector_ui.classes.borrow().calculations, 4);
+    app.tab.file_epoch += 1;
+    assert_eq!(terms(&app), ["alcohol"]);
+    assert_eq!(app.tab.inspector_ui.classes.borrow().calculations, 5);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
 async fn whole_drawing_properties_are_lazy_cached_and_never_modify_labels() {
     let (mut app, _) = App::new();
     app.tab.doc.add_atom("O", Default::default());

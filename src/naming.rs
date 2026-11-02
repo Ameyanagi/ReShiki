@@ -115,6 +115,7 @@ pub enum NameReason {
     AtomOrder,
     AmineChalcogenide,
     PrincipalGroupTie,
+    Phane,
 }
 impl NameReason {
     pub fn detail(self) -> &'static str {
@@ -170,6 +171,9 @@ impl NameReason {
             Self::PrincipalGroupTie => {
                 "Equally senior principal groups, such as a chain and a ring carboxylic acid, were chosen by atom order; the preferred parent (P-44.1) has not been verified."
             }
+            Self::Phane => {
+                "The structure is a cyclophane: at least six nodes, two or more rings and a mancude ring. Cyclic phane names rank above fused, bridged fused and von Baeyer names, so the preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). ReShiki has not verified the numbering and citation order of its phane name."
+            }
         }
     }
 }
@@ -210,6 +214,8 @@ pub struct Record {
     pub systematic_name: Option<String>,
     /// Only generated names carry a rule-path preference assessment.
     pub name_status: Option<NameStatus>,
+    /// Independently reconstructed alternatives to the generated name.
+    pub alternative_names: Vec<String>,
     pub smiles: String,
     pub canonical_smiles: String,
     /// Curated offline aliases, separate from the generated systematic name.

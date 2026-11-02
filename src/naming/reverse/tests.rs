@@ -7,6 +7,7 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
     let generated = parse_response(&serde_json::to_vec(&reply).unwrap(), "CCO").unwrap();
     assert_eq!(generated.text, "ethanol");
     assert_eq!(generated.status, NameStatus::Preferred);
+    assert!(generated.alternatives.is_empty());
     for (key, value) in [
         ("protocol", json!(worker::PROTOCOL - 1)),
         ("profile", json!("other")),
@@ -33,6 +34,14 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
             json!({"Ok":{"text":"ethanol","status":{"status":"preferred"},"unexpected":true}}),
         ),
         ("result", json!({"Ok":"ethanol"})),
+        (
+            "result",
+            json!({"Ok":{"text":"ethanol","status":{"status":"preferred"},"alternatives":[""]}}),
+        ),
+        (
+            "result",
+            json!({"Ok":{"text":"ethanol","status":{"status":"preferred"},"alternatives":["x".repeat(2049)]}}),
+        ),
     ] {
         let mut bad = reply.clone();
         bad[key] = value;
@@ -47,6 +56,41 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
         parse_response(&serde_json::to_vec(&rejected).unwrap(), "CCO").unwrap_err(),
         Error::Rejected("openclatura: isotopic naming not ported".into())
     );
+}
+
+#[tokio::test]
+async fn alternative_names_require_exact_reconstruction() -> Result<(), String> {
+    let names = ["ethanol", "methanol", "ethanol nonsense", "ethanolate"].map(str::to_owned);
+    assert_eq!(
+        verified_alternatives("CCO", &names, &Cancel::default())
+            .await
+            .map_err(|e| e.to_string())?,
+        ["ethanol"]
+    );
+    for smiles in ["C1Cc2ccc(cc2)CCc2ccc1cc2", "C1Cc2cccc(c2)CCc2cccc1c2"] {
+        let record = generate_name(
+            &Identity {
+                smiles: smiles.into(),
+                warnings: vec![],
+            },
+            Cancel::default(),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        let reason = super::super::NameReason::Phane;
+        if smiles == "C1Cc2cccc(c2)CCc2cccc1c2" {
+            assert_eq!(record.name_status, Some(NameStatus::NotPreferred(reason)));
+            assert_eq!(
+                record.alternative_names,
+                ["1,4(1,3)-dibenzenacyclohexaphane"]
+            );
+        } else {
+            assert_eq!(record.name_status, Some(NameStatus::Unverified(reason)));
+            assert_eq!(record.title, "1,4(1,4)-dibenzenacyclohexaphane");
+            assert!(record.alternative_names.is_empty());
+        }
+    }
+    Ok(())
 }
 
 #[test]

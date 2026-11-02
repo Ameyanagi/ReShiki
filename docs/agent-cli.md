@@ -343,8 +343,9 @@ $ reshiki --cli name --smiles 'CCC#N'
 propanenitrile
 ```
 
-`--json` prints one JSON line with the name and its
-[preferred IUPAC name status](chemical-naming-rust.md#preferred-iupac-name-status).
+`--json` prints one JSON line with the name, its
+[preferred IUPAC name status](chemical-naming-rust.md#preferred-iupac-name-status)
+and any alternative generated names and curated aliases matching the exact isomeric graph.
 This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 
 ```json
@@ -355,6 +356,8 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
   },
   "experimental": true,
   "value": {
+    "aliases": [],
+    "alternatives": [],
     "detail": "Uses a functional-class form such as a hydrazone, a chiral sulfoxide, a mixed chalcogen peroxide or a phosphane oxide with halide or alkoxy ligands; preferred IUPAC names use substitutive or acid-derived forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane, [(phenylselanyl)tellanyl]benzene or dimethylphosphinic fluoride (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2, P-68.3.2.3.1).",
     "name": "propan-2-one hydrazone",
     "preferred": false,
@@ -364,13 +367,15 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 }
 ```
 
-| Field       | Meaning                                                                                                    |
-| ----------- | ---------------------------------------------------------------------------------------------------------- |
-| `name`      | The name, exactly as plain output prints it                                                                |
-| `preferred` | `true` only when `status` is `preferred`                                                                   |
-| `status`    | `preferred`, `not_preferred` (known not to be the preferred IUPAC name) or `unverified`                    |
-| `reason`    | The rule family behind `not_preferred` or `unverified`, such as `functional_class`; `null` for `preferred` |
-| `detail`    | One sentence that explains the status                                                                      |
+| Field          | Meaning                                                                                                    |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| `name`         | The name, exactly as plain output prints it                                                                |
+| `preferred`    | `true` only when `status` is `preferred`                                                                   |
+| `status`       | `preferred`, `not_preferred` (known not to be the preferred IUPAC name) or `unverified`                    |
+| `reason`       | The rule family behind `not_preferred` or `unverified`, such as `functional_class`; `null` for `preferred` |
+| `detail`       | One sentence that explains the status                                                                      |
+| `aliases`      | Curated alias names for this exact graph; an empty array when no catalog entry matches                     |
+| `alternatives` | Other generated names independently reconstructed to this exact graph; otherwise an empty array            |
 
 ## info
 
