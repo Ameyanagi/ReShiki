@@ -255,6 +255,16 @@ impl<'a> StereochemistryHandler<'a> {
         Ok(())
     }
     fn apply_global_rac_or_rel(&mut self, id: NodeId, kind: StereoGroupType) -> Result {
+        // Stereo groups hold atom parities only; an absolute axis must not
+        // silently stand in for a racemic or relative one.
+        if self
+            .graph()
+            .bonds
+            .iter()
+            .any(|bond| bond.active && bond.axial_stereo.is_some())
+        {
+            return stereo("rac- or rel- axial stereochemistry is not currently interpretable");
+        }
         let mut word = self.arena[id].parent;
         while word.is_some_and(|w| self.arena[w].name != WORD_EL) {
             word = self.arena[word.unwrap()].parent

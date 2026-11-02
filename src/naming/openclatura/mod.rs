@@ -97,6 +97,10 @@ pub(super) fn name_smiles_with_style(
     style: crate::naming::IsotopeStyle,
 ) -> Result<Name, String> {
     let mut name = name_routes(smiles, style)?;
+    // A radical-ion name is verified through its neutral parent only.
+    if name.verification.is_some() {
+        return Ok(name);
+    }
     // P-93.5.7.1: the general name cites each M/P axis as Ra/Sa.
     let general: Vec<_> = std::iter::once(&name.text)
         .chain(
@@ -131,9 +135,11 @@ fn general_axial_name(text: &str) -> Option<String> {
     while let Some(open) = rest.find('(') {
         out.push_str(&rest[..=open]);
         rest = &rest[open + 1..];
+        // A stereodescriptor group is followed by a hyphen; a nuclide group
+        // such as (31P) is not.
         let Some(close) = rest
             .find(['(', ')'])
-            .filter(|&i| rest[i..].starts_with(')'))
+            .filter(|&i| rest[i..].starts_with(")-"))
         else {
             continue;
         };
@@ -507,6 +513,20 @@ fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
 mod tests {
     use super::{name_smiles, nest_enclosing_marks};
     use std::io::Write;
+
+    #[test]
+    fn axial_general_names_leave_nuclide_groups_alone() {
+        assert_eq!(
+            super::general_axial_name("(31P)phosphanium (2M)-2-(2-hydroxyphenyl)benzen-1-olate")
+                .as_deref(),
+            Some("(31P)phosphanium (2Ra)-2-(2-hydroxyphenyl)benzen-1-olate")
+        );
+        assert_eq!(super::general_axial_name("(31P)phosphane"), None);
+        assert_eq!(
+            super::general_axial_name("4-[(1P,2R)-x]-(3M)-y").as_deref(),
+            Some("4-[(1Sa,2R)-x]-(3Ra)-y")
+        );
+    }
 
     #[test]
     fn axial_general_alternatives_cover_ordinary_unknown_isotope_and_salt_paths() {

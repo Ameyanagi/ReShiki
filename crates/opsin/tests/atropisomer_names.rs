@@ -225,6 +225,9 @@ fn axis_requires_a_locant_an_aryl_link_and_distinct_ligands() {
         "(1M,1M)-[1,1'-binaphthalene]-2,2'-diol",
         "(1M,1P)-[1,1'-binaphthalene]-2,2'-diol",
         "(1M,1'P)-[1,1'-binaphthalene]-2,2'-diol",
+        "rac-(1M)-[1,1'-binaphthalene]-2,2'-diol",
+        "rel-(1M)-[1,1'-binaphthalene]-2,2'-diol",
+        "(rac)-(1M)-[1,1'-binaphthalene]-2,2'-diol",
     ] {
         let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
         assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
