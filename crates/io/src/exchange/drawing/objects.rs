@@ -52,19 +52,40 @@ impl Writer<'_> {
             let start = P::from(a.start);
             let end = P::from(a.end);
             let cubic = a.cubic.map(|[a, b]| [P::from(a), P::from(b)]);
-            let control = a.control.map(P::from).or_else(|| {
-                if cubic.is_some() {
-                    return None;
-                }
-                matches!(a.kind.as_str(), "curved" | "fishhook" | "bent").then_some(P {
-                    x: (start.x + end.x - end.y + start.y) / 2.,
-                    y: (start.y + end.y + end.x - start.x) / 2.,
+            let control = a
+                .control
+                .map(P::from)
+                .filter(|p| {
+                    if a.kind != "retro" {
+                        return true;
+                    }
+                    let dx = end.x - start.x;
+                    let dy = end.y - start.y;
+                    let length = dx * dx + dy * dy;
+                    let t = if length > 0. {
+                        ((p.x - start.x) * dx + (p.y - start.y) * dy) / length
+                    } else {
+                        0.
+                    }
+                    .clamp(0., 1.);
+                    (p.x - start.x - t * dx).hypot(p.y - start.y - t * dy) > 0.001
                 })
-            });
+                .or_else(|| {
+                    if cubic.is_some() {
+                        return None;
+                    }
+                    matches!(a.kind.as_str(), "curved" | "fishhook" | "bent").then_some(P {
+                        x: (start.x + end.x - end.y + start.y) / 2.,
+                        y: (start.y + end.y + end.x - start.x) / 2.,
+                    })
+                });
             let curved = control.is_some() || cubic.is_some();
-            if s.pattern == LinePattern::Dotted || a.kind == "retro" {
+            if s.pattern == LinePattern::Dotted {
+                return Err(invalid("Dotted arrows require native or image export"));
+            }
+            if a.kind == "retro" && curved {
                 return Err(invalid(
-                    "Dotted and retrosynthesis arrows require native or image export",
+                    "Curved retrosynthesis arrows require native or image export",
                 ));
             }
             if a.kind == "equilibrium" && (curved || s.equilibrium_ratio != 1.) {
@@ -141,7 +162,7 @@ impl Writer<'_> {
             if s.dipole {
                 self.tree.set(n, "Dipole", "yes")?;
             }
-            if a.kind == "equilibrium" {
+            if matches!(a.kind.as_str(), "equilibrium" | "retro") {
                 self.tree
                     .set(n, "ArrowShaftSpacing", integer(style_real(s.gap_pt) * 100.))?;
             }
@@ -198,6 +219,28 @@ impl Writer<'_> {
                     .set(n, "Tail3D", format!("{} 0", self.position(start)))?;
                 self.tree
                     .set(n, "Head3D", format!("{} 0", self.position(end)))?;
+            }
+            if a.kind == "retro" {
+                let id = self.id()?;
+                let legacy = self.tree.add(
+                    Some(self.page),
+                    "graphic",
+                    [
+                        ("id", id),
+                        ("SupersededBy", self.tree.value(n, "id")?),
+                        (
+                            "BoundingBox",
+                            format!("{} {}", self.position(end), self.position(start)),
+                        ),
+                        ("GraphicType", "Line".into()),
+                        ("ArrowType", "RetroSynthetic".into()),
+                        ("HeadSize", self.tree.value(n, "HeadSize")?),
+                        ("color", self.tree.value(n, "color")?),
+                    ],
+                )?;
+                // Both representations share group ownership; the legacy one
+                // also needs the arrow's stacking order, like ChemDraw's files.
+                self.objects.push((a.id, legacy));
             }
             self.objects.push((a.id, n));
         }
