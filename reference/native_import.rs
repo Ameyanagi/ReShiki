@@ -77,6 +77,16 @@ fn compare_response(
 ) -> anyhow::Result<()> {
     let mut a = serde_json::to_value(actual)?;
     let mut b = serde_json::to_value(expected)?;
+    // The Python reference has no display formula or mass percentages.
+    for side in [&mut a, &mut b] {
+        if let Some(analysis) = side
+            .get_mut("analysis")
+            .and_then(|value| value.as_object_mut())
+        {
+            analysis.remove("display_formula");
+            analysis.remove("mass_percent");
+        }
+    }
     reaction_presentation::adapt_import("import", import_format, &a, &mut b)?;
     for key in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(x), Some(y)) = (a["analysis"][key].as_f64(), b["analysis"][key].as_f64())
