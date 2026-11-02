@@ -439,6 +439,17 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn anhydride_names_need_acid_halves() {
+        // Upstream names this "2-(((hydroxy)(thioxo)methyl)sulfanyl)acetonitrile
+        // 4-methylbenzoic thioanhydride", which OPSIN reads as two compounds.
+        let name = name_smiles("Cc1ccc(C(=O)SC(=S)SCC#N)cc1");
+        assert!(
+            !matches!(&name, Ok(name) if name.text.contains("anhydride")),
+            "{name:?}"
+        );
+    }
+
+    #[test]
     fn enclosing_marks_nest_by_what_they_enclose() {
         for (smiles, expected) in [
             (
