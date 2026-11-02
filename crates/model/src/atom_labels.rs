@@ -14,6 +14,7 @@ pub use hydrogen_isotopes::HydrogenIsotopeLabels;
 #[cfg(test)]
 mod placement_tests;
 pub mod refresh;
+mod steroid;
 #[cfg(test)]
 pub(crate) mod test_support;
 
@@ -451,6 +452,9 @@ pub struct Settings {
     /// Mark perceived stereogenic units without drawn configuration with (?).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mark_undefined_stereocentres: bool,
+    /// Show steroid nucleus stereocentres as locant and α/β face labels.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub steroid_alpha_beta: bool,
     /// Keep stereo punctuation upright while italicizing its descriptor.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub roman_stereo_parentheses: bool,
@@ -468,6 +472,7 @@ impl Default for Settings {
             stereo: false,
             dl_descriptors: false,
             mark_undefined_stereocentres: false,
+            steroid_alpha_beta: false,
             roman_stereo_parentheses: false,
             maps: true,
             axial_descriptors: AxialDescriptors::default(),
@@ -497,21 +502,25 @@ pub fn indicator_format(text: &str, style: &TextStyle, roman_parentheses: bool) 
     } else {
         0
     };
-    if prefix > 0 || roman_parentheses {
+    let roman = roman_parentheses && text[prefix..].starts_with('(') && text.ends_with(')');
+    if prefix > 0 || roman {
         format.style.italic = false;
         let mut descriptor = style.clone();
         descriptor.italic = true;
         format.spans.push(TextSpan {
-            start: prefix + usize::from(roman_parentheses),
-            end: text.len() - usize::from(roman_parentheses),
+            start: prefix + usize::from(roman),
+            end: text.len() - usize::from(roman),
             style: descriptor,
         });
     }
     format
 }
 
-/// Drawing text for a computed CIP code. Native codes remain unchanged.
+/// Drawing text for a stereo indicator. Chemical CIP codes remain unchanged.
 pub fn stereo_text(cip: &str, settings: &Settings) -> String {
+    if cip.ends_with(['α', 'β']) {
+        return cip.into();
+    }
     let text = match (cip, settings.axial_descriptors) {
         ("e", _) => "seqTrans",
         ("z", _) => "seqCis",
@@ -531,12 +540,15 @@ pub fn atom_stereo_texts(doc: &Document) -> std::collections::HashMap<u64, Strin
     doc.atoms
         .iter()
         .filter_map(|atom| {
-            let text = stereo_text(atom.cip_label.as_deref()?, &doc.atom_labels);
-            let text = if let Some(prefix) = dl.get(&atom.id) {
+            let code = atom_stereo_code(atom, doc)?;
+            let text = stereo_text(code, &doc.atom_labels);
+            let text = match dl.get(&atom.id) {
                 // Use plain capitals for D/L; IUPAC prefers small capitals.
-                format!("{prefix} {text}")
-            } else {
-                text
+                // Steroid α/β and (?) markers stay as they are.
+                Some(prefix) if atom.cip_label.as_deref() == Some(code) => {
+                    format!("{prefix} {text}")
+                }
+                _ => text,
             };
             Some((atom.id, text))
         })
@@ -981,6 +993,17 @@ pub(crate) fn stereo_code<'a>(
     )
 }
 
+/// The optional drawing convention takes precedence without replacing CIP.
+pub fn atom_stereo_code<'a>(atom: &'a Atom, doc: &Document) -> Option<&'a str> {
+    let label = doc
+        .atom_labels
+        .steroid_alpha_beta
+        .then_some(atom.steroid_label.as_deref())
+        .flatten()
+        .or(atom.cip_label.as_deref());
+    stereo_code(label, atom.undefined_stereo, doc)
+}
+
 fn indicator_style(style: &TextStyle, text: &str) -> TextStyle {
     let mut style = style.clone();
     if text == "?" {
@@ -998,8 +1021,7 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
     let atom_candidate = doc.atoms.iter().any(|a| {
         a.display.number.is_some()
             || map_indicator_shown(a, doc)
-            || (stereo_indicator_shown(a, doc)
-                && stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc).is_some())
+            || (stereo_indicator_shown(a, doc) && atom_stereo_code(a, doc).is_some())
     });
     let bond_candidate = doc.bonds.iter().any(|b| {
         bond_indicator_shown(b, doc)
@@ -1034,7 +1056,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             ));
         }
         if stereo_indicator_shown(a, doc)
-            && let Some(cip) = stereo_code(a.cip_label.as_deref(), a.undefined_stereo, doc)
+            && let Some(cip) = atom_stereo_code(a, doc)
         {
             labels.push((
                 Owner::AtomStereo(a.id),
@@ -1250,6 +1272,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
 pub fn clear_computed(doc: &mut Document) {
     for a in &mut doc.atoms {
         a.cip_label = None;
+        a.steroid_label = None;
         a.undefined_stereo = false;
     }
     for b in &mut doc.bonds {
@@ -1283,7 +1306,7 @@ pub fn copy_computed(doc: &mut Document, checked: &Document) {
             .and_then(|s| s.cip_label.clone());
     }
     // Engine documents never carry the optional editor markers.
-    refresh::refresh_undefined_stereo(doc);
+    refresh::refresh_optional_stereo(doc);
 }
 
 /// Slab clipping catches a bond crossing a label between sample points.

@@ -10,5 +10,8 @@ mod validation;
 pub mod wire;
 pub mod worker;
 
+#[cfg(test)]
+mod tests;
+
 /// Version of the reference implementation used for these operations.
 pub const INCHI_VERSION: &str = kernel::VERSION;

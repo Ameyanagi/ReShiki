@@ -653,3 +653,35 @@ fn cdxml_stereo_indicators_follow_axial_descriptor_setting() {
         }
     }
 }
+
+#[test]
+fn steroid_alpha_beta_exports_to_cdxml_and_cdx_without_parentheses() {
+    let mut document = Document::default();
+    let a = document.add_atom("C", Point::default());
+    let b = document.add_atom("C", Point::new(42., 0.));
+    document.add_bond(a, b, 2, "plain");
+    document.atom_labels.stereo = true;
+    document.atom_mut(a).unwrap().cip_label = Some("S".into());
+    document.atom_mut(a).unwrap().steroid_label = Some("3β".into());
+    document.bonds[0].cip_label = Some("E".into());
+    for enabled in [false, true] {
+        document.atom_labels.steroid_alpha_beta = enabled;
+        for roman in [false, true] {
+            document.atom_labels.roman_stereo_parentheses = roman;
+            let before = document.clone();
+            let xml = super::super::write(&document, Options::default()).unwrap();
+            let decoded =
+                crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+            for xml in [&xml, &decoded] {
+                assert_eq!(
+                    stereo_indicators(xml),
+                    [
+                        ("n".into(), if enabled { "3β" } else { "(S)" }.into()),
+                        ("b".into(), "(E)".into()),
+                    ],
+                );
+            }
+            assert_eq!(document, before);
+        }
+    }
+}

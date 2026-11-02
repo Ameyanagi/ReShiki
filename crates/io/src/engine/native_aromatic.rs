@@ -51,12 +51,13 @@ pub async fn execute(
         Ok::<_, Error>(molecular::aromatic_display(document, selected)?.finish()?)
     })
     .await??;
+    let warnings = native_response::identifier_notices(&edit.molecule, false);
     let analysis = native_response::analyze_prepared(Arc::new(edit.molecule), config).await?;
     Ok(Response {
         document: Some(edit.document),
         analysis: Some(analysis),
         output: None,
         engine_version: chemistry::RDKIT_VERSION.into(),
-        warnings: Vec::new(),
+        warnings,
     })
 }

@@ -329,6 +329,7 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         annotations.apply(&mut parsed, event)?;
     }
     annotations.numeric_props(&mut parsed)?;
+    prepare::validate_allenes(&parsed)?;
     if annotations.queries.iter().any(|&q| q)
         || annotations.context.unsupported_bonds.iter().any(|&b| b)
         || parsed.query_bonds.iter().any(|&b| b)
@@ -340,8 +341,10 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     }
     let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
     if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
-        || clean.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
-        || clean.metadata.bonds.iter().any(|b| b.stereo > 5)
+        || clean.metadata.atoms.iter().enumerate().any(|(i, a)| {
+            !stereo::allene::supported(&clean.graph, i, a.chiral_tag, a.chiral_permutation)
+        })
+        || clean.metadata.bonds.iter().any(|b| b.stereo > 7)
         || !clean.metadata.groups.is_empty()
     {
         return Err(Error::Unsupported(
@@ -469,6 +472,7 @@ pub fn read(text: &str) -> Result<Imported> {
         return Err(Error::Unsupported("query atom"));
     }
     annotations.numeric_props(&mut parsed)?;
+    prepare::validate_allenes(&parsed)?;
     let conf = annotations
         .context
         .conformers

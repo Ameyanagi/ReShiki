@@ -477,3 +477,42 @@ fn atom_maps_do_not_make_equivalent_ligands_stereogenic() {
     document.bonds[0].display = "wedge".into();
     assert!(has(&document, false, Kind::NoEffect));
 }
+
+#[test]
+fn biaryl_axis_wedges_are_not_ineffective() {
+    // ST-1.7 preferred form: a second wedge from the para atom and a bold
+    // bond between the two wedges.
+    let mut preferred = crate::chemistry::document::atrop_tests::binol("wedge");
+    preferred.bonds[1].display = "bold".into();
+    preferred.bonds[2].reverse();
+    preferred.bonds[2].display = "wedge".into();
+    let (redrawn, _) = redraw(&preferred, &[]).unwrap();
+    for (before, after) in preferred.bonds.iter().zip(&redrawn.bonds) {
+        assert_eq!((before.a, &before.display), (after.a, &after.display));
+    }
+    for document in ["wedge", "hash"]
+        .map(crate::chemistry::document::atrop_tests::binol)
+        .into_iter()
+        .chain([preferred])
+    {
+        assert!(!has(&document, false, Kind::NoEffect));
+        assert!(!has(&document, false, Kind::Reversed));
+        let axis = |document: &Document| {
+            document::prepare(document).map(|m| m.state.metadata.bonds[22].stereo)
+        };
+        let (redrawn, _) = redraw(&document, &[]).unwrap();
+        assert_eq!(axis(&redrawn).unwrap(), axis(&document).unwrap());
+    }
+}
+
+#[test]
+fn exocyclic_wedges_on_a_biaryl_ring_are_still_ineffective() {
+    let mut document = crate::chemistry::document::atrop_tests::binol("wedge");
+    let ring = document.atoms[4].id;
+    let fluorine = document.add_atom("F", Point::new(-63., 64.));
+    document.add_bond(ring, fluorine, 1, "wedge");
+    let notes = check(&document, false);
+    let ineffective: Vec<_> = notes.iter().filter(|n| n.kind == Kind::NoEffect).collect();
+    assert_eq!(ineffective.len(), 1);
+    assert_eq!(ineffective[0].bonds, [(ring, fluorine)]);
+}

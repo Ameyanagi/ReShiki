@@ -1437,6 +1437,19 @@ fn view(app: &App) -> Vec<Command> {
             )),
         ),
         send(
+            if app.tab.doc.atom_labels.steroid_alpha_beta {
+                "Hide steroid α/β"
+            } else {
+                "Show steroid α/β"
+            },
+            View,
+            "Use steroid locants and α/β for gonane ring stereocentres; other centres keep R/S",
+            "steroid alpha beta gonane 3β 5α",
+            Message::Labels(Labels::SteroidAlphaBeta(
+                !app.tab.doc.atom_labels.steroid_alpha_beta,
+            )),
+        ),
+        send(
             "Help & shortcuts",
             View,
             "Search every shortcut",

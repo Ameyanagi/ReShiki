@@ -426,6 +426,7 @@ fn cleanup_conventional_orientation_never_moves_a_fixed_part() -> anyhow::Result
         Options {
             scope: Scope::SelectedAtoms,
             keep_orientation: false,
+            ..Default::default()
         },
         &selected,
     )?
@@ -497,6 +498,98 @@ fn cleanup_conventional_reflection_rewedges_visible_stereochemistry() -> anyhow:
             ("wedge", "hash") | ("hash", "wedge")
         ));
     }
+    Ok(())
+}
+
+#[test]
+fn cleanup_iupac_unfused_and_fixed_layouts_match_free_orientation() -> anyhow::Result<()> {
+    let source = drawing_at("CC(=O)O", &[(2., 0.), (1., 0.), (1., -1.), (0., 0.)])?;
+    for fixed in 0..=2 {
+        let selected = source.atoms[fixed..]
+            .iter()
+            .map(|atom| atom.id)
+            .collect::<Vec<_>>();
+        let options = Options {
+            scope: Scope::SelectedAtoms,
+            keep_orientation: false,
+            ..Default::default()
+        };
+        let free = prepare(&source, options, &selected)?.finish(vec![positions(&source)])?;
+        let iupac = prepare(
+            &source,
+            Options {
+                keep_orientation: true,
+                iupac_orientation: true,
+                ..options
+            },
+            &selected,
+        )?
+        .finish(vec![positions(&source)])?;
+        assert_eq!(iupac.document, free.document);
+        for atom in &source.atoms[..fixed] {
+            assert_eq!(iupac.document.atom(atom.id).unwrap(), atom);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn cleanup_iupac_reflection_rewedges_visible_stereochemistry() -> anyhow::Result<()> {
+    // This four-ring system has a unique three-ring row. Its fourth ring must
+    // lie above the right end, so its mirror requires an actual reflection.
+    let text = "C[C@H](O)c1ccc2c(c1)ccc1cc3ccccc3cc12";
+    let input = smiles::read(text)?;
+    let state = input.prepared.state;
+    let mut points = depict::compute(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        depict::Options {
+            use_ring_templates: true,
+            ..Default::default()
+        },
+    )?
+    .positions;
+    super::super::layout_refinement::iupac_orientation(&state, &mut points);
+    let xy = points
+        .iter()
+        .map(|point| (-point.x, point.y))
+        .collect::<Vec<_>>();
+    let source = drawing_at(text, &xy)?;
+    let before = positions(&source);
+    let cleaned = prepare(
+        &source,
+        Options {
+            iupac_orientation: true,
+            ..Default::default()
+        },
+        &[],
+    )?
+    .finish(vec![before.clone()])?;
+    let after = cleaned.molecule.as_ref().unwrap();
+    let area = |points: &[Point3]| {
+        (points[1].x - points[0].x) * (points[2].y - points[0].y)
+            - (points[1].y - points[0].y) * (points[2].x - points[0].x)
+    };
+    assert!(area(&before) * area(&after.positions) < 0.);
+    assert_eq!(identity(after)?, identity(&molecular::prepare(&source)?)?);
+    let mut visible = cleaned.document.clone();
+    for atom in &mut visible.atoms {
+        atom.stereo = None;
+    }
+    assert_eq!(identity(&molecular::prepare(&visible)?)?, identity(after)?);
+    assert!(
+        source
+            .bonds
+            .iter()
+            .zip(&cleaned.document.bonds)
+            .any(|(before, after)| {
+                matches!(
+                    (before.display.as_str(), after.display.as_str()),
+                    ("wedge", "hash") | ("hash", "wedge")
+                )
+            })
+    );
     Ok(())
 }
 

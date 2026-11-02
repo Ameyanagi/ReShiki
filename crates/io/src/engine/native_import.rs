@@ -16,6 +16,8 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
+#[cfg(test)]
+mod allene_tests;
 pub(super) mod chain_layout;
 pub(super) mod template_retry;
 #[cfg(test)]
@@ -152,6 +154,7 @@ pub async fn execute(
     let analysis = if molecule.state.graph.atoms.is_empty() || attachments || generic {
         None
     } else {
+        warnings.extend(native_response::identifier_notices(&molecule, false));
         Some(native_response::analyze_prepared(Arc::new(molecule), config).await?)
     };
     if generic {
@@ -402,7 +405,8 @@ fn prepare_inchi(
         return Err(Error::BondType);
     }
     let mut molecule = molecule(state)?;
-    let warnings = layout(&mut molecule, &[])?;
+    let mut warnings = imported.diagnostics;
+    warnings.extend(layout(&mut molecule, &[])?);
     let labels = vec![None; molecule.ids.len()];
     let mut prepared = finish_molecule(molecule, &labels, options)?;
     prepared.warnings.extend(warnings);

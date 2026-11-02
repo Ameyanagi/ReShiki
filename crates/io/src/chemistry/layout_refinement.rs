@@ -4,7 +4,7 @@
 //! terminal substituents without changing chemistry or reference depiction.
 use super::{depict::geometry::Coordinates, stereo::Point3, stereo::perception::State};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     f64::consts::{PI, TAU},
 };
 
@@ -327,6 +327,230 @@ pub(crate) fn conventional_orientation(state: &State, points: &mut [Point3]) {
         }
         Some(())
     })();
+}
+
+#[derive(Clone, Copy)]
+struct Fusion {
+    a: usize,
+    b: usize,
+    bond: (usize, usize),
+}
+
+struct FusedSystem {
+    rings: Vec<usize>,
+    atoms: Vec<usize>,
+    fusions: Vec<Fusion>,
+}
+
+fn largest_fused_system(state: &State) -> Option<FusedSystem> {
+    let mut edges = BTreeMap::<_, Vec<usize>>::new();
+    for (index, ring) in state.rings.atoms.iter().enumerate() {
+        for (&a, &b) in ring
+            .iter()
+            .zip(ring.iter().cycle().skip(1))
+            .take(ring.len())
+        {
+            edges.entry((a.min(b), a.max(b))).or_default().push(index);
+        }
+    }
+    let mut shared = BTreeMap::<_, Vec<_>>::new();
+    for (bond, rings) in edges {
+        for (index, &a) in rings.iter().enumerate() {
+            for &b in rings.iter().skip(index + 1) {
+                shared.entry((a, b)).or_default().push(bond);
+            }
+        }
+    }
+    // Ortho- and peri-fused rings share exactly one bond; bridged rings share more.
+    let mut adjacent = vec![Vec::new(); state.rings.atoms.len()];
+    let mut fusions = Vec::new();
+    for ((a, b), bonds) in shared {
+        if let [bond] = bonds[..] {
+            adjacent.get_mut(a)?.push(b);
+            adjacent.get_mut(b)?.push(a);
+            fusions.push(Fusion { a, b, bond });
+        }
+    }
+    let mut best: Option<FusedSystem> = None;
+    for rings in components(&adjacent)? {
+        let mut atoms: Vec<_> = rings
+            .iter()
+            .filter_map(|&ring| state.rings.atoms.get(ring))
+            .flatten()
+            .copied()
+            .collect();
+        atoms.sort_unstable();
+        atoms.dedup();
+        if best
+            .as_ref()
+            .is_none_or(|best| (rings.len(), atoms.len()) > (best.rings.len(), best.atoms.len()))
+        {
+            best = Some(FusedSystem {
+                rings,
+                atoms,
+                fusions: Vec::new(),
+            });
+        }
+    }
+    let mut best = best?;
+    let mut indices = vec![None; state.rings.atoms.len()];
+    for (index, &ring) in best.rings.iter().enumerate() {
+        *indices.get_mut(ring)? = Some(index);
+    }
+    best.fusions = fusions
+        .into_iter()
+        .filter_map(|fusion| {
+            Some(Fusion {
+                a: indices.get(fusion.a).copied().flatten()?,
+                b: indices.get(fusion.b).copied().flatten()?,
+                bond: fusion.bond,
+            })
+        })
+        .collect();
+    Some(best)
+}
+
+fn fused_orientation_score(
+    system: &FusedSystem,
+    centers: &[Point3],
+    bonds: &[(Point3, Point3)],
+    tolerance: f64,
+) -> Option<[i64; 4]> {
+    let mut adjacent = vec![Vec::new(); centers.len()];
+    let mut horizontal = HashMap::new();
+    for (index, fusion) in system.fusions.iter().enumerate() {
+        let (a, b) = bonds.get(index)?;
+        let (left, right) = (centers.get(fusion.a)?, centers.get(fusion.b)?);
+        if (b.x - a.x).abs() <= tolerance && (right.y - left.y).abs() <= tolerance {
+            adjacent.get_mut(fusion.a)?.push(fusion.b);
+            adjacent.get_mut(fusion.b)?.push(fusion.a);
+            horizontal
+                .entry((fusion.a.min(fusion.b), fusion.a.max(fusion.b)))
+                .or_insert(index);
+        }
+    }
+    let mut best = None;
+    // Rings joined through vertical common bonds at one height form a row.
+    for row in components(&adjacent)? {
+        let mut row = row
+            .into_iter()
+            .map(|ring| Some((ring, *centers.get(ring)?)))
+            .collect::<Option<Vec<_>>>()?;
+        row.sort_by(|(a, p), (b, q)| p.x.total_cmp(&q.x).then(a.cmp(b)));
+        let middle = row.len() / 2;
+        let axis = if row.len() % 2 == 1 {
+            row.get(middle)?.1
+        } else {
+            let (a, b) = (row.get(middle - 1)?.0, row.get(middle)?.0);
+            let &(a, b) = bonds.get(*horizontal.get(&(a.min(b), a.max(b)))?)?;
+            Point3 {
+                x: (a.x + b.x) * 0.5,
+                y: (a.y + b.y) * 0.5,
+                z: 0.,
+            }
+        };
+        let half = |offset: f64| {
+            if offset.abs() <= tolerance {
+                1
+            } else if offset > 0. {
+                2
+            } else {
+                0
+            }
+        };
+        let (mut upper_right, mut lower_left, mut above) = (0, 0, 0);
+        for center in centers {
+            let (right, upper) = (half(center.x - axis.x), half(center.y - axis.y));
+            upper_right += right * upper;
+            lower_left += (2 - right) * (2 - upper);
+            above += 2 * upper;
+        }
+        // Quarter-ring units retain the namer's half votes on either axis.
+        let score = [row.len() as i64, upper_right, -lower_left, above];
+        if best.is_none_or(|best| score > best) {
+            best = Some(score);
+        }
+    }
+    best
+}
+
+/// Orient the largest bond-fused ring system using IUPAC's horizontal-row and
+/// quadrant preferences. Every common bond supplies the two rotations making
+/// it exactly vertical, with or without reflection in the vertical axis.
+/// All atoms move as one rigid body about their centroid, in y-up coordinates;
+/// cleanup assigns wedges afterwards from the unchanged stereo state.
+pub(crate) fn iupac_orientation(state: &State, points: &mut [Point3]) {
+    let transform = (|| -> Option<_> {
+        let system = largest_fused_system(state)?;
+        if system.rings.len() < 2 || points.len() != state.graph.atoms.len() {
+            return None;
+        }
+        let center = centroid(points, &(0..points.len()).collect::<Vec<_>>());
+        let centers: Vec<_> = system
+            .rings
+            .iter()
+            .map(|&ring| Some(centroid(points, state.rings.atoms.get(ring)?)))
+            .collect::<Option<_>>()?;
+        let bonds = system
+            .fusions
+            .iter()
+            .map(|fusion| Some((*points.get(fusion.bond.0)?, *points.get(fusion.bond.1)?)))
+            .collect::<Option<Vec<_>>>()?;
+        let tolerance = bond_length(state, points) * 0.1;
+        let mut best: Option<([i64; 4], bool, f64)> = None;
+        for &(a, b) in &bonds {
+            if (b.x - a.x).hypot(b.y - a.y) < 1e-12 {
+                continue;
+            }
+            let vertical = PI * 0.5 - (b.y - a.y).atan2(b.x - a.x);
+            for angle in [vertical, vertical + PI] {
+                let angle = (angle + PI).rem_euclid(TAU) - PI;
+                let angle = if angle.abs() < 1e-12 { 0. } else { angle };
+                let (sin, cos) = angle.sin_cos();
+                for reflect in [false, true] {
+                    let apply = |point: Point3| {
+                        let (x, y) = (point.x - center.x, point.y - center.y);
+                        Point3 {
+                            x: (cos * x - sin * y) * if reflect { -1. } else { 1. },
+                            y: sin * x + cos * y,
+                            z: point.z,
+                        }
+                    };
+                    let centers = centers.iter().copied().map(apply).collect::<Vec<_>>();
+                    let bonds = bonds
+                        .iter()
+                        .map(|&(a, b)| (apply(a), apply(b)))
+                        .collect::<Vec<_>>();
+                    let score = fused_orientation_score(&system, &centers, &bonds, tolerance)?;
+                    if best.is_none_or(|(best_score, best_reflect, best_angle)| {
+                        score > best_score
+                            || score == best_score
+                                && (!reflect && best_reflect
+                                    || reflect == best_reflect
+                                        && (angle.abs() < best_angle.abs() - 1e-12
+                                            || (angle.abs() - best_angle.abs()).abs() <= 1e-12
+                                                && angle < best_angle))
+                    }) {
+                        best = Some((score, reflect, angle));
+                    }
+                }
+            }
+        }
+        best.map(|(_, reflect, angle)| (center, reflect, angle))
+    })();
+    let Some((center, reflect, angle)) = transform else {
+        conventional_orientation(state, points);
+        return;
+    };
+    if !reflect && angle == 0. {
+        return;
+    }
+    let (sin, cos) = angle.sin_cos();
+    for point in points {
+        let (x, y) = (point.x - center.x, point.y - center.y);
+        point.x = center.x + (cos * x - sin * y) * if reflect { -1. } else { 1. };
+        point.y = center.y + sin * x + cos * y;
+    }
 }
 
 /// Arrange fresh import components by decreasing heavy-atom count, then charge
@@ -703,6 +927,186 @@ mod tests {
         )?
         .positions;
         Ok((state, positions))
+    }
+
+    fn iupac_score(state: &State, points: &[Point3]) -> [i64; 4] {
+        let system = largest_fused_system(state).unwrap();
+        let centers = system
+            .rings
+            .iter()
+            .map(|&ring| centroid(points, &state.rings.atoms[ring]))
+            .collect::<Vec<_>>();
+        let bonds = system
+            .fusions
+            .iter()
+            .map(|fusion| (points[fusion.bond.0], points[fusion.bond.1]))
+            .collect::<Vec<_>>();
+        fused_orientation_score(&system, &centers, &bonds, bond_length(state, points) * 0.1)
+            .unwrap()
+    }
+
+    #[test]
+    fn iupac_phenanthrene_and_anthracene_choose_horizontal_rows_rigidly() -> anyhow::Result<()> {
+        for (text, expected) in [
+            ("c1ccc2c(c1)ccc1ccccc12", [2, 6, -2, 8]),
+            ("c1ccc2cc3ccccc3cc2c1", [3, 3, -3, 6]),
+        ] {
+            let (state, original) = layout(text)?;
+            let center = centroid(&original, &(0..original.len()).collect::<Vec<_>>());
+            for angle in [0_f64, 0.37, 1.9, -2.6] {
+                for reflection in [1., -1.] {
+                    let (sin, cos) = angle.sin_cos();
+                    let mut points = original
+                        .iter()
+                        .map(|p| {
+                            let (x, y) = (p.x - center.x, p.y - center.y);
+                            Point3 {
+                                x: center.x + reflection * (cos * x - sin * y),
+                                y: center.y + sin * x + cos * y,
+                                z: p.z,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    iupac_orientation(&state, &mut points);
+                    assert_eq!(iupac_score(&state, &points), expected, "{text}");
+                    let system = largest_fused_system(&state).unwrap();
+                    let centers = system
+                        .rings
+                        .iter()
+                        .map(|&ring| centroid(&points, &state.rings.atoms[ring]))
+                        .collect::<Vec<_>>();
+                    let row = system
+                        .fusions
+                        .iter()
+                        .filter(|fusion| (centers[fusion.a].y - centers[fusion.b].y).abs() < 1e-8)
+                        .collect::<Vec<_>>();
+                    for fusion in &row {
+                        assert!((points[fusion.bond.0].x - points[fusion.bond.1].x).abs() < 1e-8);
+                    }
+                    if expected[0] == 2 {
+                        assert_eq!(row.len(), 1);
+                        let row = row[0];
+                        let third = (0..centers.len())
+                            .find(|&id| id != row.a && id != row.b)
+                            .unwrap();
+                        let axis_x = (points[row.bond.0].x + points[row.bond.1].x) * 0.5;
+                        assert!(centers[third].x > axis_x);
+                        assert!(
+                            centers[third].y > centers[row.a].y,
+                            "The third ring must be above the row in y-up coordinates"
+                        );
+                    } else {
+                        assert_eq!(row.len(), 2);
+                        assert!(
+                            centers
+                                .iter()
+                                .all(|point| (point.y - centers[0].y).abs() < 1e-8)
+                        );
+                    }
+                    let after = centroid(&points, &(0..points.len()).collect::<Vec<_>>());
+                    assert!((after.x - center.x).hypot(after.y - center.y) < 1e-12);
+                    for (a, point) in points.iter().enumerate() {
+                        for (b, other) in points.iter().enumerate() {
+                            let before = (original[a].x - original[b].x)
+                                .hypot(original[a].y - original[b].y);
+                            let after = (point.x - other.x).hypot(point.y - other.y);
+                            assert!((before - after).abs() < 1e-12);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn iupac_peri_pyrene_is_deterministic_and_idempotent() -> anyhow::Result<()> {
+        let (mut state, original) = layout("c1cc2ccc3cccc4ccc(c1)c2c34")?;
+        assert_eq!(state.rings.atoms.len(), 4);
+        let mut preferred = original.clone();
+        iupac_orientation(&state, &mut preferred);
+        assert_eq!(iupac_score(&state, &preferred)[0], 2);
+        for _ in 0..3 {
+            let mut repeated = original.clone();
+            iupac_orientation(&state, &mut repeated);
+            assert_eq!(repeated, preferred);
+            iupac_orientation(&state, &mut repeated);
+            assert_eq!(repeated, preferred);
+        }
+        state.rings.atoms.reverse();
+        let mut reordered = original;
+        iupac_orientation(&state, &mut reordered);
+        assert_eq!(reordered, preferred);
+        Ok(())
+    }
+
+    #[test]
+    fn iupac_unfused_layouts_use_conventional_orientation() -> anyhow::Result<()> {
+        for text in ["CC(=O)O", "Oc1ccccc1", "C1CCC2(CC1)CCNC2", "C1CC2CCC1C2"] {
+            let (state, mut actual) = layout(text)?;
+            let mut expected = actual.clone();
+            conventional_orientation(&state, &mut expected);
+            iupac_orientation(&state, &mut actual);
+            assert_eq!(actual, expected, "{text}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn iupac_largest_system_prefers_ring_count_then_atom_count() -> anyhow::Result<()> {
+        for text in ["c1ccc2ccccc2c1C1CCCCCCCCCC1", "C1CCC2CCCC2C1c1ccc2ccccc2c1"] {
+            let state = smiles::read(text)?.prepared.state;
+            let system = largest_fused_system(&state).unwrap();
+            assert_eq!((system.rings.len(), system.atoms.len()), (2, 10));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn iupac_rows_require_common_vertical_bonds() {
+        let system = FusedSystem {
+            rings: vec![0, 1, 2, 3],
+            atoms: vec![],
+            fusions: (0..3)
+                .map(|a| Fusion {
+                    a,
+                    b: a + 1,
+                    bond: (0, 1),
+                })
+                .collect(),
+        };
+        let centers = (0..4)
+            .map(|x| Point3 {
+                x: x as f64,
+                y: 0.,
+                z: 0.,
+            })
+            .collect::<Vec<_>>();
+        let mut bonds = (0..3)
+            .map(|x| {
+                (
+                    Point3 {
+                        x: x as f64 + 0.5,
+                        y: -0.5,
+                        z: 0.,
+                    },
+                    Point3 {
+                        x: x as f64 + 0.5,
+                        y: 0.5,
+                        z: 0.,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            fused_orientation_score(&system, &centers, &bonds, 0.1).unwrap()[0],
+            4
+        );
+        bonds[1].1.x += 0.2;
+        assert_eq!(
+            fused_orientation_score(&system, &centers, &bonds, 0.1).unwrap()[0],
+            2
+        );
     }
 
     #[test]

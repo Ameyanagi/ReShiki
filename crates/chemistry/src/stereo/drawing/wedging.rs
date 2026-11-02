@@ -1,6 +1,7 @@
 //! Bond wedging adapted from RDKit WedgeBonds.cpp (2026.03.6).
 //! Copyright (C) 2023 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
+mod allene;
 mod atrop;
 pub mod generated;
 mod molfile;
@@ -56,6 +57,7 @@ impl Work {
 enum Choice {
     Atom(usize),
     Atrop(Direction),
+    Allene(usize, Direction),
 }
 struct Context<'a> {
     state: WedgeState,
@@ -446,9 +448,14 @@ fn with_work(
     let mut ctx = Context::new(input, properties, conf, true, work)?;
     ctx.choose_tetrahedral(work)?;
     ctx.choose_atrop(work)?;
+    ctx.choose_allene(work)?;
     for (bond, choice) in ctx.choices.clone() {
         work.spend(1)?;
         match choice {
+            Choice::Allene(atom, direction) => {
+                put(&mut ctx.state.directions, bond, direction)?;
+                ctx.orient(bond, atom)?;
+            }
             Choice::Atrop(direction) => put(&mut ctx.state.directions, bond, direction)?,
             Choice::Atom(atom) => {
                 let direction = ctx.wedge_direction(bond, atom, work)?;

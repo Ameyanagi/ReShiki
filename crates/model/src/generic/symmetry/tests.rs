@@ -158,6 +158,20 @@ fn equivalent_total_hydrogens_ignore_explicit_count_storage() {
     assert!(equivalent(&implicit, &explicit));
 }
 
+#[test]
+fn allene_identity_keeps_helicity_under_atom_and_bond_reordering() {
+    let source = crate::chemistry::document::allene_tests::pentadiene("wedge");
+    let mut reordered = source.clone();
+    reordered.atoms.reverse();
+    reordered.bonds.reverse();
+    assert!(equivalent(&source, &reordered));
+    let mut mirror = source.clone();
+    mirror.bonds[0].display = "hash".into();
+    assert!(!equivalent(&source, &mirror));
+    mirror.bonds[0].display = "plain".into();
+    assert!(!equivalent(&source, &mirror));
+}
+
 fn tetrahedral(implicit_h: bool) -> Document {
     let mut doc = Document::default();
     let center = doc.add_atom("C", Point::default());

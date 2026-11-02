@@ -44,6 +44,7 @@ pub enum Action {
     Stereo(bool),
     DlDescriptors(bool),
     MarkUndefined(bool),
+    SteroidAlphaBeta(bool),
     RomanStereoParentheses(bool),
     AxialDescriptors(AxialDescriptors),
     Seed(String),
@@ -181,6 +182,10 @@ impl App {
             Action::DlDescriptors(value) => self.tab.doc.atom_labels.dl_descriptors = value,
             Action::MarkUndefined(value) => {
                 self.tab.doc.atom_labels.mark_undefined_stereocentres = value;
+                self.tab.labels_dirty = true;
+            }
+            Action::SteroidAlphaBeta(value) => {
+                self.tab.doc.atom_labels.steroid_alpha_beta = value;
                 self.tab.labels_dirty = true;
             }
             Action::RomanStereoParentheses(value) => {

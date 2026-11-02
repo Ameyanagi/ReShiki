@@ -60,6 +60,9 @@ fn summaries(notes: &[Note]) -> Vec<String> {
                 }
                 Kind::ReEntrant => format!("{count} stereobond{plural} at re-entrant ring atoms"),
                 Kind::TShape => format!("T-shaped wedge geometry at {count} centre{plural}"),
+                Kind::AlleneBothEnds => {
+                    format!("{count} allene{plural} with stereo bonds at both ends")
+                }
             }
         })
         .collect()

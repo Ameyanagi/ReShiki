@@ -224,6 +224,7 @@ pub fn wedge_request(request: &Request) -> Result<Request> {
     clean.cleanup = Some(crate::cleanup::Options {
         scope: crate::cleanup::Scope::SelectedMolecules,
         keep_orientation: false,
+        iupac_orientation: false,
     });
     Ok(clean)
 }

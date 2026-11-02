@@ -9,6 +9,7 @@ use crate::{
     ranking::Metadata,
 };
 use serde::{Deserialize, Serialize};
+mod allene;
 mod atrop;
 pub(crate) use atrop::detect_atropisomers_with_bounds;
 pub use atrop::{AtropError, detect_atropisomers};
@@ -201,6 +202,7 @@ pub(crate) fn from_directions_with_bounds(
     result.valences = result
         .graph
         .refresh_atoms(&result.valences, &promoted, true)?;
+    allene::perceive(&mut result, directions, positions, replace_existing)?;
     Ok(result)
 }
 
