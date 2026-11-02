@@ -136,7 +136,7 @@ MCP server's `file_save` or the app.
 | `--force`           | skill                          | Replace the generated files of an existing skill folder                                                  |
 | `--receipt`         | skill                          | Print one receipt JSON line after writing the skill                                                      |
 | `--json`            | name                           | Print the name and its status as one JSON line                                                           |
-| `--locants`         | name                           | Print JSON with parent locants in input atom order                                                      |
+| `--locants`         | name                           | Print JSON with parent locants in input atom order                                                       |
 | `--json`            | help                           | Print the command catalog as one JSON line                                                               |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
