@@ -31,6 +31,22 @@ fn runs(xml: &str, kind: &str) -> Vec<(String, u8)> {
         .collect()
 }
 
+fn stereo_indicators(xml: &str) -> Vec<(String, String)> {
+    let tree = roxmltree::Document::parse(xml).unwrap();
+    tree.descendants()
+        .filter(|node| node.has_tag_name("objecttag") && node.attribute("Name") == Some("stereo"))
+        .map(|node| {
+            (
+                node.parent().unwrap().tag_name().name().into(),
+                node.descendants()
+                    .filter(|node| node.has_tag_name("s"))
+                    .filter_map(|node| node.text())
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
 fn import_variable(xml: &str) -> Document {
     let (xml, variables) = cdxml::drawing_variables(xml).unwrap();
     let prepared = cdxml::prepare_drawing(&xml).unwrap();
@@ -429,4 +445,57 @@ fn label_justification_outranks_other_chemdraw_alignment_tags() {
     assert!(xml.contains("LabelAlignment=\"Right\"") && xml.contains("LabelDisplay=\"Right\""));
     let atom = import_variable(&xml).atoms.first().unwrap().clone();
     assert_eq!(atom.display.label_attachment, LabelAttachment::Left);
+}
+
+#[test]
+fn cdxml_stereo_indicators_use_sequential_bond_descriptors() {
+    for (cip, expected) in [
+        ("e", "(seqTrans)"),
+        ("z", "(seqCis)"),
+        ("E", "(E)"),
+        ("Z", "(Z)"),
+    ] {
+        let mut document = Document::default();
+        let left = document.add_atom("C", Point::default());
+        let right = document.add_atom("C", Point::new(42., 0.));
+        document.add_bond(left, right, 2, "plain");
+        document.atom_labels.stereo = true;
+        document.atom_mut(left).unwrap().cip_label = Some("R".into());
+        document.bonds[0].cip_label = Some(cip.into());
+        let before = document.clone();
+        let xml = super::super::write(&document, Options::default()).unwrap();
+        assert_eq!(
+            stereo_indicators(&xml),
+            [("n".into(), "(R)".into()), ("b".into(), expected.into())],
+            "{cip}"
+        );
+        assert_eq!(document, before);
+    }
+}
+
+#[test]
+fn cdxml_stereo_indicators_follow_axial_descriptor_setting() {
+    use crate::atom_labels::AxialDescriptors;
+    for (cip, ra) in [("M", "(Ra)"), ("P", "(Sa)"), ("m", "(ra)"), ("p", "(sa)")] {
+        let mut document = Document::default();
+        let left = document.add_atom("C", Point::default());
+        let right = document.add_atom("C", Point::new(42., 0.));
+        document.add_bond(left, right, 1, "plain");
+        document.atom_labels.stereo = true;
+        document.bonds[0].cip_label = Some(cip.into());
+        for (mode, expected) in [
+            (AxialDescriptors::Helicity, format!("({cip})")),
+            (AxialDescriptors::Ra, ra.into()),
+        ] {
+            document.atom_labels.axial_descriptors = mode;
+            let before = document.clone();
+            let xml = super::super::write(&document, Options::default()).unwrap();
+            assert_eq!(
+                stereo_indicators(&xml),
+                [("b".into(), expected)],
+                "{cip}: {mode}"
+            );
+            assert_eq!(document, before);
+        }
+    }
 }

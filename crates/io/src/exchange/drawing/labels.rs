@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    atom_labels::{Carbons, HydrogenPosition, Owner},
+    atom_labels::{Carbons, HydrogenPosition, Owner, stereo_text},
     typography::{Script, TextAlign, TextSpan},
 };
 
@@ -609,7 +609,7 @@ impl Writer<'_> {
                 self.indicator(
                     n,
                     Owner::AtomStereo(a.id),
-                    &format!("({cip})"),
+                    &stereo_text(cip, settings),
                     &d.stereo.style,
                     d.stereo.offset,
                     a.position.into(),
@@ -630,7 +630,7 @@ impl Writer<'_> {
                 self.indicator(
                     n,
                     Owner::BondStereo(b.a, b.b),
-                    &format!("({cip})"),
+                    &stereo_text(cip, settings),
                     &d.style,
                     d.offset,
                     P {

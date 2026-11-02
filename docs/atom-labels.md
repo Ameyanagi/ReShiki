@@ -61,11 +61,20 @@ Number assigns one sequence in creation/import order. Starts include `1`,
 A single selected atom also accepts a custom number such as `Cα` or `12a`.
 Numbers are owned by atoms, independent of reaction atom-map numbers.
 
-**Show R/S and E/Z labels** displays computed CIP assignments. Chemical edits
+**Show stereodescriptors (R/S, E/Z…)** displays computed CIP assignments. Chemical edits
 invalidate cached assignments and trigger a quiet background refresh. Stale
 responses are ignored and rescheduled; refresh does not change selection,
 document dirtiness, drawn bond orders or Undo/Redo. Invalid chemistry produces
 an inspector error. Unassigned centers have no label.
+
+Enantiomorphic double bonds display _seqCis_/_seqTrans_; native files and
+machine-facing exports retain the internal `z`/`e` codes. **Axial descriptors**
+chooses **M/P (IUPAC preferred)** or **Ra/Sa** for the whole drawing, independently
+of the selected scope. M maps to Ra and P to Sa; lowercase m/p map to ra/sa.
+The choice changes display only and can be undone. Every stereodescriptor uses
+the same italic indicator style. This option does not add axial stereo perception.
+Search **CIP** or **pseudoasymmetric** in the command palette (`:`) to show or hide
+stereodescriptors throughout the drawing.
 
 Indicators start at 7.5 pt Arial; stereo labels are italic. Change their size or
 apply the current toolbar font/color. **Position numbers & stereo labels**
@@ -92,7 +101,8 @@ Desktop exports provide measured positions. Protocol clients that omit the
 
 CIP assignments use the Rust implementation, independently checked against [RDKit's CIP labeler](https://www.rdkit.org/docs/source/rdkit.Chem.rdCIPLabeler.html). The numbered phenylalanine interchange fixture retains `C9H11NO2`, the same InChIKey, 12 atom-owned numbers and an `(S)` label.
 
-Limits: tetrahedral R/S/r/s and ordinary double-bond E/Z are supported. Allene,
+Limits: tetrahedral R/S/r/s, ordinary double-bond E/Z and enantiomorphic
+double-bond seqCis/seqTrans are supported. Allene,
 atropisomer and enhanced-group stereochemistry are not implemented. Unknown
 object tags, unsupported indicator formatting and ambiguous atom matches are
 rejected. Dense diagrams can still need manual indicator positioning. Numbering

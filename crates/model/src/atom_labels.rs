@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod placement_tests;
 pub mod refresh;
+#[cfg(test)]
+pub(crate) mod test_support;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -408,6 +410,30 @@ fn yes() -> bool {
 fn is_true(value: &bool) -> bool {
     *value
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AxialDescriptors {
+    #[default]
+    Helicity,
+    Ra,
+}
+impl AxialDescriptors {
+    pub const ALL: [Self; 2] = [Self::Helicity, Self::Ra];
+
+    fn is_helicity(&self) -> bool {
+        *self == Self::Helicity
+    }
+}
+impl std::fmt::Display for AxialDescriptors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Helicity => "M/P (IUPAC preferred)",
+            Self::Ra => "Ra/Sa",
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -417,6 +443,8 @@ pub struct Settings {
     /// Chemical atom-map labels are visible on imported mapped reactions.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub maps: bool,
+    #[serde(default, skip_serializing_if = "AxialDescriptors::is_helicity")]
+    pub axial_descriptors: AxialDescriptors,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -425,6 +453,7 @@ impl Default for Settings {
             hydrogens: yes(),
             stereo: false,
             maps: true,
+            axial_descriptors: AxialDescriptors::default(),
         }
     }
 }
@@ -439,6 +468,20 @@ pub fn stereo_style() -> TextStyle {
         italic: true,
         ..number_style()
     }
+}
+
+/// Drawing text for a computed CIP code. Native codes remain unchanged.
+pub fn stereo_text(cip: &str, settings: &Settings) -> String {
+    let text = match (cip, settings.axial_descriptors) {
+        ("e", _) => "seqTrans",
+        ("z", _) => "seqCis",
+        ("M", AxialDescriptors::Ra) => "Ra",
+        ("P", AxialDescriptors::Ra) => "Sa",
+        ("m", AxialDescriptors::Ra) => "ra",
+        ("p", AxialDescriptors::Ra) => "sa",
+        _ => cip,
+    };
+    format!("({text})")
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Number {
@@ -862,7 +905,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
         {
             labels.push((
                 Owner::AtomStereo(a.id),
-                format!("({cip})"),
+                stereo_text(cip, &doc.atom_labels),
                 a.display.stereo.offset,
                 a.display.stereo.style.clone(),
             ));
@@ -874,7 +917,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
         {
             labels.push((
                 Owner::BondStereo(b.a, b.b),
-                format!("({cip})"),
+                stereo_text(cip, &doc.atom_labels),
                 b.indicator.offset,
                 b.indicator.style.clone(),
             ));
