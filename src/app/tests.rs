@@ -556,7 +556,7 @@ fn steroid_alpha_beta_is_drawing_wide_and_undoable() {
     app.tab.history = History::default();
     let before = app.tab.doc.clone();
 
-    app.label_action(Action::SteroidAlphaBeta(true));
+    let _ = app.label_action(Action::SteroidAlphaBeta(true));
     assert!(app.tab.doc.atom_labels.steroid_alpha_beta);
     assert_eq!(app.tab.labels.scope, Scope::Selection);
     assert!(!chemistry_changed(&before, &app.tab.doc));
