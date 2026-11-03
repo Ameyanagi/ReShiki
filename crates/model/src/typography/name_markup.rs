@@ -34,7 +34,10 @@ impl NameMarkup {
                         style.size_pt = (style.size_pt * 0.8).max(4.);
                     }
                     NameRun::Superscript => style.script = Script::Superscript,
-                    NameRun::Subscript => style.script = Script::Subscript,
+                    NameRun::Subscript => {
+                        style.italic = false;
+                        style.script = Script::Subscript;
+                    }
                 }
                 TextSpan {
                     start: range.start,
@@ -81,6 +84,7 @@ impl NameMarkup {
                         '7' => '₇',
                         '8' => '₈',
                         '9' => '₉',
+                        'a' => 'ₐ',
                         _ => c,
                     }
                 } else {
@@ -398,9 +402,13 @@ fn preceding_locant(text: &str, at: usize, fusion: bool) -> bool {
         && (!fusion || locant.chars().any(|c| c.is_ascii_lowercase()))
 }
 
-/// Convert the few ASCII presentation encodings, retaining baseline digits so
+/// Normalize presentation encodings, retaining baseline digits and letters so
 /// every export can use the same script spans instead of font-specific glyphs.
 fn display_text(name: &str) -> NameMarkup {
+    let mut stereo = vec![];
+    if name.contains('ₐ') {
+        parenthesized_stereo(name, &mut stereo);
+    }
     let mut markup = NameMarkup {
         text: String::new(),
         runs: vec![],
@@ -465,9 +473,15 @@ fn display_text(name: &str) -> NameMarkup {
             let end = i + digits + 1;
             if digits > 0
                 && (boundary_after(name, end)
-                    || after(name, end)
-                        .strip_prefix(['H', 'R', 'S', 'r', 's'])
-                        .is_some_and(|tail| tail.starts_with(['-', ')', ',', '*'])))
+                    || [
+                        "H", "R", "S", "r", "s", "Ra", "Sa", "ra", "sa", "Rₐ", "Sₐ", "rₐ", "sₐ",
+                    ]
+                    .into_iter()
+                    .any(|descriptor| {
+                        after(name, end)
+                            .strip_prefix(descriptor)
+                            .is_some_and(|tail| tail.starts_with(['-', ')', ',', '*']))
+                    }))
             {
                 let start = markup.text.len();
                 markup.text.push_str(before(tail, digits));
@@ -518,15 +532,16 @@ fn display_text(name: &str) -> NameMarkup {
                 .push((start..markup.text.len(), NameRun::Superscript));
             continue;
         }
-        if c == '\'' && prime_after_locant(name, i) {
-            let count = rest.bytes().take_while(|&b| b == b'\'').count();
+        if matches!(c, '\'' | '’') && prime_after_locant(name, i) {
+            let bytes = rest.len() - rest.trim_start_matches(['\'', '’']).len();
+            let count = before(rest, bytes).chars().count();
             markup.text.extend(std::iter::repeat_n('‴', count / 3));
             match count % 3 {
                 1 => markup.text.push('′'),
                 2 => markup.text.push('″'),
                 _ => (),
             }
-            i += count;
+            i += bytes;
             continue;
         }
         if c == 'H'
@@ -538,7 +553,17 @@ fn display_text(name: &str) -> NameMarkup {
                 .runs
                 .push((markup.text.len()..markup.text.len() + 1, NameRun::Italic));
         }
-        markup.text.push(c);
+        markup.text.push(
+            if c == 'ₐ'
+                && stereo
+                    .iter()
+                    .any(|(range, run)| range.start == i && *run == NameRun::Subscript)
+            {
+                'a'
+            } else {
+                c
+            },
+        );
         i += c.len_utf8();
     }
     markup
@@ -567,7 +592,8 @@ fn stereo_item(text: &str) -> Option<Range<usize>> {
     let trimmed = text.trim();
     let offset = text.len() - text.trim_start().len();
     for descriptor in [
-        "R*", "S*", "rel", "rac", "R", "S", "E", "Z", "r", "s", "M", "P", "ξ", "Ξ",
+        "R*", "S*", "rel", "rac", "Ra", "Sa", "ra", "sa", "Rₐ", "Sₐ", "rₐ", "sₐ", "R", "S", "E",
+        "Z", "r", "s", "M", "P", "ξ", "Ξ",
     ]
     .into_iter()
     .chain(PREFIXES.iter().copied())
@@ -576,7 +602,7 @@ fn stereo_item(text: &str) -> Option<Range<usize>> {
             && (locant.is_empty() || numeric_locant(locant))
         {
             let start = offset + locant.len();
-            return Some(start..start + descriptor.len());
+            return Some(start..start + descriptor.trim_end_matches(['a', 'ₐ']).len());
         }
     }
     None
@@ -601,10 +627,13 @@ fn parenthesized_stereo(text: &str, runs: &mut Vec<(Range<usize>, NameRun)>) {
                             .map_or(0, |prefix| lead + prefix.len());
                         let range = stereo_item(after(part, skip));
                         if let Some(range) = &range {
-                            descriptors.push((
-                                offset + skip + range.start..offset + skip + range.end,
-                                NameRun::Italic,
-                            ));
+                            let end = offset + skip + range.end;
+                            descriptors.push((offset + skip + range.start..end, NameRun::Italic));
+                            if let Some(a) = after(text, end).chars().next()
+                                && matches!(a, 'a' | 'ₐ')
+                            {
+                                descriptors.push((end..end + a.len_utf8(), NameRun::Subscript));
+                            }
                         }
                         offset += part.len() + 1;
                         range.is_some()
@@ -685,7 +714,14 @@ pub fn name_markup(name: &str) -> NameMarkup {
                 let locant = rest.trim_start_matches(|c: char| {
                     c.is_ascii_digit() || superscript_digit(c).is_some()
                 });
-                if (PREFIXES.contains(&word)
+                let prefix = PREFIXES.contains(&word)
+                    || (word == "glycero"
+                        && ["D-", "L-", "DL-"].into_iter().any(|prefix| {
+                            before(text, i)
+                                .strip_suffix(prefix)
+                                .is_some_and(|head| boundary_before(text, head.len()))
+                        }));
+                if (prefix
                     && (next == Some('-')
                         || (next.is_none() && before(text, i).ends_with('-'))
                         || rest
@@ -869,6 +905,23 @@ mod tests {
             assert_eq!(parts(&name_markup(name), NameRun::SmallCaps), [descriptor]);
         }
         assert_eq!(name_markup("1,1'-biphenyl").text, "1,1′-biphenyl");
+    }
+
+    #[test]
+    fn right_single_quotes_normalize_only_after_locants() {
+        for (name, expected) in [
+            ("N’-methyl", "N′-methyl"),
+            ("1’", "1′"),
+            ("1’,1’’-biphenyl", "1′,1″-biphenyl"),
+            ("β-N’'-D-gluco", "β-N″-D-gluco"),
+            ("(1’R,2S)-name", "(1′R,2S)-name"),
+            ("someone’s compound", "someone’s compound"),
+        ] {
+            let markup = name_markup(name);
+            assert_eq!(markup.text, expected, "{name}");
+            assert_eq!(markup, name_markup(expected), "{name}");
+            assert_ranges(&markup);
+        }
     }
 
     #[test]
@@ -1064,6 +1117,83 @@ mod tests {
         italic("(rac-2aR, 12′S)-name", &["rac", "R", "S"]);
         italic("(1′R,5′aS)-name", &["R", "S"]);
         italic("((2R,3S))-name", &["R", "S"]);
+    }
+
+    #[test]
+    fn axial_descriptors_have_italic_letters_and_upright_subscript_a() {
+        for (name, unicode, expected) in [
+            (
+                "(Ra)-penta-2,3-diene",
+                "(Rₐ)-penta-2,3-diene",
+                vec![("R", NameRun::Italic), ("a", NameRun::Subscript)],
+            ),
+            (
+                "(1Ra)-name",
+                "(1Rₐ)-name",
+                vec![("R", NameRun::Italic), ("a", NameRun::Subscript)],
+            ),
+            (
+                "(Sa,2R)-name",
+                "(Sₐ,2R)-name",
+                vec![
+                    ("S", NameRun::Italic),
+                    ("a", NameRun::Subscript),
+                    ("R", NameRun::Italic),
+                ],
+            ),
+            (
+                "β-(rel-1′ra, 2sa/M,P)-name",
+                "β-(rel-1′rₐ, 2sₐ/M,P)-name",
+                vec![
+                    ("rel", NameRun::Italic),
+                    ("r", NameRun::Italic),
+                    ("a", NameRun::Subscript),
+                    ("s", NameRun::Italic),
+                    ("a", NameRun::Subscript),
+                    ("M", NameRun::Italic),
+                    ("P", NameRun::Italic),
+                ],
+            ),
+        ] {
+            let markup = name_markup(name);
+            assert_eq!(markup.text, name);
+            assert_eq!(styled(&markup), expected, "{name}");
+            let displayed = markup.unicode();
+            assert_eq!(displayed.text, unicode, "{name}");
+            assert_ranges(&displayed);
+            assert_eq!(displayed.unicode(), displayed);
+            assert_eq!(name_markup(unicode), markup);
+            let mut format = TextFormat::default();
+            format.style.italic = true;
+            markup.apply_to(&mut format);
+            format.validate(&markup.text).unwrap();
+            for (range, run) in &markup.runs {
+                let style = format.at(range.start);
+                assert_eq!(style.italic, *run == NameRun::Italic, "{name}");
+                if *run == NameRun::Subscript {
+                    assert_eq!(style.script, Script::Subscript);
+                }
+            }
+        }
+        let interior = name_markup("(3a^1Ra)-name");
+        assert_eq!(interior.unicode().text, "(3a¹Rₐ)-name");
+        assert_eq!(name_markup(&interior.unicode().text), interior);
+        assert_eq!(name_markup("(3a^1Rₐ)-name"), interior);
+        assert_eq!(
+            name_markup("N'-(Sₐ,2R)-name"),
+            name_markup("N′-(Sa,2R)-name")
+        );
+        for name in [
+            "(Ra,word)-name",
+            "(helloSa)-name",
+            "Ra-name",
+            "Rₐ-name",
+            "(Rₐ,word)-name",
+        ] {
+            let markup = name_markup(name);
+            assert_eq!(markup.text, name, "{name}");
+            assert!(markup.runs.is_empty(), "{name}");
+        }
     }
 
     #[test]
@@ -1278,6 +1408,27 @@ mod tests {
             styled(&name_markup("D-glucose")),
             [("D", NameRun::SmallCaps)]
         );
+    }
+
+    #[test]
+    fn glycero_is_italic_only_after_a_carbohydrate_configuration() {
+        for configuration in ["D", "L", "DL"] {
+            assert_eq!(
+                styled(&name_markup(&format!(
+                    "{configuration}-glycero-D-gluco-heptose"
+                ))),
+                [
+                    (configuration, NameRun::SmallCaps),
+                    ("glycero", NameRun::Italic),
+                    ("D", NameRun::SmallCaps),
+                    ("gluco", NameRun::Italic),
+                ]
+            );
+        }
+        italic("sn-glycero-3-phosphocholine", &["sn"]);
+        for name in ["glycero-heptose", "wordD-glycero-heptose"] {
+            assert!(name_markup(name).runs.is_empty(), "{name}");
+        }
     }
 
     #[test]
