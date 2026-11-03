@@ -5,6 +5,97 @@ const SPHOS: &str = "COc1cccc(OC)c1-c1ccccc1P(C1CCCCC1)C1CCCCC1";
 const XPHOS: &str = "CC(C)c1cc(C(C)C)c(-c2ccccc2P(C2CCCCC2)C2CCCCC2)c(C(C)C)c1";
 
 #[test]
+fn only_fully_specified_odd_cumulene_smiles_warn_about_lost_ez() -> anyhow::Result<()> {
+    for (text, warned) in [
+        ("C/C=C=C=C/C", true),
+        (r"C/C=C=C=C\C", true),
+        ("C/C=C=C=C=C=C/C", true),
+        ("C/C(Cl)=C=C=C(/C)F", true),
+        ("C/C=C=C=C/C.C/C=C=C=C/C", true),
+        ("CC=C=C=CC", false),
+        ("C/C=C=C=CC", false),
+        ("CC=C=C=C/C", false),
+        ("C/C=C/C", false),
+        (r"C/C=C\C", false),
+        ("C/C=C=C/C", false),
+        ("C/C=C=C=C=C/C", false),
+        ("C/C=C/C=C/C", false),
+        ("C/C=C=C=CC.CC=C=C=C/C", false),
+        ("CC=C=C=CC C/C=C=C=C/C", false),
+    ] {
+        let Preparation::Complete(prepared) = prepare(Request::import_smiles(text))? else {
+            panic!("{text}: import deferred");
+        };
+        assert!(!prepared.document.atoms.is_empty(), "{text}");
+        assert_eq!(
+            prepared
+                .warnings
+                .iter()
+                .filter(|notice| notice.as_str() == CUMULENE_EZ_NOTICE)
+                .count(),
+            usize::from(warned),
+            "{text}: {:?}",
+            prepared.warnings,
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn cumulene_smiles_loss_warning_reaches_the_import_response() -> anyhow::Result<()> {
+    for text in ["C/C=C=C=C/C", r"C/C=C=C=C\C"] {
+        let Outcome::Complete(response) = execute(
+            Request::import_smiles(text),
+            Some(native_response::Config::in_process()),
+        )
+        .await?
+        else {
+            panic!("{text}: import deferred");
+        };
+        assert!(response.document.is_some());
+        assert!(response.analysis.is_some());
+        assert!(
+            response
+                .warnings
+                .iter()
+                .any(|notice| notice == CUMULENE_EZ_NOTICE)
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn cumulene_inchi_ez_loss_uses_the_same_import_warning() -> anyhow::Result<()> {
+    for (inchi, warned) in [
+        ("InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3/b4-3+", true),
+        ("InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3/b4-3-", true),
+        ("InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3", false),
+        ("InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3/b4-3+", false),
+    ] {
+        let Outcome::Complete(response) = execute(
+            Request::import("inchi", inchi),
+            Some(native_response::Config::in_process()),
+        )
+        .await?
+        else {
+            panic!("{inchi}: import deferred");
+        };
+        assert!(response.document.is_some());
+        assert!(response.analysis.is_some());
+        assert_eq!(
+            response
+                .warnings
+                .iter()
+                .any(|notice| notice == CUMULENE_EZ_NOTICE),
+            warned,
+            "{inchi}: {:?}",
+            response.warnings,
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn generated_unknown_alkene_depictions_roundtrip_mol_and_cdxml() -> anyhow::Result<()> {
     for (input, known) in [("CC=CCC", 0), ("C/C=C/C=CC", 1)] {
         for wavy in [false, true] {

@@ -447,12 +447,14 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
         );
     }
     bound_atom_tokens(text)?;
-    // Native import cleans unusable winding and can discard non-tetrahedral
-    // classes. Check the raw graph first, before that cleanup changes identity.
-    // Unlike has_nonclassical_stereo, this raw check intentionally covers atoms only.
+    // Native import can discard unsupported stereo. Check the raw graph first,
+    // before that cleanup changes identity.
     let raw = chemistry::smiles::parse(text).map_err(|e| e.to_string())?;
     if raw.metadata.atoms.iter().any(|m| m.chiral_tag > 2) {
         return Err("Naming does not support allene or coordination stereo classes; no plain graph was substituted".into());
+    }
+    if raw.specifies_cumulene_ez() {
+        return Err("Naming does not support cumulene E/Z configuration yet; no less specific name was substituted".into());
     }
     let specified_atoms = raw
         .metadata

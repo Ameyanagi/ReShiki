@@ -158,6 +158,42 @@ fn unsupported_or_ignored_winding_is_rejected_before_cleanup() {
 }
 
 #[test]
+fn specified_cumulene_ez_is_rejected_before_cleanup() {
+    for text in [
+        "C/C=C=C=C/C",
+        r"C/C=C=C=C\C",
+        "C/C=C=C=C=C=C/C",
+        r"C/C=C=C=C=C=C\C",
+        "F/C=C=C=C/Cl",
+        "C(=C=C=C/C)/C",
+        "C/C=C=C=C/C.CC",
+        "C/1=C=C=C/CCCC1",
+        // An aromatic terminal bond carries the direction.
+        "C/C=C=C=c1/cccc[nH]1",
+        "C/C=C=C=c1cccc[nH]/1",
+    ] {
+        assert_eq!(
+            canonical_smiles(text).unwrap_err(),
+            "Naming does not support cumulene E/Z configuration yet; no less specific name was substituted",
+            "{text}"
+        );
+    }
+    for text in [
+        "CC=C=C=CC",
+        "C/C=C=C=CC",
+        "CC=C=C=C/C",
+        "CC=C=CC",
+        "C/C=C=C/C",
+        "C/C=C=C=C=C/C",
+        "C/C=C/C",
+        r"C/C=C\C",
+        "C/C=C/C=C/C",
+    ] {
+        assert!(canonical_smiles(text).is_ok(), "Rejected {text}");
+    }
+}
+
+#[test]
 fn selections_cannot_silently_truncate_a_molecule() -> Result<(), String> {
     let mut doc = Document::default();
     let a = doc.add_atom("C", crate::document::Point::new(0., 0.));

@@ -859,12 +859,68 @@ async fn name_preserves_unspecified_smiles_double_bonds() {
         (r"C/C=C\C", "(2Z)-but-2-ene"),
         ("C1=CCCCC1", "cyclohexene"),
         ("C1=CCCCCC1", "cycloheptene"),
+        ("CC=C=C=CC", "hexa-2,3,4-triene"),
+        ("C/C=C=C=CC", "hexa-2,3,4-triene"),
+        ("CC=C=CC", "penta-2,3-diene"),
+        ("C/C=C=C/C", "penta-2,3-diene"),
     ] {
         let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
         assert_eq!(code, SUCCESS, "{smiles}: {err}");
         assert!(err.is_empty(), "{smiles}: {err}");
         let result: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(result["value"]["name"], expected, "{smiles}: {out}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_rejects_specified_cumulene_ez_without_printing_a_name() {
+    for smiles in [
+        "C/C=C=C=C/C",
+        r"C/C=C=C=C\C",
+        "C/C=C=C=C=C=C/C",
+        r"C/C=C=C=C=C=C\C",
+        "F/C=C=C=C/Cl",
+    ] {
+        for json in [false, true] {
+            let mut tokens = vec!["name", "--smiles", smiles];
+            if json {
+                tokens.push("--json");
+            }
+            let (code, out, err) = call(&tokens).await;
+            assert_eq!(code, FAILURE, "{smiles}: {err}");
+            assert!(out.is_empty(), "{smiles}: {out}");
+            assert!(
+                err.contains("Naming does not support cumulene E/Z configuration yet; no less specific name was substituted"),
+                "{smiles}: {err}"
+            );
+        }
+    }
+    let (code, out, err) = call(&["name", "--smiles", "CC=[C@AL1]=CC", "--json"]).await;
+    assert_eq!(code, FAILURE, "{err}");
+    assert!(out.is_empty(), "{out}");
+    assert!(
+        err.contains("Naming does not support allene or coordination stereo classes"),
+        "{err}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_checks_raw_smiles_files_including_auto_format() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("cumulene.smi");
+    std::fs::write(&path, "C/C=C=C=C/C cumulene\n").unwrap();
+    for format in [None, Some("smiles"), Some("auto")] {
+        let mut tokens = vec!["name", path.to_str().unwrap(), "--json"];
+        if let Some(format) = format {
+            tokens.extend(["--from", format]);
+        }
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, FAILURE, "{format:?}: {err}");
+        assert!(out.is_empty(), "{format:?}: {out}");
+        assert!(
+            err.contains("Naming does not support cumulene E/Z configuration yet"),
+            "{format:?}: {err}"
+        );
     }
 }
 
