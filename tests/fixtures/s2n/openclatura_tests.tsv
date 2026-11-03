@@ -640,7 +640,7 @@ N=S(Cl)CF	(chloro(imino)sulfanyl)fluoromethane	roundtrip/test_role_models.py
 [S-][n+]1ccc(-c2ccncc2)cc1	4-(pyridin-4-yl)pyridin-1-ium-1-thiolate	roundtrip/test_role_models.py	
 [S-][n+]1ccc2ncccn21	pyrazolo[1,5-a]pyrimidin-1-ium-1-thiolate	roundtrip/test_role_models.py	
 C[S+](C)[CH-]C	1-(dimethylsulfaniumyl)ethan-1-ide	roundtrip/test_role_models.py	
-F[C@H](Cl)Br	(1R)-bromochlorofluoromethane	roundtrip/test_stereo.py	
+F[C@H](Cl)Br	(R)-bromochlorofluoromethane	roundtrip/test_stereo.py	
 C/C=C/C	(2E)-but-2-ene	roundtrip/test_stereo.py	
 CC(Cl)CO	2-chloropropan-1-ol	roundtrip/test_substituents.py	
 C=CC1=CCCCC1	1-ethenylcyclohex-1-ene	roundtrip/test_substituents.py	
@@ -667,10 +667,10 @@ C[C@H]1CC[C@@H](C)CC1	cis-1,4-dimethylcyclohexane	unit/test_audit_reconstruction
 C[C@H]1CC[C@H](C)CC1	trans-1,4-dimethylcyclohexane	unit/test_audit_reconstruction.py	0
 C[C@H]1CCCC[C@H]1C	(1R,2S)-1,2-dimethylcyclohexane	unit/test_audit_reconstruction.py	0
 C[C@H]1CCCC[C@@H]1C	(1S,2S)-1,2-dimethylcyclohexane	unit/test_audit_reconstruction.py	0
-N[C@H]1CC[C@@H](O)CC1	cis-4-aminocyclohexanol	unit/test_audit_reconstruction.py	0
-N[C@H]1CC[C@H](O)CC1	trans-4-aminocyclohexanol	unit/test_audit_reconstruction.py	0
-CS(=O)(=O)[C@H]1C[C@@H](N)C1	cis-3-(methylsulfonyl)cyclobutanamine	unit/test_audit_reconstruction.py	0
-CS(=O)(=O)[C@H]1C[C@H](N)C1	trans-3-(methylsulfonyl)cyclobutanamine	unit/test_audit_reconstruction.py	0
+N[C@H]1CC[C@@H](O)CC1	cis-4-aminocyclohexan-1-ol	unit/test_audit_reconstruction.py	0
+N[C@H]1CC[C@H](O)CC1	trans-4-aminocyclohexan-1-ol	unit/test_audit_reconstruction.py	0
+CS(=O)(=O)[C@H]1C[C@@H](N)C1	cis-3-(methylsulfonyl)cyclobutan-1-amine	unit/test_audit_reconstruction.py	0
+CS(=O)(=O)[C@H]1C[C@H](N)C1	trans-3-(methylsulfonyl)cyclobutan-1-amine	unit/test_audit_reconstruction.py	0
 Cn1c(=O)c2[nH]cnc2n(C)c1=O	1,3-dimethyl-3,7-dihydro-1H-purine-2,6-dione	unit/test_audit_reconstruction.py	1
 Cn1cnc2c1c(=O)[nH]c(=O)n2C	3,7-dimethyl-3,7-dihydro-1H-purine-2,6-dione	unit/test_audit_reconstruction.py	1
 O=c1[nH]c(=O)c2[nH]cnc2[nH]1	3,7-dihydro-1H-purine-2,6-dione	unit/test_audit_reconstruction.py	1

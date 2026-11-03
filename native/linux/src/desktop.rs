@@ -177,6 +177,9 @@ impl Endpoint {
                     return Err(denied());
                 }
                 // Do not unlink a live or unknown endpoint, even with the lock.
+                // A crashed host's child between fork and exec keeps its
+                // listener connectable, but it also keeps HOST_LOCK, so it
+                // holds off the winner until it execs and closes both.
                 let deadline = Duration::from_millis(50);
                 match self.connect(deadline) {
                     Ok(_) => return Err(io::ErrorKind::AlreadyExists.into()),

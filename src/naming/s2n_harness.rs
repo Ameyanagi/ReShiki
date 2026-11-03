@@ -396,9 +396,10 @@ fn ratchet(reports: &BTreeMap<&str, Report>) {
     // Preserve both guarantees: correct chemistry and progress toward the
     // exact openclatura spelling. Text differences never become Wrong graphs.
     // The frozen upstream goldens retain cis/trans ring names. The intentional
-    // r/s departures are pinned, with complete identity roundtrips, by
-    // ring_r_s_names_intentionally_depart_from_upstream_spelling below.
-    // FR-3.5 component changes are likewise pinned by the fr35_* identity tests.
+    // r/s and ring-assembly departures are pinned, with complete identity
+    // roundtrips, by the intentional-departure tests below. FR-3.5
+    // component changes are likewise pinned by the fr35_* identity tests.
+    // Substituted monocycle suffix locants follow P-14.3.4.2(c), not upstream.
     for (category, counts) in reports["parity"].rows() {
         current.insert(
             ("parity_text".into(), category.into()),
@@ -547,8 +548,8 @@ fn ring_r_s_names_intentionally_depart_from_upstream_spelling() {
         ),
         (
             "CC(C)(C)[C@H]1CC[C@@H](O)CC1",
-            "(1s,4s)-4-(tert-butyl)cyclohexanol",
-            Some("cis-4-(tert-butyl)cyclohexanol"),
+            "(1s,4s)-4-(tert-butyl)cyclohexan-1-ol",
+            Some("cis-4-(tert-butyl)cyclohexan-1-ol"),
         ),
         (
             "C[C@H]1C[C@H](C)C1",
@@ -582,6 +583,80 @@ fn ring_r_s_names_intentionally_depart_from_upstream_spelling() {
         for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
             assert_eq!(measurements.parse_name(text).unwrap(), identity, "{text}");
         }
+    }
+}
+
+#[test]
+fn ring_assembly_names_intentionally_depart_from_upstream_spelling() {
+    let mut measurements = Measurements::default();
+    for (smiles, expected) in [
+        ("C1=CC=NC(=C1)C2=CC=CC=N2", "2,2'-bipyridine"),
+        ("C1=CN=CC=C1C2=CC=NC=C2", "4,4'-bipyridine"),
+        (
+            "C1=CC=C(C=C1)C2=CC=C(C=C2)C3=CC=CC=C3",
+            "1^1,2^1:2^4,3^1-terphenyl",
+        ),
+        (
+            "C1=CC=C(C=C1)C2=CC(=CC=C2)C3=CC=CC=C3",
+            "1^1,2^1:2^3,3^1-terphenyl",
+        ),
+        ("C1CCC(CC1)C2CCCCC2", "1,1'-bi(cyclohexane)"),
+        (
+            "C1=CC=C2C(=C1)C=CC=C2C3=CC=CC4=CC=CC=C43",
+            "1,1'-binaphthalene",
+        ),
+        (
+            "Oc1ccc2ccccc2c1-c1c(O)ccc2ccccc12",
+            "[1,1'-binaphthalene]-2,2'-diol",
+        ),
+        (
+            "CN1CCC(CC1)N2CCC(CC2)NC(=O)C(=O)NC3=CC(=CC=C3)N4C=CC=N4",
+            "N-(1'-methyl[1,4'-bipiperidin]-4-yl)-N'-[3-(1H-pyrazol-1-yl)phenyl]ethanediamide",
+        ),
+        (
+            "CCOCC1CCC(CC1)C2CCC(CC2)C",
+            "4-(ethoxymethyl)-4'-methyl-1,1'-bi(cyclohexane)",
+        ),
+        (
+            "C1CN(CCN1CC(F)F)C(=O)C2=CC=CC=C2C3=CC=CC=C3",
+            "([1,1'-biphenyl]-2-yl)[4-(2,2-difluoroethyl)piperazin-1-yl]methanone",
+        ),
+        (
+            "CC(=O)NC1=CC=C(C=C1)C2=NC(=C(N2)C3=CC=C(C=C3)C4=CC=C(C=C4)[N+](=O)[O-])C5=CC=CC=C5",
+            "N-{4-[5-(4'-nitro[1,1'-biphenyl]-4-yl)-4-phenyl-1H-imidazol-2-yl]phenyl}acetamide",
+        ),
+        ("C1CC1-C1CC1", "1,1'-bi(cyclopropane)"),
+        ("c1ccccc1-c2ccc(cc2)-c2ccccc2", "1^1,2^1:2^4,3^1-terphenyl"),
+        ("C1=COC=CC1-C1=COC=CC1", "4H,4'H-3,4'-bipyran"),
+        ("OCCc1ccccc1-c1ccccc1", "2-([1,1'-biphenyl]-2-yl)ethan-1-ol"),
+        (
+            "CC(=O)c1ccnc2c([C@H](C)CNc3cc(-c4cnc(C)nc4)ncn3)cccc12",
+            "1-(8-{(2S)-1-[(2'-methyl[4,5'-bipyrimidin]-6-yl)amino]propan-2-yl}quinolin-4-yl)ethan-1-one",
+        ),
+        (
+            "CC(=O)c1ccnc2c(C(C)CNc3cc(-c4cnc(C)nc4)ncn3)cccc12",
+            "1-(8-{1-[(2'-methyl[4,5'-bipyrimidin]-6-yl)amino]propan-2-yl}quinolin-4-yl)ethan-1-one",
+        ),
+        (
+            "C=CC(=O)Oc1ccc(-c2ccc(CCCOSC)cc2)cc1",
+            "4'-[3-(methylsulfanyloxy)propyl][1,1'-biphenyl]-4-yl prop-2-enoate",
+        ),
+    ] {
+        // Match the canonical input used by Measurements::classify.
+        let identity = super::canonical_smiles(smiles).unwrap();
+        let name = namer(&identity).unwrap();
+        assert_eq!(name.text, expected, "{smiles}");
+        assert_ne!(
+            name.status,
+            super::NameStatus::NotPreferred(super::NameReason::RingAssembly),
+            "{smiles}"
+        );
+        assert_eq!(
+            measurements.parse_name(&name.text).unwrap(),
+            identity,
+            "{smiles}: {}",
+            name.text
+        );
     }
 }
 
@@ -767,6 +842,13 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
 
     let mut measurements = Measurements::default();
     for (smiles, preferred, alternative) in [
+        // This FR-3.5 roundtrip departure and the bipyrimidine assembly
+        // departure each reduce the frozen-golden parity count by one.
+        (
+            "O=c1c2ccccc2nc2n1CC=C2",
+            "pyrrolo[2,1-b]quinazolin-9(1H)-one",
+            Some("pyrrolo[1,2-a]benzo[d]pyrimidin-9(1H)-one"),
+        ),
         (
             "S1CC2=CC=CC3=C2C1=CC=C3",
             "2H-benzo[1,2,3-cd]1-benzothiophene",
@@ -789,8 +871,8 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
         ),
         (
             "O=C(O)Cc1nc2ccc3ocnc3c2s1",
-            "2-([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid",
-            Some("2-([1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"),
+            "([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid",
+            Some("([1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"),
         ),
     ] {
         let name = namer(smiles).unwrap();

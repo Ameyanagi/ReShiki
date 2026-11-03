@@ -35,6 +35,27 @@ The fast test fails on any Wrong name and when a correct count in
 The full test fails on any Wrong name. The workflow runs nightly, on manual
 dispatch and on pushes to `feat/s2n`, and uploads the full report.
 
+Stereo-locant omission intentionally differs from the frozen 0.4.3 spelling
+at quinine's methanol centre and a random-corpus hydrazone. Each descriptor is
+the only stereounit of its kind in its parent word, and that word cites no locants;
+locants inside separately enclosed substituents belong to those substituents.
+The descriptors therefore drop their locants (P-91.3): `(1R)` and `(1Z)`
+become `(R)` and `(Z)`. The text-parity baseline records both; structure checks
+still require the same complete graphs. A word without locants still retains
+its stereodescriptor locant when inequivalent positions could carry it, as at
+the junctions of tetradecahydrophenanthrene.
+
+The same decorated-parent proof also removes redundant constitutional locants
+when their possible placements are equivalent and the word cites no other
+locants (P-14.3.3 and P-14.3.4.6). This changes frozen spellings such as
+`2-phenylacetic acid`, `2-phenylacetonitrile` and `2-cyclopentylacetic acid`.
+Amido prefixes retain locants when the real nitrogen supplies another
+substitution site, including prefixes assembled through a temporary acid.
+These locant changes cost six fast text-parity matches; the structure and
+parity round-trip ratchets are 424/434, with zero wrong structures. Frozen upstream
+names remain unchanged in the corpus. Changed port expectations, including
+`aminoacetic acid` in `rules_cases.tsv`, are checked by OPSIN round trip.
+
 ## Checks
 
 | Check     | What it does                                                                                                                                                                                                                                                                                                                       |
@@ -144,6 +165,23 @@ own name is wrong for some inputs (protonated fused nitrogen, quinoid and
 localized pi states of retained parents, bridges without a valence proof,
 re-primed dispiro locants); the port declines those classes, and each such
 place is marked `Upstream divergence`.
+
+Intentional PIN corrections count against exact text parity with openclatura
+0.4.3. Under [P-14.3.4.2(c)](https://iupac.qmul.ac.uk/BlueBook/P1.html#P-14.3.4.2),
+the suffix locant `1` is omitted only on a monosubstituted homogeneous monocycle:
+`2-methylcyclohexan-1-ol` replaces upstream's `2-methylcyclohexanol`.
+Substitution on a suffix heteroatom alone still permits omission, as in
+`N-methylcyclohexanamine`; retained names such as `2-methylphenol` and
+`2-methylbenzoic acid` are unchanged. Four `openclatura_tests.tsv` expectations
+have corrected suffix locants but retain upstream's cis/trans wording; these
+already differ from the generated r/s names and do not affect exact parity.
+This costs three fast text matches (`drug` 18→16, `natural_product` 17→16)
+and six full text matches, three of them in `pubchem_random`. Structure, name
+and generated round-trip counts do not change. Ring-assembly parents
+([P-28](https://iupac.qmul.ac.uk/BlueBook/P2.html#28)), such as
+`[1,1′-biphenyl]-4-ol` for upstream's `4-phenylphenol`, cost eight more
+(`mr_assembly` 10→3, `roundtrip` one). With all three changes the fast text
+ratchet is 386/434.
 
 | Check                   |      Fast |                                    Full |
 | ----------------------- | --------: | --------------------------------------: |

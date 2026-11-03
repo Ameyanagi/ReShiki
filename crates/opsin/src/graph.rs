@@ -121,6 +121,16 @@ pub struct BondStereo {
     pub atom_refs: [AtomId; 4],
     pub value: BondStereoValue,
 }
+/// Biaryl axial configuration with one reference at each bond end.
+/// Clockwise is the rotation from `refs[0]` to `refs[1]` looking from the
+/// owning bond's `from` atom to its `to` atom.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AxialStereo {
+    pub refs: [AtomId; 2],
+    pub clockwise: bool,
+    /// Requested CIP descriptor, normalized to M or P.
+    pub descriptor: String,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BondDirection {
     Slash,
@@ -183,6 +193,7 @@ pub struct Bond {
     pub to: AtomId,
     pub order: u8,
     pub stereo: Option<BondStereo>,
+    pub axial_stereo: Option<AxialStereo>,
     /// Transient reader/writer state, not the semantic cis/trans descriptor.
     pub smiles_direction: Option<BondDirection>,
 }
@@ -323,6 +334,7 @@ impl Graph {
             to,
             order,
             stereo: None,
+            axial_stereo: None,
             smiles_direction: None,
         });
         self.atom_mut(from).bonds.push(id);
@@ -789,6 +801,13 @@ impl Graph {
                 self.bond_mut(new).stereo = Some(BondStereo {
                     atom_refs: refs.try_into().unwrap(),
                     value: stereo.value,
+                });
+            }
+            if let Some(stereo) = b.axial_stereo {
+                self.bond_mut(new).axial_stereo = Some(AxialStereo {
+                    refs: [mapped(stereo.refs[0])?, mapped(stereo.refs[1])?],
+                    clockwise: stereo.clockwise,
+                    descriptor: stereo.descriptor,
                 });
             }
         }

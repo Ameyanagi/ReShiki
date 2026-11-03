@@ -25,6 +25,80 @@ fn ring(n: usize) -> Graph {
 }
 
 #[test]
+fn axis_constitutional_symmetry_normalizes_kekule_paths_and_retains_isotopes() -> TestResult {
+    for (text, ends, expected) in [
+        ("c1ccccc1-c1ccccc1", [5, 6], false),
+        ("C1=CC=CC=C1-C1=CC=CC=C1", [5, 6], false),
+        ("OC1=C(C=CC=C1)[C-]1C=CC=C1", [2, 7], false),
+        ("[2H]c1ccccc1-c1ccccc1O", [6, 7], true),
+        ("Cc1cc(-c2ccccc2O)cc(C(C)C)n1", [3, 4], true),
+        ("CCc1cc(-c2ccccc2O)cc(C(C)C)n1", [4, 5], true),
+        ("Cc1cc(-c2ccccc2O)cc(-c2ccccc2)n1", [3, 4], true),
+    ] {
+        let raw = crate::smiles::parse(text)?.graph;
+        let prepared = crate::smiles::prepare(text)?.state.graph;
+        for mut graph in [raw, prepared] {
+            for reverse in [false, true] {
+                let n = graph.atoms.len();
+                let [a, b] = ends.map(|atom| if reverse { n - 1 - atom } else { atom });
+                if reverse {
+                    graph.atoms.reverse();
+                    graph.bonds.reverse();
+                    for bond in &mut graph.bonds {
+                        (bond.a, bond.b) = (n - 1 - bond.b, n - 1 - bond.a);
+                    }
+                }
+                let axis = graph
+                    .bonds
+                    .iter()
+                    .position(|bond| (bond.a, bond.b) == (a, b) || (bond.a, bond.b) == (b, a))
+                    .context("Missing test axis")?;
+                let before = graph.clone();
+                assert_eq!(
+                    axis_ends_distinct(&graph, axis).map_err(anyhow::Error::msg)?,
+                    expected,
+                    "{text}, reversed {reverse}"
+                );
+                assert_eq!(graph, before);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn axis_constitutional_symmetry_preserves_formal_charge_and_rejects_invalid_input() -> TestResult {
+    // Equal-element carriers differ only by formal charge after the edit.
+    let mut graph = Graph {
+        atoms: [6, 6, 7, 7, 9, 17]
+            .into_iter()
+            .map(|atomic_number| Atom {
+                atomic_number,
+                no_implicit: true,
+                ..Atom::default()
+            })
+            .collect(),
+        bonds: [(0, 1), (0, 2), (0, 3), (1, 4), (1, 5)]
+            .into_iter()
+            .map(|(a, b)| Bond {
+                a,
+                b,
+                order: 1,
+                aromatic: false,
+            })
+            .collect(),
+    };
+    assert!(!axis_ends_distinct(&graph, 0).map_err(anyhow::Error::msg)?);
+    graph.atoms[3].charge = 1;
+    assert!(axis_ends_distinct(&graph, 0).map_err(anyhow::Error::msg)?);
+    assert!(axis_ends_distinct(&graph, usize::MAX).is_err());
+    assert!(!axis_ends_distinct(&graph, 1).map_err(anyhow::Error::msg)?);
+    graph.bonds[0].b = usize::MAX;
+    assert!(axis_ends_distinct(&graph, 0).is_err());
+    Ok(())
+}
+
+#[test]
 fn large_macrocycle_cleanup_does_not_recurse() -> TestResult {
     let graph = ring(30_000);
     let mut metadata = Metadata::unspecified(&graph);

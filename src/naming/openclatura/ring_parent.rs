@@ -15,6 +15,7 @@ use super::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParentHydrideKind {
     Retained,
+    RingAssembly,
     SystematicFusion,
     SkeletalReplacementFusion,
     BridgedFusion,
@@ -23,6 +24,7 @@ pub enum ParentHydrideKind {
 #[derive(Clone, Debug)]
 pub struct RingParent {
     pub kind: ParentHydrideKind,
+    pub assembly: Option<super::ring_assembly::RingAssembly>,
     pub atoms: AtomSet,
     pub parent_name: Option<String>,
     pub retained_locant_maps: Vec<BTreeMap<usize, String>>,
@@ -39,6 +41,7 @@ impl RingParent {
     fn new(kind: ParentHydrideKind, atoms: AtomSet) -> Self {
         Self {
             kind,
+            assembly: None,
             atoms,
             parent_name: None,
             retained_locant_maps: Vec::new(),
@@ -50,6 +53,21 @@ impl RingParent {
             skeletal_replacement_audit_checks: Vec::new(),
             replacement_fusion_state: None,
         }
+    }
+
+    pub(super) fn from_ring_assembly(
+        atoms: AtomSet,
+        assembly: super::ring_assembly::RingAssembly,
+    ) -> Result<Self, String> {
+        let mut parent = Self::from_retained_locant_maps(
+            atoms,
+            assembly.locant_maps.clone(),
+            assembly.name.clone(),
+            None,
+        )?;
+        parent.kind = ParentHydrideKind::RingAssembly;
+        parent.assembly = Some(assembly);
+        Ok(parent)
     }
 
     pub(super) fn from_retained_locant_maps(
@@ -155,7 +173,10 @@ impl RingParent {
         self.kind == ParentHydrideKind::SkeletalReplacementFusion
     }
     pub(super) fn is_fusion_parent(&self) -> bool {
-        self.kind != ParentHydrideKind::Retained
+        !matches!(
+            self.kind,
+            ParentHydrideKind::Retained | ParentHydrideKind::RingAssembly
+        )
     }
     pub(super) fn uses_fusion_plan(&self) -> bool {
         self.fusion_plan.is_some()
@@ -189,7 +210,9 @@ impl RingParent {
             {
                 false
             }
-            ParentHydrideKind::Retained | ParentHydrideKind::SkeletalReplacementFusion => {
+            ParentHydrideKind::Retained
+            | ParentHydrideKind::RingAssembly
+            | ParentHydrideKind::SkeletalReplacementFusion => {
                 self.retained_locant_maps.iter().all(|m| {
                     m.keys().copied().collect::<AtomSet>() == self.atoms
                         && m.values().collect::<BTreeSet<_>>().len() == self.atoms.len()

@@ -23,6 +23,8 @@ pub use label_halo::{LABEL_HALO_PT, OrbitalHalos, label_halo_radius};
 /// Editable exchange and hit-testing stack them as the scene does.
 pub fn orbital_label_halos(doc: &crate::document::Document) -> OrbitalHalos {
     let opacity = crate::rear_opacity::Paint::new(doc);
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     orbital_halos(doc, &doc.graphics, |atom| {
         if doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0. {
             crate::scene::atom_label_ink_boxes(atom, doc)

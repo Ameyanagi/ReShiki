@@ -27,7 +27,8 @@ pub fn subgraph_component(mol: &Molecule, start_idx: usize, exclude_atoms: &Atom
     component
 }
 
-/// Collect E/Z descriptors at their numbered parent bond locant.
+/// Collect bond descriptors at their numbered parent locant (P-93.5.7.1
+/// for a biaryl axis, including an axis crossing into a substituent).
 pub fn emit_bond_stereo(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -81,7 +82,7 @@ pub fn emit_bond_stereo(
             if !parts
                 .stereo_features
                 .iter()
-                .any(|(l, s)| l == loc && matches!(s.as_str(), "E" | "Z" | "Ξ" | "ξ"))
+                .any(|(l, s)| l == loc && matches!(s.as_str(), "E" | "Z" | "M" | "P" | "Ξ" | "ξ"))
             {
                 parts.stereo_features.push((loc.clone(), stereo.clone()));
             }
@@ -334,6 +335,26 @@ pub fn add_substituent(
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn axial_descriptor_uses_parent_endpoint_and_is_emitted_once() {
+        let mol = read_smiles("Oc1cccc[c:900004]1-[c:900004]1ccccc1O").unwrap();
+        let axis = mol
+            .bonds
+            .values()
+            .find(|bond| bond.stereo.as_deref() == Some("M"))
+            .unwrap();
+        let locants = BTreeMap::from([(axis.u, "2".into()), (axis.v, "1'".into())]);
+        let mut parts = AssemblyParts::new(2);
+        emit_bond_stereo(&mol, &mut parts, &[axis.u, axis.v], &locants, None);
+        assert_eq!(parts.stereo_features, [("1'".into(), "M".into())]);
+        parts.stereo_features.clear();
+        emit_bond_stereo(&mol, &mut parts, &[axis.u], &locants, None);
+        assert_eq!(parts.stereo_features, [("2".into(), "M".into())]);
+        parts.stereo_features.clear();
+        emit_bond_stereo(&mol, &mut parts, &[axis.v], &locants, Some(axis.u));
+        assert!(parts.stereo_features.is_empty());
+    }
 
     #[test]
     fn skeletal_replacement_handoff_keeps_heteroatom_prefixes() {

@@ -238,6 +238,7 @@ impl Preset {
 
 /// Spellings that typing resolves before the catalog: elements and the
 /// groups built in code (N3, MgBr, Cp) or from fixed formulas (OCH3).
+/// Residue labels belong to the separate two-sided Find definitions.
 fn reserved(spelling: &str) -> bool {
     spelling == "*"
         || crate::editing::ELEMENTS.contains(&spelling)
@@ -245,6 +246,7 @@ fn reserved(spelling: &str) -> bool {
         || crate::ligands::LABELS.contains(&spelling)
         || crate::atom_text::is_formula_group(spelling)
         || crate::atom_text::is_nuclide(spelling)
+        || super::residue(spelling).is_some()
 }
 
 /// Reject what a planar collapsed group cannot carry: stereo, atom maps,

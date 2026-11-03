@@ -468,6 +468,8 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
 
 /// Connected molecules can be internally unreadable even when panel bounds do not overlap.
 pub fn internal_overlaps(doc: &Document) -> Vec<String> {
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     let atoms: Vec<_> = doc
         .atoms
         .iter()

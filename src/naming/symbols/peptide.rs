@@ -446,6 +446,25 @@ pub(super) fn one_letter(name: &str) -> Result<String, Error> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn collapsed_residue_symbols_and_names_agree_with_peptide_names() {
+        let groups = reshiki_model::chemistry::abbreviations::RESIDUES;
+        assert_eq!(groups.len(), 20);
+        for group in groups {
+            let named = residue(group.symbol).unwrap();
+            assert_eq!(group.name, named.acid, "{}", group.symbol);
+            assert_eq!(named.achiral, group.symbol == "Gly");
+        }
+        assert_eq!(
+            groups.iter().map(|group| group.symbol).collect::<Vec<_>>(),
+            RESIDUES
+                .iter()
+                .take(20)
+                .map(|named| named.symbol)
+                .collect::<Vec<_>>()
+        );
+    }
+
     fn expanded(input: &str) -> String {
         expand(input).unwrap().unwrap().name
     }

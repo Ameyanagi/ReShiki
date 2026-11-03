@@ -27,6 +27,10 @@ use std::collections::{HashMap, HashSet};
 pub enum Error {
     #[error("Choose a defined abbreviation")]
     Label,
+    #[error(
+        "Residues have two attachment points; draw the residue explicitly and use Find or Contract"
+    )]
+    Residue,
     #[error("Select one terminal atom or one abbreviation to replace")]
     Selection,
     #[error("Select an endpoint with a single bond, or an isolated atom")]
@@ -186,8 +190,11 @@ pub fn replace_with_policy(
     label: &str,
     policy: AttachmentPolicy,
 ) -> Result<Document> {
+    if super::residue(label).is_some() {
+        return Err(Error::Residue);
+    }
     if crate::common_groups::LABELS.contains(&label) {
-        return crate::common_groups::replace(document, selection, label);
+        return crate::common_groups::replace_with_policy(document, selection, label, policy);
     }
     let found = lookup(label)?.ok_or(Error::Label)?;
     replace_preset(document, selection, label, found, policy)
@@ -197,17 +204,23 @@ pub fn replace_with_policy(
 /// overrides that label. Fixed spellings (OCH3 as OMe) and groups built from
 /// another group (MgBr from Et) must keep their own chemistry.
 pub fn replace_bundled(document: &Document, selection: &[u64], label: &str) -> Result<Document> {
+    replace_bundled_with_policy(document, selection, label, AttachmentPolicy::Terminal)
+}
+
+pub fn replace_bundled_with_policy(
+    document: &Document,
+    selection: &[u64],
+    label: &str,
+    policy: AttachmentPolicy,
+) -> Result<Document> {
+    if super::residue(label).is_some() {
+        return Err(Error::Residue);
+    }
     if crate::common_groups::LABELS.contains(&label) {
-        return crate::common_groups::replace(document, selection, label);
+        return crate::common_groups::replace_with_policy(document, selection, label, policy);
     }
     let found = lookup_bundled(label)?.ok_or(Error::Label)?;
-    replace_preset(
-        document,
-        selection,
-        label,
-        found,
-        AttachmentPolicy::Terminal,
-    )
+    replace_preset(document, selection, label, found, policy)
 }
 
 fn replace_preset(
@@ -309,6 +322,7 @@ fn replace_preset(
             Spelling::Label | Spelling::Reverse => preset.reverse_label.clone(),
         },
         anchor: target,
+        exit: None,
         members,
     });
     if let Some(color) = highlight {

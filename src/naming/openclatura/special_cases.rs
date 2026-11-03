@@ -558,21 +558,40 @@ fn is_amidino_carbon(mol: &Molecule, carbon: usize, nitrogen: usize) -> bool {
             .all(|n| mol.atoms[n].symbol == "N" && mol.bond_order(carbon, *n) == 1)
 }
 
-fn hydrazone_stereo_prefix(mol: &Molecule, carbon: usize, nitrogen: usize, parent: &str) -> String {
-    let Some(stereo) = mol
-        .get_bond(carbon, nitrogen)
-        .and_then(|b| b.stereo.as_deref())
-        .filter(|stereo| matches!(*stereo, "E" | "Z"))
-    else {
-        return String::new();
+fn hydrazone_name(
+    mol: &Molecule,
+    carbon: usize,
+    nitrogen: usize,
+    parent: &str,
+    ylidene: &str,
+) -> String {
+    let name = format!("{parent} {ylidene}hydrazone");
+    let Some(bond) = mol.get_bond(carbon, nitrogen) else {
+        return name;
     };
+    let Some(stereo) = bond
+        .stereo
+        .as_deref()
+        .filter(|stereo| matches!(*stereo, "E" | "Z" | "Ξ"))
+    else {
+        return name;
+    };
+    // Functional-class words obey the same positional-equivalence proof.
     let locant = parent
         .strip_suffix("-one")
         .and_then(|s| s.rsplit_once("an-"))
         .map(|(_, locant)| locant)
         .filter(|locant| !locant.is_empty() && locant.bytes().all(|b| b.is_ascii_digit()))
-        .unwrap_or("1");
-    format!("({locant}{stereo})-")
+        .unwrap_or(
+            if name.contains(|c: char| c.is_ascii_digit())
+                || !super::locant_elision::bond_stereo_locant_is_unambiguous(mol, bond.idx)
+            {
+                "1"
+            } else {
+                ""
+            },
+        );
+    format!("({locant}{stereo})-{name}")
 }
 
 /// Port of the ordered `simple_azine_parent_name` shortcut. In particular,
@@ -607,9 +626,9 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
                 )?);
                 if !ylidene.is_empty() && ylidene.ends_with("ylidene") {
                     let side = &sides[parent_side];
-                    let stereo = hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, parent);
+                    let name = hydrazone_name(mol, side.carbon, side.nitrogen, parent, &ylidene);
                     mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
-                    return Ok(Some(format!("{stereo}{} {ylidene}hydrazone", parent)));
+                    return Ok(Some(name));
                 }
             }
             let amidino = sides
@@ -690,14 +709,15 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
         {
             return Err(SHORTCUT_STEREO_ERROR.into());
         }
-        let stereo =
-            hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, &parents[parent_side]);
+        let name = hydrazone_name(
+            mol,
+            side.carbon,
+            side.nitrogen,
+            &parents[parent_side],
+            &ylidenes[1 - parent_side],
+        );
         mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
-        return Ok(Some(format!(
-            "{stereo}{} {}hydrazone",
-            parents[parent_side],
-            ylidenes[1 - parent_side]
-        )));
+        return Ok(Some(name));
     }
     Ok(None)
 }
@@ -743,39 +763,6 @@ fn ordered_simple_ring(mol: &Molecule, atoms: &AtomSet) -> Vec<usize> {
         previous = Some(current);
         path.push(next);
     }
-}
-
-/// Retained biphenyl requires two complete benzene rings joined by one bridge.
-fn biphenyl_parent_result(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
-    // Upstream divergence: the fixed name also requires neutral ring carbons.
-    if atoms.len() != 12
-        || atoms.iter().any(|idx| {
-            let atom = &mol.atoms[idx];
-            !atom.is_carbon() || atom.charge != 0 || atom.radical_electrons != 0
-        })
-    {
-        return None;
-    }
-    let bridges: Vec<_> = mol
-        .bonds
-        .values()
-        .filter(|bond| atoms.contains(&bond.u) && atoms.contains(&bond.v) && !bond.in_small_ring)
-        .collect();
-    if bridges.len() != 1 {
-        return None;
-    }
-    let bridge = bridges[0];
-    for (root, blocked) in [(bridge.u, bridge.v), (bridge.v, bridge.u)] {
-        let ring = component_atoms_until_blocked(mol, atoms, root, &set([blocked]));
-        if ring.len() != 6 {
-            return None;
-        }
-        let path = ordered_simple_ring(mol, &ring);
-        if retained::get_retained_ring(mol, &path)?.name != "benzene" {
-            return None;
-        }
-    }
-    Some("1,1'-biphenyl".into())
 }
 
 fn simple_cycle_unsaturation_locants(mol: &Molecule, path: &[usize]) -> Vec<usize> {
@@ -3138,9 +3125,6 @@ pub(super) fn structural_replacement_parent_result(
         require_stereo_free_core(mol, atoms)?;
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = biphenyl_parent_result(mol, atoms) {
-        return Ok(Some(StructuralParentName::ordinary(name)));
-    }
     if let Some(name) = mol.candidate(|| simple_azine_parent_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
@@ -3262,30 +3246,6 @@ mod tests {
             Some("methyl dihydrogen phosphate")
         );
         assert_eq!(special("CB(O)O").as_deref(), Some("methylboronic acid"));
-    }
-
-    #[test]
-    fn biphenyl_shortcut_requires_two_complete_benzene_rings() {
-        for smiles in ["c1ccccc1-c1ccccc1", "C1=CC=C(C=C1)C2=CC=CC=C2"] {
-            assert_eq!(
-                special(smiles).as_deref(),
-                Some("1,1'-biphenyl"),
-                "{smiles}"
-            );
-        }
-        for smiles in [
-            "c1ccccc1C1CCCCC1",
-            "C1CCCCC1C1CCCCC1",
-            "Cc1ccccc1-c1ccccc1",
-            "c1ccccc1-c1ccccn1",
-        ] {
-            let mol = read_smiles(smiles).unwrap();
-            assert_eq!(
-                biphenyl_parent_result(&mol, &all_atoms(&mol)),
-                None,
-                "{smiles}"
-            );
-        }
     }
 
     #[test]
@@ -3418,7 +3378,7 @@ mod tests {
         let smiles = "CC(=O)OC(=O)N(/C(N)=N/N=C=O)C(C)C";
         let mol = read_smiles(smiles).unwrap();
         let atoms = all_atoms(&mol);
-        let expected = "1-((1E)-(((acetyloxy)carbonyl)(propan-2-yl)amino)(amino)methylidene)-2-(oxomethylidene)hydrazine";
+        let expected = "1-((E)-(((acetyloxy)carbonyl)(propan-2-yl)amino)(amino)methylidene)-2-(oxomethylidene)hydrazine";
         assert_eq!(
             simple_azine_parent_name(&mol, &atoms).unwrap().as_deref(),
             Some(expected)

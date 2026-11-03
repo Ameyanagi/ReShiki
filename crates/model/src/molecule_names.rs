@@ -10,6 +10,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+mod axis_markers;
+pub use axis_markers::{AXIS_M, AXIS_P, apply_axis_markers, encode_axis_markers};
 
 /// Maximum molecular graph size accepted by local naming and caption identity.
 pub const MAX_NAMING_ATOMS: usize = 512;
@@ -25,11 +27,6 @@ pub enum IdentityRejection {
     Write(String),
 }
 
-pub fn has_nonclassical_stereo(state: &chemistry::stereo::perception::State) -> bool {
-    state.metadata.atoms.iter().any(|atom| atom.chiral_tag > 2)
-        || state.metadata.bonds.iter().any(|bond| bond.stereo > 5)
-}
-
 pub fn is_tetrahedral(tag: u8) -> bool {
     matches!(tag, 1 | 2)
 }
@@ -40,8 +37,9 @@ pub fn has_unknown_wavy_bond(doc: &Document) -> bool {
         .any(|bond| !bond.projection && bond.display == "wavy")
 }
 
-/// Shared canonical isomeric identity without atom maps. The naming adapter
-/// and caption identity retain their own document bounds and error messages.
+/// Shared canonical isomeric identity, with private maps for M/P biaryl axes.
+/// Ordinary atom maps are excluded. The naming adapter and caption identity
+/// retain their own document bounds and error messages.
 pub fn canonical_identity(
     state: &chemistry::stereo::perception::State,
 ) -> Result<String, IdentityRejection> {
@@ -59,18 +57,11 @@ pub fn canonical_identity(
     {
         return Err(IdentityRejection::UnsupportedAtomsOrBonds);
     }
-    if has_nonclassical_stereo(state) {
-        return Err(IdentityRejection::NonclassicalStereo);
-    }
-    let mut state = unspecified_unknown_stereo(state);
-    for atom in &mut state.metadata.atoms {
-        atom.map_number = 0;
-        atom.map_present = false;
-    }
+    let state = unspecified_unknown_stereo(&encode_axis_markers(state)?);
     let smiles = chemistry::smiles::write::write(
         &state,
         chemistry::smiles::write::Options {
-            ignore_maps: true,
+            ignore_maps: false,
             ..Default::default()
         },
     )
@@ -266,7 +257,7 @@ pub fn unknown_atom_units(state: &chemistry::stereo::perception::State) -> Vec<b
 pub struct MoleculeName {
     pub annotation: u64,
     pub atoms: Vec<u64>,
-    /// Canonical isomeric identity; atom maps are deliberately excluded.
+    /// Canonical isomeric identity; only private M/P axis maps are retained.
     pub smiles: String,
     /// The text last generated. User-edited text becomes an ordinary caption.
     pub text: String,

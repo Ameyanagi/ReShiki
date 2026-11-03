@@ -9,7 +9,7 @@
     {"id": "composition-serde-defaults", "cite": "crates/agent/src/composition.rs:25,32-41,59"},
     {"id": "sketch-required-fields", "cite": "crates/agent/src/sketch.rs:18-20,447"},
     {"id": "sketch-serde-defaults", "cite": "crates/agent/src/sketch.rs:21-32,447"},
-    {"id": "sketch-member-optional-fields", "cite": "crates/agent/src/sketch.rs:45,66-71,92-95,106-107,440,443-445"},
+    {"id": "sketch-member-optional-fields", "cite": "crates/agent/src/sketch.rs:45,52-53,66-71,92-95,106-107,440,443-445,454"},
     {"id": "sketch-member-required-fields", "cite": "crates/agent/src/sketch.rs:37-38,43-44,50-52,57-61,68,96-101,108-111,116-119,439-446; crates/agent/src/sketch/ligand.rs:30-31,35-38; crates/model/src/document.rs:7-8"},
     {"id": "ligand-serde-defaults", "cite": "crates/agent/src/sketch/ligand.rs:33-34,39-40,44-49; crates/agent/src/sketch.rs:438"},
     {"id": "ligand-option-fields", "cite": "crates/agent/src/sketch/ligand.rs:41-42; crates/agent/src/sketch.rs:438"},
@@ -100,6 +100,7 @@
     {"id": "caption-control-characters", "cite": "crates/agent/src/sketch.rs:235"},
     {"id": "abbreviation-atoms", "cite": "crates/agent/src/sketch.rs:241-242,433,441"},
     {"id": "abbreviation-anchor", "cite": "crates/agent/src/sketch.rs:243,441"},
+    {"id": "abbreviation-exit", "cite": "crates/agent/src/sketch.rs:52-53,246-247,454"},
     {"id": "abbreviation-indices", "cite": "crates/agent/src/sketch.rs:244"},
     {"id": "abbreviation-label", "cite": "crates/agent/src/sketch.rs:245-246,441"},
     {"id": "sketch-tilt-count", "cite": "crates/agent/src/sketch.rs:251,442"},
@@ -138,7 +139,7 @@
       "centroids": [{"kind": "multi_center", "atoms": [1, 2], "contact": 0, "contact_style": "dashed"}],
       "arrows": [{"start": {"x": -5, "y": 0}, "end": {"x": -3, "y": 0}}],
       "captions": [{"text": "Fe complex", "position": {"x": 0, "y": 3}, "color": null}],
-      "abbreviations": [{"label": "Et", "anchor": 1, "atoms": [1, 2]}],
+      "abbreviations": [{"label": "Et", "anchor": 1, "exit": null, "atoms": [1, 2]}],
       "ligands": [{"kind": "Cp", "center": {"x": 0, "y": -2}, "phase_degrees": 0, "x_degrees": 0, "y_degrees": 0, "rotation_degrees": 0, "depth_bonds": false, "show_charge": true, "contact": 0, "contact_style": "single", "contact_in_front": null}]
     }},
     "pair_sketch": {"explanation": "", "replace_ids": [], "molecules": [], "reactions": [], "composition": {"arrangement": "rows", "columns": 2, "width_pt": 540, "preserve_details": false}, "sketch": {
@@ -209,6 +210,7 @@
     {"name": "atom-missing-color", "rule": "sketch-member-optional-fields", "base": "sketch", "patch": [{"op": "remove", "path": "/sketch/atoms/1/color"}], "expect": "schema_rejects_only"},
     {"name": "atom-missing-variable", "rule": "sketch-member-optional-fields", "base": "sketch", "patch": [{"op": "remove", "path": "/sketch/atoms/0/variable"}], "expect": "schema_rejects_only"},
     {"name": "bond-missing-ring-arc", "rule": "sketch-member-optional-fields", "base": "sketch", "patch": [{"op": "remove", "path": "/sketch/bonds/0/ring_arc"}], "expect": "schema_rejects_only"},
+    {"name": "abbreviation-missing-exit", "rule": "sketch-member-optional-fields", "base": "sketch", "patch": [{"op": "remove", "path": "/sketch/abbreviations/0/exit"}], "expect": "schema_rejects_only"},
     {"name": "centroid-missing-kind", "rule": "sketch-member-optional-fields", "base": "sketch", "patch": [{"op": "remove", "path": "/sketch/centroids/0/kind"}], "expect": "schema_rejects_only"},
     {"name": "centroid-missing-contact-style", "rule": "sketch-member-optional-fields", "base": "sketch", "patch": [{"op": "remove", "path": "/sketch/centroids/0/contact_style"}], "expect": "schema_rejects_only"},
     {"name": "centroid-missing-contact", "rule": "sketch-member-optional-fields", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/centroids/0/contact_style", "value": null}, {"op": "remove", "path": "/sketch/centroids/0/contact"}], "expect": "schema_rejects_only"},
@@ -614,8 +616,8 @@
     {"name": "captions-64", "rule": "sketch-caption-count", "base": "pair_sketch", "patch": [{"op": "replace", "path": "/sketch/captions", "value": {"$repeat": {"text": "x", "position": {"x": 0, "y": 3}, "color": null}, "count": 64}}], "expect": "both_accept"},
     {"name": "captions-65", "rule": "sketch-caption-count", "base": "pair_sketch", "patch": [{"op": "replace", "path": "/sketch/captions", "value": {"$repeat": {"text": "x", "position": {"x": 0, "y": 3}, "color": null}, "count": 65}}], "expect": "both_reject"},
 
-    {"name": "abbreviations-32", "rule": "sketch-abbreviation-count", "base": "pair_sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations", "value": {"$repeat": {"label": "Me", "anchor": 0, "atoms": [0]}, "count": 32}}], "expect": "both_accept"},
-    {"name": "abbreviations-33", "rule": "sketch-abbreviation-count", "base": "pair_sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations", "value": {"$repeat": {"label": "Me", "anchor": 0, "atoms": [0]}, "count": 33}}], "expect": "both_reject"},
+    {"name": "abbreviations-32", "rule": "sketch-abbreviation-count", "base": "pair_sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations", "value": {"$repeat": {"label": "Me", "anchor": 0, "exit": null, "atoms": [0]}, "count": 32}}], "expect": "both_accept"},
+    {"name": "abbreviations-33", "rule": "sketch-abbreviation-count", "base": "pair_sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations", "value": {"$repeat": {"label": "Me", "anchor": 0, "exit": null, "atoms": [0]}, "count": 33}}], "expect": "both_reject"},
 
     {"name": "arrow-start-x-minus-50", "rule": "arrow-bounded", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/arrows/0/start/x", "value": -50}], "expect": "both_accept"},
     {"name": "arrow-end-x-50.5", "rule": "arrow-bounded", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/arrows/0/end/x", "value": 50.5}], "expect": "both_reject"},
@@ -645,6 +647,11 @@
 
     {"name": "abbreviation-anchor-member", "rule": "abbreviation-anchor", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations/0/anchor", "value": 2}], "expect": "both_accept"},
     {"name": "abbreviation-anchor-outside", "rule": "abbreviation-anchor", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations/0/anchor", "value": 0}], "expect": "decoder_rejects_only"},
+
+    {"name": "abbreviation-exit-null", "rule": "abbreviation-exit", "base": "sketch", "expect": "both_accept"},
+    {"name": "abbreviation-exit-member", "rule": "abbreviation-exit", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations/0/exit", "value": 2}], "expect": "both_accept"},
+    {"name": "abbreviation-exit-same-as-anchor", "rule": "abbreviation-exit", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations/0/exit", "value": 1}], "expect": "decoder_rejects_only", "message": "Invalid diagram abbreviation"},
+    {"name": "abbreviation-exit-outside-members", "rule": "abbreviation-exit", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations/0/exit", "value": 0}], "expect": "decoder_rejects_only", "message": "Invalid diagram abbreviation"},
 
     {"name": "abbreviation-last-atom", "rule": "abbreviation-indices", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations/0/atoms", "value": [1, 2, 3]}], "expect": "both_accept"},
     {"name": "abbreviation-past-atoms", "rule": "abbreviation-indices", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/abbreviations/0/atoms", "value": [1, 4]}], "expect": "decoder_rejects_only"},

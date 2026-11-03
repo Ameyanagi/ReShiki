@@ -350,10 +350,18 @@ fn apply_entry(
             atom.display.set_variable(None);
         }
         let mut result = match formula {
-            Some((label, _)) => {
-                crate::chemistry::abbreviations::replace_bundled(&clean, &selected, label)
-            }
-            None => crate::chemistry::abbreviations::replace(&clean, &selected, text),
+            Some((label, _)) => crate::chemistry::abbreviations::replace_bundled_with_policy(
+                &clean,
+                &selected,
+                label,
+                crate::chemistry::abbreviations::AttachmentPolicy::SharedAnchor,
+            ),
+            None => crate::chemistry::abbreviations::replace_with_policy(
+                &clean,
+                &selected,
+                text,
+                crate::chemistry::abbreviations::AttachmentPolicy::SharedAnchor,
+            ),
         }
         .map_err(|e| format!("{e}. Choose Text label to use the text without a chemical group."))?;
         // The template is planar; retain the original anchor's position and depth.
