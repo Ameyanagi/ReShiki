@@ -1,4 +1,6 @@
 //! Rigid cage descriptors must define the bridgeheads and the substituted atom.
+use std::collections::{BTreeMap, BTreeSet};
+
 use opsin::graph::StereoGroupType;
 use opsin::{ParseOptions, Parser, Status, Structure};
 use reshiki_chemistry::smiles;
@@ -16,6 +18,59 @@ fn canonical(text: &str) -> String {
 }
 fn mirror(text: &str) -> String {
     text.replace("@@", "!").replace('@', "@@").replace('!', "@")
+}
+fn stereo_group_signature(structure: &Structure) -> String {
+    let mut groups = BTreeMap::new();
+    for atom in structure.graph.atoms.iter().filter(|atom| atom.active) {
+        if let Some(parity) = &atom.parity {
+            groups
+                .entry(parity.stereo_group)
+                .or_insert_with(Vec::new)
+                .push(atom.locants.first().unwrap().as_str());
+        }
+    }
+    let mut signatures = groups
+        .into_iter()
+        .map(|(group, mut locants)| {
+            locants.sort();
+            format!("{:?}:{}", group.kind, locants.join(","))
+        })
+        .collect::<Vec<_>>();
+    signatures.sort();
+    signatures.join(";")
+}
+fn allowed_structures(structure: &Structure) -> BTreeSet<String> {
+    let groups = structure
+        .graph
+        .atoms
+        .iter()
+        .filter(|atom| atom.active)
+        .filter_map(|atom| atom.parity.as_ref())
+        .map(|parity| parity.stereo_group)
+        .filter(|group| group.kind != StereoGroupType::Absolute)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    (0..1 << groups.len())
+        .map(|inverted| {
+            let mut member = structure.clone();
+            for atom in member.graph.atoms.iter_mut().filter(|atom| atom.active) {
+                if let Some(parity) = &mut atom.parity {
+                    if let Some(index) = groups
+                        .iter()
+                        .position(|group| *group == parity.stereo_group)
+                        && inverted & (1 << index) != 0
+                    {
+                        parity.parity *= -1;
+                    }
+                    // Canonical SMILES ignores enhanced groups. Expand each simultaneous
+                    // group mirror first, then compare ordinary absolute structures.
+                    parity.stereo_group = Default::default();
+                }
+            }
+            canonical(&member.semantic_cxsmiles().unwrap())
+        })
+        .collect()
 }
 fn assert_fixture(name: &str, fixture: &str, bridgeheads: [&str; 2], targets: &[&str]) -> String {
     let structure = parse(name);
@@ -731,6 +786,142 @@ fn nonabsolute_cip_outside_the_frame_keeps_its_own_group() {
         assert_eq!(groups[0], groups[3], "{name}");
         assert_eq!(groups[2].kind, kind, "{name}");
         assert_ne!(groups[0], groups[2], "{name}");
+    }
+}
+
+#[test]
+fn explicit_groups_crossing_the_cage_frame_preserve_their_correlations() {
+    let mirror_pair =
+        |fixture: &str| BTreeSet::from([canonical(fixture), canonical(&mirror(fixture))]);
+    let rr = mirror_pair("C[C@H]1[C@H]([C@@H]2CC[C@H]1C2)O");
+    let rs = mirror_pair("C[C@@H]1[C@H]([C@@H]2CC[C@H]1C2)O");
+    assert_eq!(rr.len(), 2);
+    assert_eq!(rs.len(), 2);
+    assert!(rr.is_disjoint(&rs));
+
+    // A01–A04, A16–A18, A23–A24, A27, A29–A34 from the anchor review.
+    for (name, expected_groups, expected_pair) in [
+        (
+            "(1R*,3R*)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Relative:1,2,3,4",
+            Some(&rr),
+        ),
+        (
+            "(1R*,3S*)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Relative:1,2,3,4",
+            Some(&rs),
+        ),
+        (
+            "(1RS,3RS)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Racemic:1,2,3,4",
+            Some(&rr),
+        ),
+        (
+            "(1RS,3SR)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Racemic:1,2,3,4",
+            Some(&rs),
+        ),
+        (
+            "(1SR,3RS)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Racemic:1,2,3,4",
+            Some(&rs),
+        ),
+        (
+            "(1R*,3R*,5S*)-3,5-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Relative:1,2,3,4,5",
+            None,
+        ),
+        (
+            "(1R*,3R*,5S)-3,5-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Absolute:5;Relative:1,2,3,4",
+            None,
+        ),
+        (
+            "(1R*,3R*,5R)-3,5-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Absolute:5;Relative:1,2,3,4",
+            None,
+        ),
+        (
+            "(1R*,4R*)-4-methylbicyclo[3.2.1]octan-2-exo-ol",
+            "Relative:1,2,4,5",
+            None,
+        ),
+        (
+            "(1RS,4RS)-4-methylbicyclo[3.2.1]octan-2-exo-ol",
+            "Racemic:1,2,4,5",
+            None,
+        ),
+        (
+            "2-[(1R*,3R*)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]-3-(bicyclo[2.2.1]heptan-2-endo-yl)propan-1-ol",
+            "Relative:1,2,3,4;Relative:1,2,4",
+            None,
+        ),
+        (
+            "(2-exo,3R*,1R*)-3-methylbicyclo[2.2.1]heptan-2-ol",
+            "Relative:1,2,3,4",
+            Some(&rr),
+        ),
+        (
+            "(1R*,3R*,2-exo)-3-methylbicyclo[2.2.1]heptan-2-ol",
+            "Relative:1,2,3,4",
+            Some(&rr),
+        ),
+        (
+            "rel-(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Relative:1,2,3,4",
+            Some(&rr),
+        ),
+        (
+            "rel-(1R,3S)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Relative:1,2,3,4",
+            Some(&rs),
+        ),
+        (
+            "rac-(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Racemic:1,2,3,4",
+            Some(&rr),
+        ),
+        (
+            "rac-(1R,3S)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "Racemic:1,2,3,4",
+            Some(&rs),
+        ),
+    ] {
+        let structure = parse(name);
+        assert_eq!(
+            stereo_group_signature(&structure),
+            expected_groups,
+            "{name}"
+        );
+        let members = allowed_structures(&structure);
+        let independent_groups = expected_groups
+            .split(';')
+            .filter(|group| !group.starts_with("Absolute:"))
+            .count();
+        assert_eq!(
+            members.len(),
+            1 << independent_groups,
+            "{name}: {members:?}"
+        );
+        if let Some(expected_pair) = expected_pair {
+            assert_eq!(&members, expected_pair, "{name}");
+        }
+    }
+}
+
+#[test]
+fn correlated_cage_groups_remain_independent_of_each_other_and_the_parent() {
+    for (prefix, kind) in [("rel", "Relative"), ("rac", "Racemic")] {
+        let name = format!(
+            "{prefix}-(2R)-2-[{prefix}-(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]-3-[{prefix}-(1R,3S)-3-methylbicyclo[2.2.1]heptan-2-endo-yl]propan-1-ol"
+        );
+        let structure = parse(&name);
+        assert_eq!(
+            stereo_group_signature(&structure),
+            format!("{kind}:1,2,3,4;{kind}:1,2,3,4;{kind}:2"),
+            "{name}"
+        );
+        assert_eq!(allowed_structures(&structure).len(), 8, "{name}");
     }
 }
 

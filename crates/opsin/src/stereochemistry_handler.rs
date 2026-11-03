@@ -28,9 +28,11 @@ struct BicyclicCage {
 }
 
 /// Template parities for the cage frame: both bridgeheads and every atom
-/// carrying an endo/exo/syn/anti descriptor. Other cage atoms are independent.
+/// carrying an endo/exo/syn/anti descriptor. Other cage atoms are independent
+/// unless an explicit stereo group correlates them with the frame.
 #[derive(Default)]
 struct CageStereochemistry {
+    atoms: Vec<AtomId>,
     parities: BTreeMap<AtomId, AtomParity>,
     group: Option<StereoGroupType>,
 }
@@ -523,6 +525,7 @@ impl<'a> StereochemistryHandler<'a> {
                 }
             }
             pending.parities.extend(parities);
+            pending.atoms = cage.atoms;
             pending.group = explicit_group.or(pending.group);
             return Ok(());
         }
@@ -622,16 +625,11 @@ impl<'a> StereochemistryHandler<'a> {
     }
     fn apply_cage_stereo_groups(&mut self) -> Result {
         let cages = std::mem::take(&mut self.cage_stereo_groups);
-        let cage_atoms: BTreeSet<_> = cages
-            .values()
-            .flat_map(|cage| cage.parities.keys().copied())
-            .collect();
         let (mut racemic_number, mut relative_number) = (0, 0);
         for group in self
             .graph()
             .atoms
             .iter()
-            .filter(|atom| !cage_atoms.contains(&atom.id))
             .filter_map(|atom| atom.parity.as_ref().map(|parity| parity.stereo_group))
         {
             let number = match group.kind {
@@ -642,7 +640,7 @@ impl<'a> StereochemistryHandler<'a> {
             *number = (*number).max(group.number);
         }
         for (_, cage) in cages {
-            let atoms: Vec<_> = cage.parities.into_keys().collect();
+            let mut atoms: Vec<_> = cage.parities.keys().copied().collect();
             let kind = if let Some(kind) = cage.group {
                 kind
             } else {
@@ -651,7 +649,43 @@ impl<'a> StereochemistryHandler<'a> {
                 }
                 StereoGroupType::Relative
             };
-            let number = match kind {
+            let existing_groups: BTreeSet<_> = atoms
+                .iter()
+                .filter_map(|&atom| self.graph().atom(atom).parity.as_ref())
+                .map(|parity| parity.stereo_group)
+                .filter(|group| {
+                    group.kind == kind
+                        && matches!(kind, StereoGroupType::Relative | StereoGroupType::Racemic)
+                })
+                .collect();
+            // Preserve explicit correlations across the geometric frame boundary.
+            atoms.extend(cage.atoms.iter().copied().filter(|atom| {
+                !cage.parities.contains_key(atom)
+                    && self
+                        .graph()
+                        .atom(*atom)
+                        .parity
+                        .as_ref()
+                        .is_some_and(|parity| existing_groups.contains(&parity.stereo_group))
+            }));
+            // Separately scoped descriptors initially reuse group number 1.
+            // If it also occurs outside this cage, renumber the correlated set
+            // together so independent cages and parent centres stay independent.
+            let existing_number = existing_groups
+                .iter()
+                .next()
+                .filter(|group| {
+                    existing_groups.len() == 1
+                        && !self.graph().atoms.iter().any(|atom| {
+                            !cage.atoms.contains(&atom.id)
+                                && atom
+                                    .parity
+                                    .as_ref()
+                                    .is_some_and(|parity| parity.stereo_group == **group)
+                        })
+                })
+                .map(|group| group.number);
+            let number = existing_number.unwrap_or_else(|| match kind {
                 StereoGroupType::Racemic => {
                     racemic_number += 1;
                     racemic_number
@@ -661,7 +695,7 @@ impl<'a> StereochemistryHandler<'a> {
                     relative_number
                 }
                 _ => 1,
-            };
+            });
             for atom in atoms {
                 self.set_stereo_group(atom, kind, number);
             }
@@ -799,7 +833,12 @@ impl<'a> StereochemistryHandler<'a> {
         let available = |a: &AtomId| {
             self.not_explicitly_defined_stereo_centre_map
                 .contains_key(a)
-                || (pseudo && locant.is_some() && self.graph().atom(*a).parity.is_some())
+                || (pseudo
+                    && locant.is_some()
+                    && self
+                        .cage_stereo_groups
+                        .values()
+                        .any(|cage| cage.parities.contains_key(a)))
                 || (pseudo
                     && !self.atom_stereo_centre_map.contains_key(a)
                     && crate::stereo_analyser::is_possibly_stereogenic(self.graph(), *a))
@@ -821,10 +860,10 @@ impl<'a> StereochemistryHandler<'a> {
                 // Cage descriptors may already have fixed this centre. Check
                 // its label after all lowercase centres are seeded, preserving
                 // the existing parity even if the descriptor contradicts it.
-                if !self
-                    .not_explicitly_defined_stereo_centre_map
-                    .contains_key(&atom)
-                    && self.graph().atom(atom).parity.is_some()
+                if self
+                    .cage_stereo_groups
+                    .values()
+                    .any(|cage| cage.parities.contains_key(&atom))
                 {
                     self.preassigned_pseudo_stereo_centres
                         .push((atom, value.into()));
