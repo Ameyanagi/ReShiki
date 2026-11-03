@@ -256,7 +256,7 @@ mod tests {
             ),
             (
                 "c1ccc2c(c1)NC1(CCC1)N2",
-                "2,3-dihydro-1H-spiro[1,3-benzimidazole-2,1'-cyclobutane]",
+                "2,3-dihydro-1H-spiro[[1,3]benzimidazole-2,1'-cyclobutane]",
                 NameStatus::Preferred,
             ),
             (

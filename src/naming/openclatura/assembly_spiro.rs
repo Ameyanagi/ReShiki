@@ -1060,8 +1060,25 @@ fn parent_needs_parentheses(name: &str) -> bool {
     }
     name.contains('-') || name.chars().any(|c| c.is_ascii_digit())
 }
+/// P-24.5.3: locants that belong to a component name, as in 1,3-benzodioxole,
+/// are enclosed in square brackets: spiro[[1,3]benzodioxole-2,1'-cyclopentane].
+fn locant_bracketed_component(name: &str) -> Option<String> {
+    let (locants, stem) = name.split_once('-')?;
+    (locants
+        .split(',')
+        .all(|l| !l.is_empty() && l.chars().all(|c| c.is_ascii_digit()))
+        && stem.starts_with(|c: char| c.is_ascii_lowercase())
+        && !stem.contains(['-', '(', '['])
+        && !stem.contains("hydro"))
+    .then(|| format!("[{locants}]{stem}"))
+}
+fn spiro_component(name: &str) -> String {
+    locant_bracketed_component(name).unwrap_or_else(|| name.into())
+}
 fn side_name(name: &str) -> String {
-    if parent_needs_parentheses(name) {
+    if let Some(bracketed) = locant_bracketed_component(name) {
+        bracketed
+    } else if parent_needs_parentheses(name) {
         format!("({name})")
     } else {
         name.into()
@@ -1401,13 +1418,15 @@ pub(super) fn format_spiro_core(
             );
         } else if side.cited_first {
             core = format!(
-                "spiro[{parent_name}-{},{}'-{core}]",
+                "spiro[{}-{},{}'-{core}]",
+                spiro_component(parent_name),
                 side_locant(side, parent_name),
                 side.parent_locant
             );
         } else {
             core = format!(
-                "spiro[{core}-{},{}'-{name}]",
+                "spiro[{}-{},{}'-{name}]",
+                spiro_component(&core),
                 side.parent_locant,
                 side_locant(side, parent_name)
             );

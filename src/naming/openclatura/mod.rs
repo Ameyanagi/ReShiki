@@ -992,7 +992,7 @@ mod tests {
             name_smiles("C1CCC2(C1)Oc1ccccc1O2")
                 .map(|name| name.text)
                 .as_deref(),
-            Ok("spiro[1,3-benzodioxole-2,1'-cyclopentane]"),
+            Ok("spiro[[1,3]benzodioxole-2,1'-cyclopentane]"),
         );
     }
 
