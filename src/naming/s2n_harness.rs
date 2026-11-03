@@ -399,6 +399,7 @@ fn ratchet(reports: &BTreeMap<&str, Report>) {
     // r/s and ring-assembly departures are pinned, with complete identity
     // roundtrips, by the intentional-departure tests below. FR-3.5
     // component changes are likewise pinned by the fr35_* identity tests.
+    // Substituted monocycle suffix locants follow P-14.3.4.2(c), not upstream.
     for (category, counts) in reports["parity"].rows() {
         current.insert(
             ("parity_text".into(), category.into()),
@@ -547,8 +548,8 @@ fn ring_r_s_names_intentionally_depart_from_upstream_spelling() {
         ),
         (
             "CC(C)(C)[C@H]1CC[C@@H](O)CC1",
-            "(1s,4s)-4-(tert-butyl)cyclohexanol",
-            Some("cis-4-(tert-butyl)cyclohexanol"),
+            "(1s,4s)-4-(tert-butyl)cyclohexan-1-ol",
+            Some("cis-4-(tert-butyl)cyclohexan-1-ol"),
         ),
         (
             "C[C@H]1C[C@H](C)C1",

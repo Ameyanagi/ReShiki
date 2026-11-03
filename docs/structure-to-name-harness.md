@@ -51,8 +51,8 @@ locants (P-14.3.3 and P-14.3.4.6). This changes frozen spellings such as
 `2-phenylacetic acid`, `2-phenylacetonitrile` and `2-cyclopentylacetic acid`.
 Amido prefixes retain locants when the real nitrogen supplies another
 substitution site, including prefixes assembled through a temporary acid.
-The fast text-parity ratchet is therefore 397/434; the structure and parity
-round-trip ratchets are 424/434, with zero wrong structures. Frozen upstream
+These locant changes cost six fast text-parity matches; the structure and
+parity round-trip ratchets are 424/434, with zero wrong structures. Frozen upstream
 names remain unchanged in the corpus. Changed port expectations, including
 `aminoacetic acid` in `rules_cases.tsv`, are checked by OPSIN round trip.
 
@@ -165,6 +165,23 @@ own name is wrong for some inputs (protonated fused nitrogen, quinoid and
 localized pi states of retained parents, bridges without a valence proof,
 re-primed dispiro locants); the port declines those classes, and each such
 place is marked `Upstream divergence`.
+
+Intentional PIN corrections count against exact text parity with openclatura
+0.4.3. Under [P-14.3.4.2(c)](https://iupac.qmul.ac.uk/BlueBook/P1.html#P-14.3.4.2),
+the suffix locant `1` is omitted only on a monosubstituted homogeneous monocycle:
+`2-methylcyclohexan-1-ol` replaces upstream's `2-methylcyclohexanol`.
+Substitution on a suffix heteroatom alone still permits omission, as in
+`N-methylcyclohexanamine`; retained names such as `2-methylphenol` and
+`2-methylbenzoic acid` are unchanged. Four `openclatura_tests.tsv` expectations
+have corrected suffix locants but retain upstream's cis/trans wording; these
+already differ from the generated r/s names and do not affect exact parity.
+This costs three fast text matches (`drug` 18→16, `natural_product` 17→16)
+and six full text matches, three of them in `pubchem_random`. Structure, name
+and generated round-trip counts do not change. Ring-assembly parents
+([P-28](https://iupac.qmul.ac.uk/BlueBook/P2.html#28)), such as
+`[1,1′-biphenyl]-4-ol` for upstream's `4-phenylphenol`, cost eight more
+(`mr_assembly` 10→3, `roundtrip` one). With all three changes the fast text
+ratchet is 386/434.
 
 | Check                   |      Fast |                                    Full |
 | ----------------------- | --------: | --------------------------------------: |

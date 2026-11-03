@@ -791,7 +791,12 @@ fn sole_group_redundant(parts: &AssemblyParts) -> bool {
         return false;
     }
     if parts.is_ring {
-        return parts.unsaturations.is_empty() && parts.retained_name.as_deref() == Some("benzene");
+        // Upstream divergence: P-14.3.4.2(c) requires a monosubstituted ring.
+        return parts.unsaturations.is_empty()
+            && (parts.retained_name.as_deref() == Some("benzene")
+                || (parts.is_simple_ring()
+                    && !parts.spiro_prefix_composition
+                    && parts.retained_name.is_none()));
     }
     !parts.is_substituent && parts.parent_length == 2 && parts.parent_charges.is_empty()
 }
@@ -854,15 +859,7 @@ pub fn format_principal_suffix(
         && !parts.is_ring_assembly()
         && !parts.isotope_explicit_locants
         && locs == ["1"]
-        && (!group.suffix_with_locant
-            || (parts.is_ring
-                && parts.unsaturations.is_empty()
-                && !parts.is_bicycle
-                && !parts.is_spiro
-                && !parts.is_polycycle
-                && !parts.spiro_prefix_composition
-                && parts.retained_name.is_none())
-            || sole_group_redundant(parts))
+        && (!group.suffix_with_locant || sole_group_redundant(parts))
     {
         omit = true;
     }

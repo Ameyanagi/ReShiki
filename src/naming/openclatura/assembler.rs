@@ -816,6 +816,70 @@ mod tests {
     }
 
     #[test]
+    fn substituted_monocycles_cite_principal_suffix_locant_one() {
+        for (smiles, expected) in [
+            ("O[C@H]1[C@H](C)CCCC1", "(1R,2R)-2-methylcyclohexan-1-ol"),
+            ("O[C@H]1[C@@H](C)CCCC1", "(1R,2S)-2-methylcyclohexan-1-ol"),
+            ("OC1C(C)CCCC1", "2-methylcyclohexan-1-ol"),
+            ("OC1CCC(C)CC1", "4-methylcyclohexan-1-ol"),
+            ("O=C1C(C)CCC1", "2-methylcyclopentan-1-one"),
+            ("NC1C(C)CCCC1", "2-methylcyclohexan-1-amine"),
+            ("OC(=O)C1C(C)CCCC1", "2-methylcyclohexane-1-carboxylic acid"),
+            ("OC1C(Cl)CCC1", "2-chlorocyclopentan-1-ol"),
+            ("SC1C(C)CCCC1", "2-methylcyclohexane-1-thiol"),
+            ("OC1CCCCC1C(C)C", "2-(propan-2-yl)cyclohexan-1-ol"),
+            ("CC1(O)CCCCC1", "1-methylcyclohexan-1-ol"),
+            ("OC1CC1C", "2-methylcyclopropan-1-ol"),
+            ("OC1C(C)CCCCC1", "2-methylcycloheptan-1-ol"),
+            ("N#CC1C(C)CCCC1", "2-methylcyclohexane-1-carbonitrile"),
+            ("O=CC1C(C)CCCC1", "2-methylcyclohexane-1-carbaldehyde"),
+            (
+                "OS(=O)(=O)C1C(C)CCCC1",
+                "2-methylcyclohexane-1-sulfonic acid",
+            ),
+            ("CNC1C(C)CCCC1", "N,2-dimethylcyclohexan-1-amine"),
+            ("[NH3+]C1C(C)CCCC1", "2-methylcyclohexan-1-aminium"),
+            ("OC1CCCCC1", "cyclohexanol"),
+            ("O=C1CCCC1", "cyclopentanone"),
+            ("NC1CCCCC1", "cyclohexanamine"),
+            ("[NH3+]C1CCCCC1", "cyclohexanaminium"),
+            ("OC(=O)C1CCCCC1", "cyclohexanecarboxylic acid"),
+            ("SC1CCCCC1", "cyclohexanethiol"),
+            ("N#CC1CCCCC1", "cyclohexanecarbonitrile"),
+            ("O=CC1CCCCC1", "cyclohexanecarbaldehyde"),
+            ("OS(=O)(=O)C1CCCCC1", "cyclohexanesulfonic acid"),
+            ("CNC1CCCCC1", "N-methylcyclohexanamine"),
+            ("CN(C)C1CCCCC1", "N,N-dimethylcyclohexanamine"),
+            ("CNC(=O)C1CCCCC1", "N-methylcyclohexanecarboxamide"),
+            ("OC1C=CCCC1", "cyclohex-2-en-1-ol"),
+            ("O=C1C=CCCC1", "cyclohex-2-en-1-one"),
+            ("Oc1ccccc1C", "2-methylphenol"),
+            ("Oc1ccccc1", "phenol"),
+            ("OC(=O)c1ccccc1", "benzoic acid"),
+            ("OC(=O)c1ccccc1C", "2-methylbenzoic acid"),
+            ("Nc1ccccc1C", "2-methylaniline"),
+            ("CCC(O)C", "butan-2-ol"),
+            ("CCCC(=O)O", "butanoic acid"),
+            ("OC1CCC(O)CC1", "cyclohexane-1,4-diol"),
+            ("C1=CCCCC1", "cyclohexene"),
+            ("CC1=CCCCC1", "1-methylcyclohex-1-ene"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{smiles}: {}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
     fn systematic_fusion_suffixes_preserve_intrinsic_added_and_hydro_hydrogen() {
         for (smiles, expected) in [
             (

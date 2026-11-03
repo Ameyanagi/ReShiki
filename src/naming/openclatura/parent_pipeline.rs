@@ -759,13 +759,13 @@ mod tests {
             ),
             (
                 "O[C@H]1CC[C@@H](C(C)(C)C)CC1",
-                "(1s,4s)-4-(tert-butyl)cyclohexanol",
-                "cis-4-(tert-butyl)cyclohexanol",
+                "(1s,4s)-4-(tert-butyl)cyclohexan-1-ol",
+                "cis-4-(tert-butyl)cyclohexan-1-ol",
             ),
             (
                 "O[C@H]1CC[C@H](C(C)(C)C)CC1",
-                "(1r,4r)-4-(tert-butyl)cyclohexanol",
-                "trans-4-(tert-butyl)cyclohexanol",
+                "(1r,4r)-4-(tert-butyl)cyclohexan-1-ol",
+                "trans-4-(tert-butyl)cyclohexan-1-ol",
             ),
         ] {
             assert_relative_ring_name(smiles, expected, alternative);
