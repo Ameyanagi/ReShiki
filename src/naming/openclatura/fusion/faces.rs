@@ -501,7 +501,7 @@ pub fn select_bounded_face_model_with_limits(
     if rank == 2
         && min == config.search.minimum_ring_size
         && max.is_none()
-        && let Some(model) = larger_carbon_bicycle(mol, atoms, &edges)
+        && let Some(model) = larger_fused_bicycle(mol, atoms, &edges)
     {
         return Ok(Some(model));
     }
@@ -611,19 +611,12 @@ pub fn select_bounded_face_model_with_limits(
     }
     Ok(if distinct.len() == 1 { best } else { None })
 }
-fn larger_carbon_bicycle(
+fn larger_fused_bicycle(
     mol: &Molecule,
     atoms: &AtomSet,
     edges: &EdgeSet,
 ) -> Option<BoundedFaceModel> {
     let c = fusion_nomenclature_config();
-    if c.annulene_ring_sizes.is_empty()
-        || atoms
-            .iter()
-            .any(|a| mol.atoms[a].symbol != "C" || mol.atoms[a].charge != 0)
-    {
-        return None;
-    }
     let adj = adjacency_from_edges(atoms, edges);
     let junctions = adj
         .iter()
@@ -668,10 +661,25 @@ fn larger_carbon_bicycle(
         return None;
     }
     let sizes = paths.iter().map(Vec::len).collect::<Vec<_>>();
-    if !c.annulene_ring_sizes.contains(sizes.iter().max()?)
-        || *sizes.iter().max()? <= c.search.maximum_ring_size
+    if *sizes.iter().max()? <= c.search.maximum_ring_size
         || *sizes.iter().min()? < c.rules.minimum_ring_size
     {
+        return None;
+    }
+    let carbon = |a: &usize| mol.atoms[a].symbol == "C" && mol.atoms[a].charge == 0;
+    let carbon_annulene =
+        atoms.iter().all(carbon) && c.annulene_ring_sizes.contains(sizes.iter().max()?);
+    // P-25.2.2.4 also applies to benzoheterocycles beyond the ordinary
+    // eight-member face limit. The generated Hantzsch-Widman series ends at
+    // ten; prove only an edge-fused benzene/heteromonocycle pair here, leaving
+    // the search bound for other heterocycles and larger polycycles unchanged.
+    let benzoheterocycle = paths
+        .iter()
+        .any(|path| path.len() == 6 && path.iter().all(carbon))
+        && paths.iter().any(|path| {
+            (9..=10).contains(&path.len()) && path.iter().any(|a| mol.atoms[a].symbol != "C")
+        });
+    if !carbon_annulene && !benzoheterocycle {
         return None;
     }
     let mut faces = paths
@@ -917,5 +925,80 @@ mod tests {
             vec![6, 10]
         );
         assert_eq!(bounded.outer_boundary.atoms.len(), 14);
+    }
+
+    #[test]
+    fn benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit() {
+        let parser = opsin::Parser::new().unwrap();
+        for (name, size) in [("1-benzoxonine", 9), ("2H-1-benzoxecine", 10)] {
+            let parsed = parser.parse(name, &opsin::ParseOptions::strict());
+            let smiles = parsed
+                .structure
+                .unwrap_or_else(|| panic!("{name}: {}", parsed.message))
+                .semantic_cxsmiles()
+                .unwrap();
+            let mol = read_smiles(&smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            let bounded = select_bounded_face_model(&mol, &atoms)
+                .unwrap()
+                .unwrap_or_else(|| panic!("{name}: {smiles}"));
+            assert_eq!(
+                bounded
+                    .faces
+                    .iter()
+                    .map(|f| f.atoms.len())
+                    .collect::<Vec<_>>(),
+                vec![6, size],
+                "{name}"
+            );
+            assert!(bounded.audit.ok, "{name}");
+            assert_eq!(bounded.outer_boundary.atoms.len(), size + 4);
+            assert_eq!(typed_face_model(&mol, &bounded).fusion_edges.len(), 1);
+            assert!(
+                select_bounded_face_model_with_limits(&mol, &atoms, 3, Some(8), 10000, 10000)
+                    .unwrap()
+                    .is_none(),
+                "explicit bounded searches stay bounded: {name}"
+            );
+
+            // Replacing a nonjunction benzene carbon removes the specific
+            // benzoheterocycle exception without altering the two-ring topology.
+            let mut nonbenzo = mol.clone();
+            let benzo_carbon = bounded.faces[0]
+                .atoms
+                .iter()
+                .find(|a| !bounded.faces[1].atoms.contains(a))
+                .unwrap();
+            nonbenzo.atoms.get_mut(benzo_carbon).unwrap().symbol = "N".into();
+            assert!(
+                select_bounded_face_model(&nonbenzo, &atoms)
+                    .unwrap()
+                    .is_none(),
+                "unrelated large heterobicycles stay outside the exception"
+            );
+
+            // Adding a third face must not make the large heterocycle available
+            // to the general polycycle face search.
+            let mut polycycle = mol.clone();
+            let (a, b) = cycle_edge_iter(&bounded.faces[0].atoms)
+                .find(|edge| !bounded.faces[1].edges.contains(edge))
+                .unwrap();
+            let extra = polycycle.atoms.keys().max().unwrap() + 1;
+            let first_bond = polycycle.bonds.keys().max().unwrap() + 1;
+            polycycle.add_atom(Atom::new(extra, "C")).unwrap();
+            polycycle
+                .add_bond(Bond::new(first_bond, a, extra, 1))
+                .unwrap();
+            polycycle
+                .add_bond(Bond::new(first_bond + 1, b, extra, 1))
+                .unwrap();
+            let polycycle_atoms = polycycle.atoms.keys().copied().collect();
+            assert!(
+                select_bounded_face_model(&polycycle, &polycycle_atoms)
+                    .unwrap()
+                    .is_none(),
+                "larger polycycles stay outside the exception"
+            );
+        }
     }
 }
