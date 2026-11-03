@@ -79,7 +79,7 @@ async fn profile_polyalanine_insert_stages() -> anyhow::Result<()> {
         document.validate().map_err(anyhow::Error::msg)?;
         elapsed(&mut stages, "drawing_and_labels", started);
         let started = Instant::now();
-        let _analysis = native_response::analyze_prepared(Arc::new(molecule), None).await?;
+        let _analysis = native_response::analyze_prepared(Arc::new(molecule), false, None).await?;
         elapsed(&mut stages, "analysis", started);
         let (mut app, _) = App::new();
         app.tab.doc = Document::default();

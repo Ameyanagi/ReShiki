@@ -154,8 +154,9 @@ pub async fn execute(
     let analysis = if molecule.state.graph.atoms.is_empty() || attachments || generic {
         None
     } else {
-        warnings.extend(native_response::identifier_notices(&molecule, false));
-        Some(native_response::analyze_prepared(Arc::new(molecule), config).await?)
+        let projected = molfile::has_projected_coordinates(&document);
+        warnings.extend(native_response::identifier_notices(&molecule, projected));
+        Some(native_response::analyze_prepared(Arc::new(molecule), projected, config).await?)
     };
     if generic {
         warnings.push(crate::generic::NOTICE.into());
