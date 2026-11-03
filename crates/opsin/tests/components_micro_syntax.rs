@@ -210,6 +210,15 @@ fn upstream_stereochemistry_bracket_cases() {
             ],
         ),
         (
+            "(2Xi,3xi,4xI)",
+            vec![
+                (Some("2"), "Xi", ALPHA_OR_BETA_TYPE_VAL, None),
+                (Some("3"), "xi", ALPHA_OR_BETA_TYPE_VAL, None),
+                (Some("4"), "ξ", ALPHA_OR_BETA_TYPE_VAL, None),
+            ],
+        ),
+        ("(Xi)", vec![(None, "Xi", ALPHA_OR_BETA_TYPE_VAL, None)]),
+        (
             "rel-(1R,3S,4S,7R)",
             vec![
                 (Some("1"), "R", R_OR_S_TYPE_VAL, Some("Rel")),

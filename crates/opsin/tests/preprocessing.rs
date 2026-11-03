@@ -10,10 +10,10 @@ fn upstream_preprocessor_cases() {
         ("$e-bromo", "epsilon-bromo"),
         ("$l-bromo", "lambda-bromo"),
         ("α-bromo", "alpha-bromo"),
-        ("(2Ξ,3R)-3-chlorobutan-2-ol", "(2xi,3R)-3-chlorobutan-2-ol"),
+        ("(2Ξ,3R)-3-chlorobutan-2-ol", "(2Xi,3R)-3-chlorobutan-2-ol"),
         (
             "(1ξ,4ξ)-cyclohexane-1,4-diol",
-            "(1xi,4xi)-cyclohexane-1,4-diol",
+            "(1xI,4xI)-cyclohexane-1,4-diol",
         ),
         ("sulphur dioxide", "sulfur dioxide"),
         (".alpha.-methyl-toluene", "alpha-methyl-toluene"),

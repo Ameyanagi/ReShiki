@@ -558,21 +558,33 @@ fn is_amidino_carbon(mol: &Molecule, carbon: usize, nitrogen: usize) -> bool {
             .all(|n| mol.atoms[n].symbol == "N" && mol.bond_order(carbon, *n) == 1)
 }
 
-fn hydrazone_stereo_prefix(mol: &Molecule, carbon: usize, nitrogen: usize, parent: &str) -> String {
+fn hydrazone_name(
+    mol: &Molecule,
+    carbon: usize,
+    nitrogen: usize,
+    parent: &str,
+    ylidene: &str,
+) -> String {
+    let name = format!("{parent} {ylidene}hydrazone");
     let Some(stereo) = mol
         .get_bond(carbon, nitrogen)
         .and_then(|b| b.stereo.as_deref())
         .filter(|stereo| matches!(*stereo, "E" | "Z"))
     else {
-        return String::new();
+        return name;
     };
+    // P-91.3: the descriptor cites the C=N locant only when the name cites locants.
     let locant = parent
         .strip_suffix("-one")
         .and_then(|s| s.rsplit_once("an-"))
         .map(|(_, locant)| locant)
         .filter(|locant| !locant.is_empty() && locant.bytes().all(|b| b.is_ascii_digit()))
-        .unwrap_or("1");
-    format!("({locant}{stereo})-")
+        .unwrap_or(if name.contains(|c: char| c.is_ascii_digit()) {
+            "1"
+        } else {
+            ""
+        });
+    format!("({locant}{stereo})-{name}")
 }
 
 /// Port of the ordered `simple_azine_parent_name` shortcut. In particular,
@@ -607,9 +619,9 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
                 )?);
                 if !ylidene.is_empty() && ylidene.ends_with("ylidene") {
                     let side = &sides[parent_side];
-                    let stereo = hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, parent);
+                    let name = hydrazone_name(mol, side.carbon, side.nitrogen, parent, &ylidene);
                     mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
-                    return Ok(Some(format!("{stereo}{} {ylidene}hydrazone", parent)));
+                    return Ok(Some(name));
                 }
             }
             let amidino = sides
@@ -690,14 +702,15 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
         {
             return Err(SHORTCUT_STEREO_ERROR.into());
         }
-        let stereo =
-            hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, &parents[parent_side]);
+        let name = hydrazone_name(
+            mol,
+            side.carbon,
+            side.nitrogen,
+            &parents[parent_side],
+            &ylidenes[1 - parent_side],
+        );
         mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
-        return Ok(Some(format!(
-            "{stereo}{} {}hydrazone",
-            parents[parent_side],
-            ylidenes[1 - parent_side]
-        )));
+        return Ok(Some(name));
     }
     Ok(None)
 }
@@ -3418,7 +3431,7 @@ mod tests {
         let smiles = "CC(=O)OC(=O)N(/C(N)=N/N=C=O)C(C)C";
         let mol = read_smiles(smiles).unwrap();
         let atoms = all_atoms(&mol);
-        let expected = "1-((1E)-(((acetyloxy)carbonyl)(propan-2-yl)amino)(amino)methylidene)-2-(oxomethylidene)hydrazine";
+        let expected = "1-((E)-(((acetyloxy)carbonyl)(propan-2-yl)amino)(amino)methylidene)-2-(oxomethylidene)hydrazine";
         assert_eq!(
             simple_azine_parent_name(&mol, &atoms).unwrap().as_deref(),
             Some(expected)

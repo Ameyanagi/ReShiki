@@ -90,6 +90,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("opsin", "suffixes"): 0,
     ("opsin", "suffixes_cycles"): 0,
     ("opsin", "suffixes_isotopes"): 0,
+    ("opsin", "unknown_stereochemistry"): 0,
 }
 
 

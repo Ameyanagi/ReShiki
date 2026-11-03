@@ -476,17 +476,32 @@ fn add_stereo(parts: &AssemblyParts, word: &str) -> String {
             parse_locant(l)
         }
     });
-    if features.is_empty() {
-        word.into()
-    } else {
-        format!(
+    // P-91.3: a single descriptor drops its locant when the word cites none,
+    // as in (E)-cyclooctene. Digits inside brackets belong to substituent,
+    // isotope, fusion or von Baeyer scopes, not to this word's locants.
+    let mut depth = 0;
+    let unlocanted_word = !word.chars().any(|character| match character {
+        '(' | '[' | '{' => {
+            depth += 1;
+            false
+        }
+        ')' | ']' | '}' => {
+            depth -= 1;
+            false
+        }
+        _ => depth == 0 && character.is_ascii_digit(),
+    });
+    match features.as_slice() {
+        [] => word.into(),
+        [(_, descriptor)] if unlocanted_word => format!("({descriptor})-{word}"),
+        _ => format!(
             "({})-{word}",
             features
                 .iter()
                 .map(|(l, d)| format!("{l}{d}"))
                 .collect::<Vec<_>>()
                 .join(",")
-        )
+        ),
     }
 }
 fn front_modifier_sort_key(name: &str) -> String {
@@ -636,6 +651,81 @@ mod tests {
         nomenclature::{rule_from_value, section},
     };
     use super::*;
+
+    #[test]
+    fn stereo_locants_follow_the_current_word_bracket_depth() {
+        let mut parts = AssemblyParts::new(1);
+        parts.stereo_features = vec![("1".into(), "R".into())];
+        for word in [
+            "bromochlorofluoromethane",
+            "(4-chlorophenyl)(fluoro)methanol",
+            "chloro(fluoro)(2H1)methane",
+        ] {
+            assert_eq!(add_stereo(&parts, word), format!("(R)-{word}"));
+        }
+        for word in ["1-chlorocyclooct-1-ene", "1H-benzo[1,2-b]pyran"] {
+            assert_eq!(add_stereo(&parts, word), format!("(1R)-{word}"));
+        }
+        // Several descriptors keep their locants even when the word has none.
+        parts.stereo_features = vec![("1".into(), "s".into()), ("4".into(), "s".into())];
+        assert_eq!(
+            add_stereo(&parts, "bicyclo[2.2.0]hexane"),
+            "(1s,4s)-bicyclo[2.2.0]hexane"
+        );
+        parts.stereo_features = vec![(String::new(), "Z".into()), ("1".into(), "Z".into())];
+        assert_eq!(
+            add_stereo(&parts, "2,3,4,5,6-pentafluorobenzaldehyde hydrazone"),
+            "(Z)-2,3,4,5,6-pentafluorobenzaldehyde hydrazone"
+        );
+    }
+
+    #[test]
+    fn stereo_locant_omission_preserves_configurations() {
+        for (smiles, expected) in [
+            ("C1CCC/C=C/CC1", "(E)-cyclooctene"),
+            ("C1CCC/C=C\\CC1", "(Z)-cyclooctene"),
+            ("C1CCCC/C=C/CC1", "(E)-cyclononene"),
+            ("C1CCCC/C=C\\CC1", "(Z)-cyclononene"),
+            ("F[C@H](Cl)Br", "(R)-bromochlorofluoromethane"),
+            ("F[C@@H](Cl)Br", "(S)-bromochlorofluoromethane"),
+            ("F[C@H](Cl)c1ccccc1", "[(R)-chlorofluoromethyl]benzene"),
+            ("C/C=C/C", "(2E)-but-2-ene"),
+            ("Cl/C=C/F", "(1E)-1-chloro-2-fluoroethene"),
+            ("C[C@@H](O)CC", "(2R)-butan-2-ol"),
+            ("O[C@H]1C[C@H](O)C1", "(1r,3r)-cyclobutane-1,3-diol"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn hydrazone_descriptor_cites_a_locant_only_when_the_name_does() {
+        for (smiles, expected) in [
+            ("C/C=N/N=C", "(E)-ethanal methylidenehydrazone"),
+            ("CC/C=N/N=C", "(E)-propanal methylidenehydrazone"),
+            (
+                "CC(C)/C=N/N=C",
+                "formaldehyde (1E)-2-methylpropylidenehydrazone",
+            ),
+        ] {
+            assert_eq!(
+                super::super::name_smiles(smiles).unwrap().text,
+                expected,
+                "{smiles}"
+            );
+        }
+    }
 
     #[test]
     fn systematic_fusion_suffixes_preserve_intrinsic_added_and_hydro_hydrogen() {

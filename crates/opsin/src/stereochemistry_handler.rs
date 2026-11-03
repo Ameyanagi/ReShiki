@@ -730,20 +730,51 @@ impl<'a> StereochemistryHandler<'a> {
         } else {
             None
         };
-        let locant = self.attr(id, LOCANT_ATR);
+        let locant = self.attribute(id, LOCANT_ATR);
         let value = self.attr(id, VALUE_ATR);
-        for fragment in self.possible_fragments(id)? {
-            if let Some(atom) = self
-                .graph()
-                .atom_by_locant(fragment, &locant)
-                .filter(|a| self.atom_stereo_centre_map.contains_key(a))
-            {
-                if value == "xi" {
+        let unknown = matches!(value.as_str(), "xi" | "Xi" | "ξ");
+        let fragments = self.possible_fragments(id)?;
+        for &fragment in &fragments {
+            let atom = if let Some(locant) = &locant {
+                self.graph()
+                    .atom_by_locant(fragment, locant)
+                    .filter(|a| self.atom_stereo_centre_map.contains_key(a))
+            } else {
+                self.graph()
+                    .fragment(fragment)
+                    .atoms
+                    .iter()
+                    .copied()
+                    .find(|a| {
+                        self.not_explicitly_defined_stereo_centre_map
+                            .contains_key(a)
+                    })
+            };
+            if let Some(atom) = atom {
+                let order = self.fragment_attribute(fragment, ALPHABETACLOCKWISEATOMORDERING_ATR);
+                if unknown {
+                    let true_centre = self.atom_stereo_centre_map[&atom].true_stereo_centre;
+                    if value == "Xi" && !true_centre {
+                        return stereo(
+                            "Uppercase Xi cannot specify a pseudoasymmetric stereocentre",
+                        );
+                    }
+                    // Steroid-style α/β positions also take lowercase ξ.
+                    let alpha_beta = order.as_deref().is_some_and(|order| {
+                        self.graph()
+                            .atom(atom)
+                            .locants
+                            .first()
+                            .is_some_and(|l| order.split('/').any(|o| o == l))
+                    });
+                    if value == "ξ" && true_centre && !alpha_beta {
+                        return stereo(
+                            "Lowercase xi requires a pseudoasymmetric or alpha/beta stereocentre",
+                        );
+                    }
                     self.state.graph_mut().atom_mut(atom).parity = None
                 } else {
-                    let Some(order) =
-                        self.fragment_attribute(fragment, ALPHABETACLOCKWISEATOMORDERING_ATR)
-                    else {
+                    let Some(order) = order else {
                         return structure(
                             "Identified fragment is not known to be able to support alpha/beta stereochemistry",
                         );
@@ -753,13 +784,19 @@ impl<'a> StereochemistryHandler<'a> {
                 self.not_explicitly_defined_stereo_centre_map.remove(&atom);
                 return Ok(());
             }
-            // IUPAC P-91.2.1.2.1 also uses Ξ at the locant of an
-            // unspecified E/Z bond; it is not restricted to alpha/beta atoms.
-            if value == "xi"
-                && self.attempt_assign_stereo_bond(fragment, "EZ", Some(&locant), false)?
-            {
-                return Ok(());
+        }
+        if matches!(value.as_str(), "Xi" | "xi") {
+            for fragment in fragments {
+                if self.attempt_assign_stereo_bond(fragment, "EZ", locant.as_deref(), false)? {
+                    return Ok(());
+                }
             }
+        }
+        if unknown {
+            return stereo(format!(
+                "Could not find stereocentre or bond that: {} appeared to be referring to",
+                self.arena.to_xml(id)
+            ));
         }
         structure(format!(
             "Could not find atom that: {} appeared to be referring to",

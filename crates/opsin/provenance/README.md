@@ -7,8 +7,9 @@ copyright 2017 Daniel Lowe. The original port was based on OPSIN 2.9.0,
 affects parsing or structures is ported through the pinned main commit,
 including phane nomenclature (see `../PORTING.md`).
 `../LICENSE` is an unmodified upstream copy. `manifest.json` records every
-XML/DTD file, migrated table, exporter and fixture hash. All 41 XML and seven
-DTD files are byte-equal to the pinned main checkout.
+XML/DTD file, migrated table, exporter and fixture hash. The 41 XML and seven
+DTD files retain the pinned main checkout, except `regexTokens.xml` also
+recognizes unlocanted Xi/xi stereodescriptors.
 
 The development oracle is the main build
 `opsin-core-3.0-SNAPSHOT-jar-with-dependencies.jar`, SHA256
@@ -41,6 +42,19 @@ intercept resource loading. Paths below should be absolute:
 cp /path/to/crates/opsin/provenance/ExportDfa.java.txt /tmp/export/ExportDfa.java
 javac -cp /path/to/pinned-opsin-core.jar -d /tmp/export /tmp/export/ExportDfa.java
 cd /tmp/empty-working-directory
+java -cp /path/to/pinned-opsin-core.jar:/tmp/export \
+  uk.ac.cam.ch.wwmm.opsin.ExportDfa /tmp/export/automata.bin
+```
+
+To include the native unlocanted Xi/xi extension, rerun that exporter from an
+isolated directory with the checked `regexTokens.xml` as a deliberate resource
+override. Only `token-69` and `token-reversed-69` differ from the pinned tables:
+
+```sh
+mkdir -p /tmp/export/resources/uk/ac/cam/ch/wwmm/opsin/resources
+cp /path/to/crates/opsin/resources/xml/regexTokens.xml \
+  /tmp/export/resources/uk/ac/cam/ch/wwmm/opsin/resources/regexTokens.xml
+cd /tmp/export
 java -cp /path/to/pinned-opsin-core.jar:/tmp/export \
   uk.ac.cam.ch.wwmm.opsin.ExportDfa /tmp/export/automata.bin
 ```
@@ -102,7 +116,7 @@ Compressed JSONL uses gzip level 9 with timestamp zero and an empty filename.
 The resource fingerprint is SHA256 over each resource in sorted UTF-8 path
 order, concatenating path, NUL, raw file bytes, NUL. This independently covers
 all XML/DTD files and the neutral DFA table. The exported crate constant is
-`bc977c95bd647cd90048215a2a82baa7d173c5373991ebc01690a0fe4137b062`.
+`120757a5f71a91898987092683be08ff8e068439e5d6344b753bd1e586f2fc6b`.
 
 `ExportGraphResources.java.txt` captures every distinct literal resource
 `(value, type, labels)` triple. The current gate checks 2,643 ordered graph

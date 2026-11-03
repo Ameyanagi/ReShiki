@@ -35,6 +35,12 @@ The fast test fails on any Wrong name and when a correct count in
 The full test fails on any Wrong name. The workflow runs nightly, on manual
 dispatch and on pushes to `feat/s2n`, and uploads the full report.
 
+Two names intentionally differ from the frozen 0.4.3 spelling: quinine's
+methanol centre and a random-corpus hydrazone. Their names cite no locants, so
+the descriptors drop theirs too (P-91.3): `(1R)` and `(1Z)` become `(R)` and
+`(Z)`. The text-parity baseline records both; structure checks still require
+the same complete graphs.
+
 ## Checks
 
 | Check     | What it does                                                                                                                                                                                                                                                                                                                       |

@@ -18,11 +18,13 @@ fn ignored_prefix_len(text: &str) -> usize {
     let words = [
         "sec", "tert", "t", "s", "d", "l", "m", "o", "p", "alpha", "beta", "gamma",
     ];
-    let stereo = !prefix.is_empty() && prefix.chars().all(|c| "ezrs".contains(c));
+    let stereo = !prefix.is_empty() && prefix.chars().all(|c| "ezrsξ".contains(c));
     let locants = prefix.split(',').all(|s| {
         let digits = s.chars().take_while(|c| c.is_ascii_digit()).count();
         if digits > 0 {
-            s[digits..].chars().all(|c| c.is_ascii_lowercase())
+            s[digits..]
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c == 'ξ')
         } else {
             s.chars().next().is_some_and(|c| "nospmc".contains(c))
                 && s[1..].chars().all(|c| c == '\'')
@@ -179,10 +181,14 @@ fn outer_parentheses_are_redundant(name: &str) -> bool {
         return !starts_with_multiplier(inner);
     }
     let (start, end) = groups[0];
-    let only_locants = start == 0
-        || inner[..start]
+    // An unlocanted stereodescriptor must remain inside its substituent scope.
+    let only_locants = if start == 0 {
+        !inner[end + 1..].starts_with('-') || inner[1..end].chars().any(|c| c.is_ascii_digit())
+    } else {
+        inner[..start]
             .trim_end_matches(|c: char| c.is_ascii_digit() || ",'-".contains(c))
-            .is_empty();
+            .is_empty()
+    };
     only_locants && !starts_with_multiplier(&inner[end + 1..])
 }
 pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
@@ -312,6 +318,23 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn outer_parentheses_keep_unlocanted_stereo_scoped_to_the_substituent() {
+        for (name, redundant) in [
+            ("((phenyl)methyl)", true),
+            ("((amino)methyl)", true),
+            ("((1R)-1-fluoroethyl)", true),
+            ("((R)-chlorofluoromethyl)", false),
+            ("((Ξ)-chlorofluoromethyl)", false),
+        ] {
+            assert_eq!(
+                super::outer_parentheses_are_redundant(name),
+                redundant,
+                "{name}"
+            );
+        }
+    }
+
     #[test]
     fn sibling_diazenyl_keeps_its_carbonyl_attachment() {
         assert_eq!(

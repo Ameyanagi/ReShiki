@@ -2635,10 +2635,11 @@ fn split_stereo_descriptors(text: &str) -> Vec<String> {
     result
 }
 fn alpha_beta_symbol(symbol: &str) -> Result<&'static str> {
-    match symbol.chars().next().map(|c| c.to_ascii_lowercase()) {
-        Some('a') => Ok("alpha"),
-        Some('b') => Ok("beta"),
-        Some('x') => Ok("xi"),
+    match symbol.chars().next() {
+        Some('a' | 'A') => Ok("alpha"),
+        Some('b' | 'B') => Ok("beta"),
+        Some('x') => Ok(if symbol == "xI" { "ξ" } else { "xi" }),
+        Some('X') => Ok("Xi"),
         _ => err("Malformed alpha/beta stereochemistry element"),
     }
 }
