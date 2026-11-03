@@ -164,9 +164,19 @@ fn specified_cumulene_ez_is_rejected_before_cleanup() {
         r"C/C=C=C=C\C",
         "C/C=C=C=C=C=C/C",
         r"C/C=C=C=C=C=C\C",
+        "[2H]/C=C=C=C/C",
+        r"[2H]/C=C=C=C\C",
+        "[3H]/C=C=C=C/C",
+        "[2H]/C=C=C=C=C=C/C",
+        "[2H]/C([H])=C=C=C/C",
         "F/C=C=C=C/Cl",
         "C/C(Cl)=C=C=C(/C)F",
         "C(=C=C=C/C)/C",
+        r"C/C=C/C(=C=C=C/F)/C=C\C",
+        r"C/C=C/C(=C=C=C\F)/C=C\C",
+        "[H]/N=C=C=C/C",
+        r"[H]/N=C=C=C\C",
+        "C/N=C=C=C/C",
         "C/C=C=C=C/C.CC",
         "C/1=C=C=C/CCCC1",
         // An aromatic terminal bond carries the direction.
@@ -192,6 +202,8 @@ fn specified_cumulene_ez_is_rejected_before_cleanup() {
         // An end with two identical ligands is not stereogenic (P-91.2.1.2.1).
         "C/C(C)=C=C=C/C",
         "C/C(C)=C=C=C(/C)C",
+        "[2H]/C([2H])=C=C=C/C",
+        "[CH3:1]/C([CH3:2])=C=C=C/C",
         "C/C=C/C(/C=C/C)=C=C=C/C=C/C",
     ] {
         assert!(canonical_smiles(text).is_ok(), "Rejected {text}");

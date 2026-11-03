@@ -453,9 +453,6 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
     if raw.metadata.atoms.iter().any(|m| m.chiral_tag > 2) {
         return Err("Naming does not support allene or coordination stereo classes; no plain graph was substituted".into());
     }
-    if raw.specifies_cumulene_ez() {
-        return Err("Naming does not support cumulene E/Z configuration yet; no less specific name was substituted".into());
-    }
     let specified_atoms = raw
         .metadata
         .atoms
@@ -463,6 +460,9 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
         .filter(|m| is_tetrahedral(m.chiral_tag))
         .count();
     let imported = chemistry::smiles::read(text).map_err(|e| e.to_string())?;
+    if imported.dropped_cumulene_ez {
+        return Err("Naming does not support cumulene E/Z configuration yet; no less specific name was substituted".into());
+    }
     if specified_atoms
         != imported
             .prepared

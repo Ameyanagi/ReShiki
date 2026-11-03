@@ -202,9 +202,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let mut molecule = molecule(imported.prepared.state)?;
             let mut warnings = layout(&mut molecule, &imported.reaction_properties)?;
             // Import perception does not keep cumulene E/Z; say so.
-            if smiles::parse(text.split_whitespace().next().unwrap_or_default())
-                .is_ok_and(|parsed| parsed.specifies_cumulene_ez())
-            {
+            if imported.dropped_cumulene_ez {
                 warnings.push(CUMULENE_EZ_NOTICE.into());
             }
             let mut prepared =
