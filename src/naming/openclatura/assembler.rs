@@ -641,6 +641,7 @@ mod tests {
     fn substituted_monocycles_cite_principal_suffix_locant_one() {
         for (smiles, expected) in [
             ("O[C@H]1[C@H](C)CCCC1", "(1R,2R)-2-methylcyclohexan-1-ol"),
+            ("O[C@H]1[C@@H](C)CCCC1", "(1R,2S)-2-methylcyclohexan-1-ol"),
             ("OC1C(C)CCCC1", "2-methylcyclohexan-1-ol"),
             ("OC1CCC(C)CC1", "4-methylcyclohexan-1-ol"),
             ("O=C1C(C)CCC1", "2-methylcyclopentan-1-one"),
