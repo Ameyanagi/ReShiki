@@ -182,11 +182,13 @@ fn label_trims_bonds_with(
         && (shown() || doc.abbreviation(atom.id).is_some())
 }
 
+/// Label bounds in a document prepared with [`Document::abbreviation_render_copy`].
 pub fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
     text_bounds(&atom_label(a, doc))
 }
 
 /// Ink extents for persistent label backgrounds, excluding font line padding.
+/// Pass a document prepared with [`Document::abbreviation_render_copy`].
 pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
     label_ink_boxes(&atom_label(a, doc))
         .into_iter()
@@ -202,6 +204,8 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
 /// Atom maps, numbers and stereo labels are separate renderer primitives and
 /// must be included when spacing a participant beside another molecule.
 pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point, Point)> {
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     let isotopes = HydrogenIsotopeLabels::new(doc);
     let mut ink: Vec<_> = atoms
         .iter()
@@ -212,7 +216,7 @@ pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point,
             }))
         })
         .collect();
-    for indicator in crate::atom_labels::indicators(doc) {
+    for indicator in crate::atom_labels::indicators_with_geometry(doc, doc) {
         if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
             ink.extend(label_ink_boxes(&indicator.primitives()));
         }
@@ -223,6 +227,8 @@ pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point,
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     let reach = LabelReach::new(doc);
     let isotopes = HydrogenIsotopeLabels::new(doc);
     let mut best: Option<(bool, f32, u64)> = None;
@@ -265,6 +271,16 @@ pub(crate) fn abbreviation_label_hit(doc: &Document, point: Point, radius: f32) 
     if doc.abbreviations.is_empty() {
         return None;
     }
+    let drawn = doc.abbreviation_render_copy();
+    abbreviation_label_hit_prepared(&drawn, point, radius)
+}
+
+/// Label picking in an already prepared render view.
+pub(crate) fn abbreviation_label_hit_prepared(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+) -> Option<u64> {
     let reach = LabelReach::new(doc);
     let atoms: std::collections::HashMap<_, _> =
         doc.atoms.iter().rev().map(|atom| (atom.id, atom)).collect();
@@ -465,7 +481,8 @@ fn label_runs(
         return vec![];
     }
     let internal_group = doc.abbreviation(a.id).filter(|group| {
-        group.alignment.is_auto()
+        group.exit.is_none()
+            && group.alignment.is_auto()
             && crate::atom_labels::condensed_label(&group.label).is_some()
             && doc
                 .bonds
@@ -791,11 +808,13 @@ fn abbreviation_label_runs(
         crate::typography::layout(content.get(..range.end).unwrap_or_default(), &format).width;
     let anchor_x = (before + through) / 2.;
     let origin = a.position.offset(
-        if matches!(
-            group.alignment,
-            crate::abbreviations::LabelAlignment::Center
-                | crate::abbreviations::LabelAlignment::Above
-        ) {
+        if group.exit.is_some() && group.alignment.is_auto()
+            || matches!(
+                group.alignment,
+                crate::abbreviations::LabelAlignment::Center
+                    | crate::abbreviations::LabelAlignment::Above
+            )
+        {
             -layout.width / 2.
         } else {
             -anchor_x
@@ -1318,6 +1337,8 @@ fn selections_bounds_in_axes(
     axes: Option<(Point, f32)>,
 ) -> Vec<Option<(Point, Point)>> {
     use crate::atom_labels::Owner;
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     let owners: std::collections::HashMap<u64, usize> = selections
         .iter()
         .enumerate()
@@ -1361,7 +1382,7 @@ fn selections_bounds_in_axes(
             }
         }
     };
-    for label in crate::atom_labels::indicators(doc) {
+    for label in crate::atom_labels::indicators_with_geometry(doc, doc) {
         let id = match label.owner {
             Owner::Number(id) | Owner::Mapping(id) | Owner::AtomStereo(id) => id,
             Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
@@ -1474,7 +1495,8 @@ fn selections_bounds_in_axes(
 
 /// Visible backbone span, with the same label ink and margin as bond rendering.
 /// Used by drawing-target picking so hidden label-covered extensions cannot
-/// create an initial mechanism-arrow attachment.
+/// create an initial mechanism-arrow attachment. The document and bond must
+/// come from the same prepared abbreviation render view.
 pub(crate) fn bond_segment(
     doc: &Document,
     bond: &Bond,
@@ -2413,7 +2435,7 @@ fn push_atom_labels(
     for a in doc.atoms.iter().filter(|a| !haloed.contains(a.id)) {
         out.extend(atom_label_parts(doc, labels, opacity, a));
     }
-    for indicator in crate::atom_labels::indicators(doc) {
+    for indicator in crate::atom_labels::indicators_with_geometry(doc, doc) {
         use crate::atom_labels::Owner;
         let alpha = match indicator.owner {
             Owner::Number(id) | Owner::Mapping(id) | Owner::AtomStereo(id) => opacity.atom(id),

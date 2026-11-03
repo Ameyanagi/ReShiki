@@ -175,7 +175,6 @@ fn explicit_internal_connections_conserve_atoms_and_reject_ambiguous_definitions
         ("BondOrdering=\"5 6\"", "BondOrdering=\"5\""),
         ("ConnectionOrder=\"11 12\"", "ConnectionOrder=\"11 11\""),
         ("ConnectionOrder=\"11 12\"", "ConnectionOrder=\"11 99\""),
-        ("id=\"17\" B=\"12\" E=\"13\"", "id=\"17\" B=\"12\" E=\"14\""),
         (
             "id=\"17\" B=\"12\" E=\"13\"",
             "id=\"17\" B=\"12\" E=\"13\" Order=\"2\"",
@@ -188,6 +187,11 @@ fn explicit_internal_connections_conserve_atoms_and_reject_ambiguous_definitions
             "Accepted {to}"
         );
     }
+    let two_sided = flatten_abbreviations(
+        &TWO_CONNECTIONS.replace("id=\"17\" B=\"12\" E=\"13\"", "id=\"17\" B=\"12\" E=\"14\""),
+    )?;
+    ensure!(two_sided.abbreviations[0].anchor.as_deref() == Some("13"));
+    ensure!(two_sided.abbreviations[0].exit.as_deref() == Some("14"));
     // Absent ConnectionOrder uses the source connection-node order.
     ensure!(
         flatten_abbreviations(&TWO_CONNECTIONS.replace(" ConnectionOrder=\"11 12\"", "")).is_ok()

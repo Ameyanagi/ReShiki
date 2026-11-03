@@ -70,7 +70,14 @@ impl Markers {
                 .filter(|bond| selected.contains(&bond.a) && selected.contains(&bond.b))
                 .filter(|bond| doc.bond_drawn(bond.a, bond.b))
                 .filter_map(|bond| {
-                    Some((atoms.get(&bond.a)?.position, atoms.get(&bond.b)?.position))
+                    Some((
+                        atoms
+                            .get(&doc.abbreviation_endpoint(bond.a, bond.b))?
+                            .position,
+                        atoms
+                            .get(&doc.abbreviation_endpoint(bond.b, bond.a))?
+                            .position,
+                    ))
                 })
                 .collect(),
             // Preserve selection order, including its behavior for repeated IDs.

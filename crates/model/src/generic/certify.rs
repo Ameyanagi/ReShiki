@@ -252,6 +252,9 @@ pub(super) fn certify_translation(
     }
     for g in abbreviations {
         undo(&mut g.anchor)?;
+        if let Some(exit) = &mut g.exit {
+            undo(exit)?;
+        }
         for id in &mut g.members {
             undo(id)?;
         }

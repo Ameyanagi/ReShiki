@@ -2,6 +2,70 @@ use super::*;
 use crate::document::Point;
 
 #[test]
+fn residue_endpoint_labels_remain_text_and_reject_one_sided_group_insertion() {
+    let mut doc = Document::default();
+    let start = doc.add_atom("C", Point::default());
+    let endpoint = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(start, endpoint, 1, "plain");
+    let before = doc.clone();
+    for label in ["Ala", "D-Ala", "Gly"] {
+        let text = apply(&doc, endpoint, label, Mode::Auto).unwrap();
+        assert_eq!(text.atoms.len(), doc.atoms.len());
+        assert_eq!(text.bonds, doc.bonds);
+        assert!(text.abbreviations.is_empty());
+        let atom = text.atom(endpoint).unwrap();
+        assert_eq!(atom.element, "*");
+        assert_eq!(atom.display.variable.as_deref(), Some(label));
+        text.validate().unwrap();
+        assert!(
+            apply(&doc, endpoint, label, Mode::Group)
+                .unwrap_err()
+                .contains("two attachment points")
+        );
+        assert_eq!(doc, before);
+    }
+}
+
+#[test]
+fn ordinary_group_typing_preserves_existing_two_sided_residues() -> anyhow::Result<()> {
+    use crate::chemistry::abbreviations::{AttachmentPolicy, find_with_policy};
+    let expanded = depicted_smiles("CC(C)(C)OC(=O)N[C@@H](C)C(=O)OC")?;
+    let molecule = crate::chemistry::document::prepare(&expanded)?;
+    let mut source = find_with_policy(
+        &expanded,
+        &molecule,
+        &[],
+        Some("Ala"),
+        AttachmentPolicy::SharedAnchor,
+    )?;
+    assert_eq!(source.abbreviations.len(), 1);
+    let residue = source.abbreviations[0].clone();
+    assert!(residue.exit.is_some());
+    let carbon = source.add_atom("C", Point::new(300., 0.));
+    let endpoint = source.add_atom("C", Point::new(342., 0.));
+    source.add_bond(carbon, endpoint, 1, "plain");
+    let before = source.clone();
+    for label in ["OMe", "OCH3", "N3", "MgBr"] {
+        let product = apply(&source, endpoint, label, Mode::Auto).map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            product.abbreviation(residue.anchor),
+            Some(&residue),
+            "{label}"
+        );
+        assert!(product.abbreviation(endpoint).is_some(), "{label}");
+        for id in &residue.members {
+            let original = source.atom(*id).unwrap();
+            let retained = product.atom(*id).unwrap();
+            assert_eq!(retained.position, original.position);
+            assert_eq!(retained.element, original.element);
+        }
+        product.validate().map_err(anyhow::Error::msg)?;
+        assert_eq!(source, before);
+    }
+    Ok(())
+}
+
+#[test]
 fn changing_a_singlet_carbene_element_clears_its_spin_state() {
     let mut doc = Document::default();
     let id = doc.add_atom("C", Point::default());

@@ -89,6 +89,7 @@ fn hidden_members_preserve_overlapping_anchor_semantics_and_follow_each_edit() {
         label: "Label".into(),
         reverse_label: String::new(),
         anchor,
+        exit: None,
         members,
         alignment: Default::default(),
     };

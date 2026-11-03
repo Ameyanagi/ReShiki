@@ -58,6 +58,20 @@ fn refused_define_preserves_the_same_contexts_draft() {
 }
 
 #[test]
+fn residue_replace_explains_find_without_changing_the_drawing() {
+    let (mut app, [a, _, _]) = ready();
+    app.tab.selected = vec![a];
+    app.abbreviations.preset = "Ala".into();
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Abbreviations(Action::Replace));
+    assert!(app.error);
+    assert!(app.status.contains("two attachments"));
+    assert!(app.status.contains("Find selected label"));
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.busy);
+}
+
+#[test]
 fn a_tab_or_file_epoch_change_clears_only_the_fragment_draft() {
     let (mut app, [_, b, c]) = ready();
     app.tab.selected = vec![b, c];

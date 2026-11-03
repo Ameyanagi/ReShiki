@@ -3590,6 +3590,7 @@ fn unmarked_atoms_do_not_change_mark_hit_order_and_hidden_marks_stay_hidden() {
     assert_eq!(hit::hit_object(&doc, probe, 1.), Some(b));
     doc.abbreviations
         .push(reshiki::abbreviations::Abbreviation {
+            exit: None,
             label: "hidden".into(),
             reverse_label: String::new(),
             anchor: c,

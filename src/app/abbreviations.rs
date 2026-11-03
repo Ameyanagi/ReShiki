@@ -17,6 +17,7 @@ pub enum Action {
     ReverseLabel(String),
     Replace,
     Find,
+    FindLabel,
     Contract,
     Define,
     Expand,
@@ -98,8 +99,16 @@ impl App {
             Action::Preset(value) => self.abbreviations.preset = value,
             Action::Label(value) => self.abbreviations.label = value,
             Action::ReverseLabel(value) => self.abbreviations.reverse_label = value,
-            Action::Replace | Action::Find => {
+            Action::Replace | Action::Find | Action::FindLabel => {
                 let replace = matches!(action, Action::Replace);
+                if replace
+                    && reshiki::chemistry::abbreviations::residue(&self.abbreviations.preset)
+                        .is_some()
+                {
+                    self.status = "Residues need two attachments. Use Find selected label to collapse an existing residue.".into();
+                    self.error = true;
+                    return Task::none();
+                }
                 if replace && reshiki::ligands::LABELS.contains(&self.abbreviations.preset.as_str())
                 {
                     let anchor = self
@@ -140,7 +149,14 @@ impl App {
                 let mut request = Request::molecule("abbreviate", self.tab.doc.clone());
                 request.selected_ids = Some(self.tab.selected.clone());
                 request.format = Some(if replace { "replace" } else { "find" }.into());
-                request.text = replace.then(|| self.abbreviations.preset.clone());
+                request.text = (replace || matches!(action, Action::FindLabel))
+                    .then(|| self.abbreviations.preset.clone());
+                if !replace
+                    && let Some(label) = request.text.as_deref()
+                    && let Ok(Some((preset, _))) = reshiki::chemistry::abbreviations::lookup(label)
+                {
+                    request.text = Some(preset.label.clone());
+                }
                 return self.run(request, Job::Abbreviate);
             }
             Action::Contract => {

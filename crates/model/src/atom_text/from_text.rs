@@ -111,7 +111,9 @@ fn text_atom_preview(doc: &Document, id: u64) -> Option<Document> {
         label.display.label_scripts = runs;
     }
     preview.atom_mut(atom)?.text_style = Some(first_glyph_style(annotation)?);
-    let shift = first_glyph_shift(&preview, atom, target);
+    let drawn = preview.abbreviation_render_copy();
+    let shift = first_glyph_shift(&drawn, atom, target);
+    drop(drawn);
     let label = preview.atom_mut(atom)?;
     label.position = label.position.offset(shift.x, shift.y);
     Some(preview)
@@ -170,6 +172,7 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
             label,
             reverse_label,
             anchor: atom,
+            exit: None,
             members: vec![atom],
             alignment: Default::default(),
         });
@@ -310,7 +313,9 @@ pub fn text_to_atom_toward(
 /// Move the new atom, and any group atoms the entry added, so the label's
 /// first glyph lands on the caption's first glyph and the text does not jump.
 fn align_first_glyph(doc: &Document, candidate: &mut Document, atom: u64, target: Point) {
-    let shift = first_glyph_shift(candidate, atom, target);
+    let drawn = candidate.abbreviation_render_copy();
+    let shift = first_glyph_shift(&drawn, atom, target);
+    drop(drawn);
     let existing: std::collections::HashSet<u64> = doc.atoms.iter().map(|a| a.id).collect();
     for added in candidate
         .atoms

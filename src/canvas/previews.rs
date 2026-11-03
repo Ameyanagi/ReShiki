@@ -84,6 +84,7 @@ impl TemplateAnchorPreview<'_> {
         let Some(locants) = self.locants else {
             return vec![];
         };
+        let drawn = self.document.abbreviation_render_copy();
         self.document
             .atoms
             .iter()
@@ -117,7 +118,7 @@ impl TemplateAnchorPreview<'_> {
                 // Step past the atom's whole label (e.g. the H of N-H), padded by
                 // the 9 px locant's half extents, where the ray leaves that box.
                 let half = (locant.chars().count() as f32 * 2.75 + 2., 6.5);
-                let offset = reshiki::scene::atom_label_ink_bounds(atom, self.document)
+                let offset = reshiki::scene::atom_label_ink_bounds(atom, &drawn)
                     .map(|(lo, hi)| {
                         let (lo, hi) = (camera.screen(lo, bounds), camera.screen(hi, bounds));
                         [

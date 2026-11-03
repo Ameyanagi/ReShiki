@@ -656,6 +656,13 @@ fn reconstruct(
     };
     // Kept 3D models still need the version that validates them.
     crate::models3d::require_version(&mut document);
+    if document
+        .abbreviations
+        .iter()
+        .any(|group| group.exit.is_some())
+    {
+        document.require_version(crate::document::RESIDUE_GROUPS);
+    }
     Ok(Drawing {
         molecule: work,
         document,

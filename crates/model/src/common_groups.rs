@@ -1,17 +1,28 @@
 //! Additional complete groups, built from the established endpoint replacement.
 use crate::{
-    chemistry::abbreviations::{ReplacementError as Error, replace_bundled as replace_base},
+    chemistry::abbreviations::{
+        AttachmentPolicy, ReplacementError as Error, replace_bundled_with_policy as replace_base,
+    },
     document::Document,
 };
 pub const LABELS: &[&str] = &["MgBr", "N3"];
 
 pub fn replace(doc: &Document, selection: &[u64], label: &str) -> Result<Document, Error> {
+    replace_with_policy(doc, selection, label, AttachmentPolicy::Terminal)
+}
+
+pub fn replace_with_policy(
+    doc: &Document,
+    selection: &[u64],
+    label: &str,
+    policy: AttachmentPolicy,
+) -> Result<Document, Error> {
     let (base, elements, charges): (_, &[&str], &[i32]) = match label {
         "MgBr" => ("Et", &["Mg", "Br"], &[0, 0]),
         "N3" => ("nPr", &["N", "N", "N"], &[0, 1, -1]),
         _ => return Err(Error::Label),
     };
-    let mut result = replace_base(doc, selection, base)?;
+    let mut result = replace_base(doc, selection, base, policy)?;
     let group = result
         .abbreviations
         .iter_mut()

@@ -40,8 +40,9 @@ impl MoleculeCanvas<'_> {
         // Expand by the full transverse extent so every rail, wedge and wave
         // stays clear of retained text, including on diagonal drags.
         let gap = style.world(style.margin_width_pt) + rails + half_width;
-        let a = self.preview_endpoint(start, end.0, gap)?;
-        let b = self.preview_endpoint(end, start.0, gap)?;
+        let drawn = self.doc.abbreviation_render_copy();
+        let a = self.preview_endpoint(&drawn, start, end.0, gap)?;
+        let b = self.preview_endpoint(&drawn, end, start.0, gap)?;
         if (b.x - a.x) * (end.0.x - start.0.x) + (b.y - a.y) * (end.0.y - start.0.y) <= 0. {
             return None;
         }
@@ -55,7 +56,13 @@ impl MoleculeCanvas<'_> {
         Some(drawing)
     }
 
-    fn preview_endpoint(&self, endpoint: Endpoint, toward: World, gap: f32) -> Option<World> {
+    fn preview_endpoint(
+        &self,
+        drawn: &Document,
+        endpoint: Endpoint,
+        toward: World,
+        gap: f32,
+    ) -> Option<World> {
         let (position, atom, caption) = endpoint;
         let ink = if let Some(caption) = caption {
             if reshiki::atom_text::text_atom_refusal(self.doc, caption).is_some() {
@@ -65,7 +72,7 @@ impl MoleculeCanvas<'_> {
             reshiki::atom_text::text_ink_bounds(annotation)
         } else {
             atom.and_then(|id| self.doc.atom(id))
-                .and_then(|atom| reshiki::scene::atom_label_ink_bounds(atom, self.doc))
+                .and_then(|atom| reshiki::scene::atom_label_ink_bounds(atom, drawn))
         };
         Some(ink.map_or(position, |bounds| trim_ink(position, toward, bounds, gap)))
     }
