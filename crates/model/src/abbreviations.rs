@@ -263,7 +263,7 @@ impl Abbreviation {
                     .any(|other| !members.contains(other))
             {
                 return Err(
-                    "Only the abbreviation's attachment atoms can connect outside it".into(),
+                    "Only the abbreviation's attachment atom can connect outside it".into(),
                 );
             }
         }

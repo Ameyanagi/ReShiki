@@ -41,7 +41,7 @@ pub enum Error {
     Members,
     #[error("Abbreviations need one attachment atom and at most one outside bond")]
     Attachment,
-    #[error("All abbreviation outside bonds must connect through an attachment atom")]
+    #[error("All abbreviation bonds must connect through its attachment atom")]
     InternalAttachment,
     #[error("An abbreviation must be connected")]
     Connected,
