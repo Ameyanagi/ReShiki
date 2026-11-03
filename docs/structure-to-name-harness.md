@@ -145,6 +145,20 @@ localized pi states of retained parents, bridges without a valence proof,
 re-primed dispiro locants); the port declines those classes, and each such
 place is marked `Upstream divergence`.
 
+Intentional PIN corrections count against exact text parity with openclatura
+0.4.3. Under [P-14.3.4.2(c)](https://iupac.qmul.ac.uk/BlueBook/P1.html#P-14.3.4.2),
+the suffix locant `1` is omitted only on a monosubstituted homogeneous monocycle:
+`2-methylcyclohexan-1-ol` replaces upstream's `2-methylcyclohexanol`.
+Substitution on a suffix heteroatom alone still permits omission, as in
+`N-methylcyclohexanamine`; retained names such as `2-methylphenol` and
+`2-methylbenzoic acid` are unchanged. Four `openclatura_tests.tsv` expectations
+have corrected suffix locants but retain upstream's cis/trans wording; these
+already differ from the generated r/s names and do not affect exact parity.
+The fast text ratchet falls from 403/434 to 400/434: `drug` 18→16 and
+`natural_product` 18→17. Full text parity falls from 1477/1592 to 1471/1592,
+with three more departures in `pubchem_random`. Structure, name and generated
+round-trip counts do not change.
+
 | Check                   |      Fast |                                    Full |
 | ----------------------- | --------: | --------------------------------------: |
 | structure               | 420 / 434 |                     1536 / 1597 (96.2%) |
