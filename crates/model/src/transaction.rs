@@ -78,9 +78,11 @@ pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
             a.cip_label = None;
             a.steroid_label = None;
             a.undefined_stereo = false;
+            a.undefined_pseudoasymmetric = false;
             b.cip_label = None;
             b.steroid_label = None;
             b.undefined_stereo = false;
+            b.undefined_pseudoasymmetric = false;
             a.label_h = 0;
             b.label_h = 0;
             a != b

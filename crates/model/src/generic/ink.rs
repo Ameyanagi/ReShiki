@@ -333,7 +333,9 @@ fn future_codes<'a>(settings: &Settings, atom: bool) -> impl Iterator<Item = &'a
     let steroid = atom && settings.steroid_alpha_beta;
     FUTURE_CIP_CODES
         .into_iter()
-        .chain(undefined.then_some("?"))
+        .chain((undefined && !settings.undefined_xi).then_some("?"))
+        .chain((undefined && settings.undefined_xi).then_some("Ξ"))
+        .chain((undefined && settings.undefined_xi && atom).then_some("ξ"))
         .chain(FUTURE_STEROID_CODES.into_iter().filter(move |_| steroid))
 }
 

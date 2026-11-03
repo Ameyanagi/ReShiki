@@ -25,6 +25,7 @@ struct ComputedAtom {
     hydrogens: u32,
     cip: Option<String>,
     undefined: bool,
+    undefined_pseudoasymmetric: bool,
     steroid: Option<String>,
 }
 
@@ -63,8 +64,11 @@ pub fn refresh_optional_stereo(document: &mut Document) {
             }
         }
     }
-    let undefined = if document.atom_labels.mark_undefined_stereocentres {
-        crate::chemistry::stereo_lint::undefined(document)
+    let (undefined, pseudo) = if document.atom_labels.mark_undefined_stereocentres {
+        crate::chemistry::stereo_lint::undefined_with_pseudo(
+            document,
+            document.atom_labels.undefined_xi,
+        )
     } else {
         Default::default()
     };
@@ -76,6 +80,7 @@ pub fn refresh_optional_stereo(document: &mut Document) {
         .collect();
     for atom in &mut document.atoms {
         atom.undefined_stereo = atoms.contains(&atom.id);
+        atom.undefined_pseudoasymmetric = pseudo.contains(&atom.id);
         atom.steroid_label = steroid.remove(&atom.id);
     }
     for bond in &mut document.bonds {
@@ -148,11 +153,13 @@ impl Refresh {
     pub fn apply(&self, document: &mut Document) {
         for atom in &mut document.atoms {
             atom.undefined_stereo = false;
+            atom.undefined_pseudoasymmetric = false;
             atom.steroid_label = None;
             if let Some(computed) = self.atoms.get(&atom.id) {
                 atom.label_h = computed.hydrogens;
                 atom.cip_label.clone_from(&computed.cip);
                 atom.undefined_stereo = computed.undefined;
+                atom.undefined_pseudoasymmetric = computed.undefined_pseudoasymmetric;
                 atom.steroid_label.clone_from(&computed.steroid);
             }
         }
@@ -270,6 +277,7 @@ pub fn refresh_edited(before: &Document, document: &mut Document) {
         // This synchronous edit repair consumes only hydrogens. Leave the
         // optional stereogenic-unit pass to the ordinary background refresh.
         component.atom_labels.mark_undefined_stereocentres = false;
+        component.atom_labels.undefined_xi = false;
         component.atom_labels.steroid_alpha_beta = false;
         if component.atoms.iter().any(|a| edited.contains(&a.id))
             && !component
@@ -315,8 +323,11 @@ fn compute(source: &Document) -> Result<Computed, String> {
     };
     // Possible-centre perception is an optional editor aid. Keep it out of
     // ordinary label refreshes and never place a question mark in CIP output.
-    let undefined = if source.atom_labels.mark_undefined_stereocentres {
-        crate::chemistry::stereo_lint::undefined(source)
+    let (undefined, pseudo) = if source.atom_labels.mark_undefined_stereocentres {
+        crate::chemistry::stereo_lint::undefined_with_pseudo(
+            source,
+            source.atom_labels.undefined_xi,
+        )
     } else {
         Default::default()
     };
@@ -337,6 +348,7 @@ fn compute(source: &Document) -> Result<Computed, String> {
                         hydrogens: a.label_h,
                         cip: a.cip_label,
                         undefined: undefined_atoms.contains(&a.id),
+                        undefined_pseudoasymmetric: pseudo.contains(&a.id),
                         steroid: steroid.remove(&a.id),
                     },
                 )
@@ -386,6 +398,7 @@ pub(crate) fn components(document: &Document) -> (Vec<Document>, bool) {
         // presentation settings remain outside the chemical snapshot.
         part.atom_labels.mark_undefined_stereocentres =
             document.atom_labels.mark_undefined_stereocentres;
+        part.atom_labels.undefined_xi = document.atom_labels.undefined_xi;
         part.atom_labels.steroid_alpha_beta = document.atom_labels.steroid_alpha_beta;
         result.push(part);
     }
@@ -415,6 +428,7 @@ pub(crate) fn components(document: &Document) -> (Vec<Document>, bool) {
         atom.cip_label = None;
         atom.steroid_label = None;
         atom.undefined_stereo = false;
+        atom.undefined_pseudoasymmetric = false;
         atom.display = Default::default();
         atom.text_style = None;
         atom.marks.clear();

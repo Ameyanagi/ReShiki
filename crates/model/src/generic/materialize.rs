@@ -317,6 +317,7 @@ pub(super) fn link(doc: &Document, node: &LinkNode, count: u32) -> Result<Docume
         copy.cip_label = None;
         copy.steroid_label = None;
         copy.undefined_stereo = false;
+        copy.undefined_pseudoasymmetric = false;
         copy.stereo = None;
         let ratio = i as f32 / count as f32;
         copy.position = Point::new(
@@ -435,6 +436,7 @@ pub(super) fn repeat(doc: &Document, unit: &RepeatUnit, count: u32) -> Result<Do
             a.cip_label = None;
             a.steroid_label = None;
             a.undefined_stereo = false;
+            a.undefined_pseudoasymmetric = false;
             a.stereo = None;
             ids.insert(old, a.id);
             atoms.push(a);

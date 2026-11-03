@@ -60,6 +60,7 @@ pub fn replace(doc: &Document, selection: &[u64], label: &str) -> Result<Documen
         atom.cip_label = None;
         atom.steroid_label = None;
         atom.undefined_stereo = false;
+        atom.undefined_pseudoasymmetric = false;
     }
     for bond in &mut result.bonds {
         if members.contains(&bond.a) && members.contains(&bond.b) {

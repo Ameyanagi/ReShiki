@@ -715,6 +715,7 @@ async fn retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse() -> Re
             &super::super::Identity {
                 smiles: record.smiles,
                 naming_smiles: None,
+                unknown_stereo_smiles: None,
                 write_unknown_stereo: false,
                 warnings: vec![],
             },

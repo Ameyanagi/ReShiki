@@ -449,9 +449,12 @@ pub struct Settings {
     /// Add D/L names to recognized amino-acid and carbohydrate stereodescriptors.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dl_descriptors: bool,
-    /// Mark perceived stereogenic units without drawn configuration with (?).
+    /// Mark perceived stereogenic units without drawn configuration.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mark_undefined_stereocentres: bool,
+    /// Use Ξ/ξ for optional undefined-configuration indicators.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub undefined_xi: bool,
     /// Show steroid nucleus stereocentres as locant and α/β face labels.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub steroid_alpha_beta: bool,
@@ -472,6 +475,7 @@ impl Default for Settings {
             stereo: false,
             dl_descriptors: false,
             mark_undefined_stereocentres: false,
+            undefined_xi: false,
             steroid_alpha_beta: false,
             roman_stereo_parentheses: false,
             maps: true,
@@ -989,7 +993,11 @@ pub(crate) fn stereo_code<'a>(
 ) -> Option<&'a str> {
     cip.or(
         (undefined && doc.atom_labels.stereo && doc.atom_labels.mark_undefined_stereocentres)
-            .then_some("?"),
+            .then_some(if doc.atom_labels.undefined_xi {
+                "Ξ"
+            } else {
+                "?"
+            }),
     )
 }
 
@@ -1001,12 +1009,18 @@ pub fn atom_stereo_code<'a>(atom: &'a Atom, doc: &Document) -> Option<&'a str> {
         .then_some(atom.steroid_label.as_deref())
         .flatten()
         .or(atom.cip_label.as_deref());
-    stereo_code(label, atom.undefined_stereo, doc)
+    stereo_code(label, atom.undefined_stereo, doc).map(|code| {
+        if code == "Ξ" && atom.undefined_pseudoasymmetric {
+            "ξ"
+        } else {
+            code
+        }
+    })
 }
 
 fn indicator_style(style: &TextStyle, text: &str) -> TextStyle {
     let mut style = style.clone();
-    if text == "?" {
+    if matches!(text, "?" | "Ξ" | "ξ") {
         style.color = crate::palette::Color::Custom([128; 3]);
     }
     style
@@ -1274,6 +1288,7 @@ pub fn clear_computed(doc: &mut Document) {
         a.cip_label = None;
         a.steroid_label = None;
         a.undefined_stereo = false;
+        a.undefined_pseudoasymmetric = false;
     }
     for b in &mut doc.bonds {
         b.cip_label = None;
