@@ -282,7 +282,7 @@ mod tests {
                 .map(|name| name.text)
                 .as_deref(),
             Ok(
-                "6-bromo-2,3-dihydro-1',4'-dioxaspiro[cyclopenta[f]1-benzofuran-7,8'-(spiro[4.5]decane)]"
+                "6-bromo-2,3-dihydro-1',4'-dioxaspiro[cyclopenta[f][1]benzofuran-7,8'-(spiro[4.5]decane)]"
             )
         );
     }

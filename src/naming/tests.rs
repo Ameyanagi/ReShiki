@@ -588,6 +588,135 @@ fn undefined_document_units_only_enter_the_explicit_unknown_input() {
     }
 }
 
+#[tokio::test]
+async fn imported_alkenes_keep_unspecified_units_in_names_and_checks() {
+    for (smiles, expected, explicit, undefined) in [
+        ("CC=CC", "but-2-ene", "(2Ξ)-but-2-ene", (2, 3)),
+        (
+            "C/C=C/C=CC",
+            "(4E)-hexa-2,4-diene",
+            "(2E,4Ξ)-hexa-2,4-diene",
+            (4, 5),
+        ),
+    ] {
+        let response = crate::engine::LocalEngine::in_process()
+            .request(crate::engine::Request::import_smiles(smiles))
+            .await
+            .unwrap();
+        let document = response.document.unwrap();
+        assert_eq!(
+            chemistry::stereo_lint::undefined(&document).bonds,
+            [undefined],
+            "{smiles}"
+        );
+        let mut identity = document_identity(&document).unwrap();
+        assert_eq!(
+            generate_name(&identity, Cancel::default())
+                .await
+                .unwrap()
+                .title,
+            expected
+        );
+        identity.write_unknown_stereo = true;
+        assert_eq!(
+            generate_name(&identity, Cancel::default())
+                .await
+                .unwrap()
+                .title,
+            explicit
+        );
+    }
+}
+
+#[tokio::test]
+async fn inchi_import_preserves_unspecified_and_defined_alkenes() {
+    for (inchi, expected, unspecified) in [
+        ("InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3", "but-2-ene", true),
+        (
+            "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3/b4-3+",
+            "(2E)-but-2-ene",
+            false,
+        ),
+    ] {
+        let response = crate::engine::LocalEngine::in_process()
+            .request(crate::engine::Request::import("inchi", inchi))
+            .await
+            .unwrap();
+        let document = response.document.unwrap();
+        let bond = document.bonds.iter().find(|bond| bond.order == 2).unwrap();
+        assert_eq!(
+            bond.stereo_authoritative && bond.stereo.is_none(),
+            unspecified
+        );
+        assert_eq!(
+            chemistry::stereo_lint::undefined(&document)
+                .bonds
+                .is_empty(),
+            !unspecified
+        );
+        let identity = document_identity(&document).unwrap();
+        assert_eq!(
+            generate_name(&identity, Cancel::default())
+                .await
+                .unwrap()
+                .title,
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn mol_roundtrip_keeps_unspecified_and_z_alkene_names() {
+    let engine = crate::engine::LocalEngine::in_process();
+    for (smiles, expected) in [("CC=CC", "but-2-ene"), (r"C/C=C\C", "(2Z)-but-2-ene")] {
+        let document = engine
+            .request(crate::engine::Request::import_smiles(smiles))
+            .await
+            .unwrap()
+            .document
+            .unwrap();
+        let mol = chemistry::molfile::write_document(&document).unwrap();
+        let document = engine
+            .request(crate::engine::Request::import("mol", &mol))
+            .await
+            .unwrap()
+            .document
+            .unwrap();
+        let identity = document_identity(&document).unwrap();
+        assert_eq!(
+            generate_name(&identity, Cancel::default())
+                .await
+                .unwrap()
+                .title,
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn plain_user_drawn_alkene_geometry_still_defines_configuration() {
+    for (case, expected) in [("E", "(2E)-but-2-ene"), ("Z", "(2Z)-but-2-ene")] {
+        let mut document = identity_case_document(case);
+        let bond = &mut document.bonds[1];
+        bond.stereo_authoritative = false;
+        bond.stereo = None;
+        bond.stereo_atoms.clear();
+        let identity = document_identity(&document).unwrap();
+        assert!(
+            chemistry::stereo_lint::undefined(&document)
+                .bonds
+                .is_empty()
+        );
+        assert_eq!(
+            generate_name(&identity, Cancel::default())
+                .await
+                .unwrap()
+                .title,
+            expected
+        );
+    }
+}
+
 #[test]
 fn explicit_unknown_input_combines_wavy_and_undefined_units() {
     let doc = wavy_and_undefined_stereo_document();

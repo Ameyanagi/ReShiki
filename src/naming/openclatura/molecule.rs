@@ -22,6 +22,8 @@ struct NamingBudget {
     unknown_units: RefCell<BTreeSet<String>>,
     ring_assembly_junctions: RefCell<AtomSet>,
     relative_ring_alternative: Cell<bool>,
+    benzoheterocycle_names: Cell<bool>,
+    higher_order_fusion_alternative: Cell<bool>,
 }
 
 impl Default for NamingBudget {
@@ -34,6 +36,8 @@ impl Default for NamingBudget {
             unknown_units: RefCell::default(),
             ring_assembly_junctions: RefCell::default(),
             relative_ring_alternative: Cell::new(false),
+            benzoheterocycle_names: Cell::new(true),
+            higher_order_fusion_alternative: Cell::new(false),
         }
     }
 }
@@ -178,6 +182,22 @@ impl Molecule {
         self.naming_budget.relative_ring_names.set(enabled);
     }
 
+    pub(super) fn mark_higher_order_fusion_alternative(&self) {
+        self.naming_budget.higher_order_fusion_alternative.set(true);
+    }
+
+    pub(super) fn has_higher_order_fusion_alternative(&self) -> bool {
+        self.naming_budget.higher_order_fusion_alternative.get()
+    }
+
+    pub(super) fn use_benzoheterocycle_names(&self) -> bool {
+        self.naming_budget.benzoheterocycle_names.get()
+    }
+
+    pub(super) fn set_benzoheterocycle_names(&self, enabled: bool) {
+        self.naming_budget.benzoheterocycle_names.set(enabled);
+    }
+
     pub(super) fn name_status(&self) -> NameStatus {
         self.naming_budget.status.get()
     }
@@ -222,11 +242,15 @@ impl Molecule {
         let status = self.name_status();
         let unknown_units = self.naming_budget.unknown_units.borrow().clone();
         let ring_assemblies = self.naming_budget.ring_assembly_junctions.borrow().clone();
+        let higher_order_fusion = self.has_higher_order_fusion_alternative();
         let result = name();
         if !matches!(result, Ok(Some(_))) {
             self.set_name_status(status);
             *self.naming_budget.unknown_units.borrow_mut() = unknown_units;
             *self.naming_budget.ring_assembly_junctions.borrow_mut() = ring_assemblies;
+            self.naming_budget
+                .higher_order_fusion_alternative
+                .set(higher_order_fusion);
         }
         result
     }

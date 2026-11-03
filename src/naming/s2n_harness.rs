@@ -396,8 +396,9 @@ fn ratchet(reports: &BTreeMap<&str, Report>) {
     // Preserve both guarantees: correct chemistry and progress toward the
     // exact openclatura spelling. Text differences never become Wrong graphs.
     // The frozen upstream goldens retain cis/trans ring names. The intentional
-    // r/s and assembly departures are pinned, with complete identity
-    // roundtrips, by the intentional-departure tests below.
+    // r/s and ring-assembly departures are pinned, with complete identity
+    // roundtrips, by the intentional-departure tests below. FR-3.5
+    // component changes are likewise pinned by the fr35_* identity tests.
     for (category, counts) in reports["parity"].rows() {
         current.insert(
             ("parity_text".into(), category.into()),
@@ -741,4 +742,173 @@ fn s2n_extra_file() {
         std::fs::write(out, rows).expect("write S2N_EXTRA_OUT");
     }
     println!("{counts:?}");
+}
+
+/// FR-3.5 source names supply independent structures, including the larger
+/// examples whose existing supported representations use other locants/forms.
+#[test]
+fn fr35_source_examples_and_generated_names_preserve_structures() {
+    use super::{NameReason, NameStatus};
+
+    let preferred = NameStatus::Preferred;
+    let layout = NameStatus::Unverified(NameReason::OpsinFusionLayout);
+    let mut measurements = Measurements::default();
+    for (source, smiles, status, output) in [
+        (
+            "thieno[3,2-f][2,1]benzothiazole",
+            "c1cc2cc3csnc3cc2s1",
+            preferred,
+            None,
+        ),
+        (
+            "[1,3]benzoxazolo[6,5-g]quinoline",
+            "c1cnc2cc3cc4ncoc4cc3cc2c1",
+            layout,
+            None,
+        ),
+        (
+            "benzo[1,2-b:4,5-c']difuran",
+            "c1cc2cc3cocc3cc2o1",
+            preferred,
+            None,
+        ),
+        (
+            "6H-benzo[c]chromene",
+            "c1ccc2c(c1)COc1ccccc1-2",
+            preferred,
+            // P-25.3.5.4 (2013): chromene is no longer a PIN component and
+            // FR-3.5 must not break the dibenzo multiplicative prefix.
+            Some("6H-dibenzo[b,d]pyran"),
+        ),
+        (
+            "10H-furo[3',2':4,5]indeno[2,1-b]pyridine",
+            "c1cnc2c(c1)-c1ccc3occc3c1C2",
+            layout,
+            None,
+        ),
+        (
+            "4H-[1,4]thiazino[2,3-g]quinoline",
+            "C1=CSc2cc3cccnc3cc2N1",
+            preferred,
+            None,
+        ),
+        (
+            "7H-phenanthro[5,4,3-cdef][1]benzoxepine",
+            "c1cc2c3c(c1)ccc1ccc4cccc(c4c13)OC2",
+            // The FR-3.5 peri form is not yet handled; keep the proved wrapper.
+            NameStatus::Unverified(NameReason::BridgedFusedParent),
+            Some("1,12-(epoxymethano)benzo[c]phenanthrene"),
+        ),
+        (
+            "9aH-pyrano[2,3-b][1]benzofuran",
+            "C1=COC2Oc3ccccc3C2=C1",
+            preferred,
+            None,
+        ),
+        (
+            "thieno[3',2':5,6]phenanthro[4,3-e][1]benzothiophene",
+            "c1cc2c(ccc3ccc4ccc5ccc6sccc6c5c4c32)s1",
+            // The current OPSIN layout changes component locants, preserving identity.
+            layout,
+            Some("thieno[2',3':3,4]phenanthro[5,6-e][1]benzothiophene"),
+        ),
+    ] {
+        let expected = super::canonical_smiles(smiles).unwrap();
+        assert_eq!(
+            measurements.parse_name(source).unwrap(),
+            expected,
+            "{source}"
+        );
+        let name = namer(smiles).unwrap();
+        assert_eq!(name.text, output.unwrap_or(source), "{smiles}");
+        assert_eq!(name.status, status, "{source}");
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            assert_eq!(measurements.parse_name(text).unwrap(), expected, "{text}");
+        }
+        for alternative in &name.alternatives {
+            assert_eq!(
+                alternative.status,
+                NameStatus::NotPreferred(NameReason::HigherOrderFusion),
+                "{}",
+                alternative.name
+            );
+        }
+        if source == "benzo[1,2-b:4,5-c']difuran" {
+            assert!(name.alternatives.is_empty(), "multiparent name retained");
+        }
+    }
+}
+
+#[test]
+fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
+    use super::{NameReason, NameStatus};
+
+    let mut measurements = Measurements::default();
+    for (smiles, preferred, alternative) in [
+        (
+            "S1CC2=CC=CC3=C2C1=CC=C3",
+            "2H-benzo[1,2,3-cd]1-benzothiophene",
+            None,
+        ),
+        (
+            "c1nc2ccc3ocnc3c2s1",
+            "[1,3]thiazolo[5,4-e][1,3]benzoxazole",
+            Some("[1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazole"),
+        ),
+        (
+            "c1nc2cc3ocnc3cc2s1",
+            "[1,3]thiazolo[5,4-f][1,3]benzoxazole",
+            Some("[1,3]thiazolo[4',5':1,2]benzo[4,5-d][1,3]oxazole"),
+        ),
+        (
+            "c1nc2cc3ncsc3cc2s1",
+            "benzo[1,2-d:5,4-d']bis[1,3]thiazole",
+            None,
+        ),
+        (
+            "O=C(O)Cc1nc2ccc3ocnc3c2s1",
+            "2-([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid",
+            Some("2-([1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"),
+        ),
+    ] {
+        let name = namer(smiles).unwrap();
+        assert_eq!(name.text, preferred, "{smiles}");
+        assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        assert_eq!(
+            name.alternatives
+                .iter()
+                .map(|n| n.name.as_str())
+                .collect::<Vec<_>>(),
+            alternative.into_iter().collect::<Vec<_>>(),
+            "{smiles}"
+        );
+        let expected = super::canonical_smiles(smiles).unwrap();
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            assert_eq!(measurements.parse_name(text).unwrap(), expected, "{text}");
+        }
+        for alternative in &name.alternatives {
+            assert_eq!(
+                alternative.status,
+                NameStatus::NotPreferred(NameReason::HigherOrderFusion),
+                "{}",
+                alternative.name
+            );
+        }
+    }
+    // In this four-ring system the selected benzo/pyrazine pair forms quinoxaline.
+    let smiles = "c1oc2cc3nc4ccccc4nc3cc2c1";
+    let name = namer(smiles).unwrap();
+    assert_eq!(name.text, "furo[2,3-g]benzo[b]quinoxaline");
+    assert_eq!(
+        name.status,
+        NameStatus::Unverified(NameReason::OpsinFusionLayout)
+    );
+    assert!(!name.alternatives.is_empty());
+    assert!(name.alternatives.iter().all(|alternative| {
+        alternative.status == NameStatus::NotPreferred(NameReason::HigherOrderFusion)
+    }));
+    let expected = super::canonical_smiles(smiles).unwrap();
+    for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+        assert_eq!(measurements.parse_name(text).unwrap(), expected, "{text}");
+    }
 }

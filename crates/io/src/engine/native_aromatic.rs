@@ -51,8 +51,10 @@ pub async fn execute(
         Ok::<_, Error>(molecular::aromatic_display(document, selected)?.finish()?)
     })
     .await??;
-    let warnings = native_response::identifier_notices(&edit.molecule, false);
-    let analysis = native_response::analyze_prepared(Arc::new(edit.molecule), config).await?;
+    let projected = crate::chemistry::molfile::has_projected_coordinates(&edit.document);
+    let warnings = native_response::identifier_notices(&edit.molecule, projected);
+    let analysis =
+        native_response::analyze_prepared(Arc::new(edit.molecule), projected, config).await?;
     Ok(Response {
         document: Some(edit.document),
         analysis: Some(analysis),
