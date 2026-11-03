@@ -246,7 +246,7 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
         const MESSAGE: &str = "This name requires relative/racemic stereo, polymer or atom-label semantics unsupported by editable naming previews. No simplified structure was accepted";
         return Err(Error::Rejected(MESSAGE.into()));
     }
-    let canonical_smiles = canonical_smiles(&smiles).map_err(Error::Rejected)?;
+    let mut canonical_smiles = canonical_smiles(&smiles).map_err(Error::Rejected)?;
     let atom_count = crate::chemistry::smiles::parse(&smiles)
         .map_err(|error| Error::Worker(error.to_string()))?
         .graph
@@ -262,6 +262,84 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     let locants = Locants {
         smiles: smiles.clone(),
         atoms: reply.locants,
+    };
+    let smiles = if reply.axes.is_empty() {
+        smiles
+    } else {
+        let mut state = crate::chemistry::smiles::read(&smiles)
+            .map_err(|error| Error::Rejected(error.to_string()))?
+            .prepared
+            .state;
+        if state.graph.atoms.len() != atom_count {
+            return Err(Error::Rejected(
+                "Native import changed the atom count of an axial structure".into(),
+            ));
+        }
+        let invalid = || Error::Worker("Local parser returned an invalid axis".into());
+        let mut axes = Vec::new();
+        for axis in &reply.axes {
+            let [a, b] = axis.atoms;
+            let index = state
+                .graph
+                .bonds
+                .iter()
+                .position(|bond| (bond.a, bond.b) == (a, b) || (bond.a, bond.b) == (b, a))
+                .ok_or_else(invalid)?;
+            let bond = state.graph.bonds.get(index).ok_or_else(invalid)?;
+            let mut refs = axis.refs;
+            if bond.a != a {
+                refs.reverse();
+            }
+            // Native axial CIP and wedging take the lowest-index neighbour at
+            // each end as carrier, so the winding flips once per other carrier.
+            let mut clockwise = axis.clockwise;
+            let mut carriers = vec![];
+            for ((atom, other), reference) in
+                [(bond.a, bond.b), (bond.b, bond.a)].into_iter().zip(refs)
+            {
+                let neighbours: Vec<_> = state
+                    .graph
+                    .bonds
+                    .iter()
+                    .filter_map(|bond| match (bond.a, bond.b) {
+                        (x, y) | (y, x) if x == atom && y != other => Some(y),
+                        _ => None,
+                    })
+                    .collect();
+                let carrier = *neighbours.iter().min().ok_or_else(invalid)?;
+                if neighbours.len() != 2 || !neighbours.contains(&reference) {
+                    return Err(invalid());
+                }
+                clockwise ^= carrier != reference;
+                carriers.push(carrier);
+            }
+            let metadata = state.metadata.bonds.get_mut(index).ok_or_else(invalid)?;
+            if metadata.stereo != 0 {
+                return Err(invalid());
+            }
+            metadata.stereo = if clockwise { 6 } else { 7 };
+            metadata.stereo_atoms = carriers;
+            axes.push((index, axis.descriptor.as_str()));
+        }
+        // Verify the requested descriptor after transferring references into
+        // the SMILES atom order, since InChI cannot check the axis.
+        let labelled = crate::chemistry::stereo::cip::label::assign(&state, &Default::default())
+            .map_err(|error| Error::Rejected(error.to_string()))?;
+        if axes.iter().any(|&(index, descriptor)| {
+            labelled
+                .state
+                .properties
+                .bond_codes
+                .get(index)
+                .and_then(Option::as_deref)
+                != Some(descriptor)
+        }) {
+            return Err(Error::Rejected(
+                "Native and OPSIN CIP assignments disagree on the biaryl axis".into(),
+            ));
+        }
+        canonical_smiles = super::canonical_state(&state).map_err(Error::Rejected)?;
+        canonical_smiles.clone()
     };
     if !generation
         && crate::chemistry::smiles::prepare(&canonical_smiles)

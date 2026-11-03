@@ -96,6 +96,82 @@ pub(super) fn name_smiles_with_style(
     smiles: &str,
     style: crate::naming::IsotopeStyle,
 ) -> Result<Name, String> {
+    let mut name = name_routes(smiles, style)?;
+    // A radical-ion name is verified through its neutral parent only.
+    if name.verification.is_some() {
+        return Ok(name);
+    }
+    // P-93.5.7.1: the general name cites each M/P axis as Ra/Sa.
+    let general: Vec<_> = std::iter::once(&name.text)
+        .chain(
+            name.alternatives
+                .iter()
+                .map(|alternative| &alternative.name),
+        )
+        .filter_map(|text| general_axial_name(text))
+        .collect();
+    for text in general {
+        if !name
+            .alternatives
+            .iter()
+            .any(|existing| existing.name == text)
+        {
+            name.alternatives.push(crate::naming::AlternativeName {
+                name: text,
+                status: crate::naming::NameStatus::NotPreferred(
+                    crate::naming::NameReason::AxialAlternative,
+                ),
+            });
+        }
+    }
+    Ok(name)
+}
+
+/// The name with Ra/Sa for M/P in every locanted stereodescriptor group, such
+/// as (1M,2R) -> (1Ra,2R); descriptor groups are innermost parentheses.
+fn general_axial_name(text: &str) -> Option<String> {
+    let mut out = String::with_capacity(text.len() + 4);
+    let mut rest = text;
+    while let Some(open) = rest.find('(') {
+        out.push_str(&rest[..=open]);
+        rest = &rest[open + 1..];
+        // A stereodescriptor group is followed by a hyphen; a nuclide group
+        // such as (31P) is not.
+        let Some(close) = rest
+            .find(['(', ')'])
+            .filter(|&i| rest[i..].starts_with(")-"))
+        else {
+            continue;
+        };
+        let terms: Option<Vec<_>> = rest[..close]
+            .split(',')
+            .map(|term| {
+                let descriptor = term.chars().last()?;
+                let locant = &term[..term.len() - descriptor.len_utf8()];
+                (locant.starts_with(|c: char| c.is_ascii_digit())
+                    && "RSrsEZMPΞξ".contains(descriptor))
+                .then_some((locant, descriptor))
+            })
+            .collect();
+        if let Some(terms) = terms.filter(|terms| terms.iter().any(|(_, d)| matches!(d, 'M' | 'P')))
+        {
+            let terms: Vec<_> = terms
+                .into_iter()
+                .map(|(locant, descriptor)| match descriptor {
+                    'M' => format!("{locant}Ra"),
+                    'P' => format!("{locant}Sa"),
+                    _ => format!("{locant}{descriptor}"),
+                })
+                .collect();
+            out.push_str(&terms.join(","));
+            rest = &rest[close..];
+        }
+    }
+    out.push_str(rest);
+    (out != text).then_some(out)
+}
+
+fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name, String> {
     if let Some(name) = unknown_stereo::name_smiles(smiles, style)? {
         return Ok(name);
     }
@@ -456,6 +532,69 @@ fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
 mod tests {
     use super::{name_smiles, nest_enclosing_marks};
     use std::io::Write;
+
+    #[test]
+    fn axial_general_names_leave_nuclide_groups_alone() {
+        assert_eq!(
+            super::general_axial_name("(31P)phosphanium (2M)-2-(2-hydroxyphenyl)benzen-1-olate")
+                .as_deref(),
+            Some("(31P)phosphanium (2Ra)-2-(2-hydroxyphenyl)benzen-1-olate")
+        );
+        assert_eq!(super::general_axial_name("(31P)phosphane"), None);
+        assert_eq!(
+            super::general_axial_name("4-[(1P,2R)-x]-(3M)-y").as_deref(),
+            Some("4-[(1Sa,2R)-x]-(3Ra)-y")
+        );
+    }
+
+    #[test]
+    fn axial_general_alternatives_cover_ordinary_unknown_isotope_and_salt_paths() {
+        use crate::naming::{NameReason, NameStatus};
+        for (marker, descriptor, general) in [(900_004, 'M', "Ra"), (900_008, 'P', "Sa")] {
+            for (input, unknown) in [
+                (
+                    format!("Oc1ccc2ccccc2[c:{marker}]1-[c:{marker}]1c(O)ccc2ccccc12"),
+                    false,
+                ),
+                (
+                    format!("O[13c]1ccc2ccccc2[c:{marker}]1-[c:{marker}]1c(O)ccc2ccccc12"),
+                    false,
+                ),
+                (
+                    format!("Oc1ccc(C[C:900001](F)(Cl)Br)c[c:{marker}]1-[c:{marker}]1ccccc1O"),
+                    true,
+                ),
+                (
+                    format!("Oc1cccc[c:{marker}]1-[c:{marker}]1ccccc1[O-].[Na+]"),
+                    false,
+                ),
+            ] {
+                let name = name_smiles(&input).unwrap_or_else(|e| panic!("{input}: {e}"));
+                assert!(name.text.contains(descriptor), "{input}: {}", name.text);
+                let expected = name.text.replace(descriptor, general);
+                let alternative = name
+                    .alternatives
+                    .iter()
+                    .find(|a| a.name == expected)
+                    .unwrap_or_else(|| {
+                        panic!("{input}: missing {expected}: {:?}", name.alternatives)
+                    });
+                assert_eq!(
+                    alternative.status,
+                    NameStatus::NotPreferred(NameReason::AxialAlternative)
+                );
+                assert!(alternative.status.detail().contains("P-93.5.7.1"));
+                if unknown {
+                    assert_eq!(name.omitted_units, 1);
+                    assert!(
+                        name.alternatives
+                            .iter()
+                            .any(|a| a.name.contains('Ξ') && a.name.contains(general))
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn anhydride_names_need_acid_halves() {

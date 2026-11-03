@@ -899,6 +899,13 @@ impl<'a> ComponentGenerator<'a> {
                 self.add(n, TYPE_ATR, ENDO_EXO_SYN_ANTI_TYPE_VAL);
                 self.add(n, VALUE_ATR, symbol.to_lowercase());
             } else if matches(symbol, "M|P|Ra|Sa|Sp|Rp") {
+                // Native extension: stereo groups hold atom parities only, so a
+                // racemic or relative axis cannot be represented.
+                if group.is_some() {
+                    return err(format!(
+                        "Racemic or relative axial stereochemistry is not supported: {original}"
+                    ));
+                }
                 self.add(n, TYPE_ATR, AXIAL_TYPE_VAL);
                 self.add(n, VALUE_ATR, symbol);
             } else {

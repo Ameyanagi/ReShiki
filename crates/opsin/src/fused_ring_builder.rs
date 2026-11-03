@@ -928,6 +928,7 @@ impl<'a> Builder<'a> {
                 to,
                 order: 1,
                 stereo: None,
+                axial_stereo: None,
                 smiles_direction: None,
             });
             self.graph_mut().atom_mut(attach).bonds.push(id);

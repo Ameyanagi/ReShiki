@@ -139,10 +139,14 @@ pub enum NameReason {
     Phane,
     RelativeRingStereo,
     UnknownConfiguration,
+    AxialAlternative,
 }
 impl NameReason {
     pub fn detail(self) -> &'static str {
         match self {
+            Self::AxialAlternative => {
+                "Uses Ra/Sa axial descriptors; M and P are preferred to Ra and Sa (P-93.5.7.1)."
+            }
             Self::SulfonylPrefix => {
                 "Uses a concatenated sulfonyl or sulfinyl prefix such as N-methyltosylamino or (methylsulfinyl)amino; preferred IUPAC names use acid-derived forms such as N,4-dimethylbenzene-1-sulfonamido or methanesulfinamido (P-65.3.2.2.2, P-66.1.1.4.3)."
             }
@@ -396,7 +400,7 @@ pub fn locant_text(locant: &str) -> String {
 #[derive(Debug, Clone)]
 pub struct Identity {
     pub smiles: String,
-    /// Internal unknown-unit markers for generation; ordinary atom maps are removed.
+    /// Unknown-unit and axis markers for generation; ordinary atom maps are removed.
     pub naming_smiles: Option<String>,
     /// Unknown-unit markers including stereogenic units with no drawn configuration.
     /// Used only when explicit unknown descriptors are requested.
@@ -431,7 +435,7 @@ fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<Strin
                 .into()
         }
         IdentityRejection::NonclassicalStereo => {
-            const MESSAGE: &str = "Naming supports tetrahedral and ordinary alkene stereochemistry only; other stereo classes cannot be discarded";
+            const MESSAGE: &str = "Naming supports tetrahedral, ordinary alkene and biaryl axis stereochemistry; other stereo classes cannot be discarded";
             MESSAGE.into()
         }
         IdentityRejection::Write(message) => message,
@@ -439,7 +443,8 @@ fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<Strin
 }
 
 /// Canonical isomeric graph identity, including isotope, charge and specified
-/// stereo. Map numbers and atom order are not molecular identity.
+/// stereo. Reserved axis markers carry biaryl configuration; other maps and
+/// atom order are not molecular identity.
 pub fn canonical_smiles(text: &str) -> Result<String, String> {
     if text.len() > MAX_SMILES_BYTES || text.contains('|') || text.contains('>') {
         return Err(
@@ -449,7 +454,7 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
     bound_atom_tokens(text)?;
     // Native import cleans unusable winding and can discard non-tetrahedral
     // classes. Check the raw graph first, before that cleanup changes identity.
-    // Unlike has_nonclassical_stereo, this raw check intentionally covers atoms only.
+    // Unlike canonical_identity, this raw check intentionally covers atoms only.
     let raw = chemistry::smiles::parse(text).map_err(|e| e.to_string())?;
     if raw.metadata.atoms.iter().any(|m| m.chiral_tag > 2) {
         return Err("Naming does not support allene or coordination stereo classes; no plain graph was substituted".into());
@@ -473,7 +478,9 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
     {
         return Err("Native import could not retain every specified tetrahedral center; no name or graph was assigned".into());
     }
-    canonical_state(&imported.prepared.state)
+    let state = molecule_names::apply_axis_markers(&imported.prepared.state)
+        .map_err(|_| "Naming received invalid biaryl axis markers".to_owned())?;
+    canonical_state(&state)
 }
 
 /// Reject oversized output before native sanitization/ranking can allocate or
@@ -633,10 +640,16 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
             }
         }
     }
+    marked = molecule_names::encode_axis_markers(&marked)
+        .map_err(|_| "Naming could not retain the biaryl axis configuration".to_owned())?;
+    // Unknown markers only grow between calls; atoms without one keep their
+    // biaryl axis map.
     let mut marker_smiles = |unknown: &[i32]| -> Result<Option<String>, String> {
         for (metadata, marker) in marked.metadata.atoms.iter_mut().zip(unknown) {
-            metadata.map_number = if *marker == 0 { 0 } else { 900_000 + marker };
-            metadata.map_present = *marker != 0;
+            if *marker != 0 {
+                metadata.map_number = 900_000 + marker;
+                metadata.map_present = true;
+            }
         }
         if unknown.iter().any(|&marker| marker != 0) {
             Ok(Some(
@@ -705,6 +718,17 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
     })
 }
 
+/// An identity as editable SMILES. SMILES has no axis layer, so this leaves
+/// out the private biaryl axis maps that `canonical_smiles` may carry.
+pub fn plain_smiles(identity: &str) -> String {
+    let stripped = [molecule_names::AXIS_M, molecule_names::AXIS_P]
+        .iter()
+        .fold(identity.to_owned(), |text, map| {
+            text.replace(&format!(":{map}]"), "]")
+        });
+    canonical_smiles(&stripped).unwrap_or(stripped)
+}
+
 pub fn verify_identity(expected: &str, actual: &str) -> Result<(), String> {
     if canonical_smiles(expected)? != canonical_smiles(actual)? {
         return Err("The source structure differs in connectivity, charge, isotope, tautomer or stereochemistry. No name was assigned".into());
@@ -712,5 +736,7 @@ pub fn verify_identity(expected: &str, actual: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
+mod axial_tests;
 #[cfg(test)]
 mod tests;

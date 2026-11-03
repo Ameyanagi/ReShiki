@@ -2,10 +2,11 @@ use super::*;
 use crate::{
     atom_labels::{Owner, indicators, refresh::Refresh, test_support::with_fonts},
     document::Point,
-    molecule_names::{IdentityRejection, canonical_identity},
+    molecule_names::{AXIS_M, AXIS_P, canonical_identity},
 };
 
-// BINOL, with the 1--11 axis horizontal in chemistry coordinates (Y up).
+// [2,2'-Binaphthalene]-1,1'-diol from #892, with the 1--11 axis joining
+// naphthalene beta carbons horizontally in chemistry coordinates (Y up).
 pub(crate) fn binol(display: &str) -> Document {
     let mut doc = Document::default();
     let positions = [
@@ -66,10 +67,9 @@ fn binol_drawing_perceives_mirrored_single_axis_wedges() -> anyhow::Result<()> {
         let before = doc.clone();
         let molecule = prepare(&doc)?;
         assert!(matches!(molecule.state.metadata.bonds[22].stereo, 6 | 7));
-        assert_eq!(
-            canonical_identity(&molecule.state),
-            Err(IdentityRejection::NonclassicalStereo)
-        );
+        let identity = canonical_identity(&molecule.state).unwrap();
+        let marker = if expected == "M" { AXIS_M } else { AXIS_P };
+        assert_eq!(identity.matches(&format!(":{marker}")).count(), 2);
         let output = labeled(&doc)?;
         assert_eq!(output.bonds[22].cip_label.as_deref(), Some(expected));
         assert_eq!(output.bonds[0].display, display);
@@ -197,5 +197,45 @@ fn binol_axis_refresh_displays_helicity_bond_indicator() {
             doc.atom_labels.stereo = false;
             assert!(indicators(&doc).is_empty());
         }
+    });
+}
+
+#[test]
+fn mirrored_biaryl_axis_invalidates_a_generated_name_caption() {
+    with_fonts(|| {
+        use crate::{molecule_names, typography::TextFormat};
+        let mut doc = binol("hash");
+        let ids: Vec<_> = doc.atoms.iter().map(|atom| atom.id).collect();
+        let identity = canonical_identity(&prepare(&doc).unwrap().state).unwrap();
+        let caption = molecule_names::show(
+            &mut doc,
+            &ids,
+            "(2M)-2-(1-hydroxynaphthalen-2-yl)naphthalen-1-ol".into(),
+            identity.clone(),
+            TextFormat::default(),
+            true,
+        )
+        .unwrap();
+        let before = doc.clone();
+        for atom in &mut doc.atoms {
+            atom.position.x += 20.;
+        }
+        molecule_names::reconcile(&mut doc, &before);
+        assert_eq!(doc.molecule_names.len(), 1);
+        let before = doc.clone();
+        for atom in &mut doc.atoms {
+            atom.position.x = -atom.position.x;
+        }
+        assert_ne!(
+            canonical_identity(&prepare(&doc).unwrap().state).unwrap(),
+            identity
+        );
+        molecule_names::reconcile(&mut doc, &before);
+        assert!(doc.molecule_names.is_empty());
+        assert!(
+            doc.annotations
+                .iter()
+                .all(|annotation| annotation.id != caption)
+        );
     });
 }

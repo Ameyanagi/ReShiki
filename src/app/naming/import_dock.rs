@@ -65,7 +65,7 @@ impl App {
         let Some(preview) = self.tab.naming.preview.clone() else {
             return;
         };
-        if self.tab.naming.smiles != preview.identity {
+        if self.tab.naming.smiles != preview.smiles {
             self.tab.naming.notice = Some(Notice::new(
                 NoticeKind::Retry,
                 "Apply the edited SMILES before inserting.",
@@ -164,7 +164,7 @@ impl App {
             && state
                 .preview
                 .as_ref()
-                .is_none_or(|preview| state.smiles == preview.identity);
+                .is_none_or(|preview| state.smiles == preview.smiles);
         let changed = state
             .preview
             .as_ref()
