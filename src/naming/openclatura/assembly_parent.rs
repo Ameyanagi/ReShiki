@@ -663,6 +663,15 @@ pub(super) struct ParentTail {
 pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> ParentTail {
     let kind = substituent_attachment_kind(parts);
     let mut suffix = RULES.assembly.substituent_attachment_suffixes[kind].clone();
+    if parts.is_ring_assembly() {
+        // P-29.3.5: junction locants stay inside brackets; the free valence is outside.
+        return ParentTail {
+            stem: format!("[{}]", assembly_suffix_stem(parts, true)),
+            terminal: format!("-{}-{suffix}", parts.attachment_locant),
+            cites_locants: true,
+            ..Default::default()
+        };
+    }
     if kind == "acyl" && parts.parent_length == 1 && !parts.substituents.is_empty() {
         suffix = RULES.assembly.substituent_attachment_suffixes["acyl_on_branch"].clone();
     }
@@ -842,6 +851,7 @@ pub fn format_principal_suffix(
     locs.sort_by_key(|l| parse_locant(l));
     let mut omit = parts.parent_length == 1;
     if !omit
+        && !parts.is_ring_assembly()
         && !parts.isotope_explicit_locants
         && locs == ["1"]
         && (!group.suffix_with_locant
@@ -921,6 +931,21 @@ pub(super) fn format_parent_tail(
     stem: &str,
     terminal: &str,
 ) -> Result<ParentTail, String> {
+    if parts.is_ring_assembly() {
+        // P-28.2.1: an assembly name always cites its junction locants.
+        let (terminal, suffix, _) = format_principal_suffix(parts, "e")?;
+        let name = assembly_suffix_stem(parts, terminal.is_empty());
+        return Ok(ParentTail {
+            stem: if suffix.is_empty() {
+                name
+            } else {
+                format!("[{name}]")
+            },
+            suffix,
+            cites_locants: true,
+            ..Default::default()
+        });
+    }
     let (stem, unsat, unsaturation_cites_locants) = if !has_retained_like_parent(parts) {
         if parts.unsaturations.is_empty() {
             (stem.to_owned(), "an".into(), false)
@@ -953,6 +978,19 @@ pub(super) fn format_parent_tail(
         suffix,
         cites_locants: unsaturation_cites_locants || suffix_cites_locants || charge_cites_locants,
     })
+}
+
+fn assembly_suffix_stem(parts: &AssemblyParts, elide: bool) -> String {
+    let name = parts.retained_name.as_deref().unwrap_or_default();
+    if elide {
+        if let Some(stem) = name.strip_suffix("e)") {
+            return format!("{stem})");
+        }
+        if let Some(stem) = name.strip_suffix('e') {
+            return stem.into();
+        }
+    }
+    name.into()
 }
 
 #[cfg(test)]

@@ -765,39 +765,6 @@ fn ordered_simple_ring(mol: &Molecule, atoms: &AtomSet) -> Vec<usize> {
     }
 }
 
-/// Retained biphenyl requires two complete benzene rings joined by one bridge.
-fn biphenyl_parent_result(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
-    // Upstream divergence: the fixed name also requires neutral ring carbons.
-    if atoms.len() != 12
-        || atoms.iter().any(|idx| {
-            let atom = &mol.atoms[idx];
-            !atom.is_carbon() || atom.charge != 0 || atom.radical_electrons != 0
-        })
-    {
-        return None;
-    }
-    let bridges: Vec<_> = mol
-        .bonds
-        .values()
-        .filter(|bond| atoms.contains(&bond.u) && atoms.contains(&bond.v) && !bond.in_small_ring)
-        .collect();
-    if bridges.len() != 1 {
-        return None;
-    }
-    let bridge = bridges[0];
-    for (root, blocked) in [(bridge.u, bridge.v), (bridge.v, bridge.u)] {
-        let ring = component_atoms_until_blocked(mol, atoms, root, &set([blocked]));
-        if ring.len() != 6 {
-            return None;
-        }
-        let path = ordered_simple_ring(mol, &ring);
-        if retained::get_retained_ring(mol, &path)?.name != "benzene" {
-            return None;
-        }
-    }
-    Some("1,1'-biphenyl".into())
-}
-
 fn simple_cycle_unsaturation_locants(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     path.iter()
         .enumerate()
@@ -3158,12 +3125,6 @@ pub(super) fn structural_replacement_parent_result(
         require_stereo_free_core(mol, atoms)?;
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = biphenyl_parent_result(mol, atoms) {
-        // Isotope-created axes can remain on the isotope-stripped parent.
-        // This fixed spelling supplies no locants for their descriptor.
-        require_stereo_free_core(mol, atoms)?;
-        return Ok(Some(StructuralParentName::ordinary(name)));
-    }
     if let Some(name) = mol.candidate(|| simple_azine_parent_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
@@ -3285,42 +3246,6 @@ mod tests {
             Some("methyl dihydrogen phosphate")
         );
         assert_eq!(special("CB(O)O").as_deref(), Some("methylboronic acid"));
-    }
-
-    #[test]
-    fn biphenyl_shortcut_requires_two_complete_benzene_rings() {
-        for smiles in ["c1ccccc1-c1ccccc1", "C1=CC=C(C=C1)C2=CC=CC=C2"] {
-            assert_eq!(
-                special(smiles).as_deref(),
-                Some("1,1'-biphenyl"),
-                "{smiles}"
-            );
-        }
-        for smiles in [
-            "c1ccccc1C1CCCCC1",
-            "C1CCCCC1C1CCCCC1",
-            "Cc1ccccc1-c1ccccc1",
-            "c1ccccc1-c1ccccn1",
-        ] {
-            let mol = read_smiles(smiles).unwrap();
-            assert_eq!(
-                biphenyl_parent_result(&mol, &all_atoms(&mol)),
-                None,
-                "{smiles}"
-            );
-        }
-    }
-
-    #[test]
-    fn fixed_biphenyl_shortcut_refuses_an_isotope_created_axis() {
-        let mut mol = read_smiles("[13cH]1cccc[c:900004]1-[c:900004]1cccc[13cH]1").unwrap();
-        for atom in mol.atoms.values_mut() {
-            atom.isotope = None;
-        }
-        assert_eq!(
-            structural_replacement_parent_result(&mol, &all_atoms(&mol)).unwrap_err(),
-            SHORTCUT_STEREO_ERROR,
-        );
     }
 
     #[test]

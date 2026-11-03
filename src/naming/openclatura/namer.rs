@@ -12,7 +12,7 @@ use super::locant_elision::apply_redundant_locant_elision;
 use super::molecule::{Atom, AtomSet, Bond, Molecule, bond_ids_within, charged_atoms};
 use super::nomenclature::RULES;
 use super::parent_pipeline::{build_parent_assembly_plan, resolve_retained_parent};
-use super::parent_selection::{ParentSelection, select_principal_parent};
+use super::parent_selection::{ParentSelection, select_principal_parent_with_excluded};
 use super::perception::{PerceivedGroup, perceive_groups};
 use super::rules::{multipliers, stems};
 use super::subgraph_tools::{
@@ -161,9 +161,9 @@ pub(super) fn select_subgraph_parent(
     if cyclic.contains(&start) {
         let rings = find_ring_systems(mol, exclude)?
             .into_iter()
-            .filter(|r| r.atoms.contains(&start))
+            .filter(|r| r.atoms.is_subset(component))
             .collect::<Vec<_>>();
-        return select_principal_parent(mol, &[], &rings, &[start])
+        return select_principal_parent_with_excluded(mol, &[], &rings, &[start], exclude)
             .ok_or_else(|| "openclatura: no recursive ring parent".into());
     }
     let paths = find_all_carbon_paths(mol, exclude)?
@@ -174,7 +174,7 @@ pub(super) fn select_subgraph_parent(
                     .all(|n| component.contains(n) && !cyclic.contains(n))
         })
         .collect::<Vec<_>>();
-    select_principal_parent(mol, &paths, &[], &[start])
+    select_principal_parent_with_excluded(mol, &paths, &[], &[start], exclude)
         .ok_or_else(|| "openclatura: no recursive chain parent".into())
 }
 
@@ -780,15 +780,15 @@ mod tests {
         use crate::naming::openclatura::name_smiles;
 
         for (smiles, expected) in [
-            ("C1=CC=NC(=C1)C2=CC=CC=N2", "2-(pyridin-2-yl)pyridine"),
+            ("C1=CC=NC(=C1)C2=CC=CC=N2", "2,2'-bipyridine"),
             ("C1CCC(CC1)C2=CC=CC=C2", "cyclohexylbenzene"),
             (
                 "C1=CC=C(C=C1)C2=CC=C(C=C2)C3=CC=CC=C3",
-                "1,4-diphenylbenzene",
+                "1^1,2^1:2^4,3^1-terphenyl",
             ),
             (
                 "C1=CC=C(C=C1)C2=CC(=CC=C2)C3=CC=CC=C3",
-                "1,3-diphenylbenzene",
+                "1^1,2^1:2^3,3^1-terphenyl",
             ),
             (
                 "CN(C)CCOC(C1=CC=CC=C1)C2=CC=CC=C2",

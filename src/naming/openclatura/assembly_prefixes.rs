@@ -19,12 +19,16 @@ fn ignored_prefix_len(text: &str) -> usize {
         "sec", "tert", "t", "s", "d", "l", "m", "o", "p", "alpha", "beta", "gamma",
     ];
     let stereo = !prefix.is_empty() && prefix.chars().all(|c| "ezrsξ".contains(c));
-    let locants = prefix.split(',').all(|s| {
+    // Assembly junction locants precede a hyphen, not a stereo block's ')'.
+    let assembly_locants = text[end..].starts_with('-');
+    let locants = prefix.split([',', ':']).all(|s| {
         let digits = s.chars().take_while(|c| c.is_ascii_digit()).count();
         if digits > 0 {
-            s[digits..]
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c == 'ξ')
+            s[digits..].chars().all(|c| {
+                c.is_ascii_lowercase()
+                    || c == 'ξ'
+                    || assembly_locants && (c.is_ascii_digit() || matches!(c, '\'' | '^'))
+            })
         } else {
             s.chars().next().is_some_and(|c| "nospmc".contains(c))
                 && s[1..].chars().all(|c| c == '\'')
@@ -128,6 +132,7 @@ fn substituent_locant_string(
         .is_some()
         && retained_parent_attachment_is_ambiguous(parts, locs);
     if locs == ["1"]
+        && !parts.is_ring_assembly()
         && parts.is_ring
         && parts.principal_group.is_none()
         && parts.unsaturations.is_empty()

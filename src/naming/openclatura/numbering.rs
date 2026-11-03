@@ -11,13 +11,14 @@ use std::sync::LazyLock;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NumberingTopology {
+    pub is_assembly: bool,
     pub is_bicycle: bool,
     pub is_spiro: bool,
     pub is_polycycle: bool,
 }
 impl NumberingTopology {
     fn has_fixed_paths(self) -> bool {
-        self.is_bicycle || self.is_spiro || self.is_polycycle
+        self.is_assembly || self.is_bicycle || self.is_spiro || self.is_polycycle
     }
 }
 
@@ -213,6 +214,7 @@ pub fn choose_parent_numbering(
             Vec<LocantKey>,
             Vec<LocantKey>,
             Vec<(String, LocantKey)>,
+            Vec<(LocantKey, usize)>,
             Vec<usize>,
         );
         let evaluate = |map: &BTreeMap<usize, String>| -> MapScore {
@@ -225,7 +227,7 @@ pub fn choose_parent_numbering(
             principal.sort();
             let mut hetero: BTreeMap<usize, Vec<LocantKey>> = BTreeMap::new();
             for (&idx, atom) in &mol.atoms {
-                if map.contains_key(&idx) && atom.symbol != "C" {
+                if !topology.is_assembly && map.contains_key(&idx) && atom.symbol != "C" {
                     hetero
                         .entry(
                             elements::get(&atom.symbol)
@@ -299,9 +301,21 @@ pub fn choose_parent_numbering(
                 })
                 .collect();
             citation.sort();
+            let mut stereo: Vec<_> = map
+                .keys()
+                .filter(|_| topology.is_assembly)
+                .filter_map(|idx| {
+                    mol.atoms[idx]
+                        .stereo
+                        .as_ref()
+                        // P-31.1.4.3.4: R before S, r before s.
+                        .map(|s| (value(idx), usize::from(!matches!(s.as_str(), "R" | "r"))))
+                })
+                .collect();
+            stereo.sort();
             path.sort_by_key(value);
-            // Retained/fused maps historically do not score atom stereo. Add
-            // only axial descriptors here, preserving their no-axis numbering.
+            // Other retained/fused maps do not score atom stereo. Axial
+            // descriptors are scored on every map.
             (
                 hetero,
                 indicated,
@@ -309,6 +323,7 @@ pub fn choose_parent_numbering(
                 hydro,
                 subst,
                 citation,
+                stereo,
                 stereochemistry_preference(mol, &path, false),
             )
         };

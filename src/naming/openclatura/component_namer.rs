@@ -123,30 +123,17 @@ pub(super) fn build_spiro_component_parts(
     })
 }
 
-fn component_pipeline(
+/// Apply the same shortcut precedence when auditing competing parent choices.
+/// A declined shortcut restores its provisional name assessment.
+pub(super) fn structural_parent(
     mol: &Molecule,
-    component_atoms: &AtomSet,
-    citation: Option<&str>,
-    projection: Option<SpiroProjection<'_>>,
-) -> Result<ComponentResult, String> {
-    let _depth = mol.enter_naming()?;
-    let as_prefix = projection.as_ref().is_some_and(|p| {
-        p.prefix_only
-            || p.required_core.is_some()
-            || super::spiro_subgraph::polycyclic_side_core(mol, component_atoms, p.junction)
-                .is_some()
-    });
-    if component_atoms.is_empty() {
-        return Err("openclatura: empty component".into());
-    }
-    if let Some(name) = single_atom_component_name(mol, component_atoms) {
-        return Ok(ComponentResult::Shortcut(name));
-    }
-    let mut groups = component_groups(mol, component_atoms);
-    let mut key = component_principal_key(&groups, as_prefix);
+    atoms: &AtomSet,
+    groups: &[super::perception::PerceivedGroup],
+    key: Option<&str>,
+) -> Result<Option<super::special_cases::StructuralParentName>, String> {
     let blocks = groups
         .iter()
-        .filter(|g| Some(g.key.as_str()) == key.as_deref())
+        .filter(|g| Some(g.key.as_str()) == key)
         .any(|g| {
             g.resolved_rule
                 .as_ref()
@@ -168,21 +155,43 @@ fn component_pipeline(
     let structural = if functional_defer {
         None
     } else {
-        structural_replacement_parent_result(mol, component_atoms)?
+        structural_replacement_parent_result(mol, atoms)?
     };
-    let defers = blocking_suffix_defers_to_chain_parent(
-        mol,
-        component_atoms,
-        &groups,
-        key.as_deref(),
-        structural.as_ref(),
-    );
+    let defers =
+        blocking_suffix_defers_to_chain_parent(mol, atoms, groups, key, structural.as_ref());
     if (!blocks || defers)
         && let Some(result) = structural
     {
-        return Ok(ComponentResult::Shortcut(result.name));
+        return Ok(Some(result));
     }
     mol.set_name_status(status);
+    Ok(None)
+}
+
+fn component_pipeline(
+    mol: &Molecule,
+    component_atoms: &AtomSet,
+    citation: Option<&str>,
+    projection: Option<SpiroProjection<'_>>,
+) -> Result<ComponentResult, String> {
+    let _depth = mol.enter_naming()?;
+    let as_prefix = projection.as_ref().is_some_and(|p| {
+        p.prefix_only
+            || p.required_core.is_some()
+            || super::spiro_subgraph::polycyclic_side_core(mol, component_atoms, p.junction)
+                .is_some()
+    });
+    if component_atoms.is_empty() {
+        return Err("openclatura: empty component".into());
+    }
+    if let Some(name) = single_atom_component_name(mol, component_atoms) {
+        return Ok(ComponentResult::Shortcut(name));
+    }
+    let mut groups = component_groups(mol, component_atoms);
+    let mut key = component_principal_key(&groups, as_prefix);
+    if let Some(result) = structural_parent(mol, component_atoms, &groups, key.as_deref())? {
+        return Ok(ComponentResult::Shortcut(result.name));
+    }
     if let Some(name) = try_name_anhydride_component(mol, &groups, key.as_deref())? {
         return Ok(ComponentResult::Shortcut(name));
     }
