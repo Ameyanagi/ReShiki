@@ -215,6 +215,103 @@ fn checked_response_round_trip_recomputes_visible_markers_for_export() {
 }
 
 #[test]
+fn xi_option_invalidates_refresh_cache_and_marks_atoms_and_double_bonds() {
+    let (mut doc, center, (a, b)) = undefined_stereogenic_units();
+    doc.atom_labels.stereo = true;
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    let ordinary = Refresh::calculate(&doc, &Refresh::default()).unwrap();
+    ordinary.apply(&mut doc);
+    assert!(
+        crate::atom_labels::indicators(&doc)
+            .iter()
+            .all(|i| i.text == "(?)")
+    );
+    doc.atom_labels.undefined_xi = true;
+    let xi = Refresh::calculate(&doc, &ordinary).unwrap();
+    assert!(!Arc::ptr_eq(&ordinary.cache[&center], &xi.cache[&center]));
+    assert!(!Arc::ptr_eq(&ordinary.cache[&a], &xi.cache[&a]));
+    xi.apply(&mut doc);
+    assert!(!doc.atom(center).unwrap().undefined_pseudoasymmetric);
+    assert!(doc.bond_between(a, b).unwrap().1.undefined_stereo);
+    let indicators = crate::atom_labels::indicators(&doc);
+    assert_eq!(indicators.len(), 2);
+    assert!(indicators.iter().all(|i| i.text == "(Ξ)"));
+}
+
+#[test]
+fn xi_full_cip_trial_marks_pseudoasymmetric_undefined_atom_and_refreshes_after_analysis() {
+    let imported = crate::chemistry::smiles::read("O=C(O)[C@H](O)C(O)[C@H](O)C(=O)O").unwrap();
+    let state = imported.prepared.state;
+    let positions = crate::chemistry::depict::compute(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        Default::default(),
+    )
+    .unwrap()
+    .positions;
+    let molecule = chemistry::Molecule {
+        rdkit_version: crate::chemistry::RDKIT_VERSION,
+        ids: (1..=positions.len() as u64).collect(),
+        state,
+        positions,
+    };
+    let drawing = chemistry::for_generated(
+        &molecule,
+        &imported.prepared.dummy_labels,
+        Default::default(),
+    )
+    .unwrap();
+    let labels = drawing.labels().unwrap();
+    let mut doc = drawing.finish(labels).unwrap();
+    let center = doc.atoms[5].id;
+    assert_eq!(doc.atoms[5].element, "C");
+    assert!(doc.atom(center).unwrap().stereo.is_none());
+    doc.atom_labels.stereo = true;
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    let ordinary = Refresh::calculate(&doc, &Refresh::default()).unwrap();
+    ordinary.apply(&mut doc);
+    assert!(doc.atom(center).unwrap().undefined_stereo);
+    assert!(!doc.atom(center).unwrap().undefined_pseudoasymmetric);
+    assert_eq!(
+        crate::atom_labels::atom_stereo_code(doc.atom(center).unwrap(), &doc),
+        Some("?")
+    );
+    doc.atom_labels.undefined_xi = true;
+    let xi = Refresh::calculate(&doc, &ordinary).unwrap();
+    assert!(xi.notice.is_none(), "{:?}", xi.notice);
+    xi.apply(&mut doc);
+    assert!(doc.atom(center).unwrap().undefined_pseudoasymmetric);
+    assert_eq!(
+        crate::atom_labels::atom_stereo_code(doc.atom(center).unwrap(), &doc),
+        Some("ξ")
+    );
+    let codes: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter_map(|a| a.cip_label.as_deref())
+        .collect();
+    assert!(codes.contains(&"R") && codes.contains(&"S"), "{codes:?}");
+    assert!(doc.atom(center).unwrap().cip_label.is_none());
+
+    let checked: Document = serde_json::from_value(serde_json::to_value(&doc).unwrap()).unwrap();
+    crate::atom_labels::clear_computed(&mut doc);
+    crate::atom_labels::copy_computed(&mut doc, &checked);
+    assert!(doc.atom(center).unwrap().undefined_pseudoasymmetric);
+    assert_eq!(
+        crate::atom_labels::atom_stereo_code(doc.atom(center).unwrap(), &doc),
+        Some("ξ")
+    );
+    doc.atom_labels.undefined_xi = false;
+    refresh_optional_stereo(&mut doc);
+    assert!(!doc.atom(center).unwrap().undefined_pseudoasymmetric);
+    assert_eq!(
+        crate::atom_labels::atom_stereo_code(doc.atom(center).unwrap(), &doc),
+        Some("?")
+    );
+}
+
+#[test]
 fn independent_fragments_survive_errors_and_only_unchanged_chemistry_is_reused() {
     let mut source = alcohol();
     let invalid = source.add_atom("O", Point::new(100., 100.));

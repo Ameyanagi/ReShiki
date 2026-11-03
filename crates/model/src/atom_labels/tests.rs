@@ -221,14 +221,18 @@ fn roman_stereo_parentheses_preserve_number_and_map_styles() {
 fn undefined_marker_setting_defaults_off_and_round_trips_only_when_enabled() {
     let legacy: Settings = serde_json::from_value(serde_json::json!({ "stereo": true })).unwrap();
     assert!(!legacy.mark_undefined_stereocentres);
+    assert!(!legacy.undefined_xi);
     let saved = serde_json::to_value(&legacy).unwrap();
     assert!(saved.get("mark_undefined_stereocentres").is_none());
+    assert!(saved.get("undefined_xi").is_none());
     let enabled = Settings {
         mark_undefined_stereocentres: true,
+        undefined_xi: true,
         ..legacy
     };
     let saved = serde_json::to_value(&enabled).unwrap();
     assert_eq!(saved["mark_undefined_stereocentres"], true);
+    assert_eq!(saved["undefined_xi"], true);
     assert_eq!(serde_json::from_value::<Settings>(saved).unwrap(), enabled);
 }
 
@@ -240,9 +244,11 @@ fn existing_native_document_round_trips_without_marker_fields() {
     .unwrap()
     .current();
     assert!(!document.atom_labels.mark_undefined_stereocentres);
+    assert!(!document.atom_labels.undefined_xi);
     let saved = document.file_json().unwrap();
     let text = std::str::from_utf8(&saved).unwrap();
     assert!(!text.contains("mark_undefined_stereocentres"));
+    assert!(!text.contains("undefined_xi"));
     assert!(!text.contains("undefined_stereo"));
     let reopened = Document::from_json(&saved).unwrap();
     assert_eq!(reopened, document);
@@ -311,17 +317,95 @@ fn computed_undefined_flags_are_not_persisted_and_clear_with_other_stereo_labels
     doc.atom_labels.mark_undefined_stereocentres = true;
     let plain = doc.clone();
     doc.atoms[0].undefined_stereo = true;
+    doc.atoms[0].undefined_pseudoasymmetric = true;
     doc.bonds[0].undefined_stereo = true;
     assert!(!crate::transaction::chemistry_changed(&plain, &doc));
     let json = serde_json::to_value(&doc).unwrap();
     assert!(json["atoms"][0].get("undefined_stereo").is_none());
+    assert!(json["atoms"][0].get("undefined_pseudoasymmetric").is_none());
     assert!(json["bonds"][0].get("undefined_stereo").is_none());
     let opened: Document = serde_json::from_value(json).unwrap();
     assert!(!opened.atoms[0].undefined_stereo && !opened.bonds[0].undefined_stereo);
+    assert!(!opened.atoms[0].undefined_pseudoasymmetric);
     assert!(opened.atom_labels.mark_undefined_stereocentres);
     assert!(!crate::transaction::chemistry_changed(&opened, &doc));
     clear_computed(&mut doc);
     assert!(!doc.atoms[0].undefined_stereo && !doc.bonds[0].undefined_stereo);
+    assert!(!doc.atoms[0].undefined_pseudoasymmetric);
+}
+
+#[test]
+fn xi_markers_share_muted_stereo_layout_visibility_and_italic_formatting() {
+    with_fonts(xi_marker_formatting);
+}
+
+fn xi_marker_formatting() {
+    let mut doc = stereo_document();
+    doc.atoms[0].display.stereo.style.family = "Liberation Sans".into();
+    let atom = doc.atoms[0].id;
+    doc.atoms[0].undefined_stereo = true;
+    doc.bonds[0].undefined_stereo = true;
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    doc.atom_labels.undefined_xi = true;
+    for pseudo in [false, true] {
+        doc.atoms[0].undefined_pseudoasymmetric = pseudo;
+        let atom_code = if pseudo { "ξ" } else { "Ξ" };
+        for roman in [false, true] {
+            doc.atom_labels.roman_stereo_parentheses = roman;
+            let labels = indicators(&doc);
+            assert_eq!(labels.len(), 2);
+            for (indicator, code) in labels.iter().zip([atom_code, "Ξ"]) {
+                assert_eq!(indicator.text, format!("({code})"));
+                assert_eq!(
+                    indicator.style.color,
+                    crate::palette::Color::Custom([128; 3])
+                );
+                let format = owned_indicator_format(
+                    indicator.owner,
+                    &indicator.text,
+                    &indicator.style,
+                    roman,
+                );
+                let runs: Vec<_> = indicator_runs(&indicator.text, &format)
+                    .map(|(text, style)| (text, style.italic, style.color))
+                    .collect();
+                let muted = crate::palette::Color::Custom([128; 3]);
+                let expected = if roman {
+                    vec![
+                        ("(", false, muted),
+                        (code, true, muted),
+                        (")", false, muted),
+                    ]
+                } else {
+                    vec![(indicator.text.as_str(), true, muted)]
+                };
+                assert_eq!(runs, expected);
+            }
+        }
+        for stereo in [false, true] {
+            for mark in [false, true] {
+                for show in [None, Some(false), Some(true)] {
+                    doc.atom_labels.stereo = stereo;
+                    doc.atom_labels.mark_undefined_stereocentres = mark;
+                    doc.atoms[0].display.stereo.show = show;
+                    doc.bonds[0].indicator.show = show;
+                    assert_eq!(
+                        indicators(&doc).len(),
+                        if stereo && mark && show != Some(false) {
+                            2
+                        } else {
+                            0
+                        }
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            atom_stereo_code(doc.atom(atom).unwrap(), &doc),
+            Some(atom_code)
+        );
+    }
+    assert!(doc.atoms[0].cip_label.is_none() && doc.bonds[0].cip_label.is_none());
 }
 
 #[test]

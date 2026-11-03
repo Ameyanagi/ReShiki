@@ -501,6 +501,34 @@ fn known_and_wavy_stereo_document() -> Document {
     doc
 }
 
+pub(super) fn undefined_and_known_stereo_document() -> Document {
+    let mut doc = known_and_wavy_stereo_document();
+    doc.atom_mut(2).unwrap().stereo = None;
+    for bond in &mut doc.bonds {
+        if bond.display == "wavy" {
+            bond.display = "plain".into();
+        }
+    }
+    doc
+}
+
+pub(super) fn undefined_alkene_document() -> Document {
+    let mut doc = identity_case_document("unknown");
+    doc.bonds[1].stereo = None;
+    doc
+}
+
+pub(super) fn wavy_and_undefined_stereo_document() -> Document {
+    let mut doc = known_and_wavy_stereo_document();
+    doc.atom_mut(4).unwrap().stereo = None;
+    for bond in &mut doc.bonds {
+        if bond.a == 4 && bond.order == 1 {
+            bond.display = "plain".into();
+        }
+    }
+    doc
+}
+
 #[test]
 fn unknown_document_identity_keeps_known_stereo_and_only_internal_maps() {
     let mut doc = known_and_wavy_stereo_document();
@@ -511,6 +539,7 @@ fn unknown_document_identity_keeps_known_stereo_and_only_internal_maps() {
     let expected = canonical_smiles("CC(O)[C@H](Cl)C").unwrap();
     assert_eq!(identity.smiles, expected);
     assert!(!identity.write_unknown_stereo);
+    assert_eq!(identity.unknown_stereo_smiles, None);
     let marked = identity.naming_smiles.unwrap();
     assert_eq!(canonical_smiles(&marked).unwrap(), expected);
     let raw = chemistry::smiles::parse(&marked).unwrap();
@@ -525,6 +554,58 @@ fn unknown_document_identity_keeps_known_stereo_and_only_internal_maps() {
     assert_eq!(name.text, "(3R)-3-chlorobutan-2-ol");
     assert_eq!(name.omitted_stereo, ["2"]);
     assert_eq!(name.alternatives[0].name, "(2Ξ,3R)-3-chlorobutan-2-ol");
+}
+
+#[test]
+fn undefined_document_units_only_enter_the_explicit_unknown_input() {
+    for (doc, expected, explicit) in [
+        (
+            undefined_and_known_stereo_document(),
+            "CC(O)[C@H](Cl)C",
+            "(2Ξ,3R)-3-chlorobutan-2-ol",
+        ),
+        (undefined_alkene_document(), "CC=CC", "(2Ξ)-but-2-ene"),
+    ] {
+        let mut identity = document_identity(&doc).unwrap();
+        let expected = canonical_smiles(expected).unwrap();
+        assert_eq!(identity.smiles, expected);
+        assert_eq!(identity.naming_smiles, None);
+        assert_eq!(identity.generation_smiles(&expected), expected);
+        assert!(
+            openclatura::name_smiles(identity.generation_smiles(&expected))
+                .unwrap()
+                .alternatives
+                .iter()
+                .all(|name| !name.name.contains(['Ξ', 'ξ']))
+        );
+        identity.write_unknown_stereo = true;
+        let marked = identity.generation_smiles(&expected);
+        assert_eq!(canonical_smiles(marked).unwrap(), expected);
+        assert_eq!(
+            openclatura::name_smiles(marked).unwrap().alternatives[0].name,
+            explicit
+        );
+    }
+}
+
+#[test]
+fn explicit_unknown_input_combines_wavy_and_undefined_units() {
+    let doc = wavy_and_undefined_stereo_document();
+    let mut identity = document_identity(&doc).unwrap();
+    let expected = canonical_smiles("CC(O)C(Cl)C").unwrap();
+    assert_eq!(identity.smiles, expected);
+    let legacy = identity.generation_smiles(&expected).to_owned();
+    let original = openclatura::name_smiles(&legacy).unwrap();
+    assert_eq!(original.omitted_units, 1);
+    assert_eq!(original.alternatives[0].name, "(2Ξ)-3-chlorobutan-2-ol");
+    identity.write_unknown_stereo = true;
+    let marked = identity.generation_smiles(&expected);
+    assert_eq!(canonical_smiles(marked).unwrap(), expected);
+    let explicit = openclatura::name_smiles(marked).unwrap();
+    assert_eq!(explicit.omitted_units, 2);
+    assert_eq!(explicit.alternatives[0].name, "(2Ξ,3Ξ)-3-chlorobutan-2-ol");
+    identity.write_unknown_stereo = false;
+    assert_eq!(identity.generation_smiles(&expected), legacy);
 }
 
 #[test]

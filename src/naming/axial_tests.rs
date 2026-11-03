@@ -272,6 +272,7 @@ async fn axial_generated_names_and_ra_sa_alternatives_round_trip() {
         let identity = Identity {
             smiles: parsed.smiles.clone(),
             naming_smiles: None,
+            unknown_stereo_smiles: None,
             write_unknown_stereo: false,
             warnings: vec![],
         };
@@ -330,6 +331,7 @@ async fn axial_ester_candidate_without_its_axis_descriptor_is_refused() {
     let identity = Identity {
         smiles: parsed.smiles,
         naming_smiles: None,
+        unknown_stereo_smiles: None,
         write_unknown_stereo: false,
         warnings: vec![],
     };

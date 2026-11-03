@@ -398,9 +398,25 @@ pub struct Identity {
     pub smiles: String,
     /// Unknown-unit and axis markers for generation; ordinary atom maps are removed.
     pub naming_smiles: Option<String>,
+    /// Unknown-unit markers including stereogenic units with no drawn configuration.
+    /// Used only when explicit unknown descriptors are requested.
+    pub unknown_stereo_smiles: Option<String>,
     /// Whether the UI requested explicit IUPAC Ξ/ξ descriptors.
     pub write_unknown_stereo: bool,
     pub warnings: Vec<String>,
+}
+
+impl Identity {
+    fn generation_smiles<'a>(&'a self, expected: &'a str) -> &'a str {
+        let explicit = if self.write_unknown_stereo {
+            self.unknown_stereo_smiles.as_deref()
+        } else {
+            None
+        };
+        explicit
+            .or(self.naming_smiles.as_deref())
+            .unwrap_or(expected)
+    }
 }
 
 fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<String, String> {
@@ -622,22 +638,51 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
     }
     marked = molecule_names::encode_axis_markers(&marked)
         .map_err(|_| "Naming could not retain the biaryl axis configuration".to_owned())?;
-    for (metadata, marker) in marked.metadata.atoms.iter_mut().zip(&unknown) {
-        if *marker != 0 {
-            metadata.map_number = 900_000 + marker;
-            metadata.map_present = true;
+    // Unknown markers only grow between calls; atoms without one keep their
+    // biaryl axis map.
+    let mut marker_smiles = |unknown: &[i32]| -> Result<Option<String>, String> {
+        for (metadata, marker) in marked.metadata.atoms.iter_mut().zip(unknown) {
+            if *marker != 0 {
+                metadata.map_number = 900_000 + marker;
+                metadata.map_present = true;
+            }
         }
-    }
-    let naming_smiles = if unknown.iter().any(|&marker| marker != 0) {
-        Some(
-            chemistry::smiles::write::write(&marked, Default::default())
-                .map_err(|error| error.to_string())?
-                .text,
-        )
-    } else {
-        None
+        if unknown.iter().any(|&marker| marker != 0) {
+            Ok(Some(
+                chemistry::smiles::write::write(&marked, Default::default())
+                    .map_err(|error| error.to_string())?
+                    .text,
+            ))
+        } else {
+            Ok(None)
+        }
     };
+    // Keep the original wavy-only input independent of the naming preference.
+    let naming_smiles = marker_smiles(&unknown)?;
     let undefined = chemistry::stereo_lint::undefined(document);
+    let unknown_stereo_smiles = if undefined.atoms.is_empty() && undefined.bonds.is_empty() {
+        None
+    } else {
+        let indices: HashMap<_, _> = molecule
+            .ids
+            .iter()
+            .enumerate()
+            .map(|(index, &id)| (id, index))
+            .collect();
+        for id in &undefined.atoms {
+            if let Some(marker) = indices.get(id).and_then(|&index| unknown.get_mut(index)) {
+                *marker |= 1;
+            }
+        }
+        for (a, b) in &undefined.bonds {
+            for id in [a, b] {
+                if let Some(marker) = indices.get(id).and_then(|&index| unknown.get_mut(index)) {
+                    *marker |= 2;
+                }
+            }
+        }
+        marker_smiles(&unknown)?
+    };
     let mut units = undefined
         .atoms
         .into_iter()
@@ -663,6 +708,7 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
     Ok(Identity {
         smiles,
         naming_smiles,
+        unknown_stereo_smiles,
         write_unknown_stereo: false,
         warnings,
     })
