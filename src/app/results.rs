@@ -513,6 +513,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Stereo(..)
                 | Action::DlDescriptors(..)
                 | Action::MarkUndefined(..)
+                | Action::UndefinedXi(..)
                 | Action::SteroidAlphaBeta(..)
                 | Action::RomanStereoParentheses(..)
                 | Action::AxialDescriptors(..)

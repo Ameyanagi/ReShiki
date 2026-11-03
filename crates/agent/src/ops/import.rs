@@ -185,9 +185,11 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
                 let mut doc = Document::from_native_file(text.as_bytes()).map_err(|error| {
                     OpError::failed(format!("Could not open document: {error}"))
                 })?;
-                // Opening clears computed labels; the drawing pipeline restores
-                // CIP labels but not the optional steroid ones.
-                if doc.atom_labels.steroid_alpha_beta {
+                // Opening clears computed labels; restore optional indicators
+                // alongside the CIP labels used by the drawing pipeline.
+                if doc.atom_labels.steroid_alpha_beta
+                    || doc.atom_labels.mark_undefined_stereocentres
+                {
                     atom_labels::refresh::Refresh::calculate(&doc, &Default::default())
                         .map_err(OpError::failed)?
                         .apply(&mut doc);

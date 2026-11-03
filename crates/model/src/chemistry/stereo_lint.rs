@@ -405,16 +405,65 @@ fn checked(document: &Document) -> impl Iterator<Item = Checked> {
     components(document).filter_map(Checked::new)
 }
 
+/// Whether both trial configurations receive lowercase full-CIP codes.
+/// Atom maps have no stereochemical meaning, so exclude them from both trials.
+pub fn is_pseudoasymmetric(state: &perception::State, atom: usize) -> bool {
+    [1, 2].into_iter().all(|tag| {
+        let mut trial = state.clone();
+        for atom in &mut trial.metadata.atoms {
+            atom.map_number = 0;
+            atom.map_present = false;
+        }
+        let Some(metadata) = trial.metadata.atoms.get_mut(atom) else {
+            return false;
+        };
+        metadata.chiral_tag = tag;
+        let Some(properties) = trial.properties.atoms.get_mut(atom) else {
+            return false;
+        };
+        properties.unknown = false;
+        trial.properties.done = None;
+        stereo::cip::label::assign(&trial, &stereo::cip::label::Options::default())
+            .ok()
+            .is_some_and(|assignment| {
+                assignment
+                    .state
+                    .properties
+                    .atoms
+                    .get(atom)
+                    .and_then(|atom| atom.cip_code.as_deref())
+                    .is_some_and(|code| matches!(code, "r" | "s"))
+            })
+    })
+}
+
 /// Compute only when requested by a naming notice or the optional editor aid.
 pub fn undefined(document: &Document) -> Undefined {
+    undefined_with_pseudo(document, false).0
+}
+
+/// Classify undefined atoms only when the optional Ξ/ξ display needs it.
+pub(crate) fn undefined_with_pseudo(
+    document: &Document,
+    classify_pseudo: bool,
+) -> (Undefined, HashSet<u64>) {
     let mut result = Undefined::default();
+    let mut pseudo = HashSet::new();
     for component in checked(document) {
         let units = component.unspecified();
+        if classify_pseudo {
+            let undefined: HashSet<_> = units.atoms.iter().copied().collect();
+            for (index, id) in component.molecule.ids.iter().enumerate() {
+                if undefined.contains(id) && is_pseudoasymmetric(&component.possible, index) {
+                    pseudo.insert(*id);
+                }
+            }
+        }
         result.atoms.extend(units.atoms);
         result.bonds.extend(units.bonds);
     }
     result.document_order(document);
-    result
+    (result, pseudo)
 }
 
 /// Inspect ordinary connected molecules; unsupported or invalid components do

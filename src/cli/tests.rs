@@ -1129,6 +1129,67 @@ async fn steroid_alpha_beta_survives_cleanup_exchange_and_cli_render() {
     assert!(!svg.contains("(17β)"));
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn undefined_xi_survives_native_reload_and_figure_exports() {
+    use crate::document::{Document, Point};
+
+    for bytes in [
+        include_bytes!("../../crates/model/fonts/LiberationSans-Regular.ttf").as_slice(),
+        include_bytes!("../../crates/model/fonts/LiberationSans-Italic.ttf").as_slice(),
+    ] {
+        crate::style::add_font(bytes.to_vec()).unwrap();
+    }
+    let mut doc = Document::default();
+    let center = doc.add_atom("C", Point::default());
+    for (element, position) in [
+        ("F", Point::new(28., 0.)),
+        ("Cl", Point::new(-14., -24.)),
+        ("Br", Point::new(-14., 24.)),
+    ] {
+        let id = doc.add_atom(element, position);
+        doc.add_bond(center, id, 1, "plain");
+    }
+    doc.atom_labels.stereo = true;
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    doc.drawing_style.font_family = "Liberation Sans".into();
+    doc.atom_mut(center).unwrap().display.stereo.style.family = "Liberation Sans".into();
+    let engine = crate::engine::LocalEngine::in_process();
+    let checked = crate::export::checked_document(&engine, doc.clone())
+        .await
+        .unwrap();
+    let question_pdf = crate::export::drawing(&checked, "pdf").unwrap();
+    doc.atom_labels.undefined_xi = true;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("undefined.rsk");
+    for roman in [false, true] {
+        doc.atom_labels.roman_stereo_parentheses = roman;
+        std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+        let (code, svg, err) = call_os(vec![
+            "render".into(),
+            path.clone().into_os_string(),
+            "--to".into(),
+            "svg".into(),
+        ])
+        .await;
+        assert_eq!(code, SUCCESS, "{err}");
+        let xml = roxmltree::Document::parse(&svg).unwrap();
+        let labels: String = xml
+            .descendants()
+            .filter(|node| node.is_text())
+            .filter_map(|node| node.text())
+            .collect();
+        assert!(labels.contains('Ξ'), "{svg}");
+        assert!(!labels.contains('?'), "{svg}");
+        let opened = Document::from_native_file(&std::fs::read(&path).unwrap()).unwrap();
+        let checked = crate::export::checked_document(&engine, opened)
+            .await
+            .unwrap();
+        let pdf = crate::export::drawing(&checked, "pdf").unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
+        assert_ne!(pdf, question_pdf);
+    }
+}
+
 #[test]
 fn compose_command_lines_parse() {
     assert_eq!(

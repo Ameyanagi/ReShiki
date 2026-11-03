@@ -119,10 +119,31 @@ pub async fn generate_name_with_options(
 ) -> Result<Record, Error> {
     let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
     let stop = CancelOnDrop(cancel.clone());
-    let input = identity.naming_smiles.as_deref().unwrap_or(&expected);
+    let input = identity.generation_smiles(&expected);
+    let ordinary = identity.naming_smiles.as_deref().unwrap_or(&expected);
+    // Ξ/ξ for undefined units is best effort: the generator cannot yet carry
+    // them through salts or isotope descriptors, so fall back to the plain name.
+    let record = match generate_from(identity, input, &expected, style, &cancel).await {
+        Err(error) if input != ordinary && !matches!(error, Error::Cancelled(_)) => {
+            generate_from(identity, ordinary, &expected, style, &cancel).await
+        }
+        result => result,
+    };
+    drop(stop);
+    record
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn generate_from(
+    identity: &Identity,
+    input: &str,
+    expected: &str,
+    style: IsotopeStyle,
+    cancel: &Cancel,
+) -> Result<Record, Error> {
     let candidate = client::on_slot(
         input,
-        &cancel,
+        cancel,
         &SLOTS,
         "Local name generation is unavailable",
         "Local name generation was cancelled",
@@ -130,9 +151,7 @@ pub async fn generate_name_with_options(
         move |smiles, cancel| generate_worker(smiles, style, cancel),
     )
     .await?;
-    let record = reconstruct(identity, expected, candidate, &cancel).await;
-    drop(stop);
-    record
+    reconstruct(identity, expected.to_owned(), candidate, cancel).await
 }
 
 /// Check every name independently, then apply the Ξ/ξ preference.
@@ -160,6 +179,7 @@ pub(super) async fn reconstruct(
     }
     // Only a verified Ξ/ξ name can replace the primary name, which has the
     // same identity as `primary`.
+    let mut explicit_unknown = false;
     if identity.write_unknown_stereo
         && let Some(alternative) = alternatives
             .iter_mut()
@@ -169,8 +189,19 @@ pub(super) async fn reconstruct(
         std::mem::swap(&mut candidate.status, &mut alternative.status);
         candidate.omitted_stereo.clear();
         candidate.omitted_units = 0;
+        explicit_unknown = true;
     }
     let mut record = generated_record(identity, expected, candidate, &primary)?;
+    if explicit_unknown {
+        for warning in &mut record.warnings {
+            if let Some(prefix) = warning.strip_suffix("; the name leaves it unspecified") {
+                *warning = format!("{prefix}; the name marks it as unknown");
+            } else if let Some(prefix) = warning.strip_suffix("; the name leaves them unspecified")
+            {
+                *warning = format!("{prefix}; the name marks them as unknown");
+            }
+        }
+    }
     record.alternatives = alternatives;
     Ok(record)
 }

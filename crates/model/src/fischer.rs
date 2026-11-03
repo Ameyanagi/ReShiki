@@ -204,6 +204,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             atom.stereo = Some(reading.clone());
             atom.cip_label = None;
             atom.undefined_stereo = false;
+            atom.undefined_pseudoasymmetric = false;
         }
     }
 }

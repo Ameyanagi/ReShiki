@@ -43,25 +43,53 @@ fn dl_descriptors_fit_the_generic_ink_envelope() {
 
 #[test]
 fn optional_unknown_indicators_fit_the_generic_ink_envelope() {
-    let mut doc = chain(&["C", "C"]);
-    doc.atom_labels.stereo = true;
-    doc.atom_labels.mark_undefined_stereocentres = true;
-    doc.atoms[0].undefined_stereo = true;
-    doc.atoms[0].display.stereo.offset = Some(Point::new(-70., -60.));
-    doc.bonds[0].undefined_stereo = true;
-    doc.bonds[0].indicator.offset = Some(Point::new(60., 80.));
-    let atom = atom_bounds(&doc.atoms[0], &doc).unwrap().unwrap();
-    let bond = object_bounds(&doc).unwrap().unwrap();
-    for indicator in crate::atom_labels::indicators(&doc) {
-        let (lo, hi) = match indicator.owner {
-            crate::atom_labels::Owner::AtomStereo(_) => atom,
-            crate::atom_labels::Owner::BondStereo(_, _) => bond,
-            _ => continue,
-        };
-        assert_eq!(indicator.text, "(?)");
-        assert!(indicator.origin.x >= lo.x && indicator.origin.y >= lo.y);
-        assert!(indicator.origin.x + indicator.width <= hi.x);
-        assert!(indicator.origin.y + indicator.height <= hi.y);
+    with_fonts(optional_unknown_ink_envelope);
+}
+
+fn optional_unknown_ink_envelope() {
+    for xi in [false, true] {
+        for pseudo in [false, true] {
+            for roman in [false, true] {
+                let mut doc = chain(&["C", "C"]);
+                doc.atoms[0].display.stereo.style.family = "Liberation Sans".into();
+                doc.bonds[0].indicator.style.family = "Liberation Sans".into();
+                doc.atom_labels.stereo = true;
+                doc.atom_labels.mark_undefined_stereocentres = true;
+                doc.atom_labels.undefined_xi = xi;
+                doc.atom_labels.roman_stereo_parentheses = roman;
+                doc.atoms[0].display.stereo.offset = Some(Point::new(-70., -60.));
+                doc.bonds[0].indicator.offset = Some(Point::new(60., 80.));
+                // Bound the ink before the optional refresh supplies its labels.
+                let atom = atom_bounds(&doc.atoms[0], &doc).unwrap().unwrap();
+                let bond = object_bounds(&doc).unwrap().unwrap();
+                doc.atoms[0].undefined_stereo = true;
+                doc.atoms[0].undefined_pseudoasymmetric = pseudo;
+                doc.bonds[0].undefined_stereo = true;
+                for indicator in crate::atom_labels::indicators(&doc) {
+                    let (lo, hi, code) = match indicator.owner {
+                        crate::atom_labels::Owner::AtomStereo(_) => (
+                            atom.0,
+                            atom.1,
+                            if xi && pseudo {
+                                "ξ"
+                            } else if xi {
+                                "Ξ"
+                            } else {
+                                "?"
+                            },
+                        ),
+                        crate::atom_labels::Owner::BondStereo(_, _) => {
+                            (bond.0, bond.1, if xi { "Ξ" } else { "?" })
+                        }
+                        _ => continue,
+                    };
+                    assert_eq!(indicator.text, format!("({code})"));
+                    assert!(indicator.origin.x >= lo.x && indicator.origin.y >= lo.y);
+                    assert!(indicator.origin.x + indicator.width <= hi.x);
+                    assert!(indicator.origin.y + indicator.height <= hi.y);
+                }
+            }
+        }
     }
 }
 

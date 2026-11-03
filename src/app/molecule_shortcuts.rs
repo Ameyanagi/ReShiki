@@ -94,6 +94,7 @@ fn changed_atoms(before: &Document, after: &Document) -> Vec<u64> {
             // Engine-derived labels can refresh on unrelated molecules.
             previous.cip_label = atom.cip_label.clone();
             previous.undefined_stereo = atom.undefined_stereo;
+            previous.undefined_pseudoasymmetric = atom.undefined_pseudoasymmetric;
             previous.label_h = atom.label_h;
             previous == *atom
         });

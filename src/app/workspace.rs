@@ -2366,6 +2366,12 @@ impl App {
                     .text_size(12)
                     .on_toggle_maybe((stereo && self.tab.doc.atom_labels.stereo).then_some(|v| Message::Labels(A::MarkUndefined(v)))),
             )
+            .push(
+                checkbox(self.tab.doc.atom_labels.undefined_xi)
+                    .label("Use Ξ/ξ for undefined (IUPAC)")
+                    .text_size(12)
+                    .on_toggle_maybe((stereo && self.tab.doc.atom_labels.stereo && self.tab.doc.atom_labels.mark_undefined_stereocentres).then_some(|v| Message::Labels(A::UndefinedXi(v)))),
+            )
             .push(hover_hint(
                 checkbox(self.tab.doc.atom_labels.steroid_alpha_beta)
                     .label("Steroid α/β (3β, 5α…)")
@@ -2375,7 +2381,7 @@ impl App {
                 tooltip::Position::Left,
             ))
             .push(
-                text("Labels update after chemical edits. (?) marks undefined configuration when enabled.")
+                text("Labels update after chemical edits. (?) or (Ξ)/(ξ) marks undefined configuration when enabled.")
                     .size(11)
                     .style(muted_text),
             )
