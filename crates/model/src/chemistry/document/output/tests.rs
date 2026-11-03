@@ -146,6 +146,11 @@ fn only_generated_stereogenic_odd_cumulenes_withhold_coordinates() -> anyhow::Re
         ("[H]C=C=C=CC", 0),
         ("[2H]C([2H])=C=C=CC", 0),
         ("[2H]C([3H])=C=C=CC", 3),
+        ("[1H]C=C=C=CC", 0),
+        // Ligands that differ only by E/Z, and N-H against the lone pair.
+        ("C/C=C/C(=C=C=CF)/C=C\\C", 3),
+        ("C/C=C/C(/C=C/C)=C=C=CF", 0),
+        ("[H]N=C=C=CC", 3),
     ] {
         let (molecule, dummy_labels) = depicted(text)?;
         let imported = for_import(&molecule, false, &dummy_labels)?;
