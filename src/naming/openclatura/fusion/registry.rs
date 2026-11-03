@@ -1,6 +1,6 @@
 //! Graph-backed retained and generated fusion-component registry.
 use super::super::{
-    locants::retained_locant_sort_key as locant_key,
+    locants::{LocantKey, retained_locant_sort_key as locant_key},
     molecule::{AtomSet, Molecule},
     nomenclature::section,
     retained_fused_templates::{
@@ -416,6 +416,8 @@ impl FusionComponentRegistry {
             s.usable_as_parent = row["allow_as_parent"].as_bool().unwrap_or(false);
             s.usable_as_attached = row["allow_as_attached"].as_bool().unwrap_or(false);
             s.usable_as_peri_parent = row["allow_as_peri_parent"].as_bool().unwrap_or(false);
+            s.benzoheterocycle_component =
+                is_benzoheterocycle(&s) && !is_trivial_benzo_name(&s.parent_name);
             s.accepted_general_prefixes = strings(&row["accepted_general_prefixes"]);
             s.horizontal_ring_count = row["horizontal_ring_count"]
                 .as_u64()
@@ -625,6 +627,9 @@ impl FusionComponentRegistry {
         Ok(out)
     }
     fn generated_from_key(&self, key: &str) -> Option<RegisteredFusionComponent> {
+        if key.starts_with("generated-benzo:") {
+            return self.generated_benzo_from_key(key);
+        }
         let symbols: Vec<String> = key
             .strip_prefix("generated-hw:")?
             .split('.')
@@ -670,6 +675,258 @@ impl FusionComponentRegistry {
         spec.horizontal_ring_count = 1;
         spec.multiplicative_prefix_style =
             if hetero.len() > 1 { "complex" } else { "basic" }.into();
+        Some(RegisteredFusionComponent {
+            template_names: vec![key.into()],
+            templates: vec![spec.clone()],
+            spec,
+            omit_attached_locants: false,
+            omit_ortho_peri_attached_locants: false,
+        })
+    }
+    /// FR-3.5 combines already selected components, rather than adding benzo
+    /// bicycles to the component-cover search. The key keeps the source template
+    /// and its oriented ring, so this operation never mutates the registry.
+    pub(super) fn benzoheterocycle_matches(
+        &self,
+        benzo: &FusionComponentMatch,
+        hetero: &FusionComponentMatch,
+    ) -> Result<Vec<FusionComponentMatch>, String> {
+        let benzene = self.spec_for_match(benzo)?;
+        let monocycle = self.spec_for_match(hetero)?;
+        if benzene.rings.len() != 1
+            || benzene.locants().len() != 6
+            || benzene.atoms().iter().any(|a| a.symbol != "C")
+            || monocycle.rings.len() != 1
+            || monocycle.locants().len() < 5
+            || monocycle.atoms().iter().all(|a| a.symbol == "C")
+            || !benzo.covered_face_ids.is_disjoint(&hetero.covered_face_ids)
+        {
+            return Ok(Vec::new());
+        }
+        let benzo_map = benzo.input_atom_by_locant();
+        let hetero_map = hetero.input_atom_by_locant();
+        let shared: AtomSet = benzo_map
+            .values()
+            .filter(|a| hetero_map.values().any(|b| *a == b))
+            .copied()
+            .collect();
+        if shared.len() != 2 {
+            return Ok(Vec::new());
+        }
+        let hetero_atoms = monocycle.template.atom_by_locant();
+        if hetero_map
+            .iter()
+            .any(|(l, a)| shared.contains(a) && hetero_atoms[l].symbol != "C")
+        {
+            return Ok(Vec::new());
+        }
+        let benzo_ring = &benzene.rings[0];
+        let hetero_ring = &monocycle.rings[0];
+        let hetero_locant_by_input: BTreeMap<_, _> =
+            hetero_map.iter().map(|(l, a)| (*a, l.clone())).collect();
+        let mut skeleton_by_input = BTreeMap::new();
+        for matched in [benzo, hetero] {
+            let skeleton = matched.skeleton_atom_by_locant();
+            for (l, a) in &matched.local_to_input_atom {
+                let s = *skeleton.get(l).ok_or("missing benzo skeleton map")?;
+                if skeleton_by_input.insert(*a, s).is_some_and(|old| old != s) {
+                    return Err("inconsistent benzo skeleton maps".into());
+                }
+            }
+        }
+        let junctions: Vec<_> = shared.into_iter().collect();
+        let mut candidates = Vec::new();
+        for (junction_from, junction_to) in
+            [(junctions[0], junctions[1]), (junctions[1], junctions[0])]
+        {
+            let Some(mut path) =
+                ring_path_without_edge(hetero_ring, &hetero_map, junction_to, junction_from)
+            else {
+                continue;
+            };
+            let Some(benzo_path) =
+                ring_path_without_edge(benzo_ring, &benzo_map, junction_from, junction_to)
+            else {
+                continue;
+            };
+            // Non-fusion heterocyclic atoms, then the two fusion carbons.
+            path.rotate_left(1);
+            let ring: Vec<_> = path
+                .iter()
+                .map(|a| hetero_locant_by_input[a].clone())
+                .collect();
+            let n = ring.len();
+            let canonical_ring = canonical_benzo_source_ring(&monocycle, &ring);
+            let encoded =
+                serde_json::to_string(&(&hetero.spec_key, &hetero.template_name, canonical_ring))
+                    .map_err(|e| e.to_string())?;
+            let key = format!("generated-benzo:{encoded}");
+            let Some(component) = self.generated_benzo_from_key(&key) else {
+                continue;
+            };
+            let spec = &component.spec;
+            let mut input = BTreeMap::new();
+            for (l, source) in benzo_locants(n)[..n - 1].iter().zip(&ring[..n - 1]) {
+                input.insert(l.clone(), hetero_map[source]);
+            }
+            let locants = benzo_locants(n);
+            input.insert(locants.last().cloned().unwrap_or_default(), junction_to);
+            for (l, a) in locants[n - 1..n + 3].iter().zip(&benzo_path[1..5]) {
+                input.insert(l.clone(), *a);
+            }
+            let local_to_input_atom: Vec<_> = spec
+                .locants()
+                .iter()
+                .map(|l| (l.clone(), input[l]))
+                .collect();
+            let local_to_skeleton_atom = local_to_input_atom
+                .iter()
+                .map(|(l, a)| (l.clone(), skeleton_by_input[a]))
+                .collect();
+            let matched = FusionComponentMatch {
+                occurrence_id: hetero.occurrence_id,
+                spec_key: key.clone(),
+                covered_face_ids: benzo
+                    .covered_face_ids
+                    .union(&hetero.covered_face_ids)
+                    .copied()
+                    .collect(),
+                local_to_input_atom,
+                local_to_skeleton_atom,
+                topology_key: topology_key(&retained_graph_template_topology_key(&spec.template)),
+                template_name: key,
+            };
+            candidates.push((benzo_numbering_key(spec), matched));
+        }
+        let best = candidates.iter().map(|(k, _)| k).min().cloned();
+        let mut matches = Vec::new();
+        for (numbering, matched) in candidates {
+            if Some(&numbering) == best.as_ref() && !matches.contains(&matched) {
+                matches.push(matched);
+            }
+        }
+        Ok(matches)
+    }
+    fn generated_benzo_from_key(&self, key: &str) -> Option<RegisteredFusionComponent> {
+        let (source_key, source_template, ring): (String, String, Vec<String>) =
+            serde_json::from_str(key.strip_prefix("generated-benzo:")?).ok()?;
+        // Benzo components cannot recursively be used as heteromonocycles.
+        if source_key.starts_with("generated-benzo:") {
+            return None;
+        }
+        let source = self
+            .get(&source_key)?
+            .spec_for_template(&source_template)
+            .ok()?;
+        let n = ring.len();
+        if source.rings.len() != 1
+            || n < 5
+            || ring.iter().collect::<BTreeSet<_>>() != source.locants().iter().collect()
+            || ring.len() != source.locants().len()
+        {
+            return None;
+        }
+        let source_atoms = source.template.atom_by_locant();
+        if source_atoms[&ring[n - 2]].symbol != "C"
+            || source_atoms[&ring[n - 1]].symbol != "C"
+            || source_atoms.values().all(|a| a.symbol == "C")
+        {
+            return None;
+        }
+        let source_bonds: BTreeMap<_, _> = source
+            .bonds()
+            .iter()
+            .map(|b| (ordered_locant_edge(&b.locants.0, &b.locants.1), b))
+            .collect();
+        if (0..n)
+            .any(|i| !source_bonds.contains_key(&ordered_locant_edge(&ring[i], &ring[(i + 1) % n])))
+        {
+            return None;
+        }
+        let locants = benzo_locants(n);
+        let renamed: BTreeMap<_, _> = ring
+            .iter()
+            .zip(locants[..n - 1].iter().chain(locants.last()))
+            .map(|(old, new)| (old.clone(), new.clone()))
+            .collect();
+        let mut template = source.template.clone();
+        template.name = key.into();
+        template.family = "generated_benzoheterocycle".into();
+        template.locants = locants.clone();
+        template.default_indicated_h = source
+            .template
+            .default_indicated_h
+            .iter()
+            .map(|l| renamed[l].clone())
+            .collect();
+        template.fusion_atoms = vec![locants[n - 2].clone(), locants[n + 3].clone()];
+        template.atoms = source
+            .atoms()
+            .iter()
+            .map(|a| {
+                let mut a = a.clone();
+                a.locant = renamed[&a.locant].clone();
+                a.fusion = template.fusion_atoms.contains(&a.locant);
+                a
+            })
+            .collect();
+        let benzene = self.get("benzene")?.spec;
+        let carbon = benzene.atoms().first()?;
+        for l in &locants[n - 1..n + 3] {
+            let mut atom = carbon.clone();
+            atom.locant = l.clone();
+            atom.fusion = false;
+            template.atoms.push(atom);
+        }
+        template.atoms.sort_by_key(|a| locant_key(&a.locant));
+        template.bonds = source
+            .bonds()
+            .iter()
+            .map(|b| RetainedGraphBondTemplate {
+                locants: (renamed[&b.locants.0].clone(), renamed[&b.locants.1].clone()),
+                bond_class: if template.fusion_atoms.contains(&renamed[&b.locants.0])
+                    && template.fusion_atoms.contains(&renamed[&b.locants.1])
+                {
+                    "fusion".into()
+                } else {
+                    b.bond_class.clone()
+                },
+            })
+            .collect();
+        for edge in locants[n - 2..].windows(2) {
+            template.bonds.push(RetainedGraphBondTemplate {
+                locants: (edge[0].clone(), edge[1].clone()),
+                bond_class: benzene.bonds().first()?.bond_class.clone(),
+            });
+        }
+        template.mancude_double_bonds = source.template.mancude_double_bonds.map(|n| n + 2);
+        let hetero_ring = ring.iter().map(|l| renamed[l].clone()).collect();
+        let benzene_ring = locants[n - 2..].to_vec();
+        let mut spec = FusionComponentSpec {
+            key: key.into(),
+            template,
+            rings: vec![hetero_ring, benzene_ring],
+            peripheral_order: locants,
+            usable_as_parent: true,
+            usable_as_attached: true,
+            horizontal_ring_count: 2,
+            multiplicative_prefix_style: "complex".into(),
+            pin_component: true,
+            ..Default::default()
+        };
+        (spec.parent_name, spec.attached_prefix) = benzo_forms(&source, &spec)?;
+        // FR-2.2.8 preserves the exceptional trivial heterobicycle names.
+        if let Some(retained) = self.components.iter().flat_map(|c| &c.templates).find(|s| {
+            s.rings.len() == 2
+                && s.usable_as_attached
+                && (is_trivial_benzo_name(&s.parent_name)
+                    || matches!(s.parent_name.as_str(), "benzimidazole" | "benzotriazole"))
+                && same_numbered_component_graph(s, &spec)
+        }) {
+            spec.parent_name = retained.parent_name.clone();
+            spec.attached_prefix = retained.attached_prefix.clone();
+        }
+        spec.benzoheterocycle_component = !is_trivial_benzo_name(&spec.parent_name);
         Some(RegisteredFusionComponent {
             template_names: vec![key.into()],
             templates: vec![spec.clone()],
@@ -818,7 +1075,11 @@ fn is_benzoheterocycle(s: &FusionComponentSpec) -> bool {
         || !s.pin_component
         || s.attached_prefix.is_empty()
         || s.rings.len() != 2
-        || s.atoms().iter().any(|a| a.charge != 0 || a.saturated)
+        || s.atoms().iter().any(|a| {
+            a.charge != 0
+                || a.saturated
+                    && !(a.symbol == "C" && s.template.default_indicated_h.contains(&a.locant))
+        })
         || s.atoms().iter().all(|a| a.symbol == "C")
     {
         return false;
@@ -927,6 +1188,191 @@ fn hw_forms(name: &str) -> (String, String) {
     }
 }
 
+fn ordered_locant_edge(a: &str, b: &str) -> (String, String) {
+    if a < b {
+        (a.into(), b.into())
+    } else {
+        (b.into(), a.into())
+    }
+}
+fn benzo_locants(size: usize) -> Vec<String> {
+    (1..=size - 2)
+        .map(|i| i.to_string())
+        .chain([format!("{}a", size - 2)])
+        .chain((size - 1..=size + 2).map(|i| i.to_string()))
+        .chain([format!("{}a", size + 2)])
+        .collect()
+}
+fn ring_path_without_edge(
+    ring: &[String],
+    atoms: &BTreeMap<String, usize>,
+    from: usize,
+    to: usize,
+) -> Option<Vec<usize>> {
+    let start = ring.iter().position(|l| atoms[l] == from)?;
+    for reverse in [false, true] {
+        let path: Vec<_> = (0..ring.len())
+            .map(|i| {
+                atoms[&ring[if reverse {
+                    (start + ring.len() - i) % ring.len()
+                } else {
+                    (start + i) % ring.len()
+                }]]
+            })
+            .collect();
+        if path.last() == Some(&to) {
+            return Some(path);
+        }
+    }
+    None
+}
+fn canonical_benzo_source_ring(spec: &FusionComponentSpec, ring: &[String]) -> Vec<String> {
+    let atoms = spec.template.atom_by_locant();
+    let defaults: BTreeSet<_> = spec.template.default_indicated_h.iter().cloned().collect();
+    super::rules::component_automorphisms(spec)
+        .into_iter()
+        .filter(|map| {
+            // The general automorphism helper's roles omit some optional H/pi
+            // annotations; a generated key must preserve those too.
+            atoms.iter().all(|(l, atom)| {
+                let mut moved = atom.clone();
+                moved.locant = map[l].clone();
+                moved == atoms[&map[l]]
+            }) && defaults
+                .iter()
+                .map(|l| map[l].clone())
+                .collect::<BTreeSet<_>>()
+                == defaults
+        })
+        .map(|map| ring.iter().map(|l| map[l].clone()).collect::<Vec<_>>())
+        .min_by_key(|order| order.iter().map(|l| locant_key(l)).collect::<Vec<_>>())
+        .unwrap_or_else(|| ring.to_vec())
+}
+fn benzo_numbering_key(spec: &FusionComponentSpec) -> Vec<Vec<LocantKey>> {
+    // FR-5.3 excludes fusion carbons from the integer sequence. For these
+    // ortho-bicycles their locants are fixed, so FR-5.4(a), (b), and (f) decide
+    // between the two directions along the heteromonocyclic perimeter.
+    let mut hetero = Vec::new();
+    let mut by_element: BTreeMap<usize, Vec<LocantKey>> = BTreeMap::new();
+    let mut indicated = Vec::new();
+    for a in spec.atoms() {
+        let number = locant_key(&a.locant);
+        if a.symbol != "C" {
+            hetero.push(number.clone());
+            by_element
+                .entry(
+                    super::super::rules::elements::get(&a.symbol)
+                        .and_then(|e| e.hw_priority)
+                        .unwrap_or(usize::MAX),
+                )
+                .or_default()
+                .push(number.clone());
+        }
+        if spec.template.default_indicated_h.contains(&a.locant)
+            || a.default_h
+            || !a.aromatic && a.resolved_pi_capacity() != 0 && !a.fusion
+        {
+            indicated.push(number);
+        }
+    }
+    hetero.sort_unstable();
+    let mut result = vec![hetero];
+    for locants in by_element.values_mut() {
+        locants.sort_unstable();
+        result.push(locants.clone());
+    }
+    indicated.sort_unstable();
+    result.push(indicated);
+    result
+}
+fn benzo_forms(
+    source: &FusionComponentSpec,
+    fused: &FusionComponentSpec,
+) -> Option<(String, String)> {
+    let trivial = matches!(
+        source.template.name.as_str(),
+        "furan"
+            | "thiophene"
+            | "selenophene"
+            | "tellurophene"
+            | "pyrrole"
+            | "pyrazole"
+            | "imidazole"
+            | "pyridine"
+            | "pyridazine"
+            | "pyrimidine"
+            | "pyrazine"
+            | "pyran"
+            | "thiopyran"
+    );
+    let (base, prefix) = if trivial {
+        (source.parent_name.clone(), source.attached_prefix.clone())
+    } else {
+        let hetero: Vec<_> = source.rings[0]
+            .iter()
+            .enumerate()
+            .filter_map(|(i, l)| {
+                let a = source.atoms().iter().find(|a| a.locant == *l)?;
+                (a.symbol != "C").then(|| (i + 1, a.symbol.clone()))
+            })
+            .collect();
+        let systematic = retained::hw_name(source.locants().len(), false, &hetero)?;
+        let (_, base) = systematic.split_once('-').unwrap_or(("", &systematic));
+        hw_forms(base)
+    };
+    let join = |word: &str| {
+        let benzo = if word.starts_with(['a', 'e', 'i', 'o', 'u']) {
+            "benz"
+        } else {
+            "benzo"
+        };
+        format!("{benzo}{word}")
+    };
+    // FR-2.2.8 explicitly omits locants for these unambiguous benzo forms.
+    if matches!(base.as_str(), "imidazole" | "triazole") {
+        let parent = join(&base);
+        let prefix = format!("{}o", parent.strip_suffix('e').unwrap_or(&parent));
+        return Some((parent, prefix));
+    }
+    let mut hetero: Vec<_> = fused.atoms().iter().filter(|a| a.symbol != "C").collect();
+    hetero.sort_by_key(|a| {
+        (
+            super::super::rules::elements::get(&a.symbol).and_then(|e| e.hw_priority),
+            locant_key(&a.locant),
+        )
+    });
+    let locants = format!(
+        "[{}]",
+        hetero
+            .iter()
+            .map(|a| a.locant.as_str())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    Some((
+        format!("{locants}{}", join(&base)),
+        format!("{locants}{}", join(&prefix)),
+    ))
+}
+fn is_trivial_benzo_name(name: &str) -> bool {
+    !name.contains("benz")
+}
+fn same_numbered_component_graph(a: &FusionComponentSpec, b: &FusionComponentSpec) -> bool {
+    let atoms = |s: &FusionComponentSpec| {
+        s.atoms()
+            .iter()
+            .map(|a| (a.locant.clone(), a.symbol.clone(), a.charge))
+            .collect::<BTreeSet<_>>()
+    };
+    let bonds = |s: &FusionComponentSpec| {
+        s.bonds()
+            .iter()
+            .map(|b| ordered_locant_edge(&b.locants.0, &b.locants.1))
+            .collect::<BTreeSet<_>>()
+    };
+    atoms(a) == atoms(b) && bonds(a) == bonds(b)
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::super::graph_io::read_smiles;
@@ -997,5 +1443,159 @@ mod tests {
         }
         let rebuilt = r.get(&matches[0].spec_key).unwrap();
         assert_eq!(rebuilt.spec.template.atoms.len(), 6);
+    }
+    fn benzo_test_pair(
+        source: &str,
+        edge: [&str; 2],
+    ) -> (FusionComponentMatch, FusionComponentMatch) {
+        let r = fusion_component_registry();
+        let hetero = r.get(source).unwrap().spec;
+        let input: BTreeMap<_, _> = hetero
+            .locants()
+            .iter()
+            .enumerate()
+            .map(|(i, l)| (l.clone(), i))
+            .collect();
+        let benzene = r.get("benzene").unwrap().spec;
+        let benzo_input = [input[edge[0]], input[edge[1]], 100, 101, 102, 103];
+        let make = |spec: &FusionComponentSpec, face, mapping: Vec<(String, usize)>| {
+            FusionComponentMatch {
+                occurrence_id: face,
+                spec_key: spec.key.clone(),
+                template_name: spec.template.name.clone(),
+                covered_face_ids: BTreeSet::from([face]),
+                local_to_skeleton_atom: mapping
+                    .iter()
+                    .map(|(l, a)| (l.clone(), a + 1000))
+                    .collect(),
+                local_to_input_atom: mapping,
+                ..Default::default()
+            }
+        };
+        (
+            make(
+                &benzene,
+                0,
+                benzene.locants().iter().cloned().zip(benzo_input).collect(),
+            ),
+            make(&hetero, 1, input.into_iter().collect()),
+        )
+    }
+    #[test]
+    fn benzo_components_generate_bicyclic_locants_and_round_trip_without_registration() {
+        let r = fusion_component_registry();
+        for (source, edge, parent, prefix, junctions) in [
+            (
+                "oxazole",
+                ["4", "5"],
+                "[1,3]benzoxazole",
+                "[1,3]benzoxazolo",
+                ["3a", "7a"],
+            ),
+            (
+                "isothiazole",
+                ["3", "4"],
+                "[2,1]benzothiazole",
+                "[2,1]benzothiazolo",
+                ["3a", "7a"],
+            ),
+            (
+                "generated-hw:S.C.C.N.C.C",
+                ["5", "6"],
+                "[1,4]benzothiazine",
+                "[1,4]benzothiazino",
+                ["4a", "8a"],
+            ),
+            (
+                "generated-hw:O.C.C.C.C.C.C",
+                ["6", "7"],
+                "[1]benzoxepine",
+                "[1]benzoxepino",
+                ["5a", "9a"],
+            ),
+            (
+                "furan",
+                ["4", "5"],
+                "[1]benzofuran",
+                "[1]benzofuro",
+                ["3a", "7a"],
+            ),
+            (
+                "imidazole",
+                ["4", "5"],
+                "benzimidazole",
+                "benzimidazolo",
+                ["3a", "7a"],
+            ),
+        ] {
+            let (benzo, hetero) = benzo_test_pair(source, edge);
+            let matches = r.benzoheterocycle_matches(&benzo, &hetero).unwrap();
+            assert!(!matches.is_empty(), "{source}");
+            for matched in matches {
+                let spec = r.spec_for_match(&matched).unwrap();
+                assert_eq!(spec.parent_name, parent);
+                assert_eq!(spec.attached_prefix, prefix);
+                assert_eq!(spec.template.fusion_atoms, junctions);
+                assert!(spec.usable_as_parent && spec.usable_as_attached);
+                assert_eq!(matched.covered_face_ids, BTreeSet::from([0, 1]));
+                assert_eq!(spec.atoms().len(), hetero.local_to_input_atom.len() + 4);
+                assert_eq!(spec.bonds().len(), hetero.local_to_input_atom.len() + 5);
+                assert_eq!(spec.rings.len(), 2);
+                assert!(
+                    matched
+                        .local_to_input_atom
+                        .iter()
+                        .zip(&matched.local_to_skeleton_atom)
+                        .all(|((l, a), (s, b))| l == s && *b == a + 1000)
+                );
+                let rebuilt = r.get(&matched.spec_key).unwrap();
+                assert_eq!(rebuilt.spec.atoms(), spec.atoms());
+                assert_eq!(rebuilt.spec.bonds(), spec.bonds());
+                for (old, a) in &hetero.local_to_input_atom {
+                    let new = matched
+                        .local_to_input_atom
+                        .iter()
+                        .find(|(_, b)| a == b)
+                        .unwrap();
+                    let old_atom =
+                        r.spec_for_match(&hetero).unwrap().template.atom_by_locant()[old].clone();
+                    let new_atom = spec.template.atom_by_locant()[&new.0].clone();
+                    assert_eq!(old_atom.aromatic, new_atom.aromatic);
+                    assert_eq!(old_atom.saturated, new_atom.saturated);
+                    assert_eq!(old_atom.pi_capacity, new_atom.pi_capacity);
+                }
+            }
+        }
+    }
+    #[test]
+    fn benzo_generation_respects_exceptional_trivial_bicycle_names() {
+        let r = fusion_component_registry();
+        let (benzo, hetero) = benzo_test_pair("pyridine", ["5", "6"]);
+        let matches = r.benzoheterocycle_matches(&benzo, &hetero).unwrap();
+        assert!(!matches.is_empty());
+        for matched in matches {
+            let spec = r.spec_for_match(&matched).unwrap();
+            assert_eq!(spec.parent_name, "quinoline");
+            assert_eq!(spec.attached_prefix, "quinolino");
+        }
+    }
+    #[test]
+    fn initial_components_distinguish_fr228_from_retained_trivial_bicycles() {
+        let r = fusion_component_registry();
+        // P-25.2.2.4: 1-benzopyran, not chromene, is the PIN component.
+        for key in [
+            "1-benzofuran",
+            "1-benzothiophene",
+            "1H-benzotriazole",
+            "2H-1-benzopyran",
+            "1H-2-benzopyran",
+        ] {
+            assert!(r.get(key).unwrap().spec.benzoheterocycle_component, "{key}");
+        }
+        for key in ["quinoline", "quinoxaline"] {
+            let spec = r.get(key).unwrap().spec;
+            assert!(!spec.benzoheterocycle_component, "{key}");
+            assert!(spec.usable_as_attached, "{key}");
+        }
     }
 }

@@ -211,6 +211,8 @@ pub struct FusionComponentSpec {
     pub horizontal_ring_count: usize,
     pub multiplicative_prefix_style: String,
     pub usable_as_peri_parent: bool,
+    /// FR-2.2.8 components are formed only after initial component selection.
+    pub benzoheterocycle_component: bool,
     pub construction_order: Option<FusionComponentConstructionOrder>,
     // Fusion topology stays beside the existing shared retained-parent graph.
     pub rings: Vec<Vec<String>>,
@@ -381,6 +383,7 @@ pub struct ParentLocationKey {
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FusionNameAst {
+    pub benzoheterocycle_merge: bool,
     pub plan_kind: String,
     pub parent_occurrences: Vec<usize>,
     pub component_occurrences: Vec<FusionComponentMatch>,
