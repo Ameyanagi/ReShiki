@@ -69,43 +69,78 @@ pub struct Parsed {
 
 impl Parsed {
     /// Whether `/` or `\` at both ends of a chain of an odd number (at least
-    /// three) of cumulated double bonds specify its E/Z configuration
-    /// (OpenSMILES 3.8.3). Import perception does not keep that configuration.
+    /// three) of cumulated double bonds specify an E/Z configuration
+    /// (OpenSMILES 3.8.3): each end must also have two distinguishable
+    /// ligands (P-91.2.1.2.1). Import perception does not keep it.
     pub fn specifies_cumulene_ez(&self) -> bool {
         let n = self.graph.atoms.len();
         let mut doubles = vec![Vec::new(); n];
+        let mut neighbors = vec![Vec::new(); n];
         let mut directed = vec![false; n];
         for (bond, direction) in self.graph.bonds.iter().zip(&self.directions) {
-            if bond.order == 2 {
-                for (end, other) in [(bond.a, bond.b), (bond.b, bond.a)] {
-                    if let Some(list) = doubles.get_mut(end) {
-                        list.push(other);
-                    }
+            for (end, other) in [(bond.a, bond.b), (bond.b, bond.a)] {
+                if let Some(list) = neighbors.get_mut(end) {
+                    list.push(other);
                 }
-            } else if matches!(direction, Direction::Up | Direction::Down) {
-                for end in [bond.a, bond.b] {
-                    if let Some(flag) = directed.get_mut(end) {
-                        *flag = true;
-                    }
+                if bond.order == 2
+                    && let Some(list) = doubles.get_mut(end)
+                {
+                    list.push(other);
+                }
+                if matches!(direction, Direction::Up | Direction::Down)
+                    && let Some(flag) = directed.get_mut(end)
+                {
+                    *flag = true;
                 }
             }
         }
         let double_count = |atom: usize| doubles.get(atom).map_or(0, Vec::len);
         let is_directed = |atom: usize| directed.get(atom).copied().unwrap_or(false);
-        (0..n).any(|start| {
-            let Some(&first) = doubles.get(start).and_then(|list| list.first()) else {
-                return false;
-            };
-            if double_count(start) != 1 || !is_directed(start) {
-                return false;
+        // Each chain as its two (terminal, chain neighbour) pairs.
+        let chains: Vec<_> = (0..n)
+            .filter_map(|start| {
+                let &first = doubles.get(start)?.first()?;
+                if double_count(start) != 1 || !is_directed(start) {
+                    return None;
+                }
+                let (mut previous, mut end, mut count) = (start, first, 1);
+                while let Some(&[a, b]) = doubles.get(end).map(Vec::as_slice) {
+                    (previous, end) = (end, if a == previous { b } else { a });
+                    count += 1;
+                }
+                (count >= 3 && count % 2 == 1 && double_count(end) == 1 && is_directed(end))
+                    .then_some([(start, first), (end, previous)])
+            })
+            .collect();
+        if chains.is_empty() {
+            return false;
+        }
+        // Unrankable raw input keeps the conservative answer.
+        let ranks = super::stereo::atom_priorities(&self.graph, &self.metadata).ok();
+        let distinct = |atom: usize, chain: usize| {
+            let ligands: Vec<usize> = neighbors
+                .get(atom)
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|&other| other != chain)
+                .collect();
+            match ligands.as_slice() {
+                // The other ligand is a hydrogen or lone pair.
+                [one] => self
+                    .graph
+                    .atoms
+                    .get(*one)
+                    .is_some_and(|a| a.atomic_number != 1),
+                [a, b] => ranks
+                    .as_ref()
+                    .is_none_or(|ranks| ranks.get(*a) != ranks.get(*b)),
+                _ => false,
             }
-            let (mut previous, mut end, mut count) = (start, first, 1);
-            while let Some(&[a, b]) = doubles.get(end).map(Vec::as_slice) {
-                (previous, end) = (end, if a == previous { b } else { a });
-                count += 1;
-            }
-            count >= 3 && count % 2 == 1 && double_count(end) == 1 && is_directed(end)
-        })
+        };
+        chains
+            .iter()
+            .any(|ends| ends.iter().all(|&(atom, chain)| distinct(atom, chain)))
     }
 }
 

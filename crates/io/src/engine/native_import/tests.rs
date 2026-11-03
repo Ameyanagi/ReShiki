@@ -22,6 +22,9 @@ fn only_fully_specified_odd_cumulene_smiles_warn_about_lost_ez() -> anyhow::Resu
         ("C/C=C/C=C/C", false),
         ("C/C=C=C=CC.CC=C=C=C/C", false),
         ("CC=C=C=CC C/C=C=C=C/C", false),
+        ("C/C(C)=C=C=C/C", false),
+        ("C/C(C)=C=C=C(/C)C", false),
+        ("C/C=C/C(/C=C/C)=C=C=C/C=C/C", false),
     ] {
         let Preparation::Complete(prepared) = prepare(Request::import_smiles(text))? else {
             panic!("{text}: import deferred");

@@ -165,6 +165,7 @@ fn specified_cumulene_ez_is_rejected_before_cleanup() {
         "C/C=C=C=C=C=C/C",
         r"C/C=C=C=C=C=C\C",
         "F/C=C=C=C/Cl",
+        "C/C(Cl)=C=C=C(/C)F",
         "C(=C=C=C/C)/C",
         "C/C=C=C=C/C.CC",
         "C/1=C=C=C/CCCC1",
@@ -188,6 +189,10 @@ fn specified_cumulene_ez_is_rejected_before_cleanup() {
         "C/C=C/C",
         r"C/C=C\C",
         "C/C=C/C=C/C",
+        // An end with two identical ligands is not stereogenic (P-91.2.1.2.1).
+        "C/C(C)=C=C=C/C",
+        "C/C(C)=C=C=C(/C)C",
+        "C/C=C/C(/C=C/C)=C=C=C/C=C/C",
     ] {
         assert!(canonical_smiles(text).is_ok(), "Rejected {text}");
     }

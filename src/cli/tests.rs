@@ -863,6 +863,13 @@ async fn name_preserves_unspecified_smiles_double_bonds() {
         ("C/C=C=C=CC", "hexa-2,3,4-triene"),
         ("CC=C=CC", "penta-2,3-diene"),
         ("C/C=C=C/C", "penta-2,3-diene"),
+        // Cumulenes with identical ligands at one end have no E/Z.
+        ("C/C(C)=C=C=C/C", "2-methylhexa-2,3,4-triene"),
+        ("C/C(C)=C=C=C(/C)C", "2,5-dimethylhexa-2,3,4-triene"),
+        (
+            "C/C=C/C(/C=C/C)=C=C=C/C=C/C",
+            "(2E,8E)-4-[(1E)-prop-1-en-1-yl]deca-2,4,5,6,8-pentaene",
+        ),
     ] {
         let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
         assert_eq!(code, SUCCESS, "{smiles}: {err}");
