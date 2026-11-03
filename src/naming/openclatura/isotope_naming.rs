@@ -68,6 +68,19 @@ fn stripped_parent(source: &Molecule) -> Result<(Molecule, Vec<Site>), String> {
     }
     parent.accurate_cip = source.accurate_cip.clone();
     parent.legacy_cip = source.legacy_cip.clone();
+    // Like the CIP labels, the possible stereo units keep isotope-created centres.
+    parent.stereogenic_atoms = source
+        .stereogenic_atoms
+        .iter()
+        .copied()
+        .filter(|idx| parent.atoms.contains_key(idx))
+        .collect();
+    parent.stereogenic_bonds = source
+        .stereogenic_bonds
+        .iter()
+        .copied()
+        .filter(|idx| parent.bonds.contains_key(idx))
+        .collect();
     if parent.atoms.is_empty() {
         return Err("openclatura: isolated isotope atoms are not supported".into());
     }
@@ -492,6 +505,8 @@ mod tests {
             ("[13CH3]CCl", "1-chloro(2-13C)ethane"),
             ("ClC([2H])([2H])Cl", "dichloro(2H2)methane"),
             ("[13CH3][C@@H](F)Cl", "(1S)-1-chloro-1-fluoro(2-13C)ethane"),
+            // P-91.3: the only stereocentre of an unlocanted name.
+            ("F[13C@H](Cl)Br", "(R)-bromochlorofluoro(13C)methane"),
         ] {
             let name = name_smiles(smiles, IsotopeStyle::Iupac).unwrap();
             assert_eq!(name.text, expected, "{smiles}");

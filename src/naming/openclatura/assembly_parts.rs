@@ -41,6 +41,7 @@ pub struct PrincipalGroupItem {
     pub bond_ids: AtomSet,
     pub charge_atom_ids: AtomSet,
     pub resolved_rule: Option<super::nomenclature::FunctionalGroupRule>,
+    pub external_substitution_sites: bool,
 }
 impl PrincipalGroupItem {
     pub fn new(key: impl Into<String>, locants: Vec<String>) -> Self {
@@ -116,6 +117,10 @@ pub struct AssemblyParts {
     pub parent_charges: Vec<ParentChargeItem>,
     pub parent_atom_ids: AtomSet,
     pub parent_bond_ids: AtomSet,
+    pub stereogenic_atom_ids: AtomSet,
+    pub stereogenic_bond_ids: AtomSet,
+    pub parent_atom_hydrogens_by_locant: BTreeMap<String, usize>,
+    pub parent_external_bonds_by_locant: BTreeMap<String, Vec<(usize, usize, usize)>>,
     pub parent_atom_ids_by_locant: BTreeMap<String, usize>,
     pub parent_atom_symbols_by_locant: BTreeMap<String, String>,
     pub parent_atom_charges_by_locant: BTreeMap<String, i32>,
@@ -178,6 +183,10 @@ impl AssemblyParts {
             parent_charges: vec![],
             parent_atom_ids: AtomSet::new(),
             parent_bond_ids: AtomSet::new(),
+            stereogenic_atom_ids: AtomSet::new(),
+            stereogenic_bond_ids: AtomSet::new(),
+            parent_atom_hydrogens_by_locant: BTreeMap::new(),
+            parent_external_bonds_by_locant: BTreeMap::new(),
             parent_atom_ids_by_locant: BTreeMap::new(),
             parent_atom_symbols_by_locant: BTreeMap::new(),
             parent_atom_charges_by_locant: BTreeMap::new(),

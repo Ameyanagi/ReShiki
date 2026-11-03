@@ -10,7 +10,7 @@ CC=CC	but-2-ene	but-2-ene
 CC#CC	but-2-yne	but-2-yne
 CC(=O)O	ethanoic acid	acetic acid
 CC(O)C(=O)O	2-hydroxypropanoic acid	2-hydroxypropanoic acid
-NCC(=O)O	2-aminoethanoic acid	2-aminoacetic acid
+NCC(=O)O	2-aminoethanoic acid	aminoacetic acid
 CC(N)C(O)C(=O)O	3-amino-2-hydroxybutanoic acid	3-amino-2-hydroxybutanoic acid
 CC(=O)CC(=O)O	3-oxobutanoic acid	3-oxobutanoic acid
 CCOC(=O)C	ethyl ethanoate	ethyl acetate

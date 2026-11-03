@@ -640,7 +640,7 @@ N=S(Cl)CF	(chloro(imino)sulfanyl)fluoromethane	roundtrip/test_role_models.py
 [S-][n+]1ccc(-c2ccncc2)cc1	4-(pyridin-4-yl)pyridin-1-ium-1-thiolate	roundtrip/test_role_models.py	
 [S-][n+]1ccc2ncccn21	pyrazolo[1,5-a]pyrimidin-1-ium-1-thiolate	roundtrip/test_role_models.py	
 C[S+](C)[CH-]C	1-(dimethylsulfaniumyl)ethan-1-ide	roundtrip/test_role_models.py	
-F[C@H](Cl)Br	(1R)-bromochlorofluoromethane	roundtrip/test_stereo.py	
+F[C@H](Cl)Br	(R)-bromochlorofluoromethane	roundtrip/test_stereo.py	
 C/C=C/C	(2E)-but-2-ene	roundtrip/test_stereo.py	
 CC(Cl)CO	2-chloropropan-1-ol	roundtrip/test_substituents.py	
 C=CC1=CCCCC1	1-ethenylcyclohex-1-ene	roundtrip/test_substituents.py	

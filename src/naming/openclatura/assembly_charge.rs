@@ -274,6 +274,8 @@ pub fn prepare_fusion_charge_assembly(parts: &mut AssemblyParts) -> Result<(), S
     }
     Ok(())
 }
-pub fn append_charge_suffixes_to_terminal(parts: &AssemblyParts, terminal: &str) -> String {
-    format!("{}{terminal}", parent_charge_suffix(parts))
+pub fn append_charge_suffixes_to_terminal(parts: &AssemblyParts, terminal: &str) -> (String, bool) {
+    let charge = parent_charge_suffix(parts);
+    let cites_locants = !charge.is_empty();
+    (format!("{charge}{terminal}"), cites_locants)
 }

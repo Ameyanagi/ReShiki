@@ -372,6 +372,8 @@ fn build_parent_parts(
     parts.retained_name = retained_name;
     parts.parent_atom_ids = numbered_path.iter().copied().collect();
     parts.parent_bond_ids = bond_ids_within(mol, &parts.parent_atom_ids);
+    parts.stereogenic_atom_ids = mol.stereogenic_atoms.clone();
+    parts.stereogenic_bond_ids = mol.stereogenic_bonds.clone();
     if let Some(root) = root {
         parts.is_substituent = true;
         parts.attachment_locant = locants[&root].clone();
@@ -383,6 +385,20 @@ fn build_parent_parts(
         let atom = &mol.atoms[&idx];
         let locant = &locants[&idx];
         parts.parent_atom_ids_by_locant.insert(locant.clone(), idx);
+        parts
+            .parent_atom_hydrogens_by_locant
+            .insert(locant.clone(), atom.total_h_count);
+        parts.parent_external_bonds_by_locant.insert(
+            locant.clone(),
+            mol.get_neighbors(idx)
+                .iter()
+                .filter(|&&other| !parts.parent_atom_ids.contains(&other))
+                .filter_map(|&other| {
+                    mol.get_bond(idx, other)
+                        .map(|bond| (other, bond.order, bond.idx))
+                })
+                .collect(),
+        );
         parts
             .parent_atom_symbols_by_locant
             .insert(locant.clone(), atom.symbol.clone());
