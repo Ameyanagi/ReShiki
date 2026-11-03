@@ -328,6 +328,134 @@ fn imported_smiles(text: &str) -> anyhow::Result<Box<Prepared>> {
     Ok(prepared)
 }
 
+#[tokio::test]
+async fn imported_butenes_retain_specified_or_unspecified_stereo_through_exports()
+-> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    const UNSPECIFIED_INCHI: &str = "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3";
+    for (format, text, expected_smiles, expected_inchi, unspecified) in [
+        ("smiles", "CC=CC", "CC=CC", UNSPECIFIED_INCHI, true),
+        (
+            "smiles",
+            "C/C=C\\C",
+            "C/C=C\\C",
+            "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3/b4-3-",
+            false,
+        ),
+        ("inchi", UNSPECIFIED_INCHI, "CC=CC", UNSPECIFIED_INCHI, true),
+    ] {
+        let imported = engine
+            .request(Request::import(format, text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let analysis = imported.analysis.unwrap();
+        assert_eq!(analysis.smiles, expected_smiles, "{format}/{text}");
+        assert_eq!(analysis.inchi, expected_inchi, "{format}/{text}");
+        let mut document = imported.document.unwrap();
+        if unspecified {
+            let double = document.bonds.iter().find(|bond| bond.order == 2).unwrap();
+            assert!(double.stereo_authoritative, "{format}/{text}");
+            assert!(double.stereo.is_none(), "{format}/{text}");
+            // Use visibly different planar coordinates so a fresh depiction
+            // cannot accidentally satisfy the coordinate preservation check.
+            for (atom, (x, y)) in
+                document
+                    .atoms
+                    .iter_mut()
+                    .zip([(11., 17.), (67., 3.), (121., 3.), (173., -39.)])
+            {
+                atom.position = crate::document::Point::new(x, y);
+            }
+        }
+        let before = document.clone();
+        for output_format in ["smiles", "inchi", "mol"] {
+            let mut request = Request::molecule("export", document.clone());
+            request.format = Some(output_format.into());
+            let response = engine.request(request).await.map_err(anyhow::Error::msg)?;
+            let analysis = response.analysis.unwrap();
+            assert_eq!(
+                analysis.smiles, expected_smiles,
+                "{format}/{text}/{output_format}"
+            );
+            assert_eq!(
+                analysis.inchi, expected_inchi,
+                "{format}/{text}/{output_format}"
+            );
+            let output = response.output.unwrap();
+            match output_format {
+                "smiles" => assert_eq!(output.trim(), expected_smiles),
+                "inchi" => assert_eq!(output.trim(), expected_inchi),
+                "mol" => {
+                    let counts = output.lines().nth(3).unwrap();
+                    assert!(counts.ends_with("V2000"), "{output}");
+                    let atoms = counts[..3].trim().parse::<usize>().unwrap();
+                    let bonds = counts[3..6].trim().parse::<usize>().unwrap();
+                    let flags: Vec<u8> = output
+                        .lines()
+                        .skip(4 + atoms)
+                        .take(bonds)
+                        .filter(|line| line[6..9].trim() == "2")
+                        .map(|line| line[9..12].trim().parse().unwrap())
+                        .collect();
+                    assert_eq!(flags, [if unspecified { 3 } else { 0 }]);
+                    let reopened = molfile::read(&output)?;
+                    assert_eq!(
+                        smiles::write::write(&reopened.molecule.state, Default::default())?.text,
+                        expected_smiles,
+                        "{format}/{text}: MOL roundtrip"
+                    );
+                    if unspecified {
+                        let prepared = molecular::prepare(&document)?;
+                        for (original, written) in
+                            prepared.positions.iter().zip(&reopened.molecule.positions)
+                        {
+                            assert!(
+                                (original.x - written.x).abs() < 1e-4,
+                                "{format}/{text}: x changed"
+                            );
+                            assert!(
+                                (original.y - written.y).abs() < 1e-4,
+                                "{format}/{text}: y changed"
+                            );
+                            assert_eq!(written.z, 0.);
+                        }
+                        assert_eq!(
+                            reopened
+                                .molecule
+                                .state
+                                .metadata
+                                .bonds
+                                .iter()
+                                .filter(|bond| bond.stereo == 1)
+                                .count(),
+                            1
+                        );
+                    }
+                    let reopened = engine
+                        .request(Request::import("mol", &output))
+                        .await
+                        .map_err(anyhow::Error::msg)?;
+                    let analysis = reopened.analysis.unwrap();
+                    assert_eq!(
+                        analysis.smiles, expected_smiles,
+                        "{format}/{text}: reopened MOL"
+                    );
+                    assert_eq!(
+                        analysis.inchi, expected_inchi,
+                        "{format}/{text}: reopened MOL"
+                    );
+                }
+                _ => unreachable!(),
+            }
+            if unspecified {
+                assert_eq!(response.document.unwrap(), before);
+            }
+        }
+        assert_eq!(document, before);
+    }
+    Ok(())
+}
+
 fn document_atom(document: &Document, id: u64) -> &crate::document::Atom {
     document.atoms.iter().find(|atom| atom.id == id).unwrap()
 }
