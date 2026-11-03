@@ -396,8 +396,8 @@ fn ratchet(reports: &BTreeMap<&str, Report>) {
     // Preserve both guarantees: correct chemistry and progress toward the
     // exact openclatura spelling. Text differences never become Wrong graphs.
     // The frozen upstream goldens retain cis/trans ring names. The intentional
-    // r/s departures are pinned, with complete identity roundtrips, by
-    // ring_r_s_names_intentionally_depart_from_upstream_spelling below.
+    // r/s and assembly departures are pinned, with complete identity
+    // roundtrips, by the intentional-departure tests below.
     for (category, counts) in reports["parity"].rows() {
         current.insert(
             ("parity_text".into(), category.into()),
@@ -581,6 +581,84 @@ fn ring_r_s_names_intentionally_depart_from_upstream_spelling() {
         for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
             assert_eq!(measurements.parse_name(text).unwrap(), identity, "{text}");
         }
+    }
+}
+
+#[test]
+fn ring_assembly_names_intentionally_depart_from_upstream_spelling() {
+    let mut measurements = Measurements::default();
+    for (smiles, expected) in [
+        ("C1=CC=NC(=C1)C2=CC=CC=N2", "2,2'-bipyridine"),
+        ("C1=CN=CC=C1C2=CC=NC=C2", "4,4'-bipyridine"),
+        (
+            "C1=CC=C(C=C1)C2=CC=C(C=C2)C3=CC=CC=C3",
+            "1^1,2^1:2^4,3^1-terphenyl",
+        ),
+        (
+            "C1=CC=C(C=C1)C2=CC(=CC=C2)C3=CC=CC=C3",
+            "1^1,2^1:2^3,3^1-terphenyl",
+        ),
+        ("C1CCC(CC1)C2CCCCC2", "1,1'-bi(cyclohexane)"),
+        (
+            "C1=CC=C2C(=C1)C=CC=C2C3=CC=CC4=CC=CC=C43",
+            "1,1'-binaphthalene",
+        ),
+        (
+            "Oc1ccc2ccccc2c1-c1c(O)ccc2ccccc12",
+            "[1,1'-binaphthalene]-2,2'-diol",
+        ),
+        (
+            "CN1CCC(CC1)N2CCC(CC2)NC(=O)C(=O)NC3=CC(=CC=C3)N4C=CC=N4",
+            "N-(1'-methyl[1,4'-bipiperidin]-4-yl)-N'-[3-(1H-pyrazol-1-yl)phenyl]ethanediamide",
+        ),
+        (
+            "CCOCC1CCC(CC1)C2CCC(CC2)C",
+            "4-(ethoxymethyl)-4'-methyl-1,1'-bi(cyclohexane)",
+        ),
+        (
+            "C1CN(CCN1CC(F)F)C(=O)C2=CC=CC=C2C3=CC=CC=C3",
+            "([1,1'-biphenyl]-2-yl)[4-(2,2-difluoroethyl)piperazin-1-yl]methanone",
+        ),
+        (
+            "CC(=O)NC1=CC=C(C=C1)C2=NC(=C(N2)C3=CC=C(C=C3)C4=CC=C(C=C4)[N+](=O)[O-])C5=CC=CC=C5",
+            "N-{4-[5-(4'-nitro[1,1'-biphenyl]-4-yl)-4-phenyl-1H-imidazol-2-yl]phenyl}acetamide",
+        ),
+        (
+            "CN(CCCCCCCCCN1CCC(CC1)OC(=O)NC2=CC=CC=C2C3=CC=CC=C3)C(=O)C4=CC(=C(C=C4)O)Cl",
+            "1-[9-(N-methyl-3-chloro-4-hydroxybenzamido)nonyl]piperidin-4-yl ([1,1'-biphenyl]-2-yl)carbamate",
+        ),
+        ("C1CC1-C1CC1", "1,1'-bi(cyclopropane)"),
+        ("c1ccccc1-c2ccc(cc2)-c2ccccc2", "1^1,2^1:2^4,3^1-terphenyl"),
+        ("C1=COC=CC1-C1=COC=CC1", "4H,4'H-3,4'-bipyran"),
+        ("OCCc1ccccc1-c1ccccc1", "2-([1,1'-biphenyl]-2-yl)ethan-1-ol"),
+        (
+            "CC(=O)c1ccnc2c([C@H](C)CNc3cc(-c4cnc(C)nc4)ncn3)cccc12",
+            "1-(8-{(2S)-1-[(2'-methyl[4,5'-bipyrimidin]-6-yl)amino]propan-2-yl}quinolin-4-yl)ethan-1-one",
+        ),
+        (
+            "CC(=O)c1ccnc2c(C(C)CNc3cc(-c4cnc(C)nc4)ncn3)cccc12",
+            "1-(8-{1-[(2'-methyl[4,5'-bipyrimidin]-6-yl)amino]propan-2-yl}quinolin-4-yl)ethan-1-one",
+        ),
+        (
+            "C=CC(=O)Oc1ccc(-c2ccc(CCCOSC)cc2)cc1",
+            "4'-[3-(methylsulfanyloxy)propyl][1,1'-biphenyl]-4-yl prop-2-enoate",
+        ),
+    ] {
+        // Match the canonical input used by Measurements::classify.
+        let identity = super::canonical_smiles(smiles).unwrap();
+        let name = namer(&identity).unwrap();
+        assert_eq!(name.text, expected, "{smiles}");
+        assert_ne!(
+            name.status,
+            super::NameStatus::NotPreferred(super::NameReason::RingAssembly),
+            "{smiles}"
+        );
+        assert_eq!(
+            measurements.parse_name(&name.text).unwrap(),
+            identity,
+            "{smiles}: {}",
+            name.text
+        );
     }
 }
 

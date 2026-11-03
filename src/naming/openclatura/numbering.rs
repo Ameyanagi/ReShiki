@@ -11,13 +11,14 @@ use std::sync::LazyLock;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NumberingTopology {
+    pub is_assembly: bool,
     pub is_bicycle: bool,
     pub is_spiro: bool,
     pub is_polycycle: bool,
 }
 impl NumberingTopology {
     fn has_fixed_paths(self) -> bool {
-        self.is_bicycle || self.is_spiro || self.is_polycycle
+        self.is_assembly || self.is_bicycle || self.is_spiro || self.is_polycycle
     }
 }
 
@@ -213,6 +214,7 @@ pub fn choose_parent_numbering(
             Vec<LocantKey>,
             Vec<LocantKey>,
             Vec<(String, LocantKey)>,
+            Vec<(LocantKey, usize)>,
         );
         let evaluate = |map: &BTreeMap<usize, String>| -> MapScore {
             let value = |idx: &usize| retained_locant_sort_key(&map[idx]);
@@ -224,7 +226,7 @@ pub fn choose_parent_numbering(
             principal.sort();
             let mut hetero: BTreeMap<usize, Vec<LocantKey>> = BTreeMap::new();
             for (&idx, atom) in &mol.atoms {
-                if map.contains_key(&idx) && atom.symbol != "C" {
+                if !topology.is_assembly && map.contains_key(&idx) && atom.symbol != "C" {
                     hetero
                         .entry(
                             elements::get(&atom.symbol)
@@ -298,7 +300,19 @@ pub fn choose_parent_numbering(
                 })
                 .collect();
             citation.sort();
-            (hetero, indicated, principal, hydro, subst, citation)
+            let mut stereo: Vec<_> = map
+                .keys()
+                .filter(|_| topology.is_assembly)
+                .filter_map(|idx| {
+                    mol.atoms[idx]
+                        .stereo
+                        .as_ref()
+                        // P-31.1.4.3.4: R before S, r before s.
+                        .map(|s| (value(idx), usize::from(!matches!(s.as_str(), "R" | "r"))))
+                })
+                .collect();
+            stereo.sort();
+            (hetero, indicated, principal, hydro, subst, citation, stereo)
         };
         if let Some(chosen) = locant_maps.iter().min_by_key(|map| evaluate(map)).cloned() {
             let mut path: Vec<_> = chosen.keys().copied().collect();

@@ -139,6 +139,12 @@ impl Default for AssemblyParts {
     }
 }
 impl AssemblyParts {
+    pub fn is_ring_assembly(&self) -> bool {
+        self.parent_hydride
+            .as_ref()
+            .is_some_and(|parent| parent.assembly.is_some())
+    }
+
     pub fn new(parent_length: usize) -> Self {
         Self {
             parent_length,

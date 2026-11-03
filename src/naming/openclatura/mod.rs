@@ -52,6 +52,7 @@ mod retained_fused_templates;
 mod retained_graph_model;
 mod retained_name_policy;
 mod retained_specs;
+mod ring_assembly;
 mod ring_parent;
 mod ring_renderer;
 mod rules;
@@ -219,8 +220,7 @@ pub(super) fn assess_parent_name(mol: &molecule::Molecule, text: &str) {
             crate::naming::NameReason::Multiplicative,
         ));
     }
-    // 1,1'-biphenyl is the only ring assembly name the namer writes.
-    if text != "1,1'-biphenyl" && has_ring_assembly(mol) {
+    if has_ring_assembly(mol) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::RingAssembly,
         ));
@@ -230,9 +230,10 @@ pub(super) fn assess_parent_name(mol: &molecule::Molecule, text: &str) {
 /// Rewrite the namer's enclosing parentheses in the IUPAC nesting order
 /// `{[({[( )]})]}` (P-16.5.4), choosing each mark from what it encloses.
 ///
-/// Square brackets (fusion, von Baeyer, spiro descriptors), the braces of
-/// superscripts such as `1^{3,7}` and the parentheses of indicated or added
-/// hydrogen are part of the parent name and do not count (P-16.5.4.1.1,
+/// Square brackets (fusion, von Baeyer, spiro descriptors, locanted ring
+/// assemblies), the braces of superscripts such as `1^{3,7}`, the parentheses
+/// of a ring assembly's parent hydride and of indicated or added hydrogen are
+/// part of the parent name and do not count (P-16.5.4.1.1,
 /// P-16.5.4.1.2). Any other parenthesis, including stereodescriptors and
 /// compound locants, counts as a level (P-16.5.4.1.3), and a mark that would
 /// directly follow or precede one of the same kind moves up a level
@@ -259,8 +260,10 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
             }),
             close @ (b')' | b']') => {
                 let Some(group) = stack.pop() else { continue };
-                // Indicated or added hydrogen such as `(4aH,9H)` does not count.
+                // Indicated or added hydrogen such as `(4aH,9H)` and the
+                // parent of a ring assembly, `bi(cyclohexane)`, do not count.
                 let counted = close == b')'
+                    && !name[..group.open].ends_with("-bi")
                     && !name[group.open + 1..i].split(',').all(|locant| {
                         locant.strip_suffix('H').is_some_and(|locant| {
                             let digits = locant
@@ -362,58 +365,15 @@ fn has_multiplicative_pin(mol: &molecule::Molecule) -> bool {
 }
 
 /// Whether two identical ring systems are joined directly by a single or
-/// double bond, a ring assembly whose PIN is 2,2'-bipyridine,
-/// 1,1'-bi(cyclopropane) or a terphenyl (P-28.1, P-28.2, P-28.3, P-52.2.7),
-/// where the namer writes 2-(pyridin-2-yl)pyridine. Systems compare as parent
-/// hydrides, so substituents count as hydrogen (4-phenylphenol); different
-/// systems keep the substitutive PIN, cyclohexylbenzene (P-61.2.2).
+/// double bond that the rendered name does not cite as a ring assembly
+/// (P-28, P-52.2.7): a double-bond junction, seven or more units, or units the
+/// assembly parent cannot number. Systems compare as parent hydrides, so
+/// substituents count as hydrogen; different systems keep the substitutive
+/// PIN, cyclohexylbenzene (P-61.2.2).
 fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
-    let ring_bonds: graph_kernel::EdgeSet =
-        graph_kernel::biconnected_edge_components(mol, &mol.atoms.keys().copied().collect())
-            .into_iter()
-            .filter(|block| block.len() > 1)
-            .flatten()
-            .collect();
-    let cyclic = ring_bonds.iter().flat_map(|&(u, v)| [u, v]).collect();
-    let systems = graph_kernel::connected_components(&cyclic, &ring_bonds);
-    let keys: Vec<_> = systems
+    ring_assembly::assembly_junctions(mol)
         .iter()
-        .map(|system| {
-            let ranks = chains::canonical_ranks(mol, Some(system));
-            let mut key: Vec<_> = system
-                .iter()
-                .map(|&u| {
-                    let atom = &mol.atoms[&u];
-                    let (inner, outer): (Vec<usize>, Vec<usize>) = mol
-                        .get_neighbors(u)
-                        .iter()
-                        .partition(|n| system.contains(n));
-                    let hydrogens = atom.total_h_count
-                        + outer.iter().map(|&n| mol.bond_order(u, n)).sum::<usize>();
-                    let mut inner: Vec<_> = inner.iter().map(|n| ranks[n]).collect();
-                    inner.sort();
-                    let (rank, symbol) = (ranks[&u], atom.symbol.as_str());
-                    (
-                        rank,
-                        symbol,
-                        atom.charge,
-                        atom.is_aromatic,
-                        hydrogens,
-                        inner,
-                    )
-                })
-                .collect();
-            key.sort();
-            key
-        })
-        .collect();
-    let system_of = |atom| systems.iter().position(|system| system.contains(&atom));
-    mol.bonds
-        .values()
-        .any(|bond| match (system_of(bond.u), system_of(bond.v)) {
-            (Some(a), Some(b)) => a != b && keys[a] == keys[b],
-            _ => false,
-        })
+        .any(|&junction| !mol.ring_assembly_is_named(junction))
 }
 
 /// Count nonbonding electrons on the main-group elements that can carry
@@ -515,6 +475,10 @@ mod tests {
             (
                 "10,10'-([1,1'-biphenyl]-4,4'-diylbis(oxy))di(decanoic acid)",
                 "10,10'-[[1,1'-biphenyl]-4,4'-diylbis(oxy)]di(decanoic acid)",
+            ),
+            (
+                "4-(4-([1,1'-bi(cyclohexan)]-4-yl)phenyl)-4'-phenyl-1,1'-bi(cyclohexane)",
+                "4-[4-([1,1'-bi(cyclohexan)]-4-yl)phenyl]-4'-phenyl-1,1'-bi(cyclohexane)",
             ),
             (
                 "1-(tricyclo[3.3.1.1^{3,7}]decan-1-yl)ethan-1-one",
@@ -728,6 +692,137 @@ mod tests {
     }
 
     #[test]
+    fn ring_assemblies_are_preferred_numbered_parents_and_round_trip() {
+        use crate::naming::NameStatus;
+        for (smiles, expected) in [
+            (
+                "Oc1ccc2ccccc2c1-c1c(O)ccc2ccccc12",
+                "[1,1'-binaphthalene]-2,2'-diol",
+            ),
+            ("Oc1ccccc1-c1ccccc1O", "[1,1'-biphenyl]-2,2'-diol"),
+            ("Oc1ccc(cc1)-c1ccccc1", "[1,1'-biphenyl]-4-ol"),
+            (
+                "OC(=O)c1ccc(cc1)-c1ccccc1",
+                "[1,1'-biphenyl]-4-carboxylic acid",
+            ),
+            ("c1ccc(cc1)-c1ccccc1", "1,1'-biphenyl"),
+            ("Cc1ccc(cc1)-c1ccc(C)cc1", "4,4'-dimethyl-1,1'-biphenyl"),
+            ("Cc1ccc(cc1)-c1ccccc1", "4-methyl-1,1'-biphenyl"),
+            ("c1ccc(nc1)-c1ccccn1", "2,2'-bipyridine"),
+            ("c1ccncc1-c1cccnc1", "3,3'-bipyridine"),
+            ("c1ccncc1-c1ccncc1", "3,4'-bipyridine"),
+            ("c1ccc(nc1)-c1cccnc1", "2,3'-bipyridine"),
+            ("c1cnccc1-c1ccncc1", "4,4'-bipyridine"),
+            ("c1ccc(s1)-c1cccs1", "2,2'-bithiophene"),
+            ("C1CC1C1CC1", "1,1'-bi(cyclopropane)"),
+            ("CC1(CC1)C1CC1", "1-methyl-1,1'-bi(cyclopropane)"),
+            ("C1CCC(CC1)C1CCCCC1", "1,1'-bi(cyclohexane)"),
+            (
+                "O=C1CCC(C2CCC(=O)CC2)CC1",
+                "[1,1'-bi(cyclohexane)]-4,4'-dione",
+            ),
+            ("c1ccc2ccccc2c1-c1ccc2ccccc2c1", "1,2'-binaphthalene"),
+            ("c1ccc2ccccc2c1-c1cccc2ccccc12", "1,1'-binaphthalene"),
+            (
+                "c1ccc(cc1)-c1ccc(cc1)-c1ccccc1",
+                "1^1,2^1:2^4,3^1-terphenyl",
+            ),
+            (
+                "c1ccc(cc1)-c1cccc(-c2ccccc2)c1",
+                "1^1,2^1:2^3,3^1-terphenyl",
+            ),
+            (
+                "Oc1ccc(cc1)-c1ccc(cc1)-c1ccccc1",
+                "[1^1,2^1:2^4,3^1-terphenyl]-1^4-ol",
+            ),
+            (
+                "c1(-c2ccccc2)cc(-c2ccccc2)cc(-c2ccccc2)c1",
+                "2^5-phenyl-1^1,2^1:2^3,3^1-terphenyl",
+            ),
+            // P-28.6: seven units, but only three in a row.
+            (
+                "c1(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c1-c1ccccc1",
+                "2^3,2^4,2^5,2^6-tetraphenyl-1^1,2^1:2^2,3^1-terphenyl",
+            ),
+            // P-31.1.4.3.4: r before s, whichever traversal the input uses.
+            (
+                "C[C@H]1CC[C@@H]([C@H]2CC[C@H](C)CC2)CC1",
+                "(1r,1's,4r,4's)-4,4'-dimethyl-1,1'-bi(cyclohexane)",
+            ),
+            (
+                "C[C@H]1CC[C@H]([C@H]2CC[C@@H](C)CC2)CC1",
+                "(1r,1's,4r,4's)-4,4'-dimethyl-1,1'-bi(cyclohexane)",
+            ),
+            ("c1c[nH]c(c1)-c1ccc[nH]1", "1H,1'H-2,2'-bipyrrole"),
+            ("c1ccn(c1)-n1cccc1", "1,1'-bipyrrole"),
+            (
+                "OC(=O)Cc1ccc(cc1)-c1ccccc1",
+                "2-([1,1'-biphenyl]-4-yl)acetic acid",
+            ),
+            (
+                "C[C@H]1C[C@@H]1[C@H]1C[C@@H]1C",
+                "(1S,1'S,2S,2'S)-2,2'-dimethyl-1,1'-bi(cyclopropane)",
+            ),
+            ("C1CCC(CC1)c1ccccc1", "cyclohexylbenzene"),
+            ("c1ccc(cc1)-c1ccncc1", "4-phenylpyridine"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_ring_assembly_keeps_substitutive_name_and_status() {
+        let name = name_smiles("C1CCC(=C2CCCC2)C1").unwrap();
+        assert_eq!(name.text, "cyclopentylidenecyclopentane");
+        assert_eq!(
+            name.status,
+            crate::naming::NameStatus::NotPreferred(crate::naming::NameReason::RingAssembly)
+        );
+    }
+
+    #[test]
+    fn composite_quaterpyridine_and_assembly_substituent_locants_round_trip() {
+        for expected in [
+            "1^2,2^2:2^6,3^2:3^6,4^2-quaterpyridine",
+            "1^1,2^1:2^2,3^1-tercyclopropane",
+            "1^1,2^1:2^4,3^1:3^4,4^1:4^4,5^1-quinquephenyl",
+            "1^1,2^1:2^4,3^1:3^4,4^1:4^4,5^1:5^4,6^1-sexiphenyl",
+            // Symmetric units collapse to the numberings a name can cite.
+            "1^1,2^1:2^4,3^1:3^4,4^1:4^4,5^1-quinquebicyclo[2.2.2]octane",
+            "6H,6'H-2,2'-bipyran",
+            "1H,1'H-1,1'-biindene",
+            "1H,1'H-3,3'-biindole",
+            "1H,1'H-[2,2'-bipyrrol]-5-ol",
+            "2-(1H,1'H-[2,2'-bipyrrol]-5-yl)acetic acid",
+            "2,3'-bifuran",
+            "2,2'-bi(bicyclo[2.2.2]octane)",
+            "1,1'-bi(spiro[2.2]pentane)",
+            "1,1'-bi(dispiro[2.0.2.1]heptane)",
+            "2-([2,2'-bipyridin]-5-yl)acetic acid",
+            "2-([1^1,2^1:2^4,3^1-terphenyl]-1^4-yl)acetic acid",
+            "2-(4'-cyano[1,1'-biphenyl]-4-yl)acetic acid",
+        ] {
+            let request = crate::naming::local::parse_request(expected).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(expected, &reply).unwrap();
+            let name = name_smiles(&parsed.smiles).unwrap();
+            assert_eq!(name.text, expected);
+            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+        }
+    }
+
+    #[test]
     fn known_departures_keep_their_names_and_report_the_rule_family() {
         use crate::naming::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
@@ -870,23 +965,6 @@ mod tests {
                 "S(CC(=O)O)CC(=O)O",
                 "2-[(2-hydroxy-2-oxoethyl)sulfanyl]acetic acid",
                 R::Multiplicative,
-            ),
-            (
-                "c1ccc(nc1)-c1ccccn1",
-                "2-(pyridin-2-yl)pyridine",
-                R::RingAssembly,
-            ),
-            ("C1CC1C1CC1", "cyclopropylcyclopropane", R::RingAssembly),
-            (
-                "c1ccc(cc1)-c1ccc(cc1)-c1ccccc1",
-                "1,4-diphenylbenzene",
-                R::RingAssembly,
-            ),
-            ("Oc1ccc(cc1)-c1ccccc1", "4-phenylphenol", R::RingAssembly),
-            (
-                "Cc1ccc(cc1)-c1ccccc1",
-                "1-methyl-4-phenylbenzene",
-                R::RingAssembly,
             ),
         ] {
             let name = name_smiles(smiles).unwrap();

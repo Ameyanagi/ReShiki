@@ -2,15 +2,32 @@
 pub fn parse_locant(text: &str) -> (u8, usize, String) {
     let before = text.split('(').next().unwrap_or(text);
     let digit_count = before.bytes().take_while(u8::is_ascii_digit).count();
+    if let Some((primary, secondary)) = before.split_once('^') {
+        let n = secondary.bytes().take_while(u8::is_ascii_digit).count();
+        if let (Ok(primary), Ok(secondary_number)) =
+            (primary.parse::<usize>(), secondary[..n].parse::<usize>())
+        {
+            // P-14.3.1: compare composite locants by primary locant, then superscript.
+            return (
+                1,
+                primary,
+                format!("^{secondary_number:020}{}", &secondary[n..]),
+            );
+        }
+    }
     if digit_count > 0
         && before[digit_count..]
             .chars()
-            .all(|c| c.is_ascii_alphabetic())
+            .all(|c| c.is_ascii_alphabetic() || c == '\'')
     {
         return (
             1,
             before[..digit_count].parse().unwrap_or(0),
-            before[digit_count..].to_owned(),
+            format!(
+                "{}{}",
+                before[digit_count..].replace('\'', ""),
+                "'".repeat(before[digit_count..].matches('\'').count())
+            ),
         );
     }
     let digits = text.trim_start_matches(|c: char| !c.is_ascii_digit());
@@ -77,7 +94,20 @@ pub fn is_fully_enclosed(text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::needs_hyphen;
+    use super::{needs_hyphen, parse_locant};
+
+    #[test]
+    fn assembly_locants_compare_primes_and_superscripts_numerically() {
+        let mut primed = ["2'", "1'", "2", "1"];
+        primed.sort_by_key(|locant| parse_locant(locant));
+        assert_eq!(primed, ["1", "1'", "2", "2'"]);
+        let mut fusion = ["3'a", "3a", "3'", "3"];
+        fusion.sort_by_key(|locant| parse_locant(locant));
+        assert_eq!(fusion, ["3", "3'", "3a", "3'a"]);
+        let mut composite = ["2^1", "1^10", "1^2", "2^2"];
+        composite.sort_by_key(|locant| parse_locant(locant));
+        assert_eq!(composite, ["1^2", "1^10", "2^1", "2^2"]);
+    }
 
     #[test]
     fn only_a_leading_stereo_descriptor_takes_a_hyphen() {

@@ -93,7 +93,7 @@ parity_text	exploratory	1	1
 parity_text	fixtures	22	22
 parity_text	heterocycle	25	25
 parity_text	integration	16	16
-parity_text	mr_assembly	10	10
+parity_text	mr_assembly	3	10
 parity_text	mr_bridged	14	14
 parity_text	mr_fused	18	20
 parity_text	mr_macro_other	5	7
@@ -101,8 +101,8 @@ parity_text	mr_spiro	7	7
 parity_text	natural_product	19	19
 parity_text	pubchem_random	40	50
 parity_text	ring_ON_ester_amide	10	10
-parity_text	roundtrip	76	77
+parity_text	roundtrip	75	77
 parity_text	stereo	14	16
 parity_text	suffix_on_ring	20	20
 parity_text	unit	47	52
-parity_text	total	410	434
+parity_text	total	402	434
