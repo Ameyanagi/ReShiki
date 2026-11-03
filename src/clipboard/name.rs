@@ -1,19 +1,31 @@
 //! Chemical names retain their source text alongside rich text typography.
 use super::Representation;
-use crate::typography::{Script, TextSpan, TextStyle};
+use crate::typography::{NameMarkup, NameRun};
 
 /// Plain text, HTML and RTF for a name whose markup spans are sorted,
 /// nonoverlapping and on UTF-8 boundaries. A browser drops the RTF.
-pub(super) fn representations(text: &str, spans: &[TextSpan]) -> Vec<Representation> {
+pub(super) fn representations(plain: &str, markup: &NameMarkup) -> Vec<Representation> {
+    let text = &markup.text;
     let mut html = String::from(r#"<meta charset="utf-8">"#);
     let mut rtf = String::from(r"{\rtf1\ansi\uc1 ");
     let mut end = 0;
-    for span in spans {
-        html_text(&mut html, &text[end..span.start]);
-        rtf_text(&mut rtf, &text[end..span.start]);
-        html_run(&mut html, &text[span.start..span.end], &span.style);
-        rtf_run(&mut rtf, &text[span.start..span.end], &span.style);
-        end = span.end;
+    for (range, run) in &markup.runs {
+        html_text(&mut html, &text[end..range.start]);
+        rtf_text(&mut rtf, &text[end..range.start]);
+        let (open, close, control) = match run {
+            NameRun::Italic => ("<i>", "</i>", r"{\i "),
+            NameRun::Superscript => ("<sup>", "</sup>", r"{\super "),
+            NameRun::Subscript => ("<sub>", "</sub>", r"{\sub "),
+            // Cocoa/TextEdit ignores small-caps flags, so scale uppercase letters to 80%.
+            NameRun::SmallCaps => (r#"<span style="font-size:80%">"#, "</span>", r"{\fs19 "),
+        };
+        html.push_str(open);
+        html_text(&mut html, &text[range.clone()]);
+        html.push_str(close);
+        rtf.push_str(control);
+        rtf_text(&mut rtf, &text[range.clone()]);
+        rtf.push('}');
+        end = range.end;
     }
     html_text(&mut html, &text[end..]);
     rtf_text(&mut rtf, &text[end..]);
@@ -22,7 +34,7 @@ pub(super) fn representations(text: &str, spans: &[TextSpan]) -> Vec<Representat
     vec![
         Representation::new("public.html", html.as_bytes()),
         Representation::new("public.rtf", rtf.as_bytes()),
-        Representation::new("public.utf8-plain-text", text.as_bytes()),
+        Representation::new("public.utf8-plain-text", plain.as_bytes()),
     ]
 }
 
@@ -34,26 +46,6 @@ fn html_text(output: &mut String, text: &str) {
             '>' => output.push_str("&gt;"),
             _ => output.push(c),
         }
-    }
-}
-
-fn html_run(output: &mut String, text: &str, style: &TextStyle) {
-    if style.italic {
-        output.push_str("<i>");
-    }
-    match style.script {
-        Script::Normal => {}
-        Script::Subscript => output.push_str("<sub>"),
-        Script::Superscript => output.push_str("<sup>"),
-    }
-    html_text(output, text);
-    match style.script {
-        Script::Normal => {}
-        Script::Subscript => output.push_str("</sub>"),
-        Script::Superscript => output.push_str("</sup>"),
-    }
-    if style.italic {
-        output.push_str("</i>");
     }
 }
 
@@ -71,24 +63,6 @@ fn rtf_text(output: &mut String, text: &str) {
                 let _ = write!(output, "\\u{}?", unit as i16);
             }
         }
-    }
-}
-
-fn rtf_run(output: &mut String, text: &str, style: &TextStyle) {
-    if style.italic {
-        output.push_str(r"{\i ");
-    }
-    match style.script {
-        Script::Normal => {}
-        Script::Subscript => output.push_str(r"{\sub "),
-        Script::Superscript => output.push_str(r"{\super "),
-    }
-    rtf_text(output, text);
-    if style.script != Script::Normal {
-        output.push('}');
-    }
-    if style.italic {
-        output.push('}');
     }
 }
 
@@ -111,33 +85,15 @@ mod tests {
     #[test]
     fn name_spans_keep_plain_text_and_scope_italic_and_superscript() {
         let text = "(1R)-N6-methyl";
-        let spans = vec![
-            TextSpan {
-                start: 2,
-                end: 3,
-                style: TextStyle {
-                    italic: true,
-                    ..Default::default()
-                },
-            },
-            TextSpan {
-                start: 5,
-                end: 6,
-                style: TextStyle {
-                    italic: true,
-                    ..Default::default()
-                },
-            },
-            TextSpan {
-                start: 6,
-                end: 7,
-                style: TextStyle {
-                    script: Script::Superscript,
-                    ..Default::default()
-                },
-            },
-        ];
-        let representations = representations(text, &spans);
+        let markup = NameMarkup {
+            text: text.into(),
+            runs: vec![
+                (2..3, NameRun::Italic),
+                (5..6, NameRun::Italic),
+                (6..7, NameRun::Superscript),
+            ],
+        };
+        let representations = representations(text, &markup);
         assert_eq!(flavor(&representations, "public.utf8-plain-text"), text);
         assert_eq!(
             flavor(&representations, "public.html"),
@@ -152,7 +108,11 @@ mod tests {
     #[test]
     fn rich_text_escapes_source_without_changing_plain_text() {
         let text = r"\{&<>}";
-        let representations = representations(text, &[]);
+        let markup = NameMarkup {
+            text: text.into(),
+            runs: vec![],
+        };
+        let representations = representations(text, &markup);
         assert_eq!(flavor(&representations, "public.utf8-plain-text"), text);
         assert_eq!(
             flavor(&representations, "public.html"),
@@ -167,7 +127,11 @@ mod tests {
     #[test]
     fn unicode_is_utf8_in_html_and_signed_utf16_in_rtf() {
         let text = "é界髙😀";
-        let representations = representations(text, &[]);
+        let markup = NameMarkup {
+            text: text.into(),
+            runs: vec![],
+        };
+        let representations = representations(text, &markup);
         assert_eq!(flavor(&representations, "public.utf8-plain-text"), text);
         assert_eq!(
             flavor(&representations, "public.html"),
@@ -180,35 +144,48 @@ mod tests {
     }
 
     #[test]
-    fn styles_can_nest_without_leaking_into_following_text() {
+    fn adjacent_runs_do_not_leak_into_following_text() {
         let text = "N6-H2";
-        let spans = [
-            TextSpan {
-                start: 1,
-                end: 2,
-                style: TextStyle {
-                    italic: true,
-                    script: Script::Superscript,
-                    ..Default::default()
-                },
-            },
-            TextSpan {
-                start: 4,
-                end: 5,
-                style: TextStyle {
-                    script: Script::Subscript,
-                    ..Default::default()
-                },
-            },
-        ];
-        let representations = representations(text, &spans);
+        let markup = NameMarkup {
+            text: text.into(),
+            runs: vec![
+                (0..1, NameRun::Italic),
+                (1..2, NameRun::Superscript),
+                (4..5, NameRun::Subscript),
+            ],
+        };
+        let representations = representations(text, &markup);
         assert_eq!(
             flavor(&representations, "public.html"),
-            r#"<meta charset="utf-8">N<i><sup>6</sup></i>-H<sub>2</sub>"#
+            r#"<meta charset="utf-8"><i>N</i><sup>6</sup>-H<sub>2</sub>"#
         );
         assert_eq!(
             flavor(&representations, "public.rtf"),
-            r"{\rtf1\ansi\uc1 N{\i {\super 6}}-H{\sub 2}}"
+            r"{\rtf1\ansi\uc1 {\i N}{\super 6}-H{\sub 2}}"
         );
+    }
+
+    #[test]
+    fn plain_text_keeps_engine_names_while_rich_text_uses_display_markup() {
+        for (plain, html, rtf) in [
+            (
+                "L-alanine",
+                r#"<span style="font-size:80%">L</span>-alanine"#,
+                r"{\fs19 L}-alanine",
+            ),
+            ("1,1'-biphenyl", "1,1′-biphenyl", r"1,1\u8242?-biphenyl"),
+        ] {
+            let markup = crate::typography::name_markup(plain);
+            let representations = representations(plain, &markup);
+            assert_eq!(flavor(&representations, "public.utf8-plain-text"), plain);
+            assert_eq!(
+                flavor(&representations, "public.html"),
+                format!(r#"<meta charset="utf-8">{html}"#)
+            );
+            assert_eq!(
+                flavor(&representations, "public.rtf"),
+                format!(r"{{\rtf1\ansi\uc1 {rtf}}}")
+            );
+        }
     }
 }
