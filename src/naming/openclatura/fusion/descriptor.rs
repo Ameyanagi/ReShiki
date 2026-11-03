@@ -12,8 +12,9 @@ use super::{
     model::*,
     registry::FusionComponentRegistry,
     rules::{
-        component_canonicalization_key, component_parent_eligible, component_spec_seniority_key,
-        component_variant_identity, multiplicative_attachment_key, multiplicative_member_order_key,
+        component_canonicalization_key, component_has_peri_fusion, component_parent_eligible,
+        component_spec_seniority_key, component_variant_identity, multiplicative_attachment_key,
+        multiplicative_member_order_key,
     },
 };
 
@@ -76,6 +77,7 @@ struct CitationTopology {
 }
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct CandidateScore {
+    benzoheterocycle_seniority: Vec<ComparisonKey>,
     seniority: ComparisonKey,
     location: ParentLocationKey,
     count: usize,
@@ -132,6 +134,7 @@ pub struct FusionNameAstIter<'a> {
     mol: &'a Molecule,
     registry: &'a FusionComponentRegistry,
     options: DescriptorOptions,
+    occurrences: Vec<OccurrenceOption>,
     prepared: Vec<PreparedSelection>,
     tiers: VecDeque<(Preference, Vec<usize>)>,
     pending: VecDeque<FusionNameAst>,
@@ -159,10 +162,19 @@ pub fn iter_fusion_name_asts<'a>(
     {
         return Err("unknown fusion join kind".into());
     }
-    let occurrence_options = occurrence_options(matches, registry)?;
-    let faces: BTreeSet<_> = occurrence_options
+    // FR-3.4's note and FR-3.5 defer FR-2.2.8 benzo components until after
+    // selection; retained components such as quinoline and indene stay eligible.
+    let mut initial_matches = Vec::new();
+    for matched in matches {
+        let spec = registry.spec_for_match(matched)?;
+        if !spec.benzoheterocycle_component || component_has_peri_fusion(matched, &spec, matches) {
+            initial_matches.push(matched.clone());
+        }
+    }
+    let occurrence_options = occurrence_options(&initial_matches, registry)?;
+    let faces: BTreeSet<_> = matches
         .iter()
-        .flat_map(|o| o.face_ids.iter().copied())
+        .flat_map(|m| m.covered_face_ids.iter().copied())
         .collect();
     if faces.len() < 2 {
         return Err("a fusion citation requires at least two component faces".into());
@@ -179,7 +191,7 @@ pub fn iter_fusion_name_asts<'a>(
     for option in &occurrence_options {
         let matched = &option.mappings[0];
         let spec = registry.spec_for_match(matched)?;
-        if component_parent_eligible(matched, &spec, matches) {
+        if component_parent_eligible(matched, &spec, &initial_matches) {
             parent_scopes
                 .entry(component_variant_identity(&spec))
                 .or_default()
@@ -208,6 +220,7 @@ pub fn iter_fusion_name_asts<'a>(
         mol,
         registry,
         options: options.clone(),
+        occurrences: occurrence_options,
         prepared,
         tiers: tiers.into_iter().collect(),
         pending: VecDeque::new(),
@@ -274,23 +287,192 @@ impl Iterator for FusionNameAstIter<'_> {
                 while end < candidates.len() && candidates[end].score == candidates[index].score {
                     end += 1;
                 }
-                if end - index > 1 {
-                    let mut named = Vec::new();
-                    for candidate in &candidates[index..end] {
+                let mut named = Vec::new();
+                for candidate in &candidates[index..end] {
+                    let regrouped = if self.mol.use_benzoheterocycle_names() {
+                        match benzoheterocycle_candidates(
+                            self.mol,
+                            candidate,
+                            &self.occurrences,
+                            self.registry,
+                            &self.options,
+                        ) {
+                            Ok(result) => result,
+                            Err(error) => return Some(Err(error)),
+                        }
+                    } else {
+                        vec![candidate.clone()]
+                    };
+                    for candidate in regrouped {
                         match render_fusion_name(&candidate.ast, self.registry) {
-                            Ok(name) => named.push((name, candidate.ast.clone())),
+                            Ok(name) => named.push((candidate.score, name, candidate.ast)),
                             Err(error) => return Some(Err(error)),
                         }
                     }
-                    named.sort_by(|left, right| left.0.cmp(&right.0));
-                    self.pending.extend(named.into_iter().map(|(_, ast)| ast));
-                } else {
-                    self.pending.push_back(candidates[index].ast.clone());
                 }
+                named.sort_by(|left, right| (&left.0, &left.1).cmp(&(&right.0, &right.1)));
+                self.pending
+                    .extend(named.into_iter().map(|(_, _, ast)| ast));
                 index = end;
             }
         }
     }
+}
+
+fn benzoheterocycle_candidates(
+    mol: &Molecule,
+    original: &Candidate,
+    occurrences: &[OccurrenceOption],
+    registry: &FusionComponentRegistry,
+    policy: &DescriptorOptions,
+) -> Result<Vec<Candidate>, String> {
+    let ast = &original.ast;
+    let selected: Vec<_> = ast
+        .component_occurrences
+        .iter()
+        .map(|m| {
+            occurrences
+                .iter()
+                .find(|o| {
+                    o.face_ids == m.covered_face_ids
+                        && o.mappings[0].spec_key == m.spec_key
+                        && o.mappings[0].template_name == m.template_name
+                })
+                .cloned()
+                .ok_or_else(|| "selected fusion component is absent from its cover".to_owned())
+        })
+        .collect::<Result<_, _>>()?;
+    let faces_for = |ids: &[usize]| -> BTreeSet<BTreeSet<usize>> {
+        ids.iter()
+            .map(|id| ast.component_occurrences[*id].covered_face_ids.clone())
+            .collect()
+    };
+    let parents = (ast.parent_occurrences.len() > 1).then(|| faces_for(&ast.parent_occurrences));
+    let groups: Vec<_> = ast
+        .multiplicative_groups
+        .iter()
+        .map(|g| faces_for(&g.occurrence_ids))
+        .collect();
+    let protected: BTreeSet<_> = parents
+        .iter()
+        .chain(&groups)
+        .flat_map(|group| group.iter().cloned())
+        .collect();
+    let mut pending = vec![selected];
+    let mut seen = BTreeSet::new();
+    let mut result = Vec::new();
+    while let Some(selected) = pending.pop() {
+        mol.spend_naming_work(1)?;
+        let mut identity: Vec<_> = selected
+            .iter()
+            .map(|o| (o.face_ids.clone(), o.mappings[0].spec_key.clone()))
+            .collect();
+        identity.sort();
+        if !seen.insert(identity) {
+            continue;
+        }
+        let specs: Vec<_> = selected
+            .iter()
+            .map(|o| registry.spec_for_match(&o.mappings[0]))
+            .collect::<Result<_, _>>()?;
+        let mut merged = false;
+        // FR-3.5 / P-25.3.5 acts on the components selected by FR-3.1–3.4.
+        // Only an isolated benzo and an ortho-fused heteromonocycle may change.
+        for (b, benzo) in selected.iter().enumerate() {
+            if specs[b].key != "benzene" || protected.contains(&benzo.face_ids) {
+                continue;
+            }
+            for (h, hetero) in selected.iter().enumerate() {
+                if specs[h].rings.len() != 1
+                    || specs[h].atoms().iter().all(|a| a.symbol == "C")
+                    || protected.contains(&hetero.face_ids)
+                {
+                    continue;
+                }
+                let shared: Vec<_> = benzo
+                    .atom_ids
+                    .intersection(&hetero.atom_ids)
+                    .copied()
+                    .collect();
+                if shared.len() != 2 || mol.get_bond(shared[0], shared[1]).is_none() {
+                    continue;
+                }
+                let mut matches = Vec::new();
+                for benzo_map in &benzo.mappings {
+                    for hetero_map in &hetero.mappings {
+                        matches.extend(registry.benzoheterocycle_matches(benzo_map, hetero_map)?);
+                    }
+                }
+                if matches.is_empty() {
+                    continue;
+                }
+                for option in occurrence_options(&matches, registry)? {
+                    let mut next: Vec<_> = selected
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| *i != b && *i != h)
+                        .map(|(_, o)| o.clone())
+                        .collect();
+                    next.push(option);
+                    pending.push(next);
+                }
+                merged = true;
+            }
+        }
+        if merged || selected.len() == ast.component_occurrences.len() {
+            continue;
+        }
+        let mut benzo_seniority: Vec<_> = selected
+            .iter()
+            .zip(&specs)
+            .filter(|(o, _)| {
+                !ast.component_occurrences
+                    .iter()
+                    .any(|m| m.covered_face_ids == o.face_ids)
+            })
+            .map(|(_, spec)| component_spec_seniority_key(spec).as_tuple())
+            .collect();
+        benzo_seniority.sort();
+        let Some(prepared) =
+            prepare_component_selection(mol, selected, registry, policy, &BTreeMap::new())?
+        else {
+            continue;
+        };
+        for (seniority, _) in selection_preference_tiers(&prepared, policy) {
+            for mut candidate in candidates_for_selection(mol, &prepared, policy, &seniority)? {
+                let faces_for = |ids: &[usize]| -> BTreeSet<BTreeSet<usize>> {
+                    ids.iter()
+                        .map(|id| {
+                            candidate.ast.component_occurrences[*id]
+                                .covered_face_ids
+                                .clone()
+                        })
+                        .collect()
+                };
+                // Rerooting must also preserve any unaffected FR-6 parents or FR-4.9 groups.
+                if parents
+                    .as_ref()
+                    .is_some_and(|p| *p != faces_for(&candidate.ast.parent_occurrences))
+                    || groups.iter().any(|group| {
+                        !candidate
+                            .ast
+                            .multiplicative_groups
+                            .iter()
+                            .any(|g| *group == faces_for(&g.occurrence_ids))
+                    })
+                {
+                    continue;
+                }
+                candidate.ast.benzoheterocycle_merge = true;
+                candidate.score.benzoheterocycle_seniority = benzo_seniority.clone();
+                result.push(candidate);
+            }
+        }
+    }
+    if result.is_empty() {
+        result.push(original.clone());
+    }
+    Ok(result)
 }
 fn occurrence_option_key(option: &OccurrenceOption) -> (usize, i64, Vec<usize>, &str, Vec<usize>) {
     (
@@ -1731,6 +1913,7 @@ fn build_candidate(
         .map(|g| -(g.occurrence_ids.len() as i64))
         .collect();
     let score = CandidateScore {
+        benzoheterocycle_seniority: Vec::new(),
         seniority: component_spec_seniority_key(&specs[&topology.roots[0]]).as_tuple(),
         location: exact_location,
         count: matches.len(),
@@ -1754,6 +1937,7 @@ fn build_candidate(
     let mut component_occurrences = matches.to_vec();
     component_occurrences.sort_by_key(|m| m.occurrence_id);
     let ast = FusionNameAst {
+        benzoheterocycle_merge: false,
         plan_kind: plan_kind.into(),
         parent_occurrences: topology.roots.clone(),
         component_occurrences,
@@ -2131,6 +2315,7 @@ mod tests {
             ("pyridine", &[0, 1, 2, 3, 4, 5]),
             ("benzene", &[1, 2, 6, 7, 8, 9]),
         ]);
+        mol.set_benzoheterocycle_names(false);
         let mut reflected = matches[0].clone();
         for (_, atom) in &mut reflected.local_to_input_atom {
             *atom = match *atom {

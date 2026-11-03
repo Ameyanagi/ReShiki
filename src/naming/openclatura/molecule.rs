@@ -23,6 +23,8 @@ struct NamingBudget {
     relative_ring_alternative: Cell<bool>,
     endo_exo_names: Cell<bool>,
     endo_exo_alternative: RefCell<Option<AtomSet>>,
+    benzoheterocycle_names: Cell<bool>,
+    higher_order_fusion_alternative: Cell<bool>,
 }
 
 impl Default for NamingBudget {
@@ -36,6 +38,8 @@ impl Default for NamingBudget {
             relative_ring_alternative: Cell::new(false),
             endo_exo_names: Cell::new(false),
             endo_exo_alternative: RefCell::default(),
+            benzoheterocycle_names: Cell::new(true),
+            higher_order_fusion_alternative: Cell::new(false),
         }
     }
 }
@@ -207,6 +211,22 @@ impl Molecule {
         self.naming_budget.endo_exo_names.set(enabled);
     }
 
+    pub(super) fn mark_higher_order_fusion_alternative(&self) {
+        self.naming_budget.higher_order_fusion_alternative.set(true);
+    }
+
+    pub(super) fn has_higher_order_fusion_alternative(&self) -> bool {
+        self.naming_budget.higher_order_fusion_alternative.get()
+    }
+
+    pub(super) fn use_benzoheterocycle_names(&self) -> bool {
+        self.naming_budget.benzoheterocycle_names.get()
+    }
+
+    pub(super) fn set_benzoheterocycle_names(&self, enabled: bool) {
+        self.naming_budget.benzoheterocycle_names.set(enabled);
+    }
+
     pub(super) fn name_status(&self) -> NameStatus {
         self.naming_budget.status.get()
     }
@@ -236,10 +256,14 @@ impl Molecule {
     ) -> Result<Option<T>, String> {
         let status = self.name_status();
         let unknown_units = self.naming_budget.unknown_units.borrow().clone();
+        let higher_order_fusion = self.has_higher_order_fusion_alternative();
         let result = name();
         if !matches!(result, Ok(Some(_))) {
             self.set_name_status(status);
             *self.naming_budget.unknown_units.borrow_mut() = unknown_units;
+            self.naming_budget
+                .higher_order_fusion_alternative
+                .set(higher_order_fusion);
         }
         result
     }
