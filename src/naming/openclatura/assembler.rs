@@ -646,7 +646,7 @@ mod tests {
             ),
             (
                 "CCCCCN1C(=O)COC2=C1C=C(C(=C2)F)N3C(=O)C4=CC=CC=C4N=N3",
-                "7-fluoro-6-(4-oxo-3,4-dihydrobenzo[d][1,2,3]triazin-3-yl)-4-pentyl-1,4-benzoxazin-3(4H)-one",
+                "7-fluoro-6-(4-oxo-3,4-dihydro-1,2,3-benzotriazin-3-yl)-4-pentyl-1,4-benzoxazin-3(4H)-one",
             ),
             (
                 "O=C1[CH-]NC2=C1C[NH2+]C2",

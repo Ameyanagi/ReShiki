@@ -12,6 +12,30 @@ use super::{
     numbering::{parent_bond_model, parent_pi_capable_atom_ids},
 };
 use std::collections::{BTreeMap, BTreeSet};
+
+pub(super) fn parent_hydrogen_candidates(
+    mol: &Molecule,
+    ast: &FusionNameAst,
+    locants: &BTreeMap<usize, String>,
+) -> AtomSet {
+    let mut candidates: AtomSet =
+        super::numbering::indicated_hydrogen_candidate_atoms(mol, locants)
+            .into_iter()
+            .collect();
+    if ast.plan_kind == "benzoheterocycle" {
+        // P-58.2.4 applies prefix substitution after parent hydrogen selection.
+        // A neutral N with two single ring bonds retains its N-H role when
+        // the third bond replaces that hydrogen with a substituent.
+        let atoms = locants.keys().copied().collect();
+        candidates.extend(
+            locants
+                .keys()
+                .filter(|&&a| is_added_hydrogen_nitrogen(mol, &atoms, a)),
+        );
+    }
+    candidates
+}
+
 fn pi_class(class: &str) -> bool {
     matches!(class, "aromatic" | "mancude" | "fusion")
 }
@@ -169,6 +193,9 @@ pub(super) fn intrinsic_carbon_fusion_scope(
     ast: &FusionNameAst,
     specs: &BTreeMap<usize, FusionComponentSpec>,
 ) -> bool {
+    if ast.plan_kind == "benzoheterocycle" {
+        return specs.len() == 1 && specs.values().all(has_component_pi_budget);
+    }
     let occurrences: AtomSet = ast
         .component_occurrences
         .iter()

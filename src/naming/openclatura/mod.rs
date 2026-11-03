@@ -160,7 +160,7 @@ pub(super) fn name_smiles_with_style(
     }
     let status = mol.name_status();
     let mut alternatives = vec![];
-    if mol.has_higher_order_fusion_alternative() {
+    if mol.has_higher_order_fusion_alternative() || mol.has_benzo_fusion_alternative() {
         // FR-3.5 / P-25.3.5: retain the pre-regrouping citation for general use.
         // Cloning discards fusion plans cached under the preferred component policy.
         let higher_order = mol.clone();
@@ -174,7 +174,11 @@ pub(super) fn name_smiles_with_style(
             alternatives.push(crate::naming::AlternativeName {
                 name: nest_enclosing_marks(&alternative),
                 status: crate::naming::NameStatus::NotPreferred(
-                    crate::naming::NameReason::HigherOrderFusion,
+                    if mol.has_benzo_fusion_alternative() {
+                        crate::naming::NameReason::BenzoFusion
+                    } else {
+                        crate::naming::NameReason::HigherOrderFusion
+                    },
                 ),
             });
         }
@@ -956,7 +960,7 @@ mod tests {
             ),
             (
                 "c1oc2cc3nc4ccccc4nc3cc2c1",
-                "furo[2,3-g]benzo[b]quinoxaline",
+                "furo[2,3-b]phenazine",
                 R::OpsinFusionLayout,
             ),
         ] {

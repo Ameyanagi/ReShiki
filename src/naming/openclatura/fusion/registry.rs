@@ -242,7 +242,13 @@ impl FusionComponentRegistry {
         let c = self
             .generated_from_key(&m.spec_key)
             .ok_or_else(|| format!("unknown fusion component {}", m.spec_key))?;
-        c.spec_for_template(&m.template_name)
+        let mut spec = c.spec_for_template(&m.template_name)?;
+        if m.standalone_benzo_parent
+            && let Some(name) = &spec.benzo_parent_name
+        {
+            spec.parent_name = name.render(&[]);
+        }
+        Ok(spec)
     }
     pub fn from_data(data: &Value) -> Result<Self, String> {
         if data["schema_version"] != 1 {
@@ -578,6 +584,7 @@ impl FusionComponentRegistry {
                         local_to_skeleton_atom: skeleton_map,
                         topology_key: topology_key(&topology),
                         template_name: spec.template.name.clone(),
+                        standalone_benzo_parent: false,
                     });
                 }
             }
@@ -620,6 +627,7 @@ impl FusionComponentRegistry {
                         local_to_skeleton_atom,
                         topology_key: topology_key(&topology),
                         template_name: spec.template.name.clone(),
+                        standalone_benzo_parent: false,
                     });
                 }
             }
@@ -795,6 +803,7 @@ impl FusionComponentRegistry {
                 local_to_skeleton_atom,
                 topology_key: topology_key(&retained_graph_template_topology_key(&spec.template)),
                 template_name: key,
+                standalone_benzo_parent: false,
             };
             candidates.push((benzo_numbering_key(spec), matched));
         }
@@ -806,6 +815,19 @@ impl FusionComponentRegistry {
             }
         }
         Ok(matches)
+    }
+    pub(super) fn benzoheterocycle_parent_matches(
+        &self,
+        benzo: &FusionComponentMatch,
+        hetero: &FusionComponentMatch,
+    ) -> Result<Vec<FusionComponentMatch>, String> {
+        let mut parents = Vec::new();
+        // A retained bicycle such as quinoline keeps its retained name here.
+        for mut matched in self.benzoheterocycle_matches(benzo, hetero)? {
+            matched.standalone_benzo_parent = true;
+            parents.push(matched);
+        }
+        Ok(parents)
     }
     fn generated_benzo_from_key(&self, key: &str) -> Option<RegisteredFusionComponent> {
         let (source_key, source_template, ring): (String, String, Vec<String>) =
@@ -914,7 +936,11 @@ impl FusionComponentRegistry {
             pin_component: true,
             ..Default::default()
         };
-        (spec.parent_name, spec.attached_prefix) = benzo_forms(&source, &spec)?;
+        (
+            spec.parent_name,
+            spec.attached_prefix,
+            spec.benzo_parent_name,
+        ) = benzo_forms(&source, &spec)?;
         // FR-2.2.8 preserves the exceptional trivial heterobicycle names.
         if let Some(retained) = self.components.iter().flat_map(|c| &c.templates).find(|s| {
             s.rings.len() == 2
@@ -925,6 +951,7 @@ impl FusionComponentRegistry {
         }) {
             spec.parent_name = retained.parent_name.clone();
             spec.attached_prefix = retained.attached_prefix.clone();
+            spec.benzo_parent_name = None;
         }
         spec.benzoheterocycle_component = !is_trivial_benzo_name(&spec.parent_name);
         Some(RegisteredFusionComponent {
@@ -1288,7 +1315,7 @@ fn benzo_numbering_key(spec: &FusionComponentSpec) -> Vec<Vec<LocantKey>> {
 fn benzo_forms(
     source: &FusionComponentSpec,
     fused: &FusionComponentSpec,
-) -> Option<(String, String)> {
+) -> Option<(String, String, Option<BenzoParentName>)> {
     let trivial = matches!(
         source.template.name.as_str(),
         "furan"
@@ -1332,7 +1359,7 @@ fn benzo_forms(
     if matches!(base.as_str(), "imidazole" | "triazole") {
         let parent = join(&base);
         let prefix = format!("{}o", parent.strip_suffix('e').unwrap_or(&parent));
-        return Some((parent, prefix));
+        return Some((parent, prefix, None));
     }
     let mut hetero: Vec<_> = fused.atoms().iter().filter(|a| a.symbol != "C").collect();
     hetero.sort_by_key(|a| {
@@ -1341,17 +1368,17 @@ fn benzo_forms(
             locant_key(&a.locant),
         )
     });
-    let locants = format!(
-        "[{}]",
-        hetero
-            .iter()
-            .map(|a| a.locant.as_str())
-            .collect::<Vec<_>>()
-            .join(",")
-    );
+    let heteroatom_locants: Vec<_> = hetero.iter().map(|a| a.locant.clone()).collect();
+    let locants = heteroatom_locants.join(",");
+    // P-25.2.2.4 cites whole-bicycle locants before the standalone name;
+    // FR-2.2.8 encloses them when the bicycle is a fusion component.
     Some((
-        format!("{locants}{}", join(&base)),
-        format!("{locants}{}", join(&prefix)),
+        format!("[{locants}]{}", join(&base)),
+        format!("[{locants}]{}", join(&prefix)),
+        Some(BenzoParentName {
+            heteroatom_locants,
+            stem: join(&base),
+        }),
     ))
 }
 fn is_trivial_benzo_name(name: &str) -> bool {
@@ -1580,6 +1607,39 @@ mod tests {
         }
     }
     #[test]
+    fn standalone_benzo_usage_preserves_component_identity_and_retained_names() {
+        let r = fusion_component_registry();
+        for (source, edge, attached_parent, standalone_parent) in [
+            (
+                "isothiazole",
+                ["3", "4"],
+                "[2,1]benzothiazole",
+                "2,1-benzothiazole",
+            ),
+            ("pyridine", ["5", "6"], "quinoline", "quinoline"),
+        ] {
+            let (benzo, hetero) = benzo_test_pair(source, edge);
+            let components = r.benzoheterocycle_matches(&benzo, &hetero).unwrap();
+            let parents = r.benzoheterocycle_parent_matches(&benzo, &hetero).unwrap();
+            assert!(!parents.is_empty());
+            assert_eq!(components.len(), parents.len());
+            for (component, parent) in components.iter().zip(&parents) {
+                let mut expected = component.clone();
+                expected.standalone_benzo_parent = true;
+                assert_eq!(*parent, expected);
+                assert_eq!(
+                    r.spec_for_match(component).unwrap().parent_name,
+                    attached_parent
+                );
+                assert_eq!(
+                    r.spec_for_match(parent).unwrap().parent_name,
+                    standalone_parent
+                );
+            }
+        }
+    }
+
+    #[test]
     fn initial_components_distinguish_fr228_from_retained_trivial_bicycles() {
         let r = fusion_component_registry();
         // P-25.2.2.4: 1-benzopyran, not chromene, is the PIN component.
@@ -1596,6 +1656,64 @@ mod tests {
             let spec = r.get(key).unwrap().spec;
             assert!(!spec.benzoheterocycle_component, "{key}");
             assert!(spec.usable_as_attached, "{key}");
+        }
+    }
+
+    #[test]
+    fn retained_phenazine_remains_available_before_benzo_component_combination() {
+        let registry = fusion_component_registry();
+        let phenazine = registry.get("phenazine").unwrap().spec;
+        assert!(phenazine.usable_as_parent && phenazine.usable_as_attached);
+        assert!(!phenazine.benzoheterocycle_component);
+        assert_eq!(phenazine.parent_name, "phenazine");
+        assert_eq!(phenazine.attached_prefix, "phenazino");
+        assert_eq!(phenazine.rings.len(), 3);
+        assert_eq!(phenazine.horizontal_ring_count, 3);
+        // FR-2.3(b): the retained three-ring N component precedes pyrazine
+        // before FR-3.5 can combine any initially selected benzo components.
+        assert!(
+            component_spec_seniority_key(&phenazine)
+                < component_spec_seniority_key(&registry.get("pyrazine").unwrap().spec)
+        );
+
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            ("c1oc2cc3nc4ccccc4nc3cc2c1", "furo[2,3-b]phenazine"),
+            ("c1sc2cc3nc4ccccc4nc3cc2c1", "thieno[2,3-b]phenazine"),
+        ] {
+            // Parse the specified fusion name independently of name generation.
+            let reference = parser.parse(expected, &opsin::ParseOptions::strict());
+            assert_eq!(
+                reference.status,
+                opsin::Status::Success,
+                "{expected}: {}",
+                reference.message
+            );
+            let reference_smiles = reference.structure.unwrap().semantic_cxsmiles().unwrap();
+            crate::naming::verify_identity(smiles, &reference_smiles).unwrap();
+
+            let name = super::super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected);
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Unverified(crate::naming::NameReason::OpsinFusionLayout)
+            );
+            for candidate in std::iter::once(name.text.as_str()).chain(
+                name.alternatives
+                    .iter()
+                    .map(|alternative| alternative.name.as_str()),
+            ) {
+                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                assert_eq!(
+                    parsed.status,
+                    opsin::Status::Success,
+                    "{candidate}: {}",
+                    parsed.message
+                );
+                let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+                crate::naming::verify_identity(smiles, &reconstructed)
+                    .unwrap_or_else(|e| panic!("{smiles} -> {candidate} -> {reconstructed}: {e}"));
+            }
         }
     }
 }

@@ -39,6 +39,9 @@ fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
 }
 
 fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionParentPlan) {
+    if plan.ast.plan_kind == "benzoheterocycle" {
+        mol.mark_benzo_fusion_alternative();
+    }
     if plan.ast.benzoheterocycle_merge {
         mol.mark_higher_order_fusion_alternative();
     }
@@ -50,11 +53,13 @@ fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionPa
     {
         mol.mark_name(NameStatus::NotPreferred(NameReason::FusionComponent));
     }
-    if matches!(
-        plan.numbering.selected_layout.kind,
-        super::fusion::model::LayoutKind::OpsinEntry
-            | super::fusion::model::LayoutKind::OpsinConstruction
-    ) {
+    if plan.ast.opsin_citation_order
+        || matches!(
+            plan.numbering.selected_layout.kind,
+            super::fusion::model::LayoutKind::OpsinEntry
+                | super::fusion::model::LayoutKind::OpsinConstruction
+        )
+    {
         mol.mark_name(NameStatus::Unverified(NameReason::OpsinFusionLayout));
     }
 }
@@ -594,10 +599,15 @@ mod tests {
     #[test]
     fn fusion_layout_status_is_deferred_until_rendering() {
         use super::super::fusion::model::{FusionParentPlan, LayoutKind};
-        for kind in [LayoutKind::OpsinEntry, LayoutKind::OpsinConstruction] {
+        for (kind, opsin_citation_order) in [
+            (LayoutKind::OpsinEntry, false),
+            (LayoutKind::OpsinConstruction, false),
+            (LayoutKind::Intrinsic, true),
+        ] {
             let mol = Molecule::new();
             let mut plan = FusionParentPlan::default();
             plan.numbering.selected_layout.kind = kind;
+            plan.ast.opsin_citation_order = opsin_citation_order;
             let mut parts = AssemblyParts::new(1);
             parts.fusion_plan = Some(plan);
             assert_eq!(mol.name_status(), NameStatus::Preferred);

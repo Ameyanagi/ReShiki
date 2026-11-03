@@ -122,6 +122,7 @@ pub enum NameReason {
     DiamideLocants,
     FusionComponent,
     HigherOrderFusion,
+    BenzoFusion,
     Multiplicative,
     AcylPrefix,
     RingAssembly,
@@ -167,6 +168,9 @@ impl NameReason {
             Self::HigherOrderFusion => {
                 "Cites an isolated benzo ring as a separate higher-order component, as in [1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazole; preferred IUPAC names treat the benzo ring and an ortho-fused heteromonocycle as one benzoheterocycle component, as in [1,3]thiazolo[5,4-e][1,3]benzoxazole (P-25.3.5, P-25.2.2.4; FR-3.5)."
             }
+            Self::BenzoFusion => {
+                "Uses a fusion descriptor for a benzene ring ortho-fused to a heteromonocycle, as in benzo[b]oxepine; preferred IUPAC names cite the heteroatom locants of the whole bicycle before its benzo name, as in 1-benzoxepine, or the retained name, as in quinoline (P-25.2.2.4, P-25.2.1)."
+            }
             Self::Multiplicative => {
                 "Names two identical units joined by an oxygen, chalcogen, sulfinyl, sulfonyl or methylene link substitutively, as in phenoxybenzene, (benzenesulfinyl)benzene or [(carboxymethyl)sulfanyl]acetic acid; the preferred IUPAC name is multiplicative, as in 1,1'-oxydibenzene, 1,1'-sulfinyldibenzene or 2,2'-sulfanediyldiacetic acid (P-51.3.1, P-63.2.4.2, P-63.6)."
             }
@@ -177,7 +181,7 @@ impl NameReason {
                 "Names identical rings or ring systems joined directly by a single or double bond substitutively, as in 2-(pyridin-2-yl)pyridine, cyclopropylcyclopropane, 1,4-diphenylbenzene or 4-phenylphenol. These are ring assemblies, and \"preferred IUPAC names for assemblies of two or more identical cyclic systems joined by a single bond are formed using the names of parent hydrides rather than the names of substituent groups, except for biphenyl and polyphenyl assemblies\" (P-52.2.7.1): 2,2'-bipyridine, 1,1'-bi(cyclopropane), 1^1,2^1:2^4,3^1-terphenyl, [1,1'-biphenyl]-4-ol, or 1,1'-bi(cyclopentylidene) for a double bond; more than six take a phane name (P-28.2, P-28.3, P-28.5)."
             }
             Self::OpsinFusionLayout => {
-                "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."
+                "Uses a fusion layout or citation order selected for OPSIN compatibility; its preferred IUPAC numbering or alphabetical citation order (FR-3.6 / P-25.3.4.2.3) has not been verified."
             }
             Self::BridgedFusedParent => {
                 "The preferred parent choice for this bridged-fused system has not been verified."

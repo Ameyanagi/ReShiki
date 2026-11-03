@@ -200,6 +200,28 @@ pub struct FusionComponentConstructionOrder {
     pub version: String,
 }
 #[derive(Clone, Debug, Default)]
+pub struct BenzoParentName {
+    pub heteroatom_locants: Vec<String>,
+    pub stem: String,
+}
+impl BenzoParentName {
+    pub(super) fn render(&self, lambda: &[super::valence::FusionLambdaDescriptor]) -> String {
+        // P-25.6 inserts lambda into the P-25.2.2.4 heteroatom locant set.
+        let locants = self
+            .heteroatom_locants
+            .iter()
+            .map(|locant| {
+                lambda
+                    .iter()
+                    .find(|d| d.locant == *locant)
+                    .map_or_else(|| locant.clone(), |d| d.text())
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{locants}-{}", self.stem)
+    }
+}
+#[derive(Clone, Debug, Default)]
 pub struct FusionComponentSpec {
     pub key: String,
     pub parent_name: String,
@@ -213,6 +235,7 @@ pub struct FusionComponentSpec {
     pub usable_as_peri_parent: bool,
     /// FR-2.2.8 components are formed only after initial component selection.
     pub benzoheterocycle_component: bool,
+    pub benzo_parent_name: Option<BenzoParentName>,
     pub construction_order: Option<FusionComponentConstructionOrder>,
     // Fusion topology stays beside the existing shared retained-parent graph.
     pub rings: Vec<Vec<String>>,
@@ -252,6 +275,8 @@ pub struct FusionComponentMatch {
     pub local_to_skeleton_atom: Vec<(String, usize)>,
     pub topology_key: ComparisonKey,
     pub template_name: String,
+    /// P-25.2.2.4 uses the same graph as a whole, independently numbered parent.
+    pub standalone_benzo_parent: bool,
 }
 impl FusionComponentMatch {
     pub(super) fn input_atom_by_locant(&self) -> BTreeMap<String, usize> {
@@ -384,6 +409,8 @@ pub struct ParentLocationKey {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FusionNameAst {
     pub benzoheterocycle_merge: bool,
+    /// Seniority citation order retained because OPSIN cannot read FR-3.6 order.
+    pub opsin_citation_order: bool,
     pub plan_kind: String,
     pub parent_occurrences: Vec<usize>,
     pub component_occurrences: Vec<FusionComponentMatch>,

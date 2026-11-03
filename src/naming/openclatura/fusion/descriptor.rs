@@ -1840,27 +1840,50 @@ fn build_candidate(
     }
     let children = ordered_children(&topology.parent_by_child, specs, &primary_joins, &ranks);
     let (mut depths, mut groups) = multiplicative_groups(&children, specs, &primary_joins);
-    for (&occurrence, &order) in &topology.order_by_occurrence {
-        if order > 1 {
-            *depths.entry(occurrence).or_default() += order - 1;
-        }
-    }
     if topology.roots.len() > 1 {
         groups.clear();
-        for (depth, &root) in topology.roots.iter().enumerate() {
-            depths.insert(root, depth);
-        }
     }
-    let roots: Vec<_> = topology
+    let mut roots: Vec<_> = topology
         .roots
         .iter()
         .map(|&root| build_citation_tree(root, &children))
         .collect();
+    // Structural map selection and its search-prefix pruning use seniority
+    // order; alphabetical citation must not change that preference.
+    let selection_order: Vec<_> = roots.iter().flat_map(postorder_children).collect();
+    let mut opsin_citation_order = false;
+    if roots.len() == 1 && interparent.is_empty() && closing.is_empty() {
+        let group_by_member = groups
+            .iter()
+            .flat_map(|g| g.occurrence_ids.iter().map(move |&id| (id, g)))
+            .collect();
+        let mut alphabetical = roots[0].clone();
+        order_citation_tree(&mut alphabetical, specs, &primary_joins, &group_by_member);
+        if policy.enforce_interoperability_limits
+            && !tree_citation_scope_supported(&alphabetical, &groups)
+        {
+            // Keep the seniority tree when OPSIN cannot read FR-3.6 order.
+            // Validate that tree below, and mark the emitted name unverified:
+            // a usable fusion citation must not become a preferred von Baeyer
+            // fallback merely because of parser scope limits (P-25.5).
+            opsin_citation_order = true;
+        } else {
+            roots[0] = alphabetical;
+        }
+    }
     if policy.enforce_interoperability_limits
         && roots.len() == 1
         && !tree_citation_scope_supported(&roots[0], &groups)
     {
         return None;
+    }
+    for root in &roots {
+        add_citation_prime_depths(root, 0, &mut depths);
+    }
+    if roots.len() > 1 {
+        for (depth, root) in roots.iter().enumerate() {
+            depths.insert(root.occurrence_id, depth);
+        }
     }
     let citation_children: Vec<_> = roots.iter().flat_map(postorder_children).collect();
     let primary: Vec<_> = citation_children
@@ -1923,13 +1946,11 @@ fn build_candidate(
             .copied()
             .max()
             .unwrap_or(0),
-        joins: citation_plan
-            .render_order
+        joins: selection_order
             .iter()
             .map(|c| join_preference_key(&primary_joins[c], ranks[c]))
             .collect(),
-        attached_seniority: citation_plan
-            .render_order
+        attached_seniority: selection_order
             .iter()
             .map(|c| component_spec_seniority_key(&specs[c]).as_tuple())
             .collect(),
@@ -1938,6 +1959,7 @@ fn build_candidate(
     component_occurrences.sort_by_key(|m| m.occurrence_id);
     let ast = FusionNameAst {
         benzoheterocycle_merge: false,
+        opsin_citation_order,
         plan_kind: plan_kind.into(),
         parent_occurrences: topology.roots.clone(),
         component_occurrences,
@@ -1969,6 +1991,162 @@ pub fn render_fusion_name(
 ) -> Result<String, String> {
     Ok(render_fusion_name_parts(ast, registry)?.concat())
 }
+
+/// FR-3.6 / P-25.3.4.2.3 compare the names of complete attached branches.
+/// Bracketed locants and fusion descriptors do not contribute to the initial
+/// alphabetic comparison. Keep this separate from component seniority, which
+/// still selects the components, their maps, and the completed numbering.
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
+struct FusionPrefixCitationKey {
+    name: String,
+    internal_fusion_locants: Vec<Vec<LocantKey>>,
+    heteroatom_locants: Vec<Vec<LocantKey>>,
+    indacene_markers: Vec<String>,
+}
+
+fn fusion_prefix_citation_key(prefix: &str) -> FusionPrefixCitationKey {
+    let mut key = FusionPrefixCitationKey::default();
+    let (prefix, marker) = prefix
+        .strip_prefix("as-")
+        .filter(|stem| *stem == "indaceno")
+        .map(|stem| (stem, "as"))
+        .or_else(|| {
+            prefix
+                .strip_prefix("s-")
+                .filter(|stem| *stem == "indaceno")
+                .map(|stem| (stem, "s"))
+        })
+        .unwrap_or((prefix, ""));
+    key.indacene_markers.push(marker.into());
+    // Some retained components spell heteroatom locants without brackets.
+    let prefix = if prefix.starts_with(|c: char| c.is_ascii_digit()) {
+        if let Some((locants, stem)) = prefix.split_once('-') {
+            key.heteroatom_locants
+                .push(locants.split(',').map(retained_locant_sort_key).collect());
+            stem
+        } else {
+            prefix
+        }
+    } else {
+        prefix
+    };
+    let mut bracket = None;
+    for (index, c) in prefix.char_indices() {
+        match c {
+            '[' => bracket = Some(index + 1),
+            ']' => {
+                if let Some(start) = bracket.take() {
+                    key.heteroatom_locants.push(
+                        prefix[start..index]
+                            .split(',')
+                            .map(retained_locant_sort_key)
+                            .collect(),
+                    );
+                }
+            }
+            _ if bracket.is_none() && c.is_alphabetic() => {
+                key.name.extend(c.to_lowercase());
+            }
+            _ => {}
+        }
+    }
+    key
+}
+
+fn fusion_group_multiplier(
+    group: &FusionMultiplicityGroup,
+    specs: &BTreeMap<usize, FusionComponentSpec>,
+) -> String {
+    let complex = group.occurrence_ids.iter().any(|id| {
+        let spec = &specs[id];
+        spec.multiplicative_prefix_style == "complex"
+            || spec.template.family == "generated_hw_monocycle"
+            || spec.attached_prefix.starts_with('[')
+    });
+    if complex {
+        multipliers::complex_(group.occurrence_ids.len())
+    } else {
+        group.multiplier.clone()
+    }
+}
+
+/// Finalize FR-3.6 order before scope validation, priming, and rendering. Each
+/// branch is compared as a whole, after ordering its own attached components.
+fn order_citation_tree(
+    node: &mut FusionCitationNode,
+    specs: &BTreeMap<usize, FusionComponentSpec>,
+    joins: &BTreeMap<usize, FusionJoin>,
+    groups: &BTreeMap<usize, &FusionMultiplicityGroup>,
+) -> FusionPrefixCitationKey {
+    let child_keys: BTreeMap<_, _> = node
+        .children
+        .iter_mut()
+        .map(|child| {
+            (
+                child.occurrence_id,
+                order_citation_tree(child, specs, joins, groups),
+            )
+        })
+        .collect();
+    node.children.sort_by(|left, right| {
+        child_keys[&left.occurrence_id].cmp(&child_keys[&right.occurrence_id])
+    });
+    let mut key = FusionPrefixCitationKey::default();
+    let mut included_groups = BTreeSet::new();
+    for child in &node.children {
+        let group = groups.get(&child.occurrence_id);
+        if let Some(group) = group {
+            if !included_groups.insert(&group.occurrence_ids) {
+                continue;
+            }
+            // Ignore this branch's own multiplier when its parent compares it;
+            // a multiplier inside this multipart branch is integral to its name.
+            key.name.push_str(&fusion_group_multiplier(group, specs));
+        }
+        let child_key = &child_keys[&child.occurrence_id];
+        key.name.push_str(&child_key.name);
+        key.internal_fusion_locants
+            .extend_from_slice(&child_key.internal_fusion_locants);
+        let members = group.map_or_else(
+            || vec![child.occurrence_id],
+            |group| group.occurrence_ids.clone(),
+        );
+        for member in members {
+            let join = &joins[&member];
+            let mut locants: Vec<_> = join
+                .attached_locants()
+                .iter()
+                .chain(join.host_locants())
+                .map(|l| retained_locant_sort_key(&l.text))
+                .collect();
+            locants.sort();
+            key.internal_fusion_locants.push(locants);
+        }
+        key.heteroatom_locants
+            .extend_from_slice(&child_key.heteroatom_locants);
+        key.indacene_markers
+            .extend_from_slice(&child_key.indacene_markers);
+    }
+    let mut own = fusion_prefix_citation_key(&specs[&node.occurrence_id].attached_prefix);
+    key.name.push_str(&own.name);
+    key.heteroatom_locants.append(&mut own.heteroatom_locants);
+    key.indacene_markers.append(&mut own.indacene_markers);
+    key
+}
+
+fn add_citation_prime_depths(
+    node: &FusionCitationNode,
+    order: usize,
+    depths: &mut BTreeMap<usize, usize>,
+) {
+    if order > 1 {
+        *depths.entry(node.occurrence_id).or_default() += order - 1;
+    }
+    for child in &node.children {
+        add_citation_prime_depths(child, order + 1, depths);
+    }
+}
+
 /// Ordered citation pieces. Atom/bond bindings are not consumed by the plain-name route.
 pub fn render_fusion_name_parts(
     ast: &FusionNameAst,
@@ -2142,17 +2320,7 @@ pub fn render_fusion_name_parts(
                 if prefixes.len() != 1 {
                     return Err("a multiplicative group must use one attached prefix".into());
                 }
-                let complex = members.iter().any(|m| {
-                    let s = &self.specs[&m.occurrence_id];
-                    s.multiplicative_prefix_style == "complex"
-                        || s.template.family == "generated_hw_monocycle"
-                        || s.attached_prefix.starts_with('[')
-                });
-                let multiplier = if complex {
-                    multipliers::complex_(members.len())
-                } else {
-                    group.multiplier.clone()
-                };
+                let multiplier = fusion_group_multiplier(group, self.specs);
                 let mut texts = Vec::new();
                 let mut higher = false;
                 let mut side_only = true;
@@ -2397,6 +2565,390 @@ mod tests {
             combine_rendered_descriptors(&[descriptor.render(), "[2',3':4,5]".into()], true, false),
             "[1',2':3,4;2',3':4,5]"
         );
+    }
+
+    fn rendering_fixture(
+        components: &[&str],
+        links: &[(usize, usize, &[&str], &[&str])],
+    ) -> FusionNameAst {
+        let parents: BTreeMap<_, _> = links.iter().map(|&(c, p, _, _)| (c, p)).collect();
+        let mut children: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        let mut joins = Vec::new();
+        for &(child, host, attached, parent) in links {
+            children.entry(host).or_default().push(child);
+            let mut order = 1;
+            let mut ancestor = host;
+            while let Some(&parent) = parents.get(&ancestor) {
+                order += 1;
+                ancestor = parent;
+            }
+            let locants = |id, depth, texts: &[&str]| {
+                texts
+                    .iter()
+                    .map(|text| ComponentLocant {
+                        component_id: id,
+                        text: (*text).into(),
+                        prime_depth: depth,
+                    })
+                    .collect()
+            };
+            joins.push(FusionJoin {
+                order,
+                interface: OrderedFusionInterface {
+                    attached_occurrence: child,
+                    host_occurrence: host,
+                    cited_attached_locants: locants(child, order - 1, attached),
+                    host_sides: if order == 1 {
+                        parent
+                            .iter()
+                            .map(|side| FusionSide {
+                                component_id: host,
+                                letter: (*side).into(),
+                                ..Default::default()
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    },
+                    host_locants: if order > 1 {
+                        locants(host, order - 2, parent)
+                    } else {
+                        Vec::new()
+                    },
+                    kind: if order == 1 {
+                        FusionJoinKind::Ortho
+                    } else {
+                        FusionJoinKind::HigherOrder
+                    },
+                    ..Default::default()
+                },
+            });
+        }
+        let root = build_citation_tree(0, &children);
+        let mut ast = FusionNameAst {
+            component_occurrences: components
+                .iter()
+                .enumerate()
+                .map(|(occurrence_id, key)| FusionComponentMatch {
+                    occurrence_id,
+                    spec_key: (*key).into(),
+                    ..Default::default()
+                })
+                .collect(),
+            descriptors: joins
+                .iter()
+                .map(|join| FusionDescriptor::from_interface(&join.interface))
+                .collect(),
+            citation_plan: Some(FusionCitationPlan::from_tree(root.clone(), &joins)),
+            citation_tree: Some(root),
+            joins,
+            ..Default::default()
+        };
+        order_rendering_fixture(&mut ast);
+        ast
+    }
+
+    fn order_rendering_fixture(ast: &mut FusionNameAst) {
+        let registry = fusion_component_registry();
+        let specs = ast
+            .component_occurrences
+            .iter()
+            .map(|m| (m.occurrence_id, registry.spec_for_match(m).unwrap()))
+            .collect();
+        let joins = ast
+            .joins
+            .iter()
+            .map(|join| (join.attached_occurrence(), join.clone()))
+            .collect();
+        let groups = ast
+            .multiplicative_groups
+            .iter()
+            .flat_map(|g| g.occurrence_ids.iter().map(move |&id| (id, g)))
+            .collect();
+        let root = ast.citation_tree.as_mut().unwrap();
+        order_citation_tree(root, &specs, &joins, &groups);
+        ast.citation_plan = Some(FusionCitationPlan::from_tree(root.clone(), &ast.joins));
+    }
+
+    #[test]
+    fn citation_keys_ignore_locants_and_indacene_italics_until_names_tie() {
+        let mut prefixes = [
+            "[1,2,4]triazolo",
+            "[1,3]oxazolo",
+            "[1]benzothieno",
+            "[1,2]oxazolo",
+        ];
+        prefixes.sort_by_cached_key(|prefix| fusion_prefix_citation_key(prefix));
+        assert_eq!(
+            prefixes,
+            [
+                "[1]benzothieno",
+                "[1,2]oxazolo",
+                "[1,3]oxazolo",
+                "[1,2,4]triazolo",
+            ]
+        );
+        let mut prefixes = ["s-indaceno", "imidazo", "as-indaceno", "naphtho"];
+        prefixes.sort_by_cached_key(|prefix| fusion_prefix_citation_key(prefix));
+        assert_eq!(
+            prefixes,
+            ["imidazo", "as-indaceno", "s-indaceno", "naphtho"]
+        );
+        assert!(
+            fusion_prefix_citation_key("1,5-naphthyridino")
+                < fusion_prefix_citation_key("1,10-naphthyridino")
+        );
+    }
+
+    #[test]
+    fn rendering_orders_complete_branches_and_retains_bound_descriptors() {
+        let registry = fusion_component_registry();
+        let ast = rendering_fixture(
+            &["pyrazine", "imidazole", "pyrrole", "furan"],
+            &[
+                (1, 0, &["4", "5"], &["e"]),
+                (2, 0, &["2", "3"], &["b"]),
+                (3, 2, &["2", "3"], &["4", "5"]),
+            ],
+        );
+        let original = ast.clone();
+        assert_eq!(
+            render_fusion_name(&ast, registry).unwrap(),
+            "furo[2',3':4,5]pyrrolo[2,3-b]imidazo[4,5-e]pyrazine"
+        );
+        assert_eq!(ast, original);
+        assert_eq!(ast.citation_plan.unwrap().render_order, [3, 2, 1]);
+
+        let ast = rendering_fixture(
+            &["pyridine", "oxazole", "furan", "isoxazole"],
+            &[
+                (1, 0, &["4", "5"], &["a"]),
+                (2, 0, &["2", "3"], &["b"]),
+                (3, 0, &["5", "4"], &["e"]),
+            ],
+        );
+        assert_eq!(
+            render_fusion_name(&ast, registry).unwrap(),
+            "furo[2,3-b][1,2]oxazolo[5,4-e][1,3]oxazolo[4,5-a]pyridine"
+        );
+
+        // The descriptors inside otherwise identical branches break a tie;
+        // their descriptors for attachment to pyridine remain bound to them.
+        let ast = rendering_fixture(
+            &["pyridine", "pyran", "pyran", "benzene", "benzene"],
+            &[
+                (1, 0, &["2", "3"], &["b"]),
+                (2, 0, &["2", "3"], &["e"]),
+                (3, 1, &["1", "2"], &["5", "6"]),
+                (4, 2, &["1", "2"], &["3", "4"]),
+            ],
+        );
+        assert_eq!(
+            render_fusion_name(&ast, registry).unwrap(),
+            "benzo[1',2':3,4]pyrano[2,3-e]benzo[1',2':5,6]pyrano[2,3-b]pyridine"
+        );
+    }
+
+    #[test]
+    fn multipliers_contribute_only_inside_a_multipart_branch_citation() {
+        let registry = fusion_component_registry();
+        let mut ast = rendering_fixture(
+            &[
+                "pyridine",
+                "pyran",
+                "benzene",
+                "benzene",
+                "cycloheptatriene",
+            ],
+            &[
+                (1, 0, &["2", "3"], &["b"]),
+                (2, 1, &["1", "2"], &["4", "5"]),
+                (3, 1, &["1", "2"], &["5", "6"]),
+                (4, 0, &["1", "2"], &["e"]),
+            ],
+        );
+        ast.multiplicative_groups.push(FusionMultiplicityGroup {
+            occurrence_ids: vec![2, 3],
+            multiplier: "di".into(),
+        });
+        let depths = [(2, 1), (3, 2)].into_iter().collect();
+        for join in &mut ast.joins {
+            *join = with_prime_depths(join.clone(), &depths);
+        }
+        ast.descriptors = ast
+            .joins
+            .iter()
+            .map(|join| FusionDescriptor::from_interface(&join.interface))
+            .collect();
+        order_rendering_fixture(&mut ast);
+        assert_eq!(
+            render_fusion_name(&ast, registry).unwrap(),
+            "cyclohepta[e]dibenzo[1',2':4,5;1'',2'':5,6]pyrano[2,3-b]pyridine"
+        );
+
+        let mut ast = rendering_fixture(
+            &["pyridine", "pyran", "pyran", "furan"],
+            &[
+                (1, 0, &["2", "3"], &["b"]),
+                (2, 0, &["4", "5"], &["d"]),
+                (3, 0, &["2", "3"], &["e"]),
+            ],
+        );
+        let depths = [(2, 1)].into_iter().collect();
+        for join in &mut ast.joins {
+            *join = with_prime_depths(join.clone(), &depths);
+        }
+        ast.descriptors = ast
+            .joins
+            .iter()
+            .map(|join| FusionDescriptor::from_interface(&join.interface))
+            .collect();
+        ast.multiplicative_groups.push(FusionMultiplicityGroup {
+            occurrence_ids: vec![1, 2],
+            multiplier: "di".into(),
+        });
+        order_rendering_fixture(&mut ast);
+        assert_eq!(
+            render_fusion_name(&ast, registry).unwrap(),
+            "furo[2,3-e]dipyrano[2,3-b:4',5'-d]pyridine"
+        );
+    }
+
+    #[test]
+    fn built_plan_and_bound_joins_follow_complete_branch_order() {
+        let (mol, matches) = rematched_fixture(&[
+            ("pyrazine", &[0, 1, 2, 3, 4, 5]),
+            ("imidazole", &[6, 7, 8, 1, 2]),
+            ("pyrrole", &[9, 4, 5, 10, 11]),
+            ("furan", &[12, 10, 11, 13, 14]),
+        ]);
+        let registry = fusion_component_registry();
+        let ast =
+            build_fusion_name_ast(&mol, &matches, registry, &DescriptorOptions::default()).unwrap();
+        let plan = ast.citation_plan.as_ref().unwrap();
+        let specs: Vec<_> = plan
+            .render_order
+            .iter()
+            .map(|id| &ast.component_occurrences[*id].spec_key)
+            .collect();
+        assert_eq!(specs, ["furan", "pyrrole", "imidazole"]);
+        assert_eq!(plan.render_order, postorder_children(&plan.roots[0]));
+        assert_eq!(
+            ast.joins
+                .iter()
+                .map(FusionJoin::attached_occurrence)
+                .collect::<Vec<_>>(),
+            plan.render_order
+        );
+        assert!(tree_citation_scope_supported(
+            &plan.roots[0],
+            &ast.multiplicative_groups
+        ));
+        let name = render_fusion_name(&ast, registry).unwrap();
+        assert!(name.starts_with("furo["), "{name}");
+        assert!(name.find("pyrrolo[").unwrap() < name.find("imidazo[").unwrap());
+        assert!(name.ends_with("pyrazine"), "{name}");
+        let furan_join = &ast.joins[0];
+        assert!(
+            furan_join
+                .attached_locants()
+                .iter()
+                .all(|l| l.prime_depth == 1)
+        );
+        assert!(furan_join.host_locants().iter().all(|l| l.prime_depth == 0));
+    }
+
+    #[test]
+    fn citation_scope_checks_the_alphabetical_tree_used_for_rendering() {
+        let ast = rendering_fixture(
+            &["quinoline", "pyridine", "imidazole", "thiophene", "pyrrole"],
+            &[
+                (1, 0, &["3", "4"], &["b"]),
+                (2, 1, &["1", "2"], &["1", "2"]),
+                (3, 2, &["2", "3"], &["4", "5"]),
+                (4, 1, &["2", "3"], &["5", "6"]),
+            ],
+        );
+        let root = ast.citation_tree.as_ref().unwrap();
+        let plan = ast.citation_plan.as_ref().unwrap();
+        assert_eq!(postorder_children(root), [4, 3, 2, 1]);
+        assert_eq!(plan.render_order, postorder_children(root));
+        assert_eq!(plan.roots, std::slice::from_ref(root));
+        assert_eq!(
+            render_fusion_name(&ast, fusion_component_registry()).unwrap(),
+            "pyrrolo[2',3':5,6]thieno[2'',3'':4',5']imidazo[1',2':1,2]pyrido[3,4-b]quinoline"
+        );
+        assert!(!tree_citation_scope_supported(root, &[]));
+
+        // The previous seniority order is accepted by OPSIN's scope rule, but
+        // it must not validate a different, alphabetically rendered traversal.
+        let mut seniority_tree = root.clone();
+        seniority_tree.children[0].children.reverse();
+        assert!(tree_citation_scope_supported(&seniority_tree, &[]));
+        assert_eq!(postorder_children(&seniority_tree), [3, 2, 4, 1]);
+        let mut depths = BTreeMap::new();
+        add_citation_prime_depths(root, 0, &mut depths);
+        assert_eq!(depths, [(2, 1), (3, 2), (4, 1)].into_iter().collect());
+    }
+
+    #[test]
+    fn unsupported_alphabetical_scope_keeps_unverified_fusion_name() -> Result<(), String> {
+        let smiles = "S1CC=C2C1=NC=1N2C=2C(=C3C1N=C1C=CC=CC1=C3)N=CC2";
+        let name = crate::naming::openclatura::name_smiles(smiles)?;
+        assert_eq!(
+            name.text,
+            "2H-thieno[2'',3'':4',5']imidazo[1',2':1,2]pyrrolo[2',3':5,6]pyrido[3,4-b]quinoline"
+        );
+        assert_eq!(
+            name.status,
+            crate::naming::NameStatus::Unverified(crate::naming::NameReason::OpsinFusionLayout)
+        );
+        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            let parsed = parser.parse(text, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{text}: {}",
+                parsed.message
+            );
+            assert!(parsed.warnings.is_empty(), "{text}: {:?}", parsed.warnings);
+            let round_trip = parsed
+                .structure
+                .ok_or("Missing parsed deeper-branch graph")?
+                .semantic_cxsmiles()
+                .map_err(|error| error.to_string())?;
+            crate::naming::verify_identity(smiles, &round_trip)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn alphabetized_corpus_prefixes_preserve_numbering_and_round_trip() -> Result<(), String> {
+        let smiles = "CC1=C(SC(=N1)NC(=O)CSC2=NN=C3N2C(=NC4=C3C5=C(S4)CCCC5)C(C)C)C";
+        let name = crate::naming::openclatura::name_smiles(smiles)?;
+        assert_eq!(
+            name.text,
+            "N-(4,5-dimethyl-1,3-thiazol-2-yl)-2-{[5-(propan-2-yl)-8,9,10,11-tetrahydro[1]benzothieno[3,2-e][1,2,4]triazolo[4,3-c]pyrimidin-3-yl]sulfanyl}acetamide"
+        );
+        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            let parsed = parser.parse(text, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{text}: {}",
+                parsed.message
+            );
+            assert!(parsed.warnings.is_empty(), "{text}: {:?}", parsed.warnings);
+            let round_trip = parsed
+                .structure
+                .ok_or("Missing parsed corpus graph")?
+                .semantic_cxsmiles()
+                .map_err(|error| error.to_string())?;
+            crate::naming::verify_identity(smiles, &round_trip)?;
+        }
+        Ok(())
     }
 
     fn rematched_fixture(components: &[(&str, &[usize])]) -> (Molecule, Vec<FusionComponentMatch>) {
