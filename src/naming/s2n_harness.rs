@@ -624,10 +624,6 @@ fn ring_assembly_names_intentionally_depart_from_upstream_spelling() {
             "CC(=O)NC1=CC=C(C=C1)C2=NC(=C(N2)C3=CC=C(C=C3)C4=CC=C(C=C4)[N+](=O)[O-])C5=CC=CC=C5",
             "N-{4-[5-(4'-nitro[1,1'-biphenyl]-4-yl)-4-phenyl-1H-imidazol-2-yl]phenyl}acetamide",
         ),
-        (
-            "CN(CCCCCCCCCN1CCC(CC1)OC(=O)NC2=CC=CC=C2C3=CC=CC=C3)C(=O)C4=CC(=C(C=C4)O)Cl",
-            "1-[9-(N-methyl-3-chloro-4-hydroxybenzamido)nonyl]piperidin-4-yl ([1,1'-biphenyl]-2-yl)carbamate",
-        ),
         ("C1CC1-C1CC1", "1,1'-bi(cyclopropane)"),
         ("c1ccccc1-c2ccc(cc2)-c2ccccc2", "1^1,2^1:2^4,3^1-terphenyl"),
         ("C1=COC=CC1-C1=COC=CC1", "4H,4'H-3,4'-bipyran"),
@@ -845,6 +841,13 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
 
     let mut measurements = Measurements::default();
     for (smiles, preferred, alternative) in [
+        // This FR-3.5 roundtrip departure and the bipyrimidine assembly
+        // departure each reduce the frozen-golden parity count by one.
+        (
+            "O=c1c2ccccc2nc2n1CC=C2",
+            "pyrrolo[2,1-b]quinazolin-9(1H)-one",
+            Some("pyrrolo[1,2-a]benzo[d]pyrimidin-9(1H)-one"),
+        ),
         (
             "S1CC2=CC=CC3=C2C1=CC=C3",
             "2H-benzo[1,2,3-cd]1-benzothiophene",

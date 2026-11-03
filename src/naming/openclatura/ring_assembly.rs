@@ -17,6 +17,7 @@ pub struct RingAssembly {
     pub indicated_hydrogen_atoms: AtomSet,
     pub junction_bond_ids: AtomSet,
     pub ring_count: usize,
+    pub(super) unit_atoms: AtomSet,
     pub(super) junction_key: (Vec<LocantKey>, Vec<LocantKey>),
 }
 
@@ -29,7 +30,7 @@ struct Unit {
 
 /// A unit includes every cyclic atom connected by cyclic edges, including spiro
 /// connections. A bridge between two units is never part of either unit.
-fn cyclic_units(mol: &Molecule) -> Vec<AtomSet> {
+pub(super) fn cyclic_units(mol: &Molecule) -> Vec<AtomSet> {
     let edges: super::graph_kernel::EdgeSet =
         biconnected_edge_components(mol, &mol.atoms.keys().copied().collect())
             .into_iter()
@@ -58,7 +59,13 @@ fn hydride(mol: &Molecule, atoms: &AtomSet) -> Molecule {
     unit
 }
 
-fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
+/// Visit exact hydride graph isomorphisms until the visitor accepts one.
+/// Aromatic bonds are compared independently of their Kekule localization.
+fn visit_hydride_isomorphisms(
+    left: &Molecule,
+    right: &Molecule,
+    mut visit: impl FnMut(&BTreeMap<usize, usize>) -> bool,
+) -> bool {
     if left.atoms.len() != right.atoms.len() || left.bonds.len() != right.bonds.len() {
         return false;
     }
@@ -90,13 +97,8 @@ fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
         return false;
     }
     let edge = |mol: &Molecule, u, v| {
-        mol.get_bond(u, v).map(|bond| {
-            if bond.is_aromatic || (mol.atoms[&u].is_aromatic && mol.atoms[&v].is_aromatic) {
-                4
-            } else {
-                bond.order
-            }
-        })
+        mol.get_bond(u, v)
+            .map(|bond| if bond.is_aromatic { 4 } else { bond.order })
     };
     fn matches(
         left: &Molecule,
@@ -104,6 +106,7 @@ fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
         candidates: &BTreeMap<usize, Vec<usize>>,
         edge: &impl Fn(&Molecule, usize, usize) -> Option<usize>,
         mapping: &mut BTreeMap<usize, usize>,
+        visit: &mut impl FnMut(&BTreeMap<usize, usize>) -> bool,
     ) -> bool {
         let Some((&u, options)) = candidates
             .iter()
@@ -115,7 +118,7 @@ fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
                     .count()
             })
         else {
-            return true;
+            return visit(mapping);
         };
         for &v in options {
             if mapping.values().any(|&x| x == v)
@@ -126,7 +129,7 @@ fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
                 continue;
             }
             mapping.insert(u, v);
-            if matches(left, right, candidates, edge, mapping) {
+            if matches(left, right, candidates, edge, mapping, visit) {
                 return true;
             }
             mapping.remove(&u);
@@ -150,7 +153,18 @@ fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
             )
         })
         .collect();
-    matches(left, right, &candidates, &edge, &mut BTreeMap::new())
+    matches(
+        left,
+        right,
+        &candidates,
+        &edge,
+        &mut BTreeMap::new(),
+        &mut visit,
+    )
+}
+
+fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
+    visit_hydride_isomorphisms(left, right, |_| true)
 }
 
 fn identical_junctions(mol: &Molecule, atoms: &[AtomSet]) -> Vec<(usize, usize, usize)> {
@@ -337,6 +351,23 @@ fn resolve_unit(mol: &Molecule, atoms: &AtomSet, system: &RingSystem) -> Option<
     {
         return None;
     }
+    // P-28.2.1 requires the lowest junction locants within the traditional
+    // parent numbering. Compose each valid numbering with every hydride graph
+    // automorphism: this preserves that numbering (including P-24.2.2 spiro
+    // descriptors), while recovering equivalent orientations omitted by a
+    // topology planner's representative paths.
+    let mut expanded = std::collections::BTreeSet::new();
+    visit_hydride_isomorphisms(&unit, &unit, |automorphism| {
+        for map in &maps {
+            expanded.insert(
+                map.iter()
+                    .map(|(&atom, locant)| (automorphism[&atom], locant.clone()))
+                    .collect(),
+            );
+        }
+        false
+    });
+    maps = expanded.into_iter().collect();
     let mut indicated =
         super::numbering::indicated_hydrogen_like_atoms(&unit, path, Some(&name), false);
     if indicated.is_empty() {
@@ -482,11 +513,27 @@ fn path_assembly(
         parent
     };
     let multiplier = ["", "", "bi", "ter", "quater", "quinque", "sexi"][path.len()];
-    let parent = if path.len() == 2
-        && (parent.starts_with("cyclo")
-            || parent.starts_with("bicyclo")
-            || parent.contains("spiro[")
-            || super::ring_renderer::is_von_baeyer_descriptor(Some(parent)))
+    // P-28.2.1 and P-16.5: separate locants belonging to the multiplied
+    // hydride from the assembly locants. Digits inside a descriptor's square
+    // brackets are already enclosed and do not require this separation.
+    let mut bracket_depth = 0_usize;
+    let locanted_parent = parent.bytes().any(|byte| match byte {
+        b'[' => {
+            bracket_depth += 1;
+            false
+        }
+        b']' => {
+            bracket_depth -= 1;
+            false
+        }
+        _ => bracket_depth == 0 && byte.is_ascii_digit(),
+    });
+    let parent = if locanted_parent
+        || path.len() == 2
+            && (parent.starts_with("cyclo")
+                || parent.starts_with("bicyclo")
+                || parent.contains("spiro[")
+                || super::ring_renderer::is_von_baeyer_descriptor(Some(parent)))
     {
         format!("({parent})")
     } else {
@@ -518,6 +565,7 @@ fn path_assembly(
         indicated_hydrogen_atoms,
         junction_bond_ids: component_bonds.clone(),
         ring_count: path.iter().map(|&i| units[i].ring_count).sum(),
+        unit_atoms: units[path[0]].maps[0].keys().copied().collect(),
         junction_key: (set, citation),
     })
 }

@@ -13,6 +13,57 @@ struct Amplificant {
     numberings: Vec<BTreeMap<usize, usize>>,
 }
 
+/// P-52.2.5.1(2), P-51.3.2: a linear phane has at least four whole
+/// ring systems and seven skeletal nodes along a ring-to-ring path.
+pub(super) fn has_linear_skeleton(mol: &Molecule) -> bool {
+    let systems = super::ring_assembly::cyclic_units(mol);
+    let rings: AtomSet = systems.iter().filter_map(|s| s.first().copied()).collect();
+    let mut collapsed: BTreeMap<_, _> = mol
+        .atoms
+        .values()
+        .filter(|a| a.symbol != "H")
+        .map(|a| (a.idx, a.idx))
+        .collect();
+    for system in &systems {
+        if let Some(&root) = system.first() {
+            for &atom in system {
+                collapsed.insert(atom, root);
+            }
+        }
+    }
+    let nodes = collapsed.values().copied().collect();
+    let edges = mol
+        .bonds
+        .values()
+        .filter_map(|bond| {
+            let (&u, &v) = (collapsed.get(&bond.u)?, collapsed.get(&bond.v)?);
+            (u != v).then_some(normalize_edge(u, v))
+        })
+        .collect();
+    let adjacency = adjacency_from_edges(&nodes, &edges);
+    // Collapsing every cyclic component leaves a forest: avoiding the
+    // preceding node visits exactly the simple paths from each terminal ring.
+    rings.iter().any(|&start| {
+        let mut pending = vec![(start, start, 1, 1)];
+        while let Some((previous, current, length, ring_count)) = pending.pop() {
+            if rings.contains(&current) && ring_count >= 4 && length >= 7 {
+                return true;
+            }
+            for &next in &adjacency[&current] {
+                if next != previous {
+                    pending.push((
+                        current,
+                        next,
+                        length + 1,
+                        ring_count + usize::from(rings.contains(&next)),
+                    ));
+                }
+            }
+        }
+        false
+    })
+}
+
 /// Only one cycle after amplification is collapsed; every atom is accounted for.
 pub(super) fn name(mol: &Molecule) -> Option<String> {
     if mol

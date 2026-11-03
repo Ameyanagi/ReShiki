@@ -234,14 +234,14 @@ pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
 
 pub(super) fn assess_parent_name(mol: &molecule::Molecule, text: &str) {
     species::assess_anion_parent(mol, text);
-    if has_multiplicative_pin(mol) {
-        mol.mark_name(crate::naming::NameStatus::NotPreferred(
-            crate::naming::NameReason::Multiplicative,
-        ));
-    }
+    // P-51.3.2: mandatory phane nomenclature precedes multiplicative names.
     if has_ring_assembly(mol) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::RingAssembly,
+        ));
+    } else if has_multiplicative_pin(mol) {
+        mol.mark_name(crate::naming::NameStatus::NotPreferred(
+            crate::naming::NameReason::Multiplicative,
         ));
     }
 }
@@ -280,9 +280,12 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
             close @ (b')' | b']') => {
                 let Some(group) = stack.pop() else { continue };
                 // Indicated or added hydrogen such as `(4aH,9H)` and the
-                // parent of a ring assembly, `bi(cyclohexane)`, do not count.
+                // multiplied parent of a ring assembly do not count
+                // (P-16.5.4.1.1, P-16.5.4.1.2).
                 let counted = close == b')'
-                    && !name[..group.open].ends_with("-bi")
+                    && !["-bi", "-ter", "-quater", "-quinque", "-sexi"]
+                        .iter()
+                        .any(|multiplier| name[..group.open].ends_with(multiplier))
                     && !name[group.open + 1..i].split(',').all(|locant| {
                         locant.strip_suffix('H').is_some_and(|locant| {
                             let digits = locant
@@ -320,79 +323,233 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
     out
 }
 
-/// Whether two identical units are joined by one -O-, -S-, -SO-, -SO2- (or
-/// Se, Te analogue) link, or two identical rings by -CH2-, whose PIN is
-/// multiplicative, 1,1'-oxydibenzene, 2,2'-sulfanediyldiacetic acid (P-51.3.1,
-/// P-63.2.4.2, P-63.6), where the namer writes phenoxybenzene. Alkane units
-/// and units that differ in configuration keep the substitutive PIN
-/// (P-51.3.1, P-45.6.2).
+/// P-51.1.5 / P-51.3.1: multiply identical senior parents, including all
+/// substituents, suffixes and their attachment positions. P-15.3 permits an
+/// asymmetric central group, but its concatenated arms must be identical.
 fn has_multiplicative_pin(mol: &molecule::Molecule) -> bool {
-    let cyclic = chains::get_cyclic_atoms(mol, &molecule::AtomSet::new());
-    let ranks = chains::canonical_ranks(mol, None);
-    let configuration = |link: usize, end: usize| {
-        let side = subgraph_tools::subgraph_component(mol, end, &[link].into());
-        let mut atoms: Vec<_> = side
-            .iter()
-            .filter_map(|i| Some((ranks[i], mol.atoms[i].stereo.as_deref()?)))
-            .collect();
-        let mut bonds: Vec<_> = mol
-            .bonds
-            .values()
-            .filter(|b| side.contains(&b.u))
-            .filter_map(|b| {
-                let (u, v) = (ranks[&b.u], ranks[&b.v]);
-                Some((u.min(v), u.max(v), b.stereo.as_deref()?))
+    use molecule::AtomSet;
+    let cyclic = chains::get_cyclic_atoms(mol, &AtomSet::new());
+    let mut groups = perception::perceive_groups(mol);
+    let key = principal_groups::component_principal_key(&groups, false);
+    // P-44.1.2: a structural hydride such as phosphane or silane can be
+    // senior to every carbon ring. Use the same suffix and shortcut policy
+    // as the naming pipeline, without retaining its provisional assessment.
+    let atoms = mol.atoms.keys().copied().collect();
+    let mut structural = false;
+    let _ = mol.candidate::<()>(|| {
+        structural =
+            component_namer::structural_parent(mol, &atoms, &groups, key.as_deref())?.is_some();
+        Ok(None)
+    });
+    if structural {
+        return false;
+    }
+    let mut excluded = AtomSet::new();
+    component_group_rules::retarget_external_carbonyl_groups(
+        mol,
+        &mut groups,
+        key.as_deref(),
+        &mut excluded,
+        &cyclic,
+    );
+    let (principal, _) =
+        principal_groups::partition_principal_and_prefix_groups(&groups, key.as_deref());
+    component_group_rules::exclude_nonparent_group_atoms(mol, &groups, &mut excluded, &cyclic);
+    let (Ok(paths), Ok(rings)) = (
+        chains::find_all_carbon_paths(mol, &excluded),
+        chains::find_ring_systems(mol, &excluded),
+    ) else {
+        return false;
+    };
+    let parents: Vec<_> =
+        parent_selection::senior_parent_candidates(mol, &paths, &rings, &principal, &excluded)
+            .into_iter()
+            // P-15.3.1.1 / P-15.3.4.2 exclude acyclic hydrocarbons without suffixes.
+            .filter(|p| p.is_ring || principal.iter().any(|a| p.primary_path().contains(a)))
+            .map(|p| {
+                let atoms = p.atom_set();
+                let mut complete = atoms.clone();
+                complete.extend(component_group_rules::principal_involved_atoms(
+                    mol,
+                    &groups,
+                    key.as_deref(),
+                    p.primary_path(),
+                ));
+                (p.primary_path()[0], atoms, complete)
             })
             .collect();
-        atoms.sort();
-        bonds.sort();
-        (atoms, bonds)
-    };
-    mol.atoms.values().any(|atom| {
-        let (oxo, ends): (Vec<usize>, Vec<usize>) = mol
-            .get_neighbors(atom.idx)
-            .iter()
-            .filter(|&&n| mol.atoms[&n].symbol != "H")
-            .partition(|&&n| mol.atoms[&n].symbol == "O" && mol.bond_order(atom.idx, n) == 2);
-        let link = match atom.symbol.as_str() {
-            "O" => oxo.is_empty(),
-            "S" | "Se" | "Te" => oxo.len() <= 2,
-            "C" => oxo.is_empty() && atom.total_h_count == 2,
-            _ => false,
-        };
-        let [a, b] = ends[..] else {
-            return false;
-        };
-        link && atom.charge == 0
-            && !cyclic.contains(&atom.idx)
-            && ranks[&a] == ranks[&b]
-            // Acyclic units are chains that carry a principal group or lead
-            // to a ring; an acyl end makes an anhydride.
-            && (cyclic.contains(&a)
-                || (!atom.is_carbon()
-                    && mol.atoms[&a].is_carbon()
-                    && mol
-                        .get_neighbors(a)
+    if parents.len() < 2 {
+        return false;
+    }
+    // Simple central groups use a chain, cyclic parent (including an assembly),
+    // or heteroatom. Side substituents belong to the central group and need
+    // not be symmetric; the branches from it towards the parents must be.
+    let mut cores: Vec<AtomSet> = paths.iter().map(|p| p.iter().copied().collect()).collect();
+    cores.extend(rings.iter().map(|r| r.atoms.clone()));
+    cores.extend(
+        ring_assembly::discover_ring_assemblies(mol, &rings)
+            .into_iter()
+            .map(|a| a.locant_maps[0].keys().copied().collect()),
+    );
+    cores.extend(
+        mol.atoms
+            .values()
+            .filter(|a| !a.is_carbon() && a.symbol != "H")
+            .map(|a| AtomSet::from([a.idx])),
+    );
+    for (i, (root_a, a, required_a)) in parents.iter().enumerate() {
+        for (root_b, b, required_b) in &parents[i + 1..] {
+            if !required_a.is_disjoint(required_b) {
+                continue;
+            }
+            for core in &cores {
+                if !core.is_disjoint(required_a) || !core.is_disjoint(required_b) {
+                    continue;
+                }
+                let left = subgraph_tools::subgraph_component(mol, *root_a, core);
+                if !required_a.is_subset(&left) || !left.is_disjoint(required_b) {
+                    continue;
+                }
+                let right = subgraph_tools::subgraph_component(mol, *root_b, core);
+                if !required_b.is_subset(&right) || !left.is_disjoint(&right) {
+                    continue;
+                }
+                let attachments = |branch: &AtomSet| {
+                    branch
                         .iter()
-                        .all(|&n| mol.atoms[&n].is_carbon() || mol.bond_order(a, n) == 1)
-                    && (!cyclic.is_empty()
-                        || perception::perceive_groups(mol)
-                            .iter()
-                            .any(|g| g.is_principal_candidate))))
-            && configuration(atom.idx, a) == configuration(atom.idx, b)
-    })
+                        .flat_map(|&u| {
+                            mol.get_neighbors(u)
+                                .iter()
+                                .filter(|v| core.contains(v))
+                                .map(move |&v| (u, v))
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let (left_edges, right_edges) = (attachments(&left), attachments(&right));
+                let ([(u, x)], [(v, y)]) = (&left_edges[..], &right_edges[..]) else {
+                    continue;
+                };
+                if multiplicative_bond(mol, *u, *x) == multiplicative_bond(mol, *v, *y)
+                    && identical_multiplicative_branches(mol, &left, &right, a, b, *u, *v)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn multiplicative_bond(
+    mol: &molecule::Molecule,
+    u: usize,
+    v: usize,
+) -> Option<(usize, Option<&str>)> {
+    mol.get_bond(u, v)
+        .map(|b| (if b.is_aromatic { 4 } else { b.order }, b.stereo.as_deref()))
+}
+
+/// A rooted graph proof preserves complete parent units and configuration
+/// (P-51.3.1, P-45.6.2), rather than comparing unrooted hydrides or global ranks.
+fn identical_multiplicative_branches(
+    mol: &molecule::Molecule,
+    left: &molecule::AtomSet,
+    right: &molecule::AtomSet,
+    parent_left: &molecule::AtomSet,
+    parent_right: &molecule::AtomSet,
+    root_left: usize,
+    root_right: usize,
+) -> bool {
+    use std::collections::BTreeMap;
+    if left.len() != right.len() {
+        return false;
+    }
+    let ranks_left = chains::canonical_ranks(&mol.subgraph(left), None);
+    let ranks_right = chains::canonical_ranks(&mol.subgraph(right), None);
+    let atom_key = |u, atoms: &molecule::AtomSet, parent: &molecule::AtomSet, root| {
+        let a = &mol.atoms[&u];
+        (
+            a.symbol.as_str(),
+            a.charge,
+            a.isotope,
+            a.is_aromatic,
+            a.total_h_count,
+            a.radical_electrons,
+            a.stereo.as_deref(),
+            mol.get_neighbors(u)
+                .iter()
+                .filter(|n| atoms.contains(n))
+                .count(),
+            parent.contains(&u),
+            u == root,
+        )
+    };
+    let candidates: BTreeMap<_, Vec<_>> = left
+        .iter()
+        .map(|&u| {
+            (
+                u,
+                right
+                    .iter()
+                    .copied()
+                    .filter(|&v| {
+                        ranks_left[&u] == ranks_right[&v]
+                            && atom_key(u, left, parent_left, root_left)
+                                == atom_key(v, right, parent_right, root_right)
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    fn matches(
+        mol: &molecule::Molecule,
+        candidates: &BTreeMap<usize, Vec<usize>>,
+        mapping: &mut BTreeMap<usize, usize>,
+    ) -> bool {
+        let Some((&u, options)) = candidates
+            .iter()
+            .filter(|(u, _)| !mapping.contains_key(u))
+            .min_by_key(|(_, options)| {
+                options
+                    .iter()
+                    .filter(|v| !mapping.values().any(|x| x == *v))
+                    .count()
+            })
+        else {
+            return true;
+        };
+        for &v in options {
+            if mapping.values().any(|&x| x == v)
+                || mapping.iter().any(|(&a, &b)| {
+                    multiplicative_bond(mol, u, a) != multiplicative_bond(mol, v, b)
+                })
+            {
+                continue;
+            }
+            mapping.insert(u, v);
+            if matches(mol, candidates, mapping) {
+                return true;
+            }
+            mapping.remove(&u);
+        }
+        false
+    }
+    matches(mol, &candidates, &mut BTreeMap::new())
 }
 
 /// Whether two identical ring systems are joined directly by a single or
 /// double bond that the rendered name does not cite as a ring assembly
-/// (P-28, P-52.2.7): a double-bond junction, seven or more units, or units the
-/// assembly parent cannot number. Systems compare as parent hydrides, so
+/// (P-28, P-52.2.7): a double-bond junction, a mandatory linear phane, or units
+/// the assembly parent cannot number. Systems compare as parent hydrides, so
 /// substituents count as hydrogen; different systems keep the substitutive
 /// PIN, cyclohexylbenzene (P-61.2.2).
 fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
-    ring_assembly::assembly_junctions(mol)
-        .iter()
-        .any(|&junction| !mol.ring_assembly_is_named(junction))
+    let junctions = ring_assembly::assembly_junctions(mol);
+    !junctions.is_empty()
+        && (junctions
+            .iter()
+            .any(|&junction| !mol.ring_assembly_is_named(junction))
+            || phane::has_linear_skeleton(mol))
 }
 
 /// Count nonbonding electrons on the main-group elements that can carry
@@ -416,6 +573,110 @@ fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
 mod tests {
     use super::{name_smiles, nest_enclosing_marks};
     use std::io::Write;
+
+    #[test]
+    fn complete_senior_parents_need_multiplicative_pin_status_and_round_trip() {
+        use crate::naming::{NameReason, NameStatus};
+        // P-16.5.4 Fig. 1.3(f) and P-15.3.2.1: the first central group is
+        // asymmetric; the second has a cyclic assembly between equal arms.
+        for (smiles, expected) in [
+            (
+                "N#Cc1ccc(-c2ccc(OCCCCCOC(=O)C(Cc3ccc(C(=O)O)cc3)c3ccc(C(=O)O)cc3)cc2)cc1",
+                "4-[2-(4-carboxyphenyl)-3-({5-[(4'-cyano[1,1'-biphenyl]-4-yl)oxy]pentyl}oxy)-3-oxopropyl]benzoic acid",
+            ),
+            (
+                "O=C(O)CCCCCCCCCOc1ccc(-c2ccc(OCCCCCCCCCC(=O)O)cc2)cc1",
+                "10-{[4'-(10-hydroxy-10-oxodecoxy)[1,1'-biphenyl]-4-yl]oxy}decanoic acid",
+            ),
+            (
+                "P(CC(=O)O)(CC(=O)O)CC(=O)O",
+                "2-[bis(2-hydroxy-2-oxoethyl)phosphanyl]acetic acid",
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::NotPreferred(NameReason::Multiplicative),
+                "{smiles}"
+            );
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text,
+            );
+        }
+    }
+
+    #[test]
+    fn multiplicative_pin_accepts_simple_cores_and_identical_concatenated_arms() {
+        for smiles in [
+            "c1ccccc1Oc1ccccc1",
+            "O=S(c1ccccc1)c1ccccc1",
+            "O=[Se](c1ccccc1)c1ccccc1",
+            "O=[Te](=O)(c1ccccc1)c1ccccc1",
+            "S(CC(=O)O)CC(=O)O",
+            // Principal acids outrank the central phosphane (P-51.3.1).
+            "P(CC(=O)O)(CC(=O)O)CC(=O)O",
+            "CC(c1ccccc1)Cc1ccccc1",
+            "O=C(O)c1ccc(OCCOc2ccc(C(=O)O)cc2)cc1",
+        ] {
+            let mol = super::graph_io::read_smiles(smiles).unwrap();
+            assert!(super::has_multiplicative_pin(&mol), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn senior_structural_hydrides_keep_preferred_names() {
+        for (smiles, expected) in [
+            ("P(c1ccccc1)(c1ccccc1)c1ccccc1", "triphenylphosphane"),
+            (
+                "[Si](c1ccccc1)(c1ccccc1)(c1ccccc1)c1ccccc1",
+                "tetraphenylsilane",
+            ),
+            ("B(c1ccccc1)(c1ccccc1)c1ccccc1", "triphenylborane"),
+            ("N(c1ccccc1)c1ccccc1", "N-phenylaniline"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn multiplicative_pin_requires_identical_complete_rooted_senior_units() {
+        for smiles in [
+            // Equal parents, different attachment locants (P-51.3.1(3)).
+            "O=C(O)c1ccc(Cc2cccc(C(=O)O)c2)cc1",
+            // Different substituted parent units and configurations.
+            "Brc1cccc(Cc2cccc(Cl)c2)c1",
+            "CC[C@@H](C)c1ccc(Sc2ccc(cc2)[C@@H](C)CC)cc1",
+            r"O=C(O)/C=C/COC/C=C\C(=O)O",
+            // Unequal concatenated arms (P-15.3.4.1.1, P-15.3.4.1.3).
+            "Oc1ccc(CNc2ccc(O)cc2)cc1",
+            "O=C(O)c1ccc(CC(Cl)OCCc2ccc(C(=O)O)cc2)cc1",
+            // A more senior chain contains the principal group.
+            "O=C(O)CC(c1ccccc1)c1ccccc1",
+            // Unfunctionalized acyclic hydrocarbons and anhydrides.
+            "CCOCC",
+            "CC(=O)OC(C)=O",
+            // Direct ring junctions are assemblies, including their suffixes.
+            "Oc1ccccc1-c1ccccc1O",
+            "O=C1CCC(C2CCC(=O)CC2)CC1",
+            "c1ccc(-c2ccc(-c3ccccc3)cc2)cc1",
+        ] {
+            let mol = super::graph_io::read_smiles(smiles).unwrap();
+            assert!(!super::has_multiplicative_pin(&mol), "{smiles}");
+        }
+    }
 
     #[test]
     fn anhydride_names_need_acid_halves() {
@@ -801,6 +1062,80 @@ mod tests {
     }
 
     #[test]
+    fn linear_phane_assemblies_keep_nonpreferred_status_and_round_trip() {
+        use crate::naming::{NameReason, NameStatus};
+        for (smiles, expected, status) in [
+            (
+                "c1ccccc1-c1ccc(-c2ccc(Oc3cccc(-c4cccc(-c5ccccn5)n4)n3)cc2)cc1",
+                "1^6-[([1^1,2^1:2^4,3^1-terphenyl]-1^4-yl)oxy]-1^2,2^2:2^6,3^2-terpyridine",
+                NameStatus::NotPreferred(NameReason::RingAssembly),
+            ),
+            // P-51.3.2: even identical halves require the linear phane,
+            // rather than a multiplicative name, for seven skeletal nodes.
+            (
+                "c1ccccc1-c1ccc(-c2ccc(Oc3ccc(-c4ccc(-c5ccccc5)cc4)cc3)cc2)cc1",
+                "1^4-[([1^1,2^1:2^4,3^1-terphenyl]-1^4-yl)oxy]-1^1,2^1:2^4,3^1-terphenyl",
+                NameStatus::NotPreferred(NameReason::RingAssembly),
+            ),
+            // The fast-subset carbamate has four ring systems along a path
+            // containing acyclic chains, so it too requires a linear phane.
+            (
+                "CN(CCCCCCCCCN1CCC(CC1)OC(=O)NC2=CC=CC=C2C3=CC=CC=C3)C(=O)C4=CC(=C(C=C4)O)Cl",
+                "1-[9-(N-methyl-3-chloro-4-hydroxybenzamido)nonyl]piperidin-4-yl ([1,1'-biphenyl]-2-yl)carbamate",
+                NameStatus::NotPreferred(NameReason::RingAssembly),
+            ),
+            (
+                "c1ccccc1-c1ccc(-c2ccc(-c3ccc(-c4ccc(-c5ccccc5)cc4)cc3)cc2)cc1",
+                "1^1,2^1:2^4,3^1:3^4,4^1:4^4,5^1:5^4,6^1-sexiphenyl",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c1-c1ccccc1",
+                "2^3,2^4,2^5,2^6-tetraphenyl-1^1,2^1:2^2,3^1-terphenyl",
+                NameStatus::Preferred,
+            ),
+            // The same seven-node shape without an assembly is outside this
+            // fallback's scope (P-52.2.5.1(2)).
+            (
+                "c1ccccc1CC1CCC(CCc2ccccc2Cc2ccccc2)CC1",
+                "1-benzyl-2-[2-(4-benzylcyclohexyl)ethyl]benzene",
+                NameStatus::Preferred,
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn tied_ring_assemblies_choose_the_senior_component_and_round_trip() {
+        let smiles = "C1(C3CC4CCC34)C(C5CC5C6CC6C7CC7C8CC8)C2CCC12";
+        let name = name_smiles(smiles).unwrap();
+        assert_eq!(
+            name.text,
+            "3-([1^1,2^1:2^2,3^1:3^2,4^1-quatercyclopropan]-1^2-yl)-2,2'-bi(bicyclo[2.2.0]hexane)"
+        );
+        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+        let request = crate::naming::local::parse_request(&name.text).unwrap();
+        let reply = crate::naming::worker::respond(&request).unwrap();
+        let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+        assert_eq!(
+            crate::naming::canonical_smiles(smiles).unwrap(),
+            crate::naming::canonical_smiles(&parsed.smiles).unwrap()
+        );
+    }
+
+    #[test]
     fn unsupported_ring_assembly_keeps_substitutive_name_and_status() {
         let name = name_smiles("C1CCC(=C2CCCC2)C1").unwrap();
         assert_eq!(name.text, "cyclopentylidenecyclopentane");
@@ -839,6 +1174,118 @@ mod tests {
             assert_eq!(name.text, expected);
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
         }
+    }
+
+    #[test]
+    fn symmetric_polyspiro_assembly_junctions_use_every_equivalent_numbering() {
+        // P-24.2.2 fixes each dispiro parent numbering; P-28.2.1 then gives
+        // both equivalent terminal rings the lowest possible junction locant.
+        for smiles in [
+            "C1CC12CC21CC1C1CC12CC21CC1",
+            "C1C2(C1)CC12CC1C1C2(C3(CC3)C2)C1",
+            "C12(CC1)C1(CC1C1C3(CC43CC4)C1)C2",
+            "C1(C2C3(CC43CC4)C2)C2(C1)CC12CC1",
+            "C1CC21CC21CC1C1CC21C1(CC1)C2",
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, "1,1'-bi(dispiro[2.0.2.1]heptane)", "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn locanted_assembly_hydrides_are_enclosed_for_two_through_six_units() {
+        // P-28.2.1 and P-16.5 separate the component's locants from those
+        // identifying the junctions, independently of the unit multiplier.
+        let smiles = "C1(OCCOC1)C1COCCO1";
+        let name = name_smiles(smiles).unwrap();
+        assert_eq!(name.text, "2,2'-bi(1,4-dioxane)");
+        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+        let request = crate::naming::local::parse_request(&name.text).unwrap();
+        let reply = crate::naming::worker::respond(&request).unwrap();
+        let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+        assert_eq!(
+            crate::naming::canonical_smiles(smiles).unwrap(),
+            crate::naming::canonical_smiles(&parsed.smiles).unwrap()
+        );
+        for expected in [
+            "2,2'-bi(1,4-dioxane)",
+            "1^2,2^2:2^3,3^2-ter(1,4-dioxane)",
+            "1^2,2^2:2^3,3^2:3^3,4^2-quater(1,4-dioxane)",
+            "1^2,2^2:2^3,3^2:3^3,4^2:4^3,5^2-quinque(1,4-dioxane)",
+            "1^2,2^2:2^3,3^2:3^3,4^2:4^3,5^2:5^3,6^2-sexi(1,4-dioxane)",
+        ] {
+            let request = crate::naming::local::parse_request(expected).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(expected, &reply).unwrap();
+            let name = name_smiles(&parsed.smiles).unwrap();
+            assert_eq!(name.text, expected);
+            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let reparsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::naming::canonical_smiles(&reparsed.smiles).unwrap()
+            );
+        }
+        for multiplier in ["bi", "ter", "quater", "quinque", "sexi"] {
+            let enclosed = format!("2-(1,1'-{multiplier}(1,4-dioxan)-2-yl)acetic acid");
+            assert_eq!(nest_enclosing_marks(&enclosed), enclosed);
+        }
+    }
+
+    #[test]
+    fn fused_heterocycle_assemblies_keep_parent_locants_and_indicated_hydrogen() {
+        for (smiles, expected) in [
+            ("c1ccc2c(c1)ccc(n2)-c1ccc2ccccc2n1", "2,2'-biquinoline"),
+            ("c1ccc2c(c1)oc(c2)-c1cc2ccccc2o1", "2,2'-bi(1-benzofuran)"),
+            (
+                "c1ccc2c(-c3c[nH]c4ccccc34)c[nH]c2c1",
+                "1H,1'H-3,3'-biindole",
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+        // P-16.2.4.1 also permits separating the intrinsic fusion-parent
+        // locant with a hyphen. Both spellings reconstruct the same hydride;
+        // generation consistently encloses locanted component names.
+        let alternative = "2,2'-bi-1-benzofuran";
+        let request = crate::naming::local::parse_request(alternative).unwrap();
+        let reply = crate::naming::worker::respond(&request).unwrap();
+        let parsed = crate::naming::local::parse_result(alternative, &reply).unwrap();
+        assert_eq!(
+            crate::naming::canonical_smiles("c1ccc2c(c1)oc(c2)-c1cc2ccccc2o1").unwrap(),
+            crate::naming::canonical_smiles(&parsed.smiles).unwrap()
+        );
     }
 
     #[test]

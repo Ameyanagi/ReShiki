@@ -168,13 +168,13 @@ impl NameReason {
                 "Cites an isolated benzo ring as a separate higher-order component, as in [1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazole; preferred IUPAC names treat the benzo ring and an ortho-fused heteromonocycle as one benzoheterocycle component, as in [1,3]thiazolo[5,4-e][1,3]benzoxazole (P-25.3.5, P-25.2.2.4; FR-3.5)."
             }
             Self::Multiplicative => {
-                "Names two identical units joined by an oxygen, chalcogen, sulfinyl, sulfonyl or methylene link substitutively, as in phenoxybenzene, (benzenesulfinyl)benzene or [(carboxymethyl)sulfanyl]acetic acid; the preferred IUPAC name is multiplicative, as in 1,1'-oxydibenzene, 1,1'-sulfinyldibenzene or 2,2'-sulfanediyldiacetic acid (P-51.3.1, P-63.2.4.2, P-63.6)."
+                "Names identical senior parent units joined by a linking group substitutively; the preferred IUPAC name is multiplicative. The units include identical substituents and suffix groups at identical locants, while the central linking group need not be symmetric, as in 1,1'-oxydibenzene or 2,2'-sulfanediyldiacetic acid (P-15.3, P-51.1.5, P-51.3.1)."
             }
             Self::AcylPrefix => {
                 "Uses an acyl prefix built from a substituent, such as (4-methylphenyl)carbonyl, cyclohexylcarbonothioyl, (dimethyloxophosphanyl) or (dimethyloxoarsanyl), or an oxophosphanyl prefix on a parent, as in (methyloxophosphanyl)methane; preferred IUPAC names use the acid-derived forms 4-methylbenzoyl, cyclohexanecarbothioyl, dimethylphosphinoyl, dimethylarsinoyl and dimethyl-lambda5-phosphanone (P-65.1.7.4.2, P-67.1.4.1.1.3, P-68.3.2.3.1)."
             }
             Self::RingAssembly => {
-                "Uses a substitutive name where a preferred ring-assembly name is not yet supported. This includes double-bond junctions, assemblies requiring skeletal-replacement or hydro prefixes, and assemblies of seven or more units requiring phane nomenclature (P-28, P-31.2.3.3.5, P-52.2.7)."
+                "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions, assemblies requiring skeletal-replacement or hydro prefixes, and linear phanes with at least four ring systems and seven skeletal nodes (P-28, P-31.2.3.3.5, P-51.3.2, P-52.2.5.1, P-52.2.7)."
             }
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."

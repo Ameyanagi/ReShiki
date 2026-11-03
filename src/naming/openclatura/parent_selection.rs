@@ -45,6 +45,7 @@ struct ParentScore {
     ring_parent: i64,
     ring_seniority: Option<RingSeniority>,
     chain_seniority: Option<ChainSeniority>,
+    assembly_component: Option<RingSeniority>,
     multiple_bonds: i64,
     double_bonds: i64,
     assembly_junctions: Option<(Vec<LocantKey>, Vec<LocantKey>)>,
@@ -160,6 +161,7 @@ fn score(
             )
         }),
         chain_seniority: (!is_ring).then(|| (-(path.len() as i64), -hetero_count, hetero_counts)),
+        assembly_component: None,
         assembly_junctions: None,
         multiple_bonds: -multiple,
         double_bonds: -double,
@@ -197,6 +199,45 @@ pub fn select_principal_parent_with_excluded(
     principal_carbons: &[usize],
     excluded: &AtomSet,
 ) -> Option<ParentSelection> {
+    // `min_by_key` keeps the first tied item, as does Python's stable sort.
+    parent_candidates(mol, chains, ring_systems, principal_carbons, excluded, true)
+        .into_iter()
+        .min_by(|a, b| a.0.cmp(&b.0))
+        .map(|(_, selection)| selection)
+}
+
+/// P-51.3.1: multiplicative units must tie as the senior parent, before the
+/// atom-order fallback used to select one equivalent substitutive parent.
+pub(super) fn senior_parent_candidates(
+    mol: &Molecule,
+    chains: &[Vec<usize>],
+    ring_systems: &[RingSystem],
+    principal_carbons: &[usize],
+    excluded: &AtomSet,
+) -> Vec<ParentSelection> {
+    let candidates = parent_candidates(
+        mol,
+        chains,
+        ring_systems,
+        principal_carbons,
+        excluded,
+        false,
+    );
+    let best = candidates.iter().map(|(score, _)| score).min().cloned();
+    candidates
+        .into_iter()
+        .filter_map(|(score, selection)| (Some(&score) == best.as_ref()).then_some(selection))
+        .collect()
+}
+
+fn parent_candidates(
+    mol: &Molecule,
+    chains: &[Vec<usize>],
+    ring_systems: &[RingSystem],
+    principal_carbons: &[usize],
+    excluded: &AtomSet,
+    atom_order_tiebreak: bool,
+) -> Vec<(ParentScore, ParentSelection)> {
     let ranks = canonical_ranks(mol, None);
     let assemblies = discover_ring_assemblies(mol, ring_systems);
     let compare_assembly = !assemblies.is_empty();
@@ -266,6 +307,26 @@ pub fn select_principal_parent_with_excluded(
             principal_carbons,
             &ranks,
         );
+        // P-44.2.2.2.7(a)-(g): after whole-assembly seniority ties, compare
+        // one component: heteroatom presence, N, first heteroatom, rings,
+        // atoms, heteroatom count, then counts in heteroatom seniority order.
+        // Ring kind has already separated assemblies from other ring parents.
+        let unit_path: Vec<_> = assembly.unit_atoms.iter().copied().collect();
+        let unit_bonds = mol
+            .bonds
+            .values()
+            .filter(|b| assembly.unit_atoms.contains(&b.u) && assembly.unit_atoms.contains(&b.v))
+            .count();
+        parent_score.assembly_component = score(
+            mol,
+            &unit_path,
+            true,
+            unit_bonds + 1 - unit_path.len(),
+            Some(6),
+            &[],
+            &ranks,
+        )
+        .ring_seniority;
         parent_score.assembly_junctions = Some(assembly.junction_key.clone());
         let atoms: AtomSet = path.iter().copied().collect();
         parent_score.attached_prefixes = -(path
@@ -310,13 +371,14 @@ pub fn select_principal_parent_with_excluded(
     if compare_assembly {
         prefer_ring_or_chain_class(&mut candidates, mol);
     }
+    if !atom_order_tiebreak {
+        for (score, _) in &mut candidates {
+            score.path_tiebreak.clear();
+        }
+    }
     prefer_spiro_backbone_components(&mut candidates, ring_systems, mol);
     prefer_assembly_substituent_citation(&mut candidates, mol, excluded);
-    // `min_by_key` keeps the first tied item, as does Python's stable sort.
     candidates
-        .into_iter()
-        .min_by(|a, b| a.0.cmp(&b.0))
-        .map(|(_, selection)| selection)
 }
 
 fn prefer_assembly_substituent_citation(
