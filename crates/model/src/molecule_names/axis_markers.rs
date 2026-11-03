@@ -25,7 +25,8 @@ struct Axis {
 
 /// Encoder and decoder admit exactly the same topology: an acyclic single
 /// bond between two aromatic sp2 ring atoms that each have two other heavy
-/// neighbours. Each atom therefore ends at most one axis.
+/// neighbours with distinct constitutional symmetry classes. Each atom
+/// therefore ends at most one axis.
 fn eligible_axes(state: &State) -> Result<Vec<Axis>, IdentityRejection> {
     let rings = chemistry::rings::fast(&state.graph).map_err(|_| REJECTED)?;
     let ring_atoms: HashSet<_> = rings.atoms.iter().flatten().copied().collect();
@@ -54,6 +55,9 @@ fn eligible_axes(state: &State) -> Result<Vec<Axis>, IdentityRejection> {
                 continue 'bonds;
             }
             *at_mut(&mut refs, slot)? = others.into_iter().min().ok_or(REJECTED)?;
+        }
+        if !chemistry::stereo::axis_ends_distinct(&state.graph, index).map_err(|_| REJECTED)? {
+            continue;
         }
         axes.push(Axis {
             bond: index,
@@ -189,6 +193,20 @@ mod tests {
 
     fn decode(text: &str) -> Result<State, IdentityRejection> {
         apply_axis_markers(&chemistry::smiles::prepare(text).unwrap().state)
+    }
+
+    fn aryl_link(state: &State) -> usize {
+        state
+            .graph
+            .bonds
+            .iter()
+            .position(|bond| {
+                bond.order == 1
+                    && !bond.aromatic
+                    && state.graph.atoms[bond.a].aromatic
+                    && state.graph.atoms[bond.b].aromatic
+            })
+            .unwrap()
     }
 
     fn assert_roundtrips(state: &State, axis_count: usize) {
@@ -338,16 +356,30 @@ mod tests {
                 "{text}"
             );
         }
-        let mut unlabelled = chemistry::smiles::prepare("c1ccccc1-c1ccccc1")
-            .unwrap()
-            .state;
-        let axis = eligible_axes(&unlabelled).unwrap().remove(0);
-        unlabelled.metadata.bonds[axis.bond].stereo = 6;
-        unlabelled.metadata.bonds[axis.bond].stereo_atoms = axis.refs.to_vec();
-        assert_eq!(
-            canonical_identity(&unlabelled),
-            Err(IdentityRejection::NonclassicalStereo)
-        );
+    }
+
+    #[test]
+    fn equivalent_axis_ends_are_ineligible_for_encoding_and_decoding() {
+        for smiles in [
+            "c1ccccc1-c1ccccc1",
+            "OC1=C(C=CC=C1)[C-]1C=CC=C1",
+            "[Na+].CC1=C(C=CC=C1)[C-]1C=CC=C1",
+        ] {
+            let mut state = chemistry::smiles::prepare(smiles).unwrap().state;
+            let axis = aryl_link(&state);
+            assert!(eligible_axes(&state).unwrap().is_empty(), "{smiles}");
+            state.metadata.bonds[axis].stereo = 6;
+            assert_eq!(canonical_identity(&state), Err(REJECTED), "{smiles}");
+            state.metadata.bonds[axis].stereo = 0;
+            let bond = &state.graph.bonds[axis];
+            for end in [bond.a, bond.b] {
+                state.metadata.atoms[end].map_number = AXIS_M;
+            }
+            assert!(
+                matches!(apply_axis_markers(&state), Err(REJECTED)),
+                "{smiles}"
+            );
+        }
     }
 
     #[test]
@@ -376,12 +408,12 @@ mod tests {
         let mut pseudo = chemistry::smiles::prepare("c1([C@H](F)Cl)cccc([C@@H](F)Cl)c1-c1ccccc1O")
             .unwrap()
             .state;
-        let axis = eligible_axes(&pseudo).unwrap().remove(0);
-        pseudo.metadata.bonds[axis.bond].stereo = 6;
-        pseudo.metadata.bonds[axis.bond].stereo_atoms = axis.refs.to_vec();
+        assert!(eligible_axes(&pseudo).unwrap().is_empty());
+        let axis = aryl_link(&pseudo);
+        pseudo.metadata.bonds[axis].stereo = 6;
         let assigned = chemistry::stereo::cip::label::assign(&pseudo, &Default::default()).unwrap();
         assert!(matches!(
-            assigned.state.properties.bond_codes[axis.bond].as_deref(),
+            assigned.state.properties.bond_codes[axis].as_deref(),
             Some("m" | "p")
         ));
         assert_eq!(

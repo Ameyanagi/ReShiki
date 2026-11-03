@@ -1,4 +1,4 @@
-//! Resonance-averaged atomic numbers, including native negative-charge order.
+//! Resonance-averaged duplicate atomic numbers for mancude rings and ring systems.
 use super::{Error, Fraction, Molecule, at, at_mut};
 use std::collections::VecDeque;
 
@@ -119,16 +119,15 @@ pub(super) fn calculate(mol: &mut Molecule<'_>) -> Result<Vec<Fraction>, Error> 
         }
         *at_mut(&mut fractions, i)? = Fraction::new(numerator, denominator);
     }
-    // The pinned implementation assigns the running fraction BEFORE adding
-    // each atom's contributions. Preserve that order independently per part.
+    // IUPAC P-92.1.4.4 averages the complete negative mancude part: every
+    // cyclopentadienide duplicate has Z = 24/5, independently of atom order.
+    // https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404
     let mut sums = vec![(0_u32, 0_u32); numparts + 1];
     for i in 0..n {
         let part = *at(&parts, i)?;
         if !*at(&negative, part)? {
             continue;
         }
-        let (numerator, denominator) = *at(&sums, part)?;
-        *at_mut(&mut fractions, i)? = Fraction::new(numerator, denominator);
         at_mut(&mut sums, part)?.1 += 1;
         for j in 0..at(&mol.adjacent, i)?.len() {
             let (a, edge) = *at(at(&mol.adjacent, i)?, j)?;
@@ -139,6 +138,12 @@ pub(super) fn calculate(mol: &mut Molecule<'_>) -> Result<Vec<Fraction>, Error> 
                 let sum = &mut at_mut(&mut sums, part)?.0;
                 *sum = sum.checked_add(extra).ok_or(Error::Limit)?;
             }
+        }
+    }
+    for (i, &part) in parts.iter().enumerate() {
+        if *at(&negative, part)? {
+            let (numerator, denominator) = *at(&sums, part)?;
+            *at_mut(&mut fractions, i)? = Fraction::new(numerator, denominator);
         }
     }
     Ok(fractions)

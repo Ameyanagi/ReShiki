@@ -15,8 +15,8 @@ use crate::graph::{
 use crate::parse_tree::{Arena, NodeId};
 use crate::stereo_analyser::{StereoBond, StereoCentre};
 use crate::xml_declarations::*;
-use reshiki_chemistry::stereo::{cip::label, perception::State};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use reshiki_chemistry::stereo::{axis_ends_distinct, cip::label};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
 /// Upstream warning mode catches StereochemistryException (including CIP
@@ -455,6 +455,14 @@ impl<'a> StereochemistryHandler<'a> {
                 "{AXIAL_TYPE_VAL} stereochemistry is not currently interpretable by OPSIN"
             ));
         };
+        // An axial locant belongs to the first component searched, including
+        // when the descriptor is attached to an ester's substituent word.
+        let Some(fragment) = self.possible_fragments(id)?.first().copied() else {
+            return stereo(format!("Could not find a biaryl axis at locant {locant}"));
+        };
+        let Some(atom) = self.graph().atom_by_locant(fragment, &locant) else {
+            return stereo(format!("Could not find a biaryl axis at locant {locant}"));
+        };
         let (mut native, indices) = crate::modern_cip::state(self.graph())?;
         let rings = reshiki_chemistry::rings::perceive(
             &native.graph,
@@ -467,62 +475,6 @@ impl<'a> StereochemistryHandler<'a> {
             .iter()
             .filter_map(|(&atom, &index)| aromatic.graph.atoms[index].aromatic.then_some(atom))
             .collect();
-        for fragment in self.possible_fragments(id)? {
-            if self.attempt_assign_axial_stereo(
-                fragment,
-                &locant,
-                descriptor,
-                &aryl_atoms,
-                &mut native,
-                &indices,
-            )? {
-                return Ok(());
-            }
-        }
-        let parent = self.parent(id)?;
-        if let Some(word) = self.arena[parent].parent.filter(|&w| {
-            self.arena[w].name == WORD_EL
-                && self.arena[w].attribute(TYPE_ATR) == Some("substituent")
-        }) && let Some(outer) = self.arena[word].parent
-        {
-            for full in self
-                .arena
-                .children_with_attribute(outer, WORD_EL, TYPE_ATR, "full")
-            {
-                for group in self
-                    .arena
-                    .descendants_named(full, GROUP_EL)
-                    .into_iter()
-                    .rev()
-                {
-                    if self.attempt_assign_axial_stereo(
-                        self.fragment(group)?,
-                        &locant,
-                        descriptor,
-                        &aryl_atoms,
-                        &mut native,
-                        &indices,
-                    )? {
-                        return Ok(());
-                    }
-                }
-            }
-        }
-        stereo(format!("Could not find a biaryl axis at locant {locant}"))
-    }
-
-    fn attempt_assign_axial_stereo(
-        &mut self,
-        fragment: FragmentId,
-        locant: &str,
-        descriptor: &str,
-        aryl_atoms: &HashSet<AtomId>,
-        native: &mut State,
-        indices: &HashMap<AtomId, usize>,
-    ) -> Result<bool> {
-        let Some(atom) = self.graph().atom_by_locant(fragment, locant) else {
-            return Ok(false);
-        };
         let candidates: Vec<_> = self
             .graph()
             .atom(atom)
@@ -545,8 +497,6 @@ impl<'a> StereochemistryHandler<'a> {
             })
             .collect();
         let bond = match candidates.as_slice() {
-            // The first fragment containing the locant owns its namespace;
-            // a non-axis parent atom cannot fall through to a substituent.
             [] => return stereo(format!("Could not find a biaryl axis at locant {locant}")),
             [bond] => *bond,
             _ => return stereo(format!("More than one biaryl axis at locant {locant}")),
@@ -574,12 +524,17 @@ impl<'a> StereochemistryHandler<'a> {
             .iter()
             .position(|bond| bond.a == indices[&axis.from] && bond.b == indices[&axis.to])
             .unwrap();
+        if !axis_ends_distinct(&native.graph, native_bond)
+            .map_err(StereochemistryError::Uninterpretable)?
+        {
+            return stereo(format!("Axis at locant {locant} has equivalent ligands"));
+        }
         native.metadata.bonds[native_bond].stereo = 6;
-        let mut labelled = label::assign(native, &Default::default())
+        let mut labelled = label::assign(&native, &Default::default())
             .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
         if labelled.state.properties.bond_codes[native_bond].as_deref() != Some(descriptor) {
             native.metadata.bonds[native_bond].stereo = 7;
-            labelled = label::assign(native, &Default::default())
+            labelled = label::assign(&native, &Default::default())
                 .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
         }
         if labelled.state.properties.bond_codes[native_bond].as_deref() != Some(descriptor) {
@@ -592,7 +547,7 @@ impl<'a> StereochemistryHandler<'a> {
             clockwise: native.metadata.bonds[native_bond].stereo == 6,
             descriptor: descriptor.into(),
         });
-        Ok(true)
+        Ok(())
     }
 
     fn assign_stereo_bond(&mut self, id: NodeId) -> Result {

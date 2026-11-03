@@ -107,6 +107,63 @@ fn partial_bond_returns_a_typed_error_without_changing_the_input() -> anyhow::Re
 }
 
 #[test]
+fn negative_mancude_fractions_average_the_complete_part_independent_of_order() -> anyhow::Result<()>
+{
+    // IUPAC P-92.1.4.4 gives every cyclopentadienide duplicate Z = 24/5.
+    // https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404
+    for text in ["[CH-]1C=CC=C1", "C1=C[CH-]C=C1"] {
+        let original = crate::smiles::read(text)?.prepared.state;
+        for reverse_atoms in [false, true] {
+            let mut state = original.clone();
+            if reverse_atoms {
+                let n = state.graph.atoms.len();
+                state.graph.atoms.reverse();
+                state.metadata.atoms.reverse();
+                state.valences.reverse();
+                state.hybridizations.reverse();
+                state.properties.atoms.reverse();
+                for bond in &mut state.graph.bonds {
+                    bond.a = n - 1 - bond.a;
+                    bond.b = n - 1 - bond.b;
+                }
+                for ring in &mut state.rings.atoms {
+                    for atom in ring {
+                        *atom = n - 1 - *atom;
+                    }
+                }
+            }
+            let mut molecule = Molecule::new(&state)?;
+            for atom in (0..state.graph.atoms.len()).rev() {
+                assert_eq!(molecule.fraction(atom)?, Fraction(24, 5), "{text}, {atom}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn equivalent_cyclopentadienide_axis_ligands_do_not_receive_helicity() -> anyhow::Result<()> {
+    let mut state = crate::smiles::read("OC1=C(C=CC=C1)[C-]1C=CC=C1")?
+        .prepared
+        .state;
+    let axis = state
+        .graph
+        .bonds
+        .iter()
+        .position(|bond| (bond.a, bond.b) == (2, 7) || (bond.a, bond.b) == (7, 2))
+        .unwrap();
+    state.metadata.bonds[axis].stereo = 6;
+    state.metadata.bonds[axis].stereo_atoms = vec![1, 8];
+    state.properties.bond_codes[axis] = Some("old".into());
+    // The uniform negative-mancude average cannot distinguish these ring paths.
+    // https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404
+    let result = label::assign(&state, &Default::default())?;
+    assert!(result.labels.is_empty());
+    assert_eq!(result.state.properties.bond_codes[axis], None);
+    Ok(())
+}
+
+#[test]
 fn complete_labeling_bounds_retained_graphs_and_selection_without_partial_edits()
 -> anyhow::Result<()> {
     let mut state = chain(20_000)?;

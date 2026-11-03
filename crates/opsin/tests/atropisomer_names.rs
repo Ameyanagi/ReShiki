@@ -180,15 +180,59 @@ fn axial_locants_follow_the_annotated_component_namespace() {
 
 #[test]
 fn axial_locants_do_not_fall_back_to_a_substituent_namespace() {
-    for base in [
-        "2-[2-(hydroxymethyl)naphthalen-1-yl]-3,5-dimethylphenol",
-        "2-(2-hydroxyphenyl)phenol",
+    let parser = Parser::new().unwrap();
+    for (base, locant) in [
+        (
+            "2-[2-(hydroxymethyl)naphthalen-1-yl]-3,5-dimethylphenol",
+            "1",
+        ),
+        ("2-(2-hydroxyphenyl)phenol", "1"),
+        ("2-(8-hydroxynaphthalen-7-yl)phenol", "7"),
+        ("2-(6-methylnaphthalen-7-yl)phenol", "7"),
+        ("2-(7-hydroxynaphthalen-8-yl)phenol", "8"),
+        ("2-(7-methylnaphthalen-8-yl)phenol", "8"),
     ] {
         for descriptor in ["M", "P", "Ra", "Sa"] {
-            let name = format!("(1{descriptor})-{base}");
-            let result = Parser::new().unwrap().parse(&name, &ParseOptions::strict());
+            let name = format!("({locant}{descriptor})-{base}");
+            let result = parser.parse(&name, &ParseOptions::default());
             assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+            assert!(result.structure.is_none(), "{name}");
         }
+    }
+}
+
+#[test]
+fn constitutionally_equivalent_aryl_ligands_cannot_define_an_axis() {
+    let parser = Parser::new().unwrap();
+    for base in [
+        "1-(2-hydroxyphenyl)cyclopenta-2,4-dien-1-ide",
+        "1-(2-methylphenyl)cyclopenta-2,4-dien-1-ide",
+    ] {
+        for prefix in ["", "sodium "] {
+            for descriptor in ["M", "P", "Ra", "Sa"] {
+                let name = format!("{prefix}(1{descriptor})-{base}");
+                let result = parser.parse(&name, &ParseOptions::default());
+                assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+                assert!(result.structure.is_none(), "{name}");
+            }
+        }
+    }
+}
+
+#[test]
+fn naphthyl_phenol_parent_locant_preserves_both_axis_hands() {
+    for (descriptor, expected, clockwise) in [
+        ("M", "M", true),
+        ("P", "P", false),
+        ("Ra", "M", true),
+        ("Sa", "P", false),
+    ] {
+        let name = format!("(2{descriptor})-2-(8-hydroxynaphthalen-7-yl)phenol");
+        let (_, _, axis) = written_axis(&name, expected, "2");
+        // Independent RDKit 2026.09.1 CIP and 3D geometry checks fix this hand.
+        assert_eq!(axis.atoms, [2, 11], "{name}");
+        assert_eq!(axis.refs, [3, 12], "{name}");
+        assert_eq!(axis.clockwise, clockwise, "{name}");
     }
 }
 
