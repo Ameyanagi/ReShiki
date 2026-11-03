@@ -118,6 +118,7 @@ async fn existing_explicit_helper_configuration_remains_isolated() {
     // that helper failure, including when the embedded engine is linked in.
     let result = native_response::analyze_prepared(
         Arc::new(molecule),
+        false,
         Some(native_response::Config::new(std::path::PathBuf::new())),
     )
     .await;

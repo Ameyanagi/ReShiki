@@ -848,6 +848,27 @@ async fn name_prints_one_plain_name_without_a_banner() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn name_preserves_unspecified_smiles_double_bonds() {
+    for (smiles, expected) in [
+        ("CC=CC", "but-2-ene"),
+        ("CCC=CC", "pent-2-ene"),
+        ("C/C=C/C=CC", "(4E)-hexa-2,4-diene"),
+        ("FC=CCl", "1-chloro-2-fluoroethene"),
+        ("C1=CCCCCCC1", "cyclooctene"),
+        ("C/C=C/C", "(2E)-but-2-ene"),
+        (r"C/C=C\C", "(2Z)-but-2-ene"),
+        ("C1=CCCCC1", "cyclohexene"),
+        ("C1=CCCCCC1", "cycloheptene"),
+    ] {
+        let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
+        assert_eq!(code, SUCCESS, "{smiles}: {err}");
+        assert!(err.is_empty(), "{smiles}: {err}");
+        let result: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(result["value"]["name"], expected, "{smiles}: {out}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
     use crate::naming::{NameReason, NameStatus};
 

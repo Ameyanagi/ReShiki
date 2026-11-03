@@ -11,6 +11,58 @@ fn copy_key(app: &App) -> CopyAsKey {
     }
 }
 
+#[tokio::test]
+async fn smiles_paste_and_import_keep_unspecified_alkenes_after_insertion() {
+    use iced::futures::StreamExt;
+
+    for paste in [false, true] {
+        let (mut app, _) = App::new();
+        app.engine = reshiki::engine::LocalEngine::in_process();
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        app.tab.doc.add_atom("O", Point::new(-100., 0.));
+        let task = if paste {
+            app.pasted(Some("CC=CC".into()))
+        } else {
+            app.imports.set_text("CC=CC");
+            app.insert_input()
+        };
+        let mut stream = iced_runtime::task::into_stream(task).unwrap();
+        let Some(iced_runtime::Action::Output(message @ Message::EngineFinished { .. })) =
+            stream.next().await
+        else {
+            panic!("Missing SMILES import result");
+        };
+        let _ = app.update(message);
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.atoms.len(), 5);
+        assert_eq!(app.tab.selected.len(), 4);
+        let bond = app
+            .tab
+            .doc
+            .bonds
+            .iter()
+            .find(|bond| bond.order == 2)
+            .unwrap();
+        assert!(bond.stereo_authoritative);
+        assert_eq!(bond.stereo, None);
+        assert_eq!(bond.display, "plain");
+        assert_eq!(
+            reshiki::chemistry::stereo_lint::undefined(&app.tab.doc).bonds,
+            [(bond.a, bond.b)]
+        );
+        let identity = reshiki::naming::selected_identity(&app.tab.doc, &app.tab.selected).unwrap();
+        assert_eq!(identity.smiles, "CC=CC");
+        assert_eq!(
+            reshiki::naming::generate_name(&identity, reshiki::naming::Cancel::default())
+                .await
+                .unwrap()
+                .title,
+            "but-2-ene"
+        );
+    }
+}
+
 #[test]
 fn copy_as_drops_stale_selection_revision_and_epoch_before_publication() {
     for stale in ["selection", "revision", "epoch"] {

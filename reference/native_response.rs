@@ -504,6 +504,7 @@ async fn shared_prepared_analysis_preserves_chemical_state_and_native_results() 
         let before = serde_json::to_value(&*molecule)?;
         let analysis = native_response::analyze_prepared(
             Arc::clone(&molecule),
+            false,
             Some(Config::new(path.clone())),
         )
         .await?;
