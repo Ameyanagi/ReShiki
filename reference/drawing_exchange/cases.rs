@@ -106,6 +106,7 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
     group
         .abbreviations
         .push(reshiki::abbreviations::Abbreviation {
+            exit: None,
             label_style: None,
             label_color_override: false,
             highlight: None,

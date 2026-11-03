@@ -661,7 +661,7 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
 | --- | --- |
 | `operation_api` | 1 |
 | `engine_protocol` | 1 |
-| `document` | 33 |
+| `document` | 34 |
 
 ## Proposal
 
@@ -978,6 +978,18 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
                     "maxItems": 300,
                     "type": "array"
                   },
+                  "exit": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    ],
+                    "description": "Second attachment atom for a two-sided residue, or null for a single attachment."
+                  },
                   "label": {
                     "type": "string"
                   }
@@ -985,6 +997,7 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
                 "required": [
                   "label",
                   "anchor",
+                  "exit",
                   "atoms"
                 ],
                 "type": "object"

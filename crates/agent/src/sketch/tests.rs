@@ -230,3 +230,35 @@ fn malformed_diagrams_are_rejected_without_panics() {
     };
     assert!(proposal.validate().is_err());
 }
+
+#[test]
+fn two_sided_abbreviations_preserve_both_sketch_attachment_indices() {
+    let mut sketch = sandwich();
+    sketch.atoms.truncate(4);
+    sketch.bonds.clear();
+    sketch.shapes.clear();
+    for index in 0..3 {
+        sketch.bonds.push(Bond {
+            a: index,
+            b: index + 1,
+            order: 1,
+            display: "plain".into(),
+            ring_arc: false,
+        });
+    }
+    sketch.abbreviations.push(Abbreviation {
+        label: "Link".into(),
+        anchor: 1,
+        exit: Some(2),
+        atoms: vec![1, 2],
+    });
+    let document = sketch.render(&Default::default()).unwrap();
+    let group = &document.abbreviations[0];
+    assert_eq!(group.anchor, 2);
+    assert_eq!(group.exit, Some(3));
+    assert_eq!(document.file_version(), crate::document::RESIDUE_GROUPS);
+    for exit in [1, 3, 4] {
+        sketch.abbreviations[0].exit = Some(exit);
+        assert!(sketch.validate().is_err(), "exit {exit}");
+    }
+}

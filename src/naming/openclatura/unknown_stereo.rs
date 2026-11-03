@@ -89,23 +89,36 @@ pub(super) fn name_smiles(
             .values()
             .filter(|bond| bond.stereo.as_deref() == Some("Ξ"))
             .count();
-    // Offer the Ξ/ξ name only when it writes one locanted descriptor per
-    // unknown unit (P-91.2.1.2.1). Otherwise (a multiplied substituent, a
-    // functional-class name) the unspecified name stands alone and the note
-    // counts the omitted units.
-    let locanted = |raw: &str| {
-        raw.chars()
-            .zip(raw.chars().skip(1))
-            .filter(|&(locant, descriptor)| {
-                matches!(descriptor, 'Ξ' | 'ξ')
-                    && (locant.is_ascii_alphanumeric() || locant == '\'')
-            })
-            .count()
+    // Offer the Ξ/ξ name only when it writes one descriptor per unknown unit
+    // (P-91.2.1.2.1). A descriptor is scoped by its locant or, without one
+    // (P-91.3), by the substituent bracket around it, as in
+    // [(Ξ)-bromofluoromethyl]. A single unlocanted descriptor in front of the
+    // whole name must leave the same name, as in (Ξ)-cyclooctene. Otherwise (a
+    // multiplied substituent, a functional-class name) the unspecified name
+    // stands alone and the note counts the omitted units.
+    let one_per_unit = |raw: &str| {
+        let chars: Vec<_> = raw.chars().collect();
+        let (mut scoped, mut leading) = (0, 0);
+        for i in (1..chars.len()).filter(|&i| matches!(chars[i], 'Ξ' | 'ξ')) {
+            if chars[i - 1].is_ascii_alphanumeric()
+                || chars[i - 1] == '\''
+                || (chars[i - 1] == '(' && i > 1 && matches!(chars[i - 2], '(' | '[' | '{'))
+            {
+                scoped += 1;
+            } else {
+                leading += 1;
+            }
+        }
+        scoped + leading == normal.omitted_units
+            && (leading == 0
+                || leading == 1
+                    && super::nest_enclosing_marks(&without_unknown_descriptors(raw))
+                        == normal.text)
     };
     let Some(explicit_raw) = graph_io::get_connected_components(&mol)
         .first()
         .and_then(|component| super::component_namer::name_component(&mol, component).ok())
-        .filter(|raw| locanted(raw) == normal.omitted_units)
+        .filter(|raw| one_per_unit(raw))
     else {
         return Ok(Some(normal));
     };
@@ -236,6 +249,61 @@ mod tests {
     }
 
     #[test]
+    fn unlocanted_unknown_descriptors_round_trip() {
+        for (input, expected, omitted, explicit) in [
+            (
+                "F[CH:900001](Cl)Br",
+                "bromochlorofluoromethane",
+                &["1"] as &[&str],
+                "(Ξ)-bromochlorofluoromethane",
+            ),
+            (
+                "C1CCC[CH:900002]=[CH:900002]CC1",
+                "cyclooctene",
+                &["1=2"],
+                "(Ξ)-cyclooctene",
+            ),
+            (
+                "C1CCCC[CH:900002]=[CH:900002]CC1",
+                "cyclononene",
+                &["1=2"],
+                "(Ξ)-cyclononene",
+            ),
+            (
+                "O=C(O)[CH:900001](F)Cl",
+                "chlorofluoroacetic acid",
+                &["2"],
+                "(Ξ)-chlorofluoroacetic acid",
+            ),
+            // Unlocanted descriptors are scoped by their substituent brackets.
+            (
+                "F[CH:900001](Cl)c1ccc([CH:900001](F)Br)cc1",
+                "1-(bromofluoromethyl)-4-(chlorofluoromethyl)benzene",
+                &[],
+                "1-[(Ξ)-bromofluoromethyl]-4-[(Ξ)-chlorofluoromethyl]benzene",
+            ),
+            (
+                "F[C@H](Cl)c1ccc([CH:900001](F)Br)cc1",
+                "1-(bromofluoromethyl)-4-[(R)-chlorofluoromethyl]benzene",
+                &[],
+                "1-[(Ξ)-bromofluoromethyl]-4-[(R)-chlorofluoromethyl]benzene",
+            ),
+        ] {
+            round_trip(input, expected, omitted, explicit);
+        }
+    }
+
+    #[test]
+    fn locanted_pseudoasymmetric_unknown_descriptor_is_retained() {
+        round_trip(
+            "O=C(O)[C@H](O)[CH:900001](O)[C@H](O)C(=O)O",
+            "(2R,4S)-2,3,4-trihydroxypentanedioic acid",
+            &["3"],
+            "(2R,3ξ,4S)-2,3,4-trihydroxypentanedioic acid",
+        );
+    }
+
+    #[test]
     fn blue_book_p91_3_unknown_macrocycle() {
         round_trip(
             "Cl[C:900002]1=[CH:900002]CCCCCCCCCC1",
@@ -326,6 +394,9 @@ mod tests {
     #[test]
     fn descriptor_omission_preserves_nested_groups_and_known_stereo() {
         for (raw, omitted) in [
+            ("(Ξ)-bromochlorofluoromethane", "bromochlorofluoromethane"),
+            ("(Ξ)-cyclooctene", "cyclooctene"),
+            ("(Ξ)-cyclononene", "cyclononene"),
             ("(2Ξ,3R)-3-chlorobutan-2-ol", "(3R)-3-chlorobutan-2-ol"),
             ("(1Ξ)-1-chlorocyclododec-1-ene", "1-chlorocyclododec-1-ene"),
             (

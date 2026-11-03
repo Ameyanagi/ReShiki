@@ -197,6 +197,7 @@ fn condensed_labels_and_abbreviations_stay_intact() {
         label: "ONa".into(),
         reverse_label: "NaO".into(),
         anchor: o,
+        exit: None,
         members: vec![o, na],
         label_style: None,
         label_color_override: false,

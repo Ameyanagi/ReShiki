@@ -69,7 +69,7 @@ fn side_replacement_prefixes(parts: &AssemblyParts) -> Vec<String> {
             p
         })
         .collect();
-    let mut replacement = format_replacement_prefixes(&local);
+    let (mut replacement, _) = format_replacement_prefixes(&local);
     if is_systematic_fusion(parts)
         && let Some(plan) = &parts.fusion_plan
         && !plan.lambda_descriptors.is_empty()
@@ -480,7 +480,7 @@ pub fn spiro_assembly_from_parts(
     if let Some(group) = &local.principal_group
         && !local.retained_absorbs_principal_group
     {
-        let (terminal, suffix) = format_principal_suffix(&local, &parent_terminal)?;
+        let (terminal, suffix, _) = format_principal_suffix(&local, &parent_terminal)?;
         let Some(base) = name.strip_suffix(&suffix).filter(|_| !suffix.is_empty()) else {
             return Err("openclatura: spiro side suffix must match shared parent assembly".into());
         };
@@ -712,6 +712,16 @@ fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
         .collect();
     parts.parent_atom_isotopes_by_locant =
         std::mem::take(&mut parts.parent_atom_isotopes_by_locant)
+            .into_iter()
+            .map(|(l, v)| (prime(&l), v))
+            .collect();
+    parts.parent_atom_hydrogens_by_locant =
+        std::mem::take(&mut parts.parent_atom_hydrogens_by_locant)
+            .into_iter()
+            .map(|(l, v)| (prime(&l), v))
+            .collect();
+    parts.parent_external_bonds_by_locant =
+        std::mem::take(&mut parts.parent_external_bonds_by_locant)
             .into_iter()
             .map(|(l, v)| (prime(&l), v))
             .collect();
@@ -1585,7 +1595,7 @@ fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
             .map(|term| {
                 let descriptor = term.chars().last()?;
                 let locant = &term[..term.len() - descriptor.len_utf8()];
-                (component_locant(locant, true) && "RSEZ".contains(descriptor))
+                (component_locant(locant, true) && "RSEZMP".contains(descriptor))
                     .then(|| (prime_side_locant(locant), descriptor.to_string()))
             })
             .collect::<Option<Vec<_>>>();
@@ -1729,6 +1739,12 @@ mod tests {
         assert_eq!(extracted.parent_name, "cyclopentane");
         assert_eq!(extracted.prefixes, ["2'-(2,6-difluorophenyl)-3'-methyl"]);
         assert_eq!(extracted.stereo, [("2'".into(), "R".into())]);
+        let extracted = extract_spiro_side_prefixes("(2R,4M)-4-phenylcyclopentane");
+        assert_eq!(extracted.prefixes, ["4'-phenyl"]);
+        assert_eq!(
+            extracted.stereo,
+            [("2'".into(), "R".into()), ("4'".into(), "M".into())]
+        );
     }
 
     #[test]

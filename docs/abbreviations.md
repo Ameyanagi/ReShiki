@@ -23,10 +23,20 @@ Properties → Labels & chemistry → Chemical abbreviations provides compact la
 
 - Select one terminal atom and choose a common group such as OMe, Boc, Ph, TBS, TBDPS or OTBDPS, then **Replace selected endpoint**. This changes the chemistry and preserves the outside connecting bond.
 - **Contract common groups** finds supported groups in the selected atoms, or the whole drawing when nothing is selected. A group only claims atoms whose charge, unpaired electrons, isotope and hydrogen count match its definition, so a charged or labelled atom stays visible. When a larger group cannot apply because a smaller group takes its outside atom, the smaller candidates are used instead (MeNHBoc contracts to Boc and Me).
-- Select a connected fragment whose outside bonds all meet the same selected atom, enter a name and optional reversed label, and choose **Contract selection**. This changes presentation only.
+- Select a connected fragment whose outside bonds meet at most two selected atoms, enter a name and optional reversed label, and choose **Contract selection**. This changes presentation only.
 - **Expand selected** or **Expand all** restores the internal atoms for editing. A collapsed group selects, moves, copies and deletes as a unit. Individual atom-property changes require expansion.
 
 Each action is one Undo step. Native version-10 documents preserve custom names and reversed labels. SVG, PDF and PNG display the abbreviated drawing. Editable binary/XML exchange carries explicit nested chemical fragments; imported labels can expand back to real atoms. Common reversed labels are recognized on import. Custom reversed spellings are native-only.
+
+For amino-acid residues, choose a three-letter label such as **Ala** and use
+**Find selected label**. The 20 standard L residues and their **D-Xaa** mirrors
+(except achiral Gly) match the full residue, including stereochemistry. In
+Boc–Ala–OMe, Ala connects through its N side on the left and carbonyl C side on
+the right; Automatic alignment centers its label. Boc and OMe can also be
+collapsed. Two-sided groups use native document version 34 and round-trip
+through CDXML/CDX. Residue labels cannot replace or insert an endpoint;
+**Contract common groups** does not search for residues. A custom residue label
+warns when the selected chemistry does not match its definition.
 
 The catalog holds 362 groups with 59 alternative spellings. Typing one of these
 labels on an endpoint creates the real group, so formula and mass match the
@@ -87,8 +97,8 @@ Internal groups can have several
 external bonds when they all connect to the same attachment atom. Editable
 import requires an explicit definition and connection ordering. CCl₂, CF₂ and
 NMe were checked through editable CDX and CDXML round trips, including the real
-atoms behind each label. Connections to different atoms within one collapsed
-group remain unsupported.
+atoms behind each label. Two-sided groups retain separate attachment atoms and
+their connection order on import and export.
 
 Cp and Cp* additionally retain full cyclopentadienyl/pentamethylcyclopentadienyl ligand graphs and typed multi-center attachment points, contributing C5H5− and C10H15−. Formula counts exclude the handles; coordination valence and complex identifiers remain unsupported. Editable CDXML/CDX expands these haptic groups when nested attachment definitions cannot survive resaving. Nested nicknames remain unsupported. Editable export rejects abbreviated groups carrying internal atom indicators rather than losing those indicators; expand them first. Labels do not introduce invented elements or replace the underlying structure with text.
 
@@ -96,7 +106,7 @@ Verification covers native save/reopen, reversed labels, selection/copy/delete/U
 
 ## The group catalog
 
-All typed and detected groups come from one file,
+The insertable common groups come from one file,
 [`catalog.json`](https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/chemistry/abbreviations/catalog.json).
 Each entry gives the label, an optional reversed label, a SMILES string whose
 first atom is the `*` attachment point, the substituent formula, a category and
@@ -119,7 +129,7 @@ layout comes from the same 2D depiction that SMILES import uses. Adding a
 group is one new entry; no separate geometry file is needed. The optional
 `aliases` list adds other typed spellings, such as TBDMS for TBS. Set
 `"contract": false` for a group that should only be created by typing, never
-found by **Contract common groups**. Groups cannot carry stereochemistry,
+found by **Contract common groups**. These catalog entries cannot carry stereochemistry,
 isotopes, radicals or `[H]` atoms, and attach through one single bond. Every
 label, alias and reverse label must be unique.
 
@@ -188,7 +198,7 @@ hand or share it:
 ```
 
 Only `label` and `smiles` are required. `smiles` must start with the single
-`*` attachment point, joined by a single bond. Labels are 1–32 characters without spaces and cannot be an element symbol or a spelling ReShiki builds itself (N3, MgBr, Cp, OCH3). If you give
+`*` attachment point, joined by a single bond. Labels are 1–32 characters without spaces and cannot be an element symbol, a residue label (Ala, D-Ala, Gly), or a spelling ReShiki builds itself (N3, MgBr, Cp, OCH3). If you give
 a `formula`, ReShiki checks it against the SMILES. `aliases`, `names`,
 `category` and `"contract": false` work as in the bundled catalog.
 

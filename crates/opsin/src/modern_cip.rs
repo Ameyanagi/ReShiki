@@ -21,7 +21,9 @@ fn error(message: impl ToString) -> StereochemistryError {
 /// Keep the OPSIN graph's physical hydrogens and bond insertion order. A
 /// parity's centre reference denotes a lone pair, which the CIP adapter also
 /// represents with the central atom after its physical neighbours.
-pub(crate) fn atom_labels(graph: &Graph) -> Result<HashMap<AtomId, String>, StereochemistryError> {
+pub(crate) fn state(
+    graph: &Graph,
+) -> Result<(State, HashMap<AtomId, usize>), StereochemistryError> {
     let atoms: Vec<_> = graph.atoms.iter().filter(|a| a.active).collect();
     let indices: HashMap<_, _> = atoms.iter().enumerate().map(|(i, a)| (a.id, i)).collect();
     let source_bonds: Vec<_> = graph.bonds.iter().filter(|b| b.active).collect();
@@ -91,11 +93,20 @@ pub(crate) fn atom_labels(graph: &Graph) -> Result<HashMap<AtomId, String>, Ster
         graph: cip_graph,
         metadata,
     };
+    Ok((state, indices))
+}
+
+pub(crate) fn atom_labels(graph: &Graph) -> Result<HashMap<AtomId, String>, StereochemistryError> {
+    let (state, indices) = state(graph)?;
     let labelled = label::assign(&state, &label::Options::default()).map_err(error)?;
-    Ok(atoms
-        .iter()
-        .zip(labelled.state.properties.atoms)
-        .filter_map(|(atom, properties)| properties.cip_code.map(|label| (atom.id, label)))
+    Ok(indices
+        .into_iter()
+        .filter_map(|(atom, index)| {
+            labelled.state.properties.atoms[index]
+                .cip_code
+                .clone()
+                .map(|label| (atom, label))
+        })
         .collect())
 }
 

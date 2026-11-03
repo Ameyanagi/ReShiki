@@ -800,6 +800,7 @@ fn prepared_ring_interiors_match_live_hits_including_ties_and_hidden_drawings() 
         label: "Ph".into(),
         reverse_label: String::new(),
         anchor: inner[0],
+        exit: None,
         members: inner.clone(),
         alignment: Default::default(),
         label_style: None,

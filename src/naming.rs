@@ -140,10 +140,14 @@ pub enum NameReason {
     Phane,
     RelativeRingStereo,
     UnknownConfiguration,
+    AxialAlternative,
 }
 impl NameReason {
     pub fn detail(self) -> &'static str {
         match self {
+            Self::AxialAlternative => {
+                "Uses Ra/Sa axial descriptors; M and P are preferred to Ra and Sa (P-93.5.7.1)."
+            }
             Self::SulfonylPrefix => {
                 "Uses a concatenated sulfonyl or sulfinyl prefix such as N-methyltosylamino or (methylsulfinyl)amino; preferred IUPAC names use acid-derived forms such as N,4-dimethylbenzene-1-sulfonamido or methanesulfinamido (P-65.3.2.2.2, P-66.1.1.4.3)."
             }
@@ -172,13 +176,13 @@ impl NameReason {
                 "Uses a fusion descriptor for a benzene ring ortho-fused to a heteromonocycle, as in benzo[b]oxepine; preferred IUPAC names cite the heteroatom locants of the whole bicycle before its benzo name, as in 1-benzoxepine, or the retained name, as in quinoline (P-25.2.2.4, P-25.2.1)."
             }
             Self::Multiplicative => {
-                "Names two identical units joined by an oxygen, chalcogen, sulfinyl, sulfonyl or methylene link substitutively, as in phenoxybenzene, (benzenesulfinyl)benzene or [(carboxymethyl)sulfanyl]acetic acid; the preferred IUPAC name is multiplicative, as in 1,1'-oxydibenzene, 1,1'-sulfinyldibenzene or 2,2'-sulfanediyldiacetic acid (P-51.3.1, P-63.2.4.2, P-63.6)."
+                "Names identical senior parent units joined by a linking group substitutively; the preferred IUPAC name is multiplicative. The units include identical substituents and suffix groups at identical locants, while the central linking group need not be symmetric, as in 1,1'-oxydibenzene or 2,2'-sulfanediyldiacetic acid (P-15.3, P-51.1.5, P-51.3.1)."
             }
             Self::AcylPrefix => {
                 "Uses an acyl prefix built from a substituent, such as (4-methylphenyl)carbonyl, cyclohexylcarbonothioyl, (dimethyloxophosphanyl) or (dimethyloxoarsanyl), or an oxophosphanyl prefix on a parent, as in (methyloxophosphanyl)methane; preferred IUPAC names use the acid-derived forms 4-methylbenzoyl, cyclohexanecarbothioyl, dimethylphosphinoyl, dimethylarsinoyl and dimethyl-lambda5-phosphanone (P-65.1.7.4.2, P-67.1.4.1.1.3, P-68.3.2.3.1)."
             }
             Self::RingAssembly => {
-                "Names identical rings or ring systems joined directly by a single or double bond substitutively, as in 2-(pyridin-2-yl)pyridine, cyclopropylcyclopropane, 1,4-diphenylbenzene or 4-phenylphenol. These are ring assemblies, and \"preferred IUPAC names for assemblies of two or more identical cyclic systems joined by a single bond are formed using the names of parent hydrides rather than the names of substituent groups, except for biphenyl and polyphenyl assemblies\" (P-52.2.7.1): 2,2'-bipyridine, 1,1'-bi(cyclopropane), 1^1,2^1:2^4,3^1-terphenyl, [1,1'-biphenyl]-4-ol, or 1,1'-bi(cyclopentylidene) for a double bond; more than six take a phane name (P-28.2, P-28.3, P-28.5)."
+                "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions, assemblies requiring skeletal-replacement or hydro prefixes, and linear phanes with at least four ring systems and seven skeletal nodes (P-28, P-31.2.3.3.5, P-51.3.2, P-52.2.5.1, P-52.2.7)."
             }
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout or citation order selected for OPSIN compatibility; its preferred IUPAC numbering or alphabetical citation order (FR-3.6 / P-25.3.4.2.3) has not been verified."
@@ -400,7 +404,7 @@ pub fn locant_text(locant: &str) -> String {
 #[derive(Debug, Clone)]
 pub struct Identity {
     pub smiles: String,
-    /// Internal unknown-unit markers for generation; ordinary atom maps are removed.
+    /// Unknown-unit and axis markers for generation; ordinary atom maps are removed.
     pub naming_smiles: Option<String>,
     /// Unknown-unit markers including stereogenic units with no drawn configuration.
     /// Used only when explicit unknown descriptors are requested.
@@ -435,7 +439,7 @@ fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<Strin
                 .into()
         }
         IdentityRejection::NonclassicalStereo => {
-            const MESSAGE: &str = "Naming supports tetrahedral and ordinary alkene stereochemistry only; other stereo classes cannot be discarded";
+            const MESSAGE: &str = "Naming supports tetrahedral, ordinary alkene and biaryl axis stereochemistry; other stereo classes cannot be discarded";
             MESSAGE.into()
         }
         IdentityRejection::Write(message) => message,
@@ -443,7 +447,8 @@ fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<Strin
 }
 
 /// Canonical isomeric graph identity, including isotope, charge and specified
-/// stereo. Map numbers and atom order are not molecular identity.
+/// stereo. Reserved axis markers carry biaryl configuration; other maps and
+/// atom order are not molecular identity.
 pub fn canonical_smiles(text: &str) -> Result<String, String> {
     if text.len() > MAX_SMILES_BYTES || text.contains('|') || text.contains('>') {
         return Err(
@@ -453,7 +458,7 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
     bound_atom_tokens(text)?;
     // Native import cleans unusable winding and can discard non-tetrahedral
     // classes. Check the raw graph first, before that cleanup changes identity.
-    // Unlike has_nonclassical_stereo, this raw check intentionally covers atoms only.
+    // Unlike canonical_identity, this raw check intentionally covers atoms only.
     let raw = chemistry::smiles::parse(text).map_err(|e| e.to_string())?;
     if raw.metadata.atoms.iter().any(|m| m.chiral_tag > 2) {
         return Err("Naming does not support allene or coordination stereo classes; no plain graph was substituted".into());
@@ -477,7 +482,9 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
     {
         return Err("Native import could not retain every specified tetrahedral center; no name or graph was assigned".into());
     }
-    canonical_state(&imported.prepared.state)
+    let state = molecule_names::apply_axis_markers(&imported.prepared.state)
+        .map_err(|_| "Naming received invalid biaryl axis markers".to_owned())?;
+    canonical_state(&state)
 }
 
 /// Reject oversized output before native sanitization/ranking can allocate or
@@ -637,10 +644,16 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
             }
         }
     }
+    marked = molecule_names::encode_axis_markers(&marked)
+        .map_err(|_| "Naming could not retain the biaryl axis configuration".to_owned())?;
+    // Unknown markers only grow between calls; atoms without one keep their
+    // biaryl axis map.
     let mut marker_smiles = |unknown: &[i32]| -> Result<Option<String>, String> {
         for (metadata, marker) in marked.metadata.atoms.iter_mut().zip(unknown) {
-            metadata.map_number = if *marker == 0 { 0 } else { 900_000 + marker };
-            metadata.map_present = *marker != 0;
+            if *marker != 0 {
+                metadata.map_number = 900_000 + marker;
+                metadata.map_present = true;
+            }
         }
         if unknown.iter().any(|&marker| marker != 0) {
             Ok(Some(
@@ -709,6 +722,17 @@ fn drawing_identity(document: &Document, names: &Document) -> Result<Identity, S
     })
 }
 
+/// An identity as editable SMILES. SMILES has no axis layer, so this leaves
+/// out the private biaryl axis maps that `canonical_smiles` may carry.
+pub fn plain_smiles(identity: &str) -> String {
+    let stripped = [molecule_names::AXIS_M, molecule_names::AXIS_P]
+        .iter()
+        .fold(identity.to_owned(), |text, map| {
+            text.replace(&format!(":{map}]"), "]")
+        });
+    canonical_smiles(&stripped).unwrap_or(stripped)
+}
+
 pub fn verify_identity(expected: &str, actual: &str) -> Result<(), String> {
     if canonical_smiles(expected)? != canonical_smiles(actual)? {
         return Err("The source structure differs in connectivity, charge, isotope, tautomer or stereochemistry. No name was assigned".into());
@@ -716,5 +740,7 @@ pub fn verify_identity(expected: &str, actual: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
+mod axial_tests;
 #[cfg(test)]
 mod tests;

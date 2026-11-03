@@ -1,6 +1,6 @@
 use super::*;
 use std::{
-    os::unix::fs::symlink,
+    os::{fd::OwnedFd, unix::fs::symlink},
     process::{Child, Command, Stdio},
     thread,
 };
@@ -98,7 +98,16 @@ fn flock_election_and_stale_socket_cleanup_keep_live_unknown_endpoints() {
     let election = fixture.endpoint.elect().unwrap().unwrap();
     assert!(fixture.endpoint.elect().unwrap().is_none());
     let path = fixture.endpoint.path("desktop.sock");
-    let stale = UnixListener::bind(&path).unwrap();
+    // A bound, non-listening socket refuses connections like a dead host's socket;
+    // a concurrent child's pre-exec copy cannot accept connections either.
+    let stale = net::socket_with(
+        AddressFamily::UNIX,
+        SocketType::STREAM,
+        SocketFlags::CLOEXEC,
+        None,
+    )
+    .unwrap();
+    net::bind(&stale, &SocketAddrUnix::new(&path).unwrap()).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
     drop(stale);
     let listener = fixture.endpoint.listen(&election).unwrap();
@@ -122,6 +131,38 @@ fn flock_election_and_stale_socket_cleanup_keep_live_unknown_endpoints() {
     drop(listener);
     assert!(!path.exists());
     assert!(fixture.endpoint.listen(&successor).is_ok());
+}
+
+/// Model a host that crashes while a child is between fork and exec: passing
+/// its lock and listener through sleep's stdio keeps both open in that child
+/// only. The ghost accepts connections, but it also excludes any successor.
+#[test]
+fn crashed_host_fork_window_ghost_keeps_the_lock_until_it_closes() {
+    let fixture = Fixture::new();
+    let Election { _lock: lock, .. } = fixture.endpoint.elect().unwrap().unwrap();
+    let path = fixture.endpoint.path("desktop.sock");
+    let listener = UnixListener::bind(&path).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let mut ghost = ChildGuard(
+        Command::new("sleep")
+            .arg("30")
+            .stdin(Stdio::from(OwnedFd::from(listener)))
+            .stdout(Stdio::from(lock))
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    assert!(
+        fixture.endpoint.connect(Duration::from_millis(50)).is_ok(),
+        "A pre-exec child keeps the crashed host's listener connectable"
+    );
+    assert!(
+        fixture.endpoint.elect().unwrap().is_none(),
+        "The same child also keeps the host lock, so no successor can probe it"
+    );
+    ghost.0.kill().unwrap();
+    ghost.0.wait().unwrap();
+    reacquire_after_drop(|| fixture.endpoint.elect());
 }
 
 #[test]

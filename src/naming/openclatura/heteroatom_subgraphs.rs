@@ -287,10 +287,12 @@ fn acid_sulfonyl(
             return Ok(None);
         }
         mol.candidate(|| {
-            Ok(capped_acid_name(mol, sulfur, &atoms)?.and_then(|name| {
-                name.strip_suffix(&format!("{acid}ic acid"))
-                    .map(|stem| format!("{stem}{suffix}"))
-            }))
+            Ok(
+                capped_acid_name(mol, sulfur, &atoms, false)?.and_then(|name| {
+                    name.strip_suffix(&format!("{acid}ic acid"))
+                        .map(|stem| format!("{stem}{suffix}"))
+                }),
+            )
         })?
     } else {
         None

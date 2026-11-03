@@ -85,7 +85,9 @@ impl Target {
             Self::Atom { atom } => doc.atom(atom).map(|a| a.position),
             Self::Bond { a, b, fraction } => {
                 doc.bond_between(a, b)?;
-                let (a, b) = doc.atom(a).zip(doc.atom(b))?;
+                let (a, b) = doc
+                    .atom(doc.abbreviation_endpoint(a, b))
+                    .zip(doc.atom(doc.abbreviation_endpoint(b, a)))?;
                 Some(a.position.offset(
                     (b.position.x - a.position.x) * fraction,
                     (b.position.y - a.position.y) * fraction,
@@ -131,10 +133,10 @@ impl Target {
     }
 }
 impl Anchor {
-    fn resolved(&self, doc: &Document, pen: f32) -> Option<Point> {
+    fn resolved(&self, doc: &Document, drawn: &Document, pen: f32) -> Option<Point> {
         let center = self.target.center(doc)?;
         let direction = projection_direction(doc, &self.target, self.direction)?;
-        let clearance = clearance(doc, &self.target, direction)?;
+        let clearance = clearance(doc, drawn, &self.target, direction)?;
         let required = clearance + self.gap + pen;
         let p = center.offset(self.offset.x, self.offset.y);
         let projection = dot(delta(p, center), direction);
@@ -172,7 +174,9 @@ impl Anchor {
 // nearly parallel to the new bond and cannot certify visible clearance.
 fn projection_direction(doc: &Document, target: &Target, hint: Point) -> Option<Point> {
     if let Target::Bond { a, b, .. } = target {
-        let (a, b) = doc.atom(*a).zip(doc.atom(*b))?;
+        let (a, b) = doc
+            .atom(doc.abbreviation_endpoint(*a, *b))
+            .zip(doc.atom(doc.abbreviation_endpoint(*b, *a)))?;
         let t = unit(delta(b.position, a.position));
         let n = Point::new(-t.y, t.x);
         Some(if dot(n, hint) >= 0. {
@@ -184,12 +188,12 @@ fn projection_direction(doc: &Document, target: &Target, hint: Point) -> Option<
         Some(unit(hint))
     }
 }
-fn clearance(doc: &Document, target: &Target, direction: Point) -> Option<f32> {
+fn clearance(doc: &Document, drawn: &Document, target: &Target, direction: Point) -> Option<f32> {
     let center = target.center(doc)?;
     Some(match *target {
         Target::Atom { atom } => {
             let a = doc.atom(atom)?;
-            crate::scene::atom_label_ink_boxes(a, doc)
+            crate::scene::atom_label_ink_boxes(a, drawn)
                 .into_iter()
                 .flat_map(|(lo, hi)| [lo, hi, Point::new(lo.x, hi.y), Point::new(hi.x, lo.y)])
                 .map(|p| dot(delta(p, center), direction))
@@ -199,10 +203,13 @@ fn clearance(doc: &Document, target: &Target, direction: Point) -> Option<f32> {
             let (_, bond) = doc.bond_between(a, b)?;
             let style = &doc.drawing_style;
             let stroke = half_stroke(doc, &bond.display);
-            let normal = doc.atom(a).zip(doc.atom(b)).map(|(a, b)| {
-                let tangent = unit(delta(b.position, a.position));
-                Point::new(-tangent.y, tangent.x)
-            })?;
+            let normal = doc
+                .atom(doc.abbreviation_endpoint(a, b))
+                .zip(doc.atom(doc.abbreviation_endpoint(b, a)))
+                .map(|(a, b)| {
+                    let tangent = unit(delta(b.position, a.position));
+                    Point::new(-tangent.y, tangent.x)
+                })?;
             let rails = match bond.order {
                 2 | 3 | 4 | 7 => 1.,
                 6 => 1.5,
@@ -352,8 +359,8 @@ fn pick_with_ink(
                 (bond.b, bond.a)
             };
             let (pa, pb) = doc
-                .atom(a)
-                .zip(doc.atom(b))
+                .atom(doc.abbreviation_endpoint(a, b))
+                .zip(doc.atom(doc.abbreviation_endpoint(b, a)))
                 .map(|(a, b)| (a.position, b.position))?;
             let v = delta(pb, pa);
             let length = dot(v, v);
@@ -369,7 +376,7 @@ fn pick_with_ink(
             if !(0.0..=1.).contains(&fraction) || offset.abs() > reach {
                 return None;
             }
-            let (start, end) = ink.segment(bond)?;
+            let (start, end) = ink.segment(index)?;
             let from = dot(delta(start, pa), v) / length;
             let to = dot(delta(end, pa), v) / length;
             // Position along the drawn segment, measured from bond.a.
@@ -497,8 +504,8 @@ fn new_target_visible(
 }
 /// A drawn bond line segment and its half stroke width.
 type InkLine = (Point, Point, f32);
-/// Bond ink leaving `atom`: each bond's direction away from the atom, the
-/// lines it draws, and its filled outlines.
+/// Bond ink leaving `atom` in a prepared render view: each bond's direction
+/// away from the atom, the lines it draws, and its filled outlines.
 fn bond_ink(
     doc: &Document,
     atom: u64,
@@ -632,7 +639,7 @@ struct HeadInk {
     fills: Vec<Vec<Point>>,
 }
 impl HeadInk {
-    /// Ink of the bonds at each of `atoms`.
+    /// Ink of the bonds at each of `atoms` in a prepared render view.
     fn around(doc: &Document, atoms: impl IntoIterator<Item = u64>) -> Self {
         let mut ink = Self {
             lines: Vec::new(),
@@ -728,7 +735,7 @@ fn open_approach(
     let ink = HeadInk { lines, fills };
     let pen = DEFAULT.world(style.width_pt) * 0.5;
     let touches = |d: Point, extra: f32| {
-        let tip = clearance(doc, &Target::Atom { atom }, d).unwrap_or(0.) + gap + pen + extra;
+        let tip = clearance(doc, doc, &Target::Atom { atom }, d).unwrap_or(0.) + gap + pen + extra;
         let end = center.offset(d.x * tip, d.y * tip);
         let bend = (start.distance(end) * 0.45).clamp(DEFAULT.world(3.), DEFAULT.world(12.));
         let mut arrow = Arrow::new(0, start, end, Preset::Curved, style.clone());
@@ -836,6 +843,7 @@ pub fn create(
             "The selected arrow target is hidden; choose visible ink or free placement".into(),
         );
     }
+    let drawn = ink.drawn();
     if a.distance(b) < 1. {
         return Err("Arrow targets are too close; use free placement".into());
     }
@@ -892,7 +900,9 @@ pub fn create(
     };
     let bond_direction = |pick: &Pick, toward: Point| {
         if let Pick::Bond { a, b, .. } = pick {
-            let (a, b) = doc.atom(*a).zip(doc.atom(*b))?;
+            let (a, b) = doc
+                .atom(doc.abbreviation_endpoint(*a, *b))
+                .zip(doc.atom(doc.abbreviation_endpoint(*b, *a)))?;
             let t = unit(delta(b.position, a.position));
             let n = Point::new(-t.y, t.x);
             Some(if dot(n, toward) >= 0. {
@@ -925,7 +935,7 @@ pub fn create(
         gap,
     };
     let start = start_anchor
-        .resolved(&candidate, pen)
+        .resolved(&candidate, drawn, pen)
         .ok_or("Missing arrow source")?;
     let (preferred, back) = arrival_hints(chord);
     let (end_direction, end_extra) = if let Some((normal, _)) = own_bond {
@@ -937,7 +947,7 @@ pub fn create(
                 0.,
             ),
             Pick::Atom(atom) => open_approach(
-                doc,
+                drawn,
                 *atom,
                 preferred,
                 back,
@@ -955,7 +965,7 @@ pub fn create(
         gap: gap + end_extra,
     };
     let end = end_anchor
-        .resolved(&candidate, pen)
+        .resolved(&candidate, drawn, pen)
         .ok_or("Missing arrow destination")?;
     start_anchor.offset = delta(
         start,
@@ -996,7 +1006,8 @@ pub fn create(
     arrow.start_anchor = Some(start_anchor);
     arrow.end_anchor = Some(end_anchor);
     candidate.arrows.push(arrow);
-    reconcile(&mut candidate);
+    let resolved = resolved_endpoints(&candidate, drawn);
+    apply_resolved_endpoints(&mut candidate, resolved);
     candidate.validate()?;
     *doc = candidate;
     Ok(id)
@@ -1012,7 +1023,7 @@ fn arrival_hints(chord: Point) -> (Point, Point) {
 }
 /// Where a newly drawn arrow would end on its attached end target: aims
 /// start from here, so an end depends only on its current aim.
-fn default_end(doc: &Document, arrow: &Arrow, pen: f32) -> Option<Point> {
+fn default_end(doc: &Document, drawn: &Document, arrow: &Arrow, pen: f32) -> Option<Point> {
     let anchor = arrow.end_anchor.as_ref()?;
     let center = anchor.target.center(doc)?;
     let (direction, extra) = match anchor.target {
@@ -1041,7 +1052,7 @@ fn default_end(doc: &Document, arrow: &Arrow, pen: f32) -> Option<Point> {
                 (departure, 0.)
             } else {
                 open_approach(
-                    doc,
+                    drawn,
                     atom,
                     preferred,
                     back,
@@ -1059,7 +1070,7 @@ fn default_end(doc: &Document, arrow: &Arrow, pen: f32) -> Option<Point> {
         gap: end_gap() + extra,
         ..anchor.clone()
     }
-    .resolved(doc, pen)
+    .resolved(doc, drawn, pen)
 }
 /// Clearance an attached end keeps beyond its target ink.
 fn end_gap() -> f32 {
@@ -1096,7 +1107,9 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
     let pen = DEFAULT.world(style.width_pt) * 0.5;
     let d = unit(delta(control, a.end));
     let gap = end_gap();
-    let (Some(center), Some(base)) = (anchor.target.center(doc), default_end(doc, a, pen)) else {
+    let drawn = doc.abbreviation_render_copy();
+    let (Some(center), Some(base)) = (anchor.target.center(doc), default_end(doc, &drawn, a, pen))
+    else {
         return;
     };
     // Start from the default end, never from an earlier aim, so repeated aims
@@ -1109,11 +1122,11 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
     };
     let (Some(push), Some(tip)) = (
         projection_direction(doc, &anchor.target, d),
-        anchor.resolved(doc, pen),
+        anchor.resolved(doc, &drawn, pen),
     ) else {
         return;
     };
-    let ink = HeadInk::around(doc, anchor.target.atoms());
+    let ink = HeadInk::around(&drawn, anchor.target.atoms());
     let touches = |end: Point| {
         let mut candidate = a.clone();
         let shift = delta(end, a.end);
@@ -1144,7 +1157,7 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
                     offset: delta(candidate, center),
                     ..anchor.clone()
                 }
-                .resolved(doc, pen)?;
+                .resolved(doc, &drawn, pen)?;
                 (!touches(candidate)).then_some(candidate)
             })
             .next()
@@ -1165,6 +1178,32 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
 /// Absolute resolution is idempotent: an already transformed endpoint has no
 /// displacement to apply twice. Missing targets detach at their cached position.
 pub fn reconcile(doc: &mut Document) {
+    let resolved = {
+        let drawn = doc.abbreviation_render_copy();
+        resolved_endpoints(doc, &drawn)
+    };
+    apply_resolved_endpoints(doc, resolved);
+}
+
+type ResolvedEnd = Option<(Point, Point)>;
+
+fn resolved_endpoints(doc: &Document, drawn: &Document) -> Vec<[ResolvedEnd; 2]> {
+    doc.arrows
+        .iter()
+        .map(|a| {
+            let resolve = |anchor: &Option<Anchor>| {
+                let anchor = anchor.as_ref()?;
+                Some((
+                    anchor.resolved(doc, drawn, DEFAULT.world(a.appearance().width_pt) * 0.5)?,
+                    anchor.target.center(doc)?,
+                ))
+            };
+            [resolve(&a.start_anchor), resolve(&a.end_anchor)]
+        })
+        .collect()
+}
+
+fn apply_resolved_endpoints(doc: &mut Document, resolved: Vec<[ResolvedEnd; 2]>) {
     // A preset change or a hand-authored native link may carry a legacy
     // quadratic. Degree elevation retains its exact curve while giving each
     // attached end an independent neighboring control.
@@ -1177,21 +1216,7 @@ pub fn reconcile(doc: &mut Document) {
             arrow.control = None;
         }
     }
-    let resolved: Vec<_> = doc
-        .arrows
-        .iter()
-        .map(|a| {
-            let resolve = |anchor: &Option<Anchor>| {
-                let anchor = anchor.as_ref()?;
-                Some((
-                    anchor.resolved(doc, DEFAULT.world(a.appearance().width_pt) * 0.5)?,
-                    anchor.target.center(doc)?,
-                ))
-            };
-            (resolve(&a.start_anchor), resolve(&a.end_anchor))
-        })
-        .collect();
-    for (a, (start, end)) in doc.arrows.iter_mut().zip(resolved) {
+    for (a, [start, end]) in doc.arrows.iter_mut().zip(resolved) {
         for (index, p) in [(0, start), (1, end)] {
             let anchor = if index == 0 {
                 &mut a.start_anchor
@@ -1225,6 +1250,7 @@ pub fn reconcile(doc: &mut Document) {
 /// exactly where [`reconcile`] would put it; generic expansion calls this on
 /// its products and charges the target and label-ink lookups to its work budget.
 pub(crate) fn certify_resolved(doc: &Document) -> Result<(), String> {
+    let drawn = doc.abbreviation_render_copy();
     for arrow in &doc.arrows {
         if arrow.is_attached()
             && arrow.cubic.is_none()
@@ -1239,7 +1265,7 @@ pub(crate) fn certify_resolved(doc: &Document) -> Result<(), String> {
         ] {
             if let Some(anchor) = anchor {
                 let resolved = anchor
-                    .resolved(doc, pen)
+                    .resolved(doc, &drawn, pen)
                     .ok_or("Prepared arrow has an unresolved target")?;
                 let center = anchor
                     .target

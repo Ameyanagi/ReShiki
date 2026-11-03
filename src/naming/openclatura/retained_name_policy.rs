@@ -194,7 +194,7 @@ mod tests {
             ),
             (
                 "O=C(O)Cn1nc2ccccc2n1",
-                "2-(2H-1,2,3-benzotriazol-2-yl)acetic acid",
+                "(2H-1,2,3-benzotriazol-2-yl)acetic acid",
                 NameStatus::Preferred,
             ),
             (
@@ -219,12 +219,12 @@ mod tests {
             ),
             (
                 "O=C(O)Cc1nc2ccccc2[nH]1",
-                "2-(1H-1,3-benzimidazol-2-yl)acetic acid",
+                "(1H-1,3-benzimidazol-2-yl)acetic acid",
                 NameStatus::Preferred,
             ),
             (
                 "O=C(O)Cn1nnc2ccccc21",
-                "2-(1H-1,2,3-benzotriazol-1-yl)acetic acid",
+                "1H-1,2,3-benzotriazol-1-ylacetic acid",
                 NameStatus::Preferred,
             ),
             // Sulfonic acid uses the retained fallback outside the production

@@ -39,6 +39,8 @@ mod xml_guard;
 #[cfg(test)]
 mod coordination_tests;
 #[cfg(test)]
+mod residue_tests;
+#[cfg(test)]
 mod tests;
 pub(crate) use variables::drawing_variables;
 

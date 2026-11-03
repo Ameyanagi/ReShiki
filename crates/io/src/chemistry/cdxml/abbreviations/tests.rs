@@ -1,7 +1,6 @@
 //! Pins flatten_one's exact diagnostics and which one wins when a wrapper
 //! holds several faults, the exact output of accepted expansions, and the
-//! Tree work each expansion spends. Every expectation was observed on the
-//! expansion before its stage split.
+//! Tree work each expansion spends after its external geometry is snapshotted.
 //!
 //! Accepted documents use only exact arithmetic so the pins hold on every CI
 //! platform: each connection vector points the same axis-aligned direction as
@@ -71,8 +70,6 @@ const MISSING: &str = "Invalid molecular CDXML: Missing internal abbreviation at
 const DUPLICATE: &str = "Invalid molecular CDXML: Duplicate internal abbreviation attachment";
 const CONNECTION: &str = "Invalid molecular CDXML: Invalid abbreviation connection point";
 const MISSING_ANCHOR: &str = "Invalid molecular CDXML: Missing internal abbreviation anchor";
-const SHARE: &str =
-    "Invalid molecular CDXML: Internal abbreviation attachments must share one atom";
 const ORDER: &str =
     "Invalid molecular CDXML: Abbreviation attachment bond order conflicts with its definition";
 const ATTACHMENT_POINT: &str = "Invalid molecular CDXML: Missing abbreviation attachment point";
@@ -235,8 +232,8 @@ fn multiple_attachment_diagnostics_and_precedence() {
                 CONNECTION,
             ),
             (&[("B='12' E='13'", "B='12' E='99'")], MISSING_ANCHOR),
-            (&[("B='12' E='13'", "B='12' E='14'")], SHARE),
-            (&[("B='11' E='13'", "B='11' E='12'")], SHARE),
+            (&[("B='12' E='13'", "B='12' E='14'")], "ok"),
+            (&[("B='11' E='13'", "B='11' E='12'")], CONNECTION),
             (&[(bond_17, "<b id='17' B='12' E='13' Order='2'/>")], ORDER),
             // The multi path checks the anchor before the bond order.
             (
@@ -247,7 +244,7 @@ fn multiple_attachment_diagnostics_and_precedence() {
             (&pair_faults, ORDER),
             (
                 &[pair_faults[0], pair_faults[1], REVERSED[0], REVERSED[1]],
-                SHARE,
+                ORDER,
             ),
         ],
     );
@@ -266,7 +263,7 @@ fn pair(xml: &str, abbreviations: &str) -> (String, String) {
 
 #[test]
 fn multiple_attachments_place_by_the_first_reordered_pair() {
-    let abbreviations = r#"[Abbreviation { label: "CCl", reverse_label: "", anchor: Some("13"), members: [Some("13"), Some("14")], highlight: None, presentation: Some(AbbreviationPresentation { label: AtomPresentation { attributes: {}, text: Some("<t><s>CCl</s></t>") }, anchor: AtomPresentation { attributes: {}, text: None } }) }]"#;
+    let abbreviations = r#"[Abbreviation { label: "CCl", reverse_label: "", anchor: Some("13"), exit: None, members: [Some("13"), Some("14")], highlight: None, presentation: Some(AbbreviationPresentation { label: AtomPresentation { attributes: {}, text: Some("<t><s>CCl</s></t>") }, anchor: AtomPresentation { attributes: {}, text: None } }) }]"#;
     // (i) Connection 11 with bond 5 to atom 2: scale 2 moves atom 14 to 0 -20.
     let written = accepted(ASYMMETRIC_TWO_CONNECTIONS);
     let xml = r#"<CDXML><page><fragment id="1"><n id="2" p="-20 0"></n><n id="3" p="10 0"></n><b id="5" B="2" E="13"></b><b id="6" B="13" E="3"></b><n id="13" p="0 0"><t p="0 0" LabelJustification="Auto"><s>CCl</s></t></n><n id="14" p="0 -20" Element="17"></n><b id="18" B="13" E="14"></b></fragment></page></CDXML>"#;
@@ -284,6 +281,56 @@ fn multiple_attachments_place_by_the_first_reordered_pair() {
     // (iii) An absent ConnectionOrder falls back to node order, giving (i).
     let unordered = edit(ASYMMETRIC_TWO_CONNECTIONS, &UNORDERED);
     assert_eq!(accepted(&unordered), written);
+}
+
+#[test]
+fn distinct_attachment_targets_follow_connection_order_and_rewire_individually() {
+    let source = edit(
+        ASYMMETRIC_TWO_CONNECTIONS,
+        &[("B='12' E='13'", "B='12' E='14'")],
+    );
+    for (source, anchor, exit) in [
+        (source.clone(), "13", "14"),
+        (edit(&source, &REVERSED), "14", "13"),
+    ] {
+        let flat = flatten_abbreviations(&source).unwrap();
+        assert_eq!(flat.abbreviations[0].anchor.as_deref(), Some(anchor));
+        assert_eq!(flat.abbreviations[0].exit.as_deref(), Some(exit));
+        let tree = roxmltree::Document::parse(&flat.xml).unwrap();
+        let bond = |id| {
+            tree.descendants()
+                .find(|node| node.has_tag_name("b") && node.attribute("id") == Some(id))
+                .unwrap()
+        };
+        assert_eq!(bond("5").attribute("E"), Some("13"));
+        assert_eq!(bond("6").attribute("B"), Some("14"));
+    }
+}
+
+#[test]
+fn more_than_two_distinct_attachment_targets_stay_unsupported() {
+    let source = edit(
+        ASYMMETRIC_TWO_CONNECTIONS,
+        &[
+            ("BondOrdering='5 6'", "BondOrdering='5 6 7'"),
+            ("ConnectionOrder='11 12'", "ConnectionOrder='11 12 21'"),
+            ("<n id='4'", "<n id='20' p='0 20'/><n id='4'"),
+            (
+                "<n id='13'",
+                "<n id='21' p='0 10' NodeType='ExternalConnectionPoint'/><n id='22' p='0 5'/><n id='13'",
+            ),
+            ("B='12' E='13'", "B='12' E='14'"),
+            (
+                "<b id='18'",
+                "<b id='23' B='21' E='22'/><b id='24' B='14' E='22'/><b id='18'",
+            ),
+            ("<b id='6'", "<b id='7' B='4' E='20'/><b id='6'"),
+        ],
+    );
+    assert_eq!(
+        outcome(&source),
+        "CDXML contains unsupported chemistry: abbreviations with more than two attachment atoms"
+    );
 }
 
 #[test]
@@ -329,10 +376,6 @@ fn numbered_attachments_follow_explicit_ids_instead_of_numeric_sorting() {
                 "id='13' p='0 0' ExternalConnectionNum='1'",
             )],
             "requires an external connection point",
-        ),
-        (
-            vec![("B='12' E='13'", "B='12' E='14'")],
-            "must share one atom",
         ),
     ] {
         let error = flatten_abbreviations(&edit(&numbered, &edits))
@@ -398,17 +441,17 @@ fn definition_connection_numbers_keep_their_message_and_duplicate_errors() {
 fn accepted_single_attachments_are_exact() {
     // Scale 2 with both `significant` spellings; OMe keeps its spelling.
     let xml = r#"<CDXML><page><fragment id="1"><n id="2" p="-30 0"></n><b id="10" B="2" E="5"></b><n id="5" p="0 0" Element="8"><t p="0 0"><s>OMe</s></t></n><n id="6" p="2e-05 2.4691358e+08"></n><b id="9" B="5" E="6"></b></fragment></page></CDXML>"#;
-    let abbreviations = r#"[Abbreviation { label: "OMe", reverse_label: "MeO", anchor: Some("5"), members: [Some("5"), Some("6")], highlight: None, presentation: Some(AbbreviationPresentation { label: AtomPresentation { attributes: {}, text: Some("<t><s>OMe</s></t>") }, anchor: AtomPresentation { attributes: {}, text: None } }) }]"#;
+    let abbreviations = r#"[Abbreviation { label: "OMe", reverse_label: "MeO", anchor: Some("5"), exit: None, members: [Some("5"), Some("6")], highlight: None, presentation: Some(AbbreviationPresentation { label: AtomPresentation { attributes: {}, text: Some("<t><s>OMe</s></t>") }, anchor: AtomPresentation { attributes: {}, text: None } }) }]"#;
     assert_eq!(accepted(SINGLE), pair(xml, abbreviations));
     // The wrapper's highlight reaches only atoms and bonds without their own.
     let xml = r#"<CDXML><page><fragment id="1"><n id="2" p="-20 0"></n><b id="12" B="2" E="5"></b><n id="5" p="0 0" highlightColor="3"><t p="0 0"><s>Et</s></t></n><n id="6" p="20 0" highlightColor="5"></n><n id="7" p="0 20" highlightColor="3"></n><b id="10" B="5" E="6" highlightColor="5"></b><b id="11" B="5" E="7" highlightColor="3"></b></fragment></page></CDXML>"#;
-    let abbreviations = r#"[Abbreviation { label: "Et", reverse_label: "", anchor: Some("5"), members: [Some("5"), Some("6"), Some("7")], highlight: Some("3"), presentation: Some(AbbreviationPresentation { label: AtomPresentation { attributes: {}, text: Some("<t><s>Et</s></t>") }, anchor: AtomPresentation { attributes: {}, text: None } }) }]"#;
+    let abbreviations = r#"[Abbreviation { label: "Et", reverse_label: "", anchor: Some("5"), exit: None, members: [Some("5"), Some("6"), Some("7")], highlight: Some("3"), presentation: Some(AbbreviationPresentation { label: AtomPresentation { attributes: {}, text: Some("<t><s>Et</s></t>") }, anchor: AtomPresentation { attributes: {}, text: None } }) }]"#;
     assert_eq!(accepted(HIGHLIGHTED), pair(xml, abbreviations));
     // With no connection point the first node anchors. Its text is replaced
     // by a clone of the label at the anchor's p, after the presentation
     // captured it, and MeO maps to OMe.
     let xml = r#"<CDXML><page><fragment id="1"><n id="4" p="5 5" Element="8" LabelFace="96"><t p="5 5" LabelJustification="Left"><s font="3">MeO</s></t></n><n id="5" p="7 5"></n><b id="6" B="4" E="5"></b></fragment></page></CDXML>"#;
-    let abbreviations = r#"[Abbreviation { label: "OMe", reverse_label: "MeO", anchor: Some("4"), members: [Some("4"), Some("5")], highlight: None, presentation: Some(AbbreviationPresentation { label: AtomPresentation { attributes: {"LabelFont": "3", "LabelSize": "10"}, text: Some("<t p=\"4 5\" LabelJustification=\"Left\"><s font=\"3\">MeO</s></t>") }, anchor: AtomPresentation { attributes: {"LabelFace": "96"}, text: Some("<t p=\"5 5\" LabelJustification=\"Left\"><s>O</s></t>") } }) }]"#;
+    let abbreviations = r#"[Abbreviation { label: "OMe", reverse_label: "MeO", anchor: Some("4"), exit: None, members: [Some("4"), Some("5")], highlight: None, presentation: Some(AbbreviationPresentation { label: AtomPresentation { attributes: {"LabelFont": "3", "LabelSize": "10"}, text: Some("<t p=\"4 5\" LabelJustification=\"Left\"><s font=\"3\">MeO</s></t>") }, anchor: AtomPresentation { attributes: {"LabelFace": "96"}, text: Some("<t p=\"5 5\" LabelJustification=\"Left\"><s>O</s></t>") } }) }]"#;
     assert_eq!(accepted(LABELED), pair(xml, abbreviations));
 }
 
@@ -416,9 +459,10 @@ fn accepted_single_attachments_are_exact() {
 /// each call's Tree work with the atoms and bonds it reports removed.
 fn expansions(text: &str) -> Vec<(usize, usize, usize)> {
     let mut tree = Tree::parse(text).unwrap();
-    let wrappers: Vec<_> = tree
-        .descendants(0)
-        .unwrap()
+    let source = tree.descendants(0).unwrap();
+    let elements = validate_connection_numbers(&tree, &source).unwrap();
+    let geometry = external_geometry(&tree, &source, &elements).unwrap();
+    let wrappers: Vec<_> = source
         .into_iter()
         .filter(|&index| wrapper(&tree, index).unwrap())
         .collect();
@@ -426,7 +470,7 @@ fn expansions(text: &str) -> Vec<(usize, usize, usize)> {
         .into_iter()
         .map(|outer| {
             let before = tree.remaining_work();
-            let expanded = flatten_one(&mut tree, outer).unwrap();
+            let expanded = flatten_one(&mut tree, outer, &geometry).unwrap();
             let after = tree.remaining_work();
             (before - after, expanded.atoms, expanded.bonds)
         })
@@ -435,19 +479,19 @@ fn expansions(text: &str) -> Vec<(usize, usize, usize)> {
 
 #[test]
 fn expansion_work_is_pinned() {
-    assert_eq!(expansions(SINGLE), [(175, 2, 1)]);
-    assert_eq!(expansions(ASYMMETRIC_TWO_CONNECTIONS), [(247, 3, 2)]);
+    assert_eq!(expansions(SINGLE), [(166, 2, 1)]);
+    assert_eq!(expansions(ASYMMETRIC_TWO_CONNECTIONS), [(234, 3, 2)]);
     assert_eq!(
         expansions(&edit(ASYMMETRIC_TWO_CONNECTIONS, &REVERSED)),
-        [(248, 3, 2)]
+        [(234, 3, 2)]
     );
     // The node-order fallback is built whether or not ConnectionOrder is
     // present, so dropping it spends the same work as the written order.
     assert_eq!(
         expansions(&edit(ASYMMETRIC_TWO_CONNECTIONS, &UNORDERED)),
-        [(247, 3, 2)]
+        [(234, 3, 2)]
     );
-    assert_eq!(expansions(HIGHLIGHTED), [(233, 2, 1)]);
+    assert_eq!(expansions(HIGHLIGHTED), [(224, 2, 1)]);
     assert_eq!(expansions(LABELED), [(140, 1, 0)]);
     let many = expansions(&many_abbreviations(50));
     assert_eq!(many.len(), 50);
@@ -460,7 +504,7 @@ fn expansion_work_is_pinned() {
 
 #[test]
 fn work_limit_boundary_is_pinned() {
-    let groups = 2563;
+    let groups = 2561;
     let flat = flatten_abbreviations(&many_abbreviations(groups)).unwrap();
     assert_eq!(flat.abbreviations.len(), groups);
     assert_eq!(outcome(&many_abbreviations(groups + 1)), LIMIT);

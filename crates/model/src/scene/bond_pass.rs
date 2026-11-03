@@ -27,7 +27,21 @@ pub(crate) struct BondInputs<'d> {
 
 impl<'d> BondInputs<'d> {
     pub(crate) fn prepare(doc: &'d Document, opacity: &Paint, resolve: Resolve) -> Self {
-        let doc = match resolve {
+        let doc = Self::resolve(doc, resolve);
+        let doc = match doc.abbreviation_render_copy() {
+            Cow::Owned(drawn) => Cow::Owned(drawn),
+            Cow::Borrowed(_) => doc,
+        };
+        Self::new(doc, opacity)
+    }
+
+    /// The caller already prepared abbreviation geometry for this operation.
+    pub(crate) fn from_drawn(doc: &'d Document, opacity: &Paint, resolve: Resolve) -> Self {
+        Self::new(Self::resolve(doc, resolve), opacity)
+    }
+
+    fn resolve(doc: &'d Document, resolve: Resolve) -> Cow<'d, Document> {
+        match resolve {
             Resolve::Scene => {
                 let paint = crate::depth_appearance::Paint::new(doc);
                 let painted = paint.materialize(doc);
@@ -39,7 +53,10 @@ impl<'d> BondInputs<'d> {
                 owned.map_or(painted, Cow::Owned)
             }
             Resolve::AsGiven => Cow::Borrowed(doc),
-        };
+        }
+    }
+
+    fn new(doc: Cow<'d, Document>, opacity: &Paint) -> Self {
         // Reversing a dative graph changes donor hydrogen counts. Labels must
         // use the resolved chemical document, before projection normalization.
         let labels = collect_atom_labels(&doc, opacity);

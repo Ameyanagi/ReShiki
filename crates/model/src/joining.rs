@@ -374,6 +374,7 @@ impl Prepared {
         crate::arrow_anchors::remap_for_join(&mut placed, &self.original.atoms, &joined_mapping);
         for g in &mut placed.abbreviations {
             g.anchor = original_id(g.anchor);
+            g.exit = g.exit.map(original_id);
             for member in &mut g.members {
                 *member = original_id(*member);
             }

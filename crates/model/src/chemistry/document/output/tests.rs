@@ -127,6 +127,68 @@ fn new_drawings_preserve_alkene_specification_through_finish() -> anyhow::Result
 }
 
 #[test]
+fn only_generated_stereogenic_odd_cumulenes_withhold_coordinates() -> anyhow::Result<()> {
+    for (text, count) in [
+        ("CC=C=C=CC", 3),
+        ("C/C=C=C=C/C", 3),
+        ("C/C=C=C=C\\C", 3),
+        ("CC=C=C=C=C=CC", 5),
+        ("CC=C=C=CC.CC=C=C=CC", 6),
+        ("CC=C=CC", 0),
+        ("CC=[C@AL1]=CC", 0),
+        ("CC=C=C=C=CC", 0),
+        ("C=C=C=CC", 0),
+        ("CC(C)=C=C=CC", 0),
+        ("[CH3:1]C([CH3:2])=C=C=CC", 0),
+        ("CCC(CC)=C=C=CC", 0),
+        ("CCC(C)=C=C=CC", 3),
+        ("[2H]C=C=C=CC", 3),
+        ("[H]C=C=C=CC", 0),
+        ("[2H]C([2H])=C=C=CC", 0),
+        ("[2H]C([3H])=C=C=CC", 3),
+    ] {
+        let (molecule, dummy_labels) = depicted(text)?;
+        let imported = for_import(&molecule, false, &dummy_labels)?;
+        let base = imported.document.clone();
+        for (constructor, draft, expected) in [
+            ("import", imported, 0),
+            ("scene", for_import_scene(&molecule, false)?, 0),
+            ("drawing", for_drawing(&molecule, &base)?, 0),
+            (
+                "generated",
+                for_generated(&molecule, &dummy_labels, DrawingOptions::default())?,
+                count,
+            ),
+        ] {
+            let labels = draft.labels()?;
+            let document = draft.finish(labels)?;
+            document.validate().map_err(anyhow::Error::msg)?;
+            assert_eq!(
+                document
+                    .bonds
+                    .iter()
+                    .filter(|bond| bond.stereo_authoritative)
+                    .count(),
+                expected,
+                "{constructor}: {text}"
+            );
+            for bond in document
+                .bonds
+                .iter()
+                .filter(|bond| bond.stereo_authoritative)
+            {
+                assert_eq!(bond.order, 2, "{constructor}: {text}");
+                assert_eq!(bond.display, "plain", "{constructor}: {text}");
+                assert!(bond.stereo.is_none(), "{constructor}: {text}");
+                assert!(bond.stereo_atoms.is_empty(), "{constructor}: {text}");
+                assert!(bond.cip_label.is_none(), "{constructor}: {text}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn unpreparable_new_drawing_keeps_unspecified_alkene_appearance() -> anyhow::Result<()> {
     let (molecule, mut dummy_labels) = depicted("CC=CC.*")?;
     *dummy_labels.last_mut().context("Missing dummy label")? = Some("R".into());

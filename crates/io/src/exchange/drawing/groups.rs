@@ -342,9 +342,13 @@ impl Writer<'_> {
                 if a && b {
                     internal.push(n);
                 } else if a != b {
-                    external.push(n);
+                    external.push((n, self.tree.value(n, if a { "B" } else { "E" })?));
                 }
             }
+            // Pair the N-side attachment before the C-side attachment even
+            // when the document's bonds were created in the opposite order.
+            let anchor_id = self.tree.value(anchor, "id")?;
+            external.sort_by_key(|(_, target)| target != &anchor_id);
             let id = self.id()?;
             let position = self.tree.value(anchor, "p")?;
             let z = self.tree.get(anchor, "Z")?.unwrap_or("0").to_owned();
@@ -354,7 +358,15 @@ impl Writer<'_> {
                 [
                     ("id", id),
                     ("p", position.clone()),
-                    ("NodeType", "Fragment".into()),
+                    (
+                        "NodeType",
+                        if group.exit.is_some() {
+                            "Nickname"
+                        } else {
+                            "Fragment"
+                        }
+                        .into(),
+                    ),
                     ("Z", z),
                 ],
             )?;
@@ -373,7 +385,8 @@ impl Writer<'_> {
             let mut left = false;
             let mut connection_ids = Vec::new();
             let mut bond_ids = Vec::new();
-            for &bond in &external {
+            for (bond, target) in &external {
+                let bond = *bond;
                 let side = if self
                     .tree
                     .get(bond, "B")?
@@ -424,7 +437,7 @@ impl Writer<'_> {
                     [
                         ("id", id),
                         ("B", connection.clone()),
-                        ("E", self.tree.value(anchor, "id")?),
+                        ("E", target.clone()),
                         ("Order", order),
                     ],
                 )?;

@@ -48,6 +48,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("reshiki-process-heap", "global_allocator_unwind"): 0,
     # The OPSIN Rust port's integration tests (about two minutes in total).
     ("opsin", "assembly_methods"): 0,
+    ("opsin", "atropisomer_names"): 0,
     ("opsin", "carbohydrates"): 0,
     ("opsin", "carbohydrates_configuration"): 0,
     ("opsin", "chalcogen_acid_locants"): 0,
@@ -90,6 +91,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("opsin", "suffixes"): 0,
     ("opsin", "suffixes_cycles"): 0,
     ("opsin", "suffixes_isotopes"): 0,
+    ("opsin", "unknown_stereochemistry"): 0,
 }
 
 

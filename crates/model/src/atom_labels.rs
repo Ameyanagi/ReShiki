@@ -1030,6 +1030,11 @@ fn indicator_style(style: &TextStyle, text: &str) -> TextStyle {
 /// atom-number text is justified away from the atom. Manual offsets remain
 /// exact. The same positions are used by canvas and all exports.
 pub fn indicators(doc: &Document) -> Vec<Indicator> {
+    let drawn = doc.abbreviation_render_copy();
+    indicators_with_geometry(doc, &drawn)
+}
+
+pub(crate) fn indicators_with_geometry(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     // Most drawings have no indicators. Check their inexpensive display rules
     // before resolving collapsed-group visibility across the whole graph.
     let atom_candidate = doc.atoms.iter().any(|a| {
@@ -1044,10 +1049,10 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
     if !atom_candidate && !bond_candidate {
         return Vec::new();
     }
-    layout_indicators(doc)
+    layout_indicators(doc, drawn)
 }
 
-fn layout_indicators(doc: &Document) -> Vec<Indicator> {
+fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     let mut atom_stereo = atom_stereo_texts(doc);
     let mut labels = Vec::new();
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
@@ -1103,7 +1108,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
         .atoms
         .iter()
         .map(|a| {
-            crate::scene::atom_label_bounds(a, doc)
+            crate::scene::atom_label_bounds(a, drawn)
                 .unwrap_or((a.position.offset(-3., -3.), a.position.offset(3., 3.)))
         })
         .collect();
@@ -1199,7 +1204,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
             let mapping = match owner {
                 Owner::Mapping(id) => Some(
                     doc.atom(id)
-                        .and_then(|a| crate::scene::atom_label_ink_bounds(a, doc)),
+                        .and_then(|a| crate::scene::atom_label_ink_bounds(a, drawn)),
                 ),
                 _ => None,
             };

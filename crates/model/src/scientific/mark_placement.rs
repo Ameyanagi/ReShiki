@@ -46,6 +46,8 @@ pub(super) fn orbit(
     mark: &AtomMark,
     directions: impl IntoIterator<Item = f32>,
 ) -> Vec<(AtomMark, bool)> {
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     let (font_pt, gap) = font_gap(doc, atom);
     let style = &doc.drawing_style;
     // Separations are found along these normals, 1° apart.
@@ -147,8 +149,9 @@ pub(super) fn orbit(
 }
 
 pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, f32) {
+    let drawn = doc.abbreviation_render_copy();
     let (font_pt, gap) = font_gap(doc, atom);
-    let owner_ink = crate::scene::atom_label_ink_boxes(atom, doc);
+    let owner_ink = crate::scene::atom_label_ink_boxes(atom, &drawn);
     // Anchor the pair to the glyph nearest the atom center. Hydrogens and
     // superscripts remain obstacles, rather than pulling the pair toward H
     // or an isotope when another side of the heteroatom is clear.
@@ -161,7 +164,7 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
     let label_ink: Vec<_> = doc
         .atoms
         .iter()
-        .flat_map(|a| crate::scene::atom_label_ink_boxes(a, doc))
+        .flat_map(|a| crate::scene::atom_label_ink_boxes(a, &drawn))
         .collect();
     // Use rendered bond/mark geometry, including wedge outlines and double
     // bonds. Free drawing objects are not chemical placement obstacles.
@@ -240,11 +243,12 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
 /// Keep an unobstructed click default; otherwise try the nearest 15° side.
 /// Called only for a newly attached charge or radical, after its label refresh.
 pub(super) fn charge_click(doc: &Document, atom: &Atom, mark: &AtomMark) -> Point {
+    let drawn = doc.abbreviation_render_copy();
     let (_, gap) = font_gap(doc, atom);
     let labels: Vec<_> = doc
         .atoms
         .iter()
-        .flat_map(|a| crate::scene::atom_label_ink_boxes(a, doc))
+        .flat_map(|a| crate::scene::atom_label_ink_boxes(a, &drawn))
         .collect();
     let mut chemistry = doc.clone();
     chemistry.graphics.clear();

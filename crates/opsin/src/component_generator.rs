@@ -899,6 +899,13 @@ impl<'a> ComponentGenerator<'a> {
                 self.add(n, TYPE_ATR, ENDO_EXO_SYN_ANTI_TYPE_VAL);
                 self.add(n, VALUE_ATR, symbol.to_lowercase());
             } else if matches(symbol, "M|P|Ra|Sa|Sp|Rp") {
+                // Native extension: stereo groups hold atom parities only, so a
+                // racemic or relative axis cannot be represented.
+                if group.is_some() {
+                    return err(format!(
+                        "Racemic or relative axial stereochemistry is not supported: {original}"
+                    ));
+                }
                 self.add(n, TYPE_ATR, AXIAL_TYPE_VAL);
                 self.add(n, VALUE_ATR, symbol);
             } else {
@@ -2635,10 +2642,11 @@ fn split_stereo_descriptors(text: &str) -> Vec<String> {
     result
 }
 fn alpha_beta_symbol(symbol: &str) -> Result<&'static str> {
-    match symbol.chars().next().map(|c| c.to_ascii_lowercase()) {
-        Some('a') => Ok("alpha"),
-        Some('b') => Ok("beta"),
-        Some('x') => Ok("xi"),
+    match symbol.chars().next() {
+        Some('a' | 'A') => Ok("alpha"),
+        Some('b' | 'B') => Ok("beta"),
+        Some('x') => Ok(if symbol == "xI" { "ξ" } else { "xi" }),
+        Some('X') => Ok("Xi"),
         _ => err("Malformed alpha/beta stereochemistry element"),
     }
 }

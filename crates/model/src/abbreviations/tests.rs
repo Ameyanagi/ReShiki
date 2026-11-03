@@ -9,6 +9,7 @@ fn abbreviation_containing_returns_the_first_member_match_or_none() {
         label: "first".into(),
         reverse_label: String::new(),
         anchor: 1,
+        exit: None,
         members: vec![1, 2],
         alignment: Default::default(),
     };
@@ -75,6 +76,293 @@ fn bond_visible_matches_atom_visibility_and_shared_groups() {
                     .any(|g| g.members.contains(&a) && g.members.contains(&b));
             assert_eq!(doc.bond_visible(a, b), expected, "{a}-{b}");
         }
+    }
+}
+
+#[test]
+fn legacy_deserialization_preserves_the_original_abbreviation_fields_and_version() {
+    let bytes =
+        include_bytes!("../../../../tests/fixtures/qa-label-feedback/before-acetyl-repeat.rsk");
+    let source: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+    let doc: Document = serde_json::from_slice(bytes).unwrap();
+    assert_eq!(doc.version, 15);
+    assert_eq!(source["version"], doc.version);
+    assert!(doc.abbreviations.iter().all(|group| group.exit.is_none()));
+    let saved = serde_json::to_value(&doc).unwrap();
+    assert_eq!(saved["version"], source["version"]);
+    assert_eq!(saved["abbreviations"], source["abbreviations"]);
+    assert!(
+        saved["abbreviations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|group| group.get("exit").is_none())
+    );
+    assert_eq!(doc.file_version(), crate::document::DISTANCE_BONDS);
+}
+
+/// The real exit is below the visible label-to-right bond, so stale endpoint
+/// geometry cannot accidentally pass the rendering and picking checks.
+fn bridge() -> (Document, [u64; 5]) {
+    let mut doc = Document::default();
+    let ids = [(-60., 0.), (0., 0.), (20., 25.), (40., 20.), (80., 0.)]
+        .map(|(x, y)| doc.add_atom("C", Point::new(x, y)));
+    // Deliberately insert the right boundary first: ordering follows geometry.
+    for [a, b] in [
+        [ids[3], ids[4]],
+        [ids[2], ids[3]],
+        [ids[1], ids[2]],
+        [ids[0], ids[1]],
+    ] {
+        doc.add_bond(a, b, 1, "plain");
+    }
+    (doc, ids)
+}
+
+#[test]
+fn custom_two_sided_contraction_validates_boundaries_and_versions() {
+    let (mut doc, [left, anchor, middle, exit, right]) = bridge();
+    doc.contract(&[anchor, middle, exit], "Bridge", "").unwrap();
+    let group = &doc.abbreviations[0];
+    assert_eq!((group.anchor, group.exit), (anchor, Some(exit)));
+    assert_eq!(doc.version, crate::document::RESIDUE_GROUPS);
+    assert_eq!(doc.file_version(), crate::document::RESIDUE_GROUPS);
+    assert!(doc.atom_visible(anchor));
+    assert!(!doc.atom_visible(exit));
+    assert!(doc.bond_visible(left, anchor));
+    assert!(doc.bond_visible(exit, right));
+    assert!(!doc.bond_visible(anchor, middle));
+    assert!(!doc.bond_visible(middle, exit));
+    doc.validate().unwrap();
+    let saved = doc.file_json().unwrap();
+    assert_eq!(Document::from_json(&saved).unwrap(), doc.current());
+
+    for invalid in [Some(anchor), Some(right), None] {
+        let mut bad = doc.clone();
+        bad.abbreviations[0].exit = invalid;
+        assert!(bad.validate().is_err(), "{invalid:?}");
+    }
+    let mut old = doc.clone();
+    old.version = crate::document::MODEL_POLISH;
+    assert!(old.validate().unwrap_err().contains("version 34"));
+    let mut disconnected = doc.clone();
+    disconnected.bonds.remove(1);
+    assert!(disconnected.validate().unwrap_err().contains("connected"));
+    let mut third_boundary = doc.clone();
+    let outside = third_boundary.add_atom("C", Point::new(20., 80.));
+    third_boundary.add_bond(middle, outside, 1, "plain");
+    assert!(third_boundary.validate().is_err());
+    third_boundary.abbreviations.clear();
+    assert_eq!(
+        third_boundary.contract(&[anchor, middle, exit], "Bridge", ""),
+        Err("A group connects through at most two atoms".into())
+    );
+}
+
+#[test]
+fn two_sided_group_moves_copies_deletes_and_expands_as_one_fragment() {
+    let (mut doc, [left, anchor, middle, exit, right]) = bridge();
+    let expanded = doc.clone();
+    doc.contract(&[anchor, middle, exit], "Bridge", "").unwrap();
+    let contracted = doc.clone();
+    doc.translate(&[exit], 8., -12.);
+    for id in [anchor, middle, exit] {
+        assert_eq!(
+            doc.atom(id).unwrap().position,
+            expanded.atom(id).unwrap().position.offset(8., -12.)
+        );
+    }
+    for id in [left, right] {
+        assert_eq!(doc.atom(id), expanded.atom(id));
+    }
+    doc.reconcile_abbreviations(&contracted);
+    assert_eq!(doc.abbreviations, contracted.abbreviations);
+    let moved = doc.clone();
+    let mut history = crate::document::History::default();
+    assert!(history.commit(contracted.clone(), &doc));
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc, contracted);
+    assert!(history.redo(&mut doc));
+    assert_eq!(doc, moved);
+
+    let part = crate::editing::selection(&doc, &[anchor]);
+    assert_eq!(part.atoms.len(), 3);
+    assert_eq!(part.abbreviations, doc.abbreviations);
+    let ids = crate::editing::append(&mut doc, &part, Point::new(150., 0.));
+    assert_eq!(ids.len(), 3);
+    let copied = &doc.abbreviations[1];
+    assert_eq!((copied.anchor, copied.exit), (ids[0], Some(ids[2])));
+    doc.validate().unwrap();
+    let mut deleted = doc.clone();
+    deleted.delete(&[exit]);
+    assert!(
+        [anchor, middle, exit]
+            .into_iter()
+            .all(|id| deleted.atom(id).is_none())
+    );
+    assert_eq!(deleted.abbreviations.len(), 1);
+    assert_eq!(doc.expand_abbreviations(&[exit]), 1);
+    assert_eq!(doc.file_version(), crate::document::RESIDUE_GROUPS);
+    assert_eq!(doc.expand_abbreviations(&ids), 1);
+    assert_eq!(doc.file_version(), crate::document::DISTANCE_BONDS);
+    assert!(
+        [anchor, middle, exit]
+            .into_iter()
+            .all(|id| doc.atom_visible(id))
+    );
+}
+
+#[test]
+fn two_sided_bonds_render_and_pick_at_both_label_edges() {
+    let (mut doc, [left, anchor, middle, exit, right]) = bridge();
+    doc.contract(&[anchor, middle, exit], "Ala", "Back")
+        .unwrap();
+    let (lo, hi) = crate::scene::atom_label_bounds(doc.atom(anchor).unwrap(), &doc).unwrap();
+    let (ink_lo, ink_hi) =
+        crate::scene::atom_label_ink_bounds(doc.atom(anchor).unwrap(), &doc).unwrap();
+    assert!(((lo.x + hi.x) / 2.).abs() < 0.001);
+    let primitives = crate::scene::primitives(&doc);
+    assert!(primitives.iter().any(
+        |primitive| matches!(primitive, crate::scene::Primitive::Text { text, .. } if text == "Ala")
+    ));
+    let paints_bond = |point: Point| {
+        let contains = |polygon: &[Point]| {
+            crate::polygon::closed_edges(polygon)
+                .filter(|(a, b)| {
+                    (a.y > point.y) != (b.y > point.y)
+                        && point.x < a.x + (point.y - a.y) * (b.x - a.x) / (b.y - a.y)
+                })
+                .count()
+                % 2
+                == 1
+        };
+        primitives.iter().any(|primitive| match primitive {
+            crate::scene::Primitive::Line(a, b, width) => {
+                crate::graphics::segment_distance(point, *a, *b) < width / 2.
+            }
+            crate::scene::Primitive::Polygon(points) => contains(points),
+            crate::scene::Primitive::Path {
+                commands,
+                filled: true,
+                ..
+            } => crate::graphics::flattened(commands)
+                .iter()
+                .any(|points| contains(points)),
+            _ => false,
+        })
+    };
+    let drawn = doc.abbreviation_render_copy();
+    let segments: Vec<_> = drawn
+        .bonds
+        .iter()
+        .filter_map(|bond| crate::scene::bond_segment(&drawn, bond, None))
+        .collect();
+    assert_eq!(segments.len(), 2);
+    for (a, b) in &segments {
+        assert!(a.x.max(b.x) < ink_lo.x || a.x.min(b.x) > ink_hi.x);
+    }
+    assert_eq!((drawn.bonds[0].a, drawn.bonds[0].b), (anchor, right));
+    assert_eq!((doc.bonds[0].a, doc.bonds[0].b), (exit, right));
+    for (index, point, endpoints) in [
+        (3, Point::new(-45., 0.), (left, anchor)),
+        (0, Point::new(65., 0.), (exit, right)),
+    ] {
+        assert_eq!(crate::editing::nearest_bond(&doc, point, 0.25), Some(index));
+        let pick = crate::arrow_anchors::pick(&doc, point, 0.25).unwrap();
+        assert!(
+            matches!(pick, crate::arrow_anchors::Pick::Bond { a, b, .. } if (a,b) == endpoints)
+        );
+        assert!(pick.center(&doc).unwrap().distance(point) < 0.001);
+        let (a, b) = crate::scene::bond_segment(&drawn, &drawn.bonds[index], None).unwrap();
+        assert!(a.y.abs() < 0.001 && b.y.abs() < 0.001);
+        assert!(paints_bond(point));
+    }
+    assert!(!paints_bond(Point::default()));
+    assert_eq!(
+        crate::editing::nearest_bond(&doc, Point::default(), 0.25),
+        None
+    );
+    assert_eq!(
+        crate::editing::nearest_bond(&doc, Point::new(60., 10.), 0.25),
+        None
+    );
+    assert_eq!(doc.nearest(Point::new(lo.x + 1., 0.), 0.25), Some(anchor));
+    assert!(crate::scene::bond_segment(&drawn, &drawn.bonds[1], None).is_none());
+    let right_span = crate::scene::bond_segment(&drawn, &drawn.bonds[0], None).unwrap();
+    assert!(right_span.0.x > hi.x - 1.);
+    let left_span = crate::scene::bond_segment(&drawn, &drawn.bonds[3], None).unwrap();
+    assert!(left_span.1.x < lo.x + 1.);
+}
+
+#[test]
+fn two_sided_bond_erasing_uses_drawn_exit_geometry() {
+    let (mut doc, [_, anchor, middle, exit, _]) = bridge();
+    doc.contract(&[anchor, middle, exit], "Bridge", "").unwrap();
+    let before = doc.clone();
+    let hidden = Point::new(60., 10.);
+    crate::erasing::stroke(&mut doc, hidden, hidden, 0.25);
+    assert_eq!(doc, before);
+    let visible = Point::new(65., 0.);
+    crate::erasing::stroke(&mut doc, visible, visible, 0.25);
+    assert_eq!(doc.bonds, before.bonds[1..]);
+}
+
+#[test]
+fn two_sided_bond_indicators_keep_their_chemical_owner() {
+    let (mut doc, [_, anchor, middle, exit, right]) = bridge();
+    doc.bonds[0].order = 2;
+    doc.bonds[0].cip_label = Some("E".into());
+    doc.bonds[0].indicator.show = Some(true);
+    doc.contract(&[anchor, middle, exit], "Bridge", "").unwrap();
+    let indicator = crate::atom_labels::indicators(&doc).remove(0);
+    assert_eq!(
+        indicator.owner,
+        crate::atom_labels::Owner::BondStereo(exit, right)
+    );
+    let offset = Some(Point::new(4., 8.));
+    indicator.owner.set_offset(&mut doc, offset);
+    assert_eq!(doc.bonds[0].indicator.offset, offset);
+}
+
+#[test]
+fn two_sided_reverse_spelling_and_label_bounds_match_the_render_view() {
+    let (mut doc, [_, anchor, middle, exit, _]) = bridge();
+    doc.contract(&[anchor, middle, exit], "Forward", "Reverse")
+        .unwrap();
+    for alignment in LabelAlignment::ALL {
+        doc.abbreviations[0].alignment = alignment;
+        let drawn = doc.abbreviation_render_copy();
+        let expected = if alignment == LabelAlignment::Right {
+            "Reverse"
+        } else {
+            "Forward"
+        };
+        assert_eq!(doc.abbreviations[0].text(&doc), expected);
+        assert_eq!(drawn.abbreviations[0].text(&drawn), expected);
+        assert_eq!(
+            crate::scene::atom_label_bounds(doc.atom(anchor).unwrap(), &doc),
+            crate::scene::atom_label_bounds(drawn.atom(anchor).unwrap(), &drawn)
+        );
+    }
+}
+
+#[test]
+fn label_bounds_and_hits_use_drawn_exit_geometry_for_outside_hydrogens() {
+    let (mut doc, [_, anchor, middle, exit, right]) = bridge();
+    doc.atom_mut(exit).unwrap().position.y = -20.;
+    doc.atom_mut(right).unwrap().element = "N".into();
+    let other = doc.add_atom("C", Point::new(120., 0.));
+    doc.add_bond(right, other, 1, "plain");
+    doc.contract(&[anchor, middle, exit], "Ala", "").unwrap();
+    doc.atom_mut(right).unwrap().label_h = 1;
+    let drawn = doc.abbreviation_render_copy();
+    let boxes = crate::scene::atom_label_ink_boxes(drawn.atom(right).unwrap(), &drawn);
+    assert!(boxes.len() >= 2);
+    let ink = crate::scene::attachment_ink::AttachmentInk::new(&doc);
+    for (lo, hi) in boxes {
+        let point = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+        assert_eq!(crate::scene::atom_label_hit(&doc, point, 0.), Some(right));
+        assert_eq!(ink.label_hit(point, 0.), Some(right));
     }
 }
 

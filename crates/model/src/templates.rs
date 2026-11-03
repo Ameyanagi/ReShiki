@@ -953,6 +953,7 @@ impl Attachment<'_> {
         }
         for group in &mut result.abbreviations {
             group.anchor = mapped(group.anchor);
+            group.exit = group.exit.map(mapped);
             for id in &mut group.members {
                 *id = mapped(*id);
             }
