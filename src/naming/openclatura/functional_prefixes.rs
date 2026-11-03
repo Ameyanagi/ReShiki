@@ -512,16 +512,22 @@ mod tests {
     #[test]
     fn peroxy_ester_prefix_encloses_only_complex_ligands() {
         for (smiles, expected) in [
-            ("COOC(=O)CC(=O)O", "2-(methylperoxycarbonyl)acetic acid"),
+            ("COOC(=O)CC(=O)O", "(methylperoxycarbonyl)acetic acid"),
             (
                 "CC(C)OOC(=O)CC(=O)O",
-                "2-[(propan-2-yl)peroxycarbonyl]acetic acid",
+                "[(propan-2-yl)peroxycarbonyl]acetic acid",
             ),
         ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
             assert_eq!(
-                name_smiles(smiles).map(|name| name.text).as_deref(),
-                Ok(expected),
-                "{smiles}"
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
             );
         }
     }

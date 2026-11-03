@@ -224,6 +224,7 @@ impl App {
         if reshiki::generic::touches(&self.tab.doc, &self.tab.selected) {
             return Err(reshiki::generic::JOIN_NOTICE.into());
         }
+        let drawn = self.tab.doc.abbreviation_render_copy();
         let mut bounds: Option<(Point, Point)> = None;
         for id in &self.tab.selected {
             let atom = self
@@ -231,7 +232,7 @@ impl App {
                 .doc
                 .atom(*id)
                 .ok_or("Select only atoms to merge.")?;
-            let (lo, hi) = reshiki::scene::atom_label_ink_bounds(atom, &self.tab.doc)
+            let (lo, hi) = reshiki::scene::atom_label_ink_bounds(atom, &drawn)
                 .unwrap_or((atom.position, atom.position));
             bounds = Some(bounds.map_or((lo, hi), |(a, b)| {
                 (

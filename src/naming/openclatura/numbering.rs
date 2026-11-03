@@ -11,13 +11,14 @@ use std::sync::LazyLock;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NumberingTopology {
+    pub is_assembly: bool,
     pub is_bicycle: bool,
     pub is_spiro: bool,
     pub is_polycycle: bool,
 }
 impl NumberingTopology {
     fn has_fixed_paths(self) -> bool {
-        self.is_bicycle || self.is_spiro || self.is_polycycle
+        self.is_assembly || self.is_bicycle || self.is_spiro || self.is_polycycle
     }
 }
 
@@ -213,6 +214,8 @@ pub fn choose_parent_numbering(
             Vec<LocantKey>,
             Vec<LocantKey>,
             Vec<(String, LocantKey)>,
+            Vec<(LocantKey, usize)>,
+            Vec<usize>,
         );
         let evaluate = |map: &BTreeMap<usize, String>| -> MapScore {
             let value = |idx: &usize| retained_locant_sort_key(&map[idx]);
@@ -224,7 +227,7 @@ pub fn choose_parent_numbering(
             principal.sort();
             let mut hetero: BTreeMap<usize, Vec<LocantKey>> = BTreeMap::new();
             for (&idx, atom) in &mol.atoms {
-                if map.contains_key(&idx) && atom.symbol != "C" {
+                if !topology.is_assembly && map.contains_key(&idx) && atom.symbol != "C" {
                     hetero
                         .entry(
                             elements::get(&atom.symbol)
@@ -258,7 +261,7 @@ pub fn choose_parent_numbering(
                 .map(value)
                 .collect();
             hydro.sort();
-            let path: Vec<_> = ring
+            let mut path: Vec<_> = ring
                 .iter()
                 .filter(|idx| mol.atoms.contains_key(idx))
                 .copied()
@@ -298,7 +301,31 @@ pub fn choose_parent_numbering(
                 })
                 .collect();
             citation.sort();
-            (hetero, indicated, principal, hydro, subst, citation)
+            let mut stereo: Vec<_> = map
+                .keys()
+                .filter(|_| topology.is_assembly)
+                .filter_map(|idx| {
+                    mol.atoms[idx]
+                        .stereo
+                        .as_ref()
+                        // P-31.1.4.3.4: R before S, r before s.
+                        .map(|s| (value(idx), usize::from(!matches!(s.as_str(), "R" | "r"))))
+                })
+                .collect();
+            stereo.sort();
+            path.sort_by_key(value);
+            // Other retained/fused maps do not score atom stereo. Axial
+            // descriptors are scored on every map.
+            (
+                hetero,
+                indicated,
+                principal,
+                hydro,
+                subst,
+                citation,
+                stereo,
+                stereochemistry_preference(mol, &path, false),
+            )
         };
         if let Some(chosen) = locant_maps.iter().min_by_key(|map| evaluate(map)).cloned() {
             let mut path: Vec<_> = chosen.keys().copied().collect();
@@ -364,15 +391,7 @@ fn numbering_preference(
         .collect();
     substituent_and_unsaturation.sort();
     let substituent_citation = substituent_citation_locants(path, substituents);
-    let stereochemistry = path
-        .iter()
-        .filter_map(|idx| {
-            mol.atoms[idx]
-                .stereo
-                .as_ref()
-                .map(|s| usize::from(s != "R"))
-        })
-        .collect();
+    let stereochemistry = stereochemistry_preference(mol, path, true);
     NumberingPreference {
         principal,
         hetero_by_priority,
@@ -384,6 +403,42 @@ fn numbering_preference(
         substituent_citation,
         stereochemistry,
     }
+}
+
+/// P-31.1.4.3.4: after structural numbering ties, prefer R to S and M to P
+/// at the first differing locant. An internal axis is cited once, at its lower
+/// locant; an axis leaving this parent is cited at the parent endpoint.
+fn stereochemistry_preference(
+    mol: &Molecule,
+    path: &[usize],
+    include_atom_descriptors: bool,
+) -> Vec<usize> {
+    let positions: BTreeMap<_, _> = path
+        .iter()
+        .enumerate()
+        .map(|(position, &atom)| (atom, position))
+        .collect();
+    let mut descriptors = Vec::new();
+    for (position, &idx) in path.iter().enumerate() {
+        if include_atom_descriptors && let Some(stereo) = mol.atoms[&idx].stereo.as_ref() {
+            descriptors.push(usize::from(stereo != "R"));
+        }
+        for &neighbor in mol.get_neighbors(idx) {
+            if positions
+                .get(&neighbor)
+                .is_some_and(|&other| other < position)
+            {
+                continue;
+            }
+            if let Some(stereo @ ("M" | "P")) = mol
+                .get_bond(idx, neighbor)
+                .and_then(|bond| bond.stereo.as_deref())
+            {
+                descriptors.push(usize::from(stereo != "M"));
+            }
+        }
+    }
+    descriptors
 }
 
 fn mancude_hydro_split(
@@ -514,6 +569,56 @@ mod tests {
         graph_io::read_smiles,
     };
     use super::*;
+    #[test]
+    fn ordinary_and_retained_numbering_prefer_m_to_p() {
+        let mut mol = read_smiles("c1(-c2ccccc2)ccc(-c2ccccc2)cc1").unwrap();
+        for bond in mol.bonds.values_mut() {
+            bond.stereo = match (bond.u, bond.v) {
+                (0, 1) => Some("M".into()),
+                (9, 10) => Some("P".into()),
+                _ => None,
+            };
+        }
+        let preferred = vec![0, 7, 8, 9, 16, 17];
+        let other = vec![9, 8, 7, 0, 17, 16];
+        let substituents = BTreeMap::from([(0, vec!["phenyl".into()]), (9, vec!["phenyl".into()])]);
+        let numbered = number_parent(
+            &mol,
+            &[other.clone(), preferred.clone()],
+            &AtomSet::new(),
+            &substituents,
+            true,
+            true,
+            Some("benzene"),
+            NumberingTopology::default(),
+        );
+        assert_eq!(numbered, preferred);
+        let maps: Vec<BTreeMap<_, _>> = [other, preferred.clone()]
+            .iter()
+            .map(|path| {
+                path.iter()
+                    .enumerate()
+                    .map(|(i, &a)| (a, (i + 1).to_string()))
+                    .collect()
+            })
+            .collect();
+        let (numbered, map) = choose_parent_numbering(
+            &mol,
+            &[],
+            &AtomSet::new(),
+            &substituents,
+            &maps,
+            true,
+            Some("benzene"),
+            false,
+            NumberingTopology::default(),
+            None,
+        );
+        assert_eq!(numbered, preferred);
+        assert_eq!(map, Some(maps[1].clone()));
+        assert_eq!(stereochemistry_preference(&mol, &[0, 1], false), vec![0]);
+    }
+
     #[test]
     fn double_bonds_take_low_locants_only_after_multiple_bonds_tie() {
         for (smiles, principal, expected) in [

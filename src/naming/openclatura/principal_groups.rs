@@ -132,5 +132,17 @@ pub fn add_component_principal_group(
         .copied()
         .filter(|i| mol.atoms[i].charge != 0)
         .collect();
+    // The parent graph cannot prove locant omission when a suffix also offers
+    // substitution at atoms outside that graph, such as the nitrogen of an amide.
+    item.external_substitution_sites = item.atom_ids.iter().any(|id| {
+        mol.projected_substitution_centers.contains(id)
+            || !parts.parent_atom_ids.contains(id)
+                && !matches!(mol.atoms[id].symbol.as_str(), "H" | "O" | "S" | "Se" | "Te")
+                && (mol.atoms[id].total_h_count > 0
+                    || mol
+                        .get_neighbors(*id)
+                        .iter()
+                        .any(|other| !item.atom_ids.contains(other)))
+    });
     parts.principal_group = Some(item);
 }

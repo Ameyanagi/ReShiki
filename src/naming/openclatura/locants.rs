@@ -77,6 +77,14 @@ pub fn parse_system_locant(value: &str) -> Result<SystemLocant, String> {
 }
 pub fn retained_locant_sort_key(value: &str) -> LocantKey {
     if let Ok(locant) = parse_system_locant(value) {
+        if locant.fusion_suffix.is_empty()
+            && let Some(secondary) = locant.interior_distance
+        {
+            // A numerical primary followed by a superscript is also the
+            // assembly form. Keep its secondary number alongside any fusion
+            // letter, so 1^4 < 1^4a < 1^5 < 1^10.
+            return (locant.base, 0, format!("^{secondary:020}"), 0);
+        }
         return (
             locant.base,
             u8::from(!locant.fusion_suffix.is_empty()),
@@ -84,11 +92,35 @@ pub fn retained_locant_sort_key(value: &str) -> LocantKey {
             locant.interior_distance.unwrap_or(0),
         );
     }
+    if let Some((primary, secondary)) = value.split_once('^') {
+        let digits = secondary.bytes().take_while(u8::is_ascii_digit).count();
+        if !primary.starts_with('0')
+            && primary.bytes().all(|b| b.is_ascii_digit())
+            && digits > 0
+            && !secondary.starts_with('0')
+            && secondary[digits..].chars().all(|c| c.is_ascii_lowercase())
+            && let (Ok(primary), Ok(number)) = (
+                primary.parse::<usize>(),
+                secondary[..digits].parse::<usize>(),
+            )
+        {
+            return (
+                primary,
+                0,
+                format!("^{number:020}{}", &secondary[digits..]),
+                0,
+            );
+        }
+    }
     let count = value.bytes().take_while(u8::is_ascii_digit).count();
     (
         value[..count].parse().unwrap_or(10_000),
         u8::from(count < value.len()),
-        value[count..].into(),
+        format!(
+            "{}{}",
+            value[count..].replace('\'', ""),
+            "'".repeat(value[count..].matches('\'').count())
+        ),
         0,
     )
 }
@@ -155,6 +187,18 @@ pub fn get_bond_locants(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assembly_composite_locants_compare_secondary_numbers_and_fusion_letters() {
+        let mut labels = ["2^1", "1^10", "1^4a", "1^5", "1^4", "1^4b", "1^2"];
+        labels.sort_by_key(|l| retained_locant_sort_key(l));
+        assert_eq!(labels, ["1^2", "1^4", "1^4a", "1^4b", "1^5", "1^10", "2^1"]);
+        assert_eq!(retained_locant_sort_key("9a^2"), (9, 1, "a".into(), 2));
+        assert_eq!(
+            retained_locant_sort_key("1^2"),
+            retained_locant_sort_key("1²")
+        );
+    }
 
     #[test]
     fn completed_system_locants_preserve_interior_distance() {

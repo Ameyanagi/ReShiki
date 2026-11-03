@@ -78,7 +78,7 @@ impl App {
         match target {
             AliasTarget::Import => {
                 let preview = self.tab.naming.preview.as_ref()?;
-                (!preview.modified && self.tab.naming.smiles == preview.identity)
+                (!preview.modified && self.tab.naming.smiles == preview.smiles)
                     .then_some(&preview.record)
             }
             AliasTarget::Structure => {

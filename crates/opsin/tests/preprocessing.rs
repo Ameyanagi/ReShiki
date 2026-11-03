@@ -10,11 +10,12 @@ fn upstream_preprocessor_cases() {
         ("$e-bromo", "epsilon-bromo"),
         ("$l-bromo", "lambda-bromo"),
         ("α-bromo", "alpha-bromo"),
-        ("(2Ξ,3R)-3-chlorobutan-2-ol", "(2xi,3R)-3-chlorobutan-2-ol"),
+        ("(2Ξ,3R)-3-chlorobutan-2-ol", "(2Xi,3R)-3-chlorobutan-2-ol"),
         (
             "(1ξ,4ξ)-cyclohexane-1,4-diol",
-            "(1xi,4xi)-cyclohexane-1,4-diol",
+            "(1xI,4xI)-cyclohexane-1,4-diol",
         ),
+        ("(2Ξ,3ξ,4Xi,5xI,6XI,7xi)", "(2Xi,3xI,4xi,5xi,6xi,7xi)"),
         ("sulphur dioxide", "sulfur dioxide"),
         (".alpha.-methyl-toluene", "alpha-methyl-toluene"),
         (".alpha..beta..eta.", "alphabetaeta"),
@@ -42,6 +43,27 @@ fn upstream_preprocessor_cases() {
             .to_string()
             .starts_with("Unrecognised unicode character:")
     );
+}
+
+#[test]
+fn ascii_xi_normalization_recognizes_descriptors_without_changing_word_text() {
+    for (input, expected) in [
+        ("(Xi,xI,XI,xi)", "(xi,xi,xi,xi)"),
+        ("[Xi] {xI} XI-xi", "[xi] {xi} xi-xi"),
+        ("(4aXi,4a'XI,4'aXi)", "(4axi,4a'xi,4'axi)"),
+        ("5Xi-cholestane", "5xi-cholestane"),
+        ("5XIcholestane", "5xicholestane"),
+        ("(Ξ,ξ,Xi,xI)", "(Xi,xI,xi,xi)"),
+        ("OXIME", "OXIME"),
+        ("THIOOXIME", "THIOOXIME"),
+        ("XIPAMIDE", "XIPAMIDE"),
+        (
+            "4-NITROBENZALDEHYDE S-(4-NITROPHENYL)THIOOXIME",
+            "4-NITROBENZALDEHYDE S-(4-NITROPHENYL)THIOOXIME",
+        ),
+    ] {
+        assert_eq!(preprocess(input).unwrap(), expected, "{input}");
+    }
 }
 
 #[test]

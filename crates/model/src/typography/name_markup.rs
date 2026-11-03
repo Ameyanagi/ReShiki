@@ -385,7 +385,7 @@ fn numeric_locant(text: &str) -> bool {
     tail.chars().all(is_prime)
 }
 
-fn preceding_locant(text: &str, at: usize, fusion: bool) -> bool {
+fn preceding_locant(text: &str, at: usize) -> bool {
     let start = before(text, at)
         .char_indices()
         .rev()
@@ -397,9 +397,7 @@ fn preceding_locant(text: &str, at: usize, fusion: bool) -> bool {
         })
         .map_or(0, |(i, c)| i + c.len_utf8());
     let locant = segment(text, start..at);
-    boundary_before(text, start)
-        && numeric_locant(locant)
-        && (!fusion || locant.chars().any(|c| c.is_ascii_lowercase()))
+    boundary_before(text, start) && numeric_locant(locant)
 }
 
 /// Normalize presentation encodings, retaining baseline digits and letters so
@@ -433,7 +431,7 @@ fn display_text(name: &str) -> NameMarkup {
             .into_iter()
             .find_map(|prefix| rest.strip_prefix(prefix).map(|tail| (prefix.len(), tail)));
         if let Some((prefix, tail)) = lambda
-            && (boundary_before(name, i) || preceding_locant(name, i, false))
+            && (boundary_before(name, i) || preceding_locant(name, i))
         {
             let digits = tail.bytes().take_while(u8::is_ascii_digit).count();
             if digits > 0 && boundary_after(name, i + prefix + digits) {
@@ -448,7 +446,7 @@ fn display_text(name: &str) -> NameMarkup {
             }
         }
         if let Some(tail) = rest.strip_prefix("^{")
-            && preceding_locant(name, i, false)
+            && preceding_locant(name, i)
             && let Some(close) = tail.find('}')
         {
             let body = before(tail, close);
@@ -467,7 +465,7 @@ fn display_text(name: &str) -> NameMarkup {
             }
         }
         if let Some(tail) = rest.strip_prefix('^')
-            && preceding_locant(name, i, true)
+            && preceding_locant(name, i)
         {
             let digits = tail.bytes().take_while(u8::is_ascii_digit).count();
             let end = i + digits + 1;
@@ -480,7 +478,9 @@ fn display_text(name: &str) -> NameMarkup {
                     .any(|descriptor| {
                         after(name, end)
                             .strip_prefix(descriptor)
-                            .is_some_and(|tail| tail.starts_with(['-', ')', ',', '*']))
+                            .is_some_and(|tail| {
+                                tail.is_empty() || tail.starts_with(['-', ')', ',', '*'])
+                            })
                     }))
             {
                 let start = markup.text.len();
@@ -495,7 +495,7 @@ fn display_text(name: &str) -> NameMarkup {
         // An element locant (N¹-) normalizes like its ASCII spelling (N1-).
         let word = before(name, i).trim_end_matches(|c: char| c.is_ascii_alphabetic());
         if superscript_digit(c).is_some()
-            && (preceding_locant(name, i, false)
+            && (preceding_locant(name, i)
                 || before(name, i).strip_suffix('λ').is_some_and(|prefix| {
                     prefix
                         .chars()
@@ -546,7 +546,7 @@ fn display_text(name: &str) -> NameMarkup {
         }
         if c == 'H'
             && matches!(after(name, i + 1).chars().next(), Some('-' | ')' | ','))
-            && preceding_locant(name, i, false)
+            && preceding_locant(name, i)
         {
             // Recognize interior locants before their script encoding is removed.
             markup
@@ -570,7 +570,7 @@ fn display_text(name: &str) -> NameMarkup {
 }
 
 fn prime_after_locant(text: &str, at: usize) -> bool {
-    if preceding_locant(text, at, false) {
+    if preceding_locant(text, at) {
         return true;
     }
     let start = before(text, at)
@@ -656,7 +656,7 @@ fn fusion_letters(text: &str, runs: &mut Vec<(Range<usize>, NameRun)>) {
             ']' => {
                 if let Some(start) = starts.pop() {
                     let mut offset = start;
-                    let mut letters = vec![];
+                    let mut letters: Vec<(Range<usize>, NameRun)> = vec![];
                     let valid = segment(text, start..i).split(':').all(|part| {
                         let (edge, edge_start, numbered) =
                             if let Some((locants, edge)) = part.split_once('-') {
@@ -669,13 +669,29 @@ fn fusion_letters(text: &str, runs: &mut Vec<(Range<usize>, NameRun)>) {
                             };
                         let mut position = edge_start;
                         let valid = edge.split(',').all(|word| {
-                            let n = word.bytes().take_while(u8::is_ascii_lowercase).count();
-                            let valid = n > 0
-                                && (numbered || n == 1)
-                                && after(word, n).chars().all(is_prime);
-                            if valid {
-                                letters.push((position..position + n, NameRun::Italic));
-                            }
+                            let mut previous = None;
+                            let mut count = 0;
+                            let valid = word.char_indices().all(|(at, c)| {
+                                if !c.is_ascii_lowercase() {
+                                    return previous.is_some() && is_prime(c);
+                                }
+                                if previous.is_some_and(|previous| c as u32 != previous as u32 + 1)
+                                {
+                                    return false;
+                                }
+                                let start = position + at;
+                                if let Some((range, _)) = letters.last_mut()
+                                    && range.end == start
+                                {
+                                    range.end += 1;
+                                } else {
+                                    letters.push((start..start + 1, NameRun::Italic));
+                                }
+                                previous = Some(c);
+                                count += 1;
+                                true
+                            }) && count > 0
+                                && (numbered || count == 1);
                             position += word.len() + 1;
                             valid
                         });
@@ -970,6 +986,50 @@ mod tests {
         assert_eq!(parts(&interior, NameRun::Italic), ["H", "b"]);
         assert_eq!(name_markup(&interior.unicode().text), interior);
         assert_eq!(name_markup("3a^1H-").unicode().text, "3a¹H-");
+    }
+
+    #[test]
+    fn numeric_primary_locants_share_caption_and_unicode_ranges() {
+        for (name, text, superscripts, unicode) in [
+            (
+                "1^1,2^1:2^4,3^1-terphenyl",
+                "11,21:24,31-terphenyl",
+                vec!["1", "1", "4", "1"],
+                "1¹,2¹:2⁴,3¹-terphenyl",
+            ),
+            (
+                "2^5-phenyl-1^1,2^1:2^4,3^1-terphenyl",
+                "25-phenyl-11,21:24,31-terphenyl",
+                vec!["5", "1", "1", "4", "1"],
+                "2⁵-phenyl-1¹,2¹:2⁴,3¹-terphenyl",
+            ),
+            (
+                "[1^1,2^1:2^4,3^1-terphenyl]-1^4-ol",
+                "[11,21:24,31-terphenyl]-14-ol",
+                vec!["1", "1", "4", "1", "4"],
+                "[1¹,2¹:2⁴,3¹-terphenyl]-1⁴-ol",
+            ),
+            ("1^4-yl", "14-yl", vec!["4"], "1⁴-yl"),
+            ("1^2H", "12H", vec!["2"], "1²H"),
+        ] {
+            let markup = name_markup(name);
+            assert_eq!(markup.text, text, "{name}");
+            assert_eq!(parts(&markup, NameRun::Superscript), superscripts, "{name}");
+            assert!(parts(&markup, NameRun::Italic).is_empty(), "{name}");
+            let display = markup.unicode();
+            assert_eq!(display.text, unicode, "{name}");
+            assert_ranges(&display);
+            assert_eq!(name_markup(&display.text), markup, "{name}");
+            let mut format = TextFormat::default();
+            markup.apply_to(&mut format);
+            format.validate(&markup.text).unwrap();
+            assert!(
+                format
+                    .spans
+                    .iter()
+                    .all(|span| span.style.script == Script::Superscript)
+            );
+        }
     }
 
     #[test]
@@ -1301,12 +1361,26 @@ mod tests {
     #[test]
     fn fusion_letter_runs_merge_but_punctuation_stays_roman() {
         italic("furo[2,3-b:4′,5′-cd′]pyridine", &["b", "cd"]);
+        italic("[1,2-a]", &["a"]);
+        italic("[2,1-b:3,4-b']", &["b", "b"]);
+        italic("[1,2,3-de]", &["de"]);
+        italic("[1,2,3,4-def′]", &["def"]);
+        italic("[1,2,3-d'e]", &["d", "e"]);
+        italic("[1,2,3-d'e']", &["d", "e"]);
+        italic("[1,2,3,4-de'f']", &["de", "f"]);
+        italic("[1,2,3,4-d′e″f‴]", &["d", "e", "f"]);
         for text in [
             "furo[2,3]pyridine",
             "furo[a-b]pyridine",
             "furo[2,3-broken word]pyridine",
             "furo[2,3-b",
             "furo2,3-b]pyridine",
+            "[1,1'-biphenyl]",
+            "[2,2'-bipyridin]",
+            "[1,1'-bi(cyclohexan)]",
+            "[1,1'-binaphthalene]",
+            "[1,2-df]",
+            "[1,2-d'f']",
         ] {
             assert!(name_markup(text).runs.is_empty(), "{text}");
         }

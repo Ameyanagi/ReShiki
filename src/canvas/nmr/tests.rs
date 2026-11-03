@@ -334,6 +334,7 @@ fn collapsed_assignments_retain_original_owners_at_the_visible_group_anchor() {
     let (mut doc, report) = fixture(Nucleus::C13);
     doc.abbreviations
         .push(reshiki::abbreviations::Abbreviation {
+            exit: None,
             label_style: None,
             label_color_override: false,
             highlight: None,

@@ -157,6 +157,8 @@ struct GraphicJson {
 struct AbbreviationJson<'a> {
     label: &'a str,
     anchor: ObjectId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exit: Option<ObjectId>,
     members: Vec<ObjectId>,
 }
 
@@ -347,6 +349,7 @@ fn summary<'a>(
         |abbreviation| AbbreviationJson {
             label: &abbreviation.label,
             anchor: ObjectId(abbreviation.anchor),
+            exit: abbreviation.exit.map(ObjectId),
             members: object_ids(&abbreviation.members),
         },
     );

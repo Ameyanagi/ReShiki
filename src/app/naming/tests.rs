@@ -2,6 +2,98 @@ use super::test_support::{ethanol, record};
 use super::*;
 
 #[tokio::test]
+async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), String> {
+    let mut binol = Vec::new();
+    for (name, descriptor) in [
+        ("(1M)-[1,1′-binaphthalene]-2,2′-diol", "M"),
+        ("(1P)-[1,1′-binaphthalene]-2,2′-diol", "P"),
+        (
+            "(1M)-6,6′-dinitro[1,1′-biphenyl]-2,2′-dicarboxylic acid",
+            "M",
+        ),
+        (
+            "(1P)-2′,5′-dimethoxy-6-nitro[1,1′-biphenyl]-2-carboxylic acid",
+            "P",
+        ),
+        (
+            "(1M)-2′,6-diamino-6′-methoxy[1,1′-biphenyl]-2-carboxylic acid",
+            "M",
+        ),
+        (
+            "(2P)-2-[2-(hydroxymethyl)naphthalen-1-yl]-3,5-dimethylphenol",
+            "P",
+        ),
+        (
+            "(1M)-2′-hydroxy[1,1′-binaphthalen]-2-yl (1S)-2,2-dimethylcyclopropane-1-carboxylate",
+            "M",
+        ),
+    ] {
+        let parsed = naming::resolve_name(name, naming::Cancel::default())
+            .await
+            .map_err(|error| format!("{name}: {error}"))?;
+        let preview = prepare_preview(
+            LocalEngine::in_process(),
+            parsed.clone(),
+            parsed.smiles.clone(),
+            Default::default(),
+        )
+        .await
+        .map_err(|error| format!("{name}: {error}"))?;
+        assert!(
+            preview
+                .document
+                .bonds
+                .iter()
+                .any(|bond| matches!(bond.display.as_str(), "wedge" | "hash")),
+            "{name}"
+        );
+        for bond in preview
+            .document
+            .bonds
+            .iter()
+            .filter(|bond| matches!(bond.cip_label.as_deref(), Some("M" | "P")))
+        {
+            assert!(bond.stereo.is_none());
+        }
+        let molecule = reshiki::chemistry::document::prepare(&preview.document)
+            .map_err(|error| error.to_string())?;
+        let labelled =
+            reshiki::chemistry::stereo::cip::label::assign(&molecule.state, &Default::default())
+                .map_err(|error| error.to_string())?
+                .state;
+        let axes: Vec<_> = labelled
+            .properties
+            .bond_codes
+            .iter()
+            .filter_map(Option::as_deref)
+            .filter(|code| matches!(*code, "M" | "P"))
+            .collect();
+        assert_eq!(axes, [descriptor], "{name}");
+        naming::verify_identity(
+            &parsed.canonical_smiles,
+            &naming::structure_smiles(&preview.document)?,
+        )?;
+        // The editable field never shows the private axis maps.
+        assert!(!preview.smiles.contains(":9000"), "{}", preview.smiles);
+        if name.contains("binaphthalene]-2") {
+            // An unedited Update rebuilds from the identity and keeps the axis.
+            let rebuilt = prepare_preview(
+                LocalEngine::in_process(),
+                parsed.clone(),
+                preview.identity.clone(),
+                Default::default(),
+            )
+            .await
+            .map_err(|error| format!("{name}: {error}"))?;
+            assert_eq!(rebuilt.identity, preview.identity);
+            binol.push(preview.identity);
+        }
+    }
+    assert!(naming::verify_identity(&binol[0], &binol[1]).is_err());
+    Ok(())
+}
+
+#[tokio::test]
 async fn inspector_copy_name_prepares_rich_text_with_copy_as_gates_and_status() {
     use iced::futures::StreamExt;
     use reshiki::clipboard::{CopyFormat, prepare_name};
@@ -149,7 +241,7 @@ async fn generated_fusion_hydrogens_preserve_formula_inchi_and_naming_outcomes()
         let name = |identity: &naming::Identity| -> Result<serde_json::Value, String> {
             let request = serde_json::json!({
                 "operation": "generate",
-                "protocol": 5,
+                "protocol": 6,
                 "profile": "openclatura 0.4.3 Rust port",
                 "smiles": identity.smiles,
                 "isotope_style": "iupac",

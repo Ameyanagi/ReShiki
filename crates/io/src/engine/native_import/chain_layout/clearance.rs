@@ -187,6 +187,8 @@ pub(super) fn labels(state: &State, positions: &[Point3], doc: &Document) -> Qua
     let Some(mut items) = geometry_items(state, positions) else {
         return Quality::Unchecked;
     };
+    let drawn = doc.abbreviation_render_copy();
+    let doc = drawn.as_ref();
     let ids: HashMap<_, _> = doc
         .atoms
         .iter()

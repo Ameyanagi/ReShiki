@@ -6,6 +6,10 @@ use std::sync::LazyLock;
 
 static JAVA_DECIMAL_DIGIT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\A\p{Nd}\z").expect("Java decimal digit category"));
+static ASCII_XI_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:\A|[^A-Za-z0-9'])([1-9][0-9]*(?:'*[a-gA-C]?|[a-gA-C]'+))?\z")
+        .expect("ASCII xi descriptor prefix")
+});
 
 // The pinned grammar accepts cage descriptors as prefixes, while the suffix
 // spelling shares its locant with both the descriptor and suffix.
@@ -169,6 +173,19 @@ pub fn preprocess(name: &str) -> Result<String, ParsingError> {
         {
             replaced.push_str("sulf");
             i += 5;
+            continue;
+        }
+        // Reserve Xi/xI for the Unicode descriptors introduced during
+        // normalization. Normalize descriptor tokens, preserving words such
+        // as OXIME. A numeric locant also permits hyphenless 5XIcholestane.
+        if matches!(ch, 'x' | 'X')
+            && chars.get(i + 1).is_some_and(|c| matches!(c, 'i' | 'I'))
+            && let Some(prefix) = ASCII_XI_PREFIX.captures(&replaced)
+            && (prefix.get(1).is_some()
+                || chars.get(i + 2).is_none_or(|c| !c.is_ascii_alphanumeric()))
+        {
+            replaced.push_str("xi");
+            i += 2;
             continue;
         }
         replaced.push(ch);

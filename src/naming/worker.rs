@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
 };
 
-pub(super) const PROTOCOL: u32 = 5;
+pub(super) const PROTOCOL: u32 = 6;
 pub(super) const WIRE_LIMIT: usize = 32_768;
 pub(super) const OUTPUT_LIMIT: usize = 65_536;
 pub(super) const MAX_NAME_BYTES: usize = 2_048;
@@ -68,6 +68,15 @@ pub(super) struct Parsed {
     pub warnings: Vec<ParserWarning>,
     pub cxsmiles: Option<String>,
     pub locants: Vec<Option<String>>,
+    pub axes: Vec<Axis>,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Axis {
+    pub atoms: [usize; 2],
+    pub refs: [usize; 2],
+    pub clockwise: bool,
+    pub descriptor: String,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -142,15 +151,18 @@ fn parse(name: String, generation: bool) -> Result<Response, String> {
         .collect();
     let serialized = result
         .structure
-        .map(|structure| structure.semantic_cxsmiles_with_locants())
+        .map(|structure| structure.semantic_cxsmiles_with_locants_and_axes())
         .transpose();
-    let (status, message, cxsmiles, locants) = match serialized {
-        Ok(Some((cxsmiles, locants))) => (status, result.message, Some(cxsmiles), locants),
-        Ok(None) => (status, result.message, None, vec![]),
+    let (status, message, cxsmiles, locants, axes) = match serialized {
+        Ok(Some((cxsmiles, locants, axes))) => {
+            (status, result.message, Some(cxsmiles), locants, axes)
+        }
+        Ok(None) => (status, result.message, None, vec![], vec![]),
         Err(error) => (
             ParserStatus::Failure,
             format!("{} Structure serialization failed: {error}", result.message),
             None,
+            vec![],
             vec![],
         ),
     };
@@ -173,6 +185,15 @@ fn parse(name: String, generation: bool) -> Result<Response, String> {
         warnings,
         cxsmiles,
         locants,
+        axes: axes
+            .into_iter()
+            .map(|axis| Axis {
+                atoms: axis.atoms,
+                refs: axis.refs,
+                clockwise: axis.clockwise,
+                descriptor: axis.descriptor,
+            })
+            .collect(),
     }))
 }
 

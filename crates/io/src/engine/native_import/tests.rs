@@ -5,6 +5,74 @@ const SPHOS: &str = "COc1cccc(OC)c1-c1ccccc1P(C1CCCCC1)C1CCCCC1";
 const XPHOS: &str = "CC(C)c1cc(C(C)C)c(-c2ccccc2P(C2CCCCC2)C2CCCCC2)c(C(C)C)c1";
 
 #[test]
+fn private_naming_smiles_import_draws_and_reperceives_biaryl_axes() -> anyhow::Result<()> {
+    use crate::molecule_names::{apply_axis_markers, canonical_identity};
+    for (marker, expected) in [(900_004, "M"), (900_008, "P")] {
+        let text = format!("Oc1ccc2ccccc2[c:{marker}]1-[c:{marker}]1c(O)ccc2ccccc12");
+        let source = apply_axis_markers(&smiles::read(&text)?.prepared.state).unwrap();
+        let identity = canonical_identity(&source).unwrap();
+        let Preparation::Complete(prepared) = prepare(Request::import("naming_smiles", &text))?
+        else {
+            panic!("Private naming import must complete natively");
+        };
+        assert!(
+            prepared
+                .document
+                .bonds
+                .iter()
+                .any(|bond| matches!(bond.display.as_str(), "wedge" | "hash"))
+        );
+        assert!(prepared.document.atoms.iter().all(|atom| atom.map_num == 0));
+        let reconstructed = molecular::prepare(&prepared.document)?;
+        assert_eq!(canonical_identity(&reconstructed.state).unwrap(), identity);
+        let assigned =
+            chemistry::stereo::cip::label::assign(&reconstructed.state, &Default::default())?;
+        assert_eq!(
+            assigned
+                .state
+                .properties
+                .bond_codes
+                .iter()
+                .filter_map(Option::as_deref)
+                .filter(|code| matches!(*code, "M" | "P"))
+                .collect::<Vec<_>>(),
+            [expected]
+        );
+
+        let Preparation::Complete(public) = prepare(Request::import("smiles", &text))? else {
+            panic!("Public SMILES import must complete natively");
+        };
+        assert!(
+            public
+                .molecule
+                .state
+                .metadata
+                .bonds
+                .iter()
+                .all(|bond| bond.stereo == 0)
+        );
+        assert!(
+            public
+                .document
+                .bonds
+                .iter()
+                .all(|bond| !matches!(bond.display.as_str(), "wedge" | "hash"))
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn private_naming_smiles_import_rejects_malformed_axis_maps() {
+    for text in ["[CH3:900004][CH3:900004]", "[c:900004]1ccccc1-c1ccccc1"] {
+        assert!(matches!(
+            prepare(Request::import("naming_smiles", text)),
+            Err(Error::AxisMarkers)
+        ));
+    }
+}
+
+#[test]
 fn generated_unknown_alkene_depictions_roundtrip_mol_and_cdxml() -> anyhow::Result<()> {
     for (input, known) in [("CC=CCC", 0), ("C/C=C/C=CC", 1)] {
         for wavy in [false, true] {
@@ -269,6 +337,13 @@ async fn imported_butenes_retain_specified_or_unspecified_stereo_through_exports
         ("smiles", "CC=CC", "CC=CC", UNSPECIFIED_INCHI, true),
         (
             "smiles",
+            "C/C=C/C",
+            "C/C=C/C",
+            "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3/b4-3+",
+            false,
+        ),
+        (
+            "smiles",
             "C/C=C\\C",
             "C/C=C\\C",
             "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3/b4-3-",
@@ -318,18 +393,10 @@ async fn imported_butenes_retain_specified_or_unspecified_stereo_through_exports
                 "smiles" => assert_eq!(output.trim(), expected_smiles),
                 "inchi" => assert_eq!(output.trim(), expected_inchi),
                 "mol" => {
-                    let counts = output.lines().nth(3).unwrap();
-                    assert!(counts.ends_with("V2000"), "{output}");
-                    let atoms = counts[..3].trim().parse::<usize>().unwrap();
-                    let bonds = counts[3..6].trim().parse::<usize>().unwrap();
-                    let flags: Vec<u8> = output
-                        .lines()
-                        .skip(4 + atoms)
-                        .take(bonds)
-                        .filter(|line| line[6..9].trim() == "2")
-                        .map(|line| line[9..12].trim().parse().unwrap())
-                        .collect();
-                    assert_eq!(flags, [if unspecified { 3 } else { 0 }]);
+                    assert_eq!(
+                        v2000_double_flags(&output),
+                        [if unspecified { 3 } else { 0 }]
+                    );
                     let reopened = molfile::read(&output)?;
                     assert_eq!(
                         smiles::write::write(&reopened.molecule.state, Default::default())?.text,
@@ -384,6 +451,241 @@ async fn imported_butenes_retain_specified_or_unspecified_stereo_through_exports
             }
         }
         assert_eq!(document, before);
+    }
+    Ok(())
+}
+
+const UNSPECIFIED_TRIENE_INCHI: &str = "InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3";
+
+#[tokio::test]
+async fn generated_cumulenes_do_not_acquire_inchi_stereo_from_layout() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    for (format, text, expected_inchi, double_count) in [
+        ("smiles", "CC=C=C=CC", UNSPECIFIED_TRIENE_INCHI, 3),
+        ("smiles", "C/C=C=C=C/C", UNSPECIFIED_TRIENE_INCHI, 3),
+        ("smiles", "C/C=C=C=C\\C", UNSPECIFIED_TRIENE_INCHI, 3),
+        (
+            "smiles",
+            "CC=C=C=C=C=CC",
+            "InChI=1S/C8H8/c1-3-5-7-8-6-4-2/h3-4H,1-2H3",
+            5,
+        ),
+        (
+            "inchi",
+            "InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3/b4-3+",
+            UNSPECIFIED_TRIENE_INCHI,
+            3,
+        ),
+    ] {
+        let imported = engine
+            .request(Request::import(format, text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(imported.analysis.unwrap().inchi, expected_inchi, "{text}");
+        if format == "inchi" {
+            assert_eq!(
+                imported.warnings,
+                ["Extended double-bond stereochemistry (e.g. C=C=C=C) ignored"]
+            );
+        }
+        let document = imported.document.unwrap();
+        document.validate().map_err(anyhow::Error::msg)?;
+        assert!(molfile::has_projected_coordinates(&document), "{text}");
+        assert_eq!(
+            document
+                .bonds
+                .iter()
+                .filter(|bond| bond.stereo_authoritative)
+                .count(),
+            double_count,
+            "{text}"
+        );
+        for bond in &document.bonds {
+            assert_eq!(bond.stereo_authoritative, bond.order == 2, "{text}");
+            assert!(bond.stereo.is_none(), "{text}");
+            assert!(bond.stereo_atoms.is_empty(), "{text}");
+            assert_eq!(bond.display, "plain", "{text}");
+        }
+        assert!(
+            chemistry::stereo_lint::check(&document, true).is_empty(),
+            "{text}: Check drawing changed"
+        );
+        for operation in ["analyze", "export"] {
+            let mut request = Request::molecule(operation, document.clone());
+            if operation == "export" {
+                request.format = Some("inchi".into());
+            }
+            let response = engine.request(request).await.map_err(anyhow::Error::msg)?;
+            assert_eq!(
+                response.analysis.unwrap().inchi,
+                expected_inchi,
+                "{text}/{operation}"
+            );
+            if operation == "export" {
+                assert_eq!(response.output.unwrap().trim(), expected_inchi, "{text}");
+            }
+            assert_eq!(response.document.unwrap(), document, "{text}/{operation}");
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn generated_allenes_and_terminal_cumulenes_keep_their_inchi() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    // Exact controls recorded with the pre-fix CLI and its InChI helper.
+    for (text, expected_inchi) in [
+        ("CC=C=CC", "InChI=1S/C5H8/c1-3-5-4-2/h3-4H,1-2H3"),
+        (
+            "CC=[C@AL1]=CC",
+            "InChI=1S/C5H8/c1-3-5-4-2/h3-4H,1-2H3/t5-/m0/s1",
+        ),
+        ("C=C=C=CC", "InChI=1S/C5H6/c1-3-5-4-2/h4H,1H2,2H3"),
+    ] {
+        let imported = engine
+            .request(Request::import("smiles", text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(imported.analysis.unwrap().inchi, expected_inchi, "{text}");
+        let document = imported.document.unwrap();
+        assert!(
+            document.bonds.iter().all(|bond| !bond.stereo_authoritative),
+            "{text}"
+        );
+        assert!(!molfile::has_projected_coordinates(&document), "{text}");
+        for operation in ["analyze", "export"] {
+            let mut request = Request::molecule(operation, document.clone());
+            if operation == "export" {
+                request.format = Some("inchi".into());
+            }
+            let response = engine.request(request).await.map_err(anyhow::Error::msg)?;
+            assert_eq!(
+                response.analysis.unwrap().inchi,
+                expected_inchi,
+                "{text}/{operation}"
+            );
+            if operation == "export" {
+                assert_eq!(response.output.unwrap().trim(), expected_inchi, "{text}");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn v2000_double_flags(text: &str) -> Vec<u8> {
+    let counts = text.lines().nth(3).unwrap();
+    assert!(counts.ends_with("V2000"), "{text}");
+    let atoms = counts[..3].trim().parse::<usize>().unwrap();
+    let bonds = counts[3..6].trim().parse::<usize>().unwrap();
+    text.lines()
+        .skip(4 + atoms)
+        .take(bonds)
+        .filter(|line| line[6..9].trim() == "2")
+        .map(|line| line[9..12].trim().parse().unwrap())
+        .collect()
+}
+
+fn assert_mol_positions(document: &Document, mol: &str) -> anyhow::Result<()> {
+    let before = molecular::prepare(document)?;
+    let reopened = molfile::read(mol)?;
+    assert_eq!(before.positions.len(), reopened.molecule.positions.len());
+    for (before, after) in before.positions.iter().zip(&reopened.molecule.positions) {
+        assert!((before.x - after.x).abs() < 1e-4);
+        assert!((before.y - after.y).abs() < 1e-4);
+        assert_eq!(after.z, 0.);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn authoritative_unspecified_cumulene_mol_export_preserves_drawing_coordinates()
+-> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let imported = engine
+        .request(Request::import("smiles", "CC=C=C=CC"))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let mut document = imported.document.unwrap();
+    for (atom, (x, y)) in document.atoms.iter_mut().zip([
+        (-41., -23.),
+        (7., 17.),
+        (43., 17.),
+        (79., 17.),
+        (115., 17.),
+        (139., 53.),
+    ]) {
+        atom.position = crate::document::Point::new(x, y);
+    }
+    assert!(
+        document
+            .bonds
+            .iter()
+            .filter(|bond| bond.order == 2)
+            .all(|bond| { bond.stereo_authoritative && bond.stereo.is_none() })
+    );
+    let mut request = Request::molecule("export", document.clone());
+    request.format = Some("mol".into());
+    let response = engine.request(request).await.map_err(anyhow::Error::msg)?;
+    assert_eq!(response.analysis.unwrap().inchi, UNSPECIFIED_TRIENE_INCHI);
+    assert_eq!(response.document.unwrap(), document);
+    let output = response.output.unwrap();
+    // Cumulene doubles do not get the ordinary alkene ANY flag.
+    assert_eq!(v2000_double_flags(&output), [0, 0, 0]);
+    assert_mol_positions(&document, &output)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn drawn_and_mol_cumulenes_retain_coordinate_defined_inchi_stereo() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    for (trans, layer) in [(true, "/b4-3+"), (false, "/b4-3-")] {
+        let mut document = Document::default();
+        let atoms = [
+            (-20., -20.),
+            (0., 0.),
+            (30., 0.),
+            (60., 0.),
+            (90., 0.),
+            (110., if trans { 20. } else { -20. }),
+        ]
+        .map(|(x, y)| document.add_atom("C", crate::document::Point::new(x, y)));
+        for (pair, order) in atoms.windows(2).zip([1, 2, 2, 2, 1]) {
+            document.add_bond(pair[0], pair[1], order, "plain");
+        }
+        document.validate().map_err(anyhow::Error::msg)?;
+        assert!(!molfile::has_projected_coordinates(&document));
+        let expected_inchi = format!("{UNSPECIFIED_TRIENE_INCHI}{layer}");
+        let analyzed = engine
+            .request(Request::molecule("analyze", document.clone()))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(analyzed.analysis.unwrap().inchi, expected_inchi);
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("mol".into());
+        let exported = engine.request(request).await.map_err(anyhow::Error::msg)?;
+        assert_eq!(exported.analysis.unwrap().inchi, expected_inchi);
+        let mol = exported.output.unwrap();
+        assert_eq!(v2000_double_flags(&mol), [0, 0, 0]);
+        assert_mol_positions(&document, &mol)?;
+        let imported = engine
+            .request(Request::import("mol", &mol))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(imported.analysis.unwrap().inchi, expected_inchi);
+        let document = imported.document.unwrap();
+        assert!(document.bonds.iter().all(|bond| !bond.stereo_authoritative));
+        assert!(!molfile::has_projected_coordinates(&document));
+        for operation in ["analyze", "export"] {
+            let mut request = Request::molecule(operation, document.clone());
+            if operation == "export" {
+                request.format = Some("inchi".into());
+            }
+            let response = engine.request(request).await.map_err(anyhow::Error::msg)?;
+            assert_eq!(response.analysis.unwrap().inchi, expected_inchi);
+            if operation == "export" {
+                assert_eq!(response.output.unwrap().trim(), expected_inchi);
+            }
+        }
     }
     Ok(())
 }

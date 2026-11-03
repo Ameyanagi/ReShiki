@@ -7,8 +7,11 @@ copyright 2017 Daniel Lowe. The original port was based on OPSIN 2.9.0,
 affects parsing or structures is ported through the pinned main commit,
 including phane nomenclature (see `../PORTING.md`).
 `../LICENSE` is an unmodified upstream copy. `manifest.json` records every
-XML/DTD file, migrated table, exporter and fixture hash. All 41 XML and seven
-DTD files are byte-equal to the pinned main checkout.
+XML/DTD file, migrated table, exporter and fixture hash. The seven DTD files
+and 40 XML files are byte-equal to the pinned main checkout. The native
+`regexTokens.xml` extensions permit a locant before an axial descriptor and
+recognize unlocanted Xi/xi stereodescriptors; `native_extensions` in the
+manifest records both changes.
 
 The development oracle is the main build
 `opsin-core-3.0-SNAPSHOT-jar-with-dependencies.jar`, SHA256
@@ -33,6 +36,16 @@ annotation-interval ordering are retained. The exported table SHA256 is recorded
 in `manifest.json`; the regenerated tables include the forward/reverse `phaneLocants` recognizer and shared locant
 and stereochemistry grammar changes.
 
+For the native locanted axial and unlocanted Xi/xi extensions, `token-69`
+(the stereochemistry bracket recognizer) and `token-reversed-69` are
+generated with the checked
+`regexTokens.xml`; all other entries retain their pinned binary tables. Use
+the existing exporter with that XML copied to
+`resources/uk/ac/cam/ch/wwmm/opsin/resources/regexTokens.xml` in its fresh
+working directory, then retain only those two entries from the resulting
+table. The override is a development-only input; Cargo reads the checked
+binary directly. Frozen upstream oracle fixtures are unchanged.
+
 To reproduce the migration with an already available trusted JDK, use a fresh
 empty working directory so OPSIN's development `./resources` override cannot
 intercept resource loading. Paths below should be absolute:
@@ -41,6 +54,19 @@ intercept resource loading. Paths below should be absolute:
 cp /path/to/crates/opsin/provenance/ExportDfa.java.txt /tmp/export/ExportDfa.java
 javac -cp /path/to/pinned-opsin-core.jar -d /tmp/export /tmp/export/ExportDfa.java
 cd /tmp/empty-working-directory
+java -cp /path/to/pinned-opsin-core.jar:/tmp/export \
+  uk.ac.cam.ch.wwmm.opsin.ExportDfa /tmp/export/automata.bin
+```
+
+To include both native extensions, rerun that exporter from an
+isolated directory with the checked `regexTokens.xml` as a deliberate resource
+override. Only `token-69` and `token-reversed-69` differ from the pinned tables:
+
+```sh
+mkdir -p /tmp/export/resources/uk/ac/cam/ch/wwmm/opsin/resources
+cp /path/to/crates/opsin/resources/xml/regexTokens.xml \
+  /tmp/export/resources/uk/ac/cam/ch/wwmm/opsin/resources/regexTokens.xml
+cd /tmp/export
 java -cp /path/to/pinned-opsin-core.jar:/tmp/export \
   uk.ac.cam.ch.wwmm.opsin.ExportDfa /tmp/export/automata.bin
 ```
@@ -102,7 +128,7 @@ Compressed JSONL uses gzip level 9 with timestamp zero and an empty filename.
 The resource fingerprint is SHA256 over each resource in sorted UTF-8 path
 order, concatenating path, NUL, raw file bytes, NUL. This independently covers
 all XML/DTD files and the neutral DFA table. The exported crate constant is
-`bc977c95bd647cd90048215a2a82baa7d173c5373991ebc01690a0fe4137b062`.
+`c4c6dbda518cb38ff80867fe6491441e3fbd11c76795d8f0cc4fe15c6ffd6302`.
 
 `ExportGraphResources.java.txt` captures every distinct literal resource
 `(value, type, labels)` triple. The current gate checks 2,643 ordered graph

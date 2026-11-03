@@ -212,12 +212,13 @@ fn reverse_spellings_follow_labels_and_aliases() {
     );
 }
 
-/// Typing resolves these before the catalog, so a user group could be saved
-/// but never created under them.
+/// Typing or residue Find resolves these before the user catalog, so a user
+/// group could be saved but never created or found under them.
 #[test]
 fn user_groups_cannot_take_reserved_spellings() {
     for spelling in [
-        "N3", "MgBr", "Cp", "OCH3", "C2H5", "Fe", "Np", "*", "D", "T", "13C", "¹⁸O",
+        "N3", "MgBr", "Cp", "OCH3", "C2H5", "Fe", "Np", "*", "D", "T", "13C", "¹⁸O", "Ala",
+        "D-Ala", "Gly",
     ] {
         let text = format!(
             r#"{{"format": 1, "groups": [{{"label": "{spelling}", "smiles": "*OC"}},

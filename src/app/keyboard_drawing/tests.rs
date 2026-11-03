@@ -1199,6 +1199,7 @@ async fn keyboard_bar_publishes_native_actions_and_fits_compact_canvas() {
                         .doc
                         .abbreviations
                         .push(reshiki::abbreviations::Abbreviation {
+                            exit: None,
                             label_style: None,
                             label_color_override: false,
                             highlight: None,

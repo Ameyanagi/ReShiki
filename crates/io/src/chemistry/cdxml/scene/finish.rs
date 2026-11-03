@@ -298,6 +298,13 @@ impl CdxmlScene {
         document.groups = self.base.groups;
         document.ring_fills = self.base.ring_fills;
         document.abbreviations = self.base.abbreviations;
+        if document
+            .abbreviations
+            .iter()
+            .any(|group| group.exit.is_some())
+        {
+            document.require_version(document::RESIDUE_GROUPS);
+        }
         document.generic = self.generic;
         for (id, label) in self.generic_labels {
             let atom = document

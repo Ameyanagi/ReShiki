@@ -9,13 +9,14 @@ use crate::WarningKind;
 use crate::build_state::BuildState;
 use crate::cip::{CipOrderingError, CipSequenceRules};
 use crate::graph::{
-    AtomId, AtomParity, BondId, BondStereo, BondStereoValue, Element, FragmentId, Graph,
-    GraphError, StereoGroup, StereoGroupType, StereoReference,
+    AtomId, AtomParity, AxialStereo, BondId, BondStereo, BondStereoValue, Element, FragmentId,
+    Graph, GraphError, StereoGroup, StereoGroupType, StereoReference,
 };
 use crate::parse_tree::{Arena, NodeId};
 use crate::stereo_analyser::{StereoBond, StereoCentre};
 use crate::xml_declarations::*;
-use std::collections::{BTreeMap, BTreeSet};
+use reshiki_chemistry::stereo::{axis_ends_distinct, cip::label};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 
 /// Numbered [2.2.1] or [3.2.1] cage. Coordinates are only a
@@ -206,6 +207,12 @@ fn stereo<T>(s: impl Into<String>) -> Result<T> {
     Err(StereochemistryError::Uninterpretable(s.into()))
 }
 
+struct UnknownStereoCentre {
+    atom: AtomId,
+    value: String,
+    alpha_beta: bool,
+}
+
 pub struct StereochemistryHandler<'a> {
     pub state: &'a mut BuildState,
     pub arena: &'a mut Arena,
@@ -216,6 +223,8 @@ pub struct StereochemistryHandler<'a> {
     pseudo_stereo_centres: Vec<(AtomId, String)>,
     preassigned_pseudo_stereo_centres: Vec<(AtomId, String)>,
     cage_stereo_groups: BTreeMap<AtomId, CageStereochemistry>,
+    unknown_stereo_centres: Vec<UnknownStereoCentre>,
+    unknown_stereo_reservations: BTreeSet<AtomId>,
 }
 impl<'a> StereochemistryHandler<'a> {
     pub fn new(
@@ -234,6 +243,8 @@ impl<'a> StereochemistryHandler<'a> {
             pseudo_stereo_centres: Vec::new(),
             preassigned_pseudo_stereo_centres: Vec::new(),
             cage_stereo_groups: BTreeMap::new(),
+            unknown_stereo_centres: Vec::new(),
+            unknown_stereo_reservations: BTreeSet::new(),
             atom_stereo_centre_map: atoms,
             bond_stereo_bond_map: bonds,
         }
@@ -328,9 +339,15 @@ impl<'a> StereochemistryHandler<'a> {
         let mut global = Vec::new();
         let mut pseudo = Vec::new();
         let mut cage = Vec::new();
+        let mut unlocanted_unknown = Vec::new();
         for &id in elements {
             if self.attr(id, TYPE_ATR) == ENDO_EXO_SYN_ANTI_TYPE_VAL {
                 cage.push(id)
+            } else if self.attr(id, TYPE_ATR) == ALPHA_OR_BETA_TYPE_VAL
+                && matches!(self.attr(id, VALUE_ATR).as_str(), "xi" | "Xi" | "ξ")
+                && self.arena[id].attribute(LOCANT_ATR).is_none()
+            {
+                unlocanted_unknown.push(id)
             } else if self.attr(id, TYPE_ATR) == R_OR_S_TYPE_VAL
                 && matches!(self.attr(id, VALUE_ATR).as_str(), "r" | "s")
             {
@@ -399,6 +416,13 @@ impl<'a> StereochemistryHandler<'a> {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
+        // The case of Unicode xi depends on the complete stereochemical
+        // environment, including lowercase r/s descriptors.
+        for id in unlocanted_unknown {
+            let result = self.match_stereochemistry(id);
+            self.warning_or_error(result)?
+        }
+        self.resolve_unknown_stereo_centres()?;
         Ok(())
     }
     pub fn remove_redundant_stereo_centres(&mut self, atoms: &[AtomId], bonds: &[BondId]) {
@@ -417,11 +441,12 @@ impl<'a> StereochemistryHandler<'a> {
         let kind = self.attr(id, TYPE_ATR);
         match kind.as_str() {
             R_OR_S_TYPE_VAL=>self.assign_stereo_centre(id)?,E_OR_Z_TYPE_VAL=>self.assign_stereo_bond(id)?,
+            AXIAL_TYPE_VAL=>self.assign_axial_stereo(id)?,
             CISORTRANS_TYPE_VAL=>{if !self.assign_cis_trans_on_ring(id)?{self.assign_stereo_bond(id)?}},
             ALPHA_OR_BETA_TYPE_VAL=>self.assign_alpha_beta_xi_stereochem(id)?,DLSTEREOCHEMISTRY_TYPE_VAL=>self.assign_dl_stereochem(id)?,
             RAC_TYPE_VAL=>self.apply_global_rac_or_rel(id,StereoGroupType::Racemic)?,REL_TYPE_VAL=>self.apply_global_rac_or_rel(id,StereoGroupType::Relative)?,
             ENDO_EXO_SYN_ANTI_TYPE_VAL=>self.assign_cage_stereochemistry(id)?,
-            RELATIVECISTRANS_TYPE_VAL|AXIAL_TYPE_VAL=>return stereo(format!("{kind} stereochemistry is not currently interpretable by OPSIN")),
+            RELATIVECISTRANS_TYPE_VAL=>return stereo(format!("{kind} stereochemistry is not currently interpretable by OPSIN")),
             OPTICALROTATION_TYPE_VAL=>self.state.add_warning(WarningKind::StereochemistryIgnored,format!("Optical rotation cannot be algorithmically used to assign stereochemistry. This term was ignored: {}",self.arena.value(id))),
             _=>return structure(format!("Unexpected stereochemistry type: {kind}"))
         }
@@ -669,6 +694,16 @@ impl<'a> StereochemistryHandler<'a> {
         Ok(original != canonical(&graph)?)
     }
     fn apply_global_rac_or_rel(&mut self, id: NodeId, kind: StereoGroupType) -> Result {
+        // Stereo groups hold atom parities only; an absolute axis must not
+        // silently stand in for a racemic or relative one.
+        if self
+            .graph()
+            .bonds
+            .iter()
+            .any(|bond| bond.active && bond.axial_stereo.is_some())
+        {
+            return stereo("rac- or rel- axial stereochemistry is not currently interpretable");
+        }
         let mut word = self.arena[id].parent;
         while word.is_some_and(|w| self.arena[w].name != WORD_EL) {
             word = self.arena[word.unwrap()].parent
@@ -772,7 +807,7 @@ impl<'a> StereochemistryHandler<'a> {
         let atom = if let Some(locant) = locant {
             self.graph()
                 .atom_by_locant(fragment, locant)
-                .filter(available)
+                .filter(|a| available(a) || self.unknown_stereo_reservations.contains(a))
         } else {
             self.graph()
                 .fragment(fragment)
@@ -814,11 +849,12 @@ impl<'a> StereochemistryHandler<'a> {
                     });
                 self.pseudo_stereo_centres.push((atom, value.into()));
             } else {
-                let centre = self.not_explicitly_defined_stereo_centre_map[&atom];
+                let centre = self.atom_stereo_centre_map[&atom];
                 apply_stereo_chemistry_to_stereo_centre(self.state.graph_mut(), centre, value)?;
             }
             self.set_stereo_group(atom, kind, 1);
             self.not_explicitly_defined_stereo_centre_map.remove(&atom);
+            self.unknown_stereo_reservations.remove(&atom);
             Ok(true)
         } else {
             Ok(false)
@@ -861,6 +897,117 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
+    fn assign_axial_stereo(&mut self, id: NodeId) -> Result {
+        let value = self.attr(id, VALUE_ATR);
+        let descriptor = match value.as_str() {
+            "M" | "Ra" => "M",
+            "P" | "Sa" => "P",
+            _ => {
+                return stereo(format!(
+                    "{AXIAL_TYPE_VAL} stereochemistry is not currently interpretable by OPSIN"
+                ));
+            }
+        };
+        let Some(locant) = self.attribute(id, LOCANT_ATR) else {
+            return stereo(format!(
+                "{AXIAL_TYPE_VAL} stereochemistry is not currently interpretable by OPSIN"
+            ));
+        };
+        // An axial locant belongs to the first component searched, including
+        // when the descriptor is attached to an ester's substituent word.
+        let Some(fragment) = self.possible_fragments(id)?.first().copied() else {
+            return stereo(format!("Could not find a biaryl axis at locant {locant}"));
+        };
+        let Some(atom) = self.graph().atom_by_locant(fragment, &locant) else {
+            return stereo(format!("Could not find a biaryl axis at locant {locant}"));
+        };
+        let (mut native, indices) = crate::modern_cip::state(self.graph())?;
+        let rings = reshiki_chemistry::rings::perceive(
+            &native.graph,
+            reshiki_chemistry::rings::Options::default(),
+        )
+        .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
+        let aromatic = reshiki_chemistry::aromaticity::perceive(&native.graph, &rings.atoms)
+            .map_err(StereochemistryError::Uninterpretable)?;
+        let aryl_atoms: HashSet<_> = indices
+            .iter()
+            .filter_map(|(&atom, &index)| aromatic.graph.atoms[index].aromatic.then_some(atom))
+            .collect();
+        let candidates: Vec<_> = self
+            .graph()
+            .atom(atom)
+            .bonds
+            .iter()
+            .copied()
+            .filter(|&id| {
+                let bond = self.graph().bond(id);
+                bond.order == 1
+                    && !crate::cycle_detector::is_bond_in_cycle(self.graph(), id)
+                    && [bond.from, bond.to].into_iter().all(|end| {
+                        aryl_atoms.contains(&end)
+                            && self.graph().neighbours(end).len() == 3
+                            && self
+                                .graph()
+                                .neighbours(end)
+                                .into_iter()
+                                .all(|other| self.graph().atom(other).element != Element::H)
+                    })
+            })
+            .collect();
+        let bond = match candidates.as_slice() {
+            [] => return stereo(format!("Could not find a biaryl axis at locant {locant}")),
+            [bond] => *bond,
+            _ => return stereo(format!("More than one biaryl axis at locant {locant}")),
+        };
+        let axis = self.graph().bond(bond);
+        if axis.axial_stereo.is_some() {
+            return stereo(format!(
+                "Duplicate or conflicting axial stereochemistry at locant {locant}"
+            ));
+        }
+        // Use the same full CIP rules as native perception, including isotope
+        // masses and resonance-averaged mancude duplicates. Its axial carriers
+        // are the lowest-index non-axis neighbours, not the high-CIP ligands.
+        let refs = [(axis.from, axis.to), (axis.to, axis.from)].map(|(end, partner)| {
+            self.graph()
+                .neighbours(end)
+                .into_iter()
+                .filter(|&atom| atom != partner)
+                .min_by_key(|atom| indices[atom])
+                .unwrap()
+        });
+        let native_bond = native
+            .graph
+            .bonds
+            .iter()
+            .position(|bond| bond.a == indices[&axis.from] && bond.b == indices[&axis.to])
+            .unwrap();
+        if !axis_ends_distinct(&native.graph, native_bond)
+            .map_err(StereochemistryError::Uninterpretable)?
+        {
+            return stereo(format!("Axis at locant {locant} has equivalent ligands"));
+        }
+        native.metadata.bonds[native_bond].stereo = 6;
+        let mut labelled = label::assign(&native, &Default::default())
+            .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
+        if labelled.state.properties.bond_codes[native_bond].as_deref() != Some(descriptor) {
+            native.metadata.bonds[native_bond].stereo = 7;
+            labelled = label::assign(&native, &Default::default())
+                .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
+        }
+        if labelled.state.properties.bond_codes[native_bond].as_deref() != Some(descriptor) {
+            return stereo(format!(
+                "Could not assign {descriptor} to the axis at locant {locant}"
+            ));
+        }
+        self.state.graph_mut().bond_mut(bond).axial_stereo = Some(AxialStereo {
+            refs,
+            clockwise: native.metadata.bonds[native_bond].stereo == 6,
+            descriptor: descriptor.into(),
+        });
+        Ok(())
+    }
+
     fn assign_stereo_bond(&mut self, id: NodeId) -> Result {
         let locant = self.attribute(id, LOCANT_ATR);
         let mut value = self.attr(id, VALUE_ATR);
@@ -1044,6 +1191,8 @@ impl<'a> StereochemistryHandler<'a> {
         self.apply_cis_trans_ring(a, b, &paths, &atoms, &self.attr(id, VALUE_ATR), by_cip)?;
         self.not_explicitly_defined_stereo_centre_map.remove(&a);
         self.not_explicitly_defined_stereo_centre_map.remove(&b);
+        self.unknown_stereo_reservations.remove(&a);
+        self.unknown_stereo_reservations.remove(&b);
         if by_cip {
             self.state.add_is_ambiguous("Ring cis/trans applied to stereocenter where no hydrogen was present. Cahn-Ingold-Prelog rules used to determine which substituents are cis/trans, but other conventions may be in use")
         }
@@ -1164,41 +1313,176 @@ impl<'a> StereochemistryHandler<'a> {
         } else {
             None
         };
-        let locant = self.attr(id, LOCANT_ATR);
+        let locant = self.attribute(id, LOCANT_ATR);
         let value = self.attr(id, VALUE_ATR);
-        for fragment in self.possible_fragments(id)? {
-            if let Some(atom) = self
-                .graph()
-                .atom_by_locant(fragment, &locant)
-                .filter(|a| self.atom_stereo_centre_map.contains_key(a))
-            {
-                if value == "xi" {
-                    self.state.graph_mut().atom_mut(atom).parity = None
+        let unknown = matches!(value.as_str(), "xi" | "Xi" | "ξ");
+        let fragments = self.possible_fragments(id)?;
+        for &fragment in &fragments {
+            let atom = if let Some(locant) = &locant {
+                self.graph()
+                    .atom_by_locant(fragment, locant)
+                    .filter(|a| self.atom_stereo_centre_map.contains_key(a))
+            } else {
+                self.graph()
+                    .fragment(fragment)
+                    .atoms
+                    .iter()
+                    .copied()
+                    .find(|a| {
+                        self.not_explicitly_defined_stereo_centre_map
+                            .contains_key(a)
+                    })
+            };
+            if let Some(atom) = atom {
+                let order = self.fragment_attribute(fragment, ALPHABETACLOCKWISEATOMORDERING_ATR);
+                if unknown {
+                    // Reserve the target now; clear its parity only after
+                    // the other descriptors have established its environment.
+                    // Steroid-style α/β positions also take lowercase ξ.
+                    let alpha_beta = order.as_deref().is_some_and(|order| {
+                        self.graph()
+                            .atom(atom)
+                            .locants
+                            .first()
+                            .is_some_and(|l| order.split('/').any(|o| o == l))
+                    });
+                    self.unknown_stereo_centres.push(UnknownStereoCentre {
+                        atom,
+                        value,
+                        alpha_beta,
+                    });
                 } else {
-                    let Some(order) =
-                        self.fragment_attribute(fragment, ALPHABETACLOCKWISEATOMORDERING_ATR)
-                    else {
+                    let Some(order) = order else {
                         return structure(
                             "Identified fragment is not known to be able to support alpha/beta stereochemistry",
                         );
                     };
                     self.apply_alpha_beta(atom, fragment, &order, &value, substituent)?;
                 }
-                self.not_explicitly_defined_stereo_centre_map.remove(&atom);
+                let available = self
+                    .not_explicitly_defined_stereo_centre_map
+                    .remove(&atom)
+                    .is_some();
+                if unknown && available {
+                    self.unknown_stereo_reservations.insert(atom);
+                } else if !unknown {
+                    self.unknown_stereo_reservations.remove(&atom);
+                }
                 return Ok(());
             }
-            // IUPAC P-91.2.1.2.1 also uses Ξ at the locant of an
-            // unspecified E/Z bond; it is not restricted to alpha/beta atoms.
-            if value == "xi"
-                && self.attempt_assign_stereo_bond(fragment, "EZ", Some(&locant), false)?
-            {
-                return Ok(());
+        }
+        if matches!(value.as_str(), "Xi" | "xi") {
+            for fragment in fragments {
+                if self.attempt_assign_stereo_bond(fragment, "EZ", locant.as_deref(), false)? {
+                    return Ok(());
+                }
             }
+        }
+        if unknown {
+            return stereo(format!(
+                "Could not find stereocentre or bond that: {} appeared to be referring to",
+                self.arena.to_xml(id)
+            ));
         }
         structure(format!(
             "Could not find atom that: {} appeared to be referring to",
             self.arena.to_xml(id)
         ))
+    }
+    fn resolve_unknown_stereo_centres(&mut self) -> Result {
+        self.unknown_stereo_reservations.clear();
+        let mut centres = std::mem::take(&mut self.unknown_stereo_centres);
+        let mut originals = BTreeMap::new();
+        for centre in &centres {
+            originals
+                .entry(centre.atom)
+                .or_insert_with(|| self.state.graph_mut().atom_mut(centre.atom).parity.take());
+        }
+        loop {
+            let mut accepted = Vec::new();
+            for centre in centres {
+                match self.validate_unknown_stereo_centre(&centre) {
+                    Ok(()) => accepted.push(centre),
+                    Err(error) => self.warning_or_error(Err(error))?,
+                }
+            }
+            let targets: BTreeSet<_> = accepted.iter().map(|centre| centre.atom).collect();
+            let mut restored = false;
+            originals.retain(|&atom, original| {
+                if targets.contains(&atom) {
+                    return true;
+                }
+                let original = original.take();
+                restored |= original.is_some();
+                self.state.graph_mut().atom_mut(atom).parity = original;
+                false
+            });
+            if !restored {
+                return Ok(());
+            }
+            // Restoring an ignored descriptor can change whether another
+            // target is pseudoasymmetric. Recheck against that environment.
+            centres = accepted;
+        }
+    }
+    fn validate_unknown_stereo_centre(&mut self, centre: &UnknownStereoCentre) -> Result {
+        let atom = centre.atom;
+        if centre.value == "xi" || (centre.value == "ξ" && centre.alpha_beta) {
+            return Ok(());
+        }
+        let mut neighbours = self.graph().neighbours(atom);
+        if neighbours.len() == 3 {
+            neighbours.push(atom);
+        }
+        let references: [AtomId; 4] = neighbours.try_into().map_err(|_| {
+            StereochemistryError::StructureBuilding(
+                "Only tetrahedral chirality is currently supported".into(),
+            )
+        })?;
+        self.state.graph_mut().atom_mut(atom).parity =
+            Some(AtomParity::new(atom_references(references), 1));
+        let labels = crate::modern_cip::atom_labels(self.graph());
+        self.state.graph_mut().atom_mut(atom).parity = None;
+        labels.and_then(|labels| match labels.get(&atom).map(String::as_str) {
+            Some("R" | "S") if centre.value == "ξ" => {
+                stereo("Lowercase xi requires a pseudoasymmetric or alpha/beta stereocentre")
+            }
+            Some("r" | "s") if centre.value == "Xi" => {
+                stereo("Uppercase Xi cannot specify a pseudoasymmetric stereocentre")
+            }
+            None => {
+                // Only undefined stereocentres in tied ligands can
+                // prevent CIP from distinguishing them.
+                let neighbours = self.graph().neighbours(atom);
+                let rules = CipSequenceRules::new(self.graph(), atom);
+                let mut pending = Vec::new();
+                for (i, &first) in neighbours.iter().enumerate() {
+                    for &second in &neighbours[..i] {
+                        match rules.compare_ligands(first, second) {
+                            Err(CipOrderingError::UnresolvedTie) => {
+                                pending.extend([first, second]);
+                            }
+                            Err(error) => return Err(error.into()),
+                            Ok(_) => (),
+                        }
+                    }
+                }
+                let mut visited = BTreeSet::from([atom]);
+                while let Some(other) = pending.pop() {
+                    if !visited.insert(other) {
+                        continue;
+                    }
+                    if self.atom_stereo_centre_map.contains_key(&other)
+                        && self.graph().atom(other).parity.is_none()
+                    {
+                        return Ok(());
+                    }
+                    pending.extend(self.graph().neighbours(other));
+                }
+                stereo("Xi cannot specify a nonstereogenic atom")
+            }
+            _ => Ok(()),
+        })
     }
     fn apply_alpha_beta(
         &mut self,
@@ -1292,6 +1576,7 @@ impl<'a> StereochemistryHandler<'a> {
         if !self
             .not_explicitly_defined_stereo_centre_map
             .contains_key(&atom)
+            && !self.unknown_stereo_reservations.contains(&atom)
             && !previous_parity.as_ref().is_some_and(|old| {
                 check_equivalency_of_atom_refs_and_parity(
                     &old.atom_refs,

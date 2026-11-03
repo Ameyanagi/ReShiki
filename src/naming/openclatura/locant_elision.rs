@@ -1,8 +1,7 @@
 //! Exact graph proofs for optional constitutional locants.
 //!
-//! Stage one supports paths and single cycles. Attachment equivalence uses
-//! their complete automorphism groups; optional feature locants use the same
-//! budgeted labeled-graph search and failure boundary as the upstream proof.
+//! Constitutional and stereochemical locants share the same decorated-parent
+//! graph and equivalence proof.
 use super::{
     assembly_parts::AssemblyParts,
     assembly_utils::parse_locant,
@@ -27,6 +26,7 @@ struct Graph {
     nodes: Vec<NodeLabel>,
     edges: BTreeMap<Edge, usize>,
     automorphisms: Vec<Vec<usize>>,
+    substituent_capacity: Vec<usize>,
 }
 fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
     let mut locants: Vec<_> = parts
@@ -79,10 +79,39 @@ fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
     let n = locants.len();
     let ring = adj.iter().all(|v| v.len() == 2) && n >= 3;
     let path = adj.iter().filter(|v| v.len() == 1).count() == 2 && adj.iter().all(|v| v.len() <= 2);
-    if !ring && !path {
-        return None;
+    let substituent_atoms: BTreeSet<_> = parts
+        .substituents
+        .iter()
+        .flat_map(|s| &s.atom_ids)
+        .collect();
+    let substituent_capacity = locants
+        .iter()
+        .map(|l| {
+            parts
+                .parent_atom_hydrogens_by_locant
+                .get(l)
+                .copied()
+                .unwrap_or(0)
+                + parts
+                    .parent_external_bonds_by_locant
+                    .get(l)
+                    .into_iter()
+                    .flatten()
+                    .filter(|(atom, _, _)| substituent_atoms.contains(atom))
+                    .map(|(_, order, _)| order)
+                    .sum::<usize>()
+        })
+        .collect();
+    if !ring && !path && n != 1 {
+        return Some(Graph {
+            locants,
+            nodes,
+            edges,
+            automorphisms: vec![],
+            substituent_capacity,
+        });
     }
-    let start = if ring {
+    let start = if ring || n == 1 {
         0
     } else {
         adj.iter().position(|v| v.len() == 1)?
@@ -118,6 +147,7 @@ fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
         nodes,
         edges,
         automorphisms,
+        substituent_capacity,
     })
 }
 fn labels_match(g: &Graph, p: &[usize]) -> bool {
@@ -214,7 +244,7 @@ pub fn substituent_locant_set_is_unique(
         return false;
     }
     let mut budget = MAX_CANDIDATE_PLACEMENTS;
-    let Some(options) = combinations(&candidates, selected.len(), &mut budget) else {
+    let Some(options) = combinations(&candidates, selected.len(), false, &mut budget) else {
         return false;
     };
     options.iter().all(|target| {
@@ -232,10 +262,16 @@ fn consume(budget: &mut usize) -> Option<()> {
         Some(())
     }
 }
-fn combinations<T: Clone>(items: &[T], k: usize, budget: &mut usize) -> Option<Vec<Vec<T>>> {
+fn combinations<T: Clone>(
+    items: &[T],
+    k: usize,
+    repeated: bool,
+    budget: &mut usize,
+) -> Option<Vec<Vec<T>>> {
     fn recur<T: Clone>(
         items: &[T],
         k: usize,
+        repeated: bool,
         current: &mut Vec<T>,
         out: &mut Vec<Vec<T>>,
         budget: &mut usize,
@@ -245,18 +281,29 @@ fn combinations<T: Clone>(items: &[T], k: usize, budget: &mut usize) -> Option<V
             out.push(current.clone());
             return Some(());
         }
-        if k > items.len() {
+        if items.is_empty() || !repeated && k > items.len() {
             return Some(());
         }
-        for i in 0..=items.len() - k {
+        for i in 0..if repeated {
+            items.len()
+        } else {
+            items.len() - k + 1
+        } {
             current.push(items[i].clone());
-            recur(&items[i + 1..], k - 1, current, out, budget)?;
+            recur(
+                &items[i + usize::from(!repeated)..],
+                k - 1,
+                repeated,
+                current,
+                out,
+                budget,
+            )?;
             current.pop();
         }
         Some(())
     }
     let mut out = vec![];
-    recur(items, k, &mut vec![], &mut out, budget)?;
+    recur(items, k, repeated, &mut vec![], &mut out, budget)?;
     Some(out)
 }
 fn supported(parts: &AssemblyParts) -> bool {
@@ -264,7 +311,7 @@ fn supported(parts: &AssemblyParts) -> bool {
         || parts.is_bicycle
         || parts.is_spiro
         || parts.is_polycycle
-        || !parts.stereo_features.is_empty()
+        || parts.stereo_features.iter().collect::<BTreeSet<_>>().len() > 1
         || !parts.relative_stereo_prefixes.is_empty()
         || !parts.indicated_hydrogens.is_empty()
         || !parts.parent_charges.is_empty()
@@ -304,18 +351,27 @@ fn features(parts: &AssemblyParts, g: &Graph) -> Vec<Feature> {
         }
     }
     if let Some(group) = &parts.principal_group {
-        if group.locants.len() == 1
-            && parts.substituents.is_empty()
-            && g.nodes.iter().all(|l| l.0 == "C")
-            && let Some(i) = g.locants.iter().position(|l| l == &group.locants[0])
-        {
+        let positions = group
+            .locants
+            .iter()
+            .filter_map(|l| g.locants.iter().position(|s| s == l).map(Position::Node))
+            .collect::<Vec<_>>();
+        if !positions.is_empty() {
             result.push(Feature {
                 category: "suffix",
                 key: group.key.clone(),
-                positions: vec![Position::Node(i)],
+                positions,
             });
         }
-        return result;
+    }
+    if parts.is_substituent
+        && let Some(i) = g.locants.iter().position(|l| l == &parts.attachment_locant)
+    {
+        result.push(Feature {
+            category: "attachment",
+            key: parts.attachment_order.to_string(),
+            positions: vec![Position::Node(i)],
+        });
     }
     let index: BTreeMap<_, _> = g.locants.iter().enumerate().map(|(i, l)| (l, i)).collect();
     let bonds: BTreeMap<_, _> = parts
@@ -423,7 +479,6 @@ fn isomorphic<'a>(
         if depth == mapping.len() {
             return Some(true);
         }
-        // Preserve Python min's stable tie order and its ascending assigned-neighbor count.
         let source = (0..mapping.len())
             .filter(|&i| mapping[i].is_none())
             .min_by_key(|&i| {
@@ -476,6 +531,153 @@ fn isomorphic<'a>(
         budget,
     )
 }
+fn stereo_positions(parts: &AssemblyParts, g: &Graph, atom: bool) -> Vec<Position> {
+    if atom {
+        return g
+            .locants
+            .iter()
+            .enumerate()
+            .filter_map(|(i, l)| {
+                parts
+                    .parent_atom_ids_by_locant
+                    .get(l)
+                    .is_some_and(|id| parts.stereogenic_atom_ids.contains(id))
+                    .then_some(Position::Node(i))
+            })
+            .collect();
+    }
+    let mut positions = Vec::new();
+    for ((a, b), id) in &parts.parent_bond_ids_by_locants {
+        if parts.stereogenic_bond_ids.contains(id)
+            && let (Some(a), Some(b)) = (
+                g.locants.iter().position(|l| l == a),
+                g.locants.iter().position(|l| l == b),
+            )
+        {
+            positions.push(Position::Edge(normalize_edge(a, b)));
+        }
+    }
+    for (i, l) in g.locants.iter().enumerate() {
+        if parts
+            .parent_external_bonds_by_locant
+            .get(l)
+            .into_iter()
+            .flatten()
+            .any(|(_, _, id)| parts.stereogenic_bond_ids.contains(id))
+        {
+            positions.push(Position::Node(i));
+        }
+    }
+    positions
+}
+
+/// P-91.3: a lone descriptor is unambiguous only when every possible unit of
+/// that kind belongs to the same orbit of the substituted parent.
+pub fn single_stereo_locant_is_unambiguous(parts: &AssemblyParts) -> bool {
+    let distinct: BTreeSet<_> = parts.stereo_features.iter().collect();
+    let Some((locant, descriptor)) = distinct.first().copied().filter(|_| distinct.len() == 1)
+    else {
+        return false;
+    };
+    if locant.is_empty() {
+        return true;
+    }
+    let atom = !matches!(descriptor.as_str(), "E" | "Z")
+        && parts
+            .parent_atom_ids_by_locant
+            .get(locant)
+            .is_some_and(|id| parts.stereogenic_atom_ids.contains(id));
+    if atom
+        && parts
+            .parent_atom_ids_by_locant
+            .values()
+            .filter(|id| parts.stereogenic_atom_ids.contains(id))
+            .count()
+            == 1
+    {
+        return true;
+    }
+    let Some(g) = graph(parts, true) else {
+        return false;
+    };
+    let positions = stereo_positions(parts, &g, atom);
+    let Some(position) = positions.iter().find(|p| match p {
+        Position::Node(i) => &g.locants[*i] == locant,
+        Position::Edge((a, b)) => &g.locants[*a] == locant || &g.locants[*b] == locant,
+    }) else {
+        return false;
+    };
+    if positions.len() == 1 {
+        return true;
+    }
+    let mut all = features(parts, &g);
+    let fixed = all.len();
+    all.push(Feature {
+        category: "stereo",
+        key: if atom { "atom" } else { "bond" }.into(),
+        positions: vec![position.clone()],
+    });
+    let actual = decorate(&g, &all);
+    let mut budget = MAX_CANDIDATE_PLACEMENTS;
+    positions
+        .iter()
+        .filter(|&p| p != position)
+        .all(|candidate| {
+            if signature(position, &g) != signature(candidate, &g) {
+                return false;
+            }
+            all[fixed].positions[0] = candidate.clone();
+            let candidate = decorate(&g, &all);
+            if !g.automorphisms.is_empty() {
+                return g.automorphisms.iter().any(|p| {
+                    labels_match(&g, p)
+                        && actual
+                            .0
+                            .iter()
+                            .enumerate()
+                            .all(|(i, labels)| labels == &candidate.0[p[i]])
+                        && actual.1.iter().all(|(&(a, b), labels)| {
+                            candidate.1.get(&normalize_edge(p[a], p[b])) == Some(labels)
+                        })
+                });
+            }
+            isomorphic(&g, &actual, &candidate, &mut budget) == Some(true)
+        })
+}
+
+/// Functional-class shortcuts use the same proof on their complete molecular
+/// word, whose constituent parents otherwise have separate assembly plans.
+pub fn bond_stereo_locant_is_unambiguous(mol: &super::molecule::Molecule, bond: usize) -> bool {
+    let mut parts = AssemblyParts::new(mol.atoms.len());
+    parts.stereogenic_atom_ids = mol.stereogenic_atoms.clone();
+    parts.stereogenic_bond_ids = mol.stereogenic_bonds.clone();
+    for (&id, atom) in &mol.atoms {
+        let locant = id.to_string();
+        parts.parent_atom_ids_by_locant.insert(locant.clone(), id);
+        parts
+            .parent_atom_symbols_by_locant
+            .insert(locant.clone(), atom.symbol.clone());
+        parts
+            .parent_atom_charges_by_locant
+            .insert(locant.clone(), atom.charge);
+        parts
+            .parent_atom_isotopes_by_locant
+            .insert(locant, atom.isotope);
+    }
+    for b in mol.bonds.values() {
+        let pair = (b.u.to_string(), b.v.to_string());
+        parts
+            .parent_bond_orders_by_locants
+            .insert(pair.clone(), b.order);
+        parts.parent_bond_ids_by_locants.insert(pair, b.idx);
+    }
+    let b = &mol.bonds[&bond];
+    parts
+        .stereo_features
+        .push((b.u.to_string(), b.stereo.clone().unwrap_or_default()));
+    single_stereo_locant_is_unambiguous(&parts)
+}
+
 fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Option<bool> {
     let actual = decorate(g, all);
     let mut options = Vec::new();
@@ -488,14 +690,23 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         };
         let mut actual_sig: Vec<_> = f.positions.iter().map(|p| signature(p, g)).collect();
         actual_sig.sort();
-        let candidates = combinations(&universe, f.positions.len(), budget)?
-            .into_iter()
-            .filter(|candidate| {
-                let mut sig: Vec<_> = candidate.iter().map(|p| signature(p, g)).collect();
-                sig.sort();
-                sig == actual_sig
-            })
-            .collect::<Vec<_>>();
+        let candidates = combinations(
+            &universe,
+            f.positions.len(),
+            f.category == "substituent",
+            budget,
+        )?
+        .into_iter()
+        .filter(|candidate| {
+            let mut sig: Vec<_> = candidate.iter().map(|p| signature(p, g)).collect();
+            sig.sort();
+            sig == actual_sig
+                && (f.category != "substituent"
+                    || candidate
+                        .iter()
+                        .all(|p| matches!(p, Position::Node(i) if g.substituent_capacity[*i] > 0)))
+        })
+        .collect::<Vec<_>>();
         if candidates.is_empty() {
             return Some(false);
         }
@@ -535,6 +746,17 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         }
         consume(budget)?;
         let candidate = decorate(g, chosen);
+        if omitted.iter().any(|&i| all[i].category == "substituent")
+            && candidate.0.iter().enumerate().any(|(i, labels)| {
+                labels
+                    .iter()
+                    .filter(|(category, _)| category == "substituent")
+                    .count()
+                    > g.substituent_capacity[i]
+            })
+        {
+            return Some(true);
+        }
         isomorphic(g, actual, &candidate, budget)
     }
     let mut fixed: Vec<_> = all
@@ -566,7 +788,22 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
     let mut ordered: Vec<_> = all
         .iter()
         .enumerate()
-        .filter(|(_, f)| f.category != "substituent")
+        .filter(|(_, f)| match f.category {
+            "substituent" => {
+                parts
+                    .principal_group
+                    .as_ref()
+                    .is_some_and(|group| !group.external_substitution_sites)
+                    && parts.parent_atom_hydrogens_by_locant.len() == g.nodes.len()
+            }
+            "suffix" => {
+                parts.substituents.is_empty()
+                    && g.nodes.iter().all(|l| l.0 == "C")
+                    && f.positions.len() == 1
+            }
+            "unsaturation" => parts.principal_group.is_none(),
+            _ => false,
+        })
         .map(|(i, _)| i)
         .collect();
     ordered.sort_by_key(|&i| {
@@ -584,7 +821,7 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
     let mut selected = vec![];
     'outer: for size in (1..=ordered.len()).rev() {
         let mut subset_budget = usize::MAX;
-        let Some(subsets) = combinations(&ordered, size, &mut subset_budget) else {
+        let Some(subsets) = combinations(&ordered, size, false, &mut subset_budget) else {
             return;
         };
         for subset in subsets {
@@ -601,12 +838,30 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
             }
         }
     }
+    if selected.is_empty() {
+        return;
+    }
     for i in selected {
         let f = &all[i];
         if f.category == "unsaturation" {
             parts.elided_unsaturation_locants.insert(f.key.clone());
+        } else if f.category == "substituent" {
+            parts.elided_substituent_locants.insert(f.key.clone());
         } else {
             parts.elide_principal_group_locants = true;
+        }
+    }
+    if !parts.stereo_features.is_empty() {
+        let cites_locants = super::assembly_prefixes::format_substituent_prefixes(parts).1
+            || !super::assembly_parent::parent_stem_and_terminal(parts)
+                .and_then(|(stem, terminal)| {
+                    super::assembly_parent::format_parent_tail(parts, &stem, &terminal)
+                })
+                .is_ok_and(|tail| !tail.cites_locants);
+        if cites_locants || !single_stereo_locant_is_unambiguous(parts) {
+            parts.elided_substituent_locants.clear();
+            parts.elided_unsaturation_locants.clear();
+            parts.elide_principal_group_locants = false;
         }
     }
 }
@@ -632,6 +887,44 @@ mod tests {
         }
         parts
     }
+    #[test]
+    fn long_stereogenic_chain_keeps_its_locants() {
+        let smiles = format!("{}[C@H](F)Cl", "C".repeat(400));
+        let name = super::super::name_smiles(&smiles).unwrap();
+        assert_eq!(name.text, "(1R)-1-chloro-1-fluorohentetractane");
+    }
+
+    #[test]
+    fn stereo_equivalence_uses_path_and_ring_automorphisms() {
+        for (n, ring, candidates) in [(401, false, vec![1, 401]), (32, true, (1..=32).collect())] {
+            let mut parts = parent(n, ring, false);
+            parts.parent_atom_ids_by_locant = (1..=n).map(|i| (i.to_string(), i)).collect();
+            parts.stereogenic_atom_ids = candidates.into_iter().collect();
+            parts.stereo_features.push(("1".into(), "R".into()));
+            assert!(single_stereo_locant_is_unambiguous(&parts));
+            parts
+                .substituents
+                .push(super::super::assembly_parts::SubstituentItem::new(
+                    "chloro",
+                    vec!["1".into()],
+                ));
+            assert!(!single_stereo_locant_is_unambiguous(&parts));
+        }
+    }
+
+    #[test]
+    fn general_equivalence_search_respects_the_budget() {
+        let mut parts = parent(6, true, false);
+        parts
+            .parent_bond_orders_by_locants
+            .insert(("1".into(), "4".into()), 1);
+        let g = graph(&parts, true).unwrap();
+        assert!(g.automorphisms.is_empty());
+        let actual = decorate(&g, &[]);
+        let mut budget = 0;
+        assert_eq!(isomorphic(&g, &actual, &actual, &mut budget), None);
+    }
+
     #[test]
     fn elision_requires_every_compatible_placement_to_be_equivalent() {
         for (n, ring, heteroatom, expected) in [

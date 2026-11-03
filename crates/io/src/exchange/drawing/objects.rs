@@ -248,6 +248,7 @@ impl Writer<'_> {
     }
     pub(super) fn marks(&mut self) -> Result<()> {
         let doc = self.doc;
+        let drawn = doc.abbreviation_render_copy();
         for atom in &doc.atoms {
             for mark in &atom.marks {
                 self.spend(doc.atoms.len())?;
@@ -345,13 +346,14 @@ impl Writer<'_> {
                 let offset = P::from(mark.offset);
                 let distance = offset.x.hypot(offset.y);
                 // Marks orbit outside the label ink, so measure from its far corner.
-                let ink = crate::scene::atom_label_ink_bounds(atom, doc).map_or(0., |(lo, hi)| {
-                    let (x, y) = (real(atom.position.x), real(atom.position.y));
-                    (x - real(lo.x))
-                        .abs()
-                        .max((real(hi.x) - x).abs())
-                        .hypot((y - real(lo.y)).abs().max((real(hi.y) - y).abs()))
-                });
+                let ink =
+                    crate::scene::atom_label_ink_bounds(atom, &drawn).map_or(0., |(lo, hi)| {
+                        let (x, y) = (real(atom.position.x), real(atom.position.y));
+                        (x - real(lo.x))
+                            .abs()
+                            .max((real(hi.x) - x).abs())
+                            .hypot((y - real(lo.y)).abs().max((real(hi.y) - y).abs()))
+                    });
                 if (distance - ink) * self.scale > label_size * 1.05 {
                     return Err(invalid(
                         "Move the mark closer to its atom for editable interchange",

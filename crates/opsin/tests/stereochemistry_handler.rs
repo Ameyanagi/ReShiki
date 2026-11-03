@@ -541,6 +541,64 @@ fn alpha_beta_contradictions_are_structural_errors_and_xi_clears_parity() {
     assert!(state.graph().atom(AtomId(0)).parity.is_none());
 }
 #[test]
+fn unlocanted_xi_consumes_undefined_centres_before_bonds() {
+    for initial in ["Xi", "R"] {
+        let (mut state, mut arena, root, _, fragment) = fixture("C(Br)(F)(Cl)C(Br)(F)C=CC");
+        let first = token(
+            &mut arena,
+            root,
+            STEREOCHEMISTRY_EL,
+            initial,
+            &[
+                (
+                    TYPE_ATR,
+                    if initial == "Xi" {
+                        ALPHA_OR_BETA_TYPE_VAL
+                    } else {
+                        R_OR_S_TYPE_VAL
+                    },
+                ),
+                (VALUE_ATR, initial),
+            ],
+        );
+        let second = token(
+            &mut arena,
+            root,
+            STEREOCHEMISTRY_EL,
+            "Xi",
+            &[(TYPE_ATR, ALPHA_OR_BETA_TYPE_VAL), (VALUE_ATR, "Xi")],
+        );
+        let third = token(
+            &mut arena,
+            root,
+            STEREOCHEMISTRY_EL,
+            "Xi",
+            &[(TYPE_ATR, ALPHA_OR_BETA_TYPE_VAL), (VALUE_ATR, "Xi")],
+        );
+        let analysis = analyse(state.graph(), fragment).unwrap();
+        assert_eq!(analysis.centres.len(), 2);
+        assert_eq!(analysis.bonds.len(), 1);
+        let mut handler =
+            StereochemistryHandler::new(&mut state, &mut arena, &analysis.centres, &analysis.bonds);
+        handler.apply_stereochemical_elements(&[first]).unwrap();
+        assert!(
+            !handler
+                .not_explicitly_defined_stereo_centre_map
+                .contains_key(&AtomId(0))
+        );
+        assert_eq!(handler.not_explicitly_defined_stereo_centre_map.len(), 1);
+        handler.apply_stereochemical_elements(&[second]).unwrap();
+        assert!(handler.not_explicitly_defined_stereo_centre_map.is_empty());
+        assert_eq!(handler.not_explicitly_defined_stereo_bond_map.len(), 1);
+        handler.apply_stereochemical_elements(&[third]).unwrap();
+        assert!(handler.not_explicitly_defined_stereo_bond_map.is_empty());
+        assert_eq!(
+            handler.state.graph().atom(AtomId(0)).parity.is_some(),
+            initial == "R"
+        );
+    }
+}
+#[test]
 fn carbohydrate_prefixes_flip_or_clear_source_parities() {
     let (mut state, mut a, r, g, f) = fixture("O=C[C@H](O)[C@H](O)[C@H](O)CO");
     a[g].set_attribute(SUBTYPE_ATR, SYSTEMATICCARBOHYDRATESTEMALDOSE_SUBTYPE_VAL);

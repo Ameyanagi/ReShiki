@@ -18,11 +18,17 @@ fn ignored_prefix_len(text: &str) -> usize {
     let words = [
         "sec", "tert", "t", "s", "d", "l", "m", "o", "p", "alpha", "beta", "gamma",
     ];
-    let stereo = !prefix.is_empty() && prefix.chars().all(|c| "ezrs".contains(c));
-    let locants = prefix.split(',').all(|s| {
+    let stereo = !prefix.is_empty() && prefix.chars().all(|c| "ezrsξ".contains(c));
+    // Assembly junction locants precede a hyphen, not a stereo block's ')'.
+    let assembly_locants = text[end..].starts_with('-');
+    let locants = prefix.split([',', ':']).all(|s| {
         let digits = s.chars().take_while(|c| c.is_ascii_digit()).count();
         if digits > 0 {
-            s[digits..].chars().all(|c| c.is_ascii_lowercase())
+            s[digits..].chars().all(|c| {
+                c.is_ascii_lowercase()
+                    || c == 'ξ'
+                    || assembly_locants && (c.is_ascii_digit() || matches!(c, '\'' | '^'))
+            })
         } else {
             s.chars().next().is_some_and(|c| "nospmc".contains(c))
                 && s[1..].chars().all(|c| c == '\'')
@@ -80,9 +86,8 @@ fn group_offers_second_position(key: &str) -> bool {
                 .any(|m| s.contains(m))
         })
 }
-pub fn substituent_locant_string(
+fn substituent_locant_string(
     parts: &AssemblyParts,
-    name: &str,
     locs: &[String],
     grouped_count: usize,
 ) -> String {
@@ -91,9 +96,6 @@ pub fn substituent_locant_string(
         .any(|locant| parts.endo_exo_descriptors.contains_key(locant))
     {
         return parts.stereochemical_locants(locs);
-    }
-    if parts.elided_substituent_locants.contains(name) {
-        return String::new();
     }
     let imino_beside = grouped_count > 1 && parts.substituents.iter().any(|s| s.name == "imino");
     if parts.parent_length == 1
@@ -136,6 +138,7 @@ pub fn substituent_locant_string(
         .is_some()
         && retained_parent_attachment_is_ambiguous(parts, locs);
     if locs == ["1"]
+        && !parts.is_ring_assembly()
         && parts.is_ring
         && parts.principal_group.is_none()
         && parts.unsaturations.is_empty()
@@ -185,13 +188,17 @@ fn outer_parentheses_are_redundant(name: &str) -> bool {
         return !starts_with_multiplier(inner);
     }
     let (start, end) = groups[0];
-    let only_locants = start == 0
-        || inner[..start]
+    // An unlocanted stereodescriptor must remain inside its substituent scope.
+    let only_locants = if start == 0 {
+        !inner[end + 1..].starts_with('-') || inner[1..end].chars().any(|c| c.is_ascii_digit())
+    } else {
+        inner[..start]
             .trim_end_matches(|c: char| c.is_ascii_digit() || ",'-".contains(c))
-            .is_empty();
+            .is_empty()
+    };
     only_locants && !starts_with_multiplier(&inner[end + 1..])
 }
-pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
+pub fn format_substituent_prefixes(parts: &AssemblyParts) -> (String, bool) {
     let mut grouped: BTreeMap<&str, Vec<_>> = BTreeMap::new();
     let mut names = Vec::new();
     for sub in &parts.substituents {
@@ -203,15 +210,30 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
     }
     // Python's dict preserves first citation order when alphabetical keys tie.
     names.sort_by_key(|s| substituent_sort_key(s));
+    let groups: Vec<_> = names
+        .into_iter()
+        .map(|name| {
+            let items = &grouped[name];
+            let mut locs: Vec<_> = items
+                .iter()
+                .flat_map(|item| item.locants.iter().cloned())
+                .collect();
+            locs.sort_by_key(|locant| parse_locant(locant));
+            let loc = if parts.elided_substituent_locants.contains(name) {
+                String::new()
+            } else {
+                substituent_locant_string(parts, &locs, grouped.len())
+            };
+            (name, items, locs, loc)
+        })
+        .collect();
+    let cites_locants = groups.iter().any(|(_, _, _, loc)| !loc.is_empty());
     let mut rendered = String::new();
-    for name in names {
-        let items = &grouped[name];
+    for (name, items, locs, mut loc) in groups {
+        if cites_locants && parts.elided_substituent_locants.contains(name) {
+            loc = substituent_locant_string(parts, &locs, grouped.len());
+        }
         let optional = items.iter().all(|i| i.outer_parentheses_optional);
-        let mut locs: Vec<_> = items
-            .iter()
-            .flat_map(|i| i.locants.iter().cloned())
-            .collect();
-        locs.sort_by_key(|l| parse_locant(l));
         let per = if name.contains("diyl") && !name.contains("ylidene") {
             2
         } else {
@@ -233,7 +255,6 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
         } else {
             String::new()
         };
-        let loc = substituent_locant_string(parts, name, &locs, grouped.len());
         let mut used = name.to_owned();
         if !parts.is_substituent
             && parts.principal_group.is_none()
@@ -268,11 +289,11 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
         }
         rendered.push_str(&piece);
     }
-    rendered
+    (rendered, cites_locants)
 }
-pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
+pub fn format_replacement_prefixes(parts: &AssemblyParts) -> (String, bool) {
     if super::assembly_charge::inferred_ionic_retained_parent(parts).is_some() {
-        return String::new();
+        return (String::new(), false);
     }
     let charged = super::assembly_charge::single_charged_replacement_locants(parts);
     let mut groups: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
@@ -301,7 +322,8 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
             .copied()
             .unwrap_or(99)
     });
-    groups
+    let cites_locants = groups.iter().any(|(_, locs)| !locs.is_empty());
+    let text = groups
         .into_iter()
         .map(|(name, mut locs)| {
             locs.sort_by_key(|l| parse_locant(l));
@@ -313,11 +335,29 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
             format!("{}-{mult}{name}", locs.join(","))
         })
         .collect::<Vec<_>>()
-        .join("-")
+        .join("-");
+    (text, cites_locants)
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn outer_parentheses_keep_unlocanted_stereo_scoped_to_the_substituent() {
+        for (name, redundant) in [
+            ("((phenyl)methyl)", true),
+            ("((amino)methyl)", true),
+            ("((1R)-1-fluoroethyl)", true),
+            ("((R)-chlorofluoromethyl)", false),
+            ("((Ξ)-chlorofluoromethyl)", false),
+        ] {
+            assert_eq!(
+                super::outer_parentheses_are_redundant(name),
+                redundant,
+                "{name}"
+            );
+        }
+    }
+
     #[test]
     fn sibling_diazenyl_keeps_its_carbonyl_attachment() {
         assert_eq!(

@@ -583,7 +583,7 @@ pub fn format_unsaturations(
     parts: &AssemblyParts,
     stem: &str,
     omit_locants: bool,
-) -> (String, String) {
+) -> (String, String, bool) {
     let mut stem = stem.to_owned();
     let mut unsats: Vec<_> = parts.unsaturations.iter().collect();
     unsats.sort_by_key(|u| {
@@ -595,6 +595,7 @@ pub fn format_unsaturations(
             .unwrap_or(99)
     });
     let mut pieces = vec![];
+    let mut cites_locants = false;
     for (i, u) in unsats.iter().enumerate() {
         let count = u.locants.len().max(1);
         let infix = bonds::unsaturation_infix(&u.bond_key, count);
@@ -606,6 +607,7 @@ pub fn format_unsaturations(
             && !omit_locants
             && !parts.elided_unsaturation_locants.contains(&u.bond_key)
         {
+            cites_locants = true;
             let mut locs = u.locants.clone();
             locs.sort_by_key(|s| parse_locant(s));
             pieces.push(format!("-{}-{base}", locs.join(",")));
@@ -613,7 +615,7 @@ pub fn format_unsaturations(
             pieces.push(base.into());
         }
     }
-    (stem, pieces.concat())
+    (stem, pieces.concat(), cites_locants)
 }
 pub fn always_print_substituent_locant(parts: &AssemblyParts) -> bool {
     if parts.isotope_explicit_locants {
@@ -655,11 +657,21 @@ pub(super) struct ParentTail {
     pub(super) unsaturation: String,
     pub(super) terminal: String,
     pub(super) suffix: String,
+    pub(super) cites_locants: bool,
 }
 
 pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> ParentTail {
     let kind = substituent_attachment_kind(parts);
     let mut suffix = RULES.assembly.substituent_attachment_suffixes[kind].clone();
+    if parts.is_ring_assembly() {
+        // P-29.3.5: junction locants stay inside brackets; the free valence is outside.
+        return ParentTail {
+            stem: format!("[{}]", assembly_suffix_stem(parts, true)),
+            terminal: format!("-{}-{suffix}", parts.attachment_locant),
+            cites_locants: true,
+            ..Default::default()
+        };
+    }
     if kind == "acyl" && parts.parent_length == 1 && !parts.substituents.is_empty() {
         suffix = RULES.assembly.substituent_attachment_suffixes["acyl_on_branch"].clone();
     }
@@ -676,17 +688,18 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
             };
         }
         if !infix.is_empty() {
-            let (stem, unsaturation) = if parts.unsaturations.is_empty() {
-                (stem.to_owned(), "ane".into())
+            let (stem, unsaturation, cites_locants) = if parts.unsaturations.is_empty() {
+                (stem.to_owned(), "ane".into(), false)
             } else {
-                let (stem, unsaturation) = format_unsaturations(parts, stem, false);
-                (stem, format!("{unsaturation}e"))
+                let (stem, unsaturation, cites_locants) = format_unsaturations(parts, stem, false);
+                (stem, format!("{unsaturation}e"), cites_locants)
             };
             return ParentTail {
                 stem,
                 unsaturation,
                 terminal: format!("{infix}yl"),
                 suffix: String::new(),
+                cites_locants,
             };
         }
         if parts.parent_length == 1 || parts.parent_length == 2 {
@@ -701,8 +714,8 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
                 ..Default::default()
             };
         }
-        let (stem, unsaturation) = if parts.unsaturations.is_empty() {
-            (stem.to_owned(), "an".into())
+        let (stem, unsaturation, cites_locants) = if parts.unsaturations.is_empty() {
+            (stem.to_owned(), "an".into(), false)
         } else {
             format_unsaturations(parts, stem, false)
         };
@@ -711,6 +724,7 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
             unsaturation,
             terminal: suffix,
             suffix: String::new(),
+            cites_locants,
         };
     }
     let always = parts.spiro_prefix_composition || always_print_substituent_locant(parts);
@@ -720,46 +734,56 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
         && parts.unsaturations.len() == 1
         && parts.unsaturations[0].locants == ["1"];
     if !always && two {
-        let (stem, unsaturation) = format_unsaturations(parts, stem, true);
+        let (stem, unsaturation, cites_locants) = format_unsaturations(parts, stem, true);
+        let (terminal, charge_cites_locants) = append_charge_suffixes_to_terminal(parts, &suffix);
         return ParentTail {
             stem,
             unsaturation,
-            terminal: append_charge_suffixes_to_terminal(parts, &suffix),
+            terminal,
             suffix: String::new(),
+            cites_locants: cites_locants || charge_cites_locants,
         };
     }
-    let terminal = if parts.retained_name.as_deref() == Some("benzene") {
-        "yl".into()
+    let (terminal, attachment_cites_locants) = if parts.retained_name.as_deref() == Some("benzene")
+    {
+        ("yl".into(), false)
     } else if (parts.attachment_locant != "1" || !parts.unsaturations.is_empty() || always)
         && parts.parent_length > 1
     {
-        format!(
-            "-{}-{suffix}",
-            parts.stereochemical_locant(&parts.attachment_locant)
-        )
-    } else {
-        suffix
-    };
-    let (stem, unsat) = if !has_retained_like_parent(parts) && !parts.unsaturations.is_empty() {
-        format_unsaturations(parts, stem, false)
-    } else {
         (
-            stem.to_owned(),
-            if !has_retained_like_parent(parts)
-                && parts.parent_length > 1
-                && (parts.attachment_locant != "1" || always)
-            {
-                "an".into()
-            } else {
-                String::new()
-            },
+            format!(
+                "-{}-{suffix}",
+                parts.stereochemical_locant(&parts.attachment_locant)
+            ),
+            true,
         )
+    } else {
+        (suffix, false)
     };
+    let (stem, unsat, cites_locants) =
+        if !has_retained_like_parent(parts) && !parts.unsaturations.is_empty() {
+            format_unsaturations(parts, stem, false)
+        } else {
+            (
+                stem.to_owned(),
+                if !has_retained_like_parent(parts)
+                    && parts.parent_length > 1
+                    && (parts.attachment_locant != "1" || always)
+                {
+                    "an".into()
+                } else {
+                    String::new()
+                },
+                false,
+            )
+        };
+    let (terminal, charge_cites_locants) = append_charge_suffixes_to_terminal(parts, &terminal);
     ParentTail {
         stem,
         unsaturation: unsat,
-        terminal: append_charge_suffixes_to_terminal(parts, &terminal),
+        terminal,
         suffix: String::new(),
+        cites_locants: cites_locants || attachment_cites_locants || charge_cites_locants,
     }
 }
 fn sole_group_redundant(parts: &AssemblyParts) -> bool {
@@ -773,7 +797,12 @@ fn sole_group_redundant(parts: &AssemblyParts) -> bool {
         return false;
     }
     if parts.is_ring {
-        return parts.unsaturations.is_empty() && parts.retained_name.as_deref() == Some("benzene");
+        // Upstream divergence: P-14.3.4.2(c) requires a monosubstituted ring.
+        return parts.unsaturations.is_empty()
+            && (parts.retained_name.as_deref() == Some("benzene")
+                || (parts.is_simple_ring()
+                    && !parts.spiro_prefix_composition
+                    && parts.retained_name.is_none()));
     }
     !parts.is_substituent && parts.parent_length == 2 && parts.parent_charges.is_empty()
 }
@@ -812,9 +841,9 @@ fn suffix_modifiers(parts: &AssemblyParts) -> String {
 pub fn format_principal_suffix(
     parts: &AssemblyParts,
     terminal: &str,
-) -> Result<(String, String), String> {
+) -> Result<(String, String, bool), String> {
     let Some(item) = &parts.principal_group else {
-        return Ok((terminal.into(), String::new()));
+        return Ok((terminal.into(), String::new(), false));
     };
     let mut group = item
         .resolved_rule
@@ -833,21 +862,15 @@ pub fn format_principal_suffix(
     locs.sort_by_key(|l| parse_locant(l));
     let mut omit = parts.parent_length == 1;
     if !omit
+        && !parts.is_ring_assembly()
         && !parts.isotope_explicit_locants
         && locs == ["1"]
-        && (!group.suffix_with_locant
-            || (parts.is_ring
-                && parts.unsaturations.is_empty()
-                && !parts.is_bicycle
-                && !parts.is_spiro
-                && !parts.is_polycycle
-                && !parts.spiro_prefix_composition
-                && parts.retained_name.is_none())
-            || sole_group_redundant(parts))
+        && (!group.suffix_with_locant || sole_group_redundant(parts))
     {
         omit = true;
     }
     let mut suffix = render_principal_suffix(&group, locs.len());
+    let mut modifier_cites_locants = false;
     if group.has_capability("element_locanted_suffix") && omit {
         suffix = format!("-{suffix}");
     }
@@ -855,6 +878,10 @@ pub fn format_principal_suffix(
         && group.families.contains("hydrazone")
         && suffix.ends_with("hydrazone")
     {
+        modifier_cites_locants = parts
+            .principal_suffix_modifiers
+            .iter()
+            .any(|modifier| !modifier.locants.is_empty());
         suffix = format!(
             "{}{}hydrazone",
             &suffix[..suffix.len() - 9],
@@ -869,13 +896,15 @@ pub fn format_principal_suffix(
     if parts.elide_principal_group_locants {
         omit = true;
     }
+    let cites_locants = group.suffix_with_locant && !locs.is_empty() && !omit;
     Ok((
         terminal,
-        if group.suffix_with_locant && !locs.is_empty() && !omit {
+        if cites_locants {
             format!("-{}-{suffix}", parts.stereochemical_locants(&locs))
         } else {
             suffix
         },
+        cites_locants || modifier_cites_locants,
     ))
 }
 fn redundant_unsaturation(parts: &AssemblyParts) -> bool {
@@ -905,9 +934,24 @@ pub(super) fn format_parent_tail(
     stem: &str,
     terminal: &str,
 ) -> Result<ParentTail, String> {
-    let (stem, unsat) = if !has_retained_like_parent(parts) {
+    if parts.is_ring_assembly() {
+        // P-28.2.1: an assembly name always cites its junction locants.
+        let (terminal, suffix, _) = format_principal_suffix(parts, "e")?;
+        let name = assembly_suffix_stem(parts, terminal.is_empty());
+        return Ok(ParentTail {
+            stem: if suffix.is_empty() {
+                name
+            } else {
+                format!("[{name}]")
+            },
+            suffix,
+            cites_locants: true,
+            ..Default::default()
+        });
+    }
+    let (stem, unsat, unsaturation_cites_locants) = if !has_retained_like_parent(parts) {
         if parts.unsaturations.is_empty() {
-            (stem.to_owned(), "an".into())
+            (stem.to_owned(), "an".into(), false)
         } else {
             format_unsaturations(
                 parts,
@@ -916,14 +960,16 @@ pub(super) fn format_parent_tail(
             )
         }
     } else {
-        (stem.to_owned(), String::new())
+        (stem.to_owned(), String::new(), false)
     };
-    let (mut terminal, mut suffix) = if parts.retained_absorbs_principal_group {
-        (terminal.to_owned(), String::new())
+    let (mut terminal, mut suffix, suffix_cites_locants) = if parts.retained_absorbs_principal_group
+    {
+        (terminal.to_owned(), String::new(), false)
     } else {
         format_principal_suffix(parts, terminal)?
     };
     let charge = parent_charge_suffix(parts);
+    let charge_cites_locants = !charge.is_empty();
     if !charge.is_empty() {
         terminal.clear();
         suffix = format!("{charge}{suffix}");
@@ -933,7 +979,21 @@ pub(super) fn format_parent_tail(
         unsaturation: unsat,
         terminal,
         suffix,
+        cites_locants: unsaturation_cites_locants || suffix_cites_locants || charge_cites_locants,
     })
+}
+
+fn assembly_suffix_stem(parts: &AssemblyParts, elide: bool) -> String {
+    let name = parts.retained_name.as_deref().unwrap_or_default();
+    if elide {
+        if let Some(stem) = name.strip_suffix("e)") {
+            return format!("{stem})");
+        }
+        if let Some(stem) = name.strip_suffix('e') {
+            return stem.into();
+        }
+    }
+    name.into()
 }
 
 #[cfg(test)]
@@ -946,22 +1006,25 @@ mod tests {
         let mut parts = AssemblyParts::new(6);
         parts.is_ring = true;
         parts.is_substituent = true;
+        let tail = format_substituent_tail(&parts, "cyclohex");
+        assert_eq!(tail.terminal, "yl");
+        assert!(!tail.cites_locants);
         parts.spiro_prefix_composition = true;
-        assert_eq!(
-            format_substituent_tail(&parts, "cyclohex").terminal,
-            "-1-yl"
-        );
+        let tail = format_substituent_tail(&parts, "cyclohex");
+        assert_eq!(tail.terminal, "-1-yl");
+        assert!(tail.cites_locants);
         parts.is_substituent = false;
         parts.unsaturations.push(UnsaturationItem {
             bond_key: "double".into(),
             locants: vec!["1".into()],
             ..Default::default()
         });
-        assert_eq!(
-            format_parent_tail(&parts, "cyclohex", "e")
-                .unwrap()
-                .unsaturation,
-            "-1-en"
-        );
+        let tail = format_parent_tail(&parts, "cyclohex", "e").unwrap();
+        assert_eq!(tail.unsaturation, "-1-en");
+        assert!(tail.cites_locants);
+        parts.spiro_prefix_composition = false;
+        let tail = format_parent_tail(&parts, "cyclohex", "e").unwrap();
+        assert_eq!(tail.unsaturation, "en");
+        assert!(!tail.cites_locants);
     }
 }

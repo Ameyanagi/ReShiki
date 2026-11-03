@@ -154,6 +154,7 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
         label: label.into(),
         reverse_label: label.into(),
         anchor: id,
+        exit: None,
         members,
     });
     if let Some(color) = highlight {

@@ -26,6 +26,10 @@ pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts)
 }
 
 fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
+    if let Some(assembly) = &parent.assembly {
+        mol.record_ring_assembly(&assembly.junction_bond_ids);
+        mark_retained_parent_status(mol, &assembly.unit_name);
+    }
     if let Some(name) = parent.base_name() {
         mark_retained_parent_status(mol, name);
     }
@@ -71,7 +75,7 @@ pub fn resolve_retained_parent(
     mol: &Molecule,
     selection: &ParentSelection,
 ) -> Option<super::rules::retained::RetainedMatch> {
-    if !selection.is_ring {
+    if !selection.is_ring || selection.ring_assembly.is_some() {
         return None;
     }
     let path = selection.primary_path();
@@ -136,7 +140,12 @@ pub fn build_parent_assembly_plan(
     retained_name: Option<String>,
     locant_maps: &[BTreeMap<usize, String>],
 ) -> Result<ParentAssemblyPlan, String> {
-    let parent = if root.is_some() {
+    let parent = if let Some(assembly) = &selection.ring_assembly {
+        Some(RingParent::from_ring_assembly(
+            selection.atom_set(),
+            assembly.clone(),
+        )?)
+    } else if root.is_some() {
         if retained_name.is_none() && (selection.is_bicycle || selection.is_polycycle) {
             super::fusion::planner::plan_fusion_parent(mol, &selection.atom_set())?
                 .map(RingParent::from_fusion_plan)
@@ -174,7 +183,13 @@ pub fn build_parent_assembly_plan_with_parent(
 ) -> Result<ParentAssemblyPlan, String> {
     let retained_name = parent
         .as_ref()
-        .filter(|p| p.kind == super::ring_parent::ParentHydrideKind::Retained)
+        .filter(|p| {
+            matches!(
+                p.kind,
+                super::ring_parent::ParentHydrideKind::Retained
+                    | super::ring_parent::ParentHydrideKind::RingAssembly
+            )
+        })
         .and_then(|p| p.base_name().map(str::to_owned))
         .or(retained_name);
     let variants: Vec<_> = parent
@@ -198,7 +213,7 @@ pub fn build_parent_assembly_plan_with_parent(
             .flat_map(|p| p.numbering.string_input_locant_maps())
             .collect()
     };
-    let proven_hydrogens: ProvenHydrogenLocants = variants
+    let mut proven_hydrogens: ProvenHydrogenLocants = variants
         .iter()
         .flat_map(|plan| {
             let hydrogen = (
@@ -215,6 +230,23 @@ pub fn build_parent_assembly_plan_with_parent(
                 .map(move |map| (map.into_iter().collect(), hydrogen.clone()))
         })
         .collect();
+    if let Some(assembly) = &selection.ring_assembly {
+        for map in &assembly.locant_maps {
+            proven_hydrogens.insert(
+                map.iter()
+                    .map(|(&atom, locant)| (atom, locant.clone()))
+                    .collect(),
+                (
+                    assembly
+                        .indicated_hydrogen_atoms
+                        .iter()
+                        .map(|atom| map[atom].clone())
+                        .collect(),
+                    vec![],
+                ),
+            );
+        }
+    }
     let principal: AtomSet = principal_carbons.iter().copied().collect();
     let names = substituents
         .iter()
@@ -256,13 +288,14 @@ pub fn build_parent_assembly_plan_with_parent(
         retained_name.as_deref(),
         selection.requires_fixed_substituent_start(),
         NumberingTopology {
+            is_assembly: selection.ring_assembly.is_some(),
             is_bicycle: selection.is_bicycle,
             is_spiro: selection.is_spiro,
             is_polycycle: selection.is_polycycle,
         },
         parent
             .as_ref()
-            .filter(|p| p.is_systematic_fusion())
+            .filter(|p| p.is_systematic_fusion() || p.assembly.is_some())
             .map(|_| &proven_hydrogens),
     );
     let locant_map = selected_map.unwrap_or_else(|| {
@@ -372,6 +405,8 @@ fn build_parent_parts(
     parts.retained_name = retained_name;
     parts.parent_atom_ids = numbered_path.iter().copied().collect();
     parts.parent_bond_ids = bond_ids_within(mol, &parts.parent_atom_ids);
+    parts.stereogenic_atom_ids = mol.stereogenic_atoms.clone();
+    parts.stereogenic_bond_ids = mol.stereogenic_bonds.clone();
     if let Some(root) = root {
         parts.is_substituent = true;
         parts.attachment_locant = locants[&root].clone();
@@ -383,6 +418,20 @@ fn build_parent_parts(
         let atom = &mol.atoms[&idx];
         let locant = &locants[&idx];
         parts.parent_atom_ids_by_locant.insert(locant.clone(), idx);
+        parts
+            .parent_atom_hydrogens_by_locant
+            .insert(locant.clone(), atom.total_h_count);
+        parts.parent_external_bonds_by_locant.insert(
+            locant.clone(),
+            mol.get_neighbors(idx)
+                .iter()
+                .filter(|&&other| !parts.parent_atom_ids.contains(&other))
+                .filter_map(|&other| {
+                    mol.get_bond(idx, other)
+                        .map(|bond| (other, bond.order, bond.idx))
+                })
+                .collect(),
+        );
         parts
             .parent_atom_symbols_by_locant
             .insert(locant.clone(), atom.symbol.clone());
@@ -421,7 +470,21 @@ fn build_parent_parts(
         }
     }
     super::endo_exo_stereo::add_alternative(mol, &mut parts, numbered_path, locants);
-    add_relative_ring_stereo(mol, &mut parts, numbered_path, locants)?;
+    if selection.ring_assembly.is_none() {
+        add_relative_ring_stereo(mol, &mut parts, numbered_path, locants)?;
+    } else {
+        for &atom in numbered_path {
+            if mol.atoms[&atom].raw_stereo.is_some() && mol.atoms[&atom].stereo.is_none() {
+                let descriptor = mol
+                    .accurate_cip
+                    .get(&atom)
+                    .ok_or("openclatura: unresolved ring assembly stereochemistry")?;
+                parts
+                    .stereo_features
+                    .push((locants[&atom].clone(), descriptor.clone()));
+            }
+        }
+    }
     Ok(parts)
 }
 
@@ -439,7 +502,7 @@ fn add_relative_ring_stereo(
     {
         return Err("openclatura: unresolved multicyclic stereochemistry not ported".into());
     }
-    if !parts.is_simple_ring() {
+    if !parts.is_simple_ring() || parts.is_ring_assembly() {
         return Ok(());
     }
     let relative: Vec<_> = path
@@ -697,13 +760,13 @@ mod tests {
             ),
             (
                 "O[C@H]1CC[C@@H](C(C)(C)C)CC1",
-                "(1s,4s)-4-(tert-butyl)cyclohexanol",
-                "cis-4-(tert-butyl)cyclohexanol",
+                "(1s,4s)-4-(tert-butyl)cyclohexan-1-ol",
+                "cis-4-(tert-butyl)cyclohexan-1-ol",
             ),
             (
                 "O[C@H]1CC[C@H](C(C)(C)C)CC1",
-                "(1r,4r)-4-(tert-butyl)cyclohexanol",
-                "trans-4-(tert-butyl)cyclohexanol",
+                "(1r,4r)-4-(tert-butyl)cyclohexan-1-ol",
+                "trans-4-(tert-butyl)cyclohexan-1-ol",
             ),
         ] {
             assert_relative_ring_name(smiles, expected, alternative);

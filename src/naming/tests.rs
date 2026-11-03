@@ -431,7 +431,7 @@ fn identity_characterization_table() {
 fn canonical_state_preserves_rejection_order_and_writer_errors() {
     const UNSUPPORTED: &str =
         "Naming does not support query atoms, radicals, exotic bonds or relative stereo groups";
-    const NONCLASSICAL: &str = "Naming supports tetrahedral and ordinary alkene stereochemistry only; other stereo classes cannot be discarded";
+    const NONCLASSICAL: &str = "Naming supports tetrahedral, ordinary alkene and biaryl axis stereochemistry; other stereo classes cannot be discarded";
     let doc = identity_case_document("plain");
     let base = chemistry::document::prepare(&doc).unwrap().state;
     let mut state = base.clone();

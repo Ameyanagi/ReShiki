@@ -109,12 +109,14 @@ fn contracting_an_internal_group_keeps_all_connections_on_its_anchor() {
     assert_eq!(doc.bonds, original_bonds);
     assert!(doc.bond_visible(a, b) && doc.bond_visible(b, c));
 
-    // Connections on different members of a group are still ambiguous.
+    // A second boundary atom becomes the exit of a two-sided group.
     let d = doc.add_atom("C", Point::new(150., 30.));
     doc.add_bond(c, d, 1, "plain");
-    let before = doc.clone();
-    assert!(doc.contract(&[b, c], "OC", "").is_err());
-    assert_eq!(doc, before);
+    doc.contract(&[b, c], "OC", "").unwrap();
+    assert_eq!(doc.abbreviations.len(), 1);
+    assert_eq!(doc.abbreviations[0].anchor, b);
+    assert_eq!(doc.abbreviations[0].exit, Some(c));
+    doc.validate().unwrap();
 }
 #[tokio::test]
 async fn checked_chemistry_cleanup_and_editable_exchange_keep_full_identity() {
@@ -170,4 +172,91 @@ async fn checked_chemistry_cleanup_and_editable_exchange_keep_full_identity() {
             .unwrap()
             .starts_with(b"%PDF-")
     );
+}
+
+#[tokio::test]
+async fn named_residue_find_preserves_native_and_exchange_chemistry() {
+    let engine = LocalEngine::default();
+    let original = engine
+        .request(Request::import_smiles("CC(C)(C)OC(=O)N[C@@H](C)C(=O)OC"))
+        .await
+        .unwrap();
+    let expanded = original.document.unwrap();
+    let identity = original.analysis.unwrap();
+    let mut request = Request::molecule("abbreviate", expanded.clone());
+    request.format = Some("find".into());
+    request.text = Some("Ala".into());
+    let found = engine.request(request).await.unwrap();
+    assert_eq!(found.analysis.unwrap().inchikey, identity.inchikey);
+    let mut collapsed = found.document.unwrap();
+    assert_eq!(collapsed.abbreviations.len(), 1);
+    let residue = collapsed.abbreviations[0].clone();
+    assert_eq!(residue.label, "Ala");
+    assert_eq!(collapsed.atom(residue.anchor).unwrap().element, "N");
+    assert_eq!(collapsed.atom(residue.exit.unwrap()).unwrap().element, "C");
+    let mut custom = expanded.clone();
+    for (attachment, x) in [(residue.anchor, -200.), (residue.exit.unwrap(), 200.)] {
+        let outside = custom
+            .bonds
+            .iter()
+            .find_map(|bond| {
+                let other = if bond.a == attachment {
+                    bond.b
+                } else if bond.b == attachment {
+                    bond.a
+                } else {
+                    return None;
+                };
+                (!residue.members.contains(&other)).then_some(other)
+            })
+            .unwrap();
+        custom.atom_mut(outside).unwrap().position.x = x;
+    }
+    custom.contract(&residue.members, "Ala", "").unwrap();
+    assert_eq!(custom.abbreviations[0].anchor, residue.anchor);
+    assert_eq!(custom.abbreviations[0].exit, residue.exit);
+    assert_eq!(custom.abbreviations.len(), 1);
+    for label in ["Boc", "OMe"] {
+        let mut request = Request::molecule("abbreviate", collapsed);
+        request.text = Some(label.into());
+        collapsed = engine.request(request).await.unwrap().document.unwrap();
+    }
+    assert_eq!(collapsed.abbreviations.len(), 3);
+    assert!(collapsed.abbreviations.contains(&residue));
+    let saved = collapsed.file_json().unwrap();
+    let reopened = Document::from_json(&saved).unwrap();
+    assert_eq!(reopened.abbreviations, collapsed.abbreviations);
+    assert_eq!(reopened.file_version(), 34);
+    for format in ["smiles", "mol"] {
+        let mut outputs = Vec::new();
+        for document in [&expanded, &collapsed] {
+            let mut request = Request::molecule("export", document.clone());
+            request.format = Some(format.into());
+            outputs.push(engine.request(request).await.unwrap().output.unwrap());
+        }
+        assert_eq!(outputs[0], outputs[1], "{format}");
+    }
+    for format in ["cdxml", "cdx"] {
+        let mut request = Request::molecule("export", collapsed.clone());
+        request.format = Some(format.into());
+        let output = engine.request(request).await.unwrap().output.unwrap();
+        let imported = engine
+            .request(Request::import(format, &output))
+            .await
+            .unwrap();
+        assert_eq!(
+            imported.analysis.unwrap().inchikey,
+            identity.inchikey,
+            "{format}"
+        );
+        let document = imported.document.unwrap();
+        assert_eq!(document.abbreviations.len(), 3, "{format}");
+        let residue = document
+            .abbreviations
+            .iter()
+            .find(|group| group.label == "Ala")
+            .unwrap();
+        assert_eq!(document.atom(residue.anchor).unwrap().element, "N");
+        assert_eq!(document.atom(residue.exit.unwrap()).unwrap().element, "C");
+    }
 }
