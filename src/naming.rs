@@ -125,6 +125,7 @@ pub enum NameReason {
     Multiplicative,
     AcylPrefix,
     RingAssembly,
+    LinearPhane,
     OpsinFusionLayout,
     BridgedFusedParent,
     UnauditedParent,
@@ -178,7 +179,10 @@ impl NameReason {
                 "Uses an acyl prefix built from a substituent, such as (4-methylphenyl)carbonyl, cyclohexylcarbonothioyl, (dimethyloxophosphanyl) or (dimethyloxoarsanyl), or an oxophosphanyl prefix on a parent, as in (methyloxophosphanyl)methane; preferred IUPAC names use the acid-derived forms 4-methylbenzoyl, cyclohexanecarbothioyl, dimethylphosphinoyl, dimethylarsinoyl and dimethyl-lambda5-phosphanone (P-65.1.7.4.2, P-67.1.4.1.1.3, P-68.3.2.3.1)."
             }
             Self::RingAssembly => {
-                "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions, assemblies requiring skeletal-replacement or hydro prefixes, and linear phanes with at least four ring systems and seven skeletal nodes (P-28, P-31.2.3.3.5, P-51.3.2, P-52.2.5.1, P-52.2.7)."
+                "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions and assemblies requiring skeletal-replacement or hydro prefixes (P-28, P-31.2.3.3.5, P-52.2.7)."
+            }
+            Self::LinearPhane => {
+                "The structure is a linear phane: at least four ring systems, two of them terminal, along a path of at least seven skeletal nodes. Its preferred IUPAC name is a phane name, such as 2,4,6-trioxa-1,7(1),3,5(1,4)-tetrabenzenaheptaphane, even where substitutive or multiplicative names exist (P-52.2.5.3). ReShiki does not yet generate linear phane names."
             }
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."

@@ -310,8 +310,12 @@ pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
 
 pub(super) fn assess_parent_name(mol: &molecule::Molecule, text: &str) {
     species::assess_anion_parent(mol, text);
-    // P-51.3.2: mandatory phane nomenclature precedes multiplicative names.
-    if has_ring_assembly(mol) {
+    // P-51.3.2 / P-52.2.5.3: mandatory phane nomenclature takes precedence.
+    if phane::has_linear_skeleton(mol) {
+        mol.mark_name(crate::naming::NameStatus::NotPreferred(
+            crate::naming::NameReason::LinearPhane,
+        ));
+    } else if has_ring_assembly(mol) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::RingAssembly,
         ));
@@ -615,17 +619,14 @@ fn identical_multiplicative_branches(
 
 /// Whether two identical ring systems are joined directly by a single or
 /// double bond that the rendered name does not cite as a ring assembly
-/// (P-28, P-52.2.7): a double-bond junction, a mandatory linear phane, or units
-/// the assembly parent cannot number. Systems compare as parent hydrides, so
+/// (P-28, P-52.2.7): a double-bond junction or units the assembly parent
+/// cannot number. Systems compare as parent hydrides, so
 /// substituents count as hydrogen; different systems keep the substitutive
 /// PIN, cyclohexylbenzene (P-61.2.2).
 fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
-    let junctions = ring_assembly::assembly_junctions(mol);
-    !junctions.is_empty()
-        && (junctions
-            .iter()
-            .any(|&junction| !mol.ring_assembly_is_named(junction))
-            || phane::has_linear_skeleton(mol))
+    ring_assembly::assembly_junctions(mol)
+        .iter()
+        .any(|&junction| !mol.ring_assembly_is_named(junction))
 }
 
 /// Count nonbonding electrons on the main-group elements that can carry
@@ -731,6 +732,18 @@ mod tests {
                 "P(CC(=O)O)(CC(=O)O)CC(=O)O",
                 "[bis(2-hydroxy-2-oxoethyl)phosphanyl]acetic acid",
             ),
+            // P-15.3 / P-51.3.1: a more substituted core does not remove
+            // identical terminal parents from multiplicative eligibility.
+            ("c1ccccc1Oc2ccc(Oc3ccccc3)cc2", "1,4-diphenoxybenzene"),
+            (
+                "c1ccccc1Oc2cc(Oc3ccccc3)cc(Oc4ccccc4)c2",
+                "1,3,5-triphenoxybenzene",
+            ),
+            (
+                "c1ccccc1Oc2ccc(Oc3ccccc3)c(C)c2",
+                "2-methyl-1,4-diphenoxybenzene",
+            ),
+            ("c1ccccc1Cc2ccc(Cc3ccccc3)cc2", "1,4-dibenzylbenzene"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -814,6 +827,33 @@ mod tests {
         ] {
             let mol = super::graph_io::read_smiles(smiles).unwrap();
             assert!(!super::has_multiplicative_pin(&mol), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn unequal_or_junior_multiplicative_units_keep_preferred_names_and_round_trip() {
+        for (smiles, expected) in [
+            ("Oc1ccc(Oc2ccccc2)cc1", "4-phenoxyphenol"),
+            ("Cc1ccc(Oc2ccccc2)cc1", "1-methyl-4-phenoxybenzene"),
+            ("c1ccccc1Oc2ccc(Oc3ccccc3)nc2", "2,5-diphenoxypyridine"),
+            ("C1CCC(CC1)c1ccccc1", "cyclohexylbenzene"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
         }
     }
 
@@ -1230,21 +1270,48 @@ mod tests {
             (
                 "c1ccccc1-c1ccc(-c2ccc(Oc3cccc(-c4cccc(-c5ccccn5)n4)n3)cc2)cc1",
                 "1^6-[([1^1,2^1:2^4,3^1-terphenyl]-1^4-yl)oxy]-1^2,2^2:2^6,3^2-terpyridine",
-                NameStatus::NotPreferred(NameReason::RingAssembly),
+                NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             // P-51.3.2: even identical halves require the linear phane,
             // rather than a multiplicative name, for seven skeletal nodes.
             (
                 "c1ccccc1-c1ccc(-c2ccc(Oc3ccc(-c4ccc(-c5ccccc5)cc4)cc3)cc2)cc1",
                 "1^4-[([1^1,2^1:2^4,3^1-terphenyl]-1^4-yl)oxy]-1^1,2^1:2^4,3^1-terphenyl",
-                NameStatus::NotPreferred(NameReason::RingAssembly),
+                NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             // The fast-subset carbamate has four ring systems along a path
             // containing acyclic chains, so it too requires a linear phane.
             (
                 "CN(CCCCCCCCCN1CCC(CC1)OC(=O)NC2=CC=CC=C2C3=CC=CC=C3)C(=O)C4=CC(=C(C=C4)O)Cl",
                 "1-[9-(N-methyl-3-chloro-4-hydroxybenzamido)nonyl]piperidin-4-yl ([1,1'-biphenyl]-2-yl)carbamate",
-                NameStatus::NotPreferred(NameReason::RingAssembly),
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            // P-52.2.5.3 applies without identical-unit ring junctions.
+            (
+                "Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+                "4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenol",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            (
+                "Oc1ccc(Cc2ccc(Cc3ccc(Cc4ccccc4)cc3)cc2)cc1",
+                "4-({4-[(4-benzylphenyl)methyl]phenyl}methyl)phenol",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            (
+                "Oc1ccc(Oc2ccc(Sc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+                "4-({4-[(4-phenoxyphenyl)sulfanyl]phenyl}oxy)phenol",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            (
+                "Oc1ccc(-c2ccnc(-c3ccc(-c4ccnc(-c5ccc(-c6ccnc(-c7ccccc7)c6)cc5)c4)cc3)c2)cc1",
+                "4-[2-(4-{2-[4-(2-phenylpyridin-4-yl)phenyl]pyridin-4-yl}phenyl)pyridin-4-yl]phenol",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            // A linear phane outranks the multiplicative name (P-51.3.2).
+            (
+                "c1ccccc1Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2",
+                "1-phenoxy-4-[(4-phenoxyphenyl)oxy]benzene",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             (
                 "c1ccccc1-c1ccc(-c2ccc(-c3ccc(-c4ccc(-c5ccccc5)cc4)cc3)cc2)cc1",
@@ -1256,12 +1323,12 @@ mod tests {
                 "2^3,2^4,2^5,2^6-tetraphenyl-1^1,2^1:2^2,3^1-terphenyl",
                 NameStatus::Preferred,
             ),
-            // The same seven-node shape without an assembly is outside this
-            // fallback's scope (P-52.2.5.1(2)).
+            // Four ring systems along eight collapsed nodes require a
+            // linear phane even without an assembly (P-52.2.5.3).
             (
                 "c1ccccc1CC1CCC(CCc2ccccc2Cc2ccccc2)CC1",
                 "1-benzyl-2-[2-(4-benzylcyclohexyl)ethyl]benzene",
-                NameStatus::Preferred,
+                NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
         ] {
             let name = name_smiles(smiles).unwrap();
