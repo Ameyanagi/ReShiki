@@ -24,7 +24,7 @@ fn labels(drawing: &Drawing) -> Labels {
     }
 }
 
-fn generated(text: &str, options: DrawingOptions) -> anyhow::Result<Document> {
+fn depicted(text: &str) -> anyhow::Result<(Molecule, Vec<Option<String>>)> {
     let input = crate::chemistry::smiles::read(text)?;
     let state = input.prepared.state;
     let positions = crate::chemistry::depict::compute(
@@ -40,9 +40,151 @@ fn generated(text: &str, options: DrawingOptions) -> anyhow::Result<Document> {
         state,
         positions,
     };
-    let draft = for_generated(&molecule, &input.prepared.dummy_labels, options)?;
+    Ok((molecule, input.prepared.dummy_labels))
+}
+
+fn generated(text: &str, options: DrawingOptions) -> anyhow::Result<Document> {
+    let (molecule, dummy_labels) = depicted(text)?;
+    let draft = for_generated(&molecule, &dummy_labels, options)?;
     let labels = draft.labels()?;
     Ok(draft.finish(labels)?)
+}
+
+#[test]
+fn new_drawings_preserve_alkene_specification_through_finish() -> anyhow::Result<()> {
+    let cases: &[(&str, &[bool])] = &[
+        ("CC=CC", &[true]),
+        ("C/C=C/C=CC", &[false, true]),
+        ("C/C=C/C", &[false]),
+        ("C/C=C\\C", &[false]),
+        ("C1=CCCCC1", &[false]),
+        ("C1=CCCCCC1", &[false]),
+        ("C=CC", &[false]),
+        ("CC=O", &[false]),
+    ];
+    for &(text, expected_flags) in cases {
+        let (molecule, dummy_labels) = depicted(text)?;
+        let expected_smiles =
+            crate::chemistry::smiles::write::write(&molecule.state, Default::default())?.text;
+        for (constructor, draft) in [
+            (
+                "import",
+                for_import_with_attachments(
+                    &molecule,
+                    false,
+                    &dummy_labels,
+                    vec![false; molecule.ids.len()],
+                ),
+            ),
+            (
+                "generated",
+                for_generated(&molecule, &dummy_labels, DrawingOptions::default()),
+            ),
+        ] {
+            let draft = draft.with_context(|| format!("{constructor}: {text}"))?;
+            let flags = |document: &Document| {
+                document
+                    .bonds
+                    .iter()
+                    .filter(|bond| bond.order == 2)
+                    .map(|bond| bond.stereo_authoritative)
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(
+                flags(&draft.document),
+                expected_flags,
+                "{constructor}: {text}"
+            );
+            for bond in &draft.document.bonds {
+                if bond.stereo_authoritative {
+                    assert_eq!(bond.order, 2, "{constructor}: {text}");
+                    assert_eq!(bond.display, "plain", "{constructor}: {text}");
+                    assert!(bond.stereo.is_none(), "{constructor}: {text}");
+                    assert!(bond.stereo_atoms.is_empty(), "{constructor}: {text}");
+                }
+            }
+            let labels = draft.labels()?;
+            let finished = draft.finish(labels)?;
+            assert_eq!(flags(&finished), expected_flags, "{constructor}: {text}");
+            for bond in finished
+                .bonds
+                .iter()
+                .filter(|bond| bond.stereo_authoritative)
+            {
+                assert_eq!(bond.display, "plain", "{constructor}: {text}");
+                assert!(bond.stereo.is_none(), "{constructor}: {text}");
+                assert!(bond.cip_label.is_none(), "{constructor}: {text}");
+            }
+            let prepared = prepare(&finished)?;
+            assert_eq!(
+                crate::chemistry::smiles::write::write(&prepared.state, Default::default())?.text,
+                expected_smiles,
+                "{constructor}: {text}",
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn unpreparable_new_drawing_keeps_unspecified_alkene_appearance() -> anyhow::Result<()> {
+    let (molecule, mut dummy_labels) = depicted("CC=CC.*")?;
+    *dummy_labels.last_mut().context("Missing dummy label")? = Some("R".into());
+    for draft in [
+        for_import(&molecule, false, &dummy_labels),
+        for_generated(&molecule, &dummy_labels, DrawingOptions::default()),
+    ] {
+        let draft = draft?;
+        assert!(prepare(&draft.document).is_err());
+        let before = draft.document.clone();
+        let mut document = before.clone();
+        preserve_unspecified_alkenes(&molecule, &mut document);
+        assert_eq!(document, before);
+        assert!(document.bonds.iter().all(|bond| !bond.stereo_authoritative));
+        let labels = draft.labels()?;
+        let finished = draft.finish(labels)?;
+        let double = finished.bonds.iter().find(|bond| bond.order == 2).unwrap();
+        assert_eq!(double.display, "plain");
+        assert!(double.stereo.is_none());
+    }
+    Ok(())
+}
+
+#[test]
+fn scene_and_existing_drawing_still_perceive_alkene_geometry() -> anyhow::Result<()> {
+    let (molecule, _) = depicted("CC=CC")?;
+    let draft = for_import_scene(&molecule, false)?;
+    assert!(
+        draft
+            .document
+            .bonds
+            .iter()
+            .all(|bond| !bond.stereo_authoritative)
+    );
+    let prepared = prepare(&draft.document)?;
+    assert!(
+        prepared
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .any(|bond| bond.stereo > 1)
+    );
+    let drawing = for_drawing(&prepared, &draft.document)?;
+    let labels = drawing.labels()?;
+    let finished = drawing.finish(labels)?;
+    let double = finished.bonds.iter().find(|bond| bond.order == 2).unwrap();
+    assert!(!double.stereo_authoritative);
+    assert!(double.stereo.is_some());
+    assert!(
+        prepare(&finished)?
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .any(|bond| bond.stereo > 1)
+    );
+    Ok(())
 }
 
 #[test]

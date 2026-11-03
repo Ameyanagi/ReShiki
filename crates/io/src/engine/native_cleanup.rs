@@ -49,10 +49,11 @@ pub async fn execute(
     let mut cleaned = crate::task::spawn_blocking(move || prepare(&request)).await??;
     let analysis = match cleaned.molecule {
         Some(molecule) => {
+            let projected = crate::chemistry::molfile::has_projected_coordinates(&cleaned.document);
             cleaned
                 .warnings
-                .extend(native_response::identifier_notices(&molecule, false));
-            Some(native_response::analyze_prepared(Arc::new(molecule), config).await?)
+                .extend(native_response::identifier_notices(&molecule, projected));
+            Some(native_response::analyze_prepared(Arc::new(molecule), projected, config).await?)
         }
         None if cleaned.analysis_policy == cleanup::AnalysisPolicy::SelectedChemistry
             && cleaned.analysis_failure.is_some() =>

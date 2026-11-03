@@ -198,6 +198,132 @@ async fn smiles_imports_into_a_new_document_with_an_analysis() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unspecified_alkene_import_survives_insertion_remapping_and_selected_analysis() {
+    let host = host();
+    let imported = import_ok(&host, "smiles", "CC=CC").await;
+    assert_eq!(imported["value"]["analysis"]["smiles"], "CC=CC");
+    let source = stored(&host, &imported);
+    let double = source.bonds.iter().find(|bond| bond.order == 2).unwrap();
+    let ends = (source.atoms[1].id, source.atoms[2].id);
+    assert_eq!((double.a, double.b), ends);
+    assert!(double.stereo_authoritative);
+    assert_eq!(double.stereo, None);
+    assert!(double.stereo_atoms.is_empty());
+    let missing = crate::chemistry::stereo_lint::check(&source, false);
+    assert!(missing.iter().any(|note| {
+        note.kind == crate::chemistry::stereo_lint::Kind::Undefined
+            && note.bonds == [ends]
+            && note.message == "1 undefined stereogenic double bond (C2=C3)"
+    }));
+
+    // The agent's real insert path appends into a nonempty drawing, requiring
+    // different atom IDs and a computed-label refresh after reconciliation.
+    let destination = import_ok(&host, "smiles", "CCO").await;
+    let inserted = host
+        .call(call(
+            "apply",
+            json!({
+                "document": destination["value"]["document"],
+                "edit": "insert",
+                "source": imported["value"]["document"],
+                "ids": null,
+                "base_revision": "0",
+                "idempotency_key": null,
+            }),
+        ))
+        .await
+        .unwrap();
+    assert!(!inserted.is_error, "{:?}", inserted.value);
+    let inserted = Value::Object(inserted.value);
+    let remap = |id: u64| {
+        let source = id.to_string();
+        inserted["value"]["id_remap"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|pair| pair["source"] == source)
+            .unwrap()["inserted"]
+            .as_str()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap()
+    };
+    let mapped_ends = (remap(ends.0), remap(ends.1));
+    assert_ne!(mapped_ends, ends);
+    let copied = stored(&host, &destination);
+    let double = copied
+        .bonds
+        .iter()
+        .find(|bond| (bond.a, bond.b) == mapped_ends)
+        .unwrap();
+    assert!(double.stereo_authoritative);
+    assert_eq!(double.stereo, None);
+    assert!(double.stereo_atoms.is_empty());
+    assert_eq!(
+        crate::chemistry::stereo_lint::undefined(&copied).bonds,
+        [mapped_ends]
+    );
+
+    // Selecting just the inserted molecule takes analysis_document's
+    // selection/copy path before the engine reads its stereo metadata again.
+    let analysis = host
+        .call(call(
+            "analyze",
+            json!({
+                "document": destination["value"]["document"],
+                "ids": inserted["value"]["inserted"],
+            }),
+        ))
+        .await
+        .unwrap();
+    assert!(!analysis.is_error, "{:?}", analysis.value);
+    assert_eq!(analysis.value["value"]["analysis"]["smiles"], "CC=CC");
+    assert_eq!(
+        analysis.value["value"]["analyzed_atoms"],
+        inserted["value"]["inserted"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn drawn_plain_alkene_geometry_still_defines_e_and_z_for_agent_analysis() {
+    use crate::document::Point;
+
+    let host = host();
+    for (last_y, expected) in [(-30., "C/C=C/C"), (30., "C/C=C\\C")] {
+        let mut doc = Document::default();
+        let atoms: Vec<_> = [
+            Point::new(-30., 30.),
+            Point::new(0., 0.),
+            Point::new(42., 0.),
+            Point::new(72., last_y),
+        ]
+        .into_iter()
+        .map(|position| doc.add_atom("C", position))
+        .collect();
+        for (index, pair) in atoms.windows(2).enumerate() {
+            doc.add_bond(pair[0], pair[1], if index == 1 { 2 } else { 1 }, "plain");
+        }
+        assert!(!doc.bonds[1].stereo_authoritative);
+        assert_eq!(doc.bonds[1].stereo, None);
+        assert!(
+            crate::chemistry::stereo_lint::undefined(&doc)
+                .bonds
+                .is_empty()
+        );
+        let created = host.store().create(&Principal::local(), doc).unwrap();
+        let analysis = host
+            .call(call(
+                "analyze",
+                json!({"document": created.handle, "ids": null}),
+            ))
+            .await
+            .unwrap();
+        assert!(!analysis.is_error, "{:?}", analysis.value);
+        assert_eq!(analysis.value["value"]["analysis"]["smiles"], expected);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mol_and_auto_detected_mol_import_alike() {
     let host = host();
     for format in ["mol", "auto"] {

@@ -163,7 +163,15 @@ fn write_drawing_part(
         }
     }
     let detached;
-    let molecule = if has_projected_coordinates(doc) {
+    // Authoritative absence prevents identifiers from inferring stereo from
+    // XY, but a plain 2D drawing can keep those coordinates in a MOL file:
+    // the writer marks an unspecified stereogenic double bond as crossed.
+    let molecule = if doc
+        .bonds
+        .iter()
+        .any(|bond| bond.projection || bond.stereo_authoritative && bond.stereo.is_some())
+        || doc.atoms.iter().any(|atom| atom.depth != 0.)
+    {
         detached = interchange_depiction(molecule)?;
         &detached
     } else {

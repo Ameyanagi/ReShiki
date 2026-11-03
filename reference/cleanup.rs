@@ -172,6 +172,7 @@ async fn complete_cleanup_matches_original_worker_and_captured_layouts() -> anyh
                     Some(
                         native_response::analyze_prepared(
                             Arc::new(molecule),
+                            false,
                             Some(native_response::Config::new(helper.clone())),
                         )
                         .await?,
@@ -327,6 +328,7 @@ async fn malformed_layouts_fixed_atoms_and_helper_failures_are_atomic() -> anyho
     let temporary = tempfile::tempdir()?;
     let error = native_response::analyze_prepared(
         Arc::new(cleaned.molecule.context("Missing molecule")?),
+        false,
         Some(native_response::Config::new(
             temporary.path().join("missing-helper"),
         )),
