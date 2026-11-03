@@ -470,14 +470,14 @@ fn chemical_name_formatting_replaces_selected_annotation_spans_in_one_undo() {
 #[test]
 fn chemical_name_formatting_is_stable_when_applied_again_to_superscript_spans() {
     let mut app = selected_caption();
-    app.tab.doc.annotations[0].text = "N'-5lambda^6-3a^1-tricyclo[3.2.2.0^{1,5}]nonane".into();
+    app.tab.doc.annotations[0].text = "N1,N'-5lambda^6-3a^1-tricyclo[3.2.2.0^{1,5}]nonane".into();
     let before = app.tab.doc.clone();
     let _ = app.update(Message::FormatChemicalName);
     assert!(!app.error, "{}", app.status);
     let formatted = app.tab.doc.clone();
     assert_eq!(
         formatted.annotations[0].text,
-        "N′-5λ6-3a1-tricyclo[3.2.2.01,5]nonane"
+        "N1,N′-5λ6-3a1-tricyclo[3.2.2.01,5]nonane"
     );
     assert_eq!(
         formatted.annotations[0]
@@ -487,7 +487,7 @@ fn chemical_name_formatting_is_stable_when_applied_again_to_superscript_spans() 
             .filter(|span| span.style.script == Script::Superscript)
             .map(|span| &formatted.annotations[0].text[span.start..span.end])
             .collect::<Vec<_>>(),
-        ["6", "1", "1,5"]
+        ["1", "6", "1", "1,5"]
     );
     let _ = app.update(Message::FormatChemicalName);
     assert_eq!(app.tab.doc, formatted);

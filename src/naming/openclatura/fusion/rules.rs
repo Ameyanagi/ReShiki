@@ -142,6 +142,13 @@ pub fn component_parent_eligible(
     if !spec.usable_as_peri_parent || !spec.usable_as_attached || spec.rings.len() < 2 {
         return false;
     }
+    component_has_peri_fusion(component, spec, components)
+}
+pub(super) fn component_has_peri_fusion(
+    component: &FusionComponentMatch,
+    spec: &FusionComponentSpec,
+    components: &[FusionComponentMatch],
+) -> bool {
     components
         .iter()
         .filter(|o| component.covered_face_ids.is_disjoint(&o.covered_face_ids))

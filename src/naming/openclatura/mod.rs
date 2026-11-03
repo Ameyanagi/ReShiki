@@ -160,6 +160,25 @@ pub(super) fn name_smiles_with_style(
     }
     let status = mol.name_status();
     let mut alternatives = vec![];
+    if mol.has_higher_order_fusion_alternative() {
+        // FR-3.5 / P-25.3.5: retain the pre-regrouping citation for general use.
+        // Cloning discards fusion plans cached under the preferred component policy.
+        let higher_order = mol.clone();
+        higher_order.set_benzoheterocycle_names(false);
+        let alternative = component_namer::name_component(&higher_order, &components[0]);
+        mol.set_benzoheterocycle_names(true);
+        mol.set_name_status(status);
+        if let Ok(alternative) = alternative
+            && alternative != text
+        {
+            alternatives.push(crate::naming::AlternativeName {
+                name: nest_enclosing_marks(&alternative),
+                status: crate::naming::NameStatus::NotPreferred(
+                    crate::naming::NameReason::HigherOrderFusion,
+                ),
+            });
+        }
+    }
     if mol.has_relative_ring_alternative() {
         mol.set_relative_ring_names(true);
         mol.set_name_status(status);
@@ -937,7 +956,7 @@ mod tests {
             ),
             (
                 "c1oc2cc3nc4ccccc4nc3cc2c1",
-                "benzofuro[5,6-b]benzo[e]pyrazine",
+                "furo[2,3-g]benzo[b]quinoxaline",
                 R::OpsinFusionLayout,
             ),
         ] {
@@ -979,7 +998,7 @@ mod tests {
         let name = name_smiles(smiles).unwrap().text;
         assert_eq!(
             name,
-            "2-([1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"
+            "2-([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid"
         );
         let request = crate::naming::local::parse_request(&name).unwrap();
         let reply = crate::naming::worker::respond(&request).unwrap();
