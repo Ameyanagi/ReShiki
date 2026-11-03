@@ -1,6 +1,5 @@
 use opsin::{
     Axis, ParseOptions, Parser, Status, Structure,
-    cip::CipSequenceRules,
     graph::{AxialStereo, Graph},
     smiles,
 };
@@ -26,7 +25,7 @@ fn written_axis(name: &str, expected: &str, locant: &str) -> (String, Vec<Option
     let (text, locants, axes) = structure.semantic_cxsmiles_with_locants_and_axes().unwrap();
     assert_eq!(axes.len(), 1, "{name}");
     let axis = axes.into_iter().next().unwrap();
-    assert_eq!(axis.clockwise, expected == "P", "{name}");
+    assert_eq!(axis.descriptor, expected, "{name}");
     if [bond.from, bond.to]
         .iter()
         .any(|atom| structure.principal_parent_atoms.contains(atom))
@@ -58,19 +57,31 @@ fn written_axis(name: &str, expected: &str, locant: &str) -> (String, Vec<Option
                 .is_some()
         );
     }
-    // The graph stores the high-CIP (last) ligand, rather than merely choosing
-    // whichever ligand happens to be encountered first.
+    // Native indices enumerate active construction atoms in increasing AtomId
+    // order. Each reference is the first nonaxis neighbour in that order.
     let stereo = bond.axial_stereo.as_ref().unwrap();
+    assert_eq!(stereo.descriptor, expected, "{name}");
+    assert_eq!(axis.clockwise, stereo.clockwise, "{name}");
     for (end, partner, reference) in [
         (bond.from, bond.to, stereo.refs[0]),
         (bond.to, bond.from, stereo.refs[1]),
     ] {
-        let order = CipSequenceRules::for_axis(&structure.graph, end)
-            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(partner)
+        let carrier = structure
+            .graph
+            .atom(end)
+            .bonds
+            .iter()
+            .filter_map(|&id| {
+                let bond = structure.graph.bond(id);
+                bond.active.then(|| bond.other_atom(end)).flatten()
+            })
+            .filter(|&atom| atom != partner && structure.graph.atom(atom).active)
+            .min()
             .unwrap();
-        assert_eq!(order.len(), 2);
-        assert_eq!(order.last(), Some(&reference));
+        assert_eq!(reference, carrier, "{name}");
     }
+    // Check consistency after reimporting the exported SMILES and translating
+    // its reference neighbours into the native bond carrier convention.
     let mut native = reshiki_chemistry::smiles::read(&text)
         .unwrap()
         .prepared
@@ -114,46 +125,71 @@ fn written_axis(name: &str, expected: &str, locant: &str) -> (String, Vec<Option
     assert_eq!(
         labelled.state.properties.bond_codes[native_bond].as_deref(),
         Some(expected),
-        "{name}: independent CIP disagreement"
+        "{name}: native CIP reimport consistency disagreement"
     );
     (text, locants, axis)
 }
 
+fn check_both_axis_hands_and_general_descriptors(base: &str, locant: &str) {
+    let m = written_axis(&format!("({locant}M)-{base}"), "M", locant);
+    let p = written_axis(&format!("({locant}P)-{base}"), "P", locant);
+    assert_eq!(m.0, p.0, "{base}");
+    assert_eq!(m.1, p.1, "{base}");
+    assert_eq!(m.2.atoms, p.2.atoms, "{base}");
+    assert_eq!(m.2.refs, p.2.refs, "{base}");
+    assert_ne!(m.2.clockwise, p.2.clockwise, "{base}");
+    for (descriptor, expected, axis) in [("Ra", "M", m), ("Sa", "P", p)] {
+        assert_eq!(
+            axis,
+            written_axis(&format!("({locant}{descriptor})-{base}"), expected, locant),
+            "{base}"
+        );
+    }
+}
+
 #[test]
-fn axial_cip_includes_the_root_duplicate_for_a_naphthyl_ligand() {
-    let structure = parse("(2P)-2-[2-(hydroxymethyl)naphthalen-1-yl]-3,5-dimethylphenol");
-    let bond = structure
-        .graph
-        .fragment(structure.fragment)
-        .bonds
-        .iter()
-        .map(|&id| structure.graph.bond(id))
-        .find(|bond| bond.axial_stereo.is_some())
-        .unwrap();
-    let (end, partner) = if structure
-        .graph
-        .atom(bond.from)
-        .locants
-        .contains(&"1".into())
-    {
-        (bond.from, bond.to)
-    } else {
-        (bond.to, bond.from)
-    };
-    let ordinary = CipSequenceRules::new(&structure.graph, end)
-        .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(partner)
-        .unwrap();
-    let axial = CipSequenceRules::for_axis(&structure.graph, end)
-        .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(partner)
-        .unwrap();
-    assert_ne!(ordinary, axial);
-    assert!(
-        structure
-            .graph
-            .atom(*axial.last().unwrap())
-            .locants
-            .contains(&"2".into())
-    );
+fn axial_carriers_follow_native_atom_order_across_cip_priority_cases() {
+    for (base, locant) in [
+        ("[1,1'-biphenyl]-2-ol-2'-d", "1"),
+        ("2-methyl[1,1'-biphenyl]-2'-d", "1"),
+        ("2-bromo[1,1'-biphenyl]-2'-d", "1"),
+        ("2-[2-methyl-6-(propan-2-yl)pyridin-4-yl]phenol", "2"),
+        ("2-[2-ethyl-6-(propan-2-yl)pyridin-4-yl]phenol", "2"),
+        ("2-(2-methyl-6-phenylpyridin-4-yl)phenol", "2"),
+    ] {
+        check_both_axis_hands_and_general_descriptors(base, locant);
+    }
+}
+
+#[test]
+fn axial_locants_follow_the_annotated_component_namespace() {
+    for (base, locant) in [
+        (
+            "2-[2-(hydroxymethyl)naphthalen-1-yl]-3,5-dimethylphenol",
+            "2",
+        ),
+        ("[1,1'-binaphthalene]-2,2'-diol", "1"),
+        (
+            "2'-hydroxy[1,1'-binaphthalen]-2-yl (1S)-2,2-dimethylcyclopropane-1-carboxylate",
+            "1",
+        ),
+    ] {
+        check_both_axis_hands_and_general_descriptors(base, locant);
+    }
+}
+
+#[test]
+fn axial_locants_do_not_fall_back_to_a_substituent_namespace() {
+    for base in [
+        "2-[2-(hydroxymethyl)naphthalen-1-yl]-3,5-dimethylphenol",
+        "2-(2-hydroxyphenyl)phenol",
+    ] {
+        for descriptor in ["M", "P", "Ra", "Sa"] {
+            let name = format!("(1{descriptor})-{base}");
+            let result = Parser::new().unwrap().parse(&name, &ParseOptions::strict());
+            assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+        }
+    }
 }
 
 #[test]
@@ -262,7 +298,8 @@ fn fragment_copy_remaps_both_axial_references() {
         structure.graph.bond(copied_bond).axial_stereo,
         Some(AxialStereo {
             refs: original_stereo.refs.map(mapped),
-            clockwise: true,
+            clockwise: original_stereo.clockwise,
+            descriptor: original_stereo.descriptor.clone(),
         })
     );
 }

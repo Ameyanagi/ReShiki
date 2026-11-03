@@ -76,6 +76,7 @@ pub(super) struct Axis {
     pub atoms: [usize; 2],
     pub refs: [usize; 2],
     pub clockwise: bool,
+    pub descriptor: String,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -190,6 +191,7 @@ fn parse(name: String, generation: bool) -> Result<Response, String> {
                 atoms: axis.atoms,
                 refs: axis.refs,
                 clockwise: axis.clockwise,
+                descriptor: axis.descriptor,
             })
             .collect(),
     }))

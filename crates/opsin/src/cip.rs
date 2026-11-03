@@ -43,26 +43,11 @@ impl std::error::Error for CipOrderingError {}
 pub struct CipSequenceRules<'a> {
     graph: &'a Graph,
     chiral_atom: AtomId,
-    axial: bool,
 }
 
 impl<'a> CipSequenceRules<'a> {
     pub const fn new(graph: &'a Graph, chiral_atom: AtomId) -> Self {
-        Self {
-            graph,
-            chiral_atom,
-            axial: false,
-        }
-    }
-
-    /// Axial ligand comparison retains multiple-bond duplicates back to the
-    /// axis end. Tetrahedral comparison excludes these root duplicates.
-    pub const fn for_axis(graph: &'a Graph, axis_end: AtomId) -> Self {
-        Self {
-            graph,
-            chiral_atom: axis_end,
-            axial: true,
-        }
+        Self { graph, chiral_atom }
     }
 
     pub fn get_neighbouring_atoms_in_cip_order(&self) -> Result<Vec<AtomId>, CipOrderingError> {
@@ -232,10 +217,9 @@ impl<'a> CipSequenceRules<'a> {
             })?;
             let other_atom = self.atom(other)?;
             let origin = node.visited.iter().position(|&ancestor| ancestor == other);
-            if self.axial || other != self.chiral_atom {
-                // Tetrahedral root bonds do not create duplicates
+            if other != self.chiral_atom {
+                // Higher-order bonds to the root itself do not create duplicates
                 // (P-91.1.4.2.4), including e.g. the oxygen of a sulfoxide.
-                // Axis ends retain them for ligand comparisons in a ring.
                 for _ in 1..bond.order {
                     neighbours.push(Node::ghost(
                         other_atom.element,

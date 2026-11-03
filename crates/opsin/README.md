@@ -48,8 +48,11 @@ The native biaryl extension also interprets locanted M/P and Ra/Sa axial
 descriptors (Ra = M, Sa = P). Use
 `Structure::semantic_cxsmiles_with_locants_and_axes` to export these structures:
 its axes and principal-parent locants share the accompanying SMILES atom order.
-Each axis includes its two endpoints, the higher-CIP reference at each end,
-and clockwise rotation for P. The SMILES-only semantic methods return an error
-when the structure has an axis, because SMILES cannot retain that configuration.
+Each axis includes its two endpoints, a reference neighbour at each end, the
+rotation from the first reference to the second looking along the endpoint
+order, and the requested M/P descriptor. Native CIP assigns the configuration
+using isotope masses and resonance-averaged mancude duplicates. The SMILES-only
+semantic methods return an error when the structure has an axis, because SMILES
+cannot retain that configuration.
 Unlocanted helicity, planar Rp/Sp and unresolved ligand priorities remain
 uninterpretable. See the native resource extension in [provenance](provenance/README.md).

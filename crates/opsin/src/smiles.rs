@@ -703,6 +703,7 @@ pub fn write_semantic_cxsmiles_with_locants_and_axes(
             atoms: [index(bond.from)?, index(bond.to)?],
             refs: [index(stereo.refs[0])?, index(stereo.refs[1])?],
             clockwise: stereo.clockwise,
+            descriptor: stereo.descriptor.clone(),
         });
     }
     let parent: HashSet<_> = principal_parent_atoms.iter().copied().collect();

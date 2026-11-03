@@ -65,10 +65,13 @@ pub const PORT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Axis {
     pub atoms: [usize; 2],
-    /// Higher-CIP neighbour at each corresponding axis end.
+    /// Reference neighbour at each corresponding axis end.
     pub refs: [usize; 2],
-    /// Clockwise rotation of the high-CIP references is P, otherwise M.
+    /// Whether the rotation from `refs[0]` to `refs[1]` is clockwise when
+    /// looking from `atoms[0]` to `atoms[1]`.
     pub clockwise: bool,
+    /// Requested CIP descriptor, normalized to M or P.
+    pub descriptor: String,
 }
 
 /// Semantic SMILES, parent locants, and axes in the same written atom order.

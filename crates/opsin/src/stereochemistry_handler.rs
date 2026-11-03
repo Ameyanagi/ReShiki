@@ -15,7 +15,8 @@ use crate::graph::{
 use crate::parse_tree::{Arena, NodeId};
 use crate::stereo_analyser::{StereoBond, StereoCentre};
 use crate::xml_declarations::*;
-use std::collections::{BTreeMap, HashMap};
+use reshiki_chemistry::stereo::{cip::label, perception::State};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
 /// Upstream warning mode catches StereochemistryException (including CIP
@@ -440,9 +441,9 @@ impl<'a> StereochemistryHandler<'a> {
     }
     fn assign_axial_stereo(&mut self, id: NodeId) -> Result {
         let value = self.attr(id, VALUE_ATR);
-        let clockwise = match value.as_str() {
-            "M" | "Ra" => false,
-            "P" | "Sa" => true,
+        let descriptor = match value.as_str() {
+            "M" | "Ra" => "M",
+            "P" | "Sa" => "P",
             _ => {
                 return stereo(format!(
                     "{AXIAL_TYPE_VAL} stereochemistry is not currently interpretable by OPSIN"
@@ -454,7 +455,7 @@ impl<'a> StereochemistryHandler<'a> {
                 "{AXIAL_TYPE_VAL} stereochemistry is not currently interpretable by OPSIN"
             ));
         };
-        let (native, indices) = crate::modern_cip::state(self.graph())?;
+        let (mut native, indices) = crate::modern_cip::state(self.graph())?;
         let rings = reshiki_chemistry::rings::perceive(
             &native.graph,
             reshiki_chemistry::rings::Options::default(),
@@ -462,29 +463,19 @@ impl<'a> StereochemistryHandler<'a> {
         .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
         let aromatic = reshiki_chemistry::aromaticity::perceive(&native.graph, &rings.atoms)
             .map_err(StereochemistryError::Uninterpretable)?;
-        // The upstream CIP traversal uses a fixed Kekulé form. Aromatic
-        // symmetry must therefore be checked before trusting its ligand order.
-        let symmetry = reshiki_chemistry::ranking::rank(
-            &aromatic.graph,
-            &rings.atoms,
-            &reshiki_chemistry::ranking::Metadata::unspecified(&aromatic.graph),
-            reshiki_chemistry::ranking::Options {
-                break_ties: false,
-                include_chirality: false,
-                ..Default::default()
-            },
-        )
-        .map_err(StereochemistryError::Uninterpretable)?;
-        let aryl_atoms: HashMap<_, _> = indices
-            .into_iter()
-            .filter_map(|(atom, index)| {
-                aromatic.graph.atoms[index]
-                    .aromatic
-                    .then_some((atom, symmetry[index]))
-            })
+        let aryl_atoms: HashSet<_> = indices
+            .iter()
+            .filter_map(|(&atom, &index)| aromatic.graph.atoms[index].aromatic.then_some(atom))
             .collect();
         for fragment in self.possible_fragments(id)? {
-            if self.attempt_assign_axial_stereo(fragment, &locant, clockwise, &aryl_atoms)? {
+            if self.attempt_assign_axial_stereo(
+                fragment,
+                &locant,
+                descriptor,
+                &aryl_atoms,
+                &mut native,
+                &indices,
+            )? {
                 return Ok(());
             }
         }
@@ -507,8 +498,10 @@ impl<'a> StereochemistryHandler<'a> {
                     if self.attempt_assign_axial_stereo(
                         self.fragment(group)?,
                         &locant,
-                        clockwise,
+                        descriptor,
                         &aryl_atoms,
+                        &mut native,
+                        &indices,
                     )? {
                         return Ok(());
                     }
@@ -522,8 +515,10 @@ impl<'a> StereochemistryHandler<'a> {
         &mut self,
         fragment: FragmentId,
         locant: &str,
-        clockwise: bool,
-        aryl_atoms: &HashMap<AtomId, u32>,
+        descriptor: &str,
+        aryl_atoms: &HashSet<AtomId>,
+        native: &mut State,
+        indices: &HashMap<AtomId, usize>,
     ) -> Result<bool> {
         let Some(atom) = self.graph().atom_by_locant(fragment, locant) else {
             return Ok(false);
@@ -539,7 +534,7 @@ impl<'a> StereochemistryHandler<'a> {
                 bond.order == 1
                     && !crate::cycle_detector::is_bond_in_cycle(self.graph(), id)
                     && [bond.from, bond.to].into_iter().all(|end| {
-                        aryl_atoms.contains_key(&end)
+                        aryl_atoms.contains(&end)
                             && self.graph().neighbours(end).len() == 3
                             && self
                                 .graph()
@@ -550,7 +545,9 @@ impl<'a> StereochemistryHandler<'a> {
             })
             .collect();
         let bond = match candidates.as_slice() {
-            [] => return Ok(false),
+            // The first fragment containing the locant owns its namespace;
+            // a non-axis parent atom cannot fall through to a substituent.
+            [] => return stereo(format!("Could not find a biaryl axis at locant {locant}")),
             [bond] => *bond,
             _ => return stereo(format!("More than one biaryl axis at locant {locant}")),
         };
@@ -560,18 +557,40 @@ impl<'a> StereochemistryHandler<'a> {
                 "Duplicate or conflicting axial stereochemistry at locant {locant}"
             ));
         }
-        let first = CipSequenceRules::for_axis(self.graph(), axis.from)
-            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(axis.to)?;
-        let second = CipSequenceRules::for_axis(self.graph(), axis.to)
-            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(axis.from)?;
-        if aryl_atoms.get(&first[0]) == aryl_atoms.get(&first[1])
-            || aryl_atoms.get(&second[0]) == aryl_atoms.get(&second[1])
-        {
-            return Err(CipOrderingError::UnresolvedTie.into());
+        // Use the same full CIP rules as native perception, including isotope
+        // masses and resonance-averaged mancude duplicates. Its axial carriers
+        // are the lowest-index non-axis neighbours, not the high-CIP ligands.
+        let refs = [(axis.from, axis.to), (axis.to, axis.from)].map(|(end, partner)| {
+            self.graph()
+                .neighbours(end)
+                .into_iter()
+                .filter(|&atom| atom != partner)
+                .min_by_key(|atom| indices[atom])
+                .unwrap()
+        });
+        let native_bond = native
+            .graph
+            .bonds
+            .iter()
+            .position(|bond| bond.a == indices[&axis.from] && bond.b == indices[&axis.to])
+            .unwrap();
+        native.metadata.bonds[native_bond].stereo = 6;
+        let mut labelled = label::assign(native, &Default::default())
+            .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
+        if labelled.state.properties.bond_codes[native_bond].as_deref() != Some(descriptor) {
+            native.metadata.bonds[native_bond].stereo = 7;
+            labelled = label::assign(native, &Default::default())
+                .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
+        }
+        if labelled.state.properties.bond_codes[native_bond].as_deref() != Some(descriptor) {
+            return stereo(format!(
+                "Could not assign {descriptor} to the axis at locant {locant}"
+            ));
         }
         self.state.graph_mut().bond_mut(bond).axial_stereo = Some(AxialStereo {
-            refs: [*first.last().unwrap(), *second.last().unwrap()],
-            clockwise,
+            refs,
+            clockwise: native.metadata.bonds[native_bond].stereo == 6,
+            descriptor: descriptor.into(),
         });
         Ok(true)
     }

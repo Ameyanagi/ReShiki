@@ -5,7 +5,8 @@ use crate::{
     molecule_names::{AXIS_M, AXIS_P, canonical_identity},
 };
 
-// BINOL, with the 1--11 axis horizontal in chemistry coordinates (Y up).
+// [2,2'-Binaphthalene]-1,1'-diol from #892, with the 1--11 axis joining
+// naphthalene beta carbons horizontally in chemistry coordinates (Y up).
 pub(crate) fn binol(display: &str) -> Document {
     let mut doc = Document::default();
     let positions = [
@@ -209,7 +210,7 @@ fn mirrored_biaryl_axis_invalidates_a_generated_name_caption() {
         let caption = molecule_names::show(
             &mut doc,
             &ids,
-            "(1M)-[1,1'-binaphthalene]-2,2'-diol".into(),
+            "(2M)-2-(1-hydroxynaphthalen-2-yl)naphthalen-1-ol".into(),
             identity.clone(),
             TextFormat::default(),
             true,

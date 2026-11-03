@@ -121,12 +121,15 @@ pub struct BondStereo {
     pub atom_refs: [AtomId; 4],
     pub value: BondStereoValue,
 }
-/// Biaryl axial configuration with one high-CIP reference at each bond end.
-/// References follow the owning bond's `from`/`to` order. Clockwise is P.
+/// Biaryl axial configuration with one reference at each bond end.
+/// Clockwise is the rotation from `refs[0]` to `refs[1]` looking from the
+/// owning bond's `from` atom to its `to` atom.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AxialStereo {
     pub refs: [AtomId; 2],
     pub clockwise: bool,
+    /// Requested CIP descriptor, normalized to M or P.
+    pub descriptor: String,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BondDirection {
@@ -804,6 +807,7 @@ impl Graph {
                 self.bond_mut(new).axial_stereo = Some(AxialStereo {
                     refs: [mapped(stereo.refs[0])?, mapped(stereo.refs[1])?],
                     clockwise: stereo.clockwise,
+                    descriptor: stereo.descriptor,
                 });
             }
         }

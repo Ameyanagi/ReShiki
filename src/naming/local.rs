@@ -319,10 +319,10 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
             }
             metadata.stereo = if clockwise { 6 } else { 7 };
             metadata.stereo_atoms = carriers;
-            axes.push((index, if axis.clockwise { "P" } else { "M" }));
+            axes.push((index, axis.descriptor.as_str()));
         }
-        // OPSIN built the winding from its own CIP ranking; ReShiki's CIP must
-        // give the same descriptor, since InChI cannot check the axis.
+        // Verify the requested descriptor after transferring references into
+        // the SMILES atom order, since InChI cannot check the axis.
         let labelled = crate::chemistry::stereo::cip::label::assign(&state, &Default::default())
             .map_err(|error| Error::Rejected(error.to_string()))?;
         if axes.iter().any(|&(index, descriptor)| {
