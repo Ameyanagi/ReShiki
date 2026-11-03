@@ -67,7 +67,7 @@ fn side_replacement_prefixes(parts: &AssemblyParts) -> Vec<String> {
             p
         })
         .collect();
-    let mut replacement = format_replacement_prefixes(&local);
+    let (mut replacement, _) = format_replacement_prefixes(&local);
     if is_systematic_fusion(parts)
         && let Some(plan) = &parts.fusion_plan
         && !plan.lambda_descriptors.is_empty()
@@ -478,7 +478,7 @@ pub fn spiro_assembly_from_parts(
     if let Some(group) = &local.principal_group
         && !local.retained_absorbs_principal_group
     {
-        let (terminal, suffix) = format_principal_suffix(&local, &parent_terminal)?;
+        let (terminal, suffix, _) = format_principal_suffix(&local, &parent_terminal)?;
         let Some(base) = name.strip_suffix(&suffix).filter(|_| !suffix.is_empty()) else {
             return Err("openclatura: spiro side suffix must match shared parent assembly".into());
         };
@@ -710,6 +710,16 @@ fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
         .collect();
     parts.parent_atom_isotopes_by_locant =
         std::mem::take(&mut parts.parent_atom_isotopes_by_locant)
+            .into_iter()
+            .map(|(l, v)| (prime(&l), v))
+            .collect();
+    parts.parent_atom_hydrogens_by_locant =
+        std::mem::take(&mut parts.parent_atom_hydrogens_by_locant)
+            .into_iter()
+            .map(|(l, v)| (prime(&l), v))
+            .collect();
+    parts.parent_external_bonds_by_locant =
+        std::mem::take(&mut parts.parent_external_bonds_by_locant)
             .into_iter()
             .map(|(l, v)| (prime(&l), v))
             .collect();

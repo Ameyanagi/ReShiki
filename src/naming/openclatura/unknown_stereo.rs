@@ -269,6 +269,12 @@ mod tests {
                 &["1=2"],
                 "(Ξ)-cyclononene",
             ),
+            (
+                "O=C(O)[CH:900001](F)Cl",
+                "chlorofluoroacetic acid",
+                &["2"],
+                "(Ξ)-chlorofluoroacetic acid",
+            ),
             // Unlocanted descriptors are scoped by their substituent brackets.
             (
                 "F[CH:900001](Cl)c1ccc([CH:900001](F)Br)cc1",

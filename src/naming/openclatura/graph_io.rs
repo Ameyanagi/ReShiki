@@ -89,6 +89,9 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
         None
     };
     let mut mol = Molecule::new();
+    let (atoms, bonds) = perception::stereogenic_units(&legacy)?;
+    mol.stereogenic_atoms = atoms.into_iter().collect();
+    mol.stereogenic_bonds = bonds.into_iter().map(|idx| idx + 1).collect();
     mol.legacy_cip = atom_cip(&legacy);
     mol.accurate_cip = accurate.as_ref().map_or_else(BTreeMap::new, atom_cip);
 
@@ -133,6 +136,9 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
             .get(usize::from(atom.atomic_number))
             .ok_or("Unknown naming element")?
             .symbol;
+        if stereo.is_some() {
+            mol.stereogenic_atoms.insert(idx);
+        }
         mol.add_atom(Atom {
             idx,
             symbol: symbol.into(),

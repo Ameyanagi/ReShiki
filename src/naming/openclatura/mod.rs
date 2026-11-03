@@ -485,7 +485,7 @@ mod tests {
             ),
             (
                 "CN(CC(=O)O)Nc1cnc(CO)cn1",
-                "2-({[5-(hydroxymethyl)pyrazin-2-yl]amino}(methyl)amino)acetic acid",
+                "({[5-(hydroxymethyl)pyrazin-2-yl]amino}(methyl)amino)acetic acid",
             ),
             (
                 "C[S@@](=O)CSCNN",
@@ -500,7 +500,7 @@ mod tests {
             ),
             (
                 "OC(=O)CC1CC2CCC1C2",
-                "2-(bicyclo[2.2.1]heptan-2-yl)acetic acid",
+                "(bicyclo[2.2.1]heptan-2-yl)acetic acid",
             ),
             (
                 "CC(=O)NC12C=C1BNC2",
@@ -508,14 +508,26 @@ mod tests {
             ),
             (
                 "OC(=O)Cc1ccc(cc1)-c1c[nH]c2ncccc12",
-                "2-[4-(1H-pyrrolo[2,3-b]pyridin-3-yl)phenyl]acetic acid",
+                "[4-(1H-pyrrolo[2,3-b]pyridin-3-yl)phenyl]acetic acid",
             ),
             (
                 "CC(=O)N[C@@H]1CCN2C=CN[C@H]12",
                 "N-[(7R,7aS)-5,6,7,7a-tetrahydro-1H-pyrrolo[1,2-a]imidazol-7-yl]acetamide",
             ),
         ] {
-            assert_eq!(name_smiles(smiles).unwrap().text, expected, "{smiles}");
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            if expected.ends_with("acetic acid") {
+                let request = crate::naming::local::parse_request(&name.text).unwrap();
+                let reply = crate::naming::worker::respond(&request).unwrap();
+                let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+                assert_eq!(
+                    crate::naming::canonical_smiles(smiles).unwrap(),
+                    crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                    "{}",
+                    name.text
+                );
+            }
         }
     }
 
@@ -594,7 +606,7 @@ mod tests {
                 "COS(=O)(=O)c1ccc(C(=O)O)cc1",
                 "4-(methoxysulfonyl)benzoic acid",
             ),
-            ("COS(=O)(=O)NCC(=O)O", "2-methoxysulfonylaminoacetic acid"),
+            ("COS(=O)(=O)NCC(=O)O", "methoxysulfonylaminoacetic acid"),
             // Sulfonyl and sulfinyl prefixes are named from the acid (P-65.3.2.2.2).
             ("CS(=O)(=O)c1ccccc1", "(methanesulfonyl)benzene"),
             ("C[S@](=O)c1ccccc1", "[(S)-methanesulfinyl]benzene"),
@@ -615,7 +627,7 @@ mod tests {
                 "CS(=O)(=O)OCCC(=O)O",
                 "3-[(methanesulfonyl)oxy]propanoic acid",
             ),
-            ("OC(=O)CS(=O)(=O)c1ccccc1", "2-(benzenesulfonyl)acetic acid"),
+            ("OC(=O)CS(=O)(=O)c1ccccc1", "(benzenesulfonyl)acetic acid"),
             ("OS(=O)(=O)ON=C1CCCCC1", "N-(sulfooxy)cyclohexanimine"),
             // Substituted anisoles take systematic PINs (P-63.2.3).
             ("COc1ccc(Cl)cc1", "1-chloro-4-methoxybenzene"),
@@ -677,18 +689,18 @@ mod tests {
             ("NC(=O)C(N)=O", "oxamide"),
             ("C#[N+][O-]", "formonitrile oxide"),
             ("CC#[N+][O-]", "acetonitrile oxide"),
-            ("ClCC#[N+][O-]", "2-chloroacetonitrile oxide"),
+            ("ClCC#[N+][O-]", "chloroacetonitrile oxide"),
             // Anilino (P-62.2.1.1.1) and carbamimidoylamino (P-66.4.1.2.1.3)
             // prefixes; contractions still read anilino as phenylamino.
-            ("O=C(O)CNc1ccccc1", "2-anilinoacetic acid"),
+            ("O=C(O)CNc1ccccc1", "anilinoacetic acid"),
             (
                 "OC(=O)c1ccc(N(c2ccccc2)c2ccccc2)cc1",
                 "4-(N-phenylanilino)benzoic acid",
             ),
-            ("NC(=N)NCC(=O)O", "2-(carbamimidoylamino)acetic acid"),
+            ("NC(=N)NCC(=O)O", "(carbamimidoylamino)acetic acid"),
             (
                 "CN(C(=N)N)CC(=O)O",
-                "2-[carbamimidoyl(methyl)amino]acetic acid",
+                "[carbamimidoyl(methyl)amino]acetic acid",
             ),
             ("COC(=O)Nc1ccccc1", "methyl phenylcarbamate"),
             (
@@ -713,11 +725,11 @@ mod tests {
             // parent hydride or is complex (P-16.5.1.4, P-16.5.1.1).
             (
                 "CS(=O)(=O)SCC(=O)O",
-                "2-[(methanesulfonyl)sulfanyl]acetic acid",
+                "[(methanesulfonyl)sulfanyl]acetic acid",
             ),
-            ("CC(C)OOCC(=O)O", "2-[(propan-2-yl)peroxy]acetic acid"),
-            ("CC(=S)SCC(=O)O", "2-[(ethanethioyl)sulfanyl]acetic acid"),
-            ("CC(=S)OOCC(=O)O", "2-[(ethanethioyl)peroxy]acetic acid"),
+            ("CC(C)OOCC(=O)O", "[(propan-2-yl)peroxy]acetic acid"),
+            ("CC(=S)SCC(=O)O", "[(ethanethioyl)sulfanyl]acetic acid"),
+            ("CC(=S)OOCC(=O)O", "[(ethanethioyl)peroxy]acetic acid"),
             // Prefixes are numbered and cited from their first Roman letter;
             // bracketed initial locants only break ties (P-14.5, P-14.5.4).
             (
@@ -743,6 +755,17 @@ mod tests {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            if expected.ends_with("acetic acid") || expected == "chloroacetonitrile oxide" {
+                let request = crate::naming::local::parse_request(&name.text).unwrap();
+                let reply = crate::naming::worker::respond(&request).unwrap();
+                let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+                assert_eq!(
+                    crate::naming::canonical_smiles(smiles).unwrap(),
+                    crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                    "{}",
+                    name.text
+                );
+            }
         }
     }
 
@@ -757,17 +780,17 @@ mod tests {
             ),
             (
                 "OC(=O)CS(=O)(=O)CS(=O)(=O)O",
-                "2-(sulfomethylsulfonyl)acetic acid",
+                "(sulfomethylsulfonyl)acetic acid",
                 R::SulfonylPrefix,
             ),
             (
                 "CNC(=N)NCC(=O)O",
-                "2-(3-methylguanidino)acetic acid",
+                "(3-methylguanidino)acetic acid",
                 R::AminoPrefix,
             ),
             (
                 "N/C(=N/[H])NCC(=O)O",
-                "2-[(Z)-guanidino]acetic acid",
+                "[(Z)-guanidino]acetic acid",
                 R::AminoPrefix,
             ),
             (
@@ -803,7 +826,7 @@ mod tests {
             ),
             (
                 "CN(C=O)C(=O)O",
-                "1-(N-methylformamido)formic acid",
+                "(N-methylformamido)formic acid",
                 R::UnretainedParent,
             ),
             ("O=C(O)Cl", "hydroxyformyl chloride", R::UnretainedParent),
@@ -820,7 +843,7 @@ mod tests {
             ),
             (
                 "O=C(O)OP(=O)(O)c1ccccn1",
-                "1-{[hydroxy(pyridin-2-yl)phosphoryl]oxy}formic acid",
+                "{[hydroxy(pyridin-2-yl)phosphoryl]oxy}formic acid",
                 R::UnretainedParent,
             ),
             (
@@ -887,7 +910,7 @@ mod tests {
             ),
             (
                 "S(CC(=O)O)CC(=O)O",
-                "2-[(2-hydroxy-2-oxoethyl)sulfanyl]acetic acid",
+                "[(2-hydroxy-2-oxoethyl)sulfanyl]acetic acid",
                 R::Multiplicative,
             ),
             (
@@ -911,6 +934,17 @@ mod tests {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::NotPreferred(reason), "{smiles}");
+            if expected.ends_with("acetic acid") || expected.ends_with("formic acid") {
+                let request = crate::naming::local::parse_request(&name.text).unwrap();
+                let reply = crate::naming::worker::respond(&request).unwrap();
+                let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+                assert_eq!(
+                    crate::naming::canonical_smiles(smiles).unwrap(),
+                    crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                    "{}",
+                    name.text
+                );
+            }
         }
     }
 
@@ -921,7 +955,7 @@ mod tests {
             ("NCC=O", "2-aminoethanal", R::SubstitutedRetainedParent),
             (
                 "OC(=O)Cc1ccc(cc1)C(=O)O",
-                "2-(4-carboxyphenyl)acetic acid",
+                "(4-carboxyphenyl)acetic acid",
                 R::PrincipalGroupTie,
             ),
             (
@@ -963,6 +997,17 @@ mod tests {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Unverified(reason), "{smiles}");
+            if expected.ends_with("acetic acid") {
+                let request = crate::naming::local::parse_request(&name.text).unwrap();
+                let reply = crate::naming::worker::respond(&request).unwrap();
+                let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+                assert_eq!(
+                    crate::naming::canonical_smiles(smiles).unwrap(),
+                    crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                    "{}",
+                    name.text
+                );
+            }
         }
     }
 
@@ -998,7 +1043,7 @@ mod tests {
         let name = name_smiles(smiles).unwrap().text;
         assert_eq!(
             name,
-            "2-([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid"
+            "([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid"
         );
         let request = crate::naming::local::parse_request(&name).unwrap();
         let reply = crate::naming::worker::respond(&request).unwrap();

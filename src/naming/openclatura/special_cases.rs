@@ -566,24 +566,31 @@ fn hydrazone_name(
     ylidene: &str,
 ) -> String {
     let name = format!("{parent} {ylidene}hydrazone");
-    let Some(stereo) = mol
-        .get_bond(carbon, nitrogen)
-        .and_then(|b| b.stereo.as_deref())
-        .filter(|stereo| matches!(*stereo, "E" | "Z"))
+    let Some(bond) = mol.get_bond(carbon, nitrogen) else {
+        return name;
+    };
+    let Some(stereo) = bond
+        .stereo
+        .as_deref()
+        .filter(|stereo| matches!(*stereo, "E" | "Z" | "Ξ"))
     else {
         return name;
     };
-    // P-91.3: the descriptor cites the C=N locant only when the name cites locants.
+    // Functional-class words obey the same positional-equivalence proof.
     let locant = parent
         .strip_suffix("-one")
         .and_then(|s| s.rsplit_once("an-"))
         .map(|(_, locant)| locant)
         .filter(|locant| !locant.is_empty() && locant.bytes().all(|b| b.is_ascii_digit()))
-        .unwrap_or(if name.contains(|c: char| c.is_ascii_digit()) {
-            "1"
-        } else {
-            ""
-        });
+        .unwrap_or(
+            if name.contains(|c: char| c.is_ascii_digit())
+                || !super::locant_elision::bond_stereo_locant_is_unambiguous(mol, bond.idx)
+            {
+                "1"
+            } else {
+                ""
+            },
+        );
     format!("({locant}{stereo})-{name}")
 }
 

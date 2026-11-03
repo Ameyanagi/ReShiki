@@ -298,8 +298,9 @@ fn respell_indicated_hydrogen(text: &str, respelled: &BTreeSet<String>) -> Optio
     })
 }
 
-fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> String {
+fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (String, bool) {
     let mut core = normalize_indicated_hydrogen_quota(parts, core);
+    let mut cites_locants = indicated_run(&core).is_some();
     let mut additive: Vec<_> = parts
         .hydro_operations
         .iter()
@@ -325,6 +326,7 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> Strin
     additive.sort_by_key(|l| parse_locant(l));
     additive.dedup();
     if !indicated.is_empty() {
+        cites_locants = true;
         let added: BTreeSet<_> = parts
             .hydro_operations
             .iter()
@@ -382,11 +384,12 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> Strin
             && (fully_hydrogenated_fusion
                 || additive.len() + indicated.len().max(stated) == parts.parent_length)
         {
-            return format!("{hydro}{sep}{core}");
+            return (format!("{hydro}{sep}{core}"), cites_locants);
         }
         core = format!("{}-{hydro}{sep}{core}", additive.join(","));
+        cites_locants = true;
     }
-    core
+    (core, cites_locants)
 }
 fn move_added_hydrogen(parts: &AssemblyParts, core: &str, suffix: &str) -> (String, String) {
     let added: BTreeSet<_> = parts
@@ -456,7 +459,7 @@ fn move_added_hydrogen(parts: &AssemblyParts, core: &str, suffix: &str) -> (Stri
         ),
     )
 }
-fn add_stereo(parts: &AssemblyParts, word: &str) -> String {
+fn add_stereo(parts: &AssemblyParts, word: &str, cites_locants: bool) -> String {
     let mut features = vec![];
     for feature in &parts.stereo_features {
         if !features.contains(&feature) {
@@ -476,24 +479,14 @@ fn add_stereo(parts: &AssemblyParts, word: &str) -> String {
             parse_locant(l)
         }
     });
-    // P-91.3: a single descriptor drops its locant when the word cites none,
-    // as in (E)-cyclooctene. Digits inside brackets belong to substituent,
-    // isotope, fusion or von Baeyer scopes, not to this word's locants.
-    let mut depth = 0;
-    let unlocanted_word = !word.chars().any(|character| match character {
-        '(' | '[' | '{' => {
-            depth += 1;
-            false
-        }
-        ')' | ']' | '}' => {
-            depth -= 1;
-            false
-        }
-        _ => depth == 0 && character.is_ascii_digit(),
-    });
     match features.as_slice() {
         [] => word.into(),
-        [(_, descriptor)] if unlocanted_word => format!("({descriptor})-{word}"),
+        [(_, descriptor)]
+            if !cites_locants
+                && super::locant_elision::single_stereo_locant_is_unambiguous(parts) =>
+        {
+            format!("({descriptor})-{word}")
+        }
         _ => format!(
             "({})-{word}",
             features
@@ -580,14 +573,20 @@ pub(super) fn assemble_name_with_parent(
     promote_retained_functional_parent(parts)?;
     let spiro_sides = super::assembly_spiro::split_spiro_substituents(parts)?;
     parts.spiro_prefix_composition = !spiro_sides.is_empty();
-    let prefix = format_substituent_prefixes(parts);
-    let a_prefix = format_replacement_prefixes(parts);
+    let (a_prefix, mut cites_locants) = format_replacement_prefixes(parts);
+    cites_locants |= !spiro_sides.is_empty();
     let core = if let Some(name) = fused_ion_candidate
         .as_ref()
         .and_then(|candidate| candidate.rendered_name())
     {
+        cites_locants |= name
+            .split('-')
+            .any(|run| run.starts_with(|c: char| c.is_ascii_digit()));
         name.to_owned()
     } else if let Some(name) = &parts.retained_substituent_name {
+        cites_locants |= name
+            .split('-')
+            .any(|run| run.starts_with(|c: char| c.is_ascii_digit()));
         name.clone()
     } else {
         let (stem, terminal) = parent_stem_and_terminal(parts)?;
@@ -606,6 +605,7 @@ pub(super) fn assemble_name_with_parent(
         } else {
             format_parent_tail(parts, &stem, &terminal)?
         };
+        cites_locants |= tail.cites_locants;
         let spiro = super::assembly_spiro::format_spiro_core(
             &tail.stem,
             &tail.unsaturation,
@@ -614,10 +614,20 @@ pub(super) fn assemble_name_with_parent(
             &tail.suffix,
             &parent_terminal,
         );
-        let core = add_indicated_hydrogen_prefix(parts, &spiro.core);
+        let (core, hydrogen_cites_locants) = add_indicated_hydrogen_prefix(parts, &spiro.core);
+        cites_locants |= hydrogen_cites_locants;
         let (core, suffix) = move_added_hydrogen(parts, &core, &spiro.suffix);
         format!("{core}{suffix}")
     };
+    // Plan the core first: its citations keep optional substituent locants too.
+    if cites_locants {
+        parts.elided_substituent_locants.clear();
+    }
+    let (prefix, prefix_cites_locants) = format_substituent_prefixes(parts);
+    cites_locants |= prefix_cites_locants;
+    if prefix_cites_locants {
+        parts.elided_substituent_locants.clear();
+    }
     let charged_hyphen = !prefix.is_empty()
         && !positive_parent_n_charges(parts).is_empty()
         && parts.retained_name.is_some()
@@ -627,7 +637,7 @@ pub(super) fn assemble_name_with_parent(
     } else {
         format!("{prefix}{core}")
     };
-    let mut word = add_stereo(parts, &word);
+    let mut word = add_stereo(parts, &word, cites_locants);
     let mut relative = vec![];
     for p in &parts.relative_stereo_prefixes {
         if !relative.contains(&p.as_str()) {
@@ -653,46 +663,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stereo_locants_follow_the_current_word_bracket_depth() {
-        let mut parts = AssemblyParts::new(1);
-        parts.stereo_features = vec![("1".into(), "R".into())];
-        for word in [
-            "bromochlorofluoromethane",
-            "(4-chlorophenyl)(fluoro)methanol",
-            "chloro(fluoro)(2H1)methane",
-        ] {
-            assert_eq!(add_stereo(&parts, word), format!("(R)-{word}"));
-        }
-        for word in ["1-chlorocyclooct-1-ene", "1H-benzo[1,2-b]pyran"] {
-            assert_eq!(add_stereo(&parts, word), format!("(1R)-{word}"));
-        }
-        // Several descriptors keep their locants even when the word has none.
-        parts.stereo_features = vec![("1".into(), "s".into()), ("4".into(), "s".into())];
-        assert_eq!(
-            add_stereo(&parts, "bicyclo[2.2.0]hexane"),
-            "(1s,4s)-bicyclo[2.2.0]hexane"
-        );
-        parts.stereo_features = vec![(String::new(), "Z".into()), ("1".into(), "Z".into())];
-        assert_eq!(
-            add_stereo(&parts, "2,3,4,5,6-pentafluorobenzaldehyde hydrazone"),
-            "(Z)-2,3,4,5,6-pentafluorobenzaldehyde hydrazone"
-        );
-    }
-
-    #[test]
     fn stereo_locant_omission_preserves_configurations() {
+        let canonical_inner_junction =
+            crate::naming::canonical_smiles("C1CCC[C@H]2C3CCCCC3CCC12").unwrap();
         for (smiles, expected) in [
             ("C1CCC/C=C/CC1", "(E)-cyclooctene"),
             ("C1CCC/C=C\\CC1", "(Z)-cyclooctene"),
             ("C1CCCC/C=C/CC1", "(E)-cyclononene"),
             ("C1CCCC/C=C\\CC1", "(Z)-cyclononene"),
+            ("C1CCCCC/C=C/CC1", "(E)-cyclodecene"),
             ("F[C@H](Cl)Br", "(R)-bromochlorofluoromethane"),
             ("F[C@@H](Cl)Br", "(S)-bromochlorofluoromethane"),
+            ("F[C@H](Cl)I", "(R)-chlorofluoroiodomethane"),
             ("F[C@H](Cl)c1ccccc1", "[(R)-chlorofluoromethyl]benzene"),
+            (
+                "F[C@@H](Cl)c1ccc([C@H](F)Br)cc1",
+                "1-[(R)-bromofluoromethyl]-4-[(S)-chlorofluoromethyl]benzene",
+            ),
+            (
+                "O[C@H](F)c1ccc(Cl)cc1",
+                "(R)-(4-chlorophenyl)fluoromethanol",
+            ),
+            ("O=C(O)C(F)Cl", "chlorofluoroacetic acid"),
+            ("O=C(O)C(Cl)Cl", "dichloroacetic acid"),
+            ("O=C(O)C(Cl)CCl", "2,3-dichloropropanoic acid"),
+            ("O=C(N)CF", "2-fluoroacetamide"),
+            ("O=C(NC)CF", "2-fluoro-N-methylacetamide"),
+            ("O=C(O)[C@H](F)Cl", "(R)-chlorofluoroacetic acid"),
+            ("O=C(O)[C@@H](F)Cl", "(S)-chlorofluoroacetic acid"),
+            (
+                "C1CCC[C@H]2C3CCCCC3CCC12",
+                "(4aR)-tetradecahydrophenanthrene",
+            ),
+            (
+                canonical_inner_junction.as_str(),
+                "(4bR)-tetradecahydrophenanthrene",
+            ),
+            (
+                "C1CCCC2C3CCCC[C@@H]3CCC12",
+                "(8aR)-tetradecahydrophenanthrene",
+            ),
             ("C/C=C/C", "(2E)-but-2-ene"),
+            ("C/C=C\\C", "(2Z)-but-2-ene"),
             ("Cl/C=C/F", "(1E)-1-chloro-2-fluoroethene"),
             ("C[C@@H](O)CC", "(2R)-butan-2-ol"),
             ("O[C@H]1C[C@H](O)C1", "(1r,3r)-cyclobutane-1,3-diol"),
+            ("C1C[C@H]2CC[C@@H]12", "(1s,4s)-bicyclo[2.2.0]hexane"),
+            ("Cl/C1=C/CCCCCC1", "(1E)-1-chlorocyclooct-1-ene"),
+            ("CC1CCC/C=C/CC1", "(1E)-5-methylcyclooct-1-ene"),
+            (
+                "O=C(O)[C@H](O)[C@H](O)[C@H](O)C(=O)O",
+                "(2R,3r,4S)-2,3,4-trihydroxypentanedioic acid",
+            ),
+            ("C[C@H](O)c1ccccc1", "(1S)-1-phenylethan-1-ol"),
         ] {
             let name = super::super::name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -710,6 +733,65 @@ mod tests {
     }
 
     #[test]
+    fn constitutional_locant_omission_preserves_other_word_citations() {
+        for (smiles, expected) in [
+            ("CN1CCC(O)CC1", "1-methylpiperidin-4-ol"),
+            (
+                "COC(=O)C[C@@H](C1=CC=CC=C1Cl)NC(=O)C2CCN(CC2)C3=NS(=O)(=O)C4=CC=CC=C43",
+                "methyl (3S)-3-(2-chlorophenyl)-3-[1-(1,1-dioxo-1,2-benzothiazol-3-yl)piperidine-4-carboxamido]propanoate",
+            ),
+            (
+                "CC1=C(C=C(C=C1)NC(=O)C2CCCCN2C(=O)C3=CC=CS3)S(=O)(=O)N4CCCCCC4",
+                "N-[3-(azepane-1-sulfonyl)-4-methylphenyl]-1-[(thiophen-2-yl)carbonyl]piperidine-2-carboxamide",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn acid_derived_amido_prefixes_keep_the_real_nitrogen_substitution_site() {
+        for (smiles, expected) in [
+            ("O=C(O)CNC(=O)Cc1ccccc1", "(2-phenylacetamido)acetic acid"),
+            (
+                "CC1([C@@H](N2[C@H](S1)[C@@H](C2=O)NC(=O)CC3=CC=CC=C3)C(=O)O)C",
+                "(1R,4S,7R)-3,3-dimethyl-6-oxo-7-(2-phenylacetamido)-2-thia-5-azabicyclo[3.2.0]heptane-4-carboxylic acid",
+            ),
+            (
+                "CN(C1=CC=C(C=C1)NC(=O)CNC(=O)C2=CSC=C2)C(=O)OC",
+                "methyl methyl{4-[2-(thiophene-3-carboxamido)acetamido]phenyl}carbamate",
+            ),
+            (
+                "CC1=CC=C(C=C1)N2C(=O)C3=C(N=C2SCC(=O)N/N=C\\C4=CC(=C(C=C4)OC(=O)C)OC)SC5=C3CCCC5",
+                "2-methoxy-4-{(Z)-[(2-{[3-(4-methylphenyl)-4-oxo-5,6,7,8-tetrahydro[1]benzothieno[2,3-d]pyrimidin-2-yl]sulfanyl}acetamido)imino]methyl}phenyl acetate",
+            ),
+        ] {
+            let input = crate::naming::canonical_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(&input).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                input,
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
     fn hydrazone_descriptor_cites_a_locant_only_when_the_name_does() {
         for (smiles, expected) in [
             ("C/C=N/N=C", "(E)-ethanal methylidenehydrazone"),
@@ -719,10 +801,16 @@ mod tests {
                 "formaldehyde (1E)-2-methylpropylidenehydrazone",
             ),
         ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
             assert_eq!(
-                super::super::name_smiles(smiles).unwrap().text,
-                expected,
-                "{smiles}"
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
             );
         }
     }

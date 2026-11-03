@@ -569,7 +569,7 @@ fn acylamino_amido_prefix(
     blocked.insert(nitrogen);
     let acid_atoms = subgraph_component(mol, center, &blocked);
     let status = mol.name_status();
-    let Some(acid_name) = capped_acid_name(mol, center, &acid_atoms)? else {
+    let Some(acid_name) = capped_acid_name(mol, center, &acid_atoms, true)? else {
         return Ok(None);
     };
     let n_sub: Vec<_> = neighbors.into_iter().filter(|n| *n != center).collect();
@@ -640,6 +640,7 @@ pub(super) fn capped_acid_name(
     mol: &Molecule,
     center: usize,
     acid_atoms: &AtomSet,
+    external_substitution_sites: bool,
 ) -> Result<Option<String>, String> {
     // Only a competing acid reachable without crossing an ether can take the suffix.
     // Upstream divergence: a sulfonic/sulfinic acid competes as well as a
@@ -673,6 +674,11 @@ pub(super) fn capped_acid_name(
         return Ok(None);
     }
     let mut acid_mol = mol.subgraph(acid_atoms);
+    // An amido prefix retains its real nitrogen substitution site even though
+    // the acid cap below replaces that nitrogen by OH.
+    if external_substitution_sites {
+        acid_mol.projected_substitution_centers.insert(center);
+    }
     if acid_mol.atoms[&center].charge > 0
         && let Some((oxygen, bond_id)) = acid_mol.get_neighbors(center).iter().find_map(|&n| {
             let bond = acid_mol.get_bond(center, n)?;

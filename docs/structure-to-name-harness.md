@@ -35,11 +35,26 @@ The fast test fails on any Wrong name and when a correct count in
 The full test fails on any Wrong name. The workflow runs nightly, on manual
 dispatch and on pushes to `feat/s2n`, and uploads the full report.
 
-Two names intentionally differ from the frozen 0.4.3 spelling: quinine's
-methanol centre and a random-corpus hydrazone. Their names cite no locants, so
-the descriptors drop theirs too (P-91.3): `(1R)` and `(1Z)` become `(R)` and
-`(Z)`. The text-parity baseline records both; structure checks still require
-the same complete graphs.
+Stereo-locant omission intentionally differs from the frozen 0.4.3 spelling
+at quinine's methanol centre and a random-corpus hydrazone. Each descriptor is
+the only stereounit of its kind in its parent word, and that word cites no locants;
+locants inside separately enclosed substituents belong to those substituents.
+The descriptors therefore drop their locants (P-91.3): `(1R)` and `(1Z)`
+become `(R)` and `(Z)`. The text-parity baseline records both; structure checks
+still require the same complete graphs. A word without locants still retains
+its stereodescriptor locant when inequivalent positions could carry it, as at
+the junctions of tetradecahydrophenanthrene.
+
+The same decorated-parent proof also removes redundant constitutional locants
+when their possible placements are equivalent and the word cites no other
+locants (P-14.3.3 and P-14.3.4.6). This changes frozen spellings such as
+`2-phenylacetic acid`, `2-phenylacetonitrile` and `2-cyclopentylacetic acid`.
+Amido prefixes retain locants when the real nitrogen supplies another
+substitution site, including prefixes assembled through a temporary acid.
+The fast text-parity ratchet is therefore 397/434; the structure and parity
+round-trip ratchets are 424/434, with zero wrong structures. Frozen upstream
+names remain unchanged in the corpus. Changed port expectations, including
+`aminoacetic acid` in `rules_cases.tsv`, are checked by OPSIN round trip.
 
 ## Checks
 

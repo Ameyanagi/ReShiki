@@ -82,15 +82,11 @@ fn group_offers_second_position(key: &str) -> bool {
                 .any(|m| s.contains(m))
         })
 }
-pub fn substituent_locant_string(
+fn substituent_locant_string(
     parts: &AssemblyParts,
-    name: &str,
     locs: &[String],
     grouped_count: usize,
 ) -> String {
-    if parts.elided_substituent_locants.contains(name) {
-        return String::new();
-    }
     let imino_beside = grouped_count > 1 && parts.substituents.iter().any(|s| s.name == "imino");
     if parts.parent_length == 1
         && parts.retained_name.as_deref() != Some("guanidine")
@@ -191,7 +187,7 @@ fn outer_parentheses_are_redundant(name: &str) -> bool {
     };
     only_locants && !starts_with_multiplier(&inner[end + 1..])
 }
-pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
+pub fn format_substituent_prefixes(parts: &AssemblyParts) -> (String, bool) {
     let mut grouped: BTreeMap<&str, Vec<_>> = BTreeMap::new();
     let mut names = Vec::new();
     for sub in &parts.substituents {
@@ -203,15 +199,30 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
     }
     // Python's dict preserves first citation order when alphabetical keys tie.
     names.sort_by_key(|s| substituent_sort_key(s));
+    let groups: Vec<_> = names
+        .into_iter()
+        .map(|name| {
+            let items = &grouped[name];
+            let mut locs: Vec<_> = items
+                .iter()
+                .flat_map(|item| item.locants.iter().cloned())
+                .collect();
+            locs.sort_by_key(|locant| parse_locant(locant));
+            let loc = if parts.elided_substituent_locants.contains(name) {
+                String::new()
+            } else {
+                substituent_locant_string(parts, &locs, grouped.len())
+            };
+            (name, items, locs, loc)
+        })
+        .collect();
+    let cites_locants = groups.iter().any(|(_, _, _, loc)| !loc.is_empty());
     let mut rendered = String::new();
-    for name in names {
-        let items = &grouped[name];
+    for (name, items, locs, mut loc) in groups {
+        if cites_locants && parts.elided_substituent_locants.contains(name) {
+            loc = substituent_locant_string(parts, &locs, grouped.len());
+        }
         let optional = items.iter().all(|i| i.outer_parentheses_optional);
-        let mut locs: Vec<_> = items
-            .iter()
-            .flat_map(|i| i.locants.iter().cloned())
-            .collect();
-        locs.sort_by_key(|l| parse_locant(l));
         let per = if name.contains("diyl") && !name.contains("ylidene") {
             2
         } else {
@@ -233,7 +244,6 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
         } else {
             String::new()
         };
-        let loc = substituent_locant_string(parts, name, &locs, grouped.len());
         let mut used = name.to_owned();
         if !parts.is_substituent
             && parts.principal_group.is_none()
@@ -268,11 +278,11 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
         }
         rendered.push_str(&piece);
     }
-    rendered
+    (rendered, cites_locants)
 }
-pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
+pub fn format_replacement_prefixes(parts: &AssemblyParts) -> (String, bool) {
     if super::assembly_charge::inferred_ionic_retained_parent(parts).is_some() {
-        return String::new();
+        return (String::new(), false);
     }
     let charged = super::assembly_charge::single_charged_replacement_locants(parts);
     let mut groups: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
@@ -301,7 +311,8 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
             .copied()
             .unwrap_or(99)
     });
-    groups
+    let cites_locants = groups.iter().any(|(_, locs)| !locs.is_empty());
+    let text = groups
         .into_iter()
         .map(|(name, mut locs)| {
             locs.sort_by_key(|l| parse_locant(l));
@@ -313,7 +324,8 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
             format!("{}-{mult}{name}", locs.join(","))
         })
         .collect::<Vec<_>>()
-        .join("-")
+        .join("-");
+    (text, cites_locants)
 }
 
 #[cfg(test)]
