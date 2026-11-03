@@ -153,6 +153,11 @@ fn absolute_bridgehead_parity_selects_and_preserves_the_cage_mirror() {
 
 #[test]
 fn pseudo_cip_descriptor_cannot_override_the_requested_cage_face() {
+    let agreeing = parse("(1R,3r,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-endo-ol");
+    assert_eq!(
+        canonical(&agreeing.semantic_cxsmiles().unwrap()),
+        canonical("CN1[C@@H]2CC[C@H]1C[C@@H](O)C2")
+    );
     let result = Parser::new().unwrap().parse(
         "(1R,3s,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-endo-ol",
         &ParseOptions::strict(),
@@ -507,7 +512,7 @@ fn cage_groups_remain_independent_of_stereo_centres_outside_cages() {
 }
 
 #[test]
-fn any_absolute_cip_centre_anchors_the_entire_cage() {
+fn absolute_cip_centre_on_the_frame_anchors_the_entire_frame() {
     for name in [
         "(1R,4S*)-bicyclo[2.2.1]heptan-2-exo-ol",
         "(1R*,4S)-bicyclo[2.2.1]heptan-2-exo-ol",
@@ -524,6 +529,208 @@ fn any_absolute_cip_centre_anchors_the_entire_cage() {
             "{name}: {written}"
         );
         assert!(!written.contains('|'), "{name}: {written}");
+    }
+}
+
+#[test]
+fn absolute_cip_outside_the_frame_preserves_both_cage_diastereomers() {
+    for (locant, descriptor, representative, inverted) in [
+        (
+            "3",
+            "R",
+            "C[C@H]1[C@H]([C@@H]2CC[C@H]1C2)O",
+            "O[C@H]1[C@H](C)[C@@H]2CC[C@H]1C2",
+        ),
+        (
+            "3",
+            "S",
+            "C[C@@H]1[C@H]([C@@H]2CC[C@H]1C2)O",
+            "O[C@H]1[C@@H](C)[C@@H]2CC[C@H]1C2",
+        ),
+        (
+            "7",
+            "R",
+            "C[C@H]1[C@@H]2[C@@H](C[C@H]1CC2)O",
+            "C[C@H]1[C@H]2[C@H](C[C@@H]1CC2)O",
+        ),
+        (
+            "7",
+            "S",
+            "C[C@@H]1[C@@H]2[C@@H](C[C@H]1CC2)O",
+            "C[C@@H]1[C@H]2[C@H](C[C@@H]1CC2)O",
+        ),
+    ] {
+        let name = format!("({locant}{descriptor})-{locant}-methylbicyclo[2.2.1]heptan-2-exo-ol");
+        let mut structure = parse(&name);
+        let outside = structure
+            .graph
+            .atom_by_locant(structure.fragment, locant)
+            .unwrap();
+        let outside_parity = structure.graph.atom(outside).parity.clone().unwrap();
+        assert_eq!(outside_parity.stereo_group.kind, StereoGroupType::Absolute);
+        let frame = ["1", "2", "4"].map(|locant| {
+            structure
+                .graph
+                .atom_by_locant(structure.fragment, locant)
+                .unwrap()
+        });
+        let group = structure
+            .graph
+            .atom(frame[0])
+            .parity
+            .as_ref()
+            .unwrap()
+            .stereo_group;
+        assert_eq!(group.kind, StereoGroupType::Relative, "{name}");
+        for &atom in &frame {
+            assert_eq!(
+                structure
+                    .graph
+                    .atom(atom)
+                    .parity
+                    .as_ref()
+                    .unwrap()
+                    .stereo_group,
+                group,
+                "{name}"
+            );
+        }
+        let (written, locants) = structure.semantic_cxsmiles_with_locants().unwrap();
+        assert_eq!(
+            canonical(&written),
+            canonical(representative),
+            "{name}: {written}"
+        );
+        let imported = smiles::read(&written).unwrap();
+        let groups = &imported.prepared.state.metadata.groups;
+        assert_eq!(groups.len(), 1, "{name}: {written}");
+        assert_eq!(groups[0].kind, 1);
+        let mut grouped_locants: Vec<_> = groups[0]
+            .atoms
+            .iter()
+            .map(|&index| locants[index].as_deref().unwrap())
+            .collect();
+        grouped_locants.sort();
+        assert_eq!(grouped_locants, ["1", "2", "4"], "{name}: {written}");
+        for atom in frame {
+            let parity = structure.graph.atom_mut(atom).parity.as_mut().unwrap();
+            parity.parity *= -1;
+            parity.stereo_group = Default::default();
+        }
+        assert_eq!(
+            structure.graph.atom(outside).parity.as_ref().unwrap(),
+            &outside_parity
+        );
+        let written = structure.semantic_cxsmiles().unwrap();
+        assert_eq!(
+            canonical(&written),
+            canonical(inverted),
+            "{name}: {written}"
+        );
+        assert_ne!(canonical(representative), canonical(inverted), "{name}");
+    }
+}
+
+#[test]
+fn absolute_frame_anchors_preserve_the_specified_diastereomer() {
+    for (name, expected) in [
+        (
+            "(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "C[C@H]1[C@H]([C@@H]2CC[C@H]1C2)O",
+        ),
+        (
+            "(1S,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "C[C@H]1[C@@H]([C@H]2CC[C@@H]1C2)O",
+        ),
+        (
+            "(3R)-3-exo-methylbicyclo[2.2.1]heptan-2-exo-ol",
+            "C[C@H]1[C@H]([C@@H]2CC[C@H]1C2)O",
+        ),
+    ] {
+        let structure = parse(name);
+        assert_eq!(structure.semantic_cxsmiles().unwrap(), expected, "{name}");
+        assert!(
+            structure
+                .graph
+                .atoms
+                .iter()
+                .filter_map(|atom| atom.parity.as_ref())
+                .all(|parity| parity.stereo_group.kind == StereoGroupType::Absolute),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn all_cage_descriptors_are_collected_before_choosing_the_mirror() {
+    for (names, expected) in [
+        (
+            [
+                "(3R)-3-endo-methylbicyclo[2.2.1]heptan-2-exo-ol",
+                "(3R,3-endo,2-exo)-3-methylbicyclo[2.2.1]heptan-2-ol",
+                "(3R,2-exo,3-endo)-3-methylbicyclo[2.2.1]heptan-2-ol",
+            ],
+            "O[C@H]1[C@H](C)[C@@H]2CC[C@H]1C2",
+        ),
+        (
+            [
+                "(3R)-3-exo-methylbicyclo[2.2.1]heptan-2-endo-ol",
+                "(3R,3-exo,2-endo)-3-methylbicyclo[2.2.1]heptan-2-ol",
+                "(3R,2-endo,3-exo)-3-methylbicyclo[2.2.1]heptan-2-ol",
+            ],
+            "C[C@H]1[C@@H]([C@@H]2CC[C@H]1C2)O",
+        ),
+    ] {
+        for name in names {
+            let written = parse(name).semantic_cxsmiles().unwrap();
+            assert!(!written.contains('|'), "{name}: {written}");
+            assert_eq!(
+                canonical(&written),
+                canonical(expected),
+                "{name}: {written}"
+            );
+        }
+    }
+    for name in [
+        "(1R,3R)-3-endo-methylbicyclo[2.2.1]heptan-2-exo-ol",
+        "(1S,3R)-3-exo-methylbicyclo[2.2.1]heptan-2-exo-ol",
+    ] {
+        let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}");
+        assert!(
+            result.message.contains("Contradictory cage"),
+            "{name}: {}",
+            result.message
+        );
+    }
+}
+
+#[test]
+fn nonabsolute_cip_outside_the_frame_keeps_its_own_group() {
+    for (descriptor, kind) in [
+        ("3R*", StereoGroupType::Relative),
+        ("3RS", StereoGroupType::Racemic),
+    ] {
+        let name = format!("({descriptor})-3-methylbicyclo[2.2.1]heptan-2-exo-ol");
+        let structure = parse(&name);
+        let groups = ["1", "2", "3", "4"].map(|locant| {
+            let atom = structure
+                .graph
+                .atom_by_locant(structure.fragment, locant)
+                .unwrap();
+            structure
+                .graph
+                .atom(atom)
+                .parity
+                .as_ref()
+                .unwrap()
+                .stereo_group
+        });
+        assert_eq!(groups[0].kind, StereoGroupType::Relative, "{name}");
+        assert_eq!(groups[0], groups[1], "{name}");
+        assert_eq!(groups[0], groups[3], "{name}");
+        assert_eq!(groups[2].kind, kind, "{name}");
+        assert_ne!(groups[0], groups[2], "{name}");
     }
 }
 

@@ -25,6 +25,15 @@ struct BicyclicCage {
     points: Vec<[f64; 3]>,
     bridgehead: usize,
 }
+
+/// Template parities for the cage frame: both bridgeheads and every atom
+/// carrying an endo/exo/syn/anti descriptor. Other cage atoms are independent.
+#[derive(Default)]
+struct CageStereochemistry {
+    parities: BTreeMap<AtomId, AtomParity>,
+    group: Option<StereoGroupType>,
+}
+
 impl BicyclicCage {
     fn find(graph: &Graph, fragment: FragmentId) -> Option<Self> {
         for longest in [2, 3] {
@@ -206,7 +215,7 @@ pub struct StereochemistryHandler<'a> {
     pub not_explicitly_defined_stereo_bond_map: BTreeMap<BondId, StereoBond>,
     pseudo_stereo_centres: Vec<(AtomId, String)>,
     preassigned_pseudo_stereo_centres: Vec<(AtomId, String)>,
-    cage_stereo_groups: BTreeMap<AtomId, (Vec<AtomId>, Option<StereoGroupType>)>,
+    cage_stereo_groups: BTreeMap<AtomId, CageStereochemistry>,
 }
 impl<'a> StereochemistryHandler<'a> {
     pub fn new(
@@ -351,6 +360,13 @@ impl<'a> StereochemistryHandler<'a> {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
+        for (atom, mut cage) in std::mem::take(&mut self.cage_stereo_groups) {
+            let result = self.resolve_cage_stereochemistry(&mut cage);
+            if result.is_ok() {
+                self.cage_stereo_groups.insert(atom, cage);
+            }
+            self.warning_or_error(result)?;
+        }
         // Enantiomorphic ligand priorities depend on the true R/S centres and,
         // for achiral ring pairs, on the other lowercase descriptor. Seed all
         // lowercase centres before resolving any of them with full CIP.
@@ -412,8 +428,8 @@ impl<'a> StereochemistryHandler<'a> {
         self.arena.detach(id);
         Ok(())
     }
-    /// These relative descriptors define the rigid cage, including its two
-    /// bridgeheads. Absolute descriptors processed earlier choose its mirror.
+    /// Collect all relative descriptors in a common template frame before
+    /// existing parities on that frame choose its mirror.
     fn assign_cage_stereochemistry(&mut self, id: NodeId) -> Result {
         let value = self.attr(id, VALUE_ATR);
         let locant = self.attribute(id, LOCANT_ATR);
@@ -463,70 +479,78 @@ impl<'a> StereochemistryHandler<'a> {
                 cage.atoms[target],
                 cage.parity(self.graph(), target, Some((substituent, direction)))?,
             ));
-            let mut mirror = None;
-            for (atom, proposed) in &parities {
-                if let Some(existing) = &self.graph().atom(*atom).parity {
-                    let alignment = if check_equivalency_of_atom_refs_and_parity(
-                        &existing.atom_refs,
-                        existing.parity,
-                        &proposed.atom_refs,
-                        proposed.parity,
-                    ) {
-                        1
-                    } else {
-                        -1
-                    };
-                    if mirror.is_some_and(|previous| previous != alignment) {
-                        return stereo("Contradictory cage stereochemistry");
-                    }
-                    mirror = Some(alignment);
-                }
-            }
             let explicit_group = match self.attribute(id, STEREOGROUP_ATR).as_deref() {
                 Some("Rac") => Some(StereoGroupType::Racemic),
                 Some("Rel") => Some(StereoGroupType::Relative),
                 _ => None,
             };
-            // Reuse the recorded kind on later cage descriptors: the parities
-            // introduced below default to absolute but do not anchor the cage.
-            let existing_group = self
-                .cage_stereo_groups
-                .get(&cage.atoms[0])
-                .map(|(_, kind)| *kind)
-                .unwrap_or_else(|| {
-                    cage.atoms
-                        .iter()
-                        .filter_map(|&atom| self.graph().atom(atom).parity.as_ref())
-                        .map(|parity| parity.stereo_group.kind)
-                        .max_by_key(|kind| *kind == StereoGroupType::Absolute)
-                });
-            let requested_group = if existing_group == Some(StereoGroupType::Absolute) {
-                existing_group
-            } else {
-                explicit_group.or(existing_group)
-            };
-            self.cage_stereo_groups
-                .entry(cage.atoms[0])
-                .or_insert_with(|| (cage.atoms.clone(), None))
-                .1 = requested_group;
-            for (atom, mut parity) in parities {
-                parity.parity *= mirror.unwrap_or(1);
-                if self.graph().atom(atom).parity.is_none() {
-                    self.state.graph_mut().atom_mut(atom).parity = Some(parity);
+            let pending = self.cage_stereo_groups.entry(cage.atoms[0]).or_default();
+            for (atom, proposed) in &parities {
+                if let Some(previous) = pending.parities.get(atom)
+                    && !check_equivalency_of_atom_refs_and_parity(
+                        &previous.atom_refs,
+                        previous.parity,
+                        &proposed.atom_refs,
+                        proposed.parity,
+                    )
+                {
+                    return stereo("Contradictory cage stereochemistry");
                 }
-                self.atom_stereo_centre_map
-                    .entry(atom)
-                    .or_insert(StereoCentre {
-                        atom,
-                        true_stereo_centre: false,
-                    });
-                self.not_explicitly_defined_stereo_centre_map.remove(&atom);
             }
+            pending.parities.extend(parities);
+            pending.group = explicit_group.or(pending.group);
             return Ok(());
         }
         stereo(
             "Endo/exo/syn/anti is supported only for substituted bicyclo[2.2.1]heptane and bicyclo[3.2.1]octane cages",
         )
+    }
+    fn resolve_cage_stereochemistry(&mut self, cage: &mut CageStereochemistry) -> Result {
+        let mut mirror = None;
+        let existing_group = cage
+            .parities
+            .keys()
+            .filter_map(|&atom| self.graph().atom(atom).parity.as_ref())
+            .map(|parity| parity.stereo_group.kind)
+            .max_by_key(|kind| *kind == StereoGroupType::Absolute);
+        for (&atom, proposed) in &cage.parities {
+            if let Some(existing) = &self.graph().atom(atom).parity {
+                let alignment = if check_equivalency_of_atom_refs_and_parity(
+                    &existing.atom_refs,
+                    existing.parity,
+                    &proposed.atom_refs,
+                    proposed.parity,
+                ) {
+                    1
+                } else {
+                    -1
+                };
+                if mirror.is_some_and(|previous| previous != alignment) {
+                    return stereo("Contradictory cage stereochemistry");
+                }
+                mirror = Some(alignment);
+            }
+        }
+        cage.group = if existing_group == Some(StereoGroupType::Absolute) {
+            existing_group
+        } else {
+            cage.group.or(existing_group)
+        };
+        for (&atom, proposed) in &cage.parities {
+            if self.graph().atom(atom).parity.is_none() {
+                let mut parity = proposed.clone();
+                parity.parity *= mirror.unwrap_or(1);
+                self.state.graph_mut().atom_mut(atom).parity = Some(parity);
+            }
+            self.atom_stereo_centre_map
+                .entry(atom)
+                .or_insert(StereoCentre {
+                    atom,
+                    true_stereo_centre: false,
+                });
+            self.not_explicitly_defined_stereo_centre_map.remove(&atom);
+        }
+        Ok(())
     }
     fn cage_owning_fragment(&self, id: NodeId) -> Result<Option<FragmentId>> {
         let mut scope = self.parent(id)?;
@@ -575,7 +599,7 @@ impl<'a> StereochemistryHandler<'a> {
         let cages = std::mem::take(&mut self.cage_stereo_groups);
         let cage_atoms: BTreeSet<_> = cages
             .values()
-            .flat_map(|(atoms, _)| atoms.iter().copied())
+            .flat_map(|cage| cage.parities.keys().copied())
             .collect();
         let (mut racemic_number, mut relative_number) = (0, 0);
         for group in self
@@ -592,8 +616,9 @@ impl<'a> StereochemistryHandler<'a> {
             };
             *number = (*number).max(group.number);
         }
-        for (_, (atoms, group)) in cages {
-            let kind = if let Some(kind) = group {
+        for (_, cage) in cages {
+            let atoms: Vec<_> = cage.parities.into_keys().collect();
+            let kind = if let Some(kind) = cage.group {
                 kind
             } else {
                 if !self.cage_has_distinct_mirror(&atoms)? {
@@ -618,9 +643,9 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
-    fn cage_has_distinct_mirror(&self, atoms: &[AtomId]) -> Result<bool> {
+    fn cage_has_distinct_mirror(&self, frame: &[AtomId]) -> Result<bool> {
         let mut graph = self.graph().clone();
-        let fragment = graph.atom(atoms[0]).fragment;
+        let fragment = graph.atom(frame[0]).fragment;
         for atom in &mut graph.atoms {
             if let Some(parity) = &mut atom.parity {
                 parity.stereo_group = StereoGroup::default();
@@ -636,7 +661,7 @@ impl<'a> StereochemistryHandler<'a> {
                 .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))
         };
         let original = canonical(&graph)?;
-        for &atom in atoms {
+        for &atom in frame {
             if let Some(parity) = &mut graph.atom_mut(atom).parity {
                 parity.parity *= -1;
             }
