@@ -309,12 +309,9 @@ async fn axial_generated_names_and_ra_sa_alternatives_round_trip() {
         if name.contains("binaphthalene]-2") {
             assert_eq!(
                 generated.title,
-                format!("(1{descriptor})-1-(2-hydroxynaphthalen-1-yl)naphthalen-2-ol")
+                format!("(1{descriptor})-[1,1'-binaphthalene]-2,2'-diol")
             );
-            assert_eq!(
-                generated.name_status,
-                Some(NameStatus::NotPreferred(NameReason::RingAssembly))
-            );
+            assert_eq!(generated.name_status, Some(NameStatus::Preferred));
         }
         println!(
             "AXIAL RESULT {name}\nNAME: {}\nGENERAL: {}",

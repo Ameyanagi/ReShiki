@@ -729,7 +729,7 @@ mod tests {
             ),
             (
                 "P(CC(=O)O)(CC(=O)O)CC(=O)O",
-                "2-[bis(2-hydroxy-2-oxoethyl)phosphanyl]acetic acid",
+                "[bis(2-hydroxy-2-oxoethyl)phosphanyl]acetic acid",
             ),
         ] {
             let name = name_smiles(smiles).unwrap();
@@ -1199,7 +1199,7 @@ mod tests {
             ("c1ccn(c1)-n1cccc1", "1,1'-bipyrrole"),
             (
                 "OC(=O)Cc1ccc(cc1)-c1ccccc1",
-                "2-([1,1'-biphenyl]-4-yl)acetic acid",
+                "([1,1'-biphenyl]-4-yl)acetic acid",
             ),
             (
                 "C[C@H]1C[C@@H]1[C@H]1C[C@@H]1C",
@@ -1320,14 +1320,14 @@ mod tests {
             "1H,1'H-1,1'-biindene",
             "1H,1'H-3,3'-biindole",
             "1H,1'H-[2,2'-bipyrrol]-5-ol",
-            "2-(1H,1'H-[2,2'-bipyrrol]-5-yl)acetic acid",
+            "(1H,1'H-[2,2'-bipyrrol]-5-yl)acetic acid",
             "2,3'-bifuran",
             "2,2'-bi(bicyclo[2.2.2]octane)",
             "1,1'-bi(spiro[2.2]pentane)",
             "1,1'-bi(dispiro[2.0.2.1]heptane)",
-            "2-([2,2'-bipyridin]-5-yl)acetic acid",
-            "2-([1^1,2^1:2^4,3^1-terphenyl]-1^4-yl)acetic acid",
-            "2-(4'-cyano[1,1'-biphenyl]-4-yl)acetic acid",
+            "([2,2'-bipyridin]-5-yl)acetic acid",
+            "([1^1,2^1:2^4,3^1-terphenyl]-1^4-yl)acetic acid",
+            "(4'-cyano[1,1'-biphenyl]-4-yl)acetic acid",
         ] {
             let request = crate::naming::local::parse_request(expected).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
