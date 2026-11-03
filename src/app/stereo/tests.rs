@@ -309,6 +309,43 @@ fn check_keeps_undefined_markers_and_computed_flags_do_not_dirty_the_drawing() {
 }
 
 #[test]
+fn undefined_xi_is_drawing_wide_refreshes_and_is_undoable() {
+    let mut app = fixture_app(drawing("plain", false));
+    app.tab.doc.atom_labels.stereo = true;
+    app.tab.doc.atom_labels.mark_undefined_stereocentres = true;
+    app.tab.labels.scope = atom_labels::Scope::Selection;
+    checked(&mut app, vec![], true);
+    let before = app.tab.doc.clone();
+    assert!(!before.atom_labels.undefined_xi);
+
+    let _ = app.label_action(atom_labels::Action::UndefinedXi(true));
+    assert!(app.tab.doc.atom_labels.undefined_xi);
+    assert!(app.tab.labels_dirty);
+    assert!(!reshiki::transaction::chemistry_changed(
+        &before,
+        &app.tab.doc
+    ));
+    reshiki::atom_labels::refresh::refresh_optional_stereo(&mut app.tab.doc);
+    assert_eq!(
+        reshiki::atom_labels::atom_stereo_code(&app.tab.doc.atoms[0], &app.tab.doc),
+        Some("Ξ")
+    );
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    app.step_history(false);
+    assert!(!app.tab.doc.atom_labels.undefined_xi);
+    assert_eq!(
+        reshiki::atom_labels::atom_stereo_code(&app.tab.doc.atoms[0], &app.tab.doc),
+        Some("?")
+    );
+    app.step_history(true);
+    assert!(app.tab.doc.atom_labels.undefined_xi);
+    assert_eq!(
+        reshiki::atom_labels::atom_stereo_code(&app.tab.doc.atoms[0], &app.tab.doc),
+        Some("Ξ")
+    );
+}
+
+#[test]
 fn style_preference_is_opt_in_and_invalidates_cached_notices() {
     let mut app = fixture_app(drawing("wedge", true));
     assert!(!app.appearance.iupac_style_notes);

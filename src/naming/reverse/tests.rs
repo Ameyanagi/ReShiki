@@ -11,6 +11,7 @@ fn generated_record_keeps_reconstruction_smiles_order_for_locants() {
     let identity = Identity {
         smiles: expected.clone(),
         naming_smiles: None,
+        unknown_stereo_smiles: None,
         write_unknown_stereo: false,
         warnings: vec![],
     };
@@ -95,6 +96,7 @@ async fn phane_names_are_verified_alternatives_or_the_only_name() -> Result<(), 
             &Identity {
                 smiles: smiles.into(),
                 naming_smiles: None,
+                unknown_stereo_smiles: None,
                 write_unknown_stereo: false,
                 warnings: vec![],
             },
@@ -183,6 +185,7 @@ async fn native_worker_then_local_opsin_verifies_supported_names() -> Result<(),
             &Identity {
                 smiles: smiles.into(),
                 naming_smiles: None,
+                unknown_stereo_smiles: None,
                 write_unknown_stereo: false,
                 warnings: vec![],
             },
@@ -296,6 +299,7 @@ async fn native_species_generation_verifies_the_complete_identity_and_status() {
             &Identity {
                 smiles: smiles.into(),
                 naming_smiles: None,
+                unknown_stereo_smiles: None,
                 write_unknown_stereo: false,
                 warnings: vec![],
             },
@@ -317,6 +321,7 @@ async fn native_species_generation_verifies_the_complete_identity_and_status() {
             &Identity {
                 smiles: "[Fe+2].[Cl-].[Cl-]".into(),
                 naming_smiles: None,
+                unknown_stereo_smiles: None,
                 write_unknown_stereo: false,
                 warnings: vec![],
             },
@@ -360,6 +365,7 @@ async fn native_isotope_styles_preserve_graph_and_preference_status() {
             &Identity {
                 smiles: smiles.into(),
                 naming_smiles: None,
+                unknown_stereo_smiles: None,
                 write_unknown_stereo: false,
                 warnings: vec![],
             },
@@ -386,6 +392,7 @@ async fn alternatives_require_independent_reconstruction() {
     let identity = Identity {
         smiles: "CCO".into(),
         naming_smiles: None,
+        unknown_stereo_smiles: None,
         write_unknown_stereo: false,
         warnings: vec![],
     };
@@ -435,6 +442,7 @@ async fn unknown_configuration_preference_selects_the_verified_primary() {
         let identity = Identity {
             smiles: expected.clone(),
             naming_smiles: Some(input.into()),
+            unknown_stereo_smiles: None,
             write_unknown_stereo: explicit,
             warnings: vec![],
         };
@@ -467,5 +475,121 @@ async fn unknown_configuration_preference_selects_the_verified_primary() {
                 Some("Configuration of 2 units drawn as unknown not specified in name")
             );
         }
+    }
+}
+
+#[tokio::test]
+async fn undefined_configuration_preference_uses_verified_document_names() {
+    use super::super::tests::{
+        undefined_alkene_document, undefined_and_known_stereo_document,
+        wavy_and_undefined_stereo_document,
+    };
+    for (document, omitted, explicit, old_unknown_alternative) in [
+        (
+            undefined_and_known_stereo_document(),
+            "(3R)-3-chlorobutan-2-ol",
+            "(2Ξ,3R)-3-chlorobutan-2-ol",
+            None,
+        ),
+        (
+            undefined_alkene_document(),
+            "but-2-ene",
+            "(2Ξ)-but-2-ene",
+            None,
+        ),
+        (
+            wavy_and_undefined_stereo_document(),
+            "3-chlorobutan-2-ol",
+            "(2Ξ,3Ξ)-3-chlorobutan-2-ol",
+            Some("(2Ξ)-3-chlorobutan-2-ol"),
+        ),
+    ] {
+        let mut identity = super::super::document_identity(&document).unwrap();
+        for enabled in [false, true] {
+            identity.write_unknown_stereo = enabled;
+            let record = generate_name(&identity, Cancel::default()).await.unwrap();
+            assert_eq!(record.title, if enabled { explicit } else { omitted });
+            assert_eq!(record.canonical_smiles, identity.smiles);
+            let verification = super::super::resolve_name(&record.title, Cancel::default())
+                .await
+                .unwrap();
+            super::super::verify_identity(&identity.smiles, &verification.smiles).unwrap();
+            if enabled {
+                assert_eq!(record.name_status, Some(NameStatus::Preferred));
+                assert!(record.omitted_stereo.is_empty());
+                assert_eq!(record.omitted_units, 0);
+                assert_eq!(record.alternatives[0].name, omitted);
+                assert!(record.warnings[0].ends_with("; the name marks it as unknown"));
+            } else {
+                assert_eq!(record.warnings[0], identity.warnings[0]);
+                if old_unknown_alternative.is_some() {
+                    assert_eq!(
+                        record.name_status,
+                        Some(NameStatus::NotPreferred(
+                            super::super::NameReason::UnknownConfiguration
+                        ))
+                    );
+                    assert_eq!(record.omitted_stereo, ["2"]);
+                    assert_eq!(record.omitted_units, 1);
+                } else {
+                    assert_eq!(record.name_status, Some(NameStatus::Preferred));
+                    assert!(record.omitted_stereo.is_empty());
+                    assert_eq!(record.omitted_units, 0);
+                }
+                assert_eq!(
+                    record.alternatives.first().map(|name| name.name.as_str()),
+                    old_unknown_alternative
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn unverified_unknown_alternative_cannot_replace_the_primary_or_its_notice() {
+    let document = super::super::tests::undefined_and_known_stereo_document();
+    let mut identity = super::super::document_identity(&document).unwrap();
+    identity.write_unknown_stereo = true;
+    let input = identity.generation_smiles(&identity.smiles);
+    let mut candidate = openclatura::name_smiles(input).unwrap();
+    candidate.alternatives[0].name = "(2Ξ,3S)-3-chlorobutan-2-ol".into();
+    let record = reconstruct(
+        &identity,
+        identity.smiles.clone(),
+        candidate,
+        &Cancel::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(record.title, "(3R)-3-chlorobutan-2-ol");
+    assert!(record.alternatives.is_empty());
+    assert_eq!(record.omitted_stereo, ["2"]);
+    assert_eq!(record.omitted_units, 1);
+    assert_eq!(record.warnings[0], identity.warnings[0]);
+}
+
+#[tokio::test]
+async fn undefined_xi_falls_back_to_the_plain_name_for_salts_and_isotopes() {
+    for (smiles, marked, name) in [
+        (
+            "CC(O)C(=O)[O-].[Na+]",
+            "C[CH:900001](O)C(=O)[O-].[Na+]",
+            "sodium 2-hydroxypropanoate",
+        ),
+        (
+            "[13CH3]C(O)CC",
+            "[13CH3][CH:900001](O)CC",
+            "(1-13C)butan-2-ol",
+        ),
+    ] {
+        let identity = Identity {
+            smiles: smiles.into(),
+            naming_smiles: None,
+            unknown_stereo_smiles: Some(marked.into()),
+            write_unknown_stereo: true,
+            warnings: vec![],
+        };
+        let record = generate_name(&identity, Cancel::default()).await.unwrap();
+        assert_eq!(record.title, name);
     }
 }

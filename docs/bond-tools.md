@@ -45,7 +45,7 @@ Enable **IUPAC style notes in Check drawing** in Stereochemistry for optional ad
 
 **Redraw stereo bonds**, available in the selection context menu, command palette and stereo notices, lets the automatic wedge chooser place the wedges again. It acts on the molecules touched by the selection, or the whole drawing with no selection. It normalises solid/hollow/bold and hash depictions to solid or hashed wedges while retaining configuration, coordinates, colours and other bond properties. Wavy and projection bonds stay as drawn. The command is undoable.
 
-Under **Show R/S and E/Z labels**, enable **Mark undefined stereocentres** to show muted **(?)** markers at undefined stereocentres and stereogenic double bonds. The document option starts off. Markers appear in figure exports only while visible; they are separate from chemical CIP labels. Generated-name notices list the specific units whose configurations are left unspecified.
+Under **Show R/S and E/Z labels**, enable **Mark undefined stereocentres** to show muted **(?)** markers at undefined stereocentres and stereogenic double bonds. The document option starts off. Markers appear in figure exports only while visible; they are separate from chemical CIP labels. Enable **Use Ξ/ξ for undefined (IUPAC)** below it to draw **(Ξ)** instead, or **(ξ)** at a pseudoasymmetric centre, the IUPAC descriptors for unknown configuration (P-91.2.1.2.1). Generated-name notices list the specific units whose configurations are left unspecified. With **Write Ξ/ξ for unknown configuration** on in **Chemical names**, the generated name writes those units as Ξ/ξ too, for example (2Ξ,3R)-3-chlorobutan-2-ol.
 
 ## Native and chemical representation
 
