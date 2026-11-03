@@ -59,6 +59,9 @@ pub struct Atom {
     /// Computed editor aid; never an assigned stereochemical descriptor.
     #[serde(skip)]
     pub undefined_stereo: bool,
+    /// Full-CIP classification of an optional undefined atom indicator.
+    #[serde(skip)]
+    pub undefined_pseudoasymmetric: bool,
     pub id: u64,
     pub element: String,
     pub position: Point,
@@ -462,6 +465,7 @@ impl Document {
             cip_label: None,
             steroid_label: None,
             undefined_stereo: false,
+            undefined_pseudoasymmetric: false,
             id,
             element: element.into(),
             position,

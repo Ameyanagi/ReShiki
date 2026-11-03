@@ -120,6 +120,7 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
     point.cip_label = None;
     point.steroid_label = None;
     point.undefined_stereo = false;
+    point.undefined_pseudoasymmetric = false;
     point.display.set_variable(None);
     point.marks.clear();
     for group in &mut result.groups {

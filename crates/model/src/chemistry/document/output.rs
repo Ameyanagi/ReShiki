@@ -728,6 +728,7 @@ fn reconstruct_atoms(
                 cip_label: None,
                 steroid_label: None,
                 undefined_stereo: false,
+                undefined_pseudoasymmetric: false,
                 display: old.map(|a| a.display.clone()).unwrap_or_default(),
                 marks: old.map(|a| a.marks.clone()).unwrap_or_default(),
                 mark_serial: old.map_or(0, |a| a.mark_serial),
@@ -750,6 +751,7 @@ fn reconstruct_atoms(
                 .ok_or_else(|| invalid("Drawing hydrogen count overflow"))?;
             atom.cip_label = None;
             atom.undefined_stereo = false;
+            atom.undefined_pseudoasymmetric = false;
             Ok(atom)
         })
         .collect::<Result<Vec<_>, Error>>()

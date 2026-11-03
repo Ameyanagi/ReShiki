@@ -2,7 +2,7 @@
 //! The structure used for identity omits only these units' configurations.
 use super::{Name, graph_io, molecule::Molecule};
 use crate::naming::{AlternativeName, NameReason, NameStatus};
-use reshiki_chemistry::stereo::{cip::label, perception};
+use reshiki_chemistry::stereo::perception;
 
 const UNKNOWN_ATOM: i32 = 900_001;
 const UNKNOWN_BOND: i32 = 900_002;
@@ -30,20 +30,7 @@ pub(super) fn annotate(state: &perception::State, mol: &mut Molecule) -> Result<
         if !atom_marker(map) {
             continue;
         }
-        let pseudo = [1, 2].into_iter().all(|tag| {
-            let mut trial = state.clone();
-            for atom in &mut trial.metadata.atoms {
-                atom.map_number = 0;
-                atom.map_present = false;
-            }
-            trial.metadata.atoms[idx].chiral_tag = tag;
-            trial.properties.atoms[idx].unknown = false;
-            trial.properties.done = None;
-            label::assign(&trial, &label::Options::default())
-                .ok()
-                .and_then(|assignment| assignment.state.properties.atoms[idx].cip_code.clone())
-                .is_some_and(|code| matches!(code.as_str(), "r" | "s"))
-        });
+        let pseudo = reshiki_model::chemistry::stereo_lint::is_pseudoasymmetric(state, idx);
         let atom = mol
             .atoms
             .get_mut(&idx)

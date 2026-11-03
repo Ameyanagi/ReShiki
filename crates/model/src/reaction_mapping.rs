@@ -439,6 +439,7 @@ pub(crate) fn reconcile_label_changes(before: &Document, after: &mut Document) {
                                 || a.cip_label != b.cip_label
                                 || a.steroid_label != b.steroid_label
                                 || a.undefined_stereo != b.undefined_stereo
+                                || a.undefined_pseudoasymmetric != b.undefined_pseudoasymmetric
                                 || a.text_style != b.text_style
                                 || a.display != b.display
                                 || a.marks != b.marks
