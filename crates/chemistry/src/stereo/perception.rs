@@ -117,47 +117,60 @@ pub fn perceive(input: &State, options: Options) -> Result<State, String> {
 /// ring cis/trans pair or double bond. Uses the same neighbor ranks and ring
 /// rules as assignment.
 pub fn has_unspecified_stereo(input: &State) -> Result<bool, String> {
-    if input
+    let (atoms, bonds) = stereogenic_units(input)?;
+    for i in atoms {
+        if !matches!(at(&input.metadata.atoms, i)?.chiral_tag, 1 | 2) {
+            return Ok(true);
+        }
+    }
+    for i in bonds {
+        if matches!(at(&input.metadata.bonds, i)?.stereo, 0 | 1) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Potential tetrahedral and E/Z units, including coupled ring centres.
+/// Uses the same ligand ranks and ring rules as stereo assignment.
+pub fn stereogenic_units(input: &State) -> Result<(Vec<usize>, Vec<usize>), String> {
+    let mut atoms: Vec<_> = input
         .properties
         .atoms
         .iter()
-        .zip(&input.metadata.atoms)
-        .any(|(props, meta)| props.possible == Some(true) && !matches!(meta.chiral_tag, 1 | 2))
-    {
-        return Ok(true);
-    }
+        .enumerate()
+        .filter_map(|(i, atom)| (atom.possible == Some(true)).then_some(i))
+        .collect();
     let mut work = Work(50_000_000);
     let mut ctx = Context::new(input.clone(), &mut work)?;
     ctx.ensure_ranks(&mut work)?;
-    // Ring cis/trans centres, as in 1,4-disubstituted cyclohexanes, have equal
-    // ring-neighbor ranks and no `possible` flag; they pair within a ring system.
     let candidates = (0..input.graph.atoms.len())
         .map(|atom| Ok(ctx.legal_center(atom, &mut work)? && ctx.candidate(atom, &mut work)?))
         .collect::<Result<Vec<_>, String>>()?;
     for (root, _) in candidates.iter().enumerate().filter(|(_, c)| **c) {
-        if matches!(at(&input.metadata.atoms, root)?.chiral_tag, 1 | 2) {
-            continue;
-        }
         let mut seen = vec![false; candidates.len()];
         put(&mut seen, root, true)?;
         let mut queue = vec![root];
-        while let Some(atom) = queue.pop() {
+        'ring: while let Some(atom) = queue.pop() {
             for &b in at(&ctx.neighbors, atom)? {
                 let other = ctx.other(b, atom)?;
                 if at(&ctx.bond_rings, b)?.is_empty() || *at(&seen, other)? {
                     continue;
                 }
                 if *at(&candidates, other)? {
-                    return Ok(true);
+                    if !atoms.contains(&root) {
+                        atoms.push(root);
+                    }
+                    break 'ring;
                 }
                 put(&mut seen, other, true)?;
                 queue.push(other);
             }
         }
     }
+    let mut bonds = Vec::new();
     for (i, bond) in input.graph.bonds.iter().enumerate() {
         if bond.order != 2
-            || !matches!(at(&input.metadata.bonds, i)?.stereo, 0 | 1)
             || !ctx.detectable(i)?
             || !matches!(at(&ctx.neighbors, bond.a)?.len(), 2 | 3)
             || !matches!(at(&ctx.neighbors, bond.b)?.len(), 2 | 3)
@@ -172,10 +185,10 @@ pub fn has_unspecified_stereo(input: &State) -> Result<bool, String> {
                 .directed_neighbors(bond.b, i, &mut unknown, false, &mut work)?
                 .is_empty()
         {
-            return Ok(true);
+            bonds.push(i);
         }
     }
-    Ok(false)
+    Ok((atoms, bonds))
 }
 
 /// Drawing-only provenance: skip legacy assignment for retained double-bond

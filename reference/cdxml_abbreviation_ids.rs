@@ -28,6 +28,7 @@ impl From<Record> for cdxml::Abbreviation {
             label: r.label,
             reverse_label: r.reverse_label,
             anchor: r.anchor,
+            exit: None,
             members: r.members,
         }
     }
@@ -211,6 +212,7 @@ fn twenty_thousand_distinct_ids_use_spatial_lookup() -> anyhow::Result<()> {
     }
     source.push_str("</fragment></page></CDXML>");
     let records = vec![cdxml::Abbreviation {
+        exit: None,
         highlight: None,
         presentation: None,
         label: "X".into(),
@@ -230,6 +232,7 @@ fn invalid_dimensions_coordinates_and_storage_fail_atomically() -> anyhow::Resul
     let source = "<CDXML><page><n id='a' p='0 0'/></page></CDXML>";
     let fragments = fragments(&[6], &[1])?;
     let records = vec![cdxml::Abbreviation {
+        exit: None,
         highlight: None,
         presentation: None,
         label: "Me".into(),

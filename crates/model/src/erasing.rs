@@ -57,11 +57,12 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
         .filter(|a| doc.atom_drawn(a.id) && distance(a.position, from, to) <= radius)
         .map(|a| a.id)
         .collect();
+    let drawn = doc.abbreviation_render_copy();
     // Atom labels and attached marks belong to the atom, even away from its center.
-    for atom in doc.atoms.iter().filter(|a| doc.atom_drawn(a.id)) {
-        if crate::scene::atom_label_bounds(atom, doc)
+    for atom in drawn.atoms.iter().filter(|a| drawn.atom_drawn(a.id)) {
+        if crate::scene::atom_label_bounds(atom, &drawn)
             .is_some_and(|(lo, hi)| box_hit(lo, hi, from, to, radius))
-            || crate::scientific::document_mark_parts(atom, doc)
+            || crate::scientific::document_mark_parts(atom, &drawn)
                 .iter()
                 .any(|part| path_hit(&part.commands, from, to, radius))
         {
@@ -123,14 +124,17 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
     let bonds: Vec<_> = doc
         .bonds
         .iter()
-        .filter(|b| doc.bond_drawn(b.a, b.b))
-        .filter(|b| {
-            doc.atom(b.a)
-                .zip(doc.atom(b.b))
+        .zip(&drawn.bonds)
+        .filter(|(_, b)| drawn.bond_drawn(b.a, b.b))
+        .filter(|(_, b)| {
+            drawn
+                .atom(b.a)
+                .zip(drawn.atom(b.b))
                 .is_some_and(|(a, b)| crossed(from, to, a.position, b.position, radius))
         })
-        .map(|b| (b.a, b.b))
+        .map(|(b, _)| (b.a, b.b))
         .collect();
+    drop(drawn);
     if !ids.is_empty() {
         doc.delete(&ids);
     }

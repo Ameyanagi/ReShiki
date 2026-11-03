@@ -48,3 +48,24 @@ fn indexed_markers_preserve_document_and_selection_order_and_abbreviation_visibi
         assert_eq!(markers.captions, captions);
     }
 }
+
+#[test]
+fn two_sided_group_bond_markers_meet_the_visible_label() {
+    let mut doc = Document::default();
+    let atoms: Vec<_> = (0..4)
+        .map(|i| doc.add_atom("C", reshiki::document::Point::new(i as f32 * 42., 0.)))
+        .collect();
+    for pair in atoms.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    doc.contract(&atoms[1..3], "Link", "").unwrap();
+    let markers = Markers::new(&doc, &doc.all_ids());
+    assert_eq!(
+        markers.bonds,
+        vec![
+            (World::new(0., 0.), World::new(42., 0.)),
+            (World::new(42., 0.), World::new(126., 0.)),
+        ]
+    );
+    assert!(!markers.atoms.iter().any(|(id, _)| *id == atoms[2]));
+}

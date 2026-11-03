@@ -43,6 +43,59 @@ fn at<T>(items: &[T], id: usize) -> Result<&T, String> {
         .ok_or_else(|| "Invalid stereo-cleanup index".into())
 }
 
+/// Whether both axis ends have two constitutionally distinct non-axis ligands.
+/// Whole-molecule symmetry retains isotopes and charges, ignoring stereo and
+/// atom maps. This eligibility check does not determine CIP priority or lifetime.
+pub fn axis_ends_distinct(graph: &Graph, bond: usize) -> Result<bool, String> {
+    graph.validate()?;
+    let axis = at(&graph.bonds, bond)?;
+    let mut ligands = Vec::with_capacity(2);
+    for end in [axis.a, axis.b] {
+        let neighbors = graph
+            .bonds
+            .iter()
+            .enumerate()
+            .filter(|&(id, _)| id != bond)
+            .filter_map(|(_, other)| {
+                if other.a == end {
+                    Some(other.b)
+                } else if other.b == end {
+                    Some(other.a)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if neighbors.len() != 2 {
+            return Ok(false);
+        }
+        ligands.push(neighbors);
+    }
+    let rings = crate::rings::perceive(graph, Default::default())
+        .map_err(|error| error.to_string())?
+        .atoms;
+    // A particular Kekule assignment must not distinguish equivalent ring paths.
+    let normalized = crate::aromaticity::perceive(graph, &rings)?.graph;
+    let ranks = crate::ranking::rank(
+        &normalized,
+        &rings,
+        &Metadata::unspecified(&normalized),
+        crate::ranking::Options {
+            break_ties: false,
+            include_chirality: false,
+            include_maps: false,
+            include_isotopes: true,
+            ..Default::default()
+        },
+    )?;
+    for pair in ligands {
+        if at(&ranks, *at(&pair, 0)?)? == at(&ranks, *at(&pair, 1)?)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// Remove impossible atom chiral tags and out-of-range coordination permutations.
 /// The supplied hybridizations must belong to this graph at the current stage.
 pub fn chirality(

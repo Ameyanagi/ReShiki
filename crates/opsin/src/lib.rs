@@ -58,8 +58,24 @@ use std::sync::{Arc, OnceLock};
 pub const UPSTREAM_VERSION: &str = "3.0-SNAPSHOT";
 pub const UPSTREAM_COMMIT: &str = "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91";
 pub const RESOURCE_FINGERPRINT: &str =
-    "bc977c95bd647cd90048215a2a82baa7d173c5373991ebc01690a0fe4137b062";
+    "c4c6dbda518cb38ff80867fe6491441e3fbd11c76795d8f0cc4fe15c6ffd6302";
 pub const PORT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Axial stereochemistry in the atom order of the accompanying SMILES.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Axis {
+    pub atoms: [usize; 2],
+    /// Reference neighbour at each corresponding axis end.
+    pub refs: [usize; 2],
+    /// Whether the rotation from `refs[0]` to `refs[1]` is clockwise when
+    /// looking from `atoms[0]` to `atoms[1]`.
+    pub clockwise: bool,
+    /// Requested CIP descriptor, normalized to M or P.
+    pub descriptor: String,
+}
+
+/// Semantic SMILES, parent locants, and axes in the same written atom order.
+pub type SerializedStructure = (String, Vec<Option<String>>, Vec<Axis>);
 
 #[derive(Debug, Clone)]
 pub struct Structure {
@@ -72,16 +88,30 @@ pub struct Structure {
 impl Structure {
     /// Semantic CXSMILES retains atom labels, enhanced stereo and polymers.
     /// Cosmetic atom values (including locants) are intentionally excluded.
+    /// Axial configurations require `semantic_cxsmiles_with_locants_and_axes`.
     pub fn semantic_cxsmiles(&self) -> Result<String, SerializationError> {
         smiles::write_semantic_cxsmiles(&self.graph, self.fragment)
     }
 
     /// Semantic CXSMILES and the first principal-parent locant for each written
     /// atom, in SMILES order. Folded hydrogens have no entry in this vector.
+    /// Returns an error when axes would otherwise be omitted.
     pub fn semantic_cxsmiles_with_locants(
         &self,
     ) -> Result<(String, Vec<Option<String>>), SerializationError> {
         smiles::write_semantic_cxsmiles_with_locants(
+            &self.graph,
+            self.fragment,
+            &self.principal_parent_atoms,
+        )
+    }
+
+    /// Serialize SMILES, parent locants, and axial configurations together.
+    /// Axes use the same written atom indices as the locants vector.
+    pub fn semantic_cxsmiles_with_locants_and_axes(
+        &self,
+    ) -> Result<SerializedStructure, SerializationError> {
+        smiles::write_semantic_cxsmiles_with_locants_and_axes(
             &self.graph,
             self.fragment,
             &self.principal_parent_atoms,

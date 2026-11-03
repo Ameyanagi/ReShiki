@@ -24,9 +24,9 @@ pub(in crate::naming) fn recover(smiles: &str) -> Result<Option<(String, &'stati
     // Check the unmodified input before native preparation can clean stereo.
     // This also proves the ordinary SMILES retains the original radical state.
     let canonical = super::super::canonical_smiles(smiles)?;
-    let source = smiles::prepare(smiles)
-        .map_err(|error| error.to_string())?
-        .state;
+    let prepared = smiles::prepare(smiles).map_err(|error| error.to_string())?;
+    let source = reshiki_model::molecule_names::apply_axis_markers(&prepared.state)
+        .map_err(|_| UNSUPPORTED)?;
     let radicals: Vec<_> = source
         .graph
         .atoms
@@ -154,15 +154,9 @@ fn closed_shell_parent(source: &State, graph: &Graph) -> Option<String> {
         },
         properties,
     };
-    let text = smiles::write::write(
-        &state,
-        smiles::write::Options {
-            ignore_maps: true,
-            ..smiles::write::Options::default()
-        },
-    )
-    .ok()?
-    .text;
+    // Recompute axial descriptors after neutralization: an M/P identity map
+    // from the radical ion need not retain its letter if CIP priorities change.
+    let text = reshiki_model::molecule_names::canonical_identity(&state).ok()?;
     let prepared = smiles::prepare(&text).ok()?;
     if prepared
         .state
@@ -179,6 +173,33 @@ fn closed_shell_parent(source: &State, graph: &Graph) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn radical_ion_recovery_preserves_decoded_biaryl_configuration() {
+        let input = "Oc1ccc(C[N+](C)C)c[c:900004]1-[c:900004]1ccccc1O";
+        let (neutral, suffix) = recover(input).unwrap().unwrap();
+        assert_eq!(suffix, "radical cation");
+        let expected = input.replace("[N+]", "N");
+        crate::naming::verify_identity(&expected, &neutral).unwrap();
+        let prepared = smiles::prepare(&neutral).unwrap();
+        let decoded = reshiki_model::molecule_names::apply_axis_markers(&prepared.state).unwrap();
+        assert_eq!(
+            decoded
+                .metadata
+                .bonds
+                .iter()
+                .filter(|bond| matches!(bond.stereo, 6 | 7))
+                .count(),
+            1
+        );
+        assert!(
+            decoded
+                .graph
+                .atoms
+                .iter()
+                .all(|atom| atom.charge == 0 && atom.radical_electrons == 0)
+        );
+    }
 
     #[test]
     fn localized_radical_ion_pairs_recover_only_the_missing_pi_bond() {

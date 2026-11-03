@@ -16,7 +16,7 @@ fn clearer_orientation_with_reach(
 ) -> Option<LabelAlignment> {
     let atom = doc.atom(id)?;
     let group = doc.abbreviation(id)?;
-    if group.reverse_label.trim().is_empty() {
+    if group.exit.is_some() || group.reverse_label.trim().is_empty() {
         return None;
     }
     let mut forward = group.clone();

@@ -6,7 +6,7 @@ use crate::{
 };
 use std::fmt::Write;
 
-// BINOL: two naphthyl rings with a single wedge inside the first ring,
+// [2,2'-Binaphthalene]-1,1'-diol: a single wedge inside the first ring,
 // originating at atom 0 on the 0--10 axis (IUPAC ST-1.7).
 const POSITIONS: [(f32, f32); 22] = [
     (0., 0.),

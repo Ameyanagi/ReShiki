@@ -20,6 +20,7 @@ struct NamingBudget {
     status: Cell<NameStatus>,
     relative_ring_names: Cell<bool>,
     unknown_units: RefCell<BTreeSet<String>>,
+    ring_assembly_junctions: RefCell<AtomSet>,
     relative_ring_alternative: Cell<bool>,
     benzoheterocycle_names: Cell<bool>,
     higher_order_fusion_alternative: Cell<bool>,
@@ -33,6 +34,7 @@ impl Default for NamingBudget {
             status: Cell::new(NameStatus::Preferred),
             relative_ring_names: Cell::new(false),
             unknown_units: RefCell::default(),
+            ring_assembly_junctions: RefCell::default(),
             relative_ring_alternative: Cell::new(false),
             benzoheterocycle_names: Cell::new(true),
             higher_order_fusion_alternative: Cell::new(false),
@@ -119,6 +121,10 @@ pub struct Molecule {
     pub accurate_cip: BTreeMap<usize, String>,
     pub legacy_cip: BTreeMap<usize, String>,
     pub substituted_symbols: AtomSet,
+    pub stereogenic_atoms: AtomSet,
+    pub stereogenic_bonds: AtomSet,
+    /// Functional centres whose capped fragments omit real substitution sites.
+    pub projected_substitution_centers: AtomSet,
     /// A plan is valid only for this molecular graph and its chemical state.
     pub(crate) fusion_plan_cache:
         RefCell<BTreeMap<AtomSet, Result<Option<super::fusion::model::FusionParentPlan>, String>>>,
@@ -141,6 +147,9 @@ impl Clone for Molecule {
             accurate_cip: self.accurate_cip.clone(),
             legacy_cip: self.legacy_cip.clone(),
             substituted_symbols: self.substituted_symbols.clone(),
+            stereogenic_atoms: self.stereogenic_atoms.clone(),
+            stereogenic_bonds: self.stereogenic_bonds.clone(),
+            projected_substitution_centers: self.projected_substitution_centers.clone(),
             fusion_plan_cache: RefCell::default(),
             third_component_plan_cache: RefCell::default(),
             naming_budget: Rc::clone(&self.naming_budget),
@@ -213,6 +222,20 @@ impl Molecule {
             .collect()
     }
 
+    pub(super) fn record_ring_assembly(&self, junctions: &AtomSet) {
+        self.naming_budget
+            .ring_assembly_junctions
+            .borrow_mut()
+            .extend(junctions);
+    }
+
+    pub(super) fn ring_assembly_is_named(&self, junction: usize) -> bool {
+        self.naming_budget
+            .ring_assembly_junctions
+            .borrow()
+            .contains(&junction)
+    }
+
     pub(super) fn set_name_status(&self, status: NameStatus) {
         self.naming_budget.status.set(status);
     }
@@ -225,11 +248,13 @@ impl Molecule {
     ) -> Result<Option<T>, String> {
         let status = self.name_status();
         let unknown_units = self.naming_budget.unknown_units.borrow().clone();
+        let ring_assemblies = self.naming_budget.ring_assembly_junctions.borrow().clone();
         let higher_order_fusion = self.has_higher_order_fusion_alternative();
         let result = name();
         if !matches!(result, Ok(Some(_))) {
             self.set_name_status(status);
             *self.naming_budget.unknown_units.borrow_mut() = unknown_units;
+            *self.naming_budget.ring_assembly_junctions.borrow_mut() = ring_assemblies;
             self.naming_budget
                 .higher_order_fusion_alternative
                 .set(higher_order_fusion);
@@ -350,6 +375,11 @@ impl Molecule {
     ) -> Self {
         let mut fragment = Self::new();
         fragment.naming_budget = Rc::clone(&self.naming_budget);
+        fragment.projected_substitution_centers = self
+            .projected_substitution_centers
+            .intersection(atom_ids)
+            .copied()
+            .collect();
         for idx in atom_ids {
             if let Some(original) = self.atoms.get(idx) {
                 let mut atom = original.clone();
@@ -381,6 +411,20 @@ impl Molecule {
                 fragment.bonds.insert(bond.idx, bond.clone());
             }
         }
+        // Naming projections retain source descriptors and their possible units,
+        // including when a caller subsequently caps a functional group.
+        fragment.stereogenic_atoms = self
+            .stereogenic_atoms
+            .iter()
+            .copied()
+            .filter(|idx| fragment.atoms.contains_key(idx))
+            .collect();
+        fragment.stereogenic_bonds = self
+            .stereogenic_bonds
+            .iter()
+            .copied()
+            .filter(|idx| fragment.bonds.contains_key(idx))
+            .collect();
         fragment.accurate_cip = self
             .accurate_cip
             .iter()
@@ -501,6 +545,8 @@ mod tests {
         assert!(mol.add_bond(Bond::new(8, 9, 3, 1)).is_err());
         mol.accurate_cip.insert(2, "r".into());
         mol.legacy_cip.insert(2, "S".into());
+        mol.stereogenic_atoms.extend([2, 3]);
+        mol.stereogenic_bonds.extend([1, 8]);
         let ids = AtomSet::from([2, 5, 9]);
         let fragment = mol.subgraph(&ids);
         assert_eq!(fragment.get_neighbors(5), &[9, 2]);
@@ -510,6 +556,8 @@ mod tests {
         );
         assert_eq!(fragment.accurate_cip, mol.accurate_cip);
         assert_eq!(fragment.legacy_cip, mol.legacy_cip);
+        assert_eq!(fragment.stereogenic_atoms, AtomSet::from([2]));
+        assert_eq!(fragment.stereogenic_bonds, AtomSet::from([1]));
         assert_eq!(bond_ids_within(&mol, &ids), BTreeSet::from([1, 4]));
         assert_eq!(
             component_atoms_until_blocked(
@@ -520,5 +568,39 @@ mod tests {
             ),
             AtomSet::from([5, 9])
         );
+    }
+
+    #[test]
+    fn extracted_acid_fragments_preserve_stereo_locant_omission() {
+        for (smiles, expected) in [
+            (
+                "O=C(O)c1ccc([C@H](F)Cl)cc1",
+                "4-[(R)-chlorofluoromethyl]benzoic acid",
+            ),
+            (
+                "CC(=O)OC(=O)c1ccc([C@H](F)Cl)cc1",
+                "4-[(R)-chlorofluoromethyl]benzoic acetic anhydride",
+            ),
+            (
+                "O=C(O)CNC(=O)c1ccc([C@H](F)Cl)cc1",
+                "{4-[(R)-chlorofluoromethyl]benzamido}acetic acid",
+            ),
+            (
+                "CC(=O)OC(=O)[C@H](F)Cl",
+                "(R)-chlorofluoroacetic acetic anhydride",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
     }
 }

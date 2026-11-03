@@ -256,6 +256,21 @@ pub fn add_indicated_hydrogens(
     numbered_path: &[usize],
     locants: &BTreeMap<usize, String>,
 ) -> Result<(), String> {
+    if let Some(assembly) = parts
+        .parent_hydride
+        .as_ref()
+        .and_then(|parent| parent.assembly.as_ref())
+    {
+        // P-28.2.3: cite indicated hydrogen at the front of the entire assembly.
+        let mut sites: Vec<_> = assembly
+            .indicated_hydrogen_atoms
+            .iter()
+            .map(|&atom| (locants[&atom].clone(), atom))
+            .collect();
+        sort_sites(&mut sites);
+        add_citations(parts, "indicated_hydrogen", &sites);
+        return Ok(());
+    }
     collect_indicated_hydrogens(mol, parts, numbered_path, locants)?;
     validate_retained_hydrogen_sites(mol, parts)
 }
