@@ -10,7 +10,7 @@ use std::{
 };
 
 fn reply(smiles: &str) -> serde_json::Value {
-    let count = crate::chemistry::smiles::parse(smiles)
+    let count = crate::chemistry::smiles::parse(smiles.split('|').next().unwrap().trim_end())
         .map(|parsed| parsed.graph.atoms.len())
         .unwrap_or_default();
     json!({"operation":"parse","protocol":worker::PROTOCOL,"backend":worker::BACKEND,"port_version":worker::PORT_VERSION,"upstream_version":worker::UPSTREAM_VERSION,"upstream_commit":worker::UPSTREAM_COMMIT,"resource_fingerprint":worker::RESOURCE_FINGERPRINT,"options":worker::OPTIONS,"name":"example","status":"SUCCESS","message":"","warnings":[],"cxsmiles":smiles,"locants":vec![None::<String>; count]})
@@ -123,6 +123,78 @@ fn generation_verification_accepts_salts_and_radicals_without_relaxing_import() 
         );
         let strict = worker::respond(&parse_request(name).unwrap()).unwrap();
         assert_eq!(parse_result(name, &strict).is_ok(), imports, "{name}");
+    }
+}
+
+#[test]
+fn generation_verification_accepts_only_one_relative_cx_group() {
+    for smiles in ["C[C@H](O)C(=O)O |o1:1|", "C[C@H](O)C(=O)[O-].[Na+] |o12:1|"] {
+        let mut value = reply(smiles);
+        value["options"] = json!(worker::GENERATION_OPTIONS);
+        let record = verification_result("example", &serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(record.smiles, smiles);
+        assert_eq!(record.locants.unwrap().smiles, smiles);
+        assert!(matches!(parse(reply(smiles)), Err(Error::Rejected(_))));
+    }
+    for extension in [
+        "r",
+        "&1:1",
+        "a:1",
+        "o1:1,o2:3",
+        "o1:1,&1:3",
+        "o1:1,$label$",
+        "o:1",
+        "o1:",
+        "o1:1,",
+        "o1:x",
+        "o1:1||o2:3",
+        "o1:1| trailing",
+    ] {
+        let mut value = reply(&format!("C[C@H](O)C(=O)O |{extension}|"));
+        value["options"] = json!(worker::GENERATION_OPTIONS);
+        assert!(
+            matches!(
+                verification_result("example", &serde_json::to_vec(&value).unwrap()),
+                Err(Error::Rejected(_))
+            ),
+            "Accepted unsupported extension {extension}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn actual_parser_rejects_relative_cages_and_imports_achiral_cages() {
+    for name in [
+        "bicyclo[2.2.1]heptan-2-exo-ol",
+        "rel-bicyclo[2.2.1]heptan-2-exo-ol",
+        "rac-bicyclo[2.2.1]heptan-2-exo-ol",
+    ] {
+        let error = resolve_name(name, Cancel::default()).await.unwrap_err();
+        assert!(matches!(error, Error::Rejected(_)), "{name}: {error}");
+        let message = error.to_string();
+        assert!(
+            message.contains("cannot yet store relative configuration"),
+            "{message}"
+        );
+        assert!(
+            message.contains("endo/exo/syn/anti on a chiral ring system"),
+            "{message}"
+        );
+        assert!(
+            message.contains("No simplified structure or single enantiomer was drawn"),
+            "{message}"
+        );
+    }
+    for name in [
+        "8-methyl-8-azabicyclo[3.2.1]octan-3-endo-ol",
+        "8-methyl-8-azabicyclo[3.2.1]octan-3-exo-ol",
+        "8-azabicyclo[3.2.1]octan-3-endo-ol",
+    ] {
+        let record = resolve_name(name, Cancel::default())
+            .await
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert!(!record.smiles.contains('|'), "{name}: {}", record.smiles);
+        assert!(record.warnings.is_empty(), "{name}");
     }
 }
 

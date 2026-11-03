@@ -215,9 +215,8 @@ pub(super) fn verify_alternative_identity(
     actual: &str,
     status: NameStatus,
 ) -> Result<(), String> {
-    let exact = super::verify_identity(expected, actual);
-    if exact.is_ok() || status != NameStatus::NotPreferred(super::NameReason::EndoExoStereo) {
-        return exact;
+    if status != NameStatus::NotPreferred(super::NameReason::EndoExoStereo) {
+        return super::verify_identity(expected, actual);
     }
     // These relative descriptors identify either enantiomer of the cage.
     // Invert every tetrahedral centre together.
@@ -229,7 +228,36 @@ pub(super) fn verify_alternative_identity(
             mirror.push('@');
         }
     }
-    super::verify_identity(&mirror, actual)
+    let relative = super::local::relative_stereo_smiles(actual);
+    let chiral = super::canonical_smiles(expected)? != super::canonical_smiles(&mirror)?;
+    if chiral != relative.is_some() {
+        return Err("The reconstructed endo/exo name must carry a relative stereo group exactly when the source structure is chiral".into());
+    }
+    if relative.is_some() {
+        let imported = crate::chemistry::smiles::read(actual).map_err(|error| error.to_string())?;
+        let metadata = &imported.prepared.state.metadata;
+        let valid_group = match metadata.groups.as_slice() {
+            [group] if group.kind == 1 && group.bonds.is_empty() => {
+                let mut atoms = group.atoms.clone();
+                atoms.sort_unstable();
+                atoms
+                    .into_iter()
+                    .eq(metadata
+                        .atoms
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(atom, meta)| {
+                            super::is_tetrahedral(meta.chiral_tag).then_some(atom)
+                        }))
+            }
+            _ => false,
+        };
+        if !valid_group {
+            return Err("The reconstructed endo/exo name must carry one relative stereo group containing exactly every tetrahedral stereocentre and no bonds".into());
+        }
+    }
+    let actual = relative.unwrap_or(actual);
+    super::verify_identity(expected, actual).or_else(|_| super::verify_identity(&mirror, actual))
 }
 
 async fn reconstruct_name(name: &str, cancel: &super::Cancel) -> Result<Record, Error> {

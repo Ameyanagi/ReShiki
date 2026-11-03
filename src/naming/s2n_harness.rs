@@ -105,7 +105,11 @@ impl Measurements {
             let reply = super::worker::respond(&request)?;
             let parsed = super::local::verification_result(name, &reply)
                 .map_err(|e| format!("{name}: {e}"))?;
-            super::canonical_smiles(&parsed.smiles)
+            if parsed.smiles.contains('|') {
+                Ok(parsed.smiles)
+            } else {
+                super::canonical_smiles(&parsed.smiles)
+            }
         })();
         self.parsing_time += start.elapsed();
         self.parsing_calls += 1;

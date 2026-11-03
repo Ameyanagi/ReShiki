@@ -268,25 +268,19 @@ mod tests {
     }
 
     fn assert_round_trip(name: &str, expected: &str, relative: bool) {
-        let request = crate::naming::local::parse_request(name).unwrap();
+        let request = crate::naming::local::verification_request(name).unwrap();
         let reply = crate::naming::worker::respond(&request).unwrap();
-        let parsed = crate::naming::local::parse_result(name, &reply).unwrap();
-        let actual = canonical_smiles(&parsed.smiles).unwrap();
-        if relative && actual != expected {
-            // Endo/exo names specify relative configuration, so OPSIN may
-            // choose the enantiomer with every tetrahedral centre inverted.
-            let mut mirror = String::new();
-            let mut chars = expected.chars().peekable();
-            while let Some(c) = chars.next() {
-                mirror.push(c);
-                if c == '@' && chars.next_if_eq(&'@').is_none() {
-                    mirror.push('@');
-                }
-            }
-            assert_eq!(actual, canonical_smiles(&mirror).unwrap(), "{name}");
+        let parsed = crate::naming::local::verification_result(name, &reply).unwrap();
+        let result = if relative {
+            crate::naming::reverse::verify_alternative_identity(
+                expected,
+                &parsed.smiles,
+                NameStatus::NotPreferred(NameReason::EndoExoStereo),
+            )
         } else {
-            assert_eq!(actual, expected, "{name}");
-        }
+            crate::naming::verify_identity(expected, &parsed.smiles)
+        };
+        result.unwrap_or_else(|error| panic!("{name}: {error}"));
     }
 
     #[test]

@@ -206,6 +206,7 @@ pub struct StereochemistryHandler<'a> {
     pub not_explicitly_defined_stereo_bond_map: BTreeMap<BondId, StereoBond>,
     pseudo_stereo_centres: Vec<(AtomId, String)>,
     preassigned_pseudo_stereo_centres: Vec<(AtomId, String)>,
+    cage_stereo_groups: BTreeMap<AtomId, (Vec<AtomId>, Option<StereoGroupType>)>,
 }
 impl<'a> StereochemistryHandler<'a> {
     pub fn new(
@@ -223,6 +224,7 @@ impl<'a> StereochemistryHandler<'a> {
             not_explicitly_defined_stereo_bond_map: bonds.clone(),
             pseudo_stereo_centres: Vec::new(),
             preassigned_pseudo_stereo_centres: Vec::new(),
+            cage_stereo_groups: BTreeMap::new(),
             atom_stereo_centre_map: atoms,
             bond_stereo_bond_map: bonds,
         }
@@ -363,6 +365,7 @@ impl<'a> StereochemistryHandler<'a> {
             }
         }
         self.warning_or_error(result)?;
+        self.apply_cage_stereo_groups()?;
         if global.len() > 1 {
             let message = "More than one global indicator of rac- or rel- was specified";
             if self
@@ -414,10 +417,13 @@ impl<'a> StereochemistryHandler<'a> {
     fn assign_cage_stereochemistry(&mut self, id: NodeId) -> Result {
         let value = self.attr(id, VALUE_ATR);
         let locant = self.attribute(id, LOCANT_ATR);
-        let fragments = self
-            .possible_fragments(id)?
-            .into_iter()
-            .chain(self.later_word_fragments(id, true)?);
+        let fragments = if locant.is_some() {
+            self.cage_owning_fragment(id)?.into_iter().collect()
+        } else {
+            let mut fragments = self.possible_fragments(id)?;
+            fragments.extend(self.later_word_fragments(id, true)?);
+            fragments
+        };
         for fragment in fragments {
             let Some(cage) = BicyclicCage::find(self.graph(), fragment) else {
                 continue;
@@ -476,6 +482,33 @@ impl<'a> StereochemistryHandler<'a> {
                     mirror = Some(alignment);
                 }
             }
+            let explicit_group = match self.attribute(id, STEREOGROUP_ATR).as_deref() {
+                Some("Rac") => Some(StereoGroupType::Racemic),
+                Some("Rel") => Some(StereoGroupType::Relative),
+                _ => None,
+            };
+            // Reuse the recorded kind on later cage descriptors: the parities
+            // introduced below default to absolute but do not anchor the cage.
+            let existing_group = self
+                .cage_stereo_groups
+                .get(&cage.atoms[0])
+                .map(|(_, kind)| *kind)
+                .unwrap_or_else(|| {
+                    cage.atoms
+                        .iter()
+                        .filter_map(|&atom| self.graph().atom(atom).parity.as_ref())
+                        .map(|parity| parity.stereo_group.kind)
+                        .max_by_key(|kind| *kind == StereoGroupType::Absolute)
+                });
+            let requested_group = if existing_group == Some(StereoGroupType::Absolute) {
+                existing_group
+            } else {
+                explicit_group.or(existing_group)
+            };
+            self.cage_stereo_groups
+                .entry(cage.atoms[0])
+                .or_insert_with(|| (cage.atoms.clone(), None))
+                .1 = requested_group;
             for (atom, mut parity) in parities {
                 parity.parity *= mirror.unwrap_or(1);
                 if self.graph().atom(atom).parity.is_none() {
@@ -494,6 +527,121 @@ impl<'a> StereochemistryHandler<'a> {
         stereo(
             "Endo/exo/syn/anti is supported only for substituted bicyclo[2.2.1]heptane and bicyclo[3.2.1]octane cages",
         )
+    }
+    fn cage_owning_fragment(&self, id: NodeId) -> Result<Option<FragmentId>> {
+        let mut scope = self.parent(id)?;
+        if self.arena[scope].attribute(LOCANT_ATR).is_none()
+            && let Some(group) = self.arena.first_child_named(scope, GROUP_EL)
+        {
+            return self.fragment(group).map(Some);
+        }
+        while let Some(parent) = self.arena[scope].parent {
+            let index = self.arena.index_of(parent, scope).unwrap();
+            if let Some(mut target) = self.arena[parent].children[index + 1..]
+                .iter()
+                .rev()
+                .copied()
+                .find(|&node| {
+                    matches!(
+                        self.arena[node].name.as_str(),
+                        ROOT_EL | SUBSTITUENT_EL | BRACKET_EL
+                    )
+                })
+            {
+                while self.arena[target].name == BRACKET_EL {
+                    target = *self.arena[target]
+                        .children
+                        .iter()
+                        .rev()
+                        .find(|&&node| {
+                            matches!(
+                                self.arena[node].name.as_str(),
+                                ROOT_EL | SUBSTITUENT_EL | BRACKET_EL
+                            )
+                        })
+                        .unwrap();
+                }
+                let group = self.arena.first_child_named(target, GROUP_EL).unwrap();
+                return self.fragment(group).map(Some);
+            }
+            if self.arena[parent].name == WORD_EL {
+                break;
+            }
+            scope = parent;
+        }
+        Ok(None)
+    }
+    fn apply_cage_stereo_groups(&mut self) -> Result {
+        let cages = std::mem::take(&mut self.cage_stereo_groups);
+        let cage_atoms: BTreeSet<_> = cages
+            .values()
+            .flat_map(|(atoms, _)| atoms.iter().copied())
+            .collect();
+        let (mut racemic_number, mut relative_number) = (0, 0);
+        for group in self
+            .graph()
+            .atoms
+            .iter()
+            .filter(|atom| !cage_atoms.contains(&atom.id))
+            .filter_map(|atom| atom.parity.as_ref().map(|parity| parity.stereo_group))
+        {
+            let number = match group.kind {
+                StereoGroupType::Racemic => &mut racemic_number,
+                StereoGroupType::Relative => &mut relative_number,
+                _ => continue,
+            };
+            *number = (*number).max(group.number);
+        }
+        for (_, (atoms, group)) in cages {
+            let kind = if let Some(kind) = group {
+                kind
+            } else {
+                if !self.cage_has_distinct_mirror(&atoms)? {
+                    continue;
+                }
+                StereoGroupType::Relative
+            };
+            let number = match kind {
+                StereoGroupType::Racemic => {
+                    racemic_number += 1;
+                    racemic_number
+                }
+                StereoGroupType::Relative => {
+                    relative_number += 1;
+                    relative_number
+                }
+                _ => 1,
+            };
+            for atom in atoms {
+                self.set_stereo_group(atom, kind, number);
+            }
+        }
+        Ok(())
+    }
+    fn cage_has_distinct_mirror(&self, atoms: &[AtomId]) -> Result<bool> {
+        let mut graph = self.graph().clone();
+        let fragment = graph.atom(atoms[0]).fragment;
+        for atom in &mut graph.atoms {
+            if let Some(parity) = &mut atom.parity {
+                parity.stereo_group = StereoGroup::default();
+            }
+        }
+        let canonical = |graph: &Graph| -> Result<String> {
+            let smiles = crate::smiles::write_semantic_cxsmiles(graph, fragment)
+                .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
+            let imported = reshiki_chemistry::smiles::read(&smiles)
+                .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
+            reshiki_chemistry::smiles::write::write(&imported.prepared.state, Default::default())
+                .map(|output| output.text)
+                .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))
+        };
+        let original = canonical(&graph)?;
+        for &atom in atoms {
+            if let Some(parity) = &mut graph.atom_mut(atom).parity {
+                parity.parity *= -1;
+            }
+        }
+        Ok(original != canonical(&graph)?)
     }
     fn apply_global_rac_or_rel(&mut self, id: NodeId, kind: StereoGroupType) -> Result {
         let mut word = self.arena[id].parent;

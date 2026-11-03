@@ -898,6 +898,9 @@ impl<'a> ComponentGenerator<'a> {
             } else if matches(symbol, "(?i:endo|exo|syn|anti)") {
                 self.add(n, TYPE_ATR, ENDO_EXO_SYN_ANTI_TYPE_VAL);
                 self.add(n, VALUE_ATR, symbol.to_lowercase());
+                if let Some(group) = group {
+                    self.add(n, STEREOGROUP_ATR, group);
+                }
             } else if matches(symbol, "M|P|Ra|Sa|Sp|Rp") {
                 self.add(n, TYPE_ATR, AXIAL_TYPE_VAL);
                 self.add(n, VALUE_ATR, symbol);
