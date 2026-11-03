@@ -225,14 +225,17 @@ pub async fn build(
 /// own drawing finish. `None` discovers the installed helper only if needed.
 /// Empty molecules receive an empty analysis; an import's `analysis: None`
 /// policy belongs to its caller. All chemistry remains on blocking tasks.
+/// `projected` withholds XY from InChI when the drawing's coordinates must not
+/// define stereo (see `molfile::has_projected_coordinates`).
 pub async fn analyze_prepared(
     molecule: Arc<molecular::Molecule>,
+    projected: bool,
     config: Option<Config>,
 ) -> Result<Analysis, Error> {
     let source = Arc::clone(&molecule);
     let (smiles, input) = crate::task::spawn_blocking(move || {
         molecular::validate_molecule(&source)?;
-        prepare_identifiers(&source, false)
+        prepare_identifiers(&source, projected)
     })
     .await??;
     let inchi = generate_inchi(input.as_ref(), config).await?;

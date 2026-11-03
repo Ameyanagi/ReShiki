@@ -388,7 +388,7 @@ pub fn for_import_with_attachments(
     }
     let options = DrawingOptions::default();
     let work = wedge(molecule, is_3d, attachments, options, false)?;
-    let drawing = reconstruct(
+    let mut drawing = reconstruct(
         work,
         molecule,
         None,
@@ -396,6 +396,7 @@ pub fn for_import_with_attachments(
         Some(dummy_labels),
         options,
     )?;
+    preserve_unspecified_alkenes(molecule, &mut drawing.document);
     drawing.document.validate().map_err(Error::Drawing)?;
     Ok(drawing)
 }
@@ -454,7 +455,7 @@ pub fn for_generated(
         options,
         true,
     )?;
-    let drawing = reconstruct(
+    let mut drawing = reconstruct(
         work,
         &molecule,
         None,
@@ -462,8 +463,28 @@ pub fn for_generated(
         Some(&dummy_labels),
         options,
     )?;
+    preserve_unspecified_alkenes(&molecule, &mut drawing.document);
     drawing.document.validate().map_err(Error::Drawing)?;
     Ok(drawing)
+}
+
+/// Newly laid-out coordinates must not specify an alkene the source left open.
+/// Without a base drawing, reconstructed bonds retain the source graph order.
+fn preserve_unspecified_alkenes(molecule: &Molecule, document: &mut Document) {
+    let Ok(prepared) = super::prepare(document) else {
+        return;
+    };
+    for (((bond, chemical), source), perceived) in document
+        .bonds
+        .iter_mut()
+        .zip(&molecule.state.graph.bonds)
+        .zip(&molecule.state.metadata.bonds)
+        .zip(&prepared.state.metadata.bonds)
+    {
+        if chemical.order == 2 && source.stereo == 0 && perceived.stereo > 1 {
+            bond.stereo_authoritative = true;
+        }
+    }
 }
 
 pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
