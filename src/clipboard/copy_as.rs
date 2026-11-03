@@ -263,11 +263,11 @@ impl PreparedCopy {
 
 /// Prepare a known chemical name without invoking the local generator.
 pub fn prepare_name(name: String) -> PreparedCopy {
-    let spans = crate::name_markup::name_markup(&name);
+    let markup = crate::typography::name_markup(&name);
     PreparedCopy {
         format: CopyFormat::Name,
         notices: Vec::new(),
-        representations: super::name::representations(&name, &spans),
+        representations: super::name::representations(&name, &markup),
         text: Some(name),
     }
 }
