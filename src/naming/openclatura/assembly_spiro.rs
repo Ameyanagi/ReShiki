@@ -1,11 +1,13 @@
 //! Graph-numbered spiro components and their plain-name projection.
 use super::{
+    additive::name_indicated_hydrogen_locants,
     assembly_parent::{format_principal_suffix, parent_stem_and_terminal},
     assembly_parts::{AssemblyParts, HydroOperation, SubstituentItem, UnsaturationItem},
     assembly_prefixes::format_replacement_prefixes,
     assembly_utils::parse_locant,
     molecule::AtomSet,
     nomenclature::RULES,
+    retained_name_policy::retained_parent_name_policy,
     rules::{elements, elision, multipliers, retained::hw_name, stems},
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -1509,12 +1511,29 @@ fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
                 "1,3-benzoxazole",
                 "1,3-benzothiazole",
                 "benzimidazole",
+                "1H-benzotriazole",
                 "benzene",
                 "tetracyclo",
                 "tricyclo",
                 "bicyclo",
             ]
-            .map(str::to_owned),
+            .map(|name| {
+                // Hydro derivative aliases retain the existing parent boundary.
+                let name = retained_parent_name_policy(name)
+                    .filter(|policy| policy.hydrogenation.is_none())
+                    .map_or_else(
+                        || name.to_owned(),
+                        |policy| policy.output_name("unsubstituted_parent"),
+                    );
+                // Indicated H stays in the prefix; intrinsic parent locants do not.
+                if let Some((_, parent)) = name.split_once('-')
+                    && !name_indicated_hydrogen_locants(Some(&name)).is_empty()
+                {
+                    parent.to_owned()
+                } else {
+                    name
+                }
+            }),
         );
         for size in RULES.charges.saturated_n_ring_ionic_parents.keys() {
             for stem in ["aza", "oxa", "thia"] {
@@ -1691,5 +1710,42 @@ mod tests {
         assert_eq!(extracted.parent_name, "cyclopentane");
         assert_eq!(extracted.prefixes, ["2'-(2,6-difluorophenyl)-3'-methyl"]);
         assert_eq!(extracted.stereo, [("2'".into(), "R".into())]);
+    }
+
+    #[test]
+    fn benzoheterocycle_side_prefix_projection_preserves_parent_locants() {
+        for (input, expected, prefixes) in [
+            (
+                "1-methyl-1,3-benzimidazole",
+                "1,3-benzimidazole",
+                vec!["1'-methyl"],
+            ),
+            (
+                "5-methyl-1,2,3-benzotriazole",
+                "1,2,3-benzotriazole",
+                vec!["5'-methyl"],
+            ),
+            (
+                "5-methyl-1H-1,2,3-benzotriazole",
+                "1,2,3-benzotriazole",
+                vec!["5'-methyl-1H"],
+            ),
+        ] {
+            let extracted = extract_spiro_side_prefixes(input);
+            assert_eq!(extracted.parent_name, expected);
+            assert_eq!(extracted.prefixes, prefixes);
+        }
+    }
+
+    #[test]
+    fn retained_hydrogenation_aliases_keep_side_prefix_boundaries() {
+        for (input, parent, prefix) in [
+            ("5-methylindane", "indane", "5'-methyl"),
+            ("1-methylindoline", "indoline", "1'-methyl"),
+        ] {
+            let extracted = extract_spiro_side_prefixes(input);
+            assert_eq!(extracted.parent_name, parent);
+            assert_eq!(extracted.prefixes, [prefix]);
+        }
     }
 }

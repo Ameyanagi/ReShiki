@@ -730,9 +730,10 @@ fn fr35_source_examples_and_generated_names_preserve_structures() {
         (
             "thieno[3',2':5,6]phenanthro[4,3-e][1]benzothiophene",
             "c1cc2c(ccc3ccc4ccc5ccc6sccc6c5c4c32)s1",
-            // The current OPSIN layout changes component locants, preserving identity.
+            // FR-4.5(c) minimizes first-order phenanthro locants before the
+            // higher-order thieno locants, recovering the FR-3.5 source form.
             layout,
-            Some("thieno[2',3':3,4]phenanthro[5,6-e][1]benzothiophene"),
+            None,
         ),
     ] {
         let expected = super::canonical_smiles(smiles).unwrap();
@@ -775,12 +776,12 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
         (
             "c1nc2ccc3ocnc3c2s1",
             "[1,3]thiazolo[5,4-e][1,3]benzoxazole",
-            Some("[1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazole"),
+            Some("[1,3]thiazolo[4',5':5,6]benzo[1,2-d][1,3]oxazole"),
         ),
         (
             "c1nc2cc3ocnc3cc2s1",
             "[1,3]thiazolo[5,4-f][1,3]benzoxazole",
-            Some("[1,3]thiazolo[4',5':1,2]benzo[4,5-d][1,3]oxazole"),
+            Some("[1,3]thiazolo[4',5':4,5]benzo[1,2-d][1,3]oxazole"),
         ),
         (
             "c1nc2cc3ncsc3cc2s1",
@@ -790,7 +791,7 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
         (
             "O=C(O)Cc1nc2ccc3ocnc3c2s1",
             "2-([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid",
-            Some("2-([1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"),
+            Some("2-([1,3]thiazolo[4',5':5,6]benzo[1,2-d][1,3]oxazol-7-yl)acetic acid"),
         ),
     ] {
         let name = namer(smiles).unwrap();
@@ -923,6 +924,9 @@ fn standalone_benzoheterocycles_preserve_retained_parents() {
     for expected in [
         "1-benzofuran",
         "1,3-benzoxazole",
+        "1H-1,3-benzimidazole",
+        "1H-1,2,3-benzotriazole",
+        "1-methyl-1H-1,3-benzimidazole",
         "quinoline",
         "1H-indole",
         "2H-1-benzopyran",

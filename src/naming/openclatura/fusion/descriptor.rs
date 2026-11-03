@@ -75,6 +75,13 @@ struct CitationTopology {
     interparent_occurrences: Vec<usize>,
     location_key: ParentLocationKey,
 }
+#[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+struct FirstOrderLocantKey {
+    parent_letters_set: Vec<(usize, String, usize)>,
+    parent_letters_citation: Vec<(usize, String, usize)>,
+    attached_locants_set: Vec<(LocantKey, usize)>,
+    attached_locants_citation: Vec<(LocantKey, usize)>,
+}
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct CandidateScore {
     benzoheterocycle_seniority: Vec<ComparisonKey>,
@@ -82,6 +89,7 @@ struct CandidateScore {
     location: ParentLocationKey,
     count: usize,
     maximum_order: usize,
+    first_order_locants: FirstOrderLocantKey,
     joins: Vec<JoinKey>,
     attached_seniority: Vec<ComparisonKey>,
 }
@@ -1343,6 +1351,57 @@ fn attached_locant_key(join: &FusionJoin) -> Vec<LocantKey> {
 fn join_preference_key(join: &FusionJoin, side_rank: usize) -> JoinKey {
     (join.order, side_rank, attached_locant_key(join))
 }
+/// FR-4.5(a-d) / P-25.3.4.2.4(a-d) compare each complete locant tier
+/// before considering the next one. Sets retain repeated locants, and numeric
+/// locants retain multiplicative primes. FR-4.6 omission happens in rendering.
+fn first_order_locant_key(
+    citation_order: &[usize],
+    joins: &BTreeMap<usize, FusionJoin>,
+    depths: &BTreeMap<usize, usize>,
+) -> FirstOrderLocantKey {
+    let first_order: Vec<_> = citation_order
+        .iter()
+        .filter_map(|id| joins.get(id))
+        .filter(|join| join.order == 1)
+        .collect();
+    let parent_letters_citation: Vec<_> = first_order
+        .iter()
+        .flat_map(|join| join.host_sides())
+        .map(|side| {
+            (
+                side.letter.len(),
+                side.letter.clone(),
+                depths
+                    .get(&side.component_id)
+                    .copied()
+                    .unwrap_or(side.prime_depth),
+            )
+        })
+        .collect();
+    let attached_locants_citation: Vec<_> = first_order
+        .iter()
+        .flat_map(|join| join.attached_locants())
+        .map(|locant| {
+            (
+                retained_locant_sort_key(&locant.text),
+                depths
+                    .get(&locant.component_id)
+                    .copied()
+                    .unwrap_or(locant.prime_depth),
+            )
+        })
+        .collect();
+    let mut parent_letters_set = parent_letters_citation.clone();
+    parent_letters_set.sort();
+    let mut attached_locants_set = attached_locants_citation.clone();
+    attached_locants_set.sort();
+    FirstOrderLocantKey {
+        parent_letters_set,
+        parent_letters_citation,
+        attached_locants_set,
+        attached_locants_citation,
+    }
+}
 fn ordered_children(
     parents: &BTreeMap<usize, usize>,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -1379,6 +1438,7 @@ struct TreeState {
     map_indices: BTreeMap<usize, usize>,
     joins: BTreeMap<usize, FusionJoin>,
     ranks: BTreeMap<usize, usize>,
+    first_order_locants: Option<FirstOrderLocantKey>,
     prefix: Vec<JoinKey>,
     todo: Vec<TreeWork>,
 }
@@ -1390,10 +1450,10 @@ fn best_tree_mapping_candidate(
     mol: &Molecule,
     policy: &DescriptorOptions,
 ) -> Result<Option<Candidate>, String> {
-    // This work stack is the upstream continuation walk: choose every direct
-    // child's map first, order those children, then visit them in citation
-    // postorder. A completed join-key prefix can reject a branch immediately.
-    // Retaining this order also retains which full map wins a structural tie.
+    // Choose every direct child's map before visiting its descendants. Join
+    // prefixes may prune only in the final citation order: chains and distinct
+    // leaf prefixes have a fixed order, whereas multipart branch keys and
+    // tied-prefix multiplicative groups are finalized in build_candidate.
     let projected = deduplicate_interface_equivalent_maps(mapping_sets, interfaces);
     let root = topology.roots[0];
     let children: BTreeMap<usize, Vec<usize>> = (0..projected.len())
@@ -1409,6 +1469,16 @@ fn best_tree_mapping_candidate(
             )
         })
         .collect();
+    let prune_citation_prefix = children.values().all(|ids| {
+        ids.len() < 2
+            || (ids.iter().all(|child| children[child].is_empty())
+                && ids
+                    .iter()
+                    .map(|child| fusion_prefix_citation_key(&specs[child].attached_prefix))
+                    .collect::<BTreeSet<_>>()
+                    .len()
+                    == ids.len())
+    });
     let mut best: Option<Candidate> = None;
     let mut states = 0;
     let mut proved: BTreeMap<(usize, usize, usize), Option<(FusionJoin, usize)>> = BTreeMap::new();
@@ -1419,6 +1489,7 @@ fn best_tree_mapping_candidate(
             map_indices: [(root, root_index)].into_iter().collect(),
             joins: BTreeMap::new(),
             ranks: BTreeMap::new(),
+            first_order_locants: None,
             prefix: Vec::new(),
             todo: vec![TreeWork::Complete, TreeWork::VisitNode(root)],
         }];
@@ -1437,12 +1508,20 @@ fn best_tree_mapping_candidate(
                         let mut ordered = ids.clone();
                         ordered.sort_by_key(|c| {
                             (
+                                fusion_prefix_citation_key(&specs[c].attached_prefix),
                                 component_spec_seniority_key(&specs[c]).as_tuple(),
                                 state.ranks[c],
                                 attached_locant_key(&state.joins[c]),
                                 component_canonicalization_key(&specs[c]),
                             )
                         });
+                        if node == root && prune_citation_prefix {
+                            state.first_order_locants = Some(first_order_locant_key(
+                                &ordered,
+                                &state.joins,
+                                &BTreeMap::new(),
+                            ));
+                        }
                         for child in ordered.into_iter().rev() {
                             state.todo.push(TreeWork::EmitJoin(child));
                             state.todo.push(TreeWork::VisitNode(child));
@@ -1511,13 +1590,25 @@ fn best_tree_mapping_candidate(
                     }
                 }
                 TreeWork::EmitJoin(child) => {
-                    state.prefix.push(join_preference_key(
-                        &state.joins[&child],
-                        state.ranks[&child],
-                    ));
-                    if !best.as_ref().is_some_and(|b| {
-                        state.prefix.as_slice() > &b.score.joins[..state.prefix.len()]
-                    }) {
+                    if prune_citation_prefix {
+                        state.prefix.push(join_preference_key(
+                            &state.joins[&child],
+                            state.ranks[&child],
+                        ));
+                    }
+                    if !prune_citation_prefix
+                        || !best.as_ref().is_some_and(|b| {
+                            state
+                                .first_order_locants
+                                .as_ref()
+                                .is_some_and(|first_order| {
+                                    first_order > &b.score.first_order_locants
+                                        || (first_order == &b.score.first_order_locants
+                                            && state.prefix.as_slice()
+                                                > &b.score.joins[..state.prefix.len()])
+                                })
+                        })
+                    {
                         pending.push(state);
                     }
                 }
@@ -1848,9 +1939,7 @@ fn build_candidate(
         .iter()
         .map(|&root| build_citation_tree(root, &children))
         .collect();
-    // Structural map selection and its search-prefix pruning use seniority
-    // order; alphabetical citation must not change that preference.
-    let selection_order: Vec<_> = roots.iter().flat_map(postorder_children).collect();
+    let mut selection_order: Vec<_> = roots.iter().flat_map(postorder_children).collect();
     let mut opsin_citation_order = false;
     if roots.len() == 1 && interparent.is_empty() && closing.is_empty() {
         let group_by_member = groups
@@ -1859,6 +1948,10 @@ fn build_candidate(
             .collect();
         let mut alphabetical = roots[0].clone();
         order_citation_tree(&mut alphabetical, specs, &primary_joins, &group_by_member);
+        // FR-4.5 / P-25.3.4.2.4 compare fusion locants in FR-3.6 citation
+        // order. Select the maps in that order even if OPSIN later requires
+        // the explicitly unverified seniority-order rendering below.
+        selection_order = postorder_children(&alphabetical);
         if policy.enforce_interoperability_limits
             && !tree_citation_scope_supported(&alphabetical, &groups)
         {
@@ -1946,6 +2039,14 @@ fn build_candidate(
             .copied()
             .max()
             .unwrap_or(0),
+        first_order_locants: if topology.roots.len() == 1
+            && topology.interparent_pairs.is_empty()
+            && topology.cycle_closing_pairs.is_empty()
+        {
+            first_order_locant_key(&selection_order, &primary_joins, &depths)
+        } else {
+            FirstOrderLocantKey::default()
+        },
         joins: selection_order
             .iter()
             .map(|c| join_preference_key(&primary_joins[c], ranks[c]))
@@ -1995,7 +2096,7 @@ pub fn render_fusion_name(
 /// FR-3.6 / P-25.3.4.2.3 compare the names of complete attached branches.
 /// Bracketed locants and fusion descriptors do not contribute to the initial
 /// alphabetic comparison. Keep this separate from component seniority, which
-/// still selects the components, their maps, and the completed numbering.
+/// still selects the components and the completed numbering.
 #[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
 struct FusionPrefixCitationKey {
     name: String,
@@ -2892,6 +2993,53 @@ mod tests {
     }
 
     #[test]
+    fn fusion_locants_follow_alphabetical_citation_order() -> Result<(), String> {
+        for (smiles, expected) in [
+            (
+                // Pyrrole is senior to furan, but furo is cited first. The
+                // tied parent letter set {b,e} is minimized in citation order.
+                "n1c2[nH]ccc2nc2occc12",
+                "5H-furo[2,3-b]pyrrolo[2,3-e]pyrazine",
+            ),
+            (
+                // Furan is senior to thiophene and is also cited first.
+                "O1C=CC2=NC3=C(C=C21)SC=C3",
+                "furo[3,2-b]thieno[2,3-e]pyridine",
+            ),
+        ] {
+            let name = crate::naming::openclatura::name_smiles(smiles)?;
+            assert_eq!(name.text, expected);
+            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_strict_fusion_name_identity(smiles, &name)?;
+        }
+        Ok(())
+    }
+
+    fn assert_strict_fusion_name_identity(
+        smiles: &str,
+        name: &crate::naming::openclatura::Name,
+    ) -> Result<(), String> {
+        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            let parsed = parser.parse(text, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{text}: {}",
+                parsed.message
+            );
+            assert!(parsed.warnings.is_empty(), "{text}: {:?}", parsed.warnings);
+            let round_trip = parsed
+                .structure
+                .ok_or("Missing parsed fusion graph")?
+                .semantic_cxsmiles()
+                .map_err(|error| error.to_string())?;
+            crate::naming::verify_identity(smiles, &round_trip)?;
+        }
+        Ok(())
+    }
+
+    #[test]
     fn unsupported_alphabetical_scope_keeps_unverified_fusion_name() -> Result<(), String> {
         let smiles = "S1CC=C2C1=NC=1N2C=2C(=C3C1N=C1C=CC=CC1=C3)N=CC2";
         let name = crate::naming::openclatura::name_smiles(smiles)?;
@@ -2903,24 +3051,7 @@ mod tests {
             name.status,
             crate::naming::NameStatus::Unverified(crate::naming::NameReason::OpsinFusionLayout)
         );
-        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
-        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
-            let parsed = parser.parse(text, &opsin::ParseOptions::strict());
-            assert_eq!(
-                parsed.status,
-                opsin::Status::Success,
-                "{text}: {}",
-                parsed.message
-            );
-            assert!(parsed.warnings.is_empty(), "{text}: {:?}", parsed.warnings);
-            let round_trip = parsed
-                .structure
-                .ok_or("Missing parsed deeper-branch graph")?
-                .semantic_cxsmiles()
-                .map_err(|error| error.to_string())?;
-            crate::naming::verify_identity(smiles, &round_trip)?;
-        }
-        Ok(())
+        assert_strict_fusion_name_identity(smiles, &name)
     }
 
     #[test]
@@ -2931,24 +3062,11 @@ mod tests {
             name.text,
             "N-(4,5-dimethyl-1,3-thiazol-2-yl)-2-{[5-(propan-2-yl)-8,9,10,11-tetrahydro[1]benzothieno[3,2-e][1,2,4]triazolo[4,3-c]pyrimidin-3-yl]sulfanyl}acetamide"
         );
-        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
-        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
-            let parsed = parser.parse(text, &opsin::ParseOptions::strict());
-            assert_eq!(
-                parsed.status,
-                opsin::Status::Success,
-                "{text}: {}",
-                parsed.message
-            );
-            assert!(parsed.warnings.is_empty(), "{text}: {:?}", parsed.warnings);
-            let round_trip = parsed
-                .structure
-                .ok_or("Missing parsed corpus graph")?
-                .semantic_cxsmiles()
-                .map_err(|error| error.to_string())?;
-            crate::naming::verify_identity(smiles, &round_trip)?;
-        }
-        Ok(())
+        assert_eq!(
+            name.status,
+            crate::naming::NameStatus::Unverified(crate::naming::NameReason::OpsinFusionLayout)
+        );
+        assert_strict_fusion_name_identity(smiles, &name)
     }
 
     fn rematched_fixture(components: &[(&str, &[usize])]) -> (Molecule, Vec<FusionComponentMatch>) {
@@ -2980,7 +3098,7 @@ mod tests {
     }
 
     #[test]
-    fn graph_matched_citations_follow_upstream_seniority_and_higher_order_preferences() {
+    fn graph_matched_citations_prioritize_first_order_fusion_locants() -> Result<(), String> {
         type CitationCase<'a> = (Vec<(&'a str, Vec<usize>)>, &'a str);
         let cases: Vec<CitationCase<'_>> = vec![
             (
@@ -3004,7 +3122,9 @@ mod tests {
                     ("thiophene", vec![6, 1, 2, 7, 8]),
                     ("furan", vec![9, 7, 8, 10, 11]),
                 ],
-                "furo[3',2':2,3]thieno[5,4-b]pyridine",
+                // FR-4.5(c): first-order {2,3} wins over {4,5} before
+                // comparing the locants of the higher-order furo component.
+                "furo[2',3':4,5]thieno[2,3-b]pyridine",
             ),
             (
                 vec![
@@ -3040,5 +3160,24 @@ mod tests {
                 assert_eq!(render_fusion_name(&ast, registry).unwrap(), expected);
             }
         }
+        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+        let mut graphs = Vec::new();
+        for name in [
+            "furo[2',3':4,5]thieno[2,3-b]pyridine",
+            "furo[3',2':2,3]thieno[5,4-b]pyridine",
+        ] {
+            let parsed = parser.parse(name, &opsin::ParseOptions::strict());
+            assert_eq!(parsed.status, opsin::Status::Success, "{name}");
+            assert!(parsed.warnings.is_empty(), "{name}: {:?}", parsed.warnings);
+            graphs.push(
+                parsed
+                    .structure
+                    .ok_or("Missing parsed first-order locant control graph")?
+                    .semantic_cxsmiles()
+                    .map_err(|error| error.to_string())?,
+            );
+        }
+        crate::naming::verify_identity(&graphs[0], &graphs[1])?;
+        Ok(())
     }
 }

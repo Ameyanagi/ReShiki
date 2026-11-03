@@ -941,17 +941,19 @@ impl FusionComponentRegistry {
             spec.attached_prefix,
             spec.benzo_parent_name,
         ) = benzo_forms(&source, &spec)?;
-        // FR-2.2.8 preserves the exceptional trivial heterobicycle names.
+        // Preserve retained trivial names and the declared attached stems of
+        // matching preferred benzo components (for example, benzimidazolo).
         if let Some(retained) = self.components.iter().flat_map(|c| &c.templates).find(|s| {
             s.rings.len() == 2
                 && s.usable_as_attached
-                && (is_trivial_benzo_name(&s.parent_name)
-                    || matches!(s.parent_name.as_str(), "benzimidazole" | "benzotriazole"))
+                && (is_trivial_benzo_name(&s.parent_name) || s.parent_name == spec.parent_name)
                 && same_numbered_component_graph(s, &spec)
         }) {
             spec.parent_name = retained.parent_name.clone();
             spec.attached_prefix = retained.attached_prefix.clone();
-            spec.benzo_parent_name = None;
+            if is_trivial_benzo_name(&retained.parent_name) {
+                spec.benzo_parent_name = None;
+            }
         }
         spec.benzoheterocycle_component = !is_trivial_benzo_name(&spec.parent_name);
         Some(RegisteredFusionComponent {
@@ -1355,12 +1357,6 @@ fn benzo_forms(
         };
         format!("{benzo}{word}")
     };
-    // FR-2.2.8 explicitly omits locants for these unambiguous benzo forms.
-    if matches!(base.as_str(), "imidazole" | "triazole") {
-        let parent = join(&base);
-        let prefix = format!("{}o", parent.strip_suffix('e').unwrap_or(&parent));
-        return Some((parent, prefix, None));
-    }
     let mut hetero: Vec<_> = fused.atoms().iter().filter(|a| a.symbol != "C").collect();
     hetero.sort_by_key(|a| {
         (
@@ -1550,8 +1546,15 @@ mod tests {
             (
                 "imidazole",
                 ["4", "5"],
-                "benzimidazole",
-                "benzimidazolo",
+                "[1,3]benzimidazole",
+                "[1,3]benzimidazolo",
+                ["3a", "7a"],
+            ),
+            (
+                "generated-hw:N.N.N.C.C",
+                ["4", "5"],
+                "[1,2,3]benzotriazole",
+                "[1,2,3]benzotriazolo",
                 ["3a", "7a"],
             ),
         ] {
@@ -1617,6 +1620,18 @@ mod tests {
                 "2,1-benzothiazole",
             ),
             ("pyridine", ["5", "6"], "quinoline", "quinoline"),
+            (
+                "imidazole",
+                ["4", "5"],
+                "[1,3]benzimidazole",
+                "1,3-benzimidazole",
+            ),
+            (
+                "generated-hw:N.N.N.C.C",
+                ["4", "5"],
+                "[1,2,3]benzotriazole",
+                "1,2,3-benzotriazole",
+            ),
         ] {
             let (benzo, hetero) = benzo_test_pair(source, edge);
             let components = r.benzoheterocycle_matches(&benzo, &hetero).unwrap();
@@ -1647,6 +1662,7 @@ mod tests {
             "1-benzofuran",
             "1-benzothiophene",
             "1H-benzotriazole",
+            "benzimidazole",
             "2H-1-benzopyran",
             "1H-2-benzopyran",
         ] {
@@ -1656,6 +1672,34 @@ mod tests {
             let spec = r.get(key).unwrap().spec;
             assert!(!spec.benzoheterocycle_component, "{key}");
             assert!(spec.usable_as_attached, "{key}");
+        }
+    }
+
+    #[test]
+    fn retained_benzo_components_cite_whole_bicycle_heteroatom_locants() {
+        let registry = fusion_component_registry();
+        for (key, prefix) in [
+            ("1-benzofuran", "[1]benzofuro"),
+            ("1-benzothiophene", "[1]benzothieno"),
+            ("1,4-benzodioxine", "[1,4]benzodioxino"),
+            ("1,3-benzodioxole", "[1,3]benzodioxolo"),
+            ("1,4-benzoxazine", "[1,4]benzoxazino"),
+        ] {
+            assert_eq!(registry.get(key).unwrap().spec.attached_prefix, prefix);
+        }
+        for (key, parent, prefix) in [
+            ("benzimidazole", "[1,3]benzimidazole", "[1,3]benzimidazolo"),
+            (
+                "1H-benzotriazole",
+                "[1,2,3]benzotriazole",
+                "[1,2,3]benzotriazolo",
+            ),
+        ] {
+            let component = registry.get(key).unwrap().spec;
+            assert_eq!(component.parent_name, parent);
+            assert_eq!(component.attached_prefix, prefix);
+            assert!(component.benzoheterocycle_component);
+            assert!(component.template.default_indicated_h.is_empty());
         }
     }
 

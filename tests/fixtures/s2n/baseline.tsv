@@ -88,10 +88,10 @@ parity_text	alcohol_amine	13	13
 parity_text	alkenyl_benzyl	10	10
 parity_text	chain_ring_prefix	12	12
 parity_text	data	11	13
-parity_text	drug	17	20
+parity_text	drug	16	20
 parity_text	exploratory	1	1
 parity_text	fixtures	22	22
-parity_text	heterocycle	25	25
+parity_text	heterocycle	24	25
 parity_text	integration	16	16
 parity_text	mr_assembly	10	10
 parity_text	mr_bridged	14	14
@@ -105,4 +105,4 @@ parity_text	roundtrip	75	77
 parity_text	stereo	14	16
 parity_text	suffix_on_ring	20	20
 parity_text	unit	47	52
-parity_text	total	400	434
+parity_text	total	398	434

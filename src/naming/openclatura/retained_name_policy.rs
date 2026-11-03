@@ -161,3 +161,154 @@ pub fn render_retained_hydrogen_state(
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::naming::{NameReason, NameStatus, verify_identity};
+
+    #[test]
+    fn benzoheterocycle_locants_survive_substitution_fusion_and_spiro() {
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected, status) in [
+            // The spelling policy must not fix H1: oxo reconstruction and
+            // strict retained matches derive the hydrogen state from the graph.
+            (
+                "O=C1Nc2ccccc2N1",
+                "1,3-dihydro-2H-1,3-benzimidazol-2-one",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=C1N(C)c2ccccc2N1C",
+                "1,3-dimethyl-1,3-dihydro-2H-1,3-benzimidazol-2-one",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1ccc2n[nH]nc2c1",
+                "2H-1,2,3-benzotriazole",
+                NameStatus::Preferred,
+            ),
+            (
+                "Cn1nc2ccccc2n1",
+                "2-methyl-2H-1,2,3-benzotriazole",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=C(O)Cn1nc2ccccc2n1",
+                "2-(2H-1,2,3-benzotriazol-2-yl)acetic acid",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1N=C2C=CC=CC2=N1",
+                "2H-1,3-benzimidazole",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1ccc2[nH]cnc2c1",
+                "1H-1,3-benzimidazole",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1ccc2[nH]nnc2c1",
+                "1H-1,2,3-benzotriazole",
+                NameStatus::Preferred,
+            ),
+            (
+                "Cn1cnc2ccccc21",
+                "1-methyl-1H-1,3-benzimidazole",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=C(O)Cc1nc2ccccc2[nH]1",
+                "2-(1H-1,3-benzimidazol-2-yl)acetic acid",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=C(O)Cn1nnc2ccccc21",
+                "2-(1H-1,2,3-benzotriazol-1-yl)acetic acid",
+                NameStatus::Preferred,
+            ),
+            // Sulfonic acid uses the retained fallback outside the production
+            // gate and must keep the source parent's explicit 1H citation.
+            (
+                "O=S(=O)(O)c1ccc2[nH]nnc2c1",
+                "1H-1,2,3-benzotriazole-5-sulfonic acid",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1nc2cc3occc3cc2[nH]1",
+                "1H-furo[2,3-f][1,3]benzimidazole",
+                NameStatus::Preferred,
+            ),
+            (
+                "n1nc2cc3occc3cc2[nH]1",
+                "1H-furo[2,3-f][1,2,3]benzotriazole",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1=CC=CC=2C=CC=3N(C12)C1=C(N3)C=CC=C1",
+                "[1,3]benzimidazolo[1,2-a]quinoline",
+                NameStatus::Unverified(NameReason::OpsinFusionLayout),
+            ),
+            (
+                "N1=NN=C2C1=CC1=CC=3C=CC=NC3C=C1C2",
+                "4H-[1,2,3]benzotriazolo[5,6-g]quinoline",
+                NameStatus::Unverified(NameReason::OpsinFusionLayout),
+            ),
+            (
+                "c1ccc2c(c1)NC1(CCC1)N2",
+                "2,3-dihydro-1H-spiro[1,3-benzimidazole-2,1'-cyclobutane]",
+                NameStatus::Preferred,
+            ),
+            (
+                r"C1=CC=C(C=C1)COC2=CC\3=C(C=C2)NN/C3=C\4/N=C5C=CC(=CC5=N4)NCCCN6C=CN=C6",
+                "(2Z)-2-[5-(benzyloxy)-2,3-dihydro-1H-indazol-3-ylidene]-N-[3-(1H-imidazol-1-yl)propyl]-1,3-benzimidazol-5-amine",
+                NameStatus::Preferred,
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
+            for candidate in std::iter::once(name.text.as_str()).chain(
+                name.alternatives
+                    .iter()
+                    .map(|alternative| alternative.name.as_str()),
+            ) {
+                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                assert_eq!(
+                    parsed.status,
+                    opsin::Status::Success,
+                    "{candidate}: {}",
+                    parsed.message
+                );
+                let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+                verify_identity(smiles, &reconstructed)
+                    .unwrap_or_else(|error| panic!("{smiles} -> {candidate}: {error}"));
+            }
+        }
+    }
+
+    #[test]
+    fn recursive_benzo_policy_preserves_other_retained_substituents() {
+        for (smiles, expected) in [
+            (
+                "CC1=CC(=CC=C1)OCCNC(=O)CN(C)C2CCC3=CC=CC=C23",
+                "2-[(indan-1-yl)(methyl)amino]-N-{2-[(3-methylphenyl)oxy]ethyl}acetamide",
+            ),
+            (
+                "C=CCN1CC(C2=CC=CC=C21)CCCNC(=O)CCl",
+                "2-chloro-N-{3-[1-(prop-2-en-1-yl)indolin-3-yl]propyl}acetamide",
+            ),
+            (
+                "CCC(C)C(=O)N1CCC2=C1C=CC(=C2)C3=CSC(=N3)NC(=O)C4=CC=CC=C4OCC",
+                "2-ethoxy-N-{4-[1-(2-methylbutanoyl)indolin-5-yl]-1,3-thiazol-2-yl}benzamide",
+            ),
+            (
+                "CC(C1CCC2=C1C(=C(C=C2)OC)OC)C(C)C(=O)N",
+                "3-(6,7-dimethoxyindan-1-yl)-2-methylbutanamide",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+        }
+    }
+}
