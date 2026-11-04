@@ -55,26 +55,53 @@ pub(super) fn monatomic_cation(smiles: &str, in_salt: bool) -> Result<Option<Nam
 
 /// Assess each anion before a salt can inherit its preference status.
 pub(super) fn assess_anion_parent(mol: &Molecule, text: &str) {
-    if mol.atoms.values().map(|atom| atom.charge).sum::<i32>() >= 0 {
+    // Carbon-free anions take retained or additive names, not a P-72.7 parent.
+    if mol.atoms.values().all(|atom| atom.symbol != "C")
+        || mol.atoms.values().map(|atom| atom.charge).sum::<i32>() >= 0
+    {
         return;
     }
-    let olate = text.trim_end_matches([')', ']', '}']).ends_with("olate");
-    let acid = text
+    // Only the outer parent citation proves an anionic parent: an ionic
+    // suffix inside a bracketed substituent does not name the parent.
+    let mut depth = 0usize;
+    let parent: String = text
+        .chars()
+        .filter(|ch| match ch {
+            '(' | '[' | '{' => {
+                depth += 1;
+                false
+            }
+            ')' | ']' | '}' => {
+                depth = depth.saturating_sub(1);
+                false
+            }
+            _ => depth == 0,
+        })
+        .collect();
+    let words: Vec<_> = parent
         .split(|c: char| !c.is_ascii_alphabetic())
-        .any(|word| word == "acid");
-    let oxido_acid = text.contains("oxido")
-        && mol.atoms.iter().any(|(&id, atom)| {
-            atom.symbol == "O"
-                && atom.charge < 0
-                && mol.degree(id) == 1
-                && mol.get_neighbors(id).iter().any(|&center| {
-                    mol.bond_order(id, center) == 1
-                        && mol.get_neighbors(center).iter().any(|&other| {
-                            mol.atoms[&other].symbol == "O" && mol.bond_order(center, other) == 2
-                        })
-                })
+        .filter(|word| !word.is_empty())
+        .collect();
+    let last = words.last().copied().unwrap_or_default();
+    // A skeletal anion can precede a neutral suffix, as in
+    // 1H-pyrrol-1-ide-3-carboxylic acid.
+    let anionic_parent = last.ends_with("ate")
+        || last.ends_with("ite")
+        || words.iter().any(|word| {
+            word.ends_with("ide")
+                && ![
+                    "amide",
+                    "imide",
+                    "hydrazide",
+                    "oxide",
+                    "sulfide",
+                    "selenide",
+                    "telluride",
+                ]
+                .iter()
+                .any(|neutral| word.ends_with(neutral))
         });
-    if olate || acid || oxido_acid {
+    if last.ends_with("olate") || !anionic_parent {
         mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
     }
 }
@@ -157,6 +184,204 @@ mod tests {
     use super::*;
 
     #[test]
+    fn charged_substituents_do_not_certify_a_neutral_outer_parent() {
+        for (smiles, text) in [
+            (
+                "Oc1ccccc1-c1[n-]ccc1C",
+                "2-(3-methyl-1H-pyrrol-1-ide-2-yl)phenol",
+            ),
+            ("Oc1ccccc1[CH2-]", "2-methanidylphenol"),
+            ("OCCc1cc[n-]c1", "2-(1H-pyrrol-1-ide-3-yl)ethan-1-ol"),
+            (
+                "OC(=O)c1ccccc1-c1[n-]ccc1",
+                "2-(1H-pyrrol-1-ide-2-yl)benzoic acid",
+            ),
+        ] {
+            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+            assess_anion_parent(&mol, text);
+            assert_eq!(
+                mol.name_status(),
+                NameStatus::Unverified(NameReason::AnionParent),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn outer_skeletal_anion_citations_can_precede_a_neutral_suffix() {
+        for (smiles, text) in [
+            ("O=C(O)c1cc[n-]c1", "1H-pyrrol-1-ide-3-carboxylic acid"),
+            ("Oc1ccccc1[CH2-]", "(2-hydroxyphenyl)methanide"),
+            (
+                "[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
+                "2-[(2-oxidophenyl)methyl]benzoate",
+            ),
+        ] {
+            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+            assess_anion_parent(&mol, text);
+            assert_eq!(mol.name_status(), NameStatus::Preferred, "{text}");
+        }
+    }
+
+    #[test]
+    fn sulfonium_ylide_status_follows_substituent_anions() {
+        for (smiles, expected, status) in [
+            (
+                "C[S+](C)[CH-]c1cc([O-])ccc1[O-]",
+                "(dimethylsulfaniumyl)2,5-dioxidophenylmethanide",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "C[S+](C)[CH-]c1ccc([N+](=O)[O-])cc1",
+                "(dimethylsulfaniumyl)4-nitrophenylmethanide",
+                NameStatus::Preferred,
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected);
+            assert_eq!(name.status, status, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn unsupported_anionic_parent_examples_still_decline() {
+        for smiles in [
+            "[Na+].Oc1ccccc1-[n-]1cccc1",
+            "[Na+].Oc1ccccc1-n1cccc1",
+            "[Na+].Oc1ccccc1[C-]1C=CC=C1",
+            "[Na+].OCC[CH2-]",
+        ] {
+            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn anionic_parents_precede_neutral_groups_and_roundtrip_complete_salts() {
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected, status) in [
+            (
+                "[Na+].Oc1ccccc1-c1[n-]ccc1C",
+                "sodium 2-(2-hydroxyphenyl)-3-methyl-1H-pyrrol-1-ide",
+                NameStatus::Preferred,
+            ),
+            (
+                "Oc1ccccc1-c1[n-]ccc1C",
+                "2-(2-hydroxyphenyl)-3-methyl-1H-pyrrol-1-ide",
+                NameStatus::Preferred,
+            ),
+            ("[n-]1cccc1", "1H-pyrrol-1-ide", NameStatus::Preferred),
+            (
+                "[Na+].Cc1cc[n-]c1",
+                "sodium 3-methyl-1H-pyrrol-1-ide",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].Oc1ccccc1Cc1cc[n-]c1",
+                "sodium 3-[(2-hydroxyphenyl)methyl]-1H-pyrrol-1-ide",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].OC(=O)c1ccccc1-c1[n-]ccc1",
+                "sodium 2-(2-carboxyphenyl)-1H-pyrrol-1-ide",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].Oc1ccccc1[CH2-]",
+                "sodium (2-hydroxyphenyl)methanide",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].Oc1ccc(cc1)[CH2-]",
+                "sodium (4-hydroxyphenyl)methanide",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].OC(=O)c1ccccc1Cc1ccccc1[O-]",
+                "sodium 2-[(2-carboxyphenyl)methyl]benzen-1-olate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].OC(=O)c1ccccc1Cc1ccccc1C(=O)[O-]",
+                "sodium 2-[(2-carboxyphenyl)methyl]benzoate",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].[O-]C(=O)c1ccccc1Cc1ccccc1O",
+                "sodium 2-[(2-hydroxyphenyl)methyl]benzoate",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].[O-]C(=O)Cc1ccccc1O",
+                "sodium (2-hydroxyphenyl)acetate",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].Oc1ccccc1Cc1ccccc1[O-]",
+                "sodium 2-[(2-hydroxyphenyl)methyl]benzen-1-olate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].NC(=O)c1ccccc1Cc1ccccc1[O-]",
+                "sodium 2-[(2-carbamoylphenyl)methyl]benzen-1-olate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].O=Cc1ccccc1Cc1ccccc1[O-]",
+                "sodium 2-[(2-formylphenyl)methyl]benzen-1-olate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].CC(=O)c1ccccc1Cc1ccccc1[O-]",
+                "sodium 2-[(2-acetylphenyl)methyl]benzen-1-olate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].[Na+].[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
+                "disodium 2-[(2-oxidophenyl)methyl]benzoate",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].OCCc1cc[n-]c1",
+                "sodium 3-(2-hydroxyethyl)-1H-pyrrol-1-ide",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].Oc1ccccc1-c1nc[n-]c1",
+                "sodium 4-(2-hydroxyphenyl)-1H-imidazol-1-ide",
+                NameStatus::Preferred,
+            ),
+            ("CC(=O)[O-]", "acetate", NameStatus::Preferred),
+            (
+                "O=C([O-])CCC(=O)O",
+                "3-carboxypropanoate",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].O=C([O-])CCC(=O)O",
+                "sodium 3-carboxypropanoate",
+                NameStatus::Preferred,
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles)
+                .unwrap_or_else(|error| panic!("{smiles}: {error}"));
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
+            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{}: {}",
+                name.text,
+                parsed.message
+            );
+            let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            crate::naming::verify_identity(smiles, &reconstructed).unwrap_or_else(|error| {
+                panic!("{smiles} -> {} -> {reconstructed}: {error}", name.text)
+            });
+        }
+    }
+
+    #[test]
     fn hydroxy_anion_parent_preference_is_unverified() {
         let name = super::super::name_smiles("C[O-]").unwrap();
         assert_eq!(name.text, "methanolate");
@@ -164,18 +389,10 @@ mod tests {
     }
 
     #[test]
-    fn acid_anion_parent_preference_is_unverified() {
+    fn acid_anion_parent_precedes_the_neutral_acid() {
         let name = super::super::name_smiles("O=C([O-])CCC(=O)O").unwrap();
-        assert_eq!(name.text, "4-oxido-4-oxobutanoic acid");
-        assert_eq!(name.status, NameStatus::Unverified(NameReason::AnionParent));
-    }
-
-    #[test]
-    fn oxido_prefix_for_deprotonated_acid_is_unverified() {
-        let name = super::super::name_smiles("O=C([O-])C#[N+][O-]").unwrap();
-        assert!(name.text.contains("oxido"), "{}", name.text);
-        assert!(!name.text.contains("acid"), "{}", name.text);
-        assert_eq!(name.status, NameStatus::Unverified(NameReason::AnionParent));
+        assert_eq!(name.text, "3-carboxypropanoate");
+        assert_eq!(name.status, NameStatus::Preferred);
     }
 
     #[test]
@@ -186,10 +403,10 @@ mod tests {
     }
 
     #[test]
-    fn salt_inherits_acid_anion_parent_uncertainty() {
+    fn salt_inherits_the_preferred_acid_anion_parent() {
         let name = super::super::name_smiles("[Na+].O=C([O-])CCC(=O)O").unwrap();
-        assert_eq!(name.text, "sodium 4-oxido-4-oxobutanoic acid");
-        assert_eq!(name.status, NameStatus::Unverified(NameReason::AnionParent));
+        assert_eq!(name.text, "sodium 3-carboxypropanoate");
+        assert_eq!(name.status, NameStatus::Preferred);
     }
 
     #[test]
@@ -198,6 +415,8 @@ mod tests {
             ("CC(=O)[O-]", "acetate"),
             ("O=S(=O)([O-])[O-]", "sulfate"),
             ("[Cl-]", "chloride"),
+            ("[N-]=[N+]=[N-]", "azide"),
+            ("[O-]N=O", "nitrite"),
             ("C[NH3+]", "methanaminium"),
             ("CC(=O)O", "acetic acid"),
         ] {
