@@ -47,11 +47,11 @@ impl App {
             }
             Action::Cancel => {
                 self.cancel_cleanup();
-                Task::none()
+                super::focus_drawing()
             }
             Action::Apply => {
                 self.apply_cleanup();
-                Task::none()
+                super::focus_drawing()
             }
         }
     }

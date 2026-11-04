@@ -383,8 +383,12 @@ impl App {
         Continue(message)
     }
 
+    // Preview close routing is exercised in src/app/shortcut_focus_tests/review_close.rs.
     fn cleanup_preview_gate(&mut self, message: Message) -> Gate {
         if self.tab.cleanup.is_some() {
+            if matches!(&message, Message::ContextKey(key) if key == "Enter") {
+                return Break(self.update(Message::Cleanup(cleanup::Action::Apply)));
+            }
             if matches!(message, Message::Tool(Tool::Select)) {
                 return Break(self.update(Message::Cleanup(cleanup::Action::Cancel)));
             }
@@ -404,7 +408,7 @@ impl App {
                 && !self.answers_save_dialog(&message)
             {
                 if !matches!(message, Message::Canvas(_)) {
-                    self.status = "Apply or cancel the cleanup preview to continue editing".into();
+                    self.status = "Cleanup preview · Enter to apply · Esc to cancel".into();
                 }
                 return Break(Task::none());
             }
