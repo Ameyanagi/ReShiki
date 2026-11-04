@@ -4,6 +4,7 @@ use super::{
     assembly_prefixes::substituent_sort_key,
     component_group_rules::ester_or_peroxy_single_oxygen,
     formatting::strip_outer_parentheses,
+    graph_kernel::{Edge, normalize_edge},
     locants::parse_locant,
     molecule::{AtomSet, Molecule, bond_ids_within},
     namer::{name_subgraph_rendered, name_subgraph_with_upstream},
@@ -11,7 +12,7 @@ use super::{
     subgraph_tools::subgraph_component,
 };
 use crate::naming::{NameReason, NameStatus};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn add_component_front_modifiers(
     mol: &Molecule,
@@ -20,17 +21,18 @@ pub fn add_component_front_modifiers(
     key: Option<&str>,
     exclude: &AtomSet,
     locants: &BTreeMap<usize, String>,
-) -> Result<AtomSet, String> {
+) -> Result<(AtomSet, BTreeSet<Edge>), String> {
     let mut consumed = AtomSet::new();
+    let mut component_splits = BTreeSet::new();
     let Some(first) = groups.iter().find(|g| Some(g.key.as_str()) == key) else {
-        return Ok(consumed);
+        return Ok((consumed, component_splits));
     };
     if !first
         .resolved_rule
         .as_ref()
         .is_some_and(|r| r.has_capability("front_modifier"))
     {
-        return Ok(consumed);
+        return Ok((consumed, component_splits));
     }
     for group in groups.iter().filter(|g| Some(g.key.as_str()) == key) {
         let Some(linker) = ester_or_peroxy_single_oxygen(mol, group) else {
@@ -71,8 +73,10 @@ pub fn add_component_front_modifiers(
         parts
             .front_modifier_locants
             .push(locants.get(&group.attachment_carbon).cloned());
+        // P-65.6.3.2.1 / P-65.6.3.3.7.2.1: only rendered ester modifiers split.
+        component_splits.insert(normalize_edge(linker, root));
     }
-    Ok(consumed)
+    Ok((consumed, component_splits))
 }
 
 fn nitrogen_rank(

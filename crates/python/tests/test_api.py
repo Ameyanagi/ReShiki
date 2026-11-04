@@ -258,7 +258,7 @@ def test_aspirin_properties() -> None:
 def test_properties_match_cli() -> None:
     # Captured from this source with:
     # reshiki --cli analyze --smiles 'CC(=O)Oc1ccccc1C(=O)O'
-    result = json.loads((Path(__file__).parent / "fixtures/aspirin-cli.json").read_text())
+    result = json.loads((Path(__file__).parent / "fixtures/aspirin-cli.json").read_text("utf-8"))
     analysis = result["value"]["analysis"]
     actual = asdict(reshiki.properties(ASPIRIN))
     assert actual.keys() == analysis.keys()
@@ -277,7 +277,7 @@ def test_properties_match_live_cli() -> None:
         [candidate, "--cli", "analyze", "--smiles", ASPIRIN],
         check=True,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     result = json.loads(completed.stdout)
     analysis = result["value"]["analysis"]
