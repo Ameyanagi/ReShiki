@@ -357,7 +357,7 @@ fn cleanup_preview_admits_only_its_controls_and_view_aids() {
             assert_eq!(app.status, status, "{context}");
         } else {
             assert_eq!(
-                app.status, "Apply or cancel the cleanup preview to continue editing",
+                app.status, "Cleanup preview · Enter to apply · Esc to cancel",
                 "{context}"
             );
         }

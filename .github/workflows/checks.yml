@@ -322,6 +322,9 @@ jobs:
         # The Windows renderer includes Tiny Skia when WGPU is unavailable.
         # This checks widget layout/input; it is not native desktop acceptance.
         run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::updates_ -- --ignored
+      - name: Test that closing review panels returns keyboard focus to the drawing on Windows
+        if: runner.os == 'Windows'
+        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::review_close -- --ignored
       - name: Test rendered tool flyout input ownership on Windows
         if: runner.os == 'Windows'
         # Exercise the actual application widgets, including the Tiny Skia fallback.
