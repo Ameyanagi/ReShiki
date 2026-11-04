@@ -3,6 +3,7 @@
 //! Port of `CipSequenceRules.java`, OPSIN 2.9.0, commit
 //! `b91b610af5ab07560fedb20730d7aef46bb2bca0`.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT, see the crate license.
+//! Adds P-92.1.4.4 anionic mancude averaging, which is absent from upstream OPSIN.
 //!
 //! Each rule is exhausted over the whole ligand before the next rule is used.
 //! Path-local histories terminate rings; terminal duplicate atoms represent
@@ -13,9 +14,11 @@
 //! placeholders are not virtual neighbours: callers must use the same explicit
 //! hydrogen construction stage as OPSIN when hydrogen participation is needed.
 
-use crate::graph::{Atom, AtomId, Element, Graph};
+use crate::graph::{Atom, AtomId, Graph};
+use reshiki_chemistry::stereo::cip::{Fraction, Molecule};
+use std::cell::OnceCell;
 use std::cmp::Ordering;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 
 const UNRESOLVED_MESSAGE: &str = "Failed to assign CIP stereochemistry, this indicates a bug in OPSIN or a limitation in OPSIN's implementation of the sequence rules";
@@ -43,11 +46,21 @@ impl std::error::Error for CipOrderingError {}
 pub struct CipSequenceRules<'a> {
     graph: &'a Graph,
     chiral_atom: AtomId,
+    negative_parts: OnceCell<Result<HashMap<AtomId, NegativeMancudePart>, CipOrderingError>>,
+}
+
+struct NegativeMancudePart {
+    id: usize,
+    fraction: Fraction,
 }
 
 impl<'a> CipSequenceRules<'a> {
     pub const fn new(graph: &'a Graph, chiral_atom: AtomId) -> Self {
-        Self { graph, chiral_atom }
+        Self {
+            graph,
+            chiral_atom,
+            negative_parts: OnceCell::new(),
+        }
     }
 
     pub fn get_neighbouring_atoms_in_cip_order(&self) -> Result<Vec<AtomId>, CipOrderingError> {
@@ -168,11 +181,39 @@ impl<'a> CipSequenceRules<'a> {
         Err(CipOrderingError::UnresolvedTie)
     }
 
+    fn negative_parts(&self) -> Result<&HashMap<AtomId, NegativeMancudePart>, CipOrderingError> {
+        self.negative_parts
+            .get_or_init(|| {
+                if !self.graph.atoms.iter().any(|a| a.active && a.charge < 0) {
+                    return Ok(HashMap::new());
+                }
+                let (state, indices) = crate::modern_cip::constitutional_state(self.graph)
+                    .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?;
+                let mut molecule = Molecule::new(&state)
+                    .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?;
+                let mut parts = HashMap::new();
+                for (atom, index) in indices {
+                    if let Some(id) = molecule
+                        .negative_mancude_part(index)
+                        .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?
+                    {
+                        let fraction = molecule
+                            .fraction(index)
+                            .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?;
+                        parts.insert(atom, NegativeMancudePart { id, fraction });
+                    }
+                }
+                Ok(parts)
+            })
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+
     fn real_node(&self, id: AtomId, visited: Vec<AtomId>) -> Result<Node, CipOrderingError> {
         let atom = self.atom(id)?;
         Ok(Node {
             atom: Some(id),
-            element: atom.element,
+            atomic_number: Fraction(u32::from(atom.element.atomic_number()), 1),
             isotope: atom.isotope,
             visited,
             duplicate_origin: None,
@@ -200,7 +241,12 @@ impl<'a> CipSequenceRules<'a> {
         let mut visited = node.visited.clone();
         visited.push(id);
         let mut neighbours = Vec::new();
-        for &bond_id in &self.atom(id)?.bonds {
+        let atom = self.atom(id)?;
+        let parts = self.negative_parts()?;
+        let part = parts.get(&id);
+        let negative = atom.charge < 0 && part.is_some();
+        let mut added_bond_duplicate = false;
+        for &bond_id in &atom.bonds {
             let bond = self
                 .graph
                 .bonds
@@ -216,21 +262,38 @@ impl<'a> CipSequenceRules<'a> {
                 CipOrderingError::InvalidGraph("CIP atom contains a nonincident bond".into())
             })?;
             let other_atom = self.atom(other)?;
+            let other_number = Fraction(u32::from(other_atom.element.atomic_number()), 1);
             let origin = node.visited.iter().position(|&ancestor| ancestor == other);
+            let averaged =
+                part.filter(|part| parts.get(&other).is_some_and(|other| part.id == other.id));
             if other != self.chiral_atom {
                 // Higher-order bonds to the root itself do not create duplicates
                 // (P-91.1.4.2.4), including e.g. the oxygen of a sulfoxide.
-                for _ in 1..bond.order {
+                // A negative mancude atom needs one averaged duplicate even
+                // without a double bond, including entry from outside its ring.
+                let duplicates =
+                    if negative && averaged.is_some() && other != previous && !added_bond_duplicate
+                    {
+                        1
+                    } else {
+                        bond.order.saturating_sub(1)
+                    };
+                for _ in 0..duplicates {
                     neighbours.push(Node::ghost(
-                        other_atom.element,
+                        averaged.map_or(other_number, |part| part.fraction),
                         visited.clone(),
-                        origin.unwrap_or(node.visited.len() + 1),
+                        // An averaged duplicate stands for every resonance position, so rule 1b
+                        // has no single duplicated atom; an origin would split equivalent forms.
+                        averaged
+                            .is_none()
+                            .then_some(origin.unwrap_or(node.visited.len() + 1)),
                     ));
+                    added_bond_duplicate = true;
                 }
             }
             if other != previous {
                 if let Some(origin) = origin {
-                    neighbours.push(Node::ghost(other_atom.element, visited.clone(), origin));
+                    neighbours.push(Node::ghost(other_number, visited.clone(), Some(origin)));
                 } else {
                     neighbours.push(self.real_node(other, visited.clone())?);
                 }
@@ -245,26 +308,28 @@ impl<'a> CipSequenceRules<'a> {
 struct Node {
     /// None distinguishes a terminal ghost from its real source atom.
     atom: Option<AtomId>,
-    element: Element,
+    atomic_number: Fraction,
     isotope: Option<u32>,
     visited: Vec<AtomId>,
     duplicate_origin: Option<usize>,
 }
 
 impl Node {
-    fn ghost(element: Element, visited: Vec<AtomId>, origin: usize) -> Self {
+    fn ghost(atomic_number: Fraction, visited: Vec<AtomId>, origin: Option<usize>) -> Self {
         Self {
             atom: None,
-            element,
+            atomic_number,
             isotope: None,
             visited,
-            duplicate_origin: Some(origin),
+            duplicate_origin: origin,
         }
     }
 }
 
 fn compare_nodes(a: &Node, b: &Node, rule: u8) -> Ordering {
-    let order = a.element.atomic_number().cmp(&b.element.atomic_number());
+    let Fraction(an, ad) = a.atomic_number;
+    let Fraction(bn, bd) = b.atomic_number;
+    let order = (u64::from(an) * u64::from(bd)).cmp(&(u64::from(bn) * u64::from(ad)));
     if order != Ordering::Equal || rule == 0 {
         return order;
     }
@@ -333,4 +398,79 @@ fn group_same_priority(lists: Vec<Vec<Node>>, rule: u8) -> Vec<Vec<Node>> {
         }
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fractional_atomic_numbers_compare_exactly() {
+        let node = |n, d| Node::ghost(Fraction(n, d), Vec::new(), Some(0));
+        assert_eq!(compare_nodes(&node(24, 5), &node(6, 1), 0), Ordering::Less);
+        assert_eq!(
+            compare_nodes(&node(24, 5), &node(48, 10), 0),
+            Ordering::Equal
+        );
+    }
+
+    #[test]
+    fn each_cyclopentadienide_atom_has_one_averaged_bond_duplicate() {
+        for smiles in [
+            "O[C@H](C1=CC=CC1)C1=C[CH-]C=C1",
+            "O[C@H](C1=CC=CC1)[C-]1C=CC=C1",
+        ] {
+            assert_ring_duplicates(smiles, 7..12, Fraction(24, 5));
+        }
+    }
+
+    #[test]
+    fn each_cyclopropenide_atom_has_one_integral_averaged_bond_duplicate() {
+        for smiles in ["O[C@H](C1=CC1)C1=C[CH-]1", "O[C@H](C1=CC1)[C-]1C=C1"] {
+            assert_ring_duplicates(smiles, 5..8, Fraction(4, 1));
+        }
+    }
+
+    fn assert_ring_duplicates(smiles: &str, ring: std::ops::Range<usize>, fraction: Fraction) {
+        let mut graph = Graph::default();
+        let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
+        graph.make_hydrogens_explicit(fragment).unwrap();
+        let rules = CipSequenceRules::new(&graph, AtomId(1));
+        let mut pending = vec![
+            rules
+                .real_node(AtomId(ring.start), vec![AtomId(1)])
+                .unwrap(),
+        ];
+        while let Some(node) = pending.pop() {
+            let id = node.atom.unwrap();
+            let neighbours = rules.next_atoms(node, 0).unwrap();
+            if ring.contains(&id.0) {
+                let duplicates: Vec<_> = neighbours
+                    .iter()
+                    .filter(|n| n.atom.is_none() && n.atomic_number == fraction)
+                    .collect();
+                assert_eq!(duplicates.len(), 1, "{smiles}: atom {}", id.0);
+                assert_eq!(duplicates[0].duplicate_origin, None);
+            }
+            pending.extend(neighbours.into_iter().filter(|n| n.atom.is_some()));
+        }
+    }
+
+    #[test]
+    fn negative_part_keeps_exocyclic_oxygen_duplicate_and_origin() {
+        let mut graph = Graph::default();
+        let fragment =
+            crate::smiles::build_fragment(&mut graph, "OC1=CC(=O)C=C[CH-]1", "", "").unwrap();
+        graph.make_hydrogens_explicit(fragment).unwrap();
+        let rules = CipSequenceRules::new(&graph, AtomId(0));
+        assert!(rules.negative_parts().unwrap().contains_key(&AtomId(3)));
+        let carbonyl = rules
+            .real_node(AtomId(3), vec![AtomId(0), AtomId(1), AtomId(2)])
+            .unwrap();
+        let neighbours = rules.next_atoms(carbonyl, 0).unwrap();
+        let duplicates: Vec<_> = neighbours.iter().filter(|n| n.atom.is_none()).collect();
+        assert_eq!(duplicates.len(), 1);
+        assert_eq!(duplicates[0].atomic_number, Fraction(8, 1));
+        assert_eq!(duplicates[0].duplicate_origin, Some(4));
+    }
 }

@@ -315,3 +315,61 @@ fn invalid_arena_references_are_errors() {
         Err(CipOrderingError::InvalidGraph(_))
     ));
 }
+
+#[test]
+fn cyclopentadienide_ranks_below_neutral_cyclopentadienyl() {
+    // RDKit 2026.09.1 rdCIPLabeler.AssignCIPLabels gives S for all three.
+    // P-92.1.4.4: sphere II compares neutral C (6) with the Cp− duplicate (24/5).
+    for smiles in [
+        "O[C@H](C1=CC=CC1)C1=C[CH-]C=C1",
+        "O[C@H](C1=CCC=C1)C1=C[CH-]C=C1",
+        "O[C@H](C1=CC=CC1)[C-]1C=CC=C1",
+    ] {
+        check(
+            &graph(smiles, true),
+            2,
+            &[El(Element::H), Id(8), Id(3), El(Element::O)],
+        );
+    }
+}
+
+#[test]
+fn cyclopentadienide_resonance_forms_have_equal_priority() {
+    let graph = graph("C(F)(C1=C[CH-]C=C1)[C-]1C=CC=C1", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(0)).compare_ligands(AtomId(2), AtomId(7)),
+        Err(CipOrderingError::UnresolvedTie)
+    );
+}
+
+#[test]
+fn neutral_azaquinone_preserves_exocyclic_oxygen_duplicates() {
+    // The decisive carbonyl branches are [O, O, N] versus [O, O, C].
+    // A ring C/N average must not replace the exocyclic C=O oxygen duplicate.
+    check(
+        &graph("O[C@H](C1=CC(=O)C=NC1=O)C1=CC(=O)C=CC1=O", true),
+        2,
+        &[El(Element::H), Id(11), Id(3), El(Element::O)],
+    );
+}
+
+#[test]
+fn cationic_pyrylium_preserves_drawn_multiple_bond_duplicates() {
+    // The drawn C=[O+] supplies [O, O, C], above the other ligand's [O, N, H].
+    check(
+        &graph("O[C@H](C1=[O+]C=CC=C1)C(N)OC", true),
+        2,
+        &[El(Element::H), Id(9), Id(3), El(Element::O)],
+    );
+}
+
+#[test]
+fn neutral_azaquinone_alkene_endpoint_preserves_oxygen_duplicates() {
+    let graph = graph("FC=C(C1=CC(=O)C=NC1=O)C1=CC(=O)C=CC1=O", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(2))
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
+            .unwrap(),
+        vec![AtomId(11), AtomId(3)]
+    );
+}

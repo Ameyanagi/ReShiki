@@ -18,10 +18,9 @@ fn error(message: impl ToString) -> StereochemistryError {
     StereochemistryError::Uninterpretable(message.to_string())
 }
 
-/// Keep the OPSIN graph's physical hydrogens and bond insertion order. A
-/// parity's centre reference denotes a lone pair, which the CIP adapter also
-/// represents with the central atom after its physical neighbours.
-pub(crate) fn state(
+/// Keep physical hydrogens and bond insertion order without reading stereo
+/// references, which may still contain hydrogen placeholders during finalization.
+pub(crate) fn constitutional_state(
     graph: &Graph,
 ) -> Result<(State, HashMap<AtomId, usize>), StereochemistryError> {
     let atoms: Vec<_> = graph.atoms.iter().filter(|a| a.active).collect();
@@ -50,8 +49,26 @@ pub(crate) fn state(
             })
             .collect(),
     };
-    let mut metadata = Metadata::unspecified(&cip_graph);
-    for (index, atom) in atoms.iter().enumerate() {
+    let state = State {
+        valences: cip_graph.valences().map_err(error)?,
+        directions: vec![Direction::None; cip_graph.bonds.len()],
+        conjugated: vec![false; cip_graph.bonds.len()],
+        hybridizations: vec![Hybridization::Unspecified; cip_graph.atoms.len()],
+        properties: Properties::unspecified(&cip_graph),
+        rings: RingCache::default(),
+        metadata: Metadata::unspecified(&cip_graph),
+        graph: cip_graph,
+    };
+    Ok((state, indices))
+}
+
+/// A parity's centre reference denotes a lone pair, which the CIP adapter
+/// represents with the central atom after its physical neighbours.
+pub(crate) fn state(
+    graph: &Graph,
+) -> Result<(State, HashMap<AtomId, usize>), StereochemistryError> {
+    let (mut state, indices) = constitutional_state(graph)?;
+    for (index, atom) in graph.atoms.iter().filter(|a| a.active).enumerate() {
         let Some(parity) = &atom.parity else { continue };
         let mut carriers: Vec<_> = graph.neighbours(atom.id).into_iter().map(Some).collect();
         if carriers.len() == 3 {
@@ -67,32 +84,22 @@ pub(crate) fn state(
                 "Full CIP tetrahedral references do not match atom neighbours",
             ));
         }
-        metadata.atoms[index].chiral_tag = if (parity.parity == 1) ^ (permutation == 1) {
+        state.metadata.atoms[index].chiral_tag = if (parity.parity == 1) ^ (permutation == 1) {
             1
         } else {
             2
         };
     }
-    for (index, bond) in source_bonds.iter().enumerate() {
+    for (index, bond) in graph.bonds.iter().filter(|b| b.active).enumerate() {
         if let Some(stereo) = &bond.stereo {
-            metadata.bonds[index].stereo = match stereo.value {
+            state.metadata.bonds[index].stereo = match stereo.value {
                 BondStereoValue::Cis => 4,
                 BondStereoValue::Trans => 5,
             };
-            metadata.bonds[index].stereo_atoms =
+            state.metadata.bonds[index].stereo_atoms =
                 vec![indices[&stereo.atom_refs[0]], indices[&stereo.atom_refs[3]]];
         }
     }
-    let state = State {
-        valences: cip_graph.valences().map_err(error)?,
-        directions: vec![Direction::None; cip_graph.bonds.len()],
-        conjugated: vec![false; cip_graph.bonds.len()],
-        hybridizations: vec![Hybridization::Unspecified; cip_graph.atoms.len()],
-        properties: Properties::unspecified(&cip_graph),
-        rings: RingCache::default(),
-        graph: cip_graph,
-        metadata,
-    };
     Ok((state, indices))
 }
 
@@ -114,6 +121,48 @@ pub(crate) fn atom_labels(graph: &Graph) -> Result<HashMap<AtomId, String>, Ster
 mod tests {
     use super::*;
     use crate::{ParseOptions, Parser, Status};
+
+    #[test]
+    fn mancude_names_preserve_the_named_enantiomer() {
+        use reshiki_chemistry::smiles;
+
+        let canonical = |text: &str| {
+            let imported = smiles::read(text).unwrap();
+            smiles::write::write(&imported.prepared.state, Default::default())
+                .unwrap()
+                .text
+        };
+        let parser = Parser::new().unwrap();
+        for (name, expected, label) in [
+            (
+                "3-[(S)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
+                "O[C@H](C1=CC=CC1)C1=C[CH-]C=C1",
+                "S",
+            ),
+            (
+                "3-[(R)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
+                "O[C@@H](C1=CC=CC1)C1=C[CH-]C=C1",
+                "R",
+            ),
+            (
+                "3-[(S)-(cyclopenta-1,4-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
+                "O[C@H](C1=CCC=C1)C1=C[CH-]C=C1",
+                "S",
+            ),
+        ] {
+            let result = parser.parse(name, &ParseOptions::strict());
+            assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+            let structure = result.structure.unwrap();
+            assert_eq!(
+                canonical(&structure.semantic_cxsmiles().unwrap()),
+                canonical(expected),
+                "{name}"
+            );
+            let labels = atom_labels(&structure.graph).unwrap();
+            assert_eq!(labels.len(), 1, "{name}: {labels:?}");
+            assert_eq!(labels.values().next().unwrap(), label, "{name}");
+        }
+    }
 
     #[test]
     fn full_cip_adapter_preserves_ordinary_and_pseudo_atom_parity() {

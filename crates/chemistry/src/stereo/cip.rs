@@ -67,6 +67,7 @@ pub struct Molecule<'a> {
     ring_bonds: Option<Vec<bool>>,
     bond_types: Option<Vec<u8>>,
     fractions: Option<Vec<Fraction>>,
+    negative_mancude_parts: Option<Vec<Option<usize>>>,
 }
 impl<'a> Molecule<'a> {
     pub fn new(state: &'a State) -> Result<Self, Error> {
@@ -101,6 +102,7 @@ impl<'a> Molecule<'a> {
             ring_bonds,
             bond_types: None,
             fractions: None,
+            negative_mancude_parts: None,
         })
     }
     fn prepare_bonds(&mut self) -> Result<(), Error> {
@@ -197,15 +199,34 @@ impl<'a> Molecule<'a> {
         )
         .copied()
     }
+    fn prepare_fractions(&mut self) -> Result<(), Error> {
+        if self.fractions.is_none() {
+            let (fractions, negative_parts) = mancude::calculate(self)?;
+            self.fractions = Some(fractions);
+            self.negative_mancude_parts = Some(negative_parts);
+        }
+        Ok(())
+    }
     pub fn fraction(&mut self, index: usize) -> Result<Fraction, Error> {
         at(&self.state.graph.atoms, index)?;
-        if self.fractions.is_none() {
-            self.fractions = Some(mancude::calculate(self)?);
-        }
+        self.prepare_fractions()?;
         at(
             self.fractions
                 .as_deref()
                 .ok_or_else(|| invalid("Missing CIP fractions"))?,
+            index,
+        )
+        .copied()
+    }
+    /// Identifies an atom's negative mancude part, if any. Equal IDs identify
+    /// atoms in the same part of this molecule, including integral averages.
+    pub fn negative_mancude_part(&mut self, index: usize) -> Result<Option<usize>, Error> {
+        at(&self.state.graph.atoms, index)?;
+        self.prepare_fractions()?;
+        at(
+            self.negative_mancude_parts
+                .as_deref()
+                .ok_or_else(|| invalid("Missing negative mancude parts"))?,
             index,
         )
         .copied()
