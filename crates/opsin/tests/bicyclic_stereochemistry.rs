@@ -53,39 +53,6 @@ fn stereo_group_signature(structure: &Structure) -> String {
     signatures.sort();
     signatures.join(";")
 }
-fn allowed_structures(structure: &Structure) -> BTreeSet<String> {
-    let groups = structure
-        .graph
-        .atoms
-        .iter()
-        .filter(|atom| atom.active)
-        .filter_map(|atom| atom.parity.as_ref())
-        .map(|parity| parity.stereo_group)
-        .filter(|group| group.kind != StereoGroupType::Absolute)
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    (0..1 << groups.len())
-        .map(|inverted| {
-            let mut member = structure.clone();
-            for atom in member.graph.atoms.iter_mut().filter(|atom| atom.active) {
-                if let Some(parity) = &mut atom.parity {
-                    if let Some(index) = groups
-                        .iter()
-                        .position(|group| *group == parity.stereo_group)
-                        && inverted & (1 << index) != 0
-                    {
-                        parity.parity *= -1;
-                    }
-                    // Canonical SMILES ignores enhanced groups. Expand each simultaneous
-                    // group mirror first, then compare ordinary absolute structures.
-                    parity.stereo_group = Default::default();
-                }
-            }
-            canonical(&member.semantic_cxsmiles().unwrap())
-        })
-        .collect()
-}
 fn assert_fixture(name: &str, fixture: &str, bridgeheads: [&str; 2], targets: &[&str]) -> String {
     let structure = parse(name);
     for locant in bridgeheads.into_iter().chain(targets.iter().copied()) {
@@ -518,7 +485,8 @@ fn single_cage_groups_allow_simple_ring_substituents() {
                 format!("{kind}:1,2,3,4"),
                 "{name}"
             );
-            assert_eq!(allowed_structures(&structure).len(), 2, "{name}");
+            let members = smiles::stereoisomers(&structure.semantic_cxsmiles().unwrap()).unwrap();
+            assert_eq!(members.len(), 2, "{name}");
         }
     }
 }
@@ -848,7 +816,7 @@ fn explicit_groups_crossing_the_cage_frame_preserve_their_correlations() {
             expected_groups,
             "{name}"
         );
-        let members = allowed_structures(&structure);
+        let members = smiles::stereoisomers(&structure.semantic_cxsmiles().unwrap()).unwrap();
         let independent_groups = expected_groups
             .split(';')
             .filter(|group| !group.starts_with("Absolute:"))
@@ -953,6 +921,47 @@ fn explicit_cage_groups_with_other_molecular_stereo_are_refused() {
         "(1R,3R)-3-[(1R*,2S*)-1,2-dihydroxypropyl]bicyclo[2.2.1]heptan-2-endo-ol",
     ] {
         assert_group_scope_refused(name);
+    }
+}
+
+#[test]
+fn explicit_cage_groups_with_stereogenic_axes_are_refused() {
+    for name in [
+        "rel-(1R)-bicyclo[2.2.1]heptan-2-exo-yl (1P)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
+        "rac-(1R)-bicyclo[2.2.1]heptan-2-exo-yl (1P)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
+        "rel-(1R)-bicyclo[2.2.1]heptan-2-exo-yl (1M)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
+        "rac-(1R)-bicyclo[2.2.1]heptan-2-exo-yl (1M)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
+        "rel-(1R)-8-ethyl-8-azabicyclo[3.2.1]octan-3-endo-yl (1P)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
+        "rac-(1R)-8-ethyl-8-azabicyclo[3.2.1]octan-3-endo-yl (1P)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
+    ] {
+        assert_group_scope_refused(name);
+    }
+}
+
+#[test]
+fn stereogenic_axes_without_cage_descriptors_or_qualifiers_are_unchanged() {
+    parse(
+        "(1R,2R,4S)-bicyclo[2.2.1]heptan-2-yl (1P)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
+    );
+}
+
+#[test]
+fn explicit_cage_groups_with_e_z_double_bonds_are_allowed() {
+    for prefix in ["rel", "rac"] {
+        for configuration in ["E", "Z"] {
+            let name = format!(
+                "{prefix}-(1R)-bicyclo[2.2.1]heptan-2-exo-yl (2{configuration})-but-2-enoate"
+            );
+            let structure = parse(&name);
+            assert!(
+                structure
+                    .graph
+                    .bonds
+                    .iter()
+                    .any(|bond| bond.active && bond.stereo.is_some()),
+                "{name}"
+            );
+        }
     }
 }
 

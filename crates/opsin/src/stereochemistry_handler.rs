@@ -444,7 +444,14 @@ impl<'a> StereochemistryHandler<'a> {
         Ok(())
     }
     fn cage_scope_is_single_group(&self) -> bool {
-        if self.cage_stereo_groups.len() != 1 {
+        // Axial stereo changes under reflection; E/Z bond stereo does not.
+        if self.cage_stereo_groups.len() != 1
+            || self
+                .graph()
+                .bonds
+                .iter()
+                .any(|bond| bond.active && bond.axial_stereo.is_some())
+        {
             return false;
         }
         let cage = self.cage_stereo_groups.values().next().unwrap();
