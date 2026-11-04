@@ -89,29 +89,27 @@ pub(super) fn assess_anion_parent(mol: &Molecule, text: &str) {
             _ => depth == 0,
         })
         .collect();
-    let words: Vec<_> = parent
-        .split(|c: char| !c.is_ascii_alphabetic())
-        .filter(|word| !word.is_empty())
-        .collect();
-    let last = words.last().copied().unwrap_or_default();
-    // A skeletal anion can precede a neutral suffix, as in
-    // 1H-pyrrol-1-ide-3-carboxylic acid.
+    // The last suffix names the parent. A neutral suffix after -ide, as in
+    // 1H-indol-1-ide-3-carboxylic acid, is not preferred: the senior anion
+    // takes the suffix and COOH becomes carboxy (P-41, P-65.1.2.2.3).
+    let last = parent
+        .rsplit(|c: char| !c.is_ascii_alphabetic())
+        .find(|word| !word.is_empty())
+        .unwrap_or_default();
     let anionic_parent = last.ends_with("ate")
         || last.ends_with("ite")
-        || words.iter().any(|word| {
-            word.ends_with("ide")
-                && ![
-                    "amide",
-                    "imide",
-                    "hydrazide",
-                    "oxide",
-                    "sulfide",
-                    "selenide",
-                    "telluride",
-                ]
-                .iter()
-                .any(|neutral| word.ends_with(neutral))
-        });
+        || last.ends_with("ide")
+            && ![
+                "amide",
+                "imide",
+                "hydrazide",
+                "oxide",
+                "sulfide",
+                "selenide",
+                "telluride",
+            ]
+            .iter()
+            .any(|neutral| last.ends_with(neutral));
     // P-72.6.1: the preferred prefix for -C(=O)O- is carboxylato.
     if last.ends_with("olate") || !anionic_parent || text.contains("oxidocarbonyl") {
         mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
@@ -220,9 +218,9 @@ mod tests {
     }
 
     #[test]
-    fn outer_skeletal_anion_citations_can_precede_a_neutral_suffix() {
+    fn outer_anionic_suffix_citations_keep_preferred_status() {
         for (smiles, text) in [
-            ("O=C(O)c1cc[n-]c1", "1H-pyrrol-1-ide-3-carboxylic acid"),
+            ("O=C([O-])c1cc[n-]c1", "1H-pyrrol-1-ide-3-carboxylate"),
             ("Oc1ccccc1[CH2-]", "(2-hydroxyphenyl)methanide"),
             (
                 "[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
@@ -370,7 +368,22 @@ mod tests {
             (
                 "[Na+].[n-]1nnnc1C(=O)O",
                 "sodium 1H-tetrazol-1-ide-5-carboxylic acid",
-                NameStatus::Preferred,
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].c1ccc2[n-]cc(C(=O)O)c2c1",
+                "sodium 1H-indol-1-ide-3-carboxylic acid",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].OC(=O)c1nc[n-]c1",
+                "sodium 1H-imidazol-1-ide-4-carboxylic acid",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].[n-]1ncc(C(=O)O)c1",
+                "sodium 1H-pyrazol-1-ide-4-carboxylic acid",
+                NameStatus::Unverified(NameReason::AnionParent),
             ),
             (
                 "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
