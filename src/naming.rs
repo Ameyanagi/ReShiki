@@ -100,10 +100,19 @@ impl NameStatus {
         }
     }
 
+    pub(crate) fn strength(self) -> u8 {
+        match self {
+            Self::Preferred => 0,
+            Self::Unverified(NameReason::UnauditedPath) => 1,
+            Self::Unverified(_) => 2,
+            Self::NotPreferred(_) => 3,
+        }
+    }
+
     pub fn detail(self) -> &'static str {
         match self {
             Self::Preferred => {
-                "No rule on this name's path is known to depart from the preferred IUPAC name (IUPAC 2013)."
+                "This name's path is in an audited family, and no rule on it is known to depart from the preferred IUPAC name (IUPAC 2013)."
             }
             Self::NotPreferred(reason) | Self::Unverified(reason) => reason.detail(),
         }
@@ -116,6 +125,7 @@ impl NameStatus {
 pub enum NameReason {
     SulfonylPrefix,
     AminoPrefix,
+    CationPrefix,
     FunctionalClass,
     HydrideParent,
     UnretainedParent,
@@ -130,8 +140,11 @@ pub enum NameReason {
     VonBaeyerFusionFallback,
     LinearPhane,
     OpsinFusionLayout,
+    FusionMultiparent,
+    HydroPrefixLocants,
     BridgedFusedParent,
     UnauditedParent,
+    UnauditedPath,
     SubstitutedRetainedParent,
     AtomOrder,
     AmineChalcogenide,
@@ -158,6 +171,9 @@ impl NameReason {
             }
             Self::AminoPrefix => {
                 "Uses an acylamino prefix instead of the preferred acid-derived amido form (P-66.1.1.4.3), or a guanidino prefix substituted on its outer nitrogens or with an E/Z descriptor, such as 3-methylguanidino; preferred IUPAC names cite carbamimidoyl inside an amino prefix, as in (N-methylcarbamimidoyl)amino (P-66.4.1.2.1.3)."
+            }
+            Self::CationPrefix => {
+                "Uses the ammonio prefix; whether the azaniumyl form (P-73.6) is required here has not been verified."
             }
             Self::FunctionalClass => {
                 "Uses a functional-class form such as a hydrazone, a chiral sulfoxide, a mixed chalcogen peroxide or a phosphane oxide with halide or alkoxy ligands; preferred IUPAC names use substitutive or acid-derived forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane, [(phenylselanyl)tellanyl]benzene or dimethylphosphinic fluoride (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2, P-68.3.2.3.1)."
@@ -201,11 +217,20 @@ impl NameReason {
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout or citation order selected for OPSIN compatibility; its preferred IUPAC numbering or alphabetical citation order (FR-3.6 / P-25.3.4.2.3) has not been verified."
             }
+            Self::FusionMultiparent => {
+                "Cites the base fusion component and at least two identical attached components; whether a multiparent name such as furo[3,2-b:4,5-b']difuran is required (P-25.3.7.1) has not been verified."
+            }
+            Self::HydroPrefixLocants => {
+                "Uses locanted hydro prefixes for a completely hydrogenated polycyclic parent; the omission of these locants required by P-31.2.3.3.2 has not been verified."
+            }
             Self::BridgedFusedParent => {
                 "The preferred parent choice for this bridged-fused system has not been verified."
             }
             Self::UnauditedParent => {
-                "Porphyrin, corrin and gonane are retained parents without a PIN designation in P-10; preferred name selection for this path has not been verified."
+                "Uses a parent hydride family whose preferred-name choice has not been audited: porphyrin, corrin and gonane have no PIN designation (P-10/P-12); the von Baeyer versus fusion choice for polycycles of three or more rings has not been checked (P-52.2.4.3, P-31.1.4.3.4); skeletal-replacement chains and monocycles have unchecked conditions (P-15.4.3, P-22.2.3), as do skeletal-replacement fusion hydrides and chains requiring replacement with four heterounits (P-51.4.1, P-15.4.3.2); spiro compounds of identical components need spirobi names (P-24.3)."
+            }
+            Self::UnauditedPath => {
+                "The naming path that built this name has not been audited against the IUPAC 2013 preferred-name rules (P-10/P-12)."
             }
             Self::SubstitutedRetainedParent => {
                 "Whether a substituted acetaldehyde keeps its retained name in the preferred IUPAC name has not been verified."

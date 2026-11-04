@@ -7,6 +7,7 @@ use super::{
     },
     component_modifiers::{add_component_front_modifiers, add_component_n_substituents},
     functional_prefixes::collect_component_prefix_substituents,
+    graph_kernel::Edge,
     molecule::{AtomSet, Molecule, bond_ids_within},
     namer::name_subgraph_rendered,
     parent_pipeline::{
@@ -19,22 +20,48 @@ use super::{
         partition_principal_and_prefix_groups,
     },
     special_cases::{
-        blocking_suffix_defers_to_chain_parent, single_atom_component_name,
+        StructuralParentName, blocking_suffix_defers_to_chain_parent, single_atom_component_name,
         structural_replacement_parent_result, try_name_anhydride_component,
     },
     subgraph_tools::{
         add_indicated_hydrogens, add_parent_features, emit_bond_stereo, subgraph_component,
     },
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Result<String, String> {
     name_component_with_citation(mol, component_atoms, None, None).map(|name| name.text)
 }
 
+pub(super) enum Derivation {
+    Plan {
+        parent_atoms: AtomSet,
+        principal_group: Option<(String, AtomSet)>,
+        component_splits: BTreeSet<Edge>,
+    },
+    Shortcut {
+        component_splits: BTreeSet<Edge>,
+        certified: bool,
+    },
+}
+
+impl Derivation {
+    pub(super) fn component_splits(&self) -> &BTreeSet<Edge> {
+        match self {
+            Self::Plan {
+                component_splits, ..
+            }
+            | Self::Shortcut {
+                component_splits, ..
+            } => component_splits,
+        }
+    }
+}
+
 pub(super) struct ComponentName {
     pub text: String,
     pub principal_group_atoms: AtomSet,
+    pub derivation: Derivation,
 }
 
 pub(super) fn name_component_with_citation(
@@ -44,22 +71,34 @@ pub(super) fn name_component_with_citation(
     principal_atom: Option<usize>,
 ) -> Result<ComponentName, String> {
     match component_pipeline(mol, component_atoms, citation, principal_atom, None)? {
-        ComponentResult::Shortcut(text) => Ok(ComponentName {
-            text,
+        ComponentResult::Shortcut(name) => Ok(ComponentName {
+            text: name.name,
             principal_group_atoms: AtomSet::new(),
+            derivation: Derivation::Shortcut {
+                component_splits: name.component_splits,
+                certified: name.certified,
+            },
         }),
-        ComponentResult::Plan(mut plan) => Ok(ComponentName {
-            text: render_component_parent(
+        ComponentResult::Plan(mut plan, parent_atoms, component_splits) => {
+            let text = render_component_parent(
                 mol,
                 &mut plan.parts,
                 &plan.numbered_path,
                 &plan.locant_map,
-            )?,
-            principal_group_atoms: plan
-                .parts
-                .principal_group
-                .map_or_else(AtomSet::new, |g| g.atom_ids),
-        }),
+            )?;
+            let principal_group = plan.parts.principal_group.map(|g| (g.key, g.atom_ids));
+            Ok(ComponentName {
+                text,
+                principal_group_atoms: principal_group
+                    .as_ref()
+                    .map_or_else(AtomSet::new, |(_, atoms)| atoms.clone()),
+                derivation: Derivation::Plan {
+                    parent_atoms,
+                    principal_group,
+                    component_splits,
+                },
+            })
+        }
     }
 }
 
@@ -70,6 +109,7 @@ pub(super) struct IsotopeParentName {
     pub text: String,
     pub locants: BTreeMap<usize, String>,
     pub rendered_parent: String,
+    pub derivation: Derivation,
 }
 
 pub(super) fn name_component_with_atom_locants(
@@ -78,11 +118,15 @@ pub(super) fn name_component_with_atom_locants(
 ) -> Result<IsotopeParentName, String> {
     match component_pipeline(mol, component_atoms, None, None, None)? {
         ComponentResult::Shortcut(name) => Ok(IsotopeParentName {
-            rendered_parent: name.clone(),
-            text: name,
+            rendered_parent: name.name.clone(),
+            text: name.name,
             locants: BTreeMap::new(),
+            derivation: Derivation::Shortcut {
+                component_splits: name.component_splits,
+                certified: name.certified,
+            },
         }),
-        ComponentResult::Plan(mut plan) => {
+        ComponentResult::Plan(mut plan, parent_atoms, component_splits) => {
             // P-82.6.1.1: when isotopic modification requires a locant, the
             // constitutional locants must be explicit as well.
             plan.parts.omit_redundant_locants = false;
@@ -100,6 +144,11 @@ pub(super) fn name_component_with_atom_locants(
                 text,
                 locants: plan.locant_map,
                 rendered_parent,
+                derivation: Derivation::Plan {
+                    parent_atoms,
+                    principal_group: plan.parts.principal_group.map(|g| (g.key, g.atom_ids)),
+                    component_splits,
+                },
             })
         }
     }
@@ -111,8 +160,8 @@ struct SpiroProjection<'a> {
     prefix_only: bool,
 }
 enum ComponentResult {
-    Shortcut(String),
-    Plan(Box<ParentAssemblyPlan>),
+    Shortcut(StructuralParentName),
+    Plan(Box<ParentAssemblyPlan>, AtomSet, BTreeSet<Edge>),
 }
 
 pub(super) fn build_spiro_component_parts(
@@ -136,20 +185,19 @@ pub(super) fn build_spiro_component_parts(
                 }),
             )? {
                 ComponentResult::Shortcut(_) => None,
-                ComponentResult::Plan(plan) => Some(*plan),
+                ComponentResult::Plan(plan, _, _) => Some(*plan),
             },
         )
     })
 }
 
 /// Apply the same shortcut precedence when auditing competing parent choices.
-/// A declined shortcut restores its provisional name assessment.
 pub(super) fn structural_parent(
     mol: &Molecule,
     atoms: &AtomSet,
     groups: &[super::perception::PerceivedGroup],
     key: Option<&str>,
-) -> Result<Option<super::special_cases::StructuralParentName>, String> {
+) -> Result<Option<StructuralParentName>, String> {
     let blocks = groups
         .iter()
         .filter(|g| Some(g.key.as_str()) == key)
@@ -170,21 +218,16 @@ pub(super) fn structural_parent(
                 })
                 .any(|g| p.atom_ids().is_disjoint(&g.atom_ids()))
         });
-    let status = mol.name_status();
-    let structural = if functional_defer {
-        None
-    } else {
-        structural_replacement_parent_result(mol, atoms)?
-    };
-    let defers =
-        blocking_suffix_defers_to_chain_parent(mol, atoms, groups, key, structural.as_ref());
-    if (!blocks || defers)
-        && let Some(result) = structural
-    {
-        return Ok(Some(result));
-    }
-    mol.set_name_status(status);
-    Ok(None)
+    mol.candidate(|| {
+        let structural = if functional_defer {
+            None
+        } else {
+            structural_replacement_parent_result(mol, atoms)?
+        };
+        let defers =
+            blocking_suffix_defers_to_chain_parent(mol, atoms, groups, key, structural.as_ref());
+        Ok(structural.filter(|_| !blocks || defers))
+    })
 }
 
 fn component_pipeline(
@@ -205,7 +248,9 @@ fn component_pipeline(
         return Err("openclatura: empty component".into());
     }
     if let Some(name) = single_atom_component_name(mol, component_atoms) {
-        return Ok(ComponentResult::Shortcut(name));
+        return Ok(ComponentResult::Shortcut(StructuralParentName::ordinary(
+            name,
+        )));
     }
     let mut groups = component_groups(mol, component_atoms);
     let mut prefix_only_groups = Vec::new();
@@ -223,18 +268,12 @@ fn component_pipeline(
     if principal_atom.is_none()
         && let Some(result) = structural_parent(mol, component_atoms, &groups, key.as_deref())?
     {
-        if projection.is_none() && component_atoms.len() == mol.atoms.len() {
-            *mol.named_component_splits.borrow_mut() = result.component_splits;
-        }
-        return Ok(ComponentResult::Shortcut(result.name));
+        return Ok(ComponentResult::Shortcut(result));
     }
     if principal_atom.is_none()
         && let Some(result) = try_name_anhydride_component(mol, &groups, key.as_deref())?
     {
-        if projection.is_none() && component_atoms.len() == mol.atoms.len() {
-            *mol.named_component_splits.borrow_mut() = result.component_splits;
-        }
-        return Ok(ComponentResult::Shortcut(result.name));
+        return Ok(ComponentResult::Shortcut(result));
     }
     // The key is the first of equally senior groups, such as carboxylic_acid
     // and ring_carboxylic_acid, not the P-44.1 count and ring-over-chain choice.
@@ -357,16 +396,22 @@ fn component_pipeline(
     }
     let mut plan = if let Some(projection) = &projection {
         if !parent.contains(&projection.junction) {
-            return Ok(ComponentResult::Shortcut(String::new()));
+            return Ok(ComponentResult::Shortcut(StructuralParentName::ordinary(
+                String::new(),
+            )));
         }
         if let Some(core) = projection.required_core {
             if &parent != core {
-                return Ok(ComponentResult::Shortcut(String::new()));
+                return Ok(ComponentResult::Shortcut(StructuralParentName::ordinary(
+                    String::new(),
+                )));
             }
             let Some(proof) =
                 super::fusion::wrappers::plan_fusion_spiro_side(mol, core, projection.junction)?
             else {
-                return Ok(ComponentResult::Shortcut(String::new()));
+                return Ok(ComponentResult::Shortcut(StructuralParentName::ordinary(
+                    String::new(),
+                )));
             };
             build_parent_assembly_plan_with_parent(
                 mol,
@@ -467,7 +512,7 @@ fn component_pipeline(
     }
     super::locant_elision::apply_redundant_locant_elision(parts);
     // Preserve the upstream complete-name requirement without its trace/audit machinery.
-    let mut named = parent;
+    let mut named = parent.clone();
     named.extend(principal_atoms);
     named.extend(front);
     named.extend(n_subs);
@@ -489,10 +534,11 @@ fn component_pipeline(
             mol.atoms[missing].symbol
         ));
     }
-    if projection.is_none() && component_atoms.len() == mol.atoms.len() {
-        *mol.named_component_splits.borrow_mut() = component_splits;
-    }
-    Ok(ComponentResult::Plan(Box::new(plan)))
+    Ok(ComponentResult::Plan(
+        Box::new(plan),
+        parent,
+        component_splits,
+    ))
 }
 
 pub(super) fn render_component_parent(

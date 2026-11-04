@@ -292,13 +292,23 @@ name and Insert caption use the name text alone.
 
 | Tag                                           | Meaning                                                                                       |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Preferred IUPAC name                          | No rule on the name's path is known to depart from the PIN rules.                             |
+| Preferred IUPAC name                          | The name's path is in an audited family, and no rule on it departs from the PIN rules.        |
 | Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `acetaldehyde hydrazone`.   |
 | Systematic name, preference not verified      | The name took a path whose PIN choice has not been checked, such as an OPSIN-numbered fusion. |
 
-The engine marks the status where it makes the choice, so the name text is
-unchanged. A naming attempt it discards leaves no mark. Reasons for a name
-that is not the PIN:
+A name is preferred only with positive evidence. Every name starts as
+unverified (`unaudited_path`); the top-level naming path certifies it after the
+anion, phane, ring-assembly, multiplicative and skeletal-replacement checks find
+no departure, and only when every parent unit it rendered belongs to an audited
+family: acyclic chains and monocycles without skeletal replacement, retained
+parents, systematic fusion parents, ring assemblies, bicycles and spiro
+systems of monocycles. Shortcut paths certify only audited cases: hydrides of
+B, Si, Ge, Sn, Pb, P, As, Sb and Bi with organyl ligands, esters of inorganic
+oxoacids with alcohol-derived groups, single-linkage carboxylic anhydrides
+(O bridge, or symmetric chalcogen and peroxy bridges), boronic acids and
+monatomic cations within a salt. The engine marks a departure where it makes
+the choice, so the name text is unchanged. A naming attempt it discards leaves
+no mark. Reasons for a name that is not the PIN:
 
 | Reason                            | Example the engine writes                                                                       | Preferred form                                                                               |
 | --------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -316,18 +326,27 @@ that is not the PIN:
 | `von_baeyer_fusion_fallback`      | `17-azapentacyclo[10.7.1.1^{3,6}.0^{10,21}.0^{16,20}]henicosa-...-decaene`                      | `7H-indeno[7',1':5,6,7]cycloocta[1,2,3-de]quinoline`                                         |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
-for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
-(porphyrin, corrin, gonane), `substituted_retained_parent` (substituted
-acetaldehyde), `atom_order` (bridged fused ketones whose added hydrogen depends
+for OPSIN compatibility), `fusion_multiparent` (a base fusion component cited
+with two identical attached components, which may need a multiparent name
+under P-25.3.7.1), `hydro_prefix_locants` (locanted hydro prefixes for a
+completely hydrogenated polycyclic parent, P-31.2.3.3.2), `cation_prefix`
+(`ammonio`, where the need for `azaniumyl` under P-73.6 has not been verified),
+`bridged_fused_parent`, `unaudited_path` (a naming path not audited against
+P-10/P-12), `unaudited_parent` (porphyrin, corrin, gonane; von Baeyer polycycles
+of three or more rings; skeletal-replacement chains, monocycles and fusion
+hydrides; acyclic paths with at least four skeletal heterounits under P-51.4.1
+and P-15.4.3.2; spiro compounds of identical components, which take spirobi
+names under P-24.3), `substituted_retained_parent` (substituted acetaldehyde),
+`atom_order` (bridged fused ketones whose added hydrogen depends
 on input atom order), `lambda_parent_hydrogen` (indicated or added hydrogen on a
 λ heteroatom ring was not derived from the complete expanded-valence parent,
 so its hydrogen descriptors may not be preferred under P-25.7.1.1 and
 λ-convention Lm-3.1–3.2), `amine_chalcogenide` (amine sulfide and similar names) and
 `principal_group_tie` (equally senior principal groups, such as the chain and
 ring acids of `2-(4-carboxyphenyl)acetic acid`, chosen by atom order rather than
-by P-44.1). The other parent-selection rules that the port does not implement in
-full (heteroatom seniority, skeletal replacement chains, phane names) have no
-mark.
+by P-44.1). Each skeletal heteroatom counts as a heterounit, which can only
+overcount; only the heteroatoms of the cited principal characteristic group are
+left out of the count.
 
 Sulfonyl and sulfinyl prefixes are named from the acid (P-65.3.2.2.2) and
 enclosed although simple (P-16.5.1.4): `(methanesulfonyl)benzene`,

@@ -2920,7 +2920,13 @@ mod tests {
         ] {
             let name = super::super::name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let status = match smiles {
+                "CP(=O)(O)C" | "CP(=O)(O)O" => {
+                    NameStatus::Unverified(crate::naming::NameReason::UnauditedPath)
+                }
+                _ => NameStatus::Preferred,
+            };
+            assert_eq!(name.status, status, "{smiles}");
             for candidate in std::iter::once(name.text.as_str()).chain(
                 name.alternatives
                     .iter()

@@ -215,22 +215,26 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
         return Err("openclatura: expected one connected component".into());
     }
     let phane = phane::name(&mol);
-    let text = match component_namer::name_component(&mol, &components[0]) {
-        Ok(text) => text,
-        Err(error) => {
-            return phane.map_or(Err(error), |text| {
-                Ok(Name {
-                    text,
-                    status: crate::naming::NameStatus::Unverified(crate::naming::NameReason::Phane),
-                    alternatives: vec![],
-                    omitted_stereo: vec![],
-                    omitted_units: 0,
-                    verification: None,
-                })
-            });
-        }
-    };
-    assess_parent_name(&mol, &text);
+    let component =
+        match component_namer::name_component_with_citation(&mol, &components[0], None, None) {
+            Ok(component) => component,
+            Err(error) => {
+                return phane.map_or(Err(error), |text| {
+                    Ok(Name {
+                        text,
+                        status: crate::naming::NameStatus::Unverified(
+                            crate::naming::NameReason::Phane,
+                        ),
+                        alternatives: vec![],
+                        omitted_stereo: vec![],
+                        omitted_units: 0,
+                        verification: None,
+                    })
+                });
+            }
+        };
+    assess_derivation(&mol, &component.derivation);
+    let text = component.text;
     if phane.is_some() {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::Phane,
@@ -245,7 +249,6 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
         higher_order.set_benzoheterocycle_names(false);
         let alternative = component_namer::name_component(&higher_order, &components[0]);
         mol.set_benzoheterocycle_names(true);
-        mol.set_name_status(status);
         if let Ok(alternative) = alternative
             && alternative != text
         {
@@ -263,7 +266,6 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
     }
     if mol.has_relative_ring_alternative() {
         mol.set_relative_ring_names(true);
-        mol.set_name_status(status);
         if let Ok(relative) = component_namer::name_component(&mol, &components[0])
             && relative != text
         {
@@ -278,7 +280,6 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
     }
     if mol.has_endo_exo_alternative() {
         mol.set_endo_exo_names(true);
-        mol.set_name_status(status);
         if let Ok(relative) = component_namer::name_component(&mol, &components[0])
             && relative != text
         {
@@ -328,10 +329,10 @@ pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn assess_parent_name(mol: &molecule::Molecule, text: &str) {
-    species::assess_anion_parent(mol, text);
+fn assess_derivation(mol: &molecule::Molecule, derivation: &component_namer::Derivation) {
+    species::assess_anion_parent(mol, derivation);
     // P-51.3.2 / P-52.2.5.3: mandatory phane nomenclature takes precedence.
-    if phane::has_linear_skeleton(mol) {
+    if phane::has_linear_skeleton(mol, derivation.component_splits()) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::LinearPhane,
         ));
@@ -339,10 +340,25 @@ pub(super) fn assess_parent_name(mol: &molecule::Molecule, text: &str) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::RingAssembly,
         ));
-    } else if has_multiplicative_pin(mol) {
+    } else if has_multiplicative_pin(mol, derivation) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::Multiplicative,
         ));
+    }
+    if requires_skeletal_replacement(mol, derivation) {
+        mol.mark_name(crate::naming::NameStatus::Unverified(
+            crate::naming::NameReason::UnauditedParent,
+        ));
+    }
+    if matches!(
+        derivation,
+        component_namer::Derivation::Plan { .. }
+            | component_namer::Derivation::Shortcut {
+                certified: true,
+                ..
+            }
+    ) {
+        mol.certify();
     }
 }
 
@@ -423,27 +439,75 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
     out
 }
 
+/// P-51.4.1 / P-15.4.3.2: four heterounits on an acyclic path require
+/// skeletal replacement, including in substituents. Each skeletal heteroatom
+/// counts as a unit, which can only overcount heterounits such as -SiH2-O-SiH2-;
+/// terminal B, Al, Si, Ge, Sn and Pb count too (P-51.4.1.4). Only the cited
+/// principal group's atoms are excluded.
+fn requires_skeletal_replacement(
+    mol: &molecule::Molecule,
+    derivation: &component_namer::Derivation,
+) -> bool {
+    let principal_atoms = match derivation {
+        component_namer::Derivation::Plan {
+            principal_group, ..
+        } => principal_group.as_ref().map(|(_, atoms)| atoms),
+        component_namer::Derivation::Shortcut { .. } => None,
+    };
+    let cyclic = chains::get_cyclic_atoms(mol, &molecule::AtomSet::new());
+    let skeletal: molecule::AtomSet = mol
+        .atoms
+        .values()
+        .filter(|atom| {
+            !atom.is_carbon()
+                && atom.symbol != "H"
+                && atom.charge == 0
+                && !cyclic.contains(&atom.idx)
+                && principal_atoms.is_none_or(|atoms| !atoms.contains(&atom.idx))
+                && (mol
+                    .get_neighbors(atom.idx)
+                    .iter()
+                    .filter(|n| mol.atoms[n].symbol != "H")
+                    .count()
+                    >= 2
+                    || matches!(atom.symbol.as_str(), "B" | "Al" | "Si" | "Ge" | "Sn" | "Pb"))
+                && mol
+                    .get_neighbors(atom.idx)
+                    .iter()
+                    .all(|&n| mol.bond_order(atom.idx, n) == 1)
+        })
+        .map(|atom| atom.idx)
+        .collect();
+    skeletal.iter().any(|&start| {
+        let mut pending = vec![(start, start, 1)];
+        while let Some((previous, current, units)) = pending.pop() {
+            if units >= 4 {
+                return true;
+            }
+            for &next in mol.get_neighbors(current) {
+                if next != previous && !cyclic.contains(&next) && mol.atoms[&next].symbol != "H" {
+                    pending.push((current, next, units + usize::from(skeletal.contains(&next))));
+                }
+            }
+        }
+        false
+    })
+}
+
 /// P-51.1.5 / P-51.3.1: multiply identical senior parents, including all
 /// substituents, suffixes and their attachment positions. P-15.3 permits an
 /// asymmetric central group, but its concatenated arms must be identical.
-fn has_multiplicative_pin(mol: &molecule::Molecule) -> bool {
+fn has_multiplicative_pin(
+    mol: &molecule::Molecule,
+    derivation: &component_namer::Derivation,
+) -> bool {
+    if matches!(derivation, component_namer::Derivation::Shortcut { .. }) {
+        return false;
+    }
     use molecule::AtomSet;
     let cyclic = chains::get_cyclic_atoms(mol, &AtomSet::new());
     let mut groups = perception::perceive_groups(mol);
     let key = principal_groups::component_principal_key(mol, &groups, false);
-    // P-44.1.2: a structural hydride such as phosphane or silane can be
-    // senior to every carbon ring. Use the same suffix and shortcut policy
-    // as the naming pipeline, without retaining its provisional assessment.
-    let atoms = mol.atoms.keys().copied().collect();
-    let mut structural = false;
-    let _ = mol.candidate::<()>(|| {
-        structural =
-            component_namer::structural_parent(mol, &atoms, &groups, key.as_deref())?.is_some();
-        Ok(None)
-    });
-    if structural {
-        return false;
-    }
     let mut excluded = AtomSet::new();
     component_group_rules::retarget_external_carbonyl_groups(
         mol,
@@ -673,6 +737,329 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn skeletal_replacement_counts_heterounits_and_the_cited_group() {
+        for (smiles, required) in [
+            ("COCOCOC", false),
+            ("COCOCOCOC", true),
+            ("CNNOOC", true),
+            ("CO[SiH2]OCCOCC(=O)O", true),
+            ("COCCOCCOC[SiH3]", true),
+            ("COCOCOCC(=O)NC", false),
+            ("COCOCOCC(=O)NCC(=O)O", true),
+            ("CC(=O)NCC(=O)NCC(=O)NCC(=O)NCC(=O)O", true),
+        ] {
+            let mol = super::graph_io::read_smiles(smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            let component =
+                super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
+                    .unwrap();
+            assert_eq!(
+                super::requires_skeletal_replacement(&mol, &component.derivation),
+                required,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn allow_list_status_matrix() {
+        use crate::naming::{NameReason, NameStatus};
+        for (smiles, expected_name, expected_status) in [
+            ("CCO", "ethanol", NameStatus::Preferred),
+            ("CC(=O)O", "acetic acid", NameStatus::Preferred),
+            ("Oc1ccccc1", "phenol", NameStatus::Preferred),
+            ("OC1CCCCC1", "cyclohexanol", NameStatus::Preferred),
+            ("c1ccncc1", "pyridine", NameStatus::Preferred),
+            ("c1ccc2ccccc2c1", "naphthalene", NameStatus::Preferred),
+            (
+                "c1ccc2c(c1)C=CC=CO2",
+                "1-benzoxepine",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1CCC2CCCCC2C1",
+                "decahydronaphthalene",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1ccc(cc1)-c1ccccc1",
+                "1,1'-biphenyl",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1CC2CCC1C2",
+                "bicyclo[2.2.1]heptane",
+                NameStatus::Preferred,
+            ),
+            (
+                "O[C@@H]1C[C@H]2CC[C@@H]1C2",
+                "(1R,2R,4S)-bicyclo[2.2.1]heptan-2-ol",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1CCC2(CC1)CCCC2",
+                "spiro[4.5]decane",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1CCC2(CC1)OCCO2",
+                "1,4-dioxaspiro[4.5]decane",
+                NameStatus::Preferred,
+            ),
+            ("CCOC(C)=O", "ethyl acetate", NameStatus::Preferred),
+            ("CC(=O)OC(C)=O", "acetic anhydride", NameStatus::Preferred),
+            (
+                "CC(=O)OC(=O)CCC(=O)OC(C)=O",
+                "4-(acetyloxy)-4-oxobutanoic acetic anhydride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "c1ccc(cc1)[Si](c1ccccc1)(c1ccccc1)c1ccccc1",
+                "tetraphenylsilane",
+                NameStatus::Preferred,
+            ),
+            (
+                "CP(C)(C)=O",
+                "trimethyl-lambda5-phosphanone",
+                NameStatus::Preferred,
+            ),
+            (
+                "C[P+](C)(C)[O-]",
+                "trimethyl-lambda5-phosphanone",
+                NameStatus::Preferred,
+            ),
+            (
+                "o1ccc2oc3ccoc3c12",
+                "difuro[3,2-b:2',3'-d]furan",
+                NameStatus::Unverified(NameReason::FusionMultiparent),
+            ),
+            (
+                "O1CCC2CCCCC2C1",
+                "3,4,4a,5,6,7,8,8a-octahydro-1H-2-benzopyran",
+                NameStatus::Unverified(NameReason::HydroPrefixLocants),
+            ),
+            (
+                "O=C(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1",
+                "bis(4-phenoxyphenyl) carbonate",
+                NameStatus::Preferred,
+            ),
+            ("CCO[N+](=O)[O-]", "ethyl nitrate", NameStatus::Preferred),
+            ("[Na+].CC(=O)[O-]", "sodium acetate", NameStatus::Preferred),
+            (
+                "O=C([O-])c1cc[n-]c1",
+                "1H-pyrrol-1-ide-3-carboxylate",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1CC2C3CCC1C2C3",
+                "tricyclo[4.3.0.0^{3,9}]nonane",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "C1CCCCCOCCCCC1",
+                "1-oxacyclododecane",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "COOC",
+                "1,2-dimethyldioxidane",
+                NameStatus::NotPreferred(NameReason::HydrideParent),
+            ),
+            (
+                "C[Te]C",
+                "dimethyltellane",
+                NameStatus::NotPreferred(NameReason::HydrideParent),
+            ),
+            (
+                "NN",
+                "hydrazine",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "O[N+](=O)[O-]",
+                "nitric acid",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[SiH4]",
+                "silane",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            ("CCB(O)O", "ethylboronic acid", NameStatus::Preferred),
+            (
+                "C[SH2]C",
+                "dimethyl-lambda4-sulfane",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "C1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12",
+                "spiro[indene-1,1'-indene]",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "CC(=O)OOC(C)=O",
+                "acetic peroxyanhydride",
+                NameStatus::Preferred,
+            ),
+            (
+                "CC(=O)[Se]C(C)=O",
+                "acetic selenoanhydride",
+                NameStatus::Preferred,
+            ),
+            (
+                "CN(C)C(=O)OP(=O)(O)O",
+                "dimethylcarbamoyl dihydrogen phosphate",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[Na+].[Cl-]",
+                "sodium chloride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "C[O-]",
+                "methanolate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].c1ccc2[n-]cc(C(=O)O)c2c1",
+                "sodium 1H-indol-1-ide-3-carboxylic acid",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
+                "5-[2-(oxidocarbonyl)phenyl]-1H-pyrrol-1-ide-3-carboxylate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "c1ccc(Oc2ccccc2)cc1",
+                "phenoxybenzene",
+                NameStatus::NotPreferred(NameReason::Multiplicative),
+            ),
+            (
+                "Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+                "4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenol",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            (
+                "C1C2CC3CC1CC2C3",
+                "1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene",
+                NameStatus::Unverified(NameReason::BridgedFusedParent),
+            ),
+            (
+                "CC(=O)OOC(=O)CC",
+                "acetic propanoic peroxyanhydride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "CC(=O)OC(=O)CC",
+                "acetic propanoic anhydride",
+                NameStatus::Preferred,
+            ),
+            (
+                "CP(C)Cl",
+                "chlorodimethylphosphane",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "COP(C)C",
+                "methoxydimethylphosphane",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "C[Al](C)C",
+                "trimethylalumane",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "CC[Sn](CC)(CC)CC",
+                "tetraethylstannane",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1ccc(cc1)P(c1ccccc1)c1ccccc1",
+                "triphenylphosphane",
+                NameStatus::Preferred,
+            ),
+            (
+                "CC(=S)OP(=O)(OC)OC",
+                "ethanethioyl dimethyl phosphate",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "COCCOCCOCCOC",
+                "1-methoxy-2-({2-[(2-methoxyethyl)oxy]ethyl}oxy)ethane",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "CC(=O)NCCOCCOCCOCCOC",
+                "N-(2-{[2-({2-[(2-methoxyethyl)oxy]ethyl}oxy)ethyl]oxy}ethyl)acetamide",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            ("CCOCCOCC", "1,2-diethoxyethane", NameStatus::Preferred),
+            (
+                "CC(=O)NCC(=O)NCC(=O)NCC(=O)NCC(=O)O",
+                "{2-[2-(2-acetamidoacetamido)acetamido]acetamido}acetic acid",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "C[N+](C)(C)CC(=O)[O-]",
+                "(trimethylammonio)acetate",
+                NameStatus::Unverified(NameReason::CationPrefix),
+            ),
+            (
+                "C1CC2C3CCC1C2C3C4CC5C6CCC4C5C6",
+                "2,7'-bi(tricyclo[4.3.0.0^{3,9}]nonane)",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "[CH2-]CC#[N+][O-]",
+                "propan-3-ide-1-nitrile oxide",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[O-]C(=O)c1ccccc1Cc1cc[n-]c1",
+                "2-[(1H-pyrrol-1-ide-3-yl)methyl]benzoate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[O-]C(=O)c1ccccc1[CH2-]",
+                "2-methanidylbenzoate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[Na+].[Na+].[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
+                "disodium 2-[(2-oxidophenyl)methyl]benzoate",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1ccccc1Oc2ccc(Oc3ccccc3)cc2",
+                "1,4-diphenoxybenzene",
+                NameStatus::NotPreferred(NameReason::Multiplicative),
+            ),
+            (
+                "[Na+]",
+                "sodium(1+)",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "OCC[NH3+]",
+                "2-hydroxyethan-1-aminium",
+                NameStatus::Preferred,
+            ),
+            (
+                "[O-]c1ccccc1",
+                "benzenolate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap_or_else(|error| panic!("{smiles}: {error}"));
+            assert_eq!(name.text, expected_name, "{smiles}");
+            assert_eq!(name.status, expected_status, "{smiles}: {}", name.text);
+        }
+    }
+
+    #[test]
     fn axial_general_names_leave_nuclide_groups_alone() {
         assert_eq!(
             super::general_axial_name("(31P)phosphanium (2M)-2-(2-hydroxyphenyl)benzen-1-olate")
@@ -799,7 +1186,14 @@ mod tests {
             "O=C(O)c1ccc(OCCOc2ccc(C(=O)O)cc2)cc1",
         ] {
             let mol = super::graph_io::read_smiles(smiles).unwrap();
-            assert!(super::has_multiplicative_pin(&mol), "{smiles}");
+            let atoms = mol.atoms.keys().copied().collect();
+            let name =
+                super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
+                    .unwrap();
+            assert!(
+                super::has_multiplicative_pin(&mol, &name.derivation),
+                "{smiles}"
+            );
         }
     }
 
@@ -847,7 +1241,14 @@ mod tests {
             "c1ccc(-c2ccc(-c3ccccc3)cc2)cc1",
         ] {
             let mol = super::graph_io::read_smiles(smiles).unwrap();
-            assert!(!super::has_multiplicative_pin(&mol), "{smiles}");
+            let atoms = mol.atoms.keys().copied().collect();
+            let name =
+                super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
+                    .unwrap();
+            assert!(
+                !super::has_multiplicative_pin(&mol, &name.derivation),
+                "{smiles}"
+            );
         }
     }
 
@@ -991,7 +1392,7 @@ mod tests {
     }
 
     #[test]
-    fn preferred_controls_keep_their_names() {
+    fn controls_keep_their_names_and_preference_status() {
         use crate::naming::NameStatus;
         for (smiles, expected) in [
             ("CCO", "ethanol"),
@@ -1179,7 +1580,11 @@ mod tests {
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let status = match smiles {
+                "SS" | "SSS" => NameStatus::Unverified(crate::naming::NameReason::UnauditedPath),
+                _ => NameStatus::Preferred,
+            };
+            assert_eq!(name.status, status, "{smiles}");
             if expected.ends_with("acetic acid") || expected == "chloroacetonitrile oxide" {
                 let request = crate::naming::local::parse_request(&name.text).unwrap();
                 let reply = crate::naming::worker::respond(&request).unwrap();
@@ -1454,22 +1859,22 @@ mod tests {
             (
                 "CP(=O)(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1",
                 "bis(4-phenoxyphenyl) methylphosphonate",
-                NameStatus::Preferred,
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
                 "COP(=O)(Oc1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
                 "methyl 4-phenoxyphenyl 4-phenoxyphenylphosphonate",
-                NameStatus::Preferred,
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
                 "OP(=O)(Oc1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
                 "4-phenoxyphenyl hydrogen 4-phenoxyphenylphosphonate",
-                NameStatus::Preferred,
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
                 "[PH](=O)(Oc1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
                 "4-phenoxyphenyl (4-phenoxyphenyl)phosphinate",
-                NameStatus::Preferred,
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             // P-52.2.5.3: a four-ring path within one component still counts.
             (

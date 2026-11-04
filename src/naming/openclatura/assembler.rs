@@ -386,6 +386,16 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (Stri
         {
             return (format!("{hydro}{sep}{core}"), cites_locants);
         }
+        // P-31.2.3.3.2: complete hydrogenation omits the hydro locants.
+        parts.locanted_total_hydrogenation = !parts.spiro_prefix_composition
+            && parts
+                .parent_bond_orders_by_locants
+                .values()
+                .all(|&order| order == 1)
+            && !parts
+                .hydro_operations
+                .iter()
+                .any(|operation| operation.key == "added_hydrogen");
         core = format!("{}-{hydro}{sep}{core}", additive.join(","));
         cites_locants = true;
     }

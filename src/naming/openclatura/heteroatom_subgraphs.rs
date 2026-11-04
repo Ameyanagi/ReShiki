@@ -148,6 +148,7 @@ fn lambda(mol: &Molecule, idx: usize, names: &[String], suffix: &str) -> String 
 }
 
 pub fn format_amino_from_branches(
+    mol: &Molecule,
     names: &[String],
     double: bool,
     cation: bool,
@@ -180,6 +181,8 @@ pub fn format_amino_from_branches(
         return suffix.into();
     }
     if cation {
+        // P-73.6: whether azaniumyl is required here has not been verified.
+        mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
         if names.is_empty() {
             return "ammonio".into();
         }
@@ -628,6 +631,7 @@ fn name_nitrogen(
                 .filter(|_| atom.charge != 0)
                 .unwrap_or_else(|| "imino".into())
         } else if atom.charge > 0 {
+            mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
             "ammonio".into()
         } else if atom.charge < 0 {
             "azanidyl".into()
@@ -786,6 +790,7 @@ fn name_nitrogen(
         mol.set_name_status(status);
     }
     Ok(format_amino_from_branches(
+        mol,
         &names,
         order == 2,
         atom.charge > 0,
@@ -1126,7 +1131,7 @@ fn name_sulfur(
             if ns.len() > 1 {
                 mol.set_name_status(status);
             }
-            imino.push(format_amino_from_branches(&ns, true, false, false));
+            imino.push(format_amino_from_branches(mol, &ns, true, false, false));
         }
         if roots.is_empty() {
             return Ok(format!("{sp}{}{sulfanyl_suffix}", center(&imino)));
@@ -1655,7 +1660,7 @@ fn guanidino_prefix(
         let mut ligands: Vec<_> = names.into_keys().collect();
         ligands.push("carbamimidoyl".into());
         return Ok(Some(format_amino_from_branches(
-            &ligands, false, false, false,
+            mol, &ligands, false, false, false,
         )));
     }
     let mut ordered: Vec<_> = names.into_iter().collect();
@@ -1693,10 +1698,53 @@ fn charge_normalized_chalcogenido(mol: &Molecule, center: Option<usize>, ligand:
 #[cfg(test)]
 mod tests {
     use super::central_oxo;
-    use crate::naming::NameStatus;
     use crate::naming::openclatura::{
         graph_io::read_smiles, molecule::AtomSet, namer::name_subgraph_with_upstream,
     };
+    use crate::naming::{NameReason, NameStatus};
+
+    #[test]
+    fn ammonio_prefixes_record_unverified_preference_when_emitted() -> Result<(), String> {
+        for (smiles, start, upstream, expected, status) in [
+            (
+                "CC[NH3+]",
+                2,
+                1,
+                "ammonio",
+                NameStatus::Unverified(NameReason::CationPrefix),
+            ),
+            (
+                "C[N+](C)(C)C",
+                1,
+                0,
+                "(trimethylammonio)",
+                NameStatus::Unverified(NameReason::CationPrefix),
+            ),
+            (
+                "CC=[NH2+]",
+                2,
+                1,
+                "iminio",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+        ] {
+            let mol = read_smiles(smiles)?;
+            let exclude = (0..=upstream).collect();
+            assert_eq!(
+                name_subgraph_with_upstream(&mol, start, &exclude, Some(upstream))?,
+                expected,
+                "{smiles}"
+            );
+            assert_eq!(mol.name_status(), status, "{smiles}");
+        }
+        let name = crate::naming::openclatura::name_smiles("C[N+](C)(C)CC(=O)[O-]")?;
+        assert_eq!(name.text, "(trimethylammonio)acetate");
+        assert_eq!(
+            name.status,
+            NameStatus::Unverified(NameReason::CationPrefix)
+        );
+        Ok(())
+    }
 
     #[test]
     fn amino_contractions_read_anilino_as_phenylamino() -> Result<(), String> {
@@ -1710,7 +1758,11 @@ mod tests {
                 expected,
                 "{smiles}"
             );
-            assert_eq!(mol.name_status(), NameStatus::Preferred, "{smiles}");
+            assert_eq!(
+                mol.name_status(),
+                NameStatus::Unverified(crate::naming::NameReason::UnauditedPath),
+                "{smiles}"
+            );
         }
         Ok(())
     }

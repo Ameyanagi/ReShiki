@@ -191,6 +191,24 @@ fn graph_spiro_side(
         mol.set_name_status(status);
         return plan_graph_spiro_side(mol, side_atoms, junction, required_core, true);
     }
+    // P-24.3: identical components take a spirobi name, which is not generated.
+    let cyclic = super::chains::get_cyclic_atoms(mol, &AtomSet::new());
+    let ranks = super::chains::canonical_ranks(&mol.subgraph(&cyclic), None);
+    let side_ranks = |inside: bool| {
+        let mut ranks: Vec<_> = mol
+            .get_neighbors(junction)
+            .iter()
+            .filter(|n| cyclic.contains(n) && side_atoms.contains(n) == inside)
+            .map(|n| ranks[n])
+            .collect();
+        ranks.sort();
+        ranks
+    };
+    if result.is_some() && side_ranks(true) == side_ranks(false) {
+        mol.mark_name(crate::naming::NameStatus::Unverified(
+            crate::naming::NameReason::UnauditedParent,
+        ));
+    }
     Ok(result)
 }
 pub fn plan_substituted_fusion_spiro_side(

@@ -13,6 +13,7 @@ use super::{
     perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
 };
+use crate::naming::{NameReason, NameStatus};
 use std::collections::BTreeMap;
 
 pub struct PrefixContext<'a> {
@@ -438,6 +439,11 @@ pub fn prefix_from_group(
         return ester_prefix_from_group(context.mol, group, context.sub_exclude, "carbonyl");
     }
     Ok(if context.parent_path.contains(&group.attachment_carbon) {
+        if group.key == "aminium" {
+            context
+                .mol
+                .mark_name(NameStatus::Unverified(NameReason::CationPrefix));
+        }
         rule.prefix.clone().unwrap_or_default()
     } else {
         String::new()
@@ -508,6 +514,28 @@ pub fn collect_component_prefix_substituents(
 #[cfg(test)]
 mod tests {
     use super::super::name_smiles;
+
+    #[test]
+    fn aminium_prefix_fallback_records_the_cation_prefix_choice() {
+        let mol = super::super::graph_io::read_smiles("C[NH3+]").unwrap();
+        let group = super::super::perception::perceive_groups(&mol)
+            .into_iter()
+            .find(|group| group.key == "aminium")
+            .unwrap();
+        let context = super::PrefixContext {
+            mol: &mol,
+            parent_path: &[group.attachment_carbon],
+            sub_exclude: &super::AtomSet::new(),
+        };
+        assert_eq!(
+            super::prefix_from_group(&context, &group).unwrap(),
+            "ammonio"
+        );
+        assert_eq!(
+            mol.name_status(),
+            crate::naming::NameStatus::Unverified(crate::naming::NameReason::CationPrefix)
+        );
+    }
 
     #[test]
     fn peroxy_ester_prefix_encloses_only_complex_ligands() {

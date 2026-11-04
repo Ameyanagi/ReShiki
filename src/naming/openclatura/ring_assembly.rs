@@ -17,6 +17,8 @@ pub struct RingAssembly {
     pub indicated_hydrogen_atoms: AtomSet,
     pub junction_bond_ids: AtomSet,
     pub ring_count: usize,
+    /// P-28 cannot certify an unaudited choice of component parent hydride.
+    pub(super) units_audited: bool,
     pub(super) unit_atoms: AtomSet,
     pub(super) junction_key: (Vec<LocantKey>, Vec<LocantKey>),
 }
@@ -26,6 +28,7 @@ struct Unit {
     maps: Vec<BTreeMap<usize, String>>,
     indicated: AtomSet,
     ring_count: usize,
+    audited: bool,
 }
 
 /// A unit includes every cyclic atom connected by cyclic edges, including spiro
@@ -285,6 +288,8 @@ fn resolve_unit(mol: &Molecule, atoms: &AtomSet, system: &RingSystem) -> Option<
     let path = system.paths.first()?;
     let ring_count = unit.bonds.len() + 1 - unit.atoms.len();
     let found = retained::get_retained_ring(&unit, path);
+    let audited = found.is_some()
+        || !super::ring_renderer::is_von_baeyer_descriptor(system.polycycle_descriptor.as_deref());
     let (name, mut maps) = if let Some(found) = found {
         if retained::mancude_monocycle_hydro_plan(&unit, path, Some(&found.name)).is_some()
             || found.name.contains("hydro")
@@ -391,6 +396,7 @@ fn resolve_unit(mol: &Molecule, atoms: &AtomSet, system: &RingSystem) -> Option<
         maps,
         indicated,
         ring_count,
+        audited,
     })
 }
 
@@ -565,6 +571,7 @@ fn path_assembly(
         indicated_hydrogen_atoms,
         junction_bond_ids: component_bonds.clone(),
         ring_count: path.iter().map(|&i| units[i].ring_count).sum(),
+        units_audited: path.iter().all(|&i| units[i].audited),
         unit_atoms: units[path[0]].maps[0].keys().copied().collect(),
         junction_key: (set, citation),
     })
@@ -846,6 +853,27 @@ mod tests {
         for smiles in ["C1CCC(CC1)c1ccccc1", "c1ccc(cc1)-c1ccncc1"] {
             let mol = read_smiles(smiles).unwrap();
             assert!(assembly_junctions(&mol).is_empty(), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn assembly_units_keep_their_parent_choice_status() {
+        use crate::naming::{NameReason, NameStatus};
+        for (smiles, text, status) in [
+            (
+                "c1ccc(cc1)-c1ccccc1",
+                "1,1'-biphenyl",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1CC2C3CCC1C2C3C4CC5C6CCC4C5C6",
+                "2,7'-bi(tricyclo[4.3.0.0^{3,9}]nonane)",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, text, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
         }
     }
 

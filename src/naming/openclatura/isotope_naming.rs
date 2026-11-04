@@ -384,7 +384,7 @@ pub(super) fn name_smiles(smiles: &str, style: IsotopeStyle) -> Result<Name, Str
     let atoms = parent.atoms.keys().copied().collect();
     let base = component_namer::name_component_with_atom_locants(&parent, &atoms)?;
     let locants = &base.locants;
-    super::assess_parent_name(&parent, &base.text);
+    super::assess_derivation(&parent, &base.derivation);
     let symmetry = lowest_equivalent_map(&parent, &sites, locants)?;
     let descriptor = isotope_descriptors(&parent, &sites, locants, &symmetry, style)?;
     let text = super::nest_enclosing_marks(&with_descriptor(
@@ -396,10 +396,8 @@ pub(super) fn name_smiles(smiles: &str, style: IsotopeStyle) -> Result<Name, Str
     let status = if style == IsotopeStyle::Boughton {
         NameStatus::NotPreferred(NameReason::BoughtonIsotope)
     } else {
-        match parent.name_status() {
-            status @ (NameStatus::NotPreferred(_) | NameStatus::Unverified(_)) => status,
-            _ => NameStatus::Unverified(NameReason::IsotopePlacement),
-        }
+        parent.mark_name(NameStatus::Unverified(NameReason::IsotopePlacement));
+        parent.name_status()
     };
     Ok(Name {
         text,
