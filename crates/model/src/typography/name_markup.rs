@@ -185,11 +185,16 @@ fn boughton_nuclide(text: &str) -> Option<(NameMarkup, usize)> {
     }
     let consumed = mass_bytes + symbol_bytes + count_bytes;
     let tail = after(text, consumed);
+    // A following isotope suffix may carry its own locants (`-1,1-d2`), but
+    // indicated hydrogen before a locant-led parent (`-2H-1,3-benzimidazole`)
+    // is not followed by a nuclide.
     if !tail.is_empty()
         && !tail.strip_prefix('-').is_some_and(|tail| {
-            tail.starts_with(|c: char| {
-                c.is_ascii_digit() || superscript_digit(c).is_some() || c == 'd'
-            })
+            let next = tail
+                .split_once('-')
+                .filter(|(locants, _)| locants.split(',').all(numeric_locant))
+                .map_or(tail, |(_, next)| next);
+            boughton_nuclide(next).is_some()
         })
     {
         return None;
@@ -1114,6 +1119,21 @@ mod tests {
             name_markup("ethane-1-13C-1,1-d2").unicode().text,
             "ethane-1-¹³C-1,1-d₂"
         );
+        for (name, italic) in [
+            (
+                "N-[3-(1H-imidazol-1-yl)propyl]-2H-1,3-benzimidazol-5-amine",
+                &["N", "H", "H"][..],
+            ),
+            ("octahydro-2H-2lambda^4-benzothiophen-2-one", &["H"]),
+        ] {
+            let markup = name_markup(name);
+            assert_eq!(parts(&markup, NameRun::Italic), italic, "{name}");
+            assert!(
+                !markup.unicode().text.contains('²'),
+                "{}",
+                markup.unicode().text
+            );
+        }
         for text in ["(13C prose)", "(1,2)", "(18Ox)", "(13C,)", "1H2O"] {
             assert!(name_markup(text).runs.is_empty(), "{text}");
         }
