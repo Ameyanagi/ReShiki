@@ -169,7 +169,7 @@ impl Molecule {
     }
 
     pub(super) fn mark_name(&self, status: NameStatus) {
-        if status.strength() > self.name_status().strength() {
+        if status.severity() > self.name_status().severity() {
             self.set_name_status(status);
         }
     }

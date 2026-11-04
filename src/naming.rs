@@ -92,20 +92,22 @@ pub enum NameStatus {
     Unverified(NameReason),
 }
 impl NameStatus {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Preferred => "Preferred IUPAC name",
-            Self::NotPreferred(_) => "Systematic name, not the preferred IUPAC name",
-            Self::Unverified(_) => "Systematic name, preference not verified",
-        }
-    }
-
-    pub(crate) fn strength(self) -> u8 {
+    /// Downgrade strength: a known departure outranks an unchecked preference,
+    /// and any recorded reason outranks the uncertified default.
+    pub(crate) fn severity(self) -> u8 {
         match self {
             Self::Preferred => 0,
             Self::Unverified(NameReason::UnauditedPath) => 1,
             Self::Unverified(_) => 2,
             Self::NotPreferred(_) => 3,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Preferred => "Preferred IUPAC name",
+            Self::NotPreferred(_) => "Systematic name, not the preferred IUPAC name",
+            Self::Unverified(_) => "Systematic name, preference not verified",
         }
     }
 
