@@ -511,7 +511,8 @@ mod tests {
     /// A salt takes its strongest ion assessment (Preferred < Unverified <
     /// NotPreferred; ties keep the first ion's reason in citation order), so a
     /// known departure is never masked by an unchecked ion (P-77.1.1, P-77.2.1).
-    /// Texts are the current output; this test pins statuses, not spellings.
+    /// Texts are the current output, including spellings that are not PINs
+    /// (benzenolate, not phenoxide); the statuses are what this test checks.
     #[test]
     fn salt_status_is_the_strongest_ion_downgrade() {
         use NameReason::{AnionParent, BridgedFusedParent, Multiplicative, RingAssembly};
