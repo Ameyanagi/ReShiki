@@ -13,7 +13,7 @@ struct Amplificant {
     numberings: Vec<BTreeMap<usize, usize>>,
 }
 
-/// P-52.2.5.1(2), P-51.3.2: a linear phane has at least four whole
+/// P-52.2.5.3, P-51.3.2: a linear phane has at least four whole
 /// ring systems and seven skeletal nodes along a ring-to-ring path.
 pub(super) fn has_linear_skeleton(mol: &Molecule) -> bool {
     let systems = super::ring_assembly::cyclic_units(mol);
@@ -32,9 +32,11 @@ pub(super) fn has_linear_skeleton(mol: &Molecule) -> bool {
         }
     }
     let nodes = collapsed.values().copied().collect();
+    let splits = mol.named_component_splits.borrow();
     let edges = mol
         .bonds
         .values()
+        .filter(|bond| !splits.contains(&normalize_edge(bond.u, bond.v)))
         .filter_map(|bond| {
             let (&u, &v) = (collapsed.get(&bond.u)?, collapsed.get(&bond.v)?);
             (u != v).then_some(normalize_edge(u, v))

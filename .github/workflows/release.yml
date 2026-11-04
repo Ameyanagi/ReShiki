@@ -25,6 +25,15 @@ on:
         description: Only publish @ameyanagi/reshiki at main's version to npm (no builds, release or demo)
         type: boolean
         default: false
+      pypi_only:
+        description: Only build, test and publish the reshiki Python wheels at main's version (no app builds, release or demo)
+        type: boolean
+        default: false
+      pypi_repository:
+        description: Package index for pypi_only
+        type: choice
+        options: [pypi, testpypi]
+        default: pypi
   workflow_call:
     inputs:
       nightly:
@@ -61,8 +70,9 @@ jobs:
     with:
       live_reference: true
   validate:
-    # Every build, signing and release job needs validate, so npm_only skips them all.
-    if: ${{ !inputs.npm_only }}
+    # Every build, signing and release job needs validate, so npm_only and
+    # pypi_only skip them all.
+    if: ${{ !inputs.npm_only && !inputs.pypi_only }}
     runs-on: ubuntu-22.04
     outputs:
       nightly_version: ${{ steps.nightly.outputs.version }}
@@ -785,3 +795,58 @@ jobs:
             fi
             exit "$status"
           fi
+  # The reshiki Python package follows each release on PyPI with the app's
+  # version; maturin turns a tag such as v0.13.1-rc.1 into 0.13.1rc1. A manual
+  # run with pypi_only publishes main's version. See docs/releasing.md.
+  python_wheels:
+    if: github.event_name == 'push' || inputs.pypi_only
+    uses: ./.github/workflows/python-wheels.yml
+  pypi:
+    needs: [publish, python_wheels]
+    if: >-
+      ${{ !cancelled() && needs.python_wheels.result == 'success'
+          && ((github.event_name == 'push' && needs.publish.result == 'success')
+              || (github.event_name == 'workflow_dispatch' && inputs.pypi_only)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: pypi
+    concurrency:
+      group: pypi
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A version belongs to its tag's commit, so a manual run cannot publish
+      # main's later code under an already released version.
+      - name: Check that main's version is unreleased
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          REPOSITORY: ${{ inputs.pypi_repository }}
+        run: |
+          set -euo pipefail
+          if [[ $GITHUB_REF != refs/heads/main ]]; then
+            echo "pypi_only publishes main's version; run it on main" >&2
+            exit 1
+          fi
+          version=$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)
+          tagged=$(git ls-remote origin "refs/tags/v$version" "refs/tags/v$version^{}" | awk 'END { print $1 }')
+          if [[ $REPOSITORY == pypi && -n $tagged && $tagged != "$GITHUB_SHA" ]]; then
+            echo "::error::v$version is tagged at $tagged, not at this commit, so main is not the $version release. Publish with the next version tag."
+            exit 1
+          fi
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: python-wheel-*
+          path: dist
+          merge-multiple: true
+      # Trusted publishing (OIDC); a version already on the index is skipped,
+      # so rerunning a release is safe.
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: ${{ inputs.pypi_repository == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          skip-existing: true
