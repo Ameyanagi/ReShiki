@@ -32,9 +32,11 @@ pub(super) fn has_linear_skeleton(mol: &Molecule) -> bool {
         }
     }
     let nodes = collapsed.values().copied().collect();
+    let splits = mol.named_component_splits.borrow();
     let edges = mol
         .bonds
         .values()
+        .filter(|bond| !splits.contains(&normalize_edge(bond.u, bond.v)))
         .filter_map(|bond| {
             let (&u, &v) = (collapsed.get(&bond.u)?, collapsed.get(&bond.v)?);
             (u != v).then_some(normalize_edge(u, v))

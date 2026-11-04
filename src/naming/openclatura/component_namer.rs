@@ -190,10 +190,16 @@ fn component_pipeline(
     let mut groups = component_groups(mol, component_atoms);
     let mut key = component_principal_key(&groups, as_prefix);
     if let Some(result) = structural_parent(mol, component_atoms, &groups, key.as_deref())? {
+        if projection.is_none() && component_atoms.len() == mol.atoms.len() {
+            *mol.named_component_splits.borrow_mut() = result.component_splits;
+        }
         return Ok(ComponentResult::Shortcut(result.name));
     }
-    if let Some(name) = try_name_anhydride_component(mol, &groups, key.as_deref())? {
-        return Ok(ComponentResult::Shortcut(name));
+    if let Some(result) = try_name_anhydride_component(mol, &groups, key.as_deref())? {
+        if projection.is_none() && component_atoms.len() == mol.atoms.len() {
+            *mol.named_component_splits.borrow_mut() = result.component_splits;
+        }
+        return Ok(ComponentResult::Shortcut(result.name));
     }
     // The key is the first of equally senior groups, such as carboxylic_acid
     // and ring_carboxylic_acid, not the P-44.1 count and ring-over-chain choice.
@@ -385,7 +391,7 @@ fn component_pipeline(
     let parts = &mut plan.parts;
     parts.principal_citation_mode = citation.map(str::to_owned);
     emit_bond_stereo(mol, parts, numbered, locants, None);
-    let front =
+    let (front, component_splits) =
         add_component_front_modifiers(mol, parts, &groups, key.as_deref(), &sub_exclude, locants)?;
     let n_subs = add_component_n_substituents(
         mol,
@@ -440,6 +446,9 @@ fn component_pipeline(
             "openclatura: atom {missing} ({}) not named",
             mol.atoms[missing].symbol
         ));
+    }
+    if projection.is_none() && component_atoms.len() == mol.atoms.len() {
+        *mol.named_component_splits.borrow_mut() = component_splits;
     }
     Ok(ComponentResult::Plan(Box::new(plan)))
 }

@@ -1283,12 +1283,12 @@ mod tests {
                 "1^4-[([1^1,2^1:2^4,3^1-terphenyl]-1^4-yl)oxy]-1^1,2^1:2^4,3^1-terphenyl",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
-            // The fast-subset carbamate has four ring systems along a path
-            // containing acyclic chains, so it too requires a linear phane.
+            // P-65.6.3.3.7.2.1: the carbamate separates two two-ring
+            // components; its named biphenyl junction needs no demotion.
             (
                 "CN(CCCCCCCCCN1CCC(CC1)OC(=O)NC2=CC=CC=C2C3=CC=CC=C3)C(=O)C4=CC(=C(C=C4)O)Cl",
                 "1-[9-(N-methyl-3-chloro-4-hydroxybenzamido)nonyl]piperidin-4-yl ([1,1'-biphenyl]-2-yl)carbamate",
-                NameStatus::NotPreferred(NameReason::LinearPhane),
+                NameStatus::Preferred,
             ),
             // P-52.2.5.3 applies without identical-unit ring junctions.
             (
@@ -1348,6 +1348,171 @@ mod tests {
                 name.text
             );
         }
+    }
+
+    #[test]
+    fn linear_phane_status_respects_functional_class_components_and_round_trips() {
+        use crate::naming::{NameReason, NameStatus};
+        for (smiles, expected, status) in [
+            // P-65.6.3.2.1 / P-65.6.3.3.1: each ester component has two rings.
+            (
+                "O=C(OCc1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "(4-phenoxyphenyl)methyl 4-phenoxybenzoate",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=C(OCc1ccc(-c2ccccc2)cc1)c1ccc(-c2ccccc2)cc1",
+                "([1,1'-biphenyl]-4-yl)methyl [1,1'-biphenyl]-4-carboxylate",
+                NameStatus::Preferred,
+            ),
+            // P-65.6.3.3.7.2.1: carbamic acid esters use the same split.
+            (
+                "O=C(Oc1ccc(Oc2ccccc2)cc1)Nc1ccc(Oc2ccccc2)cc1",
+                "4-phenoxyphenyl (4-phenoxyphenyl)carbamate",
+                NameStatus::Preferred,
+            ),
+            // P-65.7.1: anhydrides cite separate acid components.
+            (
+                "O=C(OC(=O)c1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "4-phenoxybenzoic anhydride",
+                NameStatus::Preferred,
+            ),
+            // P-65.6.3.3.4.4: a phane within either component still counts.
+            (
+                "COC(=O)c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+                "methyl 4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)benzoate",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            (
+                "CC(=O)Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+                "4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenyl acetate",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            // P-65.6.3.3.4: an ester prefix does not split the acid parent.
+            (
+                "OC(=O)c1ccc(Oc2ccc(C(=O)Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+                "4-[(4-{[(4-phenoxyphenyl)oxy]carbonyl}phenyl)oxy]benzoic acid",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            // A same-key ester outside the selected parent remains a prefix.
+            (
+                "COC(=O)c1cc(C(=O)OC)cc(Oc2ccc(C(=O)Oc3ccc(Oc4ccccc4)cc3)cc2)c1",
+                "dimethyl 5-[(4-{[(4-phenoxyphenyl)oxy]carbonyl}phenyl)oxy]benzene-1,3-dicarboxylate",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn linear_phane_status_respects_oxoacid_ester_components_and_round_trips() {
+        use crate::naming::{NameReason, NameStatus};
+        for (smiles, expected, status) in [
+            // P-65.2.3 / P-65.6.3.2.1: ester organyl groups are separate components.
+            (
+                "O=C(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1",
+                "bis(4-phenoxyphenyl) carbonate",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=P(Oc1ccc(Oc2ccccc2)cc1)(Oc1ccccc1)Oc1ccc(Oc2ccccc2)cc1",
+                "bis(4-phenoxyphenyl) phenyl phosphate",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=S(=O)(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1",
+                "bis(4-phenoxyphenyl) sulfate",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=S(=O)(Oc1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "4-phenoxyphenyl 4-phenoxybenzene-1-sulfonate",
+                NameStatus::Preferred,
+            ),
+            (
+                "CP(=O)(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1",
+                "bis(4-phenoxyphenyl) methylphosphonate",
+                NameStatus::Preferred,
+            ),
+            (
+                "COP(=O)(Oc1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "methyl 4-phenoxyphenyl 4-phenoxyphenylphosphonate",
+                NameStatus::Preferred,
+            ),
+            (
+                "OP(=O)(Oc1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "4-phenoxyphenyl hydrogen 4-phenoxyphenylphosphonate",
+                NameStatus::Preferred,
+            ),
+            (
+                "[PH](=O)(Oc1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "4-phenoxyphenyl (4-phenoxyphenyl)phosphinate",
+                NameStatus::Preferred,
+            ),
+            // P-52.2.5.3: a four-ring path within one component still counts.
+            (
+                "COC(=O)Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+                "methyl 4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenyl carbonate",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            (
+                "COP(=O)(c1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "methyl bis(4-phenoxyphenyl)phosphinate",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            (
+                "OP(=O)(c1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "bis(4-phenoxyphenyl)phosphinic acid",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+            // A phosphonate prefix under a senior nitrile keeps the full skeleton.
+            (
+                "N#Cc1ccc(Oc2ccc(P(=O)(OC)Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+                "4-[(4-{methoxy[(4-phenoxyphenyl)oxy]phosphoryl}phenyl)oxy]benzonitrile",
+                NameStatus::NotPreferred(NameReason::LinearPhane),
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn linear_phane_status_preserves_reduced_parent_components() {
+        use crate::naming::{NameReason, NameStatus};
+        let name =
+            name_smiles("O=P(Oc1ccc(Oc2ccccc2)cc1)(Oc1ccccc1)Oc1ccc(Oc2ccc([N+](C)(C)[S-])cc2)cc1")
+                .unwrap();
+        assert_eq!(
+            name.text,
+            "4-{[4-(dimethylamino)phenyl]oxy}phenyl 4-phenoxyphenyl phenyl phosphate sulfide"
+        );
+        assert_eq!(
+            name.status,
+            NameStatus::Unverified(NameReason::AmineChalcogenide)
+        );
     }
 
     #[test]
