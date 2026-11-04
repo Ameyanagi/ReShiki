@@ -470,6 +470,9 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
         .filter(|m| is_tetrahedral(m.chiral_tag))
         .count();
     let imported = chemistry::smiles::read(text).map_err(|e| e.to_string())?;
+    if imported.dropped_cumulene_ez {
+        return Err("Naming does not support cumulene E/Z configuration yet; no less specific name was substituted".into());
+    }
     if specified_atoms
         != imported
             .prepared

@@ -17,7 +17,7 @@ pub(crate) async fn run(
     let text = session.text(source, &format)?;
     // Import cleanup can drop stereo classes that naming rejects, such as
     // allene stereo, so the raw SMILES (before any title) is checked first.
-    if format == "smiles" {
+    if format == "smiles" || format == "auto" && crate::engine::text_format(&text) == "smiles" {
         let smiles = text.split_whitespace().next().unwrap_or_default();
         naming::canonical_smiles(smiles).map_err(CliError::Failed)?;
     }
