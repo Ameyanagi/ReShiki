@@ -221,7 +221,7 @@ impl NameReason {
                 "Uses the descriptive ‘radical cation’ or ‘radical anion’ form (RC-85.1); preferred systematic radical-ion names use the cumulative ionic and radical suffixes of P-75 (including the cation suffixes in P-73)."
             }
             Self::AnionParent => {
-                "The preferred parent, suffix and retained-name choice for this hydroxy- or acid-derived anion have not been verified (P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."
+                "The anionic parent, suffix or retained-name choice for this anion has not been verified (P-72.7, P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."
             }
             Self::Phane => {
                 "The structure is a cyclophane: at least six nodes, two or more rings and a mancude ring. Cyclic phane names rank above fused, bridged fused and von Baeyer names, so the preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). ReShiki has not verified the numbering and citation order of its phane name."

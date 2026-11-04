@@ -538,6 +538,28 @@ fn s2n_fast_subset() {
 }
 
 #[test]
+fn relative_cxsmiles_known_failure_927_item_5() {
+    use reshiki_chemistry::smiles::stereoisomers;
+
+    // #927 item 5: import keeps the representative drawing but loses bare `r`.
+    let intended = "C[C@H](O)C(=O)O |r|";
+    let imported = reshiki_chemistry::smiles::read(intended).unwrap();
+    let canonical = super::canonical_state(&imported.prepared.state).unwrap();
+    let name = namer(&canonical).unwrap().text;
+    assert_eq!(name, "(2S)-2-hydroxypropanoic acid");
+    let parsed = opsin::Parser::new()
+        .unwrap()
+        .parse(&name, &opsin::ParseOptions::strict());
+    assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
+    let actual = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+    assert_ne!(
+        stereoisomers(&actual).unwrap(),
+        stereoisomers(intended).unwrap(),
+        "#927 item 5 is fixed: make this a passing assertion and close the item"
+    );
+}
+
+#[test]
 fn ring_r_s_names_intentionally_depart_from_upstream_spelling() {
     let mut measurements = Measurements::default();
     for (smiles, expected, alternative) in [

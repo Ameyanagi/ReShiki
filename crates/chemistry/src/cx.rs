@@ -63,6 +63,7 @@ pub enum Event {
         id: u32,
         atoms: Vec<usize>,
     },
+    RelativeStereo,
     QueryAtom(usize),
     SubstanceGroup {
         atoms: Vec<usize>,
@@ -210,6 +211,13 @@ pub fn read_at(
             Some(b'a' | b'o') => p.stereo_group()?,
             Some(b'&') if !p.starts(b"&#") => p.stereo_group()?,
             Some(b'r') if p.starts(b"rb") => p.substitution(true)?,
+            Some(b'r')
+                if matches!(p.input.get(p.pos - 1), Some(b'|' | b','))
+                    && matches!(p.input.get(p.pos + 1), Some(b'|' | b',')) =>
+            {
+                p.events.push(Event::RelativeStereo);
+                p.advance()?;
+            }
             Some(b'L') if p.starts(b"LN") => p.link_nodes()?,
             Some(b'S') if p.starts(b"SgD") => p.data_group()?,
             Some(b'S') if p.starts(b"SgH") => p.group_hierarchy()?,

@@ -3195,6 +3195,7 @@ dependencies = [
  "reshiki-chemistry",
  "roxmltree",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
