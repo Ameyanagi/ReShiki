@@ -333,43 +333,52 @@ pub fn component_automorphisms(spec: &FusionComponentSpec) -> Vec<BTreeMap<Strin
         })
         .collect()
 }
-pub fn component_interface_orbit(spec: &FusionComponentSpec, path: &[String]) -> Vec<String> {
-    let mut variants = Vec::new();
-    for a in component_automorphisms(spec) {
-        let mapped = path.iter().map(|l| a[l].clone()).collect::<Vec<_>>();
-        variants.push(mapped.clone());
-        variants.push(mapped.into_iter().rev().collect())
-    }
-    variants
+/// Components whose multiplied form is bis/tris rather than di/tri.
+pub fn uses_complex_multiplier(spec: &FusionComponentSpec) -> bool {
+    spec.multiplicative_prefix_style == "complex"
+        || spec.template.family == "generated_hw_monocycle"
+        || spec.attached_prefix.starts_with('[')
+}
+fn component_interface_orbit(spec: &FusionComponentSpec, path: &[String]) -> Vec<String> {
+    component_automorphisms(spec)
         .into_iter()
+        .flat_map(|a| {
+            let mapped: Vec<_> = path.iter().map(|l| a[l].clone()).collect();
+            let reversed = mapped.iter().rev().cloned().collect();
+            [mapped, reversed]
+        })
         .min_by_key(|p| p.iter().map(|l| locant_key(l)).collect::<Vec<_>>())
         .unwrap_or_else(|| path.to_vec())
 }
+/// Identical leaf components share a multiplier within each sibling scope
+/// whatever bond each uses (P-25.3.6.1); descriptors keep the attachment
+/// paths. A bis/tris multiplier needs an enclosed component, bis(...)
+/// (P-16.5.1.1), which the parser cannot yet read back, so those components
+/// still group only when their interfaces are equivalent.
 pub fn multiplicative_attachment_key(
     spec: &FusionComponentSpec,
     join: &FusionJoin,
 ) -> ComparisonKey {
+    let identity = component_variant_identity(spec);
+    if !uses_complex_multiplier(spec) {
+        return identity;
+    }
+    let path: Vec<_> = join
+        .interface
+        .attached_path
+        .iter()
+        .map(|l| l.text.clone())
+        .collect();
     ComparisonKey::tuple([
-        component_variant_identity(spec),
-        text(join.kind().as_str()),
+        identity,
+        text(format!("{:?}", join.kind())),
         join.order.into(),
         text(if join.host_sides().is_empty() {
             "locants"
         } else {
             "sides"
         }),
-        seq(
-            component_interface_orbit(
-                spec,
-                &join
-                    .interface
-                    .attached_path
-                    .iter()
-                    .map(|l| l.text.clone())
-                    .collect::<Vec<_>>(),
-            ),
-            text,
-        ),
+        seq(component_interface_orbit(spec, &path), text),
     ])
 }
 fn locant_comparison(l: &str) -> ComparisonKey {

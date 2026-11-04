@@ -1469,7 +1469,7 @@ mod tests {
             ),
             (
                 "CC1=C2C(=CC=C1)C3=C(N2)N=C(N=N3)NN=C4C5=C(C=CC(=C5)[N+](=O)[O-])N(C4=O)C",
-                "1-methyl-3-{[(6-methyl-5H-indolo[2,3-e][1,2,4]triazin-3-yl)amino]imino}-5-nitro-1,3-dihydro-2H-indol-2-one",
+                "1-methyl-3-{[(6-methyl-5H-[1,2,4]triazino[5,6-b]indol-3-yl)amino]imino}-5-nitro-1,3-dihydro-2H-indol-2-one",
             ),
             ("O=C1CCc2ccccc2N1", "3,4-dihydroquinolin-2(1H)-one"),
             ("O=C1CCc2ccccc12", "2,3-dihydro-1H-inden-1-one"),
@@ -1622,6 +1622,62 @@ mod tests {
                 Ok(expected),
                 "{smiles}"
             );
+        }
+    }
+
+    #[test]
+    fn xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants() {
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            ("S1c2ccccc2Cc2ccccc21", "9H-thioxanthene"),
+            (
+                "C1=CC(=CC=2SC3=CC=CC=C3CC12)C(=O)O",
+                "9H-thioxanthene-3-carboxylic acid",
+            ),
+            ("O=C1c2ccccc2Sc2ccccc12", "9H-thioxanthen-9-one"),
+            ("[Se]1c2ccccc2Cc2ccccc21", "9H-selenoxanthene"),
+            ("[Te]1c2ccccc2Cc2ccccc21", "9H-telluroxanthene"),
+            (
+                "O=S1c2ccccc2Cc2ccccc21",
+                "10lambda^4-thioxanthen-10(9H)-one",
+            ),
+            (
+                "O=S1(=O)c2ccccc2Cc2ccccc21",
+                "10lambda^6-thioxanthene-10,10(9H)-dione",
+            ),
+            (
+                "O=[Se]1c2ccccc2Cc2ccccc21",
+                "10lambda^4-selenoxanthen-10(9H)-one",
+            ),
+            (
+                "O=C1C2=CC=CC=C2S(C=2C=C(C=CC12)C(=O)O)(=O)=O",
+                "9,10,10-trioxo-9,10-dihydro-10lambda^6-thioxanthene-3-carboxylic acid",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            for candidate in std::iter::once(&name.text).chain(
+                name.alternatives
+                    .iter()
+                    .map(|alternative| &alternative.name),
+            ) {
+                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                assert_eq!(
+                    parsed.status,
+                    opsin::Status::Success,
+                    "{candidate}: {}",
+                    parsed.message
+                );
+                assert!(
+                    parsed.warnings.is_empty(),
+                    "{candidate}: {:?}",
+                    parsed.warnings
+                );
+                let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+                crate::naming::verify_identity(smiles, &reconstructed)
+                    .unwrap_or_else(|error| panic!("{smiles} -> {candidate}: {error}"));
+            }
         }
     }
 }
