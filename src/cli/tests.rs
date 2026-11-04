@@ -859,12 +859,96 @@ async fn name_preserves_unspecified_smiles_double_bonds() {
         (r"C/C=C\C", "(2Z)-but-2-ene"),
         ("C1=CCCCC1", "cyclohexene"),
         ("C1=CCCCCC1", "cycloheptene"),
+        ("CC=C=C=CC", "hexa-2,3,4-triene"),
+        ("C/C=C=C=CC", "hexa-2,3,4-triene"),
+        ("CC=C=C=C/C", "hexa-2,3,4-triene"),
+        ("CC=C=CC", "penta-2,3-diene"),
+        ("C/C=C=C/C", "penta-2,3-diene"),
+        ("C/C=C=C=C=C/C", "hepta-2,3,4,5-tetraene"),
+        ("C/C=C/C=C/C", "(2E,4E)-hexa-2,4-diene"),
+        // Cumulenes with identical ligands at one end have no E/Z.
+        ("C/C(C)=C=C=C/C", "2-methylhexa-2,3,4-triene"),
+        ("C/C(C)=C=C=C(/C)C", "2,5-dimethylhexa-2,3,4-triene"),
+        ("[CH3:1]/C([CH3:2])=C=C=C/C", "2-methylhexa-2,3,4-triene"),
+        ("[2H]/C([2H])=C=C=C/C", "(1,1-2H2)penta-1,2,3-triene"),
+        (
+            "C/C=C/C(/C=C/C)=C=C=C/C=C/C",
+            "(2E,8E)-4-[(1E)-prop-1-en-1-yl]deca-2,4,5,6,8-pentaene",
+        ),
     ] {
         let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
         assert_eq!(code, SUCCESS, "{smiles}: {err}");
         assert!(err.is_empty(), "{smiles}: {err}");
         let result: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(result["value"]["name"], expected, "{smiles}: {out}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_rejects_specified_cumulene_ez_without_printing_a_name() {
+    for smiles in [
+        "C/C=C=C=C/C",
+        r"C/C=C=C=C\C",
+        "C/C=C=C=C=C=C/C",
+        r"C/C=C=C=C=C=C\C",
+        "[2H]/C=C=C=C/C",
+        r"[2H]/C=C=C=C\C",
+        "[3H]/C=C=C=C/C",
+        "[2H]/C=C=C=C=C=C/C",
+        "[2H]/C([H])=C=C=C/C",
+        "F/C=C=C=C/Cl",
+        "C/C(Cl)=C=C=C(/C)F",
+        "C(=C=C=C/C)/C",
+        r"C/C=C/C(=C=C=C/F)/C=C\C",
+        r"C/C=C/C(=C=C=C\F)/C=C\C",
+        "[H]/N=C=C=C/C",
+        r"[H]/N=C=C=C\C",
+        "C/N=C=C=C/C",
+        "C/C=C=C=C/C.CC",
+        "C/1=C=C=C/CCCC1",
+        "C/C=C=C=c1/cccc[nH]1",
+        "C/C=C=C=c1cccc[nH]/1",
+    ] {
+        for json in [false, true] {
+            let mut tokens = vec!["name", "--smiles", smiles];
+            if json {
+                tokens.push("--json");
+            }
+            let (code, out, err) = call(&tokens).await;
+            assert_eq!(code, FAILURE, "{smiles}: {err}");
+            assert!(out.is_empty(), "{smiles}: {out}");
+            assert!(
+                err.contains("Naming does not support cumulene E/Z configuration yet; no less specific name was substituted"),
+                "{smiles}: {err}"
+            );
+        }
+    }
+    let (code, out, err) = call(&["name", "--smiles", "CC=[C@AL1]=CC", "--json"]).await;
+    assert_eq!(code, FAILURE, "{err}");
+    assert!(out.is_empty(), "{out}");
+    assert!(
+        err.contains("Naming does not support allene or coordination stereo classes"),
+        "{err}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_checks_raw_smiles_files_including_auto_format() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("cumulene.smi");
+    std::fs::write(&path, "C/C=C=C=C/C cumulene\n").unwrap();
+    for format in [None, Some("smiles"), Some("auto")] {
+        let mut tokens = vec!["name", path.to_str().unwrap(), "--json"];
+        if let Some(format) = format {
+            tokens.extend(["--from", format]);
+        }
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, FAILURE, "{format:?}: {err}");
+        assert!(out.is_empty(), "{format:?}: {out}");
+        assert!(
+            err.contains("Naming does not support cumulene E/Z configuration yet"),
+            "{format:?}: {err}"
+        );
     }
 }
 

@@ -7,7 +7,9 @@
 //! Absolute configurations remain separate. Results never edit the caller's data.
 pub mod allene;
 pub mod cip;
+mod cumulene;
 mod drawing;
+pub use cumulene::{Cumulene, stereogenic_odd_cumulenes};
 pub use drawing::wedging;
 pub mod perception;
 mod priority;

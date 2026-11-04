@@ -16,6 +16,8 @@ pub struct Imported {
     pub prepared: Prepared,
     pub conformers: Vec<Conformer>,
     pub name: Option<String>,
+    /// SMILES directions specified odd-cumulene E/Z that preparation discarded.
+    pub dropped_cumulene_ez: bool,
     /// Reaction CX attachment markers affect wedge selection before drawing.
     #[serde(skip)]
     pub reaction_attachments: Vec<bool>,
@@ -391,6 +393,7 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         })
         .collect();
     Ok(Imported {
+        dropped_cumulene_ez: false,
         reaction_properties,
         reaction_attachments: annotations
             .properties
@@ -444,6 +447,15 @@ pub fn read(text: &str) -> Result<Imported> {
         (text, "")
     };
     let mut parsed = parse_inner(body)?;
+    // Record directions before H removal: a bond to a removed H still specifies
+    // a terminal ligand's orientation, including H opposite an imine lone pair.
+    let mut directed = vec![false; parsed.graph.atoms.len()];
+    for (bond, direction) in parsed.graph.bonds.iter().zip(&parsed.directions) {
+        if matches!(direction, Direction::Up | Direction::Down) {
+            put(&mut directed, bond.a, true)?;
+            put(&mut directed, bond.b, true)?;
+        }
+    }
     let mut annotations = Annotations::new(&parsed);
     let name = if suffix.starts_with('|') {
         let topology = cx::Topology {
@@ -516,6 +528,14 @@ pub fn read(text: &str) -> Result<Imported> {
         stereo::CoordinateBounds::NativeImport,
     )?;
     let (prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
+    let mut dropped_cumulene_ez = false;
+    for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {
+        let [(a, _), (b, _)] = chain.ends;
+        if *at(&directed, *at(&kept_atoms, a)?)? && *at(&directed, *at(&kept_atoms, b)?)? {
+            dropped_cumulene_ez = true;
+            break;
+        }
+    }
     // Native RemoveHs preserves properties on retained atoms. Keep the raw
     // values for the later depiction stage, which converts rank properties
     // only when the selected fragment/neighbor ordering reads them.
@@ -534,6 +554,7 @@ pub fn read(text: &str) -> Result<Imported> {
         })
         .collect::<Result<Vec<_>>>()?;
     Ok(Imported {
+        dropped_cumulene_ez,
         prepared,
         conformers,
         name: (!name.is_empty()).then(|| name.to_owned()),
