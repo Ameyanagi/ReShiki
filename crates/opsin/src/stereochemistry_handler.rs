@@ -337,13 +337,20 @@ impl<'a> StereochemistryHandler<'a> {
     pub fn apply_stereochemical_elements(&mut self, elements: &[NodeId]) -> Result {
         // Descriptor-set prefixes, starred R/S and RS/SR have already been
         // normalized to Rel/Rac attributes; standalone qualifiers keep a type.
-        let explicitly_grouped = elements.iter().any(|&id| {
+        let mut requested_group_kinds = BTreeSet::new();
+        for &id in elements {
             let element = &self.arena[id];
-            matches!(
-                element.attribute(TYPE_ATR),
-                Some(REL_TYPE_VAL | RAC_TYPE_VAL)
-            ) || matches!(element.attribute(STEREOGROUP_ATR), Some("Rel" | "Rac"))
-        });
+            if element.attribute(TYPE_ATR) == Some(RAC_TYPE_VAL)
+                || element.attribute(STEREOGROUP_ATR) == Some("Rac")
+            {
+                requested_group_kinds.insert(StereoGroupType::Racemic);
+            }
+            if element.attribute(TYPE_ATR) == Some(REL_TYPE_VAL)
+                || element.attribute(STEREOGROUP_ATR) == Some("Rel")
+            {
+                requested_group_kinds.insert(StereoGroupType::Relative);
+            }
+        }
         let mut locanted = Vec::new();
         let mut unlocanted = Vec::new();
         let mut carbohydrate = Vec::new();
@@ -435,7 +442,10 @@ impl<'a> StereochemistryHandler<'a> {
             self.warning_or_error(result)?
         }
         self.resolve_unknown_stereo_centres()?;
-        if has_cage_descriptor && explicitly_grouped && !self.cage_scope_is_single_group() {
+        if has_cage_descriptor
+            && !requested_group_kinds.is_empty()
+            && !self.cage_scope_is_single_group(&requested_group_kinds)
+        {
             self.warning_or_error(stereo(
                 "rel-/rac- outside an endo/exo cage's own scope is not supported",
             ))?;
@@ -443,9 +453,13 @@ impl<'a> StereochemistryHandler<'a> {
         self.cage_stereo_groups.clear();
         Ok(())
     }
-    fn cage_scope_is_single_group(&self) -> bool {
+    fn cage_scope_is_single_group(
+        &self,
+        requested_group_kinds: &BTreeSet<StereoGroupType>,
+    ) -> bool {
         // Axial stereo changes under reflection; E/Z bond stereo does not.
-        if self.cage_stereo_groups.len() != 1
+        if requested_group_kinds.len() != 1
+            || self.cage_stereo_groups.len() != 1
             || self
                 .graph()
                 .bonds
@@ -467,10 +481,8 @@ impl<'a> StereochemistryHandler<'a> {
                 if !cage.atoms.contains(&atom.id) {
                     return false;
                 }
-                matches!(
-                    parity.stereo_group.kind,
-                    StereoGroupType::Relative | StereoGroupType::Racemic
-                ) && *group.get_or_insert(parity.stereo_group) == parity.stereo_group
+                requested_group_kinds.contains(&parity.stereo_group.kind)
+                    && *group.get_or_insert(parity.stereo_group) == parity.stereo_group
             })
             && group.is_some()
     }

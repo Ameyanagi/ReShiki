@@ -966,6 +966,43 @@ fn explicit_cage_groups_with_e_z_double_bonds_are_allowed() {
 }
 
 #[test]
+fn racemic_qualifiers_on_e_z_descriptors_cannot_become_relative_cage_groups() {
+    for name in [
+        "rac-(1E)-1-(bicyclo[2.2.1]heptan-2-exo-yl)-2-fluoroethene",
+        "rac-(1Z)-1-(bicyclo[2.2.1]heptan-2-exo-yl)-2-fluoroethene",
+        "rac-(E)-1-(bicyclo[2.2.1]heptan-2-exo-yl)-2-fluoroethene",
+        "rac-(Z)-1-(bicyclo[2.2.1]heptan-2-exo-yl)-2-fluoroethene",
+        "rac-(2E)-4-(bicyclo[2.2.1]heptan-2-exo-yl)but-2-en-1-ol",
+        "rac-(2Z)-4-(bicyclo[2.2.1]heptan-2-exo-yl)but-2-en-1-ol",
+    ] {
+        assert_group_scope_refused(name);
+    }
+}
+
+#[test]
+fn supported_racemic_cage_groups_with_e_z_double_bonds_preserve_their_kind() {
+    for name in [
+        "(rac)-(E)-1-(bicyclo[2.2.1]heptan-2-exo-yl)-2-fluoroethene",
+        "rac-(1R)-2-exo-[(1E)-2-fluoroethenyl]bicyclo[2.2.1]heptane",
+    ] {
+        let structure = parse(name);
+        assert_eq!(
+            stereo_group_signature(&structure),
+            "Racemic:1,2,4",
+            "{name}"
+        );
+        assert!(
+            structure
+                .graph
+                .bonds
+                .iter()
+                .any(|bond| bond.active && bond.stereo.is_some()),
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn qualifiers_on_non_cip_descriptors_are_retained_for_cage_scope_checks() {
     for unqualified in [
         "(1E)-1-[(1R)-bicyclo[2.2.1]heptan-2-exo-yl]-2-fluoroethene",
