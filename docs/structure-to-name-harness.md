@@ -10,12 +10,14 @@ OPSIN port reads it back to the drawn structure.
 ## Run
 
 ```sh
-# Fast subset (normal test, about 7 s in a debug build)
-cargo test --no-default-features --lib naming::s2n_harness::s2n_fast_subset -- --nocapture
+# Fast subset (normal test)
+cargo test --locked --no-default-features --lib naming::s2n_harness::s2n_fast_subset -- --nocapture
+# Metamorphic relations (normal tests)
+cargo test --locked --no-default-features --lib naming::s2n_harness::metamorphic -- --nocapture
 # Full corpus (ignored by default; nightly in .github/workflows/s2n.yml)
-S2N_REPORT=s2n-report.tsv cargo test --no-default-features --lib naming::s2n_harness::s2n_full_corpus -- --ignored --nocapture
-# Raise the baseline after an improvement, then review the diff
-S2N_UPDATE_BASELINE=1 cargo test --no-default-features --lib naming::s2n_harness::s2n_fast_subset
+S2N_REPORT=s2n-report.tsv cargo test --locked --no-default-features --lib naming::s2n_harness::s2n_full_corpus -- --ignored --nocapture
+# Regenerate baseline.tsv and status-snapshot.tsv, then review both diffs
+S2N_UPDATE_BASELINE=1 cargo test --locked --no-default-features --lib naming::s2n_harness::s2n_fast_subset -- --nocapture
 ```
 
 `S2N_EXTRA=<file>` with the ignored `s2n_extra_file` test round-trips any extra
@@ -34,6 +36,38 @@ The fast test fails on any Wrong name and when a correct count in
 `tests/fixtures/s2n/baseline.tsv` drops; it prints a reminder when one rises.
 The full test fails on any Wrong name. The workflow runs nightly, on manual
 dispatch and on pushes to `feat/s2n`, and uploads the full report.
+
+## Status snapshot
+
+`tests/fixtures/s2n/status-snapshot.tsv` holds the name, PIN status and reason
+of every fixture and generated row of the fast subset, once per SMILES.
+Declined rows have status `declined` and the decline message as reason. The
+fast test fails on any difference and prints each changed row's old and new
+name, status and reason. Every PR that changes names or statuses must
+regenerate the snapshot with `S2N_UPDATE_BASELINE=1`, review each changed row,
+and list the changes in its PR body. A new Preferred label, or a change one PR
+causes in another's results, is then visible in review.
+
+## Metamorphic tests
+
+`src/naming/s2n_harness/metamorphic.rs` names every fast-run structure, plus
+curated isotope, salt, charge, meso, E/Z and biaryl-axis cases, under four
+relations that must not change the name or status:
+
+- `atom_order`: three seeded random atom and component orders of the SMILES.
+- `mirror`: the mirror image (`@` and `@@` and the axis markers swapped) is
+  named with every R/S, M/P and Ra/Sa swapped and r/s and E/Z kept. An achiral
+  or meso input is its own mirror image. When only the R-before-S rule
+  (P-31.1.4.3.4) decides the numbering, the enantiomer may be numbered the
+  other way; its name must then differ in descriptors only and, mirrored back,
+  name the input.
+- `atom_maps`: adding atom maps 1..n (inputs with axis markers are skipped).
+- `isotope_swap`: moving an isotope label to an equivalent atom.
+
+`tests/fixtures/s2n/metamorphic_known_failures.tsv` lists the current failures
+(relation, canonical SMILES, reason). Each entry is an open bug: the test fails
+on a failure that isn't listed and on an entry that no longer fails, so remove
+the entry with the fix.
 
 Stereo-locant omission intentionally differs from the frozen 0.4.3 spelling
 at quinine's methanol centre and a random-corpus hydrazone. Each descriptor is
@@ -73,12 +107,14 @@ lists every wrong and unparseable case and the top decline reasons.
 
 ## Fixtures
 
-| File                    | Rows | Source                                                                                                                                                                                                           |
-| ----------------------- | ---: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bakeoff_corpus.tsv`    |  703 | Phase 0 bake-off: 500 random PubChem compounds and 203 curated ones in 14 categories, with PubChem IUPAC names and openclatura 0.4.3 names.                                                                      |
-| `openclatura_tests.tsv` |  894 | SMILES mined from openclatura's tests (commit `90dc5bcb`), named by openclatura 0.4.3. `asserted` is 1 or 0 where the test asserts a name that does or doesn't match the output. Category is the test directory. |
-| `rules_cases.tsv`       |   94 | Cases of the removed rules namer, its name (empty: declined) and the port's name; checked by `s2n_rules_cases`.                                                                                                  |
-| `baseline.tsv`          |  107 | Fast-subset correct counts per check and category; `parity_text` rows hold exact text matches.                                                                                                                   |
+| File                             | Rows | Source                                                                                                                                                                                                           |
+| -------------------------------- | ---: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bakeoff_corpus.tsv`             |  703 | Phase 0 bake-off: 500 random PubChem compounds and 203 curated ones in 14 categories, with PubChem IUPAC names and openclatura 0.4.3 names.                                                                      |
+| `openclatura_tests.tsv`          |  894 | SMILES mined from openclatura's tests (commit `90dc5bcb`), named by openclatura 0.4.3. `asserted` is 1 or 0 where the test asserts a name that does or doesn't match the output. Category is the test directory. |
+| `rules_cases.tsv`                |   94 | Cases of the removed rules namer, its name (empty: declined) and the port's name; checked by `s2n_rules_cases`.                                                                                                  |
+| `baseline.tsv`                   |  107 | Fast-subset correct counts per check and category; `parity_text` rows hold exact text matches.                                                                                                                   |
+| `status-snapshot.tsv`            |  909 | Name, status and reason of every fast-subset fixture and generated row; see [Status snapshot](#status-snapshot).                                                                                                 |
+| `metamorphic_known_failures.tsv` |    9 | Open metamorphic-relation failures; see [Metamorphic tests](#metamorphic-tests).                                                                                                                                 |
 
 openclatura-derived data is MIT; see `licenses/openclatura/`.
 

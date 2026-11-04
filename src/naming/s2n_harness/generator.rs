@@ -95,7 +95,7 @@ const GROUPS: &[&str] = &[
     "CO",
 ];
 
-struct SplitMix64(u64);
+pub(super) struct SplitMix64(pub(super) u64);
 
 impl SplitMix64 {
     fn next(&mut self) -> u64 {
@@ -106,7 +106,7 @@ impl SplitMix64 {
         z ^ (z >> 31)
     }
 
-    fn below(&mut self, bound: usize) -> usize {
+    pub(super) fn below(&mut self, bound: usize) -> usize {
         (self.next() % bound as u64) as usize
     }
 }
