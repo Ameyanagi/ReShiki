@@ -43,6 +43,9 @@ fn only_fully_specified_odd_cumulene_smiles_warn_about_lost_ez() -> anyhow::Resu
         ("C/C(C)=C=C=C/C", false),
         ("C/C(C)=C=C=C(/C)C", false),
         ("[2H]/C([2H])=C=C=C/C", false),
+        ("[1H]/C=C=C=C/C", false),
+        (r"[1H]/C=C=C=C\C", false),
+        ("[1H]/C([H])=C=C=C/C", false),
         ("[CH3:1]/C([CH3:2])=C=C=C/C", false),
         ("C/C=C/C(/C=C/C)=C=C=C/C=C/C", false),
     ] {

@@ -208,6 +208,13 @@ fn specified_cumulene_ez_is_rejected_before_cleanup() {
     ] {
         assert!(canonical_smiles(text).is_ok(), "Rejected {text}");
     }
+    // An explicit 1H end is the same ligand as H, so no cumulene E/Z is lost.
+    for text in ["[1H]/C=C=C=C/C", r"[1H]/C=C=C=C\C", "[1H]/C([H])=C=C=C/C"] {
+        assert!(
+            !canonical_smiles(text).is_err_and(|error| error.contains("cumulene")),
+            "{text}"
+        );
+    }
 }
 
 #[test]

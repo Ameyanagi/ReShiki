@@ -141,7 +141,8 @@ pub fn stereogenic_odd_cumulenes(state: &State) -> Result<Vec<Cumulene>, String>
         for &(other, _) in at(&neighbors, end)? {
             if other != inner {
                 let atom = at(&state.graph.atoms, other)?;
-                ligands.push(if atom.atomic_number == 1 && atom.isotope == 0 {
+                // An explicit 1H is the same ligand as H (P-92.3).
+                ligands.push(if atom.atomic_number == 1 && atom.isotope <= 1 {
                     Ligand::Hydrogen
                 } else {
                     Ligand::Atom(*at(&ranks, other)?)
