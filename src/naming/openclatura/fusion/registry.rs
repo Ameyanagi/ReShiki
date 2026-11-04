@@ -288,6 +288,19 @@ impl FusionComponentRegistry {
                     .insert(t.name.clone(), metadata(t.clone(), row));
             }
         }
+        // P-22.2.1, Table 2.2: the Se/Te analogues retain pyran numbering
+        // and indicated hydrogen, but have no standalone graph templates yet.
+        for (name, symbol) in [("selenopyran", "Se"), ("telluropyran", "Te")] {
+            let mut spec = registry.template_by_name["thiopyran"].clone();
+            spec.template.name = name.into();
+            spec.parent_name = name.into();
+            for atom in &mut spec.template.atoms {
+                if atom.symbol == "S" {
+                    atom.symbol = symbol.into();
+                }
+            }
+            registry.template_by_name.insert(name.into(), spec);
+        }
         let mut existing_sizes = BTreeSet::new();
         for row in data["generated_components"]
             .as_array()
@@ -674,6 +687,14 @@ impl FusionComponentRegistry {
             .filter(|(_, s)| *s != "C")
             .map(|(i, s)| (i + 1, s.clone()))
             .collect();
+        // Retained pyran components must not fall back to HW oxine/thiine
+        // names when their explicit component match fails.
+        if symbols.len() == 6
+            && hetero.len() == 1
+            && matches!(hetero[0].1.as_str(), "O" | "S" | "Se" | "Te")
+        {
+            return None;
+        }
         let name = retained::hw_name(symbols.len(), false, &hetero)?;
         let (parent, prefix) = hw_forms(&name);
         let mut spec = monocycle(key, &symbols, "mancude", true);
@@ -1366,6 +1387,8 @@ fn benzo_forms(
             | "pyrazine"
             | "pyran"
             | "thiopyran"
+            | "selenopyran"
+            | "telluropyran"
     );
     let (base, prefix) = if trivial {
         (source.parent_name.clone(), source.attached_prefix.clone())
@@ -1478,6 +1501,87 @@ mod tests {
             matches.iter().filter(|m| m.spec_key == "benzene").count(),
             24
         );
+    }
+    #[test]
+    fn retained_tricycles_preserve_numbering_and_seniority() {
+        let r = fusion_component_registry();
+        for (key, prefix, nitrogen, horizontal, perimeter) in [
+            (
+                "acridine",
+                "acridino",
+                "10",
+                3,
+                [
+                    "1", "2", "3", "4", "4a", "10", "10a", "5", "6", "7", "8", "8a", "9", "9a",
+                ],
+            ),
+            (
+                "phenanthridine",
+                "phenanthridino",
+                "5",
+                2,
+                [
+                    "1", "2", "3", "4", "4a", "5", "6", "6a", "7", "8", "9", "10", "10a", "10b",
+                ],
+            ),
+        ] {
+            let spec = r.get(key).unwrap().spec;
+            assert!(spec.usable_as_parent && spec.usable_as_attached);
+            assert_eq!(spec.attached_prefix, prefix);
+            assert_eq!(spec.rings.len(), 3);
+            assert_eq!(spec.horizontal_ring_count, horizontal);
+            assert_eq!(spec.template.atom_by_locant()[nitrogen].symbol, "N");
+            assert_eq!(spec.peripheral_order, perimeter);
+            let sides = super::super::descriptor::component_sides(&spec).unwrap();
+            assert_eq!(sides[1].letter, "b");
+            assert_eq!(sides[1].start_locant, "2");
+            assert_eq!(sides[1].end_locant, "3");
+        }
+        assert!(
+            component_spec_seniority_key(&r.get("acridine").unwrap().spec)
+                < component_spec_seniority_key(&r.get("phenanthridine").unwrap().spec)
+        );
+    }
+    #[test]
+    fn retained_pyrans_exclude_generated_hw_citations() {
+        let r = fusion_component_registry();
+        for (symbol, name) in [
+            ("O", "pyran"),
+            ("S", "thiopyran"),
+            ("Se", "selenopyran"),
+            ("Te", "telluropyran"),
+        ] {
+            let spec = r.get(name).unwrap().spec;
+            assert!(spec.usable_as_parent && spec.usable_as_attached);
+            assert_eq!(spec.parent_name, name);
+            assert_eq!(spec.attached_prefix, format!("{name}o"));
+            assert_eq!(spec.template.atom_by_locant()["1"].symbol, symbol);
+            assert_eq!(spec.template.default_indicated_h, ["2"]);
+            assert_eq!(spec.template.mancude_double_bonds, Some(2));
+            for position in 0..6 {
+                let mut symbols = ["C"; 6];
+                symbols[position] = symbol;
+                assert!(
+                    r.get(&format!("generated-hw:{}", symbols.join(".")))
+                        .is_none()
+                );
+            }
+            for smiles in [
+                format!("[{symbol}]1CC=CC=C1"),
+                format!("[{symbol}]1C=CCC=C1"),
+            ] {
+                let mol = read_smiles(&smiles).unwrap();
+                let face = Face {
+                    id: 0,
+                    atom_cycle: (0..6).collect(),
+                    size: 6,
+                    edge_cycle: Vec::new(),
+                };
+                let matches = r.match_faces(&mol, &[face], None).unwrap();
+                assert!(!matches.is_empty(), "{smiles}");
+                assert!(matches.iter().all(|m| m.spec_key == name), "{smiles}");
+            }
+        }
     }
     #[test]
     fn generated_hw_is_stateless_and_rejects_incompatible_pi_edges() {
@@ -1717,6 +1821,36 @@ mod tests {
             assert!(!spec.benzoheterocycle_component, "{key}");
             assert!(spec.usable_as_parent, "{key}");
             assert!(spec.usable_as_attached, "{key}");
+        }
+    }
+
+    /// P-25.3.2.4(b,g): ring count, then rings in a horizontal row.
+    #[test]
+    fn retained_tricycles_compete_as_parent_components() {
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            ("c1ccc2nc3ccccc3cc2c1", "acridine"),
+            ("c1ccc2c(c1)cnc1ccccc12", "phenanthridine"),
+            ("c1ccc2c(c1)[nH]c1ccccc12", "9H-carbazole"),
+            ("c1ccc2nc3ccccc3nc2c1", "phenazine"),
+            ("c1c3ncncc3cc4nc2ccccc2cc14", "pyrimido[4,5-b]acridine"),
+            (
+                "c2c4c1ccccc1ncc4cc5nc3ccccc3cc25",
+                "quinolino[4,3-b]acridine",
+            ),
+        ] {
+            let name = super::super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
+            assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
+            let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            crate::naming::verify_identity(smiles, &reconstructed).unwrap();
         }
     }
 

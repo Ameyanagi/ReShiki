@@ -876,6 +876,18 @@ mod tests {
                 "O1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2",
                 "pyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
             ),
+            (
+                "S1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2",
+                "thiopyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
+            ),
+            (
+                "[Se]1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2",
+                "selenopyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
+            ),
+            (
+                "[Te]1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2",
+                "telluropyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
+            ),
         ] {
             let mol = read_smiles(smiles).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
