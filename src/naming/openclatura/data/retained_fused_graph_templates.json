@@ -9811,7 +9811,7 @@
         "benzofuran",
         "benzo[b]furan"
       ],
-      "attached_prefix": "benzofuro",
+      "attached_prefix": "[1]benzofuro",
       "derivative_stem": "1-benzofuran",
       "template": {
         "atoms": [
@@ -9968,7 +9968,7 @@
         "benzothiophene",
         "benzo[b]thiophene"
       ],
-      "attached_prefix": "benzothieno",
+      "attached_prefix": "[1]benzothieno",
       "derivative_stem": "1-benzothiophen",
       "template": {
         "atoms": [
@@ -10436,8 +10436,8 @@
       "pin": true,
       "priority": 32,
       "aliases": [],
-      "attached_prefix": "benzotriazolo",
-      "derivative_stem": "1H-benzotriazol",
+      "attached_prefix": "[1,2,3]benzotriazolo",
+      "derivative_stem": "1H-1,2,3-benzotriazol",
       "template": {
         "atoms": [
           {
@@ -11254,7 +11254,7 @@
       "pin": true,
       "priority": 37,
       "aliases": [],
-      "attached_prefix": "benzodioxino",
+      "attached_prefix": "[1,4]benzodioxino",
       "derivative_stem": "1,4-benzodioxin",
       "template": {
         "atoms": [
@@ -11858,7 +11858,7 @@
       "pin": true,
       "priority": 40,
       "aliases": [],
-      "attached_prefix": "benzodioxolo",
+      "attached_prefix": "[1,3]benzodioxolo",
       "derivative_stem": "1,3-benzodioxol",
       "default_indicated_h": [
         "2"
@@ -12021,7 +12021,7 @@
       "pin": true,
       "priority": 40,
       "aliases": [],
-      "attached_prefix": "benzoxazino",
+      "attached_prefix": "[1,4]benzoxazino",
       "derivative_stem": "1,4-benzoxazin",
       "default_indicated_h": [
         "2"
@@ -22340,8 +22340,8 @@
       "pin": true,
       "priority": 261,
       "aliases": [],
-      "attached_prefix": null,
-      "derivative_stem": "benzimidazol",
+      "attached_prefix": "[1,3]benzimidazolo",
+      "derivative_stem": "1,3-benzimidazol",
       "template": {
         "atoms": [
           {

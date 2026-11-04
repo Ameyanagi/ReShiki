@@ -740,8 +740,18 @@ pub fn cites_indicated_hydrogen(mol: &Molecule, path: &[usize], name: Option<&st
         return spec.double_bonds > 0 && spec.size > 2 * spec.double_bonds + fixed;
     }
     GRAPH_PARENTS["parents"].as_array().is_some_and(|rows| {
-        rows.iter()
-            .any(|row| row["indicated_hydrogen_name"].as_str() == Some(name))
+        rows.iter().any(|row| {
+            row["indicated_hydrogen_name"].as_str().is_some_and(|key| {
+                key == name
+                    || super::super::retained_name_policy::retained_parent_name_policy(key)
+                        .is_some_and(|policy| {
+                            // Output spelling does not change whether the
+                            // retained parent derives its hydrogen citation.
+                            policy.preferred_name == name
+                                || policy.context_names.values().any(|value| value == name)
+                        })
+            })
+        })
     })
 }
 
