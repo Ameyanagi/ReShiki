@@ -762,8 +762,7 @@ pub fn mancude_search_budget_exceeded(error: &str) -> bool {
     error.starts_with("mancude assignment search exceeded its budget of ")
 }
 
-// Preserve the source API's Molecule compatibility path alongside the graph API.
-#[allow(dead_code)]
+// Build the complete mancude skeleton with the stated lambda bonding numbers.
 pub fn parent_bond_graph(mol: &Molecule, atoms: &AtomSet) -> FusionGraph {
     FusionGraph {
         atoms: atoms
@@ -773,6 +772,16 @@ pub fn parent_bond_graph(mol: &Molecule, atoms: &AtomSet) -> FusionGraph {
                 let mut site = FusionGraphAtom::new(id, &atom.symbol);
                 site.formal_charge = atom.charge;
                 site.forced_single = atom.element().is_some_and(|e| e.mancude_forced_single);
+                if let Some(bonding) = super::exocyclic::neutral_lambda_oxo_bonding_number(mol, id)
+                {
+                    let degree = mol
+                        .get_neighbors(id)
+                        .iter()
+                        .filter(|n| atoms.contains(n))
+                        .count();
+                    site.pi_capacity = bonding.saturating_sub(degree).min(1);
+                    site.forced_single = site.pi_capacity == 0;
+                }
                 site
             })
             .collect(),

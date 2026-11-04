@@ -174,6 +174,7 @@ pub fn audit_fusion_plan(
             ast,
             &specs,
             numbering,
+            bond_model,
             indicated_hydrogens,
             derivative_state,
         )?;
@@ -2082,7 +2083,7 @@ fn audit_derivative_state(
         );
     }
     let redistribution =
-        mancude::prove_pi_redistribution(mol, atoms, model, &delta, &indicated, &external)?;
+        mancude::prove_pi_redistribution(mol, atoms, model, &delta, &indicated, &external, None)?;
     if state.pi_redistribution != redistribution {
         issue(
             errors,
@@ -2269,11 +2270,12 @@ fn audited_pin_composition_errors(
     ast: &FusionNameAst,
     specs: &Specs,
     numbering: &FusionNumberingProof,
+    model: &ParentBondModel,
     cited: &[String],
     state: &ParentDerivativeState,
 ) -> Result<Vec<String>, String> {
     let consistent =
-        has_consistent_derivative_operations(mol, ast, specs, numbering, cited, state)?;
+        has_consistent_derivative_operations(mol, ast, specs, numbering, model, cited, state)?;
     let locants = locant_map(numbering)?;
     let by_locant: BTreeMap<_, _> = locants.iter().map(|(&a, l)| (l.clone(), a)).collect();
     let intrinsic_carbon = consistent
@@ -2310,6 +2312,7 @@ fn has_consistent_derivative_operations(
     ast: &FusionNameAst,
     specs: &Specs,
     numbering: &FusionNumberingProof,
+    model: &ParentBondModel,
     cited: &[String],
     state: &ParentDerivativeState,
 ) -> Result<bool, String> {
@@ -2379,8 +2382,21 @@ fn has_consistent_derivative_operations(
     {
         return Ok(true);
     }
+    // An external pi ligand may replace the hydrogens at an intrinsic parent
+    // site while every parent bond remains unchanged. Reconstruct this role
+    // before allowing indicated-H and external-pi atom scopes to overlap.
+    let replaced_indicated_h: AtomSet = if numbering::observed_parent_matches_bond_model(mol, model)
+    {
+        h.intersection(&oxo)
+            .copied()
+            .filter(|&id| is_intrinsic_carbon_h_site(mol, id, &atoms))
+            .collect()
+    } else {
+        AtomSet::new()
+    };
     if !h.is_disjoint(&hydro)
-        || !h.is_disjoint(&oxo)
+        || h.intersection(&oxo)
+            .any(|id| !replaced_indicated_h.contains(id))
         || !h.is_disjoint(&added)
         || !h.is_disjoint(&intrinsic)
         || !hydro.is_disjoint(&oxo)
@@ -2489,7 +2505,13 @@ fn has_consistent_derivative_operations(
         if !oxo.is_empty() {
             let graph = component_parent_graph(ast, specs, true)?;
             let donors = intrinsic_parent_lone_pair_sites(mol, &graph);
-            if !has_carbon_h_oxo_bond_consumption(mol, &atoms, state, &donors)? {
+            if !has_carbon_h_oxo_bond_consumption(
+                mol,
+                &atoms,
+                state,
+                &donors,
+                &replaced_indicated_h,
+            )? {
                 return Ok(false);
             }
         }
@@ -2541,6 +2563,7 @@ fn has_carbon_h_oxo_bond_consumption(
     atoms: &AtomSet,
     state: &ParentDerivativeState,
     donors: &AtomSet,
+    replaced_indicated_h: &AtomSet,
 ) -> Result<bool, String> {
     if super::external_pi_consumption::has_paired_external_pi_consumption(mol, atoms, state) {
         return Ok(true);
@@ -2548,6 +2571,9 @@ fn has_carbon_h_oxo_bond_consumption(
     let expected: BTreeMap<_, _> = state.bond_delta.assignment.orders.iter().copied().collect();
     for operation in state.external_pi_operations() {
         let id = operation.parent_atom_id;
+        if replaced_indicated_h.contains(&id) {
+            continue;
+        }
         if neutral_lambda_oxo_bonding_number(mol, id).is_some() {
             let neighbors: Vec<_> = mol
                 .get_neighbors(id)

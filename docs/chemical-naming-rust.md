@@ -319,7 +319,10 @@ Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
 (porphyrin, corrin, gonane), `substituted_retained_parent` (substituted
 acetaldehyde), `atom_order` (bridged fused ketones whose added hydrogen depends
-on input atom order), `amine_chalcogenide` (amine sulfide and similar names) and
+on input atom order), `lambda_parent_hydrogen` (indicated or added hydrogen on a
+λ heteroatom ring was not derived from the complete expanded-valence parent,
+so its hydrogen descriptors may not be preferred under P-25.7.1.1 and
+λ-convention Lm-3.1–3.2), `amine_chalcogenide` (amine sulfide and similar names) and
 `principal_group_tie` (equally senior principal groups, such as the chain and
 ring acids of `2-(4-carboxyphenyl)acetic acid`, chosen by atom order rather than
 by P-44.1). The other parent-selection rules that the port does not implement in
