@@ -750,7 +750,13 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
     } else if (parts.attachment_locant != "1" || !parts.unsaturations.is_empty() || always)
         && parts.parent_length > 1
     {
-        (format!("-{}-{suffix}", parts.attachment_locant), true)
+        (
+            format!(
+                "-{}-{suffix}",
+                parts.stereochemical_locant(&parts.attachment_locant)
+            ),
+            true,
+        )
     } else {
         (suffix, false)
     };
@@ -894,7 +900,7 @@ pub fn format_principal_suffix(
     Ok((
         terminal,
         if cites_locants {
-            format!("-{}-{suffix}", locs.join(","))
+            format!("-{}-{suffix}", parts.stereochemical_locants(&locs))
         } else {
             suffix
         },
