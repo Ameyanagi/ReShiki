@@ -1102,10 +1102,7 @@ fn audit_descriptors(
         for &child in siblings {
             if !children.contains_key(&child) {
                 identity
-                    .entry(multiplicative_attachment_key(
-                        &specs[&child],
-                        attached[&child],
-                    ))
+                    .entry(multiplicative_attachment_key(&specs[&child]))
                     .or_default()
                     .push(child);
             }
@@ -1146,7 +1143,7 @@ fn audit_descriptors(
     if audit_multiplicity && actual_groups != expected_groups {
         issue(
             errors,
-            "multiplicative groups do not match exact sibling interface orbits",
+            "multiplicative groups do not match identical leaf siblings",
         );
     }
     for &i in &citation.cycle_closing_join_indices {

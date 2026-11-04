@@ -10,10 +10,10 @@ c1[se]c2ncccc2c1	selenopheno[2,3-b]pyridine	data/fusion_pin_cases.json	1
 c1oc2nccnc2c1	furo[2,3-b]pyrazine	data/fusion_pin_cases.json	1
 c1nnc2ncccc2c1	pyrido[2,3-c]pyridazine	data/fusion_pin_cases.json	1
 c1[nH]c2ncccc2n1	3H-imidazo[4,5-b]pyridine	data/fusion_pin_cases.json	1
-c1ccc2cc3ncncc3cc2c1	naphtho[2,3-d]pyrimidine	data/fusion_pin_cases.json	1
-c1ccc2cc3nccnc3cc2c1	naphtho[2,3-b]pyrazine	data/fusion_pin_cases.json	1
-c1ccc2cc3cnncc3cc2c1	naphtho[2,3-d]pyridazine	data/fusion_pin_cases.json	1
-c1ccc2cc3nnccc3cc2c1	naphtho[2,3-c]pyridazine	data/fusion_pin_cases.json	1
+c1ccc2cc3ncncc3cc2c1	benzo[g]quinazoline	data/fusion_pin_cases.json	1
+c1ccc2cc3nccnc3cc2c1	benzo[g]quinoxaline	data/fusion_pin_cases.json	1
+c1ccc2cc3cnncc3cc2c1	benzo[g]phthalazine	data/fusion_pin_cases.json	1
+c1ccc2cc3nnccc3cc2c1	benzo[g]cinnoline	data/fusion_pin_cases.json	1
 c1oc2cc3ncncc3cc2c1	benzofuro[6,5-d]pyrimidine	data/fusion_pin_cases.json	1
 c1sc2cc3ncncc3cc2c1	benzothieno[6,5-d]pyrimidine	data/fusion_pin_cases.json	1
 c1oc2cc3nccnc3cc2c1	benzofuro[5,6-b]pyrazine	data/fusion_pin_cases.json	1
@@ -834,7 +834,7 @@ CC1Cc2ncccc2C1=O	6-methyl-6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	unit/test_fu
 C1Cc2ncc(Cl)cc2C1=O	3-chloro-6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	unit/test_fused_oxo_added_hydrogen_tier.py	1
 c1cnc2[nH]cnc2c1	3H-imidazo[4,5-b]pyridine	unit/test_fusion_candidate_budget.py	1
 Brc1cn2c(n1)OCCC2	2-bromo-6,7-dihydro-5H-imidazo[2,1-b][1,3]oxazine	unit/test_fusion_candidate_budget.py	1
-CSc1nc(N)c2ccc3ccccc3c2n1	2-(methylsulfanyl)naphtho[1,2-d]pyrimidin-4-amine	unit/test_fusion_candidate_budget.py	1
+CSc1nc(N)c2ccc3ccccc3c2n1	2-(methylsulfanyl)benzo[h]quinazolin-4-amine	unit/test_fusion_candidate_budget.py	1
 Cc1nc2cc(O)c3ccccc3c2o1	2-methylnaphtho[2,1-d][1,3]oxazol-5-ol	unit/test_fusion_candidate_budget.py	1
 Cc1c2ccccc2nc2cc3ccccc3n12	12-methylindolo[1,2-a]benzo[d]pyrimidine	unit/test_fusion_candidate_budget.py	1
 COC(=O)c1cc2c(cn1)ncn2Cc1ccc(F)cc1	methyl 1-((4-fluorophenyl)methyl)imidazo[4,5-c]pyridine-6-carboxylate	unit/test_fusion_candidate_budget.py	1

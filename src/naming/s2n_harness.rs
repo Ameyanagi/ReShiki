@@ -780,7 +780,7 @@ fn fr35_source_examples_and_generated_names_preserve_structures() {
         (
             "10H-furo[3',2':4,5]indeno[2,1-b]pyridine",
             "c1cnc2c(c1)-c1ccc3occc3c1C2",
-            layout,
+            preferred,
             None,
         ),
         (
@@ -807,7 +807,7 @@ fn fr35_source_examples_and_generated_names_preserve_structures() {
             "c1cc2c(ccc3ccc4ccc5ccc6sccc6c5c4c32)s1",
             // FR-4.5(c) minimizes first-order phenanthro locants before the
             // higher-order thieno locants, recovering the FR-3.5 source form.
-            layout,
+            preferred,
             None,
         ),
     ] {
@@ -843,12 +843,12 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
 
     let mut measurements = Measurements::default();
     for (smiles, preferred, alternative) in [
-        // This FR-3.5 roundtrip departure and the bipyrimidine assembly
-        // departure each reduce the frozen-golden parity count by one.
+        // Retained quinazoline is selected by FR-3.1 even without FR-3.5
+        // regrouping, so the separate-benzo form is no longer an alternative.
         (
             "O=c1c2ccccc2nc2n1CC=C2",
             "pyrrolo[2,1-b]quinazolin-9(1H)-one",
-            Some("benzo[d]pyrrolo[1,2-a]pyrimidin-9(1H)-one"),
+            None,
         ),
         (
             "S1CC2=CC=CC3=C2C1=CC=C3",

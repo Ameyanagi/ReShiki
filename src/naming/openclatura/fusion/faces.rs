@@ -7,7 +7,7 @@ use crate::naming::openclatura::{
     chains::canonical_ranks,
     graph_kernel::{adjacency_from_edges, connected_components},
     molecule::{AtomSet, Molecule},
-    polycycle_topology::edges_within_atoms,
+    polycycle_topology::{bicyclo_proof, edges_within_atoms},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -464,6 +464,53 @@ pub fn cached_bounded_face_model(
     FACE_CACHE.with(|cache| cache.insert(key, model.clone()));
     Ok(model)
 }
+
+/// Prove the bridge-free fused topology and the P-52.2.4.1 ring-size gate,
+/// independently of component coverage, bond orders and naming support.
+///
+/// The bounded-face audit reconstructs every ring edge, limits each edge to
+/// two faces, and proves a connected face dual and a simple outer boundary.
+/// FR-1.1.1/FR-1.2 additionally require adjacent constituent rings to share
+/// exactly two atoms and one bond. A shared path of two or more bonds is a
+/// bridge, even when a bounded-face model can be found for it.
+pub fn bridge_free_fusion_parent_eligible(mol: &Molecule, atoms: &AtomSet) -> bool {
+    if let Some(proof) = bicyclo_proof(atoms, &edges_within_atoms(mol, atoms)) {
+        // A zero-length bridge is the single shared bond. The two remaining
+        // paths each gain the two junction atoms to form the fused rings.
+        let [first, second, shared] = proof.descriptor_numbers;
+        return shared == 0 && first >= 3 && second >= 3;
+    }
+    let Ok(Some(bounded)) = cached_bounded_face_model(mol, atoms) else {
+        // Ambiguous or budget-limited decompositions do not prove a departure.
+        return false;
+    };
+    if !bounded.audit.ok
+        || bounded.cycle_rank < 2
+        || bounded
+            .faces
+            .iter()
+            .filter(|face| face.atoms.len() >= 5)
+            .count()
+            < 2
+    {
+        return false;
+    }
+    for (index, face) in bounded.faces.iter().enumerate() {
+        for other in &bounded.faces[index + 1..] {
+            let shared_atoms = face
+                .atoms
+                .iter()
+                .filter(|atom| other.atoms.contains(atom))
+                .count();
+            let shared_edges = face.edges.intersection(&other.edges).count();
+            if !matches!((shared_atoms, shared_edges), (0 | 1, 0) | (2, 1)) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 pub fn select_bounded_face_model(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -880,6 +927,40 @@ mod tests {
         }
         let atoms = theta.atoms.keys().copied().collect();
         assert!(select_bounded_face_model(&theta, &atoms).unwrap().is_none());
+    }
+
+    #[test]
+    fn bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems() {
+        for (smiles, expected) in [
+            // Bond orders and heteroatoms do not change the topology proof.
+            ("C1CCC2CCCCC2C1", true),
+            ("O1CCC2CCCCC2C1", true),
+            ("c1ccc2ccccc2c1", true),
+            // The direct bicycle proof is independent of face-search sizes.
+            ("N1CCCCCCCC2CCCCC12", true),
+            // Pyrene has legitimate interior, peri-fusion atoms.
+            ("C1=CC=C2C=CC3=CC=CC4=CC=C1C2=C34", true),
+            // Issue #925: topology is eligible even when a planner abstains.
+            ("C1=NN=C2C1=C1C(=NC=3C=CC=CC13)C=CO2", true),
+            ("C1=CN=C2C=CC=C3C2=C1C=C1C2=C(C3)C=CC=C2C=C1", true),
+            ("O1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2", true),
+            // Only one constituent ring has at least five members.
+            ("C1CC2=CC=CC=C12", false),
+            ("C1C2CC12", false),
+            // Genuine bridges, including unequal bridge lengths.
+            ("C1CC2CCC1CC2", false),
+            ("C1CC2CCC1C2", false),
+            ("C1CC2CCCC1C2", false),
+            ("C1CCC2(CC1)CCCC2", false),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            assert_eq!(
+                bridge_free_fusion_parent_eligible(&mol, &atoms),
+                expected,
+                "{smiles}"
+            );
+        }
     }
 
     #[test]

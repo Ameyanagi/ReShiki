@@ -126,6 +126,7 @@ pub enum NameReason {
     Multiplicative,
     AcylPrefix,
     RingAssembly,
+    VonBaeyerFusionFallback,
     OpsinFusionLayout,
     BridgedFusedParent,
     UnauditedParent,
@@ -183,6 +184,9 @@ impl NameReason {
             }
             Self::RingAssembly => {
                 "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions, assemblies requiring skeletal-replacement or hydro prefixes, and linear phanes with at least four ring systems and seven skeletal nodes (P-28, P-31.2.3.3.5, P-51.3.2, P-52.2.5.1, P-52.2.7)."
+            }
+            Self::VonBaeyerFusionFallback => {
+                "Uses a von Baeyer name, with skeletal replacement where needed, for a bridge-free ortho- or ortho- and peri-fused ring system with at least two rings of five or more members; preferred IUPAC names use fusion nomenclature, as in decahydronaphthalene rather than bicyclo[4.4.0]decane (P-52.2.4.4.2, P-31.1.4.2.4)."
             }
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout or citation order selected for OPSIN compatibility; its preferred IUPAC numbering or alphabetical citation order (FR-3.6 / P-25.3.4.2.3) has not been verified."

@@ -362,7 +362,20 @@ impl FusionComponentRegistry {
                     .unwrap_or_else(|| s.template.output_name());
                 let parent = parent.strip_prefix(&h).unwrap_or(&parent).to_owned();
                 let ring_count = s.rings.len();
-                registry.register(&json!({"key":name,"parent_name":parent,"allow_as_parent":policy["allow_as_parent"],"allow_as_peri_parent":policy["allow_as_peri_parent"],"allow_as_attached":policy["allow_as_attached"],"horizontal_ring_count":ring_count}))?;
+                // Retained trivial bicycles participate directly in FR-3.1.
+                // Only FR-2.2.8 benzo components inherit the deferred-parent
+                // policy; otherwise a junior explicit component can win before
+                // the intrinsic seniority comparison sees the retained parent.
+                let allow_as_parent = is_trivial_benzo_name(&parent)
+                    || policy["allow_as_parent"].as_bool().unwrap_or(false);
+                registry.register(&json!({
+                    "key": name,
+                    "parent_name": parent,
+                    "allow_as_parent": allow_as_parent,
+                    "allow_as_peri_parent": policy["allow_as_peri_parent"],
+                    "allow_as_attached": policy["allow_as_attached"],
+                    "horizontal_ring_count": ring_count,
+                }))?;
             }
         }
         for p in data["systematic_component_generators"]
@@ -1049,8 +1062,28 @@ impl FusionComponentRegistry {
                 unavailable[next] = true
             }
         }
-        if actual > expected || actual + maximum_cycle_matching(&unavailable) != expected {
+        if actual > expected {
             return Ok(Vec::new());
+        }
+        if actual + maximum_cycle_matching(&unavailable) != expected {
+            // Fusion can pair the remaining pi sites in adjoining components;
+            // the completed-parent audit still proves the merged pi state.
+            let external = path
+                .iter()
+                .enumerate()
+                .filter(|&(index, atom)| {
+                    !unavailable[index]
+                        && mol.get_neighbors(*atom).iter().any(|neighbor| {
+                            !path.contains(neighbor)
+                                && mol
+                                    .get_bond(*atom, *neighbor)
+                                    .is_some_and(|bond| bond.order == 2)
+                        })
+                })
+                .count();
+            if 2 * actual + external < 2 * expected {
+                return Ok(Vec::new());
+            }
         }
         let key = format!("generated-hw:{}", symbols.join("."));
         let Some(component) = self.generated_from_key(&key) else {
@@ -1668,10 +1701,68 @@ mod tests {
         ] {
             assert!(r.get(key).unwrap().spec.benzoheterocycle_component, "{key}");
         }
-        for key in ["quinoline", "quinoxaline"] {
+        for key in [
+            "indole",
+            "1H-isoindole",
+            "2H-isoindole",
+            "indazole",
+            "quinoline",
+            "isoquinoline",
+            "quinazoline",
+            "quinoxaline",
+            "cinnoline",
+            "phthalazine",
+        ] {
             let spec = r.get(key).unwrap().spec;
             assert!(!spec.benzoheterocycle_component, "{key}");
+            assert!(spec.usable_as_parent, "{key}");
             assert!(spec.usable_as_attached, "{key}");
+        }
+    }
+
+    /// P-25.3.2.4: retained bicycles compete as parents, e.g. quinoxaline
+    /// (2 rings) over pyrazine (b), and quinazoline (6,6) over indole (c).
+    #[test]
+    fn retained_bicycles_compete_as_parent_components() {
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            (
+                "Cc1c2ccccc2nc2cc3ccccc3n12",
+                "12-methylindolo[2,1-b]quinazoline",
+            ),
+            (
+                "c1ccc2c(c1)[nH]c1nc3ccccc3nc12",
+                "6H-indolo[2,3-b]quinoxaline",
+            ),
+            ("c1ccc2cc3nccnc3cc2c1", "benzo[g]quinoxaline"),
+            (
+                "CSc1nc(N)c2ccc3ccccc3c2n1",
+                "2-(methylsulfanyl)benzo[h]quinazolin-4-amine",
+            ),
+            ("c1ccc2c(c1)[nH]c1ncccc12", "9H-pyrido[2,3-b]indole"),
+            ("c1ccc2c(c1)[nH]c1ccncc12", "5H-pyrido[4,3-b]indole"),
+            (
+                "C1=NN=C2C1=C1C(=NC=3C=CC=CC13)C=CO2",
+                "pyrazolo[4',3':6,7]oxepino[4,5-b]indole",
+            ),
+            (
+                "CC1=C2C(=CC=C1)C3=C(N2)N=C(N=N3)NN=C4C5=C(C=CC(=C5)[N+](=O)[O-])N(C4=O)C",
+                "1-methyl-3-{[(6-methyl-5H-[1,2,4]triazino[5,6-b]indol-3-yl)amino]imino}-5-nitro-1,3-dihydro-2H-indol-2-one",
+            ),
+        ] {
+            let name = super::super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{}: {}",
+                name.text,
+                parsed.message
+            );
+            assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
+            let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            crate::naming::verify_identity(smiles, &reconstructed).unwrap();
         }
     }
 

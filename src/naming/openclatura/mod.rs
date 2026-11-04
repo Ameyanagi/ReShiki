@@ -1455,9 +1455,38 @@ mod tests {
     }
 
     #[test]
+    fn preferred_von_baeyer_controls_do_not_report_fusion_fallback() {
+        use crate::naming::NameStatus;
+        for (smiles, expected) in [
+            ("C1CCC2CCCCC2C1", "decahydronaphthalene"),
+            ("C1CC2=CC=CC=C12", "bicyclo[4.2.0]octa-1,3,5-triene"),
+            ("C1CC2CCC1CC2", "bicyclo[2.2.2]octane"),
+            ("C1C2CC12", "bicyclo[1.1.0]butane"),
+            ("C1CC2CCC1C2", "bicyclo[2.2.1]heptane"),
+            ("C1CCC2(CC1)CCCC2", "spiro[4.5]decane"),
+            // A retained fused parent bypasses the fallback assessment.
+            ("c1ccc2ccccc2c1", "naphthalene"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::Preferred,
+                "{smiles}: {}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
     fn known_departures_keep_their_names_and_report_the_rule_family() {
         use crate::naming::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
+            (
+                "C1=CN=C2C=CC=C3C2=C1C=C1C2=C(C3)C=CC=C2C=C1",
+                "17-azapentacyclo[10.7.1.1^{3,6}.0^{10,21}.0^{16,20}]henicosa-1(19),2,4,6(21),7,9,12(20),13,15,17-decaene",
+                R::VonBaeyerFusionFallback,
+            ),
             (
                 "CN(C(C)C(=O)O)S(=O)(=O)c1ccc(C)cc1",
                 "2-(N-methyltosylamino)propanoic acid",

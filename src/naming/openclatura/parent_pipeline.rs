@@ -19,6 +19,17 @@ pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts)
         mark_parent_hydride_status(mol, parent);
     } else if let Some(plan) = &parts.fusion_plan {
         mark_fusion_plan_status(mol, plan);
+    } else if parts.retained_name.is_none()
+        && !parts.is_spiro
+        && (parts.is_bicycle
+            || super::ring_renderer::is_von_baeyer_descriptor(
+                parts.polycycle_descriptor.as_deref(),
+            ))
+        && super::fusion::faces::bridge_free_fusion_parent_eligible(mol, &parts.parent_atom_ids)
+    {
+        mol.mark_name(NameStatus::NotPreferred(
+            NameReason::VonBaeyerFusionFallback,
+        ));
     }
     if let Some(name) = &parts.retained_name {
         mark_retained_parent_status(mol, name);

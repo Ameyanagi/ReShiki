@@ -82,6 +82,13 @@ struct FirstOrderLocantKey {
     attached_locants_set: Vec<(LocantKey, usize)>,
     attached_locants_citation: Vec<(LocantKey, usize)>,
 }
+#[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+struct HigherOrderLocantKey {
+    host_set: Vec<(LocantKey, usize)>,
+    host_citation: Vec<(LocantKey, usize)>,
+    attached_set: Vec<(LocantKey, usize)>,
+    attached_citation: Vec<(LocantKey, usize)>,
+}
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct CandidateScore {
     benzoheterocycle_seniority: Vec<ComparisonKey>,
@@ -90,6 +97,7 @@ struct CandidateScore {
     count: usize,
     maximum_order: usize,
     first_order_locants: FirstOrderLocantKey,
+    higher_order_locants: Vec<HigherOrderLocantKey>,
     joins: Vec<JoinKey>,
     attached_seniority: Vec<ComparisonKey>,
 }
@@ -1402,6 +1410,42 @@ fn first_order_locant_key(
         attached_locants_citation,
     }
 }
+fn higher_order_locant_key(
+    citation_order: &[usize],
+    joins: &BTreeMap<usize, FusionJoin>,
+    depths: &BTreeMap<usize, usize>,
+) -> Vec<HigherOrderLocantKey> {
+    let mut orders: BTreeMap<usize, HigherOrderLocantKey> = BTreeMap::new();
+    let locant_key = |locant: &ComponentLocant| {
+        (
+            retained_locant_sort_key(&locant.text),
+            depths
+                .get(&locant.component_id)
+                .copied()
+                .unwrap_or(locant.prime_depth),
+        )
+    };
+    // FR-4.5(e-h) is applied outwards, before moving to the next order.
+    for join in citation_order.iter().filter_map(|id| joins.get(id)) {
+        if join.order > 1 {
+            let key = orders.entry(join.order).or_default();
+            key.host_citation
+                .extend(join.interface.host_path.iter().map(locant_key));
+            key.attached_citation
+                .extend(join.attached_locants().iter().map(locant_key));
+        }
+    }
+    orders
+        .into_values()
+        .map(|mut key| {
+            key.host_set = key.host_citation.clone();
+            key.host_set.sort();
+            key.attached_set = key.attached_citation.clone();
+            key.attached_set.sort();
+            key
+        })
+        .collect()
+}
 fn ordered_children(
     parents: &BTreeMap<usize, usize>,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -1469,16 +1513,20 @@ fn best_tree_mapping_candidate(
             )
         })
         .collect();
-    let prune_citation_prefix = children.values().all(|ids| {
-        ids.len() < 2
-            || (ids.iter().all(|child| children[child].is_empty())
-                && ids
-                    .iter()
-                    .map(|child| fusion_prefix_citation_key(&specs[child].attached_prefix))
-                    .collect::<BTreeSet<_>>()
-                    .len()
-                    == ids.len())
-    });
+    let prune_citation_prefix = topology
+        .order_by_occurrence
+        .values()
+        .all(|&order| order <= 1)
+        && children.values().all(|ids| {
+            ids.len() < 2
+                || (ids.iter().all(|child| children[child].is_empty())
+                    && ids
+                        .iter()
+                        .map(|child| fusion_prefix_citation_key(&specs[child].attached_prefix))
+                        .collect::<BTreeSet<_>>()
+                        .len()
+                        == ids.len())
+        });
     let mut best: Option<Candidate> = None;
     let mut states = 0;
     let mut proved: BTreeMap<(usize, usize, usize), Option<(FusionJoin, usize)>> = BTreeMap::new();
@@ -1726,7 +1774,7 @@ fn multiplicative_groups(
         for child in siblings {
             if !children.contains_key(child) {
                 patterns
-                    .entry(multiplicative_attachment_key(&specs[child], &joins[child]))
+                    .entry(multiplicative_attachment_key(&specs[child]))
                     .or_default()
                     .push(*child);
             }
@@ -2047,6 +2095,7 @@ fn build_candidate(
         } else {
             FirstOrderLocantKey::default()
         },
+        higher_order_locants: higher_order_locant_key(&selection_order, &primary_joins, &depths),
         joins: selection_order
             .iter()
             .map(|c| join_preference_key(&primary_joins[c], ranks[c]))
@@ -3015,6 +3064,30 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn identical_leaf_components_multiply_across_attached_interface_orbits() -> Result<(), String> {
+        for (smiles, expected) in [
+            ("O1C=CC2=NC=3C(C=C21)=COC3", "difuro[3,2-b:3',4'-e]pyridine"),
+            (
+                "O1CC=CC=2C1=C1C(=NC2)C=COC1",
+                "2H,10H-dipyrano[4,3-b:2',3'-d]pyridine",
+            ),
+            ("c1oc2nc3occc3cc2c1", "difuro[2,3-b:3',2'-e]pyridine"),
+            ("c1sc2nc3sccc3nc2c1", "dithieno[2,3-b:3',2'-e]pyrazine"),
+            ("O1C=CC2=C1C=C1C(=N2)C=CO1", "difuro[3,2-b:2',3'-e]pyridine"),
+            (
+                "C1OC=C2C3=C1C=1C(=NC3=CC=C2)OC=CC1",
+                "1H-dipyrano[2,3-b:3',4',5'-de]quinoline",
+            ),
+        ] {
+            let name = crate::naming::openclatura::name_smiles(smiles)?;
+            assert_eq!(name.text, expected);
+            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_strict_fusion_name_identity(smiles, &name)?;
+        }
+        Ok(())
+    }
+
     fn assert_strict_fusion_name_identity(
         smiles: &str,
         name: &crate::naming::openclatura::Name,
@@ -3133,6 +3206,22 @@ mod tests {
                     ("furan", vec![9, 4, 5, 10, 11]),
                 ],
                 "difuro[3,2-b:2',3'-e]pyridine",
+            ),
+            (
+                vec![
+                    ("pyridine", vec![0, 1, 2, 3, 4, 5]),
+                    ("furan", vec![6, 2, 1, 7, 8]),
+                    ("furan", vec![9, 10, 4, 5, 11]),
+                ],
+                "difuro[3,2-b:3',4'-e]pyridine",
+            ),
+            (
+                vec![
+                    ("pyridine", vec![0, 1, 2, 3, 4, 5]),
+                    ("pyran", vec![6, 7, 2, 1, 8, 9]),
+                    ("pyran", vec![10, 3, 4, 11, 12, 13]),
+                ],
+                "dipyrano[4,3-b:2',3'-d]pyridine",
             ),
         ];
         let registry = fusion_component_registry();

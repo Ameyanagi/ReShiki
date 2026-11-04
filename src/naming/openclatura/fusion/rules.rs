@@ -333,44 +333,10 @@ pub fn component_automorphisms(spec: &FusionComponentSpec) -> Vec<BTreeMap<Strin
         })
         .collect()
 }
-pub fn component_interface_orbit(spec: &FusionComponentSpec, path: &[String]) -> Vec<String> {
-    let mut variants = Vec::new();
-    for a in component_automorphisms(spec) {
-        let mapped = path.iter().map(|l| a[l].clone()).collect::<Vec<_>>();
-        variants.push(mapped.clone());
-        variants.push(mapped.into_iter().rev().collect())
-    }
-    variants
-        .into_iter()
-        .min_by_key(|p| p.iter().map(|l| locant_key(l)).collect::<Vec<_>>())
-        .unwrap_or_else(|| path.to_vec())
-}
-pub fn multiplicative_attachment_key(
-    spec: &FusionComponentSpec,
-    join: &FusionJoin,
-) -> ComparisonKey {
-    ComparisonKey::tuple([
-        component_variant_identity(spec),
-        text(join.kind().as_str()),
-        join.order.into(),
-        text(if join.host_sides().is_empty() {
-            "locants"
-        } else {
-            "sides"
-        }),
-        seq(
-            component_interface_orbit(
-                spec,
-                &join
-                    .interface
-                    .attached_path
-                    .iter()
-                    .map(|l| l.text.clone())
-                    .collect::<Vec<_>>(),
-            ),
-            text,
-        ),
-    ])
+/// Identical leaf components share a multiplier within each sibling scope,
+/// regardless of fusion kind. Individual descriptors preserve attachment paths.
+pub fn multiplicative_attachment_key(spec: &FusionComponentSpec) -> ComparisonKey {
+    component_variant_identity(spec)
 }
 fn locant_comparison(l: &str) -> ComparisonKey {
     let (n, b, s, d) = locant_key(l);
