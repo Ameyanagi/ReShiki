@@ -1102,7 +1102,10 @@ fn audit_descriptors(
         for &child in siblings {
             if !children.contains_key(&child) {
                 identity
-                    .entry(multiplicative_attachment_key(&specs[&child]))
+                    .entry(multiplicative_attachment_key(
+                        &specs[&child],
+                        attached[&child],
+                    ))
                     .or_default()
                     .push(child);
             }

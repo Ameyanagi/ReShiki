@@ -14,7 +14,7 @@ use super::{
     rules::{
         component_canonicalization_key, component_has_peri_fusion, component_parent_eligible,
         component_spec_seniority_key, component_variant_identity, multiplicative_attachment_key,
-        multiplicative_member_order_key,
+        multiplicative_member_order_key, uses_complex_multiplier,
     },
 };
 
@@ -1774,7 +1774,7 @@ fn multiplicative_groups(
         for child in siblings {
             if !children.contains_key(child) {
                 patterns
-                    .entry(multiplicative_attachment_key(&specs[child]))
+                    .entry(multiplicative_attachment_key(&specs[child], &joins[child]))
                     .or_default()
                     .push(*child);
             }
@@ -2207,13 +2207,11 @@ fn fusion_group_multiplier(
     group: &FusionMultiplicityGroup,
     specs: &BTreeMap<usize, FusionComponentSpec>,
 ) -> String {
-    let complex = group.occurrence_ids.iter().any(|id| {
-        let spec = &specs[id];
-        spec.multiplicative_prefix_style == "complex"
-            || spec.template.family == "generated_hw_monocycle"
-            || spec.attached_prefix.starts_with('[')
-    });
-    if complex {
+    if group
+        .occurrence_ids
+        .iter()
+        .any(|id| uses_complex_multiplier(&specs[id]))
+    {
         multipliers::complex_(group.occurrence_ids.len())
     } else {
         group.multiplier.clone()
