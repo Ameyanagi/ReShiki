@@ -982,6 +982,14 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
             json!([]),
         ),
         (
+            "O=[PH]1C=CC1",
+            "1lambda^5-phosphet-1(2H)-one",
+            NameStatus::Unverified(NameReason::LambdaParentHydrogen),
+            json!("lambda_parent_hydrogen"),
+            json!([]),
+            json!([]),
+        ),
+        (
             "CC(=NN)C",
             "propan-2-one hydrazone",
             NameStatus::NotPreferred(NameReason::FunctionalClass),

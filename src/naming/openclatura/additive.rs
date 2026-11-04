@@ -327,6 +327,46 @@ fn collect_indicated_hydrogens(
     if add_proved_parent_hydrogens(mol, parts, locants)? {
         return Ok(());
     }
+    if parts.is_ring
+        && (parts
+            .parent_bond_orders_by_locants
+            .values()
+            .any(|&order| order > 1)
+            || retained::cites_indicated_hydrogen(
+                mol,
+                numbered_path,
+                parts.retained_name.as_deref(),
+            ))
+    {
+        use super::fusion::exocyclic::neutral_lambda_oxo_bonding_number;
+
+        // Generated HW parents can already place intrinsic H on a supported
+        // lambda-oxo centre. Other saturated sites still need the complete
+        // expanded-valence parent to distinguish indicated, added and hydro H.
+        let unresolved_site = ring.iter().any(|&id| {
+            neutral_lambda_oxo_bonding_number(mol, id).is_none()
+                && retained::is_saturated_ring_site(mol, id, &ring)
+        });
+        if ring.iter().any(|&id| {
+            let atom = &mol.atoms[&id];
+            !atom.is_carbon()
+                && atom.charge == 0
+                && atom.element().is_some_and(|element| {
+                    atom.total_h_count
+                        + mol
+                            .get_neighbors(id)
+                            .iter()
+                            .map(|&other| mol.bond_order(id, other))
+                            .sum::<usize>()
+                        > element.standard_valence
+                })
+                && (unresolved_site || neutral_lambda_oxo_bonding_number(mol, id).is_none())
+        }) {
+            mol.mark_name(crate::naming::NameStatus::Unverified(
+                crate::naming::NameReason::LambdaParentHydrogen,
+            ));
+        }
+    }
     if let Some(plan) =
         retained::mancude_monocycle_hydro_plan(mol, numbered_path, parts.retained_name.as_deref())
     {

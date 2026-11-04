@@ -333,6 +333,16 @@ mod tests {
                     .unwrap_or_else(|error| panic!("{smiles} -> {candidate}: {error}"));
             }
         }
+        // #921: the ylidene site keeps its parent's 2H citation. Its status
+        // follows the linear-phane rule and is pinned in the audit fixture.
+        assert_eq!(
+            super::super::name_smiles(
+                r"C1=CC=C(C=C1)COC2=CC\3=C(C=C2)NN/C3=C\4/N=C5C=CC(=CC5=N4)NCCCN6C=CN=C6"
+            )
+            .unwrap()
+            .text,
+            "(2Z)-2-[5-(benzyloxy)-2,3-dihydro-1H-indazol-3-ylidene]-N-[3-(1H-imidazol-1-yl)propyl]-2H-1,3-benzimidazol-5-amine"
+        );
     }
 
     #[test]

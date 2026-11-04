@@ -2804,6 +2804,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn unrecomputed_lambda_parent_hydrogens_are_unverified() {
+        use crate::naming::{NameReason, NameStatus};
+
+        for (smiles, expected) in [
+            ("O=[PH]1C=CC1", "1lambda^5-phosphet-1(2H)-one"),
+            ("O=P1(C)C=CC1", "1-methyl-1lambda^5-phosphet-1(2H)-one"),
+            ("O=[AsH]1C=CC=CC1", "1-oxo-2H-1lambda^5-arsinine"),
+            ("O=[AsH]1C=CC=C1", "1-oxo-1H-1lambda^5-arsole"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::Unverified(NameReason::LambdaParentHydrogen),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
     fn cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes() {
         use crate::naming::{NameStatus, verify_identity};
 
@@ -2812,6 +2832,8 @@ mod tests {
             ("O=S1CCCC1", "1lambda^4-thiolan-1-one"),
             ("O=S1CCCCC1", "1lambda^4-thian-1-one"),
             ("O=S1(=O)CCCC1", "1lambda^6-thiolane-1,1-dione"),
+            ("O=[PH]1CCCC1", "1lambda^5-phospholan-1-one"),
+            ("O=[AsH]1CCCC1", "1-oxo-1lambda^5-arsolane"),
             (
                 "O=S1(=O)CNC(=O)c2ccccc21",
                 "2,3-dihydro-1lambda^6,3-benzothiazine-1,1,4-trione",
@@ -2838,6 +2860,8 @@ mod tests {
             ),
             ("O=[PH]1C=CC=CC1", "1,2-dihydro-1lambda^5-phosphinin-1-one"),
             ("O=[PH]1C=CC=C1", "1H-1lambda^5-phosphol-1-one"),
+            ("O=[PH]1C=C1", "1H-1lambda^5-phosphiren-1-one"),
+            ("O=[PH]1C=CC=CC=C1", "1H-1lambda^5-phosphepin-1-one"),
             ("O=P1(C)C=CC=C1", "1-methyl-1H-1lambda^5-phosphol-1-one"),
             (
                 "O=P1(C)C=CC=CC1",
