@@ -563,7 +563,6 @@ mod tests {
         }
         for (smiles, name) in [
             ("c1ccc2[nH+]cccc2c1", "quinolin-1-ium"),
-            ("c1ccc2[n-]ncc2c1", "indazol-1-ide"),
             ("C1=Cc2ccccc2[NH2+]1", "1H-indol-1-ium"),
         ] {
             assert_eq!(

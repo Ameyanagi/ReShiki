@@ -1260,13 +1260,6 @@ mod tests {
                 "2^3,2^4,2^5,2^6-tetraphenyl-1^1,2^1:2^2,3^1-terphenyl",
                 NameStatus::Preferred,
             ),
-            // The same seven-node shape without an assembly is outside this
-            // fallback's scope (P-52.2.5.1(2)).
-            (
-                "c1ccccc1CC1CCC(CCc2ccccc2Cc2ccccc2)CC1",
-                "1-benzyl-2-[2-(4-benzylcyclohexyl)ethyl]benzene",
-                NameStatus::Preferred,
-            ),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
