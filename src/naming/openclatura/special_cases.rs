@@ -2979,6 +2979,7 @@ fn anhydride_half_name(mol: &Molecule, start: usize, bridge: &AtomSet) -> Result
     fragment.add_bond(Bond::new(bond, start, oh, 1))?;
     atoms.insert(oh);
     super::component_namer::name_component_with_citation(&fragment, &atoms, Some("anhydride_half"))
+        .map(|name| name.text)
 }
 fn anhydride_class_name(mol: &Molecule, path: &[usize]) -> Option<String> {
     use super::nomenclature::section;

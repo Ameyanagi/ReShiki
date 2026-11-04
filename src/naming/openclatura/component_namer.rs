@@ -29,19 +29,36 @@ use super::{
 use std::collections::BTreeMap;
 
 pub(super) fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Result<String, String> {
-    name_component_with_citation(mol, component_atoms, None)
+    name_component_with_citation(mol, component_atoms, None).map(|name| name.text)
+}
+
+pub(super) struct ComponentName {
+    pub text: String,
+    pub principal_group_atoms: AtomSet,
 }
 
 pub(super) fn name_component_with_citation(
     mol: &Molecule,
     component_atoms: &AtomSet,
     citation: Option<&str>,
-) -> Result<String, String> {
+) -> Result<ComponentName, String> {
     match component_pipeline(mol, component_atoms, citation, None)? {
-        ComponentResult::Shortcut(name) => Ok(name),
-        ComponentResult::Plan(mut plan) => {
-            render_component_parent(mol, &mut plan.parts, &plan.numbered_path, &plan.locant_map)
-        }
+        ComponentResult::Shortcut(text) => Ok(ComponentName {
+            text,
+            principal_group_atoms: AtomSet::new(),
+        }),
+        ComponentResult::Plan(mut plan) => Ok(ComponentName {
+            text: render_component_parent(
+                mol,
+                &mut plan.parts,
+                &plan.numbered_path,
+                &plan.locant_map,
+            )?,
+            principal_group_atoms: plan
+                .parts
+                .principal_group
+                .map_or_else(AtomSet::new, |g| g.atom_ids),
+        }),
     }
 }
 

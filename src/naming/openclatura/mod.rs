@@ -1288,7 +1288,7 @@ mod tests {
             // components; its named biphenyl junction needs no demotion.
             (
                 "CN(CCCCCCCCCN1CCC(CC1)OC(=O)NC2=CC=CC=C2C3=CC=CC=C3)C(=O)C4=CC(=C(C=C4)O)Cl",
-                "1-[9-(N-methyl-3-chloro-4-hydroxybenzamido)nonyl]piperidin-4-yl ([1,1'-biphenyl]-2-yl)carbamate",
+                "1-[9-(3-chloro-4-hydroxy-N-methylbenzamido)nonyl]piperidin-4-yl ([1,1'-biphenyl]-2-yl)carbamate",
                 NameStatus::Preferred,
             ),
             // P-52.2.5.3 applies without identical-unit ring junctions.
@@ -1691,11 +1691,6 @@ mod tests {
     fn known_departures_keep_their_names_and_report_the_rule_family() {
         use crate::naming::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
-            (
-                "CN(C(C)C(=O)O)S(=O)(=O)c1ccc(C)cc1",
-                "2-(N-methyltosylamino)propanoic acid",
-                R::SulfonylPrefix,
-            ),
             (
                 "OC(=O)CS(=O)(=O)CS(=O)(=O)O",
                 "(sulfomethylsulfonyl)acetic acid",

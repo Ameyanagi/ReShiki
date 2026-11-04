@@ -792,6 +792,85 @@ mod tests {
     }
 
     #[test]
+    fn n_substituted_amido_prefixes_use_complete_amide_ordering() {
+        for (smiles, expected) in [
+            (
+                "OC(=O)CCN(C)C(=O)c1ccc(O)c(Cl)c1",
+                "3-(3-chloro-4-hydroxy-N-methylbenzamido)propanoic acid",
+            ),
+            (
+                "OC(=O)CCN(CC)C(=O)c1ccc(C)cc1",
+                "3-(N-ethyl-4-methylbenzamido)propanoic acid",
+            ),
+            (
+                "OC(=O)CCN(C)C(=O)c1ccc(C)cc1",
+                "3-(N,4-dimethylbenzamido)propanoic acid",
+            ),
+            (
+                "OC(=O)CCN(C(C)C)C(=O)c1ccc(C)cc1",
+                "3-[4-methyl-N-(propan-2-yl)benzamido]propanoic acid",
+            ),
+            (
+                "OC(=O)CCN(C(=O)c1ccccc1)c1ccccc1",
+                "3-(N-phenylbenzamido)propanoic acid",
+            ),
+            (
+                "CN(C(C)C(=O)O)S(=O)(=O)c1ccc(C)cc1",
+                "2-(N,4-dimethylbenzene-1-sulfonamido)propanoic acid",
+            ),
+            (
+                "O=C(O)CN(CCO)C(=O)c1cc(Cl)ccc1",
+                "[3-chloro-N-(2-hydroxyethyl)benzamido]acetic acid",
+            ),
+            (
+                "O=C(O)CN(CCO)C(=O)c1ccc(CCO)cc1",
+                "[N,4-bis(2-hydroxyethyl)benzamido]acetic acid",
+            ),
+        ] {
+            let input = crate::naming::canonical_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(&input).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                input,
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn competing_amide_suffixes_keep_the_attachment_nitrogen() {
+        for (smiles, expected) in [
+            (
+                "O=C(O)CN(CCNC(=O)CCCC)C(C)=O",
+                "{acetyl[2-(pentanamido)ethyl]amino}acetic acid",
+            ),
+            (
+                "O=C(O)CN(CCNC(=[Se])CCCC)S(=O)(=O)c1ccccc1",
+                "({2-[(pentaneselenoyl)amino]ethyl}(phenylsulfonyl)amino)acetic acid",
+            ),
+        ] {
+            let input = crate::naming::canonical_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(&input).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                input,
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
     fn hydrazone_descriptor_cites_a_locant_only_when_the_name_does() {
         for (smiles, expected) in [
             ("C/C=N/N=C", "(E)-ethanal methylidenehydrazone"),
