@@ -1,0 +1,910 @@
+smiles	name	status	reason
+CCOC(=O)/C=C/c1ccccc1	ethyl (2E)-3-phenylprop-2-enoate	preferred	
+C1=CC=C(C=C1)CC(=O)O	phenylacetic acid	preferred	
+CC(C)CC1=CC=C(C=C1)C(C)C(=O)O	2-[4-(2-methylpropyl)phenyl]propanoic acid	preferred	
+C1=CC=C(C=C1)C(C(=O)O)O	(hydroxy)(phenyl)acetic acid	preferred	
+C1=CC=C(C=C1)C[C@@H](C(=O)O)N	(2S)-2-amino-3-phenylpropanoic acid	preferred	
+C1=CC(=CC=C1C[C@@H](C(=O)O)N)O	(2S)-2-amino-3-(4-hydroxyphenyl)propanoic acid	preferred	
+C1=CC=C(C=C1)CCC(=O)O	3-phenylpropanoic acid	preferred	
+CC(=O)CCC1=CC=CC=C1	4-phenylbutan-2-one	preferred	
+O=C/C=C/c1ccccc1	(2E)-3-phenylprop-2-enal	preferred	
+C1=CC=C(C=C1)CC#N	phenylacetonitrile	preferred	
+CC(C(=O)O)c1ccccc1	2-phenylpropanoic acid	preferred	
+C1=CC(=C(C=C1CCN)O)O	4-(2-aminoethyl)benzene-1,2-diol	preferred	
+CC(=O)OCC1=CC=CC=C1	benzyl acetate	preferred	
+CC(=O)OC1=CC=CC=C1	phenyl acetate	preferred	
+CC(=O)NC1=CC=CC=C1	N-phenylacetamide	preferred	
+CC(=O)NC1=CC=C(C=C1)O	N-(4-hydroxyphenyl)acetamide	preferred	
+C1=CC=C(C=C1)COC(=O)C2=CC=CC=C2	benzyl benzoate	preferred	
+C1=CC=C(C=C1)C(=O)OC2=CC=CC=C2	phenyl benzoate	preferred	
+CC(=O)NCC1=CC=CC=C1	N-benzylacetamide	preferred	
+C1=CC=C(C=C1)C(=O)NC2=CC=CC=C2	N-phenylbenzamide	preferred	
+CC(=O)OC1CCCCC1	cyclohexyl acetate	preferred	
+CN(C)C(=O)C1=CC=CC=C1	N,N-dimethylbenzamide	preferred	
+C1=CC=C(C=C1)C(=O)O	benzoic acid	preferred	
+COC(=O)C1=CC=CC=C1	methyl benzoate	preferred	
+CC(=O)OC1=CC=CC=C1C(=O)O	2-(acetyloxy)benzoic acid	preferred	
+C1=CC=C(C(=C1)C(=O)O)O	2-hydroxybenzoic acid	preferred	
+COC1=C(C=CC(=C1)C=O)O	4-hydroxy-3-methoxybenzaldehyde	preferred	
+CCOC(=O)C1=CC=C(C=C1)N	ethyl 4-aminobenzoate	preferred	
+C1=CC(=CN=C1)C(=O)N	pyridine-3-carboxamide	preferred	
+C1=CC=C(C=C1)C=O	benzaldehyde	preferred	
+CC(=O)C1=CC=CC=C1	1-phenylethan-1-one	preferred	
+C1=CC=C(C=C1)O	phenol	preferred	
+C1=CC=C(C=C1)N	aniline	preferred	
+C1CCC(CC1)C(=O)O	cyclohexanecarboxylic acid	preferred	
+C1CCC(=O)CC1	cyclohexanone	preferred	
+C1=CC(=CC=C1C(=O)O)[N+](=O)[O-]	4-nitrobenzoic acid	preferred	
+C1=CC=C(C=C1)C#N	benzonitrile	preferred	
+C1=CC=C(C=C1)S(=O)(=O)N	benzenesulfonamide	preferred	
+C1=CN=CC=C1C(=O)O	pyridine-4-carboxylic acid	preferred	
+CC1=CC=CC=C1	methylbenzene	preferred	
+CC1=CC=C(C=C1)C	1,4-dimethylbenzene	preferred	
+C1=CC=C(C=C1)Cl	chlorobenzene	preferred	
+C1=CC=C(C=C1)CCO	2-phenylethan-1-ol	preferred	
+CC(N)Cc1ccccc1	1-phenylpropan-2-amine	preferred	
+C[C@@H]([C@@H](C1=CC=CC=C1)O)NC	(1R,2S)-2-(methylamino)-1-phenylpropan-1-ol	preferred	
+C1=CC=C(C=C1)CO	phenylmethanol	preferred	
+C[C@@H](O)c1ccccc1	(1R)-1-phenylethan-1-ol	preferred	
+C(CO)N	2-aminoethan-1-ol	preferred	
+CCN(CC)CC	N,N-diethylethanamine	preferred	
+C1=CC=C(C=C1)CCN	2-phenylethan-1-amine	preferred	
+C1CCC(CC1)N	cyclohexanamine	preferred	
+CC(C)(CO)N	2-amino-2-methylpropan-1-ol	preferred	
+C(C(CO)O)O	propane-1,2,3-triol	preferred	
+C(CO)O	ethane-1,2-diol	preferred	
+CC(C)(C)O	2-methylpropan-2-ol	preferred	
+C=CC1=CC=CC=C1	ethenylbenzene	preferred	
+C=CCC1=CC=CC=C1	(prop-2-en-1-yl)benzene	preferred	
+CCC(Cc1ccccc1)C(=O)O	2-benzylbutanoic acid	preferred	
+C1=CC=C(C=C1)/C=C/C2=CC=CC=C2	(1E)-2-phenylethenylbenzene	not_preferred	multiplicative
+CC(=C)C1=CC=CC=C1	(prop-1-en-2-yl)benzene	preferred	
+OC/C=C/c1ccccc1	(2E)-3-phenylprop-2-en-1-ol	preferred	
+C=CC1=CC=NC=C1	4-ethenylpyridine	preferred	
+COC1=C(C=CC(=C1)CC=C)O	2-methoxy-4-(prop-2-en-1-yl)phenol	preferred	
+C=CCC1=CC2=C(C=C1)OCO2	5-(prop-2-en-1-yl)-1,3-benzodioxole	preferred	
+COc1ccc(/C=C/C)cc1	1-methoxy-4-[(1E)-prop-1-en-1-yl]benzene	preferred	
+C1CCNCC1	piperidine	preferred	
+C1COCCN1	morpholine	preferred	
+C1CCOCC1	oxane	preferred	
+C1COCCC1O	oxan-4-ol	preferred	
+CC1CCCCO1	2-methyloxane	preferred	
+C1CNCCN1	piperazine	preferred	
+C1CCNC1	pyrrolidine	preferred	
+C1CCOC1	oxolane	preferred	
+C1COCCO1	1,4-dioxane	preferred	
+C1=CSC=C1	thiophene	preferred	
+C1=COC=C1	furan	preferred	
+C1=CN=CN1	1H-imidazole	preferred	
+C1=CN=CN=C1	pyrimidine	preferred	
+C1=CC=C2C(=C1)C=CN2	1H-indole	preferred	
+C1=CC=C2C(=C1)C=CC=N2	quinoline	preferred	
+C1=CC=C2C=NC=CC2=C1	isoquinoline	preferred	
+CN1C=NC2=C1C(=O)N(C(=O)N2C)C	1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione	preferred	
+CN1C=NC2=C1C(=O)NC(=O)N2C	3,7-dimethyl-3,7-dihydro-1H-purine-2,6-dione	preferred	
+C1=NC2=NC=NC(=C2N1)N	7H-purin-6-amine	preferred	
+C1=NC2=C(N1)C(=O)NC(=N2)N	2-amino-1,7-dihydro-6H-purin-6-one	preferred	
+C1=CNC(=O)NC1=O	pyrimidine-2,4(1H,3H)-dione	preferred	
+C1=C(NC(=O)N=C1)N	6-aminopyrimidin-2(1H)-one	preferred	
+C1=CC=C2C(=C1)NC=N2	1H-1,3-benzimidazole	preferred	
+C1=CC(=O)NC=C1	pyridin-2(1H)-one	preferred	
+CN1CCC[C@H]1C2=CN=CC=C2	3-[(2S)-1-methylpyrrolidin-2-yl]pyridine	preferred	
+CCN(CC)CC(=O)NC1=C(C=CC=C1C)C	2-(diethylamino)-N-(2,6-dimethylphenyl)acetamide	preferred	
+CN(C)CCOC(C1=CC=CC=C1)C2=CC=CC=C2	2-[(diphenylmethyl)oxy]-N,N-dimethylethan-1-amine	preferred	
+CN1C(=O)CN=C(C2=C1C=CC(=C2)Cl)C3=CC=CC=C3	7-chloro-1-methyl-5-phenyl-1H-1,4-benzodiazepin-2(3H)-one	preferred	
+C1CC1N2C=C(C(=O)C3=CC(=C(C=C32)N4CCNCC4)F)C(=O)O	1-cyclopropyl-6-fluoro-4-oxo-7-(piperazin-1-yl)-1,4-dihydroquinoline-3-carboxylic acid	preferred	
+CN(C)C(=N)N=C(N)N	2-(N,N-dimethylcarbamimidoyl)guanidine	preferred	
+CC(C)NCC(COC1=CC=C(C=C1)CC(=O)N)O	2-(4-{2-hydroxy-3-[(propan-2-yl)amino]propoxy}phenyl)acetamide	preferred	
+CC(C)NCC(COC1=CC=CC2=CC=CC=C21)O	1-[(naphthalen-1-yl)oxy]-3-[(propan-2-yl)amino]propan-2-ol	preferred	
+CNCCC(C1=CC=CC=C1)OC2=CC=C(C=C2)C(F)(F)F	N-methyl-3-phenyl-3-{[4-(trifluoromethyl)phenyl]oxy}propan-1-amine	preferred	
+CN[C@H]1CC[C@H](C2=CC=CC=C12)C3=CC(=C(C=C3)Cl)Cl	(1S,4S)-4-(3,4-dichlorophenyl)-N-methyl-1,2,3,4-tetrahydronaphthalen-1-amine	preferred	
+CC1=CN=C(C(=C1OC)C)CS(=O)C2=NC3=C(N2)C=C(C=C3)OC	6-methoxy-2-[(4-methoxy-3,5-dimethylpyridin-2-yl)methanesulfinyl]-1H-1,3-benzimidazole	preferred	
+C[C@@H](C1=CC2=C(C=C1)C=C(C=C2)OC)C(=O)O	(2S)-2-(6-methoxynaphthalen-2-yl)propanoic acid	preferred	
+CC(=O)CC(C1=CC=CC=C1)C2=C(C3=CC=CC=C3OC2=O)O	4-hydroxy-3-(3-oxo-1-phenylbutyl)-2H-1-benzopyran-2-one	preferred	
+CCOC(=O)N1CCC(=C2C3=C(CCC4=C2N=CC=C4)C=C(C=C3)Cl)CC1	ethyl 4-(8-chloro-5,6-dihydrobenzo[1',2':5,6]cyclohepta[1,2-b]pyridin-11-ylidene)piperidine-1-carboxylate	preferred	
+C1CN(CCC1(C2=CC=C(C=C2)Cl)O)CCCC(=O)C3=CC=C(C=C3)F	4-[4-(4-chlorophenyl)-4-hydroxypiperidin-1-yl]-1-(4-fluorophenyl)butan-1-one	preferred	
+CCCC1=NN(C2=C1N=C(NC2=O)C3=C(C=CC(=C3)S(=O)(=O)N4CCN(CC4)C)OCC)C	5-[2-ethoxy-5-(4-methylpiperazine-1-sulfonyl)phenyl]-1-methyl-3-propyl-6H-pyrazolo[4,3-d]pyrimidin-7(1H)-one	preferred	
+CC1=CC=C(C=C1)C2=CC(=NN2C3=CC=C(C=C3)S(=O)(=O)N)C(F)(F)F	4-[5-(4-methylphenyl)-3-(trifluoromethyl)-1H-pyrazol-1-yl]benzene-1-sulfonamide	preferred	
+CC(C)(C)NCC(C1=CC(=C(C=C1)O)CO)O	4-{2-[(tert-butyl)amino]-1-hydroxyethyl}-2-(hydroxymethyl)phenol	preferred	
+CNC1(CCCCC1=O)C2=CC=CC=C2Cl	2-(2-chlorophenyl)-2-(methylamino)cyclohexan-1-one	preferred	
+CN(C)C[C@H]1CCCC[C@@]1(C2=CC(=CC=C2)OC)O	(1R,2R)-2-[(dimethylamino)methyl]-1-(3-methoxyphenyl)cyclohexan-1-ol	preferred	
+CC1([C@@H](N2[C@H](S1)[C@@H](C2=O)NC(=O)CC3=CC=CC=C3)C(=O)O)C	(1R,4S,7R)-3,3-dimethyl-6-oxo-7-(2-phenylacetamido)-2-thia-5-azabicyclo[3.2.0]heptane-4-carboxylic acid	preferred	
+C[C@@H]1CC[C@H]([C@@H](C1)O)C(C)C	(1R,2S,5R)-5-methyl-2-(propan-2-yl)cyclohexan-1-ol	preferred	
+C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C	(1R,3aS,3bS,7S,9aR,9bS,11aR)-9a,11a-dimethyl-1-[(2R)-6-methylheptan-2-yl]-2,3,3a,3b,4,6,7,8,9,9a,9b,10,11,11a-tetradecahydro-1H-cyclopenta[a]phenanthren-7-ol	unverified	opsin_fusion_layout
+C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@]34C	(1S,3aS,3bR,9aR,9bS,11aS)-1-hydroxy-9a,11a-dimethyl-2,3,3a,3b,4,5,9,9a,9b,10,11,11a-dodecahydrocyclopenta[a]phenanthren-7(1H,8H)-one	unverified	opsin_fusion_layout
+CN1CC[C@]23[C@@H]4[C@H]1CC5=C2C(=C(C=C5)O)O[C@H]3[C@H](C=C4)O	(4R,4aR,7S,7aR,12bS)-3-methyl-2,3,4,4a,7,7a-hexahydro-4,12-methano-1H-[1]benzofuro[3,2-e]isoquinoline-7,9-diol	unverified	opsin_fusion_layout
+C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O	(3R,4S,5S,6R)-6-(hydroxymethyl)oxane-2,3,4,5-tetraol	preferred	
+C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O[C@]2([C@H]([C@@H]([C@H](O2)CO)O)O)CO)O)O)O)O	(2R,3R,4S,5S,6R)-2-{[(2S,3S,4S,5R)-3,4-dihydroxy-2,5-bis(hydroxymethyl)oxolan-2-yl]oxy}-6-(hydroxymethyl)oxane-3,4,5-triol	preferred	
+COC1=CC2=C(C=CN=C2C=C1)[C@H]([C@@H]3C[C@@H]4CCN3C[C@@H]4C=C)O	(R)-[(2S,4S,5R)-5-ethenyl-1-azabicyclo[2.2.2]octan-2-yl](6-methoxyquinolin-4-yl)methanol	preferred	
+CC1=CC[C@@H](CC1)C(=C)C	(4R)-1-methyl-4-(prop-1-en-2-yl)cyclohex-1-ene	preferred	
+CC(=CCC/C(=C/CO)/C)C	(2E)-3,7-dimethylocta-2,6-dien-1-ol	preferred	
+CC1=CC[C@H](CC1=O)C(=C)C	(5R)-2-methyl-5-(prop-1-en-2-yl)cyclohex-2-en-1-one	preferred	
+CC(C)/C=C/CCCCC(=O)NCC1=CC(=C(C=C1)O)OC	(6E)-N-[(4-hydroxy-3-methoxyphenyl)methyl]-8-methylnon-6-enamide	preferred	
+C1=CC(=CC=C1/C=C/C2=CC(=CC(=C2)O)O)O	5-[(1E)-2-(4-hydroxyphenyl)ethenyl]benzene-1,3-diol	preferred	
+C1=CC(=C(C=C1C2=C(C(=O)C3=C(C=C(C=C3O2)O)O)O)O)O	2-(3,4-dihydroxyphenyl)-3,5,7-trihydroxy-4H-1-benzopyran-4-one	preferred	
+C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=C3C=CC(=C4)O	(1S,3aS,3bR,9bS,11aS)-11a-methyl-2,3,3a,3b,4,5,9b,10,11,11a-decahydro-1H-cyclopenta[a]phenanthrene-1,7-diol	unverified	opsin_fusion_layout
+C[C@@H]1CC[C@H]2[C@H](C(=O)O[C@H]3[C@@]24[C@H]1CC[C@](O3)(OO4)C)C	(1R,4S,5R,8S,9R,12S,13R)-1,5,9-trimethyl-11,14,15,16-tetraoxatetracyclo[10.3.1.0^{8,13}.0^{4,13}]hexadecan-10-one	preferred	
+C([C@@H]([C@@H]1C(=C(C(=O)O1)O)O)O)O	(5R)-5-[(1S)-1,2-dihydroxyethyl]-3,4-dihydroxyfuran-2(5H)-one	preferred	
+C(C(=O)O)C(CC(=O)O)(C(=O)O)O	3-carboxy-3-hydroxypentanedioic acid	preferred	
+C[C@@H](C(=O)O)O	(2S)-2-hydroxypropanoic acid	preferred	
+C1CN2CC3=CCO[C@H]4CC(=O)N5[C@H]6[C@H]4[C@H]3C[C@H]2[C@@]61C7=CC=CC=C75	(1R,11S,18S,20R,21R,22S)-12-oxa-8,17-diazaheptacyclo[15.5.2.0^{8,22}.0^{11,21}.0^{15,20}.0^{1,18}.0^{2,7}]tetracosa-2,4,6,14-tetraen-9-one	preferred	
+C/C=C/C	(2E)-but-2-ene	preferred	
+C/C=C\C	(2Z)-but-2-ene	preferred	
+C(=C\C(=O)O)\C(=O)O	(2Z)-but-2-enedioic acid	preferred	
+C(=C/C(=O)O)\C(=O)O	(2E)-but-2-enedioic acid	preferred	
+CC[C@@H](C)O	(2R)-butan-2-ol	preferred	
+C[C@@H](C(=O)O)N	(2S)-2-aminopropanoic acid	preferred	
+C[C@H]([C@@H](C(=O)O)N)O	(2S,3R)-2-amino-3-hydroxybutanoic acid	preferred	
+C[C@H]1CCCC[C@H]1C	(1R,2S)-1,2-dimethylcyclohexane	preferred	
+C[C@H]1CC[C@@H](C)CC1	(1s,4s)-1,4-dimethylcyclohexane	preferred	
+O[C@@H]1CCCC[C@H]1O	(1R,2R)-cyclohexane-1,2-diol	preferred	
+O=C(O)[C@H](O)[C@@H](O)C(=O)O	(2R,3R)-2,3-dihydroxybutanedioic acid	preferred	
+O=C(O)[C@@H](O)[C@@H](O)C(=O)O	(2R,3S)-2,3-dihydroxybutanedioic acid	preferred	
+CC(C)Cc1ccc([C@H](C)C(=O)O)cc1	(2S)-2-[4-(2-methylpropyl)phenyl]propanoic acid	preferred	
+CCCCCCCC/C=C\CCCCCCCC(=O)O	(9Z)-octadec-9-enoic acid	preferred	
+CC[C@H](C)Cl	(2S)-2-chlorobutane	preferred	
+CC(C)(C)[C@H]1CC[C@@H](O)CC1	(1s,4s)-4-(tert-butyl)cyclohexan-1-ol	preferred	
+C1CCC2(CC1)CCCC2	spiro[4.5]decane	preferred	
+C1CCC2(CC1)CCCCC2	spiro[5.5]undecane	preferred	
+C1CC12CC2	spiro[2.2]pentane	preferred	
+C1CCC2(CC1)OCCO2	1,4-dioxaspiro[4.5]decane	preferred	
+O=C1CCCC12CCCCC2	spiro[4.5]decan-1-one	preferred	
+C1CCC2(CC1)CCCO2	1-oxaspiro[4.5]decane	preferred	
+C1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12	spiro[indene-1,1'-indene]	preferred	
+C1CC2CCC1C2	bicyclo[2.2.1]heptane	preferred	
+C1C[C@H]2C[C@@H]1C=C2	(1R,4S)-bicyclo[2.2.1]hept-2-ene	preferred	
+C1CC2CCC1CC2	bicyclo[2.2.2]octane	preferred	
+C1CC2CCCC(C1)C2	bicyclo[3.3.1]nonane	preferred	
+C1C2CC3CC1CC(C2)C3	adamantane	preferred	
+C1C2CC3CC1CC(C2)(C3)N	adamantan-1-amine	preferred	
+CC1(C)[C@@H]2CC[C@@]1(C)C(=O)C2	(1R,4R)-1,7,7-trimethylbicyclo[2.2.1]heptan-2-one	preferred	
+CC1(C)C2CCC1(C)C(=O)C2	1,7,7-trimethylbicyclo[2.2.1]heptan-2-one	preferred	
+C1CC2CCC1O2	7-oxabicyclo[2.2.1]heptane	preferred	
+C1CN2CCC1CC2	1-azabicyclo[2.2.2]octane	preferred	
+C1CN2CCN1CC2	1,4-diazabicyclo[2.2.2]octane	preferred	
+CC1=CCC2CC1C2(C)C	2,6,6-trimethylbicyclo[3.1.1]hept-2-ene	preferred	
+C12C3C4C1C5C2C3C45	cubane	preferred	
+C1C2C1C2	bicyclo[1.1.0]butane	preferred	
+C1=CC=C2C=CC=CC2=C1	naphthalene	preferred	
+CC1=CC2=CC=CC=C2C=C1	2-methylnaphthalene	preferred	
+C1=CC=C2C=C(C=CC2=C1)O	naphthalen-2-ol	preferred	
+C1=CC=C2C=C(C=CC2=C1)C(=O)O	naphthalene-2-carboxylic acid	preferred	
+C1=CC=C2C=C3C=CC=CC3=CC2=C1	anthracene	preferred	
+C1=CC=C2C(=C1)C=CC3=CC=CC=C32	phenanthrene	preferred	
+C1=CC2=C3C(=C1)C=CC4=CC=CC(=C43)C=C2	pyrene	preferred	
+C1=CC=C2C=CC=C2C=C1	azulene	preferred	
+C1C2=CC=CC=C2C3=CC=CC=C31	9H-fluorene	preferred	
+C1CC2=CC=CC=C2C1	2,3-dihydro-1H-indene	preferred	
+C1CCC2=CC=CC=C2C1	1,2,3,4-tetrahydronaphthalene	preferred	
+C1CC[C@@H]2CCCC[C@H]2C1	(4ar,8ar)-decahydronaphthalene	preferred	
+C1CC[C@H]2CCCC[C@H]2C1	(4as,8as)-decahydronaphthalene	preferred	
+C1=CC=C2C(=C1)C3=CC=CC=C3N2	9H-carbazole	preferred	
+C1=CC=C2C(=C1)C3=CC=CC=C3O2	dibenzofuran	preferred	
+C1=CC2=C(C(=C1)O)N=CC=C2	quinolin-8-ol	preferred	
+C1=CC=C2C(=C1)C=CC3=C2C=CC4=CC=CC=C43	chrysene	preferred	
+C1=CC2=C3C4=C1C=CC5=C4C6=C(C=C5)C=CC7=C6C3=C(C=C2)C=C7	coronene	preferred	
+C1=CC=C2C3=C4C(=CC2=C1)C=CC5=C4C(=CC=C5)C=C3	benzo[a]pyrene	preferred	
+C1=C2C(=NC=N1)N=CN2	7H-purine	preferred	
+C1=CC=C(C=C1)C2=CC=CC=C2	1,1'-biphenyl	preferred	
+C1=CC=NC(=C1)C2=CC=CC=N2	2,2'-bipyridine	preferred	
+C1=CN=CC=C1C2=CC=NC=C2	4,4'-bipyridine	preferred	
+C1=CC=C(C=C1)C2=CC=C(C=C2)C3=CC=CC=C3	1^1,2^1:2^4,3^1-terphenyl	preferred	
+C1=CC=C(C=C1)C2=CC(=CC=C2)C3=CC=CC=C3	1^1,2^1:2^3,3^1-terphenyl	preferred	
+C1CCC(CC1)C2=CC=CC=C2	cyclohexylbenzene	preferred	
+C1=CC=C(C=C1)C2=CC=NC=C2	4-phenylpyridine	preferred	
+C1CCC(CC1)C2CCCCC2	1,1'-bi(cyclohexane)	preferred	
+C1=CC=C2C(=C1)C=CC=C2C3=CC=CC4=CC=CC=C43	1,1'-binaphthalene	preferred	
+Oc1ccc2ccccc2c1-c1c(O)ccc2ccccc12	[1,1'-binaphthalene]-2,2'-diol	preferred	
+C1=CC2=CC3=CC=C(N3)C=C4C=CC(=N4)C=C5C=CC(=N5)C=C1N2	21,22,23,24-tetraazapentacyclo[16.2.1.1^{13,16}.1^{8,11}.1^{3,6}]tetracosa-1,3(24),4,6,8(23),9,11,13,15,17,19-undecaene	preferred	
+C1CC2=CC=C(CCC3=CC=C1C=C3)C=C2	1,4(1,4)-dibenzenacyclohexaphane	unverified	phane
+C1COCCOCCOCCOCCOCCO1	1,4,7,10,13,16-hexaoxacyclooctadecane	preferred	
+C1COCCOCCOCCOCCO1	1,4,7,10,13-pentaoxacyclopentadecane	preferred	
+C1CCCCCCCCCCC1	cyclododecane	preferred	
+C1CCCCCCCCCCCCCCC1	cyclohexadecane	preferred	
+C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC[C@@H]4[C@@]3(CCCC4)C)C	(5R,8R,9S,10S,13R,14S,17R)-10,13-dimethyl-17-[(2R)-6-methylheptan-2-yl]gonane	unverified	unaudited_parent
+CN(CC1=CC(=C(C=C1)OC(F)F)OC)C(=O)NC2=C(C=CC(=C2)OC)Cl	N-(2-chloro-5-methoxyphenyl)-N'-({4-[(difluoromethyl)oxy]-3-methoxyphenyl}methyl)-N'-methylurea	preferred	
+C[C@@H](C1=NC(=NO1)C2=CC=CS2)N3CCN(CC3)CC4=CC5=C(C=C4)OCO5	5-[(1S)-1-{4-[(1,3-benzodioxol-5-yl)methyl]piperazin-1-yl}ethyl]-3-(thiophen-2-yl)-1,2,4-oxadiazole	preferred	
+COC(=O)C[C@@H](C1=CC=CC=C1Cl)NC(=O)C2CCN(CC2)C3=NS(=O)(=O)C4=CC=CC=C43	methyl (3S)-3-(2-chlorophenyl)-3-[1-(1,1-dioxo-1,2-benzothiazol-3-yl)piperidine-4-carboxamido]propanoate	preferred	
+CC(C)CC(=O)NC1=CC=C(C=C1)NC(=O)C2=C(N=CC=C2)SC3=CC=CC=C3	3-methyl-N-{4-[2-(phenylsulfanyl)pyridine-3-carboxamido]phenyl}butanamide	unverified	principal_group_tie
+CCOC(=O)C1=C(NC2=C(C1C3=C(C(=CC=C3)OC)OC)C(=O)CC(C2)C4=CC=C(C=C4)OC)C	ethyl 4-(2,3-dimethoxyphenyl)-7-(4-methoxyphenyl)-2-methyl-5-oxo-4,6,7,8-tetrahydroquinoline-3(1H)-carboxylate	preferred	
+CCCN(CC#C)C(=O)NC(C)C1=CC(=CC=C1)N2CCCC2=O	N-{1-[3-(2-oxopyrrolidin-1-yl)phenyl]ethyl}-N'-(prop-2-yn-1-yl)-N'-propylurea	preferred	
+C1CCN(CC1)CC2=C(C=CC(=C2)NC(=O)C3=CC=C(C=C3)[N+](=O)[O-])O.Cl		declined	Salt naming requires charged components without zwitterions or radicals; neutral components and mixtures are unsupported
+CN1CCC(CC1)N2CCC(CC2)NC(=O)C(=O)NC3=CC(=CC=C3)N4C=CC=N4	N-(1'-methyl[1,4'-bipiperidin]-4-yl)-N'-[3-(1H-pyrazol-1-yl)phenyl]ethanediamide	not_preferred	unretained_parent
+C[C@H](C(=O)NC1=CC=C(C=C1)SC)OC(=O)CN(C)S(=O)(=O)C2=CC=C(C=C2)Cl	(2R)-1-{[4-(methylsulfanyl)phenyl]amino}-1-oxopropan-2-yl 2-(N-methyl-4-chlorobenzene-1-sulfonamido)acetate	preferred	
+CCOC1=C(C=CC(=C1)CN(CC(=O)NC(=O)NCC(C)C)C2CC2)OC(F)F	2-[cyclopropyl({4-[(difluoromethyl)oxy]-3-ethoxyphenyl}methyl)amino]-N-[(2-methylpropyl)carbamoyl]acetamide	preferred	
+COC(=O)CC1=C(SC2=C1C(=O)NC(=N2)CNC3=CC=C(C=C3)Br)C(=O)OC	methyl 2-{[(4-bromophenyl)amino]methyl}-5-(2-methoxy-2-oxoethyl)-4-oxo-3,4-dihydrothieno[2,3-d]pyrimidine-6-carboxylate	preferred	
+COC1=C(C=CC(=C1)NC(=O)C2=CC3=C(C=C2)C(=O)O[C@@H](C3)C4=CC=CC=C4)NS(=O)(=O)C	(3S)-N-(4-methanesulfonamido-3-methoxyphenyl)-1-oxo-3-phenyl-3,4-dihydro-1H-2-benzopyran-6-carboxamide	preferred	
+CN(C1=CC=C(C=C1)NC(=O)CNC(=O)C2=CSC=C2)C(=O)OC	methyl methyl{4-[2-(thiophene-3-carboxamido)acetamido]phenyl}carbamate	preferred	
+CC1=CC(=C(C=C1)C)C(=O)COC(=O)C2CCN(CC2)C(=O)N3CCOCC3	2-(2,5-dimethylphenyl)-2-oxoethyl 1-[(morpholin-4-yl)carbonyl]piperidine-4-carboxylate	not_preferred	acyl_prefix
+CC1=CC(=C(C2=C1CCC2=O)C)O	6-hydroxy-4,7-dimethyl-2,3-dihydro-1H-inden-1-one	preferred	
+COC1=CC=CC(=C1OCCC#C)C=O	2-[(but-3-yn-1-yl)oxy]-3-methoxybenzaldehyde	preferred	
+CC(=O)OC1=CC(=O)CC(C1)(CC(=C)Br)C(=O)OC	methyl 3-(acetyloxy)-1-(2-bromoprop-2-en-1-yl)-5-oxocyclohex-3-ene-1-carboxylate	preferred	
+C=CCN(C1=CC=CC=C1)S(=O)(=O)C2=CC=CC(=C2)C(=O)NNC(=O)C3=CC(=CC=C3)O	3-{2-[(3-hydroxyphenyl)carbonyl]hydrazine-1-carbonyl}-N-phenyl-N-(prop-2-en-1-yl)benzene-1-sulfonamide	not_preferred	acyl_prefix
+C1CN(CCN1CC2=NC(=NC(=N2)N)N)C(=O)C3=C(C=C(C=C3)F)Cl	(2-chloro-4-fluorophenyl){4-[(4,6-diamino-1,3,5-triazin-2-yl)methyl]piperazin-1-yl}methanone	preferred	
+CCCNC(=O)COC1=CC=CC=C1C(C)(C)C	2-{[2-(tert-butyl)phenyl]oxy}-N-propylacetamide	preferred	
+CC(C)[C@@H](C(=O)NCCC1=CCCCC1)NC(=O)C2=CC=C(C=C2)Cl	4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide	unverified	principal_group_tie
+CC(=O)N1CCN(CC1)C2=CC=C(C=C2)CN([C@@H](CC3=CC=CC=C3)C(=O)N(C)CCOCC4=CC(=CC=C4)C#N)C(=O)/C=C/C5=CC=C(C=C5)C(F)(F)F	(2E)-N-{[4-(4-acetylpiperazin-1-yl)phenyl]methyl}-N-{(2S)-1-[(2-{[(3-cyanophenyl)methyl]oxy}ethyl)(methyl)amino]-1-oxo-3-phenylpropan-2-yl}-3-[4-(trifluoromethyl)phenyl]prop-2-enamide	preferred	
+CC1=C(C=C(C=C1)C(=O)C2=C(C=CC=N2)C(=O)OC)[N+](=O)[O-]	methyl 2-[(4-methyl-3-nitrophenyl)carbonyl]pyridine-3-carboxylate	not_preferred	acyl_prefix
+CCOC(=O)[C@H](CSCC(=O)C1=CC=C(C=C1)Cl)NC(=O)OC(C)(C)C	ethyl (2R)-2-(tert-butoxycarbonylamino)-3-{[2-(4-chlorophenyl)-2-oxoethyl]sulfanyl}propanoate	preferred	
+C1=CC=C2C(=C1)C(=O)N(C2=O)SSC3=CC=C(C=C3)O	2-{[(4-hydroxyphenyl)sulfanyl]sulfanyl}-2H-isoindole-1,3-dione	preferred	
+C[C@H]([C@@H]1[C@H]2CC(=C(N2C1=O)C(=O)OCC=C)SC3=CC=NC=C3)O[Si](C)(C)C(C)(C)C	prop-2-en-1-yl (5R,6S)-6-[(1R)-1-{[(tert-butyl)dimethylsilyl]oxy}ethyl]-7-oxo-3-[(pyridin-4-yl)sulfanyl]-1-azabicyclo[3.2.0]hept-2-ene-2-carboxylate	preferred	
+CCCS(=O)(=O)N1CCN(CC1)CC(=O)N(CC2=CSC=C2)C3CC3	N-cyclopropyl-2-[4-(propane-1-sulfonyl)piperazin-1-yl]-N-[(thiophen-3-yl)methyl]acetamide	preferred	
+CN(C)CCOC1=CC=CC=C1O	2-{[2-(dimethylamino)ethyl]oxy}phenol	preferred	
+C[C@]12CC[C@H](C1(C)C)C[C@H]2NC(=O)CSC3=NN=CN3CCCOC	2-{[4-(3-methoxypropyl)-4H-1,2,4-triazol-3-yl]sulfanyl}-N-[(1S,2R,4S)-1,7,7-trimethylbicyclo[2.2.1]heptan-2-yl]acetamide	preferred	
+CC1=C(C(=CC=C1)C)NC(=S)NNC(=O)CCCC[C@H]2[C@@H]3[C@H](CS2)NC(=O)N3	N-(2,6-dimethylphenyl)-1-({5-[(3aS,4S,6aR)-2-oxohexahydro-1H-thieno[3,4-d]imidazol-4-yl]pentanamido}amino)methanethioamide	preferred	
+CC1=C(C=C(C=C1)NC(=O)C2CCCCN2C(=O)C3=CC=CS3)S(=O)(=O)N4CCCCCC4	N-[3-(azepane-1-sulfonyl)-4-methylphenyl]-1-[(thiophen-2-yl)carbonyl]piperidine-2-carboxamide	not_preferred	acyl_prefix
+CC1=C(C=C(C=C1)C(=O)O)NS(=O)(=O)C2=CC3=C(C=C2)NC(=O)CC(=O)N3	3-(2,4-dioxo-4,5-dihydro-1H-1,5-benzodiazepine-7(3H)-sulfonamido)-4-methylbenzoic acid	preferred	
+COC(=O)C1=CC(=CC=C1)S(=O)(=O)N2C(=O)CN(C2=O)C3=CC=CC=C3	methyl 3-(2,5-dioxo-3-phenylimidazolidine-1-sulfonyl)benzoate	preferred	
+CC1=CC2=C(C=C1)N=C(N2)C3CCCN3C(=O)NC4=CC=CC=C4OC(C)C	2-(6-methyl-1H-1,3-benzimidazol-2-yl)-N-{2-[(propan-2-yl)oxy]phenyl}pyrrolidine-1-carboxamide	preferred	
+CC1=CC=C(C=C1)N2C(=O)C3=C(N=C2SCC(=O)N/N=C\C4=CC(=C(C=C4)OC(=O)C)OC)SC5=C3CCCC5	2-methoxy-4-{(Z)-[(2-{[3-(4-methylphenyl)-4-oxo-5,6,7,8-tetrahydro[1]benzothieno[2,3-d]pyrimidin-2-yl]sulfanyl}acetamido)imino]methyl}phenyl acetate	preferred	
+CCCC1=C(SC(=C1)C(=O)OCC(=O)NC2=CC(=C(C=C2)OC)S(=O)(=O)N3CCCCC3)C	2-{[4-methoxy-3-(piperidine-1-sulfonyl)phenyl]amino}-2-oxoethyl 5-methyl-4-propylthiophene-2-carboxylate	preferred	
+COC1=CC2=C(C3=C(C=C(C=C3)Cl)N=C2C=C1)NCCCN(CCCNC4=C5C=C(C=CC5=NC6=C4C=CC(=C6)Cl)OC)CC7CC7	N-(6-chloro-2-methoxyacridin-9-yl)-N'-{3-[(6-chloro-2-methoxyacridin-9-yl)amino]propyl}-N'-(cyclopropylmethyl)propane-1,3-diamine	preferred	
+C1=CC=C(C=C1)C2=C(C3=C(C=C(C(=C3)C#N)Cl)NC2=O)N	4-amino-7-chloro-2-oxo-3-phenyl-1,2-dihydroquinoline-6-carbonitrile	preferred	
+COC1=CC=C(C=C1)C(=O)CCC(=O)N2CCC3=CC=CC=C3C2	1-(4-methoxyphenyl)-4-(1,2,3,4-tetrahydroisoquinolin-2-yl)butane-1,4-dione	preferred	
+CCC(=O)N1CC/C(=N\OS(=O)(=O)O)/C2=C1C=CC(=C2)Br	1-[(4E)-6-bromo-4-(sulfooxyimino)-2,3-dihydro-1H-quinolin-1-yl]propan-1-one	preferred	
+C/C(=C\C1=CC=C(C=C1)C(=O)O)/C#N	4-[(1E)-2-methyl-3-nitriloprop-1-en-1-yl]benzoic acid	preferred	
+CC(C)NC1=C(C=CC(=C1)N2CCN(CC2)C(=O)C3=CC=CC=C3F)[N+](=O)[O-]	(2-fluorophenyl)(4-{4-nitro-3-[(propan-2-yl)amino]phenyl}piperazin-1-yl)methanone	preferred	
+CN(CC1=C(C=CC=C1Cl)F)C(=O)/C=C/C2=CC=C(C=C2)OC	(2E)-N-[(2-chloro-6-fluorophenyl)methyl]-3-(4-methoxyphenyl)-N-methylprop-2-enamide	preferred	
+CC(C)(C)OC(=O)CC(C)(C)COC(=O)CC(=O)OC	3-[4-(tert-butoxy)-2,2-dimethyl-4-oxobutyl] 1-methyl propanedioate	preferred	
+C1CCC2=C(C1)C3=C(S2)N=C(NC3=O)CCC(=O)NCC4=CC=C(C=C4)Cl	N-[(4-chlorophenyl)methyl]-3-(4-oxo-3,4,5,6,7,8-hexahydro[1]benzothieno[2,3-d]pyrimidin-2-yl)propanamide	preferred	
+C(CCN1C(=C(C2=NC3=NON=C3N=C21)C#N)N)CC(=O)O	5-(6-amino-7-cyano[1,2,5]oxadiazolo[3,4-b]pyrrolo[2,3-e]pyrazin-5-yl)pentanoic acid	preferred	
+CC1=CC=C(C=C1)N2C(=C(C(=N2)C)C3=CC=CC=C3)NC(=O)CCC(=O)O	3-{[3-methyl-1-(4-methylphenyl)-4-phenyl-1H-pyrazol-5-yl]carbamoyl}propanoic acid	preferred	
+CCOC1=CC=C(C=C1)NC(=O)C2=CC=C(C=C2)NC(=O)C[NH+](C)CC(=O)NC3=CC=C(C=C3)Cl	N-{2-[(4-chlorophenyl)amino]-2-oxoethyl}-1-({4-[(4-ethoxyphenyl)carbamoyl]phenyl}carbamoyl)-N-methylmethanaminium	preferred	
+CCOC(=O)C1=CN=C(N=C1N)SCC(=O)NC2=NC(=CS2)C	ethyl 4-amino-2-({2-[(4-methyl-1,3-thiazol-2-yl)amino]-2-oxoethyl}sulfanyl)pyrimidine-5-carboxylate	preferred	
+CCC1=CC=C(C=C1)C2=NC3=CC=CC=C3N4C(C2)C5=C(C4=O)C(=C(C=C5)OC)OC	6-(4-ethylphenyl)-10,11-dimethoxy-7,7a-dihydroisoindolo[2,1-a][1,5]benzodiazepin-12-one	unverified	opsin_fusion_layout
+c1ccc2c(c1)CCOc1ccccc1-2	6,7-dihydrodibenzo[b,d]oxepine	preferred	
+c1ccc2cc3ncccc3cc2c1	benzo[g]quinoline	preferred	
+c1[nH]c2ncccc2n1	3H-imidazo[4,5-b]pyridine	preferred	
+c1oc2cc3ncncc3cc2c1	furo[3,2-g]quinazoline	preferred	
+c1oc2cc3nnccc3cc2c1	furo[3,2-g]cinnoline	preferred	
+c1sc2nc3sccc3nc2c1	dithieno[2,3-b:3',2'-e]pyrazine	preferred	
+S1CC2=CC=CC3=C2C1=CC=C3	2H-benzo[1,2,3-cd]1-benzothiophene	preferred	
+O=Cc1oc2ncccc2c1	furo[2,3-b]pyridine-2-carbaldehyde	preferred	
+O=S(=O)(O)c1oc2ncccc2c1	furo[2,3-b]pyridine-2-sulfonic acid	preferred	
+S1C=CC=2C1=CN=CC2	thieno[2,3-c]pyridine	preferred	
+S1C=2N(C=C1)C=CN2	imidazo[2,1-b][1,3]thiazole	preferred	
+O1C2=C(C=C1)SC=C2	thieno[3,2-b]furan	preferred	
+O1C=CC2=NC3=C(C=C21)SC=C3	furo[3,2-b]thieno[2,3-e]pyridine	preferred	
+C	methane	preferred	
+CC(C)(C)C	2,2-dimethylpropane	preferred	
+C1CC1	cyclopropane	preferred	
+CC#C	propyne	preferred	
+c1ccc(Cl)cc1	chlorobenzene	preferred	
+CC(C)O	propan-2-ol	preferred	
+CC(=O)C	propan-2-one	preferred	
+OC(=O)C(O)C(O)C(=O)O	2,3-dihydroxybutanedioic acid	preferred	
+CN	methanamine	preferred	
+CC(=O)N	acetamide	preferred	
+c1ccncc1	pyridine	preferred	
+ClC(Cl)(Cl)Cl	tetrachloromethane	preferred	
+N#Cc1ccccc1	benzonitrile	preferred	
+CS(=O)(=O)O	methanesulfonic acid	preferred	
+NC(Cc1ccccc1)C(=O)O	2-amino-3-phenylpropanoic acid	preferred	
+CCCCCC=CCC=CCCCCCCCC(=O)O	octadeca-9,12-dienoic acid	preferred	
+O=C1NCCC1	pyrrolidin-2-one	preferred	
+CC(C)=C	2-methylpropene	preferred	
+S=C=N	isothiocyanic acid	preferred	
+[FH]	hydrogen fluoride	preferred	
+CC1CCCCCC2CCCC2C1	5-methyldodecahydrocyclopenta[9]annulene	preferred	
+OC1=CC2CCCC2CCCCCC1	2,3,3a,6,7,8,9,10,11,11a-decahydro-1H-cyclopenta[10]annulen-5-ol	preferred	
+CN1CCCC2C1C[NH2+]C2	1-methyl-2,3,4,4a,7,7a-hexahydro-6H-pyrrolo[3,4-b]pyridin-6-ium	preferred	
+CC[NH+]1CCc2c(cc[nH]c2=O)C1	2-ethyl-2,3,4,6-tetrahydropyrido[4,3-c]pyridin-2-ium-5-one	preferred	
+[N-]1[NH+]=CC=C2N=CC=C12	pyrrolo[3,2-c]pyridazin-1-ide-2-ium	preferred	
+[NH3+][C-]1C=CC2=C1N=NO2	cyclopenta[d][1,2,3]oxadiazol-4-ide-4-aminium	preferred	
+[NH2+](C)[C-]1C=CC2=C1N=NO2	N-methylcyclopenta[d][1,2,3]oxadiazol-4-ide-4-aminium	preferred	
+[NH2+]1CCCC2C1C[NH2+]C2	hexahydro-1H,6H-pyrrolo[3,4-b]pyridin-1,6-diium	preferred	
+N1CCC(C)C2C1C[NH2+]C2	4-methylhexahydro-1H,6H-pyrrolo[3,4-b]pyridin-6-ium	preferred	
+[NH2+]1CCCC2C1CCNC2	decahydropyrido[4,3-b]pyridin-1-ium	preferred	
+CCN1CCCC2C1CC[NH2+]C2	1-ethyldecahydropyrido[4,3-b]pyridin-6-ium	preferred	
+CC1=CC2=C(O1)SC=C2	2-methylthieno[2,3-b]furan	preferred	
+C1N=COC2=NON=C12	7H-[1,2,5]oxadiazolo[3,4-e][1,3]oxazine	preferred	
+N1N=CC=2C1=CNN2	1,5-dihydropyrazolo[4,3-c]pyrazole	preferred	
+C1=CC=CC2=NC3=CC=CC=C3C=C12	acridine	preferred	
+C1C=CC2=C1C1=CC=CC=C1C=1C=CC=CC21	1H-cyclopenta[l]phenanthrene	unverified	opsin_fusion_layout
+CC=O	acetaldehyde	preferred	
+CC(O)C	propan-2-ol	preferred	
+CC1CC1CC	1-ethyl-2-methylcyclopropane	preferred	
+c1c[nH]cn1	1H-imidazole	preferred	
+c1ccc2ncccc2c1	quinoline	preferred	
+c1ccc2occc2c1	1-benzofuran	preferred	
+O1CC=CCC1	3,6-dihydro-2H-pyran	preferred	
+CC(C)CC	2-methylbutane	preferred	
+c1cc2c3c(cccc3c1)CC2	1,2-dihydroacenaphthylene	preferred	
+c1ccc2c(c1)ccc1c3ccccc3ccc21	chrysene	preferred	
+c1ccc2cc3cc4c(ccc5cc6ccccc6cc54)cc3cc2c1	hexaphene	preferred	
+c1ccc2cc3c(cc2c1)c1cc2ccccc2cc1c1cc2ccccc2cc31	trinaphthylene	preferred	
+C1=Cc2cc3cccc4ccc5ccc1c2c5c43	cyclopenta[cd]pyrene	preferred	
+c1ccc2c(c1)ccc1cc3c(ccc4ccccc43)cc12	dibenz[a,h]anthracene	preferred	
+c1ccc2c(c1)CCN2	2,3-dihydro-1H-indole	preferred	
+NC1CCc2ccccc21	2,3-dihydro-1H-inden-1-amine	preferred	
+C1CC2=CC=CC3=C2C1=CC=C3	1,2-dihydroacenaphthylene	preferred	
+O=C(O)c1ccc2ncccc2c1	quinoline-6-carboxylic acid	preferred	
+c1nncc2ccccc12	phthalazine	preferred	
+c1ccc2c(c1)CCc1ccccc1-2	9,10-dihydrophenanthrene	preferred	
+c1ccc2ncncc2c1	quinazoline	preferred	
+C1=COc2ccccc2C1	4H-1-benzopyran	preferred	
+C1Cc2ncccc2O1	2,3-dihydrofuro[3,2-b]pyridine	preferred	
+Cc1ccc2ccccc2c1	2-methylnaphthalene	preferred	
+Nc1cccc2[nH]ccc12	1H-indol-4-amine	preferred	
+C1=Cc2c(O)cccc2C1	1H-inden-4-ol	preferred	
+Oc1ccc2ncncc2c1	quinazolin-6-ol	preferred	
+Oc1ccc2c(c1)[nH]c1ccccc12	9H-carbazol-2-ol	preferred	
+CC1CC2=CC=CC3=C2C1=CC=C3	1-methyl-1,2-dihydroacenaphthylene	preferred	
+c1oc2ncccc2c1O[N+](=O)[O-]	furo[2,3-b]pyridin-3-yl nitrate	preferred	
+C12C(C=C(C3=CC=CC=C13)O2)=O	1,4-epoxynaphthalen-3(4H)-one	unverified	atom_order
+O=C(NCc1ccccc1)Nc1ccc(C2=CSC3=NCCN23)cc1	N-benzyl-N'-[4-(5,6-dihydroimidazo[2,1-b][1,3]thiazol-3-yl)phenyl]urea	preferred	
+O=c1c2ccccc2nc2n1CC=C2	pyrrolo[2,1-b]quinazolin-9(1H)-one	preferred	
+CCCl	chloroethane	preferred	
+C[PH]CCO	2-(methylphosphanyl)ethan-1-ol	preferred	
+N1=C=CCCC1	1-azacyclohexa-1,2-diene	preferred	
+O1CCCOCC1	1,4-dioxepane	preferred	
+O1CCCCCCCCCCC1	1-oxacyclododecane	preferred	
+N1CNCC1	imidazolidine	preferred	
+[Te]1CCNCC1	1,4-tellurazinane	preferred	
+Clc1ccncc1	4-chloropyridine	preferred	
+O=C1NC=CC=C1	pyridin-2(1H)-one	preferred	
+C=NC	N-methylmethanimine	preferred	
+C1CCC2=CC=CC=C2C1=N	1,2,3,4-tetrahydronaphthalen-1-imine	preferred	
+CC(F)(Cl)[Si](CC)(CC)CC	(1-chloro-1-fluoroethyl)triethylsilane	preferred	
+[Si](C)(CC)(CCC)CCCC	butyl(ethyl)(methyl)(propyl)silane	preferred	
+C[Sn](C)(CCl)CCl	bis(chloromethyl)dimethylstannane	preferred	
+[BH3-][P+](CCl)(CCl)C	[bis(chloromethyl)(methyl)phosphaniumyl]boranuide	preferred	
+C[N+](=O)[O-]	nitromethane	preferred	
+CCS(=O)(=O)O	ethanesulfonic acid	preferred	
+CCON=O	ethyl nitrite	preferred	
+CP(F)(OC)c1ccccc1	fluoro(methoxy)(methyl)(phenyl)-lambda5-phosphane	preferred	
+C1=CCCCC1-C1=CCCCC1	3-(cyclohex-1-en-1-yl)cyclohex-1-ene	not_preferred	ring_assembly
+O=C(O)CC1CCCC1	cyclopentylacetic acid	preferred	
+c1ccccc1CC(C)O	1-phenylpropan-2-ol	preferred	
+CC(C)(C)Oc1nc(Cl)c(Cl)c(OC(C)(C)C)c1Cl	2,4-bis(tert-butoxy)-3,5,6-trichloropyridine	preferred	
+N1CC2CCC1C2	2-azabicyclo[2.2.1]heptane	preferred	
+CC=NN	acetaldehyde hydrazone	not_preferred	functional_class
+C1CCCC=C1	cyclohexene	preferred	
+O1CC2CCC1C2	2-oxabicyclo[2.2.1]heptane	preferred	
+CN1CC11C2C3CC2C13	1-methylspiro[aziridine-2,3'-tricyclo[2.2.0.0^{2,5}]hexane]	preferred	
+CCNC(=NCCc1cnn(C)c1)N[C@@H]1CCN(C2CCCC2)C1	1-[(3R)-1-cyclopentylpyrrolidin-3-yl]-3-ethyl-2-[2-(1-methyl-1H-pyrazol-4-yl)ethyl]guanidine	preferred	
+CC(=O)c1ccnc2c(C(C)CNc3cc(-c4cnc(C)nc4)ncn3)cccc12	1-(8-{1-[(2'-methyl[4,5'-bipyrimidin]-6-yl)amino]propan-2-yl}quinolin-4-yl)ethan-1-one	preferred	
+CCP(=O)O	ethylphosphinic acid	preferred	
+CCB(O)O	ethylboronic acid	preferred	
+CC(=NN)C	propan-2-one hydrazone	not_preferred	functional_class
+OB(O)c1oc2ncccc2c1	(furo[2,3-b]pyridin-2-yl)boronic acid	preferred	
+O=N(=O)O	nitric acid	preferred	
+CP(C)(C)=O	trimethyl-lambda5-phosphanone	preferred	
+[SiH4]	silane	preferred	
+NN	hydrazine	preferred	
+[SiH3][SiH2][SiH2][SiH2][SiH3]	pentasilane	preferred	
+c1ccccc1P(c2ccccc2)c2ccccc2	triphenylphosphane	preferred	
+N1C(N=C2N=CN=C2C1=O)=O	1H-purine-2,6-dione	preferred	
+CN(C)C(=O)OP(=O)(O)O	dimethylcarbamoyl dihydrogen phosphate	preferred	
+N=S(Cl)CF	[chloro(imino)sulfanyl]fluoromethane	preferred	
+CCC(=S)O	propanethioic O-acid	preferred	
+CC(=O)OOC(=O)C	acetic peroxyanhydride	preferred	
+O=C(O)Cc1ccc2cc3ccccc3cc2c1	(anthracen-2-yl)acetic acid	preferred	
+C[C@H]1C[C@H](C)C1	(1r,3r)-1,3-dimethylcyclobutane	preferred	
+CS(=O)(=O)[C@H]1C[C@H](N)C1	(1r,3r)-3-(methanesulfonyl)cyclobutan-1-amine	preferred	
+Nc1nc2[nH]cnc2c(=O)[nH]1	2-amino-1,9-dihydro-6H-purin-6-one	preferred	
+CC(=O)CC(=O)OSC(C)(C)C	OS-(tert-butyl) 3-oxobutane(thioperoxoate)	preferred	
+O=C(SSC(Cl)=CCl)c1cc(Cl)c(Cl)cc1Cl	SS-(1,2-dichloroethenyl) 2,4,5-trichlorobenzene-1-carbo(dithioperoxoate)	preferred	
+C[SeH]	methaneselenol	preferred	
+CC(=[Se])C	propane-2-selone	preferred	
+C[Te]C	dimethyltellane	preferred	
+CC(=O)[SeH]	ethaneselenoic Se-acid	preferred	
+CC(=S)[SeH]	ethaneselenothioic Se-acid	preferred	
+CC(=S)SC	S-methyl ethanedithioate	preferred	
+NC(=[Te])N	tellurourea	preferred	
+C[Te]O	methane-TeO-telluroperoxol	preferred	
+C[Se][SH]	methane-SeS-selenothioperoxol	preferred	
+C[Te][SeH]	methane-TeSe-selenotelluroperoxol	preferred	
+CC(=O)SO	ethane(thioperoxoic) SO-acid	preferred	
+CC(=O)SOC	SO-methyl ethane(thioperoxoate)	preferred	
+CC(=O)[Se]C(C)=O	acetic selenoanhydride	preferred	
+CCC(=O)SOC(C)=O	O-acetic S-propanoic thioperoxyanhydride	preferred	
+C[Te](=O)O	methanetellurinic acid	preferred	
+CS(=O)(=O)N	methanesulfonamide	preferred	
+C[Te](=O)NN	methanetellurinohydrazide	preferred	
+CS(=O)(=O)OO	methanesulfonoperoxoic acid	preferred	
+C#CC[N+](C)([O-])C(C)Cc1ccc(C)cc1	N-methyl-N-[1-(4-methylphenyl)propan-2-yl]-N-oxidoprop-2-yn-1-aminium	preferred	
+CC#[N+][O-]	acetonitrile oxide	preferred	
+COOC	1,2-dimethyldioxidane	preferred	
+CSOC	methoxy(methyl)sulfane	not_preferred	hydride_parent
+CS[Te]C	dimethyl tellurothioperoxide	not_preferred	functional_class
+CC([TeH])CC(=O)O	3-tellanylbutanoic acid	preferred	
+CC(=[Te])N(C)NC	N,N'-dimethylethanetellurohydrazide	preferred	
+COOS(=O)(=O)c1ccccc1C(=O)O	2-[(methoxyoxy)sulfonyl]benzoic acid	preferred	
+CC(=O)N=[N+]=[N-]	acetyl azide	preferred	
+CC(=O)N=C=[Se]	acetyl isoselenocyanate	preferred	
+CC1Cc2ncccc2C1=O	6-methyl-6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	preferred	
+Cc1nc2cc(O)c3ccccc3c2o1	2-methylnaphtho[2,1-d][1,3]oxazol-5-ol	preferred	
+C1Cc2nccnc2C1=O	5H-cyclopenta[b]pyrazin-7(6H)-one	preferred	
+O=C1OC2=C(O1)C=CN2	4H-[1,3]dioxolo[4,5-b]pyrrol-2-one	preferred	
+C1CC2=CNC=C2N1	1,2,3,5-tetrahydropyrrolo[3,4-b]pyrrole	preferred	
+C12=CC=C(C3=CC=CC=C13)CCCCCC2	1,4-hexanonaphthalene	unverified	bridged_fused_parent
+C12CC=C(C3=CC=CC=C13)O2	1,2-dihydro-1,4-epoxynaphthalene	unverified	bridged_fused_parent
+CS(=O)(=O)NN=Cc1ccccc1	N-(methanesulfonyl)benzaldehyde hydrazone	not_preferred	functional_class
+CC(C)OOC(C)C	1,2-bis(propan-2-yl)dioxidane	preferred	
+NNCCOC	1-(2-methoxyethyl)hydrazine	preferred	
+OOCCNN	1-(2-hydroperoxyethyl)hydrazine	preferred	
+COc1ccc2c(c1)[nH]c1cc(F)ccc12	2-fluoro-7-methoxy-9H-carbazole	preferred	
+Cc1ccc(F)c2c1C1(CN2)CC1N	7'-fluoro-4'-methylspiro[cyclopropane-2,3'-(2,3-dihydro-1H-indole)]-1-amine	preferred	
+C=C	ethene	preferred	
+C#C	ethyne	preferred	
+c1ccccc1-c2ccccc2	1,1'-biphenyl	preferred	
+C1CC2(C1)CC2	spiro[2.3]hexane	preferred	
+c1ccc2ccccc2c1	naphthalene	preferred	
+C(=O)O	formic acid	preferred	
+CC(=O)OC	methyl acetate	preferred	
+CC(=O)NC	N-methylacetamide	preferred	
+CC#N	acetonitrile	preferred	
+C=O	formaldehyde	preferred	
+CO	methanol	preferred	
+CF	fluoromethane	preferred	
+COC	methoxymethane	preferred	
+C[C@H](O)C(=O)O	(2S)-2-hydroxypropanoic acid	preferred	
+OC(=O)/C=C/C1CCC2CCC1C2	(2E)-3-(bicyclo[3.2.1]octan-2-yl)prop-2-enoic acid	preferred	
+CC	ethane	preferred	
+CC=C	propene	preferred	
+C1CCC1	cyclobutane	preferred	
+c1cc[nH]c1	1H-pyrrole	preferred	
+C1CCCCC1-C2CCCCC2	1,1'-bi(cyclohexane)	preferred	
+C1CC2(C1)CCC2	spiro[3.3]heptane	preferred	
+C1CCC2CCC1C2	bicyclo[3.2.1]octane	preferred	
+C1CC2CCC3CCC1C23	decahydrocyclopenta[cd]pentalene	preferred	
+c1ccc2[nH]ccc2c1	1H-indole	preferred	
+CC(=O)O	acetic acid	preferred	
+CC(=O)OCC	ethyl acetate	preferred	
+CCC(=O)N	propanamide	preferred	
+CC(=O)N(C)C	N,N-dimethylacetamide	preferred	
+CCC#N	propanenitrile	preferred	
+CCC(=O)C	butan-2-one	preferred	
+CCO	ethanol	preferred	
+CCN	ethanamine	preferred	
+CCl	chloromethane	preferred	
+COCC	methoxyethane	preferred	
+C[C@@H](O)C(=O)O	(2R)-2-hydroxypropanoic acid	preferred	
+CN/C=C\C1CC2(C1)CCC2	(1Z)-N-methyl-2-(spiro[3.3]heptan-2-yl)ethen-1-amine	preferred	
+CCC	propane	preferred	
+CC=CC	but-2-ene	preferred	
+CC#CC	but-2-yne	preferred	
+C1CCCC1	cyclopentane	preferred	
+c1ccoc1	furan	preferred	
+c1ccccc1-c2ccncc2	4-phenylpyridine	preferred	
+C1CCC2(CC1)CCC2	spiro[3.5]nonane	preferred	
+C1C2CC1CC2	bicyclo[2.1.1]hexane	preferred	
+C1C2CC3CC1CC2C3	1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CCC(=O)O	propanoic acid	preferred	
+CCC(=O)OC	methyl propanoate	preferred	
+CC(C)C(=O)N	2-methylpropanamide	preferred	
+CCC(=O)NCC	N-ethylpropanamide	preferred	
+CC(C)C#N	2-methylpropanenitrile	preferred	
+CCC=O	propanal	preferred	
+CCC(=O)CC	pentan-3-one	preferred	
+CNC	N-methylmethanamine	preferred	
+CBr	bromomethane	preferred	
+CCOCC	ethoxyethane	preferred	
+CC(C)C/C=C/CC	(3E)-6-methylhept-3-ene	preferred	
+CCC(CC)CC(CC)C(C)C[C@H](O)C(=O)O	(2S)-5,7-diethyl-2-hydroxy-4-methylnonanoic acid	preferred	
+CC(=O)[C@@H](C)C1CC2CCC1C2	(3S)-3-(bicyclo[2.2.1]heptan-2-yl)butan-2-one	preferred	
+CC(C)C	2-methylpropane	preferred	
+C=CC=C	buta-1,3-diene	preferred	
+C#CC#C	buta-1,3-diyne	preferred	
+C1CCCCC1	cyclohexane	preferred	
+c1ccsc1	thiophene	preferred	
+C1CCC1-C2CCCC2	cyclobutylcyclopentane	preferred	
+CCC1CC2CCC1C2	2-ethylbicyclo[2.2.1]heptane	preferred	
+C1CC2C3CCC1C2C3	tricyclo[4.3.0.0^{3,9}]nonane	preferred	
+CC(C)C(=O)O	2-methylpropanoic acid	preferred	
+CCC(C)C(C)CCCC(=O)OCCCC	butyl 5,6-dimethyloctanoate	preferred	
+CC(CC)C(C)C(C)CCC(=O)N	4,5,6-trimethyloctanamide	preferred	
+CC(C)CCCCC(=O)NCC(CC)CCCC(CC)C	N-(2-ethyl-6-methyloctyl)-6-methylheptanamide	preferred	
+CCCC(C)CC#N	3-methylhexanenitrile	preferred	
+CC(C)C=O	2-methylpropanal	preferred	
+CC(C)CC(C)C(C)C(CC)CC(=O)CC(CC)CC(CC)CC(CC)C(C)C	6,10,12,14-tetraethyl-2,4,5,15-tetramethylhexadecan-8-one	preferred	
+OCCO	ethane-1,2-diol	preferred	
+CN(C)C	N,N-dimethylmethanamine	preferred	
+CI	iodomethane	preferred	
+CC(C)C(C)C(C)C(CC)COCC(C)CCC(C)C	5-{[(2,5-dimethylhexyl)oxy]methyl}-2,3,4-trimethylheptane	preferred	
+CC(CC)C(CC)CC/C=C\CC(CC)C(CC)C(CC)C(CC)C(C)C	(7Z)-4,10,11,12,13-pentaethyl-3,14-dimethylpentadec-7-ene	preferred	
+CCCC[C@@H](O)C(=O)O	(2R)-2-hydroxyhexanoic acid	preferred	
+N#CC1CC2CCC1C2	bicyclo[2.2.1]heptane-2-carbonitrile	preferred	
+CC(C)C(C)C(C)CCC=CCC	7,8,9-trimethyldec-3-ene	preferred	
+CCC(CC)CCC#CCC	7-ethylnon-3-yne	preferred	
+C1CCCCCC1	cycloheptane	preferred	
+c1ncc[nH]1	1H-imidazole	preferred	
+c1ccoc1-c2ccsc2	2-(thiophen-3-yl)furan	preferred	
+CC(C)C(C)CCCC1CC2(C1)CC2	5-(4,5-dimethylhexyl)spiro[2.3]hexane	preferred	
+CC(CC)CC1CCC2CCC1C2	2-(2-methylbutyl)bicyclo[3.2.1]octane	preferred	
+CCC(CC)CC(C)CC1C2CC3CC1CC(C2)C3	2-(4-ethyl-2-methylhexyl)adamantane	preferred	
+CC(C)C(C)CCc1ccc2ccccc2c1	2-(3,4-dimethylpentyl)naphthalene	preferred	
+CCC(C)CCC(CC)CCC(=O)O	4-ethyl-7-methylnonanoic acid	preferred	
+CCCC(CC)CC(=O)OCCC(C)C(CC)CC(CC)C	4-ethyl-3,6-dimethyloctyl 3-ethylhexanoate	preferred	
+CC(CC)C(CC)CC(=O)N	3-ethyl-4-methylhexanamide	preferred	
+CC(CC)CC(=O)N(CCC(CC)C(C)C)CCC	N-(3-ethyl-4-methylpentyl)-3-methyl-N-propylpentanamide	preferred	
+CC(CC)CC#N	3-methylpentanenitrile	preferred	
+CCC(CC)C(CC)CC=O	3,4-diethylhexanal	preferred	
+CCC(CC)CC(CC)CC(=O)CCC(CC)CCCC	3,5,10-triethyltetradecan-7-one	preferred	
+CCCC(C)CCC(O)CCC	7-methyldecan-4-ol	preferred	
+CC(CC)CC(CC)CNCCC(CC)C	2-ethyl-4-methyl-N-(3-methylpentyl)hexan-1-amine	preferred	
+CC(C)CC(CC)C(C)C(CC)CCF	3,5-diethyl-1-fluoro-4,7-dimethyloctane	preferred	
+CCC(C)COCC(C)CCC(CC)CC	5-ethyl-2-methyl-1-[(2-methylbutyl)oxy]heptane	preferred	
+CC(CC)CC(C)C(C)C(CC)C(CC)C/C=C/CC(C)C	(4E)-7,8-diethyl-2,9,10,12-tetramethyltetradec-4-ene	preferred	
+CCC[C@H](O)C(=O)O	(2S)-2-hydroxypentanoic acid	preferred	
+CC(=O)[C@@H](C)C1CCCC1	(3S)-3-cyclopentylbutan-2-one	preferred	
+CCC(C)C	2-methylbutane	preferred	
+CC(CC)CCCC=CCCCC(C)C(C)CCC	3,12,13-trimethylhexadec-7-ene	preferred	
+CCC(C)C(C)CCC(CC)CC#CCC(CC)CCCC(CC)C	7,12-diethyl-3,4,16-trimethyloctadec-9-yne	preferred	
+C1CCCCCCC1	cyclooctane	preferred	
+c1ncco1	1,3-oxazole	preferred	
+CC(C)Cc1ccccc1-c2ccccc2	2-(2-methylpropyl)-1,1'-biphenyl	preferred	
+CCCC(C)CCC(CC)CC1CC2(C1)CCC2	2-(2-ethyl-5-methyloctyl)spiro[3.3]heptane	preferred	
+CC(C)C(C)CCC1CC2CCCC1C2	6-(3,4-dimethylpentyl)bicyclo[3.2.1]octane	preferred	
+CC(CC)CCCC(CC)C(C)CC1CC2CCC3CCC1C23	1-(3-ethyl-2,7-dimethylnonyl)decahydrocyclopenta[cd]pentalene	preferred	
+CCCc1ccc2[nH]ccc2c1	5-propyl-1H-indole	preferred	
+CC(C)CCC(=O)O	4-methylpentanoic acid	preferred	
+CC(CC)CC(=O)OCC(C)CC(CC)CC	4-ethyl-2-methylhexyl 3-methylpentanoate	preferred	
+CC(C)CC(CC)CCCC(=O)N	5-ethyl-7-methyloctanamide	preferred	
+CCCCCC(CC)CC(=O)NCCC	3-ethyl-N-propyloctanamide	preferred	
+CCCC#N	butanenitrile	preferred	
+CCC(CC)C(C)CC=O	4-ethyl-3-methylhexanal	preferred	
+CC(CC)CCC(C)C(CC)C(CC)CC(=O)CCC(CC)C	8,9-diethyl-3,10,13-trimethylpentadecan-6-one	preferred	
+CCC(C)CC(CC)CO	2-ethyl-4-methylhexan-1-ol	preferred	
+CC(C)C(C)CC(CC)CCN	3-ethyl-5,6-dimethylheptan-1-amine	preferred	
+CCOCCC(C)C	1-ethoxy-3-methylbutane	preferred	
+CCC(C)C(CC)C(C)CC/C=C\CC(CC)CC(C)C(CC)C	(8Z)-4,11-diethyl-3,5,13,14-tetramethylhexadec-8-ene	preferred	
+CC(CC)C[C@@H](O)C(=O)O	(2R)-2-hydroxy-4-methylhexanoic acid	preferred	
+NC(=O)c1ccc2ncccc2c1	quinoline-6-carboxamide	preferred	
+CC(C)CC(C)C	2,4-dimethylpentane	preferred	
+CCC(CC)C(C)C(CC)C(CC)CCC=CCC(C)C	8,9,11-triethyl-2,10-dimethyltridec-4-ene	preferred	
+CCC(C)CC#CCC(C)C(CC)CCCC(CC)C	9-ethyl-3,8,13-trimethylpentadec-5-yne	preferred	
+CCC(C)CC1CC1	(2-methylbutyl)cyclopropane	preferred	
+c1nccs1	1,3-thiazole	preferred	
+CCC(C)CCCCCC1CCCCC1-C2CCCCC2	2-(6-methyloctyl)-1,1'-bi(cyclohexane)	preferred	
+CCCC1CCC2(CC1)CCC2	7-propylspiro[3.5]nonane	preferred	
+CCC(C)C(CC)C(CC)C(CC)CCC1C2CC1CC2	5-(3,4,5-triethyl-6-methyloctyl)bicyclo[2.1.1]hexane	preferred	
+CC(CC)CC1C2CC3CC1CC2C3	1-(2-methylbutyl)-1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CCC(C)Cc1ccc2ncccc2c1	6-(2-methylbutyl)quinoline	preferred	
+CCC(CC)CCCC(CC)CC(=O)O	3,7-diethylnonanoic acid	preferred	
+CCCCC(CC)CC(=O)OCCCC(CC)C(CC)CCC	4,5-diethyloctyl 3-ethylheptanoate	preferred	
+CC(C)C(C)C(C)CC(=O)N	3,4,5-trimethylhexanamide	preferred	
+CCC(=O)N(CC)CC(CC)CC	N-ethyl-N-(2-ethylbutyl)propanamide	preferred	
+CC(C)C(C)CCCCCC#N	7,8-dimethylnonanenitrile	preferred	
+CCCCCCC=O	heptanal	preferred	
+CCC(=O)CC(CC)CC(CC)C	5-ethyl-7-methylnonan-3-one	preferred	
+CCCC(O)CCCCCCC	undecan-4-ol	preferred	
+CC(CC)C(C)C(C)CN(CCCC(C)C(C)CC(CC)C)CC	N-ethyl-4,5,7-trimethyl-N-(2,3,4-trimethylhexyl)nonan-1-amine	preferred	
+CCC(C)CBr	1-bromo-2-methylbutane	preferred	
+CCC(C)C(CC)C(C)C(C)COCC(C)CCC(CC)C	1-[(2,5-dimethylheptyl)oxy]-4-ethyl-2,3,5-trimethylheptane	preferred	
+CCCC/C=C/CC(CC)CC	(5E)-3-ethyldec-5-ene	preferred	
+CC(C)CCC(CC)C[C@H](O)C(=O)O	(2S)-4-ethyl-2-hydroxy-7-methyloctanoic acid	preferred	
+N/C=C/c1ccoc1	(1E)-2-(furan-3-yl)ethen-1-amine	preferred	
+CCCC(C)C	2-methylpentane	preferred	
+CCC(CC)CC=CCCCC	3-ethyldec-5-ene	preferred	
+CCCCCC#CCC	non-3-yne	preferred	
+CCC(C)CC(C)CC1CCC1	(2,4-dimethylhexyl)cyclobutane	preferred	
+c1cncnc1	pyrimidine	preferred	
+CCCCc1ccccc1-c2ccncc2	4-(2-butylphenyl)pyridine	preferred	
+CCCCCC(C)CC1CCC2(CC1)CCCC2	8-(2-methylheptyl)spiro[4.5]decane	preferred	
+CCCC(CC)C(C)CC1CC2CCC1C2	2-(3-ethyl-2-methylhexyl)bicyclo[2.2.1]heptane	preferred	
+CC(CC)CC(CC)CCC1CC2C3CCC1C2C3	7-(3-ethyl-5-methylheptyl)tricyclo[4.3.0.0^{3,9}]nonane	preferred	
+CC(C)Cc1ccc2occc2c1	5-(2-methylpropyl)-1-benzofuran	preferred	
+CC(C)C(C)CC(CC)C(C)C(CC)CC(=O)O	3,5-diethyl-4,7,8-trimethylnonanoic acid	preferred	
+CC(C)C(CC)C(C)C(CC)C(CC)CC(=O)OCC	ethyl 3,4,6-triethyl-5,7-dimethyloctanoate	preferred	
+CCCCC(CC)C(CC)CC(=O)N	3,4-diethyloctanamide	preferred	
+CCCC(C)C(CC)CC(=O)NCC(CC)CCC	3-ethyl-N-(2-ethylpentyl)-4-methylheptanamide	preferred	
+CC(C)C(CC)CC(C)C(C)C(C)CC#N	7-ethyl-3,4,5,8-tetramethylnonanenitrile	preferred	
+CCC(C)CCCCCC=O	7-methylnonanal	preferred	
+CC(C)CCC(=O)CC	6-methylheptan-3-one	preferred	
+CC(C)CC(C)C(C)C(CC)CCO	3-ethyl-4,5,7-trimethyloctan-1-ol	preferred	
+CCC(CC)C(C)CC(CC)CNCC(CC)C	2,5-diethyl-4-methyl-N-(2-methylbutyl)heptan-1-amine	preferred	
+CCC(C)CC(C)CCCI	1-iodo-4,6-dimethyloctane	preferred	
+CCOCC(C)C(C)CC(CC)CC	1-ethoxy-5-ethyl-2,3-dimethylheptane	preferred	
+CCCC(CC)C(CC)CC(CC)C/C=C\CCCCC	(6Z)-9,11,12-triethylpentadec-6-ene	preferred	
+CCC(C)C(C)C(C)C[C@@H](O)C(=O)O	(2R)-2-hydroxy-4,5,6-trimethyloctanoic acid	preferred	
+CNCCC1C2CC3CC1CC2C3	N-methyl-2-(tricyclo[3.3.1.0^{3,7}]nonan-2-yl)ethan-1-amine	preferred	
+CCCC(CC)C(CC)C	4-ethyl-3-methylheptane	preferred	
+CCCCC=CCC(C)C(CC)C(CC)C(C)CC	9,10-diethyl-8,11-dimethyltridec-5-ene	preferred	
+CCC(C)C(C)C(CC)CCCC#CCC(CC)C(C)CC(C)C	5,12-diethyl-2,4,13,14-tetramethylhexadec-7-yne	preferred	
+CCC1CCCC1	ethylcyclopentane	preferred	
+CC(C)C(C)CC(CC)CCCc1ccncc1	4-(4-ethyl-6,7-dimethyloctyl)pyridine	preferred	
+CCC1CCC1-C2CCCC2	(2-ethylcyclobutyl)cyclopentane	preferred	
+CCC(C)CCC1CC2(C1)CC2	5-(3-methylpentyl)spiro[2.3]hexane	preferred	
+CCC1CCC2CCC1C2	2-ethylbicyclo[3.2.1]octane	preferred	
+CCCC1C2CC3CC1CC(C2)C3	2-propyladamantane	preferred	
+CCC(C)CCC(CC)Cc1ccc2ccccc2c1	2-(2-ethyl-5-methylheptyl)naphthalene	preferred	
+CCCC(C)CCC(=O)O	4-methylheptanoic acid	preferred	
+CC(C)CCCC(=O)OCC(CC)CCCC	2-ethylhexyl 5-methylhexanoate	preferred	
+CCCC(CC)C(C)C(CC)C(C)CC(=O)N	4,6-diethyl-3,5-dimethylnonanamide	preferred	
+CC(C)C(C)CC(C)CCC(=O)N(CC(CC)C(CC)C(CC)C(CC)C(CC)CC)CCCCCCC	N-heptyl-4,6,7-trimethyl-N-(2,3,4,5,6-pentaethyloctyl)octanamide	preferred	
+CCCCC#N	pentanenitrile	preferred	
+CCC(C)CC(CC)CC=O	3-ethyl-5-methylheptanal	preferred	
+CCC(=O)CC(C)C(C)CC	5,6-dimethyloctan-3-one	preferred	
+CCCC(CC)C(C)CCCC(O)CC(C)C(CC)C	11-ethyl-3,4,10-trimethyltetradecan-6-ol	preferred	
+CCC(CC)C(C)C(C)CC(C)CN	6-ethyl-2,4,5-trimethyloctan-1-amine	preferred	
+CC(CC)CC(C)CC(CC)C(C)CF	3-ethyl-1-fluoro-2,5,7-trimethylnonane	preferred	
+CC(CC)COCC(CC)C	2-methyl-1-[(2-methylbutyl)oxy]butane	preferred	
+CC(C)C(C)CCC/C=C/CCCCC(CC)C	(7E)-2,3,13-trimethylpentadec-7-ene	preferred	
+CC(C)C[C@H](O)C(=O)O	(2S)-2-hydroxy-4-methylpentanoic acid	preferred	
+N#CCCC1CC1	3-cyclopropylpropanenitrile	preferred	
+CCCC(C)C(CC)CC(CC)C	5-ethyl-3,6-dimethylnonane	preferred	
+CCC=CCCC(C)C(C)C	7,8-dimethylnon-3-ene	preferred	
+CC(CC)C(CC)C(CC)CC#CCCC(CC)C	9,10-diethyl-3,11-dimethyltridec-6-yne	preferred	
+CCCCCC1CCCCC1	pentylcyclohexane	preferred	
+CC(C)CCC(C)CCc1cc[nH]c1	3-(3,6-dimethylheptyl)-1H-pyrrole	preferred	
+CCCC(C)CCCc1ccoc1-c2ccsc2	3-(4-methylheptyl)-2-(thiophen-3-yl)furan	preferred	
+CCC(CC)CCC1CC2(C1)CCC2	2-(3-ethylpentyl)spiro[3.3]heptane	preferred	
+CCCC(C)CC1CC2CCCC1C2	6-(2-methylpentyl)bicyclo[3.2.1]octane	preferred	
+CCC1CC2CCC3CCC1C23	1-ethyldecahydrocyclopenta[cd]pentalene	preferred	
+CCC(CC)CC(C)Cc1ccc2[nH]ccc2c1	5-(4-ethyl-2-methylhexyl)-1H-indole	preferred	
+CCC(C)C(C)C(CC)CC(=O)O	3-ethyl-4,5-dimethylheptanoic acid	preferred	
+CC(CC)CC(=O)OCC	ethyl 3-methylpentanoate	preferred	
+CC(C)CCC(=O)N	4-methylpentanamide	preferred	
+CC(CC)CC(=O)NCC(C)C	3-methyl-N-(2-methylpropyl)pentanamide	preferred	
+CCCC(C)C(C)CC#N	3,4-dimethylheptanenitrile	preferred	
+CC(CC)C(CC)CC(C)C(C)CC=O	6-ethyl-3,4,7-trimethylnonanal	preferred	
+CC(CC)CC(=O)CC	5-methylheptan-3-one	preferred	
+CCC(C)CC(C)C(CC)C(CC)CC(O)CCC	6,7-diethyl-8,10-dimethyldodecan-4-ol	preferred	
+CC(CC)C(CC)CCC(C)C(CC)CN(CC(C)CC(CC)C)CC	N-(2,4-dimethylhexyl)-N,2,6-triethyl-3,7-dimethylnonan-1-amine	preferred	
+CCI	iodoethane	preferred	
+CCCCOCC	1-ethoxybutane	preferred	
+CC(CC)C/C=C\CCC(C)CC	(5Z)-3,9-dimethylundec-5-ene	preferred	
+CC(C)C(CC)C(CC)CC(CC)C[C@@H](O)C(=O)O	(2R)-4,6,7-triethyl-2-hydroxy-8-methylnonanoic acid	preferred	
+CN(C)C(=O)/C=C\C1CC2(C1)CCC2	(2Z)-N,N-dimethyl-3-(spiro[3.3]heptan-2-yl)prop-2-enamide	preferred	
+CCC(C)CCCC(CC)C	3,7-dimethylnonane	preferred	
+CCC=CCCCC(CC)CC(CC)CC	8,10-diethyldodec-3-ene	preferred	
+CCCC#CCCC(CC)C(C)C	8-ethyl-9-methyldec-4-yne	preferred	
+CC(CC)C(C)C(C)C(C)CCC1CCCCCC1	(3,4,5,6-tetramethyloctyl)cycloheptane	preferred	
+CC(CC)Cc1ccoc1	3-(2-methylbutyl)furan	preferred	
+CC(CC)Cc1ccccc1-c2ccccc2	2-(2-methylbutyl)-1,1'-biphenyl	preferred	
+CC(CC)CCCC1CCC2(CC1)CCC2	7-(4-methylhexyl)spiro[3.5]nonane	preferred	
+CCC(C)CC1C2CC1CC2	5-(2-methylbutyl)bicyclo[2.1.1]hexane	preferred	
+CCCCCC1C2CC3CC1CC2C3	1-pentyl-1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CCC(C)CC(CC)Cc1ccc2ncccc2c1	6-(2-ethyl-4-methylhexyl)quinoline	preferred	
+CC(CC)CCCCC(=O)O	6-methyloctanoic acid	preferred	
+CCC(C)C(C)C(C)C(C)C(CC)CC(=O)OCCC(C)CC	3-methylpentyl 3-ethyl-4,5,6,7-tetramethylnonanoate	preferred	
+CC(C)C(CC)CC(=O)N	3-ethyl-4-methylpentanamide	preferred	
+CC(C)CCC(C)C(C)CC(=O)N(CC(C)CC)CC(C)CCC(C)CC	N-(2,5-dimethylheptyl)-3,4,7-trimethyl-N-(2-methylbutyl)octanamide	preferred	
+CC(C)CCC(CC)CCCC#N	5-ethyl-8-methylnonanenitrile	preferred	
+CC(C)CCCCC=O	6-methylheptanal	preferred	
+CCC(CC)C(C)C(C)C(C)CC(=O)CC(C)C(C)CC(C)C	12-ethyl-2,4,5,9,10,11-hexamethyltetradecan-7-one	preferred	
+CCCO	propan-1-ol	preferred	
+CC(CC)CC(CC)C(C)C(CC)CNCCCC(CC)C(C)C	2,4-diethyl-N-(4-ethyl-5-methylhexyl)-3,6-dimethyloctan-1-amine	preferred	
+CC(CC)C(C)CF	1-fluoro-2,3-dimethylpentane	preferred	
+CCOCCC(CC)CC(C)C(C)C(C)C	1-ethoxy-3-ethyl-5,6,7-trimethyloctane	preferred	
+CC(C)C(CC)C(C)C(CC)C(CC)C(C)C/C=C/CC(CC)CCC(CC)C	(8E)-6,12,13,15-tetraethyl-3,11,14,16-tetramethylheptadec-8-ene	preferred	
+CC(CC)CCC[C@H](O)C(=O)O	(2S)-2-hydroxy-6-methyloctanoic acid	preferred	
+FCC1CCC2(CC1)CCCC2	8-(fluoromethyl)spiro[4.5]decane	preferred	
+CC(CC)CCC(CC)C(CC)C	4-ethyl-3,7-dimethylnonane	preferred	
+CC(C)CC(C)C(C)CC=CCC(C)C(C)CC(CC)C	2,4,5,10,11,13-hexamethylpentadec-7-ene	preferred	
+CCC#CCC	hex-3-yne	preferred	
+CC(CC)C(C)CC(C)C(CC)C(CC)CC1CCCCCCC1	(2,3-diethyl-4,6,7-trimethylnonyl)cyclooctane	preferred	
+CCCc1ccsc1	3-propylthiophene	preferred	
+CC(C)C(C)C(C)C(C)CC1CCCCC1-C2CCCCC2	2-(2,3,4,5-tetramethylhexyl)-1,1'-bi(cyclohexane)	preferred	
+CCCC(C)CC(CC)C(CC)CC1CCC2(CC1)CCCC2	8-(2,3-diethyl-5-methyloctyl)spiro[4.5]decane	preferred	
+CCCC(CC)CC1CC2CCC1C2	2-(2-ethylpentyl)bicyclo[2.2.1]heptane	preferred	
+CC(CC)CC1CC2C3CCC1C2C3	7-(2-methylbutyl)tricyclo[4.3.0.0^{3,9}]nonane	preferred	
+CCC(CC)Cc1ccc2occc2c1	5-(2-ethylbutyl)-1-benzofuran	preferred	
+CC(CC)CC(=O)O	3-methylpentanoic acid	preferred	
+CCC(=O)OCCC(CC)CC	3-ethylpentyl propanoate	preferred	
+CC(CC)C(C)CC(=O)N	3,4-dimethylhexanamide	preferred	
+CC(C)C(CC)CC(=O)NCC(C)CCCC	3-ethyl-4-methyl-N-(2-methylhexyl)pentanamide	preferred	
+CC(CC)C(CC)CC(C)CCC#N	6-ethyl-4,7-dimethylnonanenitrile	preferred	
+CC(CC)C(C)CC(C)CC(CC)CC=O	3-ethyl-5,7,8-trimethyldecanal	preferred	
+CC(CC)C(CC)CC(CC)C(C)C(CC)CC(=O)CC(CC)C(CC)CC(C)C(CC)C(C)C	3,6,7,11,13,15-hexaethyl-2,4,12,16-tetramethyloctadecan-9-one	preferred	
+CC(CC)C(CC)C(CC)CCC(O)CC(CC)C(C)C(CC)CC	3,5,10,11-tetraethyl-4,12-dimethyltetradecan-7-ol	preferred	
+CC(C)CCN	3-methylbutan-1-amine	preferred	
+CCBr	bromoethane	preferred	
+CC(C)CCCOCC	1-ethoxy-4-methylpentane	preferred	
+CC(C)C(CC)CC(C)C(CC)C(CC)C/C=C\CC(C)C(C)C	(5Z)-8,9,12-triethyl-2,3,10,13-tetramethyltetradec-5-ene	preferred	
+CC(CC)CCC(C)C(CC)C[C@@H](O)C(=O)O	(2R)-4-ethyl-2-hydroxy-5,8-dimethyldecanoic acid	preferred	
+COC(=O)Cc1ccc2[nH]ccc2c1	methyl 2-(1H-indol-5-yl)acetate	preferred	
+CC(CC)CC(CC)CC	3-ethyl-5-methylheptane	preferred	
+CC(CC)C(CC)CC=CCC(C)C(C)CC(CC)C	4-ethyl-3,9,10,12-tetramethyltetradec-6-ene	preferred	
+CC(CC)CC(C)CC#CCC(C)C(C)C(CC)CCCC	12-ethyl-3,5,10,11-tetramethylhexadec-7-yne	preferred	
+CCC1CC1	ethylcyclopropane	preferred	
+CC(C)CC(C)C(C)CCc1ncc[nH]1	2-(3,4,6-trimethylheptyl)-1H-imidazole	preferred	
+CC(CC)C(C)CCc1ccccc1-c2ccncc2	4-[2-(3,4-dimethylhexyl)phenyl]pyridine	preferred	
+CC(CC)CCCCCCC1CC2(C1)CC2	5-(7-methylnonyl)spiro[2.3]hexane	preferred	
+CC(CC)C(C)CC1CCC2CCC1C2	2-(2,3-dimethylpentyl)bicyclo[3.2.1]octane	preferred	
+CCC(C)CC1C2CC3CC1CC(C2)C3	2-(2-methylbutyl)adamantane	preferred	
+CC(C)CCCC(CC)Cc1ccc2ccccc2c1	2-(2-ethyl-6-methylheptyl)naphthalene	preferred	
+CCCCCC(=O)O	hexanoic acid	preferred	
+CC(CC)CCC(=O)OCC(CC)CCC(C)C	2-ethyl-5-methylhexyl 4-methylhexanoate	preferred	
+CCCC(C)CC(CC)C(CC)CC(=O)N	3,4-diethyl-6-methylnonanamide	preferred	
+CC(CC)C(CC)CC(C)CCC(=O)N(CCCC(C)C)CC(CC)CC(C)C	6-ethyl-N-(2-ethyl-4-methylpentyl)-4,7-dimethyl-N-(4-methylpentyl)nonanamide	preferred	
+CCC(C)CC(CC)C(CC)CC#N	3,4-diethyl-6-methyloctanenitrile	preferred	
+CCCC(C)C(CC)CC=O	3-ethyl-4-methylheptanal	preferred	
+CCC(=O)CCC(CC)C(CC)CCC	6,7-diethyldecan-3-one	preferred	
+CCCCC(C)C(C)CCO	3,4-dimethyloctan-1-ol	preferred	
+CC(CC)C(C)C(C)CC(C)C(CC)CN(CCC)CCC(CC)C(C)C	2-ethyl-N-(3-ethyl-4-methylpentyl)-3,5,6,7-tetramethyl-N-propylnonan-1-amine	preferred	
+CC(C)C(CC)CI	3-(iodomethyl)-2-methylpentane	preferred	
+CCC(CC)CC(C)C(CC)C(CC)COCCC(CC)CC	4,7-diethyl-3-{[(3-ethylpentyl)oxy]methyl}-5-methylnonane	preferred	
+CC/C=C/CCC(C)C(C)C(C)C(C)C	(3E)-7,8,9,10-tetramethylundec-3-ene	preferred	
+CCC(C)C[C@H](O)C(=O)O	(2S)-2-hydroxy-4-methylhexanoic acid	preferred	
+NC1CC2(C1)CCC2	spiro[3.3]heptan-2-amine	preferred	
+CC(C)CC(C)C(CC)C(C)C	3-ethyl-2,4,6-trimethylheptane	preferred	
+CC(CC)CCCC=CCC(CC)C(CC)CCC	10,11-diethyl-3-methyltetradec-7-ene	preferred	
+CCC#CCC(C)C	6-methylhept-3-yne	preferred	
+CCCCC1CCCCC1	butylcyclohexane	preferred	
+CC(CC)Cc1ncco1	2-(2-methylbutyl)-1,3-oxazole	preferred	
+CCCCC1CCC1-C2CCCC2	(2-butylcyclobutyl)cyclopentane	preferred	
+CC(C)C(C)C(C)C(C)C(CC)CCC1CC2(C1)CCC2	2-(3-ethyl-4,5,6,7-tetramethyloctyl)spiro[3.3]heptane	preferred	
+CCC1CC2CCCC1C2	6-ethylbicyclo[3.2.1]octane	preferred	
+CC(CC)C(C)CC1CC2CCC3CCC1C23	1-(2,3-dimethylpentyl)decahydrocyclopenta[cd]pentalene	preferred	
+CCC(C)C(CC)CCc1ccc2[nH]ccc2c1	5-(3-ethyl-4-methylhexyl)-1H-indole	preferred	
+CCCC(=O)O	butanoic acid	preferred	
+CCC(CC)CC(=O)OCCC	propyl 3-ethylpentanoate	preferred	
+CCC(CC)CC(C)CC(=O)N	5-ethyl-3-methylheptanamide	preferred	
+CC(CC)CCCCC(=O)NCC(CC)CC(CC)C(C)C(C)C	N-(2,4-diethyl-5,6-dimethylheptyl)-6-methyloctanamide	preferred	
+CC(CC)C(CC)C(CC)CC#N	3,4-diethyl-5-methylheptanenitrile	preferred	
+CC(C)C(C)CC(C)CCC=O	4,6,7-trimethyloctanal	preferred	
+CCC(CC)CC(=O)CC	5-ethylheptan-3-one	preferred	
+CCC(C)CCC(O)CC	6-methyloctan-3-ol	preferred	
+CCNCCCC(CC)C(CC)CC	N,4,5-triethylheptan-1-amine	preferred	
+CC(CC)C(CC)CF	3-(fluoromethyl)-4-methylhexane	preferred	
+CCC(C)C(CC)CCC(CC)COCC(C)CCC(CC)C(C)CC	4-ethyl-7-{[(5-ethyl-2,6-dimethyloctyl)oxy]methyl}-3-methylnonane	preferred	
+CCCC/C=C\CC(CC)C	(5Z)-3-methyldec-5-ene	preferred	
+CCC(C)C(C)C[C@@H](O)C(=O)O	(2R)-2-hydroxy-4,5-dimethylheptanoic acid	preferred	
+BrCCC1C2CC1CC2	5-(2-bromoethyl)bicyclo[2.1.1]hexane	preferred	
+CCCC(C)C(C)C(C)C(C)C	2,3,4,5-tetramethyloctane	preferred	
+CC(CC)C(CC)CCCCCC=CCCC(CC)CC	3,13-diethyl-14-methylhexadec-6-ene	preferred	
+CC(C)CCCC#CCC(CC)C(CC)C	9-ethyl-2,10-dimethyldodec-6-yne	preferred	
+CC(C)C(C)C(CC)C(CC)C(CC)C(CC)CC1CCCCCC1	(2,3,4,5-tetraethyl-6,7-dimethyloctyl)cycloheptane	preferred	
+CC(CC)CC(CC)Cc1nccs1	2-(2-ethyl-4-methylhexyl)-1,3-thiazole	preferred	
+CC(C)C(C)CCCc1ccoc1-c2ccsc2	3-(4,5-dimethylhexyl)-2-(thiophen-3-yl)furan	preferred	
+CCCC(CC)CC1CCC2(CC1)CCC2	7-(2-ethylpentyl)spiro[3.5]nonane	preferred	
+CCC1C2CC1CC2	5-ethylbicyclo[2.1.1]hexane	preferred	
+CC(CC)C(CC)CC1C2CC3CC1CC2C3	1-(2-ethyl-3-methylpentyl)-1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CCC(CC)Cc1ccc2ncccc2c1	6-(2-ethylbutyl)quinoline	preferred	
+CCCCC(C)CC(C)CC(=O)O	3,5-dimethylnonanoic acid	preferred	
+CCC(=O)OCC(C)C	2-methylpropyl propanoate	preferred	
+CC(CC)C(CC)CC(CC)CC(C)CC(=O)N	5,7-diethyl-3,8-dimethyldecanamide	preferred	
+CCCC(=O)N(CC(CC)CC)CC(CC)CC(C)CCC(C)C	N-(2-ethyl-4,7-dimethyloctyl)-N-(2-ethylbutyl)butanamide	preferred	
+CC(CC)CCCC(C)C(C)CC#N	3,4,8-trimethyldecanenitrile	preferred	
+CCCCC=O	pentanal	preferred	
+CC(C)CCC(CC)C(CC)CC(=O)CC(CC)CC	3,7,8-triethyl-11-methyldodecan-5-one	preferred	
+CCC(CC)CC(C)C(C)CCO	6-ethyl-3,4-dimethyloctan-1-ol	preferred	
+CC(C)C(CC)CC(C)CN	4-ethyl-2,5-dimethylhexan-1-amine	preferred	
+CCCCCCl	1-chloropentane	preferred	
+CC(CC)C(CC)CCCOCC(C)C(C)CC	1-[(2,3-dimethylpentyl)oxy]-4-ethyl-5-methylheptane	preferred	
+CCCC(C)C(C)CCC/C=C/CC(CC)C(CC)CC(C)C	(7E)-4,5-diethyl-2,12,13-trimethylhexadec-7-ene	preferred	
+CCCC(C)CC(C)C[C@H](O)C(=O)O	(2S)-2-hydroxy-4,6-dimethylnonanoic acid	preferred	
+NC(=O)/C=C\c1ccccc1-c2ccccc2	(2Z)-3-([1,1'-biphenyl]-2-yl)prop-2-enamide	preferred	
+CC(CC)CCC(C)C	2,5-dimethylheptane	preferred	
+CC(C)CC=CCCC(C)CC(CC)C(CC)C	10-ethyl-2,8,11-trimethyltridec-4-ene	preferred	
+CCC#CCC(CC)CCC	6-ethylnon-3-yne	preferred	
+CCCCC(CC)C(C)CC1CCCCCCC1	(3-ethyl-2-methylheptyl)cyclooctane	preferred	
+CC(CC)CCc1cncnc1	5-(3-methylpentyl)pyrimidine	preferred	
+CCC(CC)CCCCCc1ccccc1-c2ccccc2	2-(6-ethyloctyl)-1,1'-biphenyl	preferred	
+CC(CC)CCCC1CCC2(CC1)CCCC2	8-(4-methylhexyl)spiro[4.5]decane	preferred	
+CC(CC)C(CC)CC1CC2CCC1C2	2-(2-ethyl-3-methylpentyl)bicyclo[2.2.1]heptane	preferred	
+CCC(CC)CC(C)CC1CC2C3CCC1C2C3	7-(4-ethyl-2-methylhexyl)tricyclo[4.3.0.0^{3,9}]nonane	preferred	
+CC(C)C(CC)Cc1ccc2occc2c1	5-(2-ethyl-3-methylbutyl)-1-benzofuran	preferred	
+CCCCC(=O)O	pentanoic acid	preferred	
+CCCC(=O)OCC(CC)CCC	2-ethylpentyl butanoate	preferred	
+CCCC(=O)N	butanamide	preferred	
+CC(CC)CCCC(=O)NCCCC	N-butyl-5-methylheptanamide	preferred	
+CCCC(C)CCC(CC)CC#N	3-ethyl-6-methylnonanenitrile	preferred	
+CC(CC)CC(CC)C(C)C(CC)C(CC)CC=O	3,4,6-triethyl-5,8-dimethyldecanal	preferred	
+CCC(C)CC(=O)CC(C)CC(CC)C(CC)C	9-ethyl-3,7,10-trimethyldodecan-5-one	preferred	
+CCCC(C)CCC(C)CC(O)CCC(C)C(C)C	2,3,8,11-tetramethyltetradecan-6-ol	preferred	
+CC(C)CCN(CC(C)CCCC(CC)C)CCC	2,6-dimethyl-N-(3-methylbutyl)-N-propyloctan-1-amine	preferred	
+CC(CC)C(CC)C(CC)CC(C)CCBr	1-bromo-5,6-diethyl-3,7-dimethylnonane	preferred	
+CC(CC)CCCOCC	1-ethoxy-4-methylhexane	preferred	
+CC(CC)CC(C)C(C)C(CC)C/C=C\CC(CC)CC(C)C	(6Z)-4,9-diethyl-2,10,11,13-tetramethylpentadec-6-ene	preferred	
+CC(CC)C(C)C(CC)CC[C@@H](O)C(=O)O	(2R)-5-ethyl-2-hydroxy-6,7-dimethylnonanoic acid	preferred	
+NCC1CCC1	1-cyclobutylmethanamine	preferred	
+CCC(C)CC(C)CC	3,5-dimethylheptane	preferred	
+CC(C)CC=CCC(C)C(CC)C(CC)C(C)CC	8,9-diethyl-2,7,10-trimethyldodec-4-ene	preferred	
+CC(CC)CC#CCCC(C)C(C)C(CC)C(CC)C	11-ethyl-3,9,10,12-tetramethyltetradec-5-yne	preferred	
+CC(CC)CCCCC1CC1	(5-methylheptyl)cyclopropane	preferred	
+CCCc1ccncc1	4-propylpyridine	preferred	
+CCC(C)CC(C)CCCC1CCCCC1-C2CCCCC2	2-(4,6-dimethyloctyl)-1,1'-bi(cyclohexane)	preferred	
+CCC1CC2(C1)CC2	5-ethylspiro[2.3]hexane	preferred	
+CCCCC1CCC2CCC1C2	2-butylbicyclo[3.2.1]octane	preferred	
+CCCC(C)CCC1CC2CCC3CCC1C23	1-(3-methylhexyl)decahydrocyclopenta[cd]pentalene	preferred	
+CCC(C)CC(C)Cc1ccc2ccccc2c1	2-(2,4-dimethylhexyl)naphthalene	preferred	
+CC(C)C(C)C(C)C(C)CC(=O)O	3,4,5,6-tetramethylheptanoic acid	preferred	
+CCC(CC)CC(CC)CCC(=O)OCCC(CC)C(CC)CC(CC)CC	3,4,6-triethyloctyl 4,6-diethyloctanoate	preferred	
+CCCC(C)C(C)CCCC(=O)N	5,6-dimethylnonanamide	preferred	
+CC(C)C(C)CC(=O)N(CC)CCC	N-ethyl-3,4-dimethyl-N-propylpentanamide	preferred	
+CC(CC)C(CC)C(C)CC#N	4-ethyl-3,5-dimethylheptanenitrile	preferred	
+CC(C)CC=O	3-methylbutanal	preferred	
+CCCC(=O)CC(CC)CCC(CC)C	6-ethyl-9-methylundecan-4-one	preferred	
+CC(C)CO	2-methylpropan-1-ol	preferred	
+CCCCC(CC)CCCNCC(C)C(C)C(C)CCC(CC)C	N-(4-ethyloctyl)-2,3,4,7-tetramethylnonan-1-amine	preferred	
+CC(CC)CC(CC)C(CC)CI	4-ethyl-3-(iodomethyl)-6-methyloctane	preferred	
+CC(C)CCCOCCC(CC)C(C)C(CC)CC	3,5-diethyl-4-methyl-1-[(4-methylpentyl)oxy]heptane	preferred	
+CCCC(CC)C/C=C/CCCC(C)CC	(6E)-4-ethyl-11-methyltridec-6-ene	preferred	
+CC(CC)C(C)C[C@H](O)C(=O)O	(2S)-2-hydroxy-4,5-dimethylheptanoic acid	preferred	
+NC(=O)/C=C\c1ccoc1-c2ccsc2	(2Z)-3-[2-(thiophen-3-yl)furan-3-yl]prop-2-enamide	preferred	
+CCC(C)C(CC)CC	3-ethyl-4-methylhexane	preferred	
+CCC=CCC(CC)C(C)CC	6-ethyl-7-methylnon-3-ene	preferred	
+CCCCC(C)C(C)CC#CCC(CC)C(CC)C	4-ethyl-3,9,10-trimethyltetradec-6-yne	preferred	
+CCC1CCC1	ethylcyclobutane	preferred	
+CCc1cc[nH]c1	3-ethyl-1H-pyrrole	preferred	
+CCCc1ccccc1-c2ccncc2	4-(2-propylphenyl)pyridine	preferred	
+CC(C)C(CC)CC(CC)CC1CC2(C1)CCC2	2-(2,4-diethyl-5-methylhexyl)spiro[3.3]heptane	preferred	
+CC(C)C(C)CC(C)C(CC)CC1CC2CCCC1C2	6-(2-ethyl-3,5,6-trimethylheptyl)bicyclo[3.2.1]octane	preferred	
+CC(CC)C(CC)CCC1C2CC3CC1CC2C3	1-(3-ethyl-4-methylhexyl)-1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CCCC(CC)C(C)Cc1ccc2[nH]ccc2c1	5-(3-ethyl-2-methylhexyl)-1H-indole	preferred	
+CC(CC)C(CC)CC(=O)O	3-ethyl-4-methylhexanoic acid	preferred	
+CCC(CC)CC(CC)CC(=O)OCCCC(CC)C(C)CCC	4-ethyl-5-methyloctyl 3,5-diethylheptanoate	preferred	
+CCC(CC)CCCC(=O)N	5-ethylheptanamide	preferred	
+CC(C)CCCCC(=O)NCC(CC)C	6-methyl-N-(2-methylbutyl)heptanamide	preferred	
+CC(C)CCC(C)CC#N	3,6-dimethylheptanenitrile	preferred	
+CCCC(CC)CCC=O	4-ethylheptanal	preferred	
+CCCC(C)C(C)C(CC)CC(=O)CCCC	7-ethyl-8,9-dimethyldodecan-5-one	preferred	
+CCC(O)CCC	hexan-3-ol	preferred	
+CCCCN	butan-1-amine	preferred	
+CCF	fluoroethane	preferred	
+CCCOCC(C)C(CC)C(C)C(C)C	3-ethyl-2,4,5-trimethyl-1-propoxyhexane	preferred	
+CC(CC)CC(C)CC(C)C/C=C\CC(CC)C(CC)C(CC)CC(CC)C(CC)C	(9Z)-12,13,14,16-tetraethyl-3,5,7,17-tetramethylnonadec-9-ene	preferred	
+CC(CC)CC[C@@H](O)C(=O)O	(2R)-2-hydroxy-5-methylheptanoic acid	preferred	
+O[C@@H](C)C1CCC2CCC1C2	(1S)-1-(bicyclo[3.2.1]octan-2-yl)ethan-1-ol	preferred	
+CC(C)C(C)C(CC)C(CC)C	4-ethyl-2,3,5-trimethylheptane	preferred	
+CCC(CC)CC(C)CC(C)CC=CCCC(CC)C	13-ethyl-3,9,11-trimethylpentadec-6-ene	preferred	
+CCCC#CCCC(C)CCC(C)C	8,11-dimethyldodec-4-yne	preferred	
+CCC(CC)CC1CCCC1	(2-ethylbutyl)cyclopentane	preferred	
+CC(C)CCCCCCc1ccoc1	3-(7-methyloctyl)furan	preferred	
+CC(CC)CC1CCC1-C2CCCC2	[2-(2-methylbutyl)cyclobutyl]cyclopentane	preferred	
+CC(CC)CCC1CCC2(CC1)CCC2	7-(3-methylpentyl)spiro[3.5]nonane	preferred	
+CC(CC)CCC(CC)CC1CC2CCC1C2	2-(2-ethyl-5-methylheptyl)bicyclo[2.2.1]heptane	preferred	
+CC(C)C(CC)C(CC)CC1CC2C3CCC1C2C3	7-(2,3-diethyl-4-methylpentyl)tricyclo[4.3.0.0^{3,9}]nonane	preferred	
+CCCCCCC(C)Cc1ccc2ncccc2c1	6-(2-methyloctyl)quinoline	preferred	
+CCCCCCCCC(=O)O	nonanoic acid	preferred	
+CCC(C)C(CC)C(C)CCC(=O)OCCCCCCC	heptyl 5-ethyl-4,6-dimethyloctanoate	preferred	
+CC(CC)CC(=O)N	3-methylpentanamide	preferred	
+CCCC(=O)N(CC(CC)C)CC(CC)C	N,N-bis(2-methylbutyl)butanamide	preferred	
+CC(C)C(CC)CCC#N	4-ethyl-5-methylhexanenitrile	preferred	
+CC(C)CCC(CC)CCC=O	4-ethyl-7-methyloctanal	preferred	
+CC(CC)C(C)C(C)CC(=O)CCC(CC)C	3,8,9,10-tetramethyldodecan-6-one	preferred	
+CCCCCO	pentan-1-ol	preferred	
+CC(CC)CN(CC(CC)C(CC)C(CC)CC)CCC	2,3,4-triethyl-N-(2-methylbutyl)-N-propylhexan-1-amine	preferred	
+CC(CC)CCCl	1-chloro-3-methylpentane	preferred	
+CCOCCCCC(C)CC	1-ethoxy-5-methylheptane	preferred	
+CCCCC/C=C/CC(C)C(CC)CC	(6E)-3-ethyl-4-methyldodec-6-ene	preferred	
+CC[C@H](O)C(=O)O	(2S)-2-hydroxybutanoic acid	preferred	
+Clc1ncc[nH]1	2-chloro-1H-imidazole	preferred	
+CCCCC	pentane	preferred	
+CCC=CCC(C)CC(CC)C(C)C(C)C(CC)C	8-ethyl-6,9,10,11-tetramethyltridec-3-ene	preferred	
+CCCC#CCCC(C)CC(C)CC	8,10-dimethyldodec-4-yne	preferred	
+CC(CC)CC1CCCCC1	(2-methylbutyl)cyclohexane	preferred	
+CC(C)C(CC)Cc1ccsc1	3-(2-ethyl-3-methylbutyl)thiophene	preferred	
+CC(CC)C(C)Cc1ccoc1-c2ccsc2	3-(2,3-dimethylpentyl)-2-(thiophen-3-yl)furan	preferred	
+CCCCCCC1CCC2(CC1)CCCC2	8-hexylspiro[4.5]decane	preferred	
+CC(CC)C(CC)CCCCC1CCC2CCC1C2	2-(5-ethyl-6-methyloctyl)bicyclo[3.2.1]octane	preferred	
+CCC1C2CC3CC1CC(C2)C3	2-ethyladamantane	preferred	
+CCC(C)C(CC)Cc1ccc2occc2c1	5-(2-ethyl-3-methylpentyl)-1-benzofuran	preferred	
+CCCC(CC)C(CC)CCCC(=O)O	5,6-diethylnonanoic acid	preferred	
+CCC(=O)OCCC	propyl propanoate	preferred	
+CC(C)CC(=O)N	3-methylbutanamide	preferred	
+CCC(C)CCCCC(=O)NCCCCCCC	N-heptyl-6-methyloctanamide	preferred	
+CC(C)CC(C)C(CC)CCC#N	4-ethyl-5,7-dimethyloctanenitrile	preferred	
+CCC(C)CC(C)CC(CC)CC=O	3-ethyl-5,7-dimethylnonanal	preferred	
+CCCC(C)CC(=O)CC(CC)CC	3-ethyl-7-methyldecan-5-one	preferred	
+CCC(CC)C(C)C(C)CC(O)CC(CC)C(C)C(CC)CCC	3,9,11-triethyl-4,5,10-trimethyltetradecan-7-ol	preferred	
+CCCCC(CC)CNCCC(C)CC(CC)CC	5-ethyl-N-(2-ethylhexyl)-3-methylheptan-1-amine	preferred	
+CC(C)CC(CC)CCBr	1-bromo-3-ethyl-5-methylhexane	preferred	
+CCCCC(C)CC(C)COCCCCC(CC)C(C)CC	1-[(5-ethyl-6-methyloctyl)oxy]-2,4-dimethyloctane	preferred	
+CC(C)C(CC)C(C)C(CC)C/C=C\CCCCCC(C)C	(7Z)-3,5-diethyl-2,4,14-trimethylpentadec-7-ene	preferred	
+CC(CC)C(CC)C[C@@H](O)C(=O)O	(2R)-4-ethyl-2-hydroxy-5-methylheptanoic acid	preferred	
+ClC1CCC1	chlorocyclobutane	preferred	
+CCCC	butane	preferred	
+CCC=CCC	hex-3-ene	preferred	
+CC(C)CC#CCCC	2-methyloct-4-yne	preferred	
+CCC(CC)CCC1CCCCCC1	(3-ethylpentyl)cycloheptane	preferred	
+CC(C)CC(C)C(C)C(C)C(CC)Cc1ncc[nH]1	2-(2-ethyl-3,4,5,7-tetramethyloctyl)-1H-imidazole	preferred	
+CCCC(CC)CC(CC)CCc1ccccc1-c2ccccc2	2-(3,5-diethyloctyl)-1,1'-biphenyl	preferred	
+CCCC1CC2(C1)CC2	5-propylspiro[2.3]hexane	preferred	
+CCCC(CC)CCCC1CC2CCCC1C2	6-(4-ethylheptyl)bicyclo[3.2.1]octane	preferred	
+CC(CC)CCC1CC2CCC3CCC1C23	1-(3-methylpentyl)decahydrocyclopenta[cd]pentalene	preferred	
+CC(C)C(C)C(C)CC(CC)Cc1ccc2ccccc2c1	2-(2-ethyl-4,5,6-trimethylheptyl)naphthalene	preferred	
+CCC(CC)C(CC)CCC(=O)O	4,5-diethylheptanoic acid	preferred	
+CCC(C)CC(=O)OCCC(CC)CC(CC)C(CC)CC	3,5,6-triethyloctyl 3-methylpentanoate	preferred	
+CC(C)C(CC)C(CC)C(CC)C(C)CCC(=O)N	5,6,7-triethyl-4,8-dimethylnonanamide	preferred	
+CCC(CC)C(CC)C(C)CC(=O)N(CCCCC(C)C)CC	N,4,5-triethyl-3-methyl-N-(5-methylhexyl)heptanamide	preferred	
+CC(CC)C(C)C(CC)CCCC#N	5-ethyl-6,7-dimethylnonanenitrile	preferred	
+CC(CC)C(C)CCCC=O	5,6-dimethyloctanal	preferred	
+CCC(C)C(CC)CC(=O)CCC(C)C	7-ethyl-2,8-dimethyldecan-5-one	preferred	
+CC(C)CC(C)CCC(O)CCC(C)C	2,8,10-trimethylundecan-5-ol	preferred	
+CCCN	propan-1-amine	preferred	
+CC(C)CI	1-iodo-2-methylpropane	preferred	

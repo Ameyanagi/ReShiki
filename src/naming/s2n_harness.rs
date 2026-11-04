@@ -1,5 +1,6 @@
 //! Test-only measurements; Phase 2 changes only `namer` below.
 mod generator;
+mod metamorphic;
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -205,6 +206,74 @@ impl Measurements {
         self.outcomes.insert(expected, result.clone());
         result
     }
+}
+
+fn snapshot_row(smiles: &str, outcome: &Outcome) -> String {
+    let (status, reason) = match outcome.status {
+        Some(status) => {
+            let status = serde_json::to_value(status).expect("serialize name status");
+            (
+                status["status"]
+                    .as_str()
+                    .expect("name status tag")
+                    .to_owned(),
+                status["reason"].as_str().unwrap_or_default().to_owned(),
+            )
+        }
+        None => ("declined".into(), outcome.reason.clone()),
+    };
+    format!(
+        "{}\t{}\t{status}\t{}",
+        field(smiles),
+        field(&outcome.name),
+        field(&reason)
+    )
+}
+
+/// Compare the fast run's names and statuses with `status-snapshot.tsv`; on a
+/// difference, print every changed row and return the failure message.
+fn status_snapshot(rows: &[String]) -> Option<String> {
+    let path = Path::new(FIXTURES).join("status-snapshot.tsv");
+    let text = format!("smiles\tname\tstatus\treason\n{}\n", rows.join("\n"));
+    if std::env::var("S2N_UPDATE_BASELINE").as_deref() == Ok("1") {
+        std::fs::write(&path, text).expect("write s2n status snapshot");
+        return None;
+    }
+    let old = std::fs::read_to_string(&path)
+        .expect("Missing s2n status snapshot; run with S2N_UPDATE_BASELINE=1");
+    if old == text {
+        return None;
+    }
+    let parse = |text: &str| -> BTreeMap<String, String> {
+        text.lines()
+            .skip(1)
+            .filter_map(|line| line.split_once('\t'))
+            .map(|(smiles, rest)| (smiles.to_owned(), rest.replace('\t', " | ")))
+            .collect()
+    };
+    let (old, new) = (parse(&old), parse(&text));
+    let mut changes = Vec::new();
+    for smiles in old
+        .keys()
+        .chain(new.keys().filter(|s| !old.contains_key(*s)))
+    {
+        let (before, after) = (old.get(smiles), new.get(smiles));
+        if before != after {
+            changes.push(format!(
+                "{smiles}\n  old: {}\n  new: {}",
+                before.map_or("<absent>", String::as_str),
+                after.map_or("<absent>", String::as_str)
+            ));
+        }
+    }
+    println!(
+        "s2n status snapshot (name | status | reason):\n{}",
+        changes.join("\n")
+    );
+    Some(format!(
+        "s2n status snapshot: {} rows changed (row order or format if 0); review them, regenerate with S2N_UPDATE_BASELINE=1 and list the changes in the PR body",
+        changes.len()
+    ))
 }
 
 #[derive(Default)]
@@ -471,8 +540,17 @@ fn run(fast: bool) {
     let mut reports = BTreeMap::new();
     let mut structure = Report::default();
     let mut parity = Report::default();
+    // One status-snapshot row per distinct fixture or generated SMILES.
+    let mut snapshot = Vec::new();
+    let mut record = |case: &Case, outcome: &Outcome| {
+        let row = snapshot_row(&case.smiles, outcome);
+        if !snapshot.contains(&row) {
+            snapshot.push(row);
+        }
+    };
     for case in &cases {
         let outcome = measurements.classify(&case.smiles);
+        record(case, &outcome);
         structure.add(case, &outcome, None);
         if case.golden.is_empty() {
             parity.missing_golden += 1;
@@ -492,7 +570,9 @@ fn run(fast: bool) {
     reports.insert("name", names);
     let mut stress = Report::default();
     for case in &generated {
-        stress.add(case, &measurements.classify(&case.smiles), None);
+        let outcome = measurements.classify(&case.smiles);
+        record(case, &outcome);
+        stress.add(case, &outcome, None);
     }
     reports.insert("generated", stress);
     let text = render(&reports, &measurements, start.elapsed());
@@ -521,9 +601,11 @@ fn run(fast: bool) {
             Path::new(&dir).join(format!("{}-status.tsv", if fast { "fast" } else { "full" }));
         std::fs::write(path, status_rows.join("\n")).expect("write S2N_DUMP status");
     }
+    let snapshot = fast.then(|| status_snapshot(&snapshot)).flatten();
     if fast {
         ratchet(&reports);
     }
+    assert!(snapshot.is_none(), "{}", snapshot.unwrap_or_default());
     for (check, report) in &reports {
         assert_eq!(
             report.total.wrong, 0,
