@@ -92,6 +92,15 @@ pub enum NameStatus {
     Unverified(NameReason),
 }
 impl NameStatus {
+    /// Downgrade strength: a known departure outranks an unchecked preference.
+    pub(crate) fn severity(self) -> u8 {
+        match self {
+            Self::Preferred => 0,
+            Self::Unverified(_) => 1,
+            Self::NotPreferred(_) => 2,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Preferred => "Preferred IUPAC name",
