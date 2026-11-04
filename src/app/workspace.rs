@@ -409,7 +409,7 @@ impl App {
         for warning in &preview.warnings {
             bar = bar.push(text(warning).size(11).style(muted_text));
         }
-        container(bar).padding([8, 12]).style(panel).into()
+        reshiki::accessibility::focus_scope(container(bar).padding([8, 12]).style(panel))
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
@@ -1681,6 +1681,8 @@ impl App {
         .spacing(4);
         if self.inspector_tab == InspectorTab::Properties && self.tab.optimization.is_some() {
             content = content.push(container(self.optimization_footer()).padding([10, 16]));
+            // The 3D preview is modal: Tab cycles its controls, Cancel and Apply last.
+            return self.inspector_frame(reshiki::accessibility::focus_scope(content));
         }
         self.inspector_frame(content)
     }

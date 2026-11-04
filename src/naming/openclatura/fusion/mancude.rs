@@ -88,6 +88,7 @@ pub struct CompareOptions<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct ParentDerivativeOptions<'a> {
     pub indicated_hydrogen_atom_ids: Option<&'a AtomSet>,
+    pub external_pi_consumption_atom_ids: Option<&'a AtomSet>,
     pub preserve_retained_parent_state: bool,
     pub allow_pi_redistribution: Option<bool>,
     pub compose_retained_external_pi: bool,
@@ -584,6 +585,7 @@ pub(super) fn prove_pi_redistribution(
     delta: &ParentBondDelta,
     indicated: &AtomSet,
     external: &[ExternalPiOperation],
+    consumption: Option<&AtomSet>,
 ) -> Result<Option<PiRedistribution>, String> {
     let model = delta.composition_model.as_ref().unwrap_or(model);
     if !indicated.is_subset(atoms)
@@ -655,7 +657,8 @@ pub(super) fn prove_pi_redistribution(
         if oxo_sites.contains(&id)
             && neighbors.iter().any(|&n| {
                 atoms.contains(&n)
-                    && (expected[&normalize_edge(id, n)] != 1
+                    && ((consumption.is_none_or(|sites| sites.contains(&id))
+                        && expected[&normalize_edge(id, n)] != 1)
                         || mol.get_bond(id, n).is_none_or(|b| b.order != 1))
             })
         {
@@ -710,7 +713,7 @@ pub(super) fn prove_pi_redistribution(
     }
     for &id in &sites {
         let value = &mol.atoms[&id];
-        if value.symbol == "C" {
+        if value.symbol == "C" || neutral_lambda_oxo_bonding_number(mol, id).is_some() {
             continue;
         }
         if value.symbol != "N"
@@ -752,7 +755,7 @@ pub(super) fn prove_pi_redistribution(
         final_assignment,
     }))
 }
-fn spiro_carbon_sites(mol: &Molecule, atoms: &AtomSet) -> AtomSet {
+pub(in super::super) fn spiro_carbon_sites(mol: &Molecule, atoms: &AtomSet) -> AtomSet {
     let mut sites = AtomSet::new();
     for &id in atoms {
         let atom = &mol.atoms[&id];
@@ -799,6 +802,41 @@ fn external_pi_parent_delta(
     locants: &BTreeMap<usize, String>,
     preserve_assignment: bool,
 ) -> Result<Option<ParentBondDelta>, String> {
+    Ok(external_pi_parent_state(
+        mol,
+        atoms,
+        model,
+        external,
+        locants,
+        preserve_assignment,
+        false,
+    )?
+    .map(|state| state.bond_delta))
+}
+
+/// Compose oxo suffix sites before assigning added and residual hydro hydrogen.
+/// Preserve the complete proof, including any required pi redistribution.
+pub(in super::super) fn suffix_hydrogen_state(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    model: &ParentBondModel,
+    suffix: &AtomSet,
+    locants: &BTreeMap<usize, String>,
+) -> Result<Option<ParentDerivativeState>, String> {
+    // P-58.2.4: compose the suffix first; external pi prefixes replace
+    // hydrogens only after indicated, added, and hydro roles are assigned.
+    external_pi_parent_state(mol, atoms, model, suffix, locants, false, true)
+}
+
+fn external_pi_parent_state(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    model: &ParentBondModel,
+    external: &AtomSet,
+    locants: &BTreeMap<usize, String>,
+    preserve_assignment: bool,
+    suffix_composition: bool,
+) -> Result<Option<ParentDerivativeState>, String> {
     if external.iter().any(|&id| {
         mol.atoms[&id].charge != 0
             || (mol.atoms[&id].symbol != "C"
@@ -806,8 +844,31 @@ fn external_pi_parent_delta(
     }) {
         return Ok(None);
     }
-    let mut forced = external.clone();
-    forced.extend(spiro_carbon_sites(mol, atoms));
+    // A lambda parent may already have both hydrogens needed by an oxo
+    // suffix while retaining its ring pi bond (e.g. lambda5 phosphorus).
+    // Count the parent hydrogens before prefix substitution and force a
+    // single-bonded site only when suffix accommodation consumes that pi bond.
+    let consumption: AtomSet = external
+        .iter()
+        .copied()
+        .filter(|&id| {
+            let Some(number) = neutral_lambda_oxo_bonding_number(mol, id) else {
+                return true;
+            };
+            let available = number.saturating_sub(parent_degree(mol, atoms, id) + 1);
+            let needed: usize = mol
+                .get_neighbors(id)
+                .iter()
+                .copied()
+                .filter(|n| !atoms.contains(n) && is_neutral_external_pi_ligand(mol, id, *n))
+                .map(|_| 2)
+                .sum();
+            needed > available
+        })
+        .collect();
+    let spiro = spiro_carbon_sites(mol, atoms);
+    let mut forced = consumption.clone();
+    forced.extend(&spiro);
     forced.extend(atoms.iter().copied().filter(|&id| {
         let a = &mol.atoms[&id];
         a.symbol == "N"
@@ -824,16 +885,24 @@ fn external_pi_parent_delta(
     };
     let pi_atoms = model.pi_atoms();
     let mut assignments = std::collections::BTreeSet::new();
-    for assignment in &model.allowed_kekule_assignments {
-        assignments.insert(BondAssignment {
-            orders: assignment
-                .orders
-                .iter()
-                .map(|&(e, o)| (e, if touches(e, &forced) { 1 } else { o }))
-                .collect(),
-        });
+    if preserve_assignment || !suffix_composition || !spiro.is_empty() {
+        // The generic external-pi fallback does not own intrinsic/suffix H
+        // allocation. A projected spiro component likewise leaves the complete
+        // hydrogen budget to its enclosing parent. Preserve their input states.
+        for assignment in &model.allowed_kekule_assignments {
+            assignments.insert(BondAssignment {
+                orders: assignment
+                    .orders
+                    .iter()
+                    .map(|&(e, o)| (e, if touches(e, &forced) { 1 } else { o }))
+                    .collect(),
+            });
+        }
     }
     if !preserve_assignment {
+        // P-58.2.2.3: explicit suffix composition redistributes first to
+        // accommodate paired suffixes. Its candidate pool contains only these
+        // maximum assignments after intrinsic H has been assigned upstream.
         assignments.extend(constrained.allowed_kekule_assignments.iter().cloned());
     }
     let mut candidates = Vec::new();
@@ -846,12 +915,26 @@ fn external_pi_parent_delta(
             .collect();
         if added.iter().any(|&id| {
             let a = &mol.atoms[&id];
+            // A prefix can replace both hydrogens at a suffix-added carbon
+            // site, as in 4-iminonaphthalen-1(4H)-one (P-58.2.4).
+            let replaced_carbon = a.symbol == "C"
+                && bonding_number(mol, id) == 4
+                && mol
+                    .get_neighbors(id)
+                    .iter()
+                    .any(|&n| !atoms.contains(&n) && is_neutral_external_pi_ligand(mol, id, n))
+                && mol.get_neighbors(id).iter().all(|&n| {
+                    mol.get_bond(id, n).is_some_and(|b| {
+                        b.order == 1
+                            || (!atoms.contains(&n) && is_neutral_external_pi_ligand(mol, id, n))
+                    })
+                });
             !matches!(a.symbol.as_str(), "C" | "N")
-                || (a.symbol == "N" && !is_added_hydrogen_nitrogen(mol, atoms, id))
+                || (a.symbol == "N" && !single_bonded_parent_nitrogen(mol, atoms, id))
                 || a.charge != 0
-                || a.is_aromatic
+                || (a.is_aromatic && !(suffix_composition && a.symbol == "N") && !replaced_carbon)
                 || !matches!(parent_degree(mol, atoms, id), 2 | 3)
-                || !all_single(mol, id)
+                || (!all_single(mol, id) && !replaced_carbon)
         }) {
             continue;
         }
@@ -864,12 +947,13 @@ fn external_pi_parent_delta(
         };
         let mut witness = candidate_model;
         witness.allowed_kekule_assignments = vec![assignment];
-        let Some(state) = parent_derivative_state(
+        let Some(mut state) = parent_derivative_state(
             mol,
             atoms,
             &witness,
             locants,
             &ParentDerivativeOptions {
+                external_pi_consumption_atom_ids: Some(&consumption),
                 preserve_retained_parent_state: true,
                 allow_pi_redistribution: Some(true),
                 ..Default::default()
@@ -881,7 +965,7 @@ fn external_pi_parent_delta(
         if !state.unsaturation_operations.is_empty() {
             continue;
         }
-        let mut delta = state.bond_delta;
+        let delta = &mut state.bond_delta;
         let mut ordered: Vec<_> = added.iter().copied().collect();
         ordered.sort_by_key(|a| locant_key(&locants[a]));
         if !ordered.is_empty() {
@@ -918,13 +1002,14 @@ fn external_pi_parent_delta(
                 .collect::<Vec<_>>(),
             hydro_keys,
         );
-        candidates.push((rank, delta));
+        candidates.push((rank, state));
     }
     let Some((_, mut selected)) = candidates.into_iter().min_by(|a, b| a.0.cmp(&b.0)) else {
         return Ok(None);
     };
-    if !selected.hydrogenated_edges.is_empty() {
+    if !selected.bond_delta.hydrogenated_edges.is_empty() {
         let added: AtomSet = selected
+            .bond_delta
             .added_hydrogen_operations
             .iter()
             .flat_map(|op| op.atom_ids.iter().copied())
@@ -934,9 +1019,9 @@ fn external_pi_parent_delta(
         let composition = single_site_parent_model(model, &sites)?;
         if composition
             .allowed_kekule_assignments
-            .contains(&selected.assignment)
+            .contains(&selected.bond_delta.assignment)
         {
-            selected.composition_model = Some(composition);
+            selected.bond_delta.composition_model = Some(composition);
         }
     }
     Ok(Some(selected))
@@ -1039,12 +1124,18 @@ pub(in super::super) fn parent_derivative_state(
         .cloned()
         .collect();
     let external_sites = external.iter().map(|op| op.parent_atom_id).collect();
+    let consumption = options
+        .external_pi_consumption_atom_ids
+        .unwrap_or(&external_sites);
+    if !consumption.is_subset(&external_sites) {
+        return Ok(None);
+    }
     let Some(delta) = compare_actual_parent_to_implied_parent(
         mol,
         atoms,
         model,
         &CompareOptions {
-            externally_unsaturated_atom_ids: Some(&external_sites),
+            externally_unsaturated_atom_ids: Some(consumption),
             indicated_hydrogen_atom_ids: options.indicated_hydrogen_atom_ids,
             atom_to_locant: Some(locants),
             preserve_retained_parent_state: options.preserve_retained_parent_state,
@@ -1061,7 +1152,15 @@ pub(in super::super) fn parent_derivative_state(
         .allow_pi_redistribution
         .unwrap_or(!options.preserve_retained_parent_state)
     {
-        prove_pi_redistribution(mol, atoms, model, &delta, indicated, &external)?
+        prove_pi_redistribution(
+            mol,
+            atoms,
+            model,
+            &delta,
+            indicated,
+            &external,
+            Some(consumption),
+        )?
     } else {
         None
     };

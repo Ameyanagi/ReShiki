@@ -213,7 +213,7 @@ impl App {
         match kind {
             Job::Clean(job) => self.cleanup_preview_ready(job, revision, response),
             Job::Projection(name) => self.projection_ready(name, response),
-            Job::Insert => self.structure_inserted(response),
+            Job::Insert => return self.structure_inserted(response),
             Job::AromaticDisplay => self.aromatic_display_ready(response),
             Job::Abbreviate => self.abbreviations_ready(response),
             Job::Analyze => self.analysis_ready(response),
@@ -253,8 +253,7 @@ impl App {
                     epoch: self.tab.file_epoch,
                     original: false,
                 });
-                self.status =
-                    "Cleanup preview · Compare with the original, then Apply or Cancel".into();
+                self.status = "Cleanup preview · Enter to apply · Esc to cancel".into();
                 self.error = false;
             }
         }
@@ -329,23 +328,28 @@ impl App {
         self.reveal_bounds(lo, hi);
     }
 
-    fn structure_inserted(&mut self, response: Response) {
-        if let Some(document) = response.document {
-            let before = self.tab.doc.clone();
-            let Some(selected) = self.insert_beside_drawing(&document) else {
-                self.tab.doc = before;
-                self.error = true;
-                self.status = INSERT_STRUCTURE_FAILED.into();
-                return;
-            };
-            self.commit_structure_insert(before, selected);
-            self.tool = Tool::Select;
-            self.status = "Inserted structure · Drag to position · Delete or Undo to remove".into();
-            if !response.warnings.is_empty() {
-                self.status.push_str(" · ");
-                self.status.push_str(&response.warnings.join(" · "));
-            }
+    fn structure_inserted(&mut self, response: Response) -> Task<Message> {
+        let Some(document) = response.document else {
+            return Task::none();
+        };
+        let before = self.tab.doc.clone();
+        let Some(selected) = self.insert_beside_drawing(&document) else {
+            self.tab.doc = before;
+            self.error = true;
+            self.status = INSERT_STRUCTURE_FAILED.into();
+            return Task::none();
+        };
+        self.commit_structure_insert(before, selected);
+        if self.error {
+            return Task::none();
         }
+        self.tool = Tool::Select;
+        self.status = "Inserted structure · Drag to position · Delete or Undo to remove".into();
+        if !response.warnings.is_empty() {
+            self.status.push_str(" · ");
+            self.status.push_str(&response.warnings.join(" · "));
+        }
+        super::focus_drawing()
     }
     fn aromatic_display_ready(&mut self, response: Response) {
         if let Some(document) = response.document {
