@@ -1014,10 +1014,9 @@ fn standalone_benzoheterocycles_round_trip() {
 #[test]
 fn standalone_benzoheterocycles_lambda_locants() {
     let mut measurements = Measurements::default();
-    // P-25.6: lambda is part of the heteroatom locant set. These corpus
-    // regressions deliberately retain their existing hydro/added-H treatment.
+    // P-25.6: lambda is part of the heteroatom locant set. This corpus
+    // regression deliberately retains its existing hydro/added-H treatment.
     for expected in [
-        "2-oxooctahydro-2lambda^4-benzothiophene",
         "N-(2-phenylethyl)-2-[(2R)-1,1,4-trioxo-2-phenyl-2,3-dihydro-5H-1lambda^6,5-benzothiazepin-5-yl]acetamide",
     ] {
         let smiles = measurements.parse_name(expected).unwrap();

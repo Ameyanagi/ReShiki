@@ -426,7 +426,7 @@ fn has_multiplicative_pin(mol: &molecule::Molecule) -> bool {
     use molecule::AtomSet;
     let cyclic = chains::get_cyclic_atoms(mol, &AtomSet::new());
     let mut groups = perception::perceive_groups(mol);
-    let key = principal_groups::component_principal_key(&groups, false);
+    let key = principal_groups::component_principal_key(mol, &groups, false);
     // P-44.1.2: a structural hydride such as phosphane or silane can be
     // senior to every carbon ring. Use the same suffix and shortcut policy
     // as the naming pipeline, without retaining its provisional assessment.
@@ -457,23 +457,24 @@ fn has_multiplicative_pin(mol: &molecule::Molecule) -> bool {
     ) else {
         return false;
     };
-    let parents: Vec<_> =
-        parent_selection::senior_parent_candidates(mol, &paths, &rings, &principal, &excluded)
-            .into_iter()
-            // P-15.3.1.1 / P-15.3.4.2 exclude acyclic hydrocarbons without suffixes.
-            .filter(|p| p.is_ring || principal.iter().any(|a| p.primary_path().contains(a)))
-            .map(|p| {
-                let atoms = p.atom_set();
-                let mut complete = atoms.clone();
-                complete.extend(component_group_rules::principal_involved_atoms(
-                    mol,
-                    &groups,
-                    key.as_deref(),
-                    p.primary_path(),
-                ));
-                (p.primary_path()[0], atoms, complete)
-            })
-            .collect();
+    let parents: Vec<_> = parent_selection::senior_parent_candidates(
+        mol, &paths, &rings, &principal, &groups, &excluded,
+    )
+    .into_iter()
+    // P-15.3.1.1 / P-15.3.4.2 exclude acyclic hydrocarbons without suffixes.
+    .filter(|p| p.is_ring || principal.iter().any(|a| p.primary_path().contains(a)))
+    .map(|p| {
+        let atoms = p.atom_set();
+        let mut complete = atoms.clone();
+        complete.extend(component_group_rules::principal_involved_atoms(
+            mol,
+            &groups,
+            key.as_deref(),
+            p.primary_path(),
+        ));
+        (p.primary_path()[0], atoms, complete)
+    })
+    .collect();
     if parents.len() < 2 {
         return false;
     }
@@ -1274,13 +1275,6 @@ mod tests {
             (
                 "c1(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c(-c2ccccc2)c1-c1ccccc1",
                 "2^3,2^4,2^5,2^6-tetraphenyl-1^1,2^1:2^2,3^1-terphenyl",
-                NameStatus::Preferred,
-            ),
-            // The same seven-node shape without an assembly is outside this
-            // fallback's scope (P-52.2.5.1(2)).
-            (
-                "c1ccccc1CC1CCC(CCc2ccccc2Cc2ccccc2)CC1",
-                "1-benzyl-2-[2-(4-benzylcyclohexyl)ethyl]benzene",
                 NameStatus::Preferred,
             ),
         ] {

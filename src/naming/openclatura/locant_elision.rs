@@ -777,6 +777,16 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
     if parts.is_ring != (g.edges.len() == g.nodes.len()) {
         return;
     }
+    // P-14.3.4.4: propa-1,2-diene always cites its locants.
+    if parts.principal_group.is_none()
+        && !parts.is_ring
+        && g.nodes.len() == 3
+        && g.nodes.iter().all(|l| l.0 == "C")
+        && g.edges.len() == 2
+        && g.edges.values().all(|&order| order == 2)
+    {
+        return;
+    }
     let all = features(parts, &g);
     for f in all.iter().filter(|f| f.category == "unsaturation") {
         for p in &f.positions {
@@ -841,6 +851,14 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
     if selected.is_empty() {
         return;
     }
+    // P-14.3.3: omit all parent locants together, or cite them all.
+    // Dinuclear unsaturation keeps its independent omission rule.
+    if parts.principal_group.is_none() && g.nodes.len() != 2 && selected.len() != all.len() {
+        selected = (0..all.len()).collect();
+        if safe(&g, &all, &selected, &mut budget) != Some(true) {
+            return;
+        }
+    }
     for i in selected {
         let f = &all[i];
         if f.category == "unsaturation" {
@@ -892,6 +910,116 @@ mod tests {
         let smiles = format!("{}[C@H](F)Cl", "C".repeat(400));
         let name = super::super::name_smiles(&smiles).unwrap();
         assert_eq!(name.text, "(1R)-1-chloro-1-fluorohentetractane");
+    }
+
+    #[test]
+    fn unsaturated_parent_locants() {
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            ("FC=C=C=CCl", "1-chloro-4-fluorobuta-1,2,3-triene"),
+            ("ClC=C=C=C", "chlorobutatriene"),
+            ("FC(Cl)=C=C=C", "1-chloro-1-fluorobuta-1,2,3-triene"),
+            ("FC=C=CCl", "1-chloro-3-fluoropropa-1,2-diene"),
+            ("ClC=C=C", "1-chloropropa-1,2-diene"),
+            ("ClC=C=CCl", "1,3-dichloropropa-1,2-diene"),
+            ("C=C=C", "propa-1,2-diene"),
+            ("FC(F)=C=C", "1,1-difluoropropa-1,2-diene"),
+            ("ClC=C=C=C=C", "chloropentatetraene"),
+            ("ClC=C=C=C=C=C", "chlorohexapentaene"),
+            ("FC=C=C=C=C=CCl", "1-chloro-6-fluorohexa-1,2,3,4,5-pentaene"),
+            ("COC=C=C=COC", "1,4-dimethoxybuta-1,2,3-triene"),
+            ("ClC(Cl)=C=C=C", "1,1-dichlorobuta-1,2,3-triene"),
+            ("ClC=C=C=CCl", "1,4-dichlorobuta-1,2,3-triene"),
+            ("BrC=C=C=CCl", "1-bromo-4-chlorobuta-1,2,3-triene"),
+            ("ClC(Cl)=C=C=CCl", "trichlorobutatriene"),
+            ("ClC(Cl)=C=C=C(Cl)Cl", "tetrachlorobutatriene"),
+            (
+                "ClC(Br)=C=C(F)I",
+                "1-bromo-1-chloro-3-fluoro-3-iodopropa-1,2-diene",
+            ),
+            ("ClC(Cl)=C=C(Cl)Cl", "1,1,3,3-tetrachloropropa-1,2-diene"),
+            ("C/C=C/OC=C=C=C", "{[(1E)-prop-1-en-1-yl]oxy}butatriene"),
+            (
+                "C/C=C/OC=C=C",
+                "1-{[(1E)-prop-1-en-1-yl]oxy}propa-1,2-diene",
+            ),
+            ("CC(C)=C", "2-methylprop-1-ene"),
+            ("CC(F)=C", "2-fluoroprop-1-ene"),
+            ("ClC1=C(Cl)C1Cl", "1,2,3-trichlorocycloprop-1-ene"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{expected}: {}",
+                parsed.message
+            );
+            assert!(
+                parsed.warnings.is_empty(),
+                "{expected}: {:?}",
+                parsed.warnings
+            );
+            let actual = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            crate::naming::verify_identity(smiles, &actual).unwrap();
+        }
+    }
+
+    #[test]
+    fn cumulene_locant_elision_controls() {
+        for (smiles, expected) in [
+            ("C=C=C=C", "butatriene"),
+            ("C=C=C=C=C", "pentatetraene"),
+            ("C=C=C=C=C=C", "hexapentaene"),
+            ("FC=CCl", "1-chloro-2-fluoroethene"),
+            ("ClC=C", "chloroethene"),
+            ("ClC#CCl", "dichloroethyne"),
+            ("FC(F)=C(F)F", "tetrafluoroethene"),
+            ("CC=C", "propene"),
+            ("CC#C", "propyne"),
+            ("ClCC#C", "3-chloroprop-1-yne"),
+            ("ClC#CC", "1-chloroprop-1-yne"),
+            ("OC=C=C", "propa-1,2-dien-1-ol"),
+            ("OC(=O)C=C=CCl", "4-chlorobuta-2,3-dienoic acid"),
+            ("C=C=CC", "buta-1,2-diene"),
+            ("ClC=C=CC", "1-chlorobuta-1,2-diene"),
+            ("ClC=C=C=CC", "1-chloropenta-1,2,3-triene"),
+            ("CC(C)=C=C=C(C)C", "2,5-dimethylhexa-2,3,4-triene"),
+            ("C/C=C/C=C=C", "(4E)-hexa-1,2,4-triene"),
+            ("C/C=C/C=C=C=C", "(5E)-hepta-1,2,3,5-tetraene"),
+            ("C=C=C=CC#C", "hexa-1,2,3-trien-5-yne"),
+            ("ClC(=C=C=C)C=C=C", "4-chlorohepta-1,2,3,5,6-pentaene"),
+            ("C[C@H](Cl)C=C=C", "(4S)-4-chloropenta-1,2-diene"),
+            ("[2H]C=C=C=C", "(1-2H1)buta-1,2,3-triene"),
+            ("C=C=CC1CCCCC1", "(propa-1,2-dien-1-yl)cyclohexane"),
+            ("C=C=C=CC1CCCCC1", "(buta-1,2,3-trien-1-yl)cyclohexane"),
+            ("BrC1C=CCCC1", "3-bromocyclohex-1-ene"),
+            ("CC1=CCCCC1", "1-methylcyclohex-1-ene"),
+            ("C1=CCCCC1", "cyclohexene"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            if smiles == "[2H]C=C=C=C" {
+                assert!(matches!(
+                    name.status,
+                    crate::naming::NameStatus::Unverified(_)
+                ));
+            } else {
+                assert_eq!(
+                    name.status,
+                    crate::naming::NameStatus::Preferred,
+                    "{smiles}"
+                );
+            }
+        }
+        let error = super::super::name_smiles("F/C=C=C=C/Cl").unwrap_err();
+        assert!(error.contains("cumulene E/Z"), "{error}");
     }
 
     #[test]
