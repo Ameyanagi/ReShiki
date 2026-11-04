@@ -261,7 +261,7 @@ C[C@H](F)C=C=C=CC	(6S)-6-fluorohepta-2,3,4-triene	preferred	P-91.2.1.2.1 https:/
 C/C(C)=C=C=C(/C)C	2,5-dimethylhexa-2,3,4-triene	preferred	P-91.2.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#9102010201	PR #918	pass
 C1=C=C=CCCCC1	cycloocta-1,2,3-triene	preferred	P-91.2.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#9102010201	PR #918	pass
 C1CCC/C=C/CCC1	(E)-cyclononene	preferred	P-93.5.1.4.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#9305010401	PR #918	pass
-FC=C=C=CCl	1-chloro-4-fluorobuta-1,2,3-triene	preferred	P-14.3.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140303	issue #920	known-failure
+FC=C=C=CCl	1-chloro-4-fluorobuta-1,2,3-triene	preferred	P-14.3.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140303	PR #918	pass
 [2H]/C([2H])=C=C=C/C	(1,1-2H2)penta-1,2,3-triene	unverified	P-91.2.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#9102010201; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	PR #918	pass
 [2H]/C=C=C=C=C=C/C		refuse	P-93.4.2.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#93040203; P-91.2.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#9102010201; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	PR #918	pass
 [2H]/C=C=C/C	(1-2H1)buta-1,2-diene	unverified	P-91.2.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#9102010201; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	PR #918	pass
