@@ -85,6 +85,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("opsin", "processing_rings"): 0,
     ("opsin", "processing_rings_topology"): 0,
     ("opsin", "processing_upstream"): 0,
+    ("opsin", "resource_pins"): 0,
     ("opsin", "stereochemistry_handler"): 0,
     ("opsin", "structure_oracle"): 0,
     ("opsin", "suffix_rules_oracle"): 0,
