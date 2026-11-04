@@ -438,23 +438,62 @@ fn multiply_charged_ring_preserves_drawn_ordering() {
 }
 
 #[test]
-fn saturated_fused_ring_preserves_drawn_ordering() {
-    let graph = graph("O[C@H](C1CC1)[C-]1C=CC2=C1CCC2", true);
-    // The saturated ring still makes this a fused system: [C, C] < [C, C, H].
-    assert_eq!(
-        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(5), AtomId(2)),
-        Ok(Ordering::Less)
+fn saturated_fused_cyclopentadienide_outranks_simple_cyclopentadienide() {
+    // M01: both rings have a 24/5 duplicate; the saturated fusion decides later.
+    check(
+        &graph("O[C@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
     );
 }
 
 #[test]
-fn saturated_fused_ring_preserves_alkene_endpoint_ordering() {
+fn saturated_fused_cyclopentadienide_outranks_cyclopropyl() {
+    let graph = graph("O[C@H](C1CC1)[C-]1C=CC2=C1CCC2", true);
+    // Only the conjugated ring is averaged: [C, C, 24/5] > [C, C, H].
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(5), AtomId(2)),
+        Ok(Ordering::Greater)
+    );
+}
+
+#[test]
+fn saturated_fused_cyclopentadienide_outranks_simple_cyclopentadienide_at_alkene_endpoint() {
+    // M03: the saturated fusion also decides between two averaged alkene ligands.
+    let graph = graph("F/C=C(/[C-]1C=CC=C1)[C-]1C=CC2=C1CCC2", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(2))
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
+            .unwrap(),
+        vec![AtomId(3), AtomId(8)]
+    );
+}
+
+#[test]
+fn saturated_fused_cyclopentadienide_outranks_cyclopropyl_at_alkene_endpoint() {
     let graph = graph("F/C=C(/C1CC1)[C-]1C=CC2=C1CCC2", true);
     assert_eq!(
         CipSequenceRules::new(&graph, AtomId(2))
             .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
             .unwrap(),
-        vec![AtomId(6), AtomId(3)]
+        vec![AtomId(3), AtomId(6)]
+    );
+}
+
+#[test]
+fn ineligible_fused_indenide_disables_all_resonance_averaging() {
+    let mut graph = Graph::default();
+    let fragment =
+        build_fragment(&mut graph, "O[C@H]([C-]1C=CC=C1)[C-]1C=Cc2ccccc21", "", "").unwrap();
+    opsin::fragment_tools::convert_spare_valencies_to_double_bonds(&mut graph, fragment).unwrap();
+    graph.make_hydrogens_explicit(fragment).unwrap();
+    // origin/main's drawn-bond ordering: both attachment atoms expose [C, C].
+    // In the next sphere, the fused aromatic carbon has two actual C neighbours
+    // and a Kekule duplicate, so its [C, C, C] beats simple Cp− [C, C, H].
+    // Averaging only the eligible Cp− would instead make its extra 24/5 win.
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(7)),
+        Ok(Ordering::Less)
     );
 }
 

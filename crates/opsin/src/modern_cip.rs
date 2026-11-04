@@ -152,6 +152,16 @@ mod tests {
                 "O[C@@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1",
                 Some("R"),
             ),
+            (
+                "2-[(R)-(cyclopenta-2,4-dien-1-id-1-yl)(hydroxy)methyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide",
+                "O[C@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2",
+                Some("R"),
+            ),
+            (
+                "2-[(S)-(cyclopenta-2,4-dien-1-id-1-yl)(hydroxy)methyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide",
+                "O[C@@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2",
+                Some("S"),
+            ),
             // The E/Z descriptor ranks the same two rings at the double bond.
             (
                 "3-[(1Z)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide",
@@ -161,6 +171,16 @@ mod tests {
             (
                 "3-[(1E)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide",
                 "F/C=C(/C1=CC=CC1)C1=C[CH-]C=C1",
+                None,
+            ),
+            (
+                "2-[(1Z)-1-(cyclopenta-2,4-dien-1-id-1-yl)-2-fluoroethenyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide",
+                "F/C=C(/[C-]1C=CC=C1)[C-]1C=CC2=C1CCC2",
+                None,
+            ),
+            (
+                "2-[(1E)-1-(cyclopenta-2,4-dien-1-id-1-yl)-2-fluoroethenyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide",
+                "F/C=C(\\[C-]1C=CC=C1)[C-]1C=CC2=C1CCC2",
                 None,
             ),
         ] {

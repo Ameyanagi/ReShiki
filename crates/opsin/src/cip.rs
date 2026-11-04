@@ -3,8 +3,8 @@
 //! Port of `CipSequenceRules.java`, OPSIN 2.9.0, commit
 //! `b91b610af5ab07560fedb20730d7aef46bb2bca0`.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT, see the crate license.
-//! Adds P-92.1.4.4 averaging for singly negative odd monocyclic mancude rings,
-//! which is absent from upstream OPSIN.
+//! Adds P-92.1.4.4 averaging for singly negative odd mancude cycles, including
+//! saturated fusion, when every conjugated ring anion in the graph is eligible.
 //!
 //! Each rule is exhausted over the whole ligand before the next rule is used.
 //! Path-local histories terminate rings; terminal duplicate atoms represent
@@ -185,7 +185,7 @@ impl<'a> CipSequenceRules<'a> {
     fn negative_rings(&self) -> &HashMap<AtomId, NegativeMancudeRing> {
         self.negative_rings.get_or_init(|| {
             let mut rings = HashMap::new();
-            'candidates: for candidate in self
+            for candidate in self
                 .graph
                 .atoms
                 .iter()
@@ -198,54 +198,104 @@ impl<'a> CipSequenceRules<'a> {
                 {
                     continue;
                 }
-                let mut ring = Vec::new();
-                let mut previous = candidate.id;
-                let mut current = candidate.id;
-                loop {
-                    let atom = self.graph.atom(current);
-                    let ring_bonds: Vec<_> = atom
-                        .bonds
-                        .iter()
-                        .copied()
-                        .filter(|&b| crate::cycle_detector::is_bond_in_cycle(self.graph, b))
-                        .collect();
-                    // Count all cyclic bonds, including those in saturated rings.
-                    if ring_bonds.len() != 2 {
-                        continue 'candidates;
-                    }
-                    if current != candidate.id {
-                        let multiple_bonds: Vec<_> = atom
+                let Some(mut current) = candidate
+                    .bonds
+                    .iter()
+                    .filter(|&&b| crate::cycle_detector::is_bond_in_cycle(self.graph, b))
+                    .filter_map(|&b| self.graph.bond(b).other_atom(candidate.id))
+                    .find(|&a| {
+                        self.graph
+                            .atom(a)
                             .bonds
                             .iter()
-                            .copied()
-                            .filter(|&b| self.graph.bond(b).order > 1)
-                            .collect();
-                        if atom.charge != 0
-                            || multiple_bonds.len() != 1
-                            || self.graph.bond(multiple_bonds[0]).order != 2
-                            || !ring_bonds.contains(&multiple_bonds[0])
-                        {
-                            continue 'candidates;
-                        }
+                            .any(|&b| self.graph.bond(b).order == 2)
+                    })
+                else {
+                    continue;
+                };
+                let mut ring = vec![candidate.id];
+                let mut previous = candidate.id;
+                // Follow alternating double/single bonds around the pi cycle.
+                // Any ineligible candidate disables averaging throughout the graph.
+                while current != candidate.id {
+                    if ring.contains(&current) {
+                        return HashMap::new();
                     }
                     ring.push(current);
-                    let next = ring_bonds
+                    let atom = self.graph.atom(current);
+                    let mut multiple_bonds = atom
+                        .bonds
                         .iter()
-                        .map(|&b| self.graph.bond(b).other_atom(current).unwrap())
-                        .find(|&a| a != previous)
-                        .unwrap();
+                        .map(|&b| self.graph.bond(b))
+                        .filter(|b| b.order > 1);
+                    let Some(double) = multiple_bonds.next() else {
+                        return HashMap::new();
+                    };
+                    if atom.charge != 0
+                        || double.order != 2
+                        || multiple_bonds.next().is_some()
+                        || !crate::cycle_detector::is_bond_in_cycle(self.graph, double.id)
+                    {
+                        return HashMap::new();
+                    }
+                    let Some(mut next) = double.other_atom(current) else {
+                        return HashMap::new();
+                    };
+                    if next == previous {
+                        let mut next_atoms = atom
+                            .bonds
+                            .iter()
+                            .map(|&b| self.graph.bond(b))
+                            .filter(|b| {
+                                b.order == 1
+                                    && crate::cycle_detector::is_bond_in_cycle(self.graph, b.id)
+                            })
+                            .filter_map(|b| b.other_atom(current))
+                            .filter(|&a| {
+                                a == candidate.id
+                                    || self
+                                        .graph
+                                        .atom(a)
+                                        .bonds
+                                        .iter()
+                                        .any(|&b| self.graph.bond(b).order == 2)
+                            });
+                        let Some(single_partner) = next_atoms.next() else {
+                            return HashMap::new();
+                        };
+                        if next_atoms.next().is_some() {
+                            return HashMap::new();
+                        }
+                        next = single_partner;
+                    }
                     previous = current;
                     current = next;
-                    if current == candidate.id {
-                        break;
+                }
+                // A stereocentre inside the ring suppresses duplicates of its own
+                // bonds, so averaging would split the two ring directions.
+                if ring.contains(&self.chiral_atom) {
+                    return HashMap::new();
+                }
+                // Unsaturated fusion adds contributors beyond this odd cycle.
+                for &atom in &ring {
+                    for &b in &self.graph.atom(atom).bonds {
+                        if !crate::cycle_detector::is_bond_in_cycle(self.graph, b) {
+                            continue;
+                        }
+                        if self.graph.bond(b).other_atom(atom).is_some_and(|a| {
+                            !ring.contains(&a)
+                                && self
+                                    .graph
+                                    .atom(a)
+                                    .bonds
+                                    .iter()
+                                    .any(|&b| self.graph.bond(b).order > 1)
+                        }) {
+                            return HashMap::new();
+                        }
                     }
                 }
                 let n = ring.len();
-                // A stereocentre inside the ring suppresses duplicates of its own
-                // bonds, so averaging would split the two ring directions.
-                if n.is_multiple_of(2) || ring.contains(&self.chiral_atom) {
-                    continue;
-                }
                 for (i, &atom) in ring.iter().enumerate() {
                     let sum: u32 = [ring[(i + n - 1) % n], ring[(i + 1) % n]]
                         .iter()
@@ -479,6 +529,50 @@ mod tests {
             "O[C@H](C1=CC=CC1)[C-]1C=CC=C1",
         ] {
             assert_ring_duplicates(smiles, 7..12, &[Fraction(24, 5); 5]);
+        }
+    }
+
+    #[test]
+    fn saturated_fusion_preserves_one_averaged_duplicate_per_pi_cycle_atom() {
+        let smiles = "O[C@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2";
+        assert_ring_duplicates(smiles, 2..7, &[Fraction(24, 5); 5]);
+        assert_ring_duplicates(smiles, 7..12, &[Fraction(24, 5); 5]);
+
+        let mut graph = Graph::default();
+        crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
+        let rules = CipSequenceRules::new(&graph, AtomId(1));
+        let rings = rules.negative_rings();
+        assert_eq!(rings.len(), 10);
+        for id in 2..12 {
+            assert_eq!(rings[&AtomId(id)].id, AtomId(if id < 7 { 2 } else { 7 }));
+        }
+    }
+
+    #[test]
+    fn ineligible_conjugated_ring_anion_disables_all_averaging() {
+        for excluded in [
+            "[C-]1C=CC2=CC=CC=C21", // Unsaturated fusion.
+            "[C-]1C=C[NH+]=C1",     // Another charge in the cycle.
+            "[C-]1C=CC1",           // Alternation cannot close the cycle.
+            "[C-]1C=CC(=O)C=C1",    // The double bond leaves the cycle.
+        ] {
+            for smiles in [
+                format!("OC([C-]1C=CC=C1){excluded}"),
+                format!("OC({excluded})[C-]1C=CC=C1"),
+            ] {
+                let mut graph = Graph::default();
+                crate::smiles::build_fragment(&mut graph, &smiles, "", "").unwrap();
+                let rules = CipSequenceRules::new(&graph, AtomId(1));
+                assert!(rules.negative_rings().is_empty(), "{smiles}");
+            }
+        }
+    }
+
+    #[test]
+    fn nonconjugated_anions_do_not_disable_ring_averaging() {
+        for spectator in ["[Cl-]", "Cl(=O)(=O)(=O)[O-]", "[CH-]1CCCC1"] {
+            let smiles = format!("OC([C-]1C=CC=C1).{spectator}");
+            assert_ring_duplicates(&smiles, 2..7, &[Fraction(24, 5); 5]);
         }
     }
 
