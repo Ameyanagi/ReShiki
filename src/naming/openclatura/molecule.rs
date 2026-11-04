@@ -22,6 +22,8 @@ struct NamingBudget {
     unknown_units: RefCell<BTreeSet<String>>,
     ring_assembly_junctions: RefCell<AtomSet>,
     relative_ring_alternative: Cell<bool>,
+    endo_exo_names: Cell<bool>,
+    endo_exo_alternative: RefCell<Option<AtomSet>>,
     benzoheterocycle_names: Cell<bool>,
     higher_order_fusion_alternative: Cell<bool>,
     benzo_fusion_alternative: Cell<bool>,
@@ -37,6 +39,8 @@ impl Default for NamingBudget {
             unknown_units: RefCell::default(),
             ring_assembly_junctions: RefCell::default(),
             relative_ring_alternative: Cell::new(false),
+            endo_exo_names: Cell::new(false),
+            endo_exo_alternative: RefCell::default(),
             benzoheterocycle_names: Cell::new(true),
             higher_order_fusion_alternative: Cell::new(false),
             benzo_fusion_alternative: Cell::new(false),
@@ -192,6 +196,33 @@ impl Molecule {
 
     pub(super) fn set_relative_ring_names(&self, enabled: bool) {
         self.naming_budget.relative_ring_names.set(enabled);
+    }
+
+    pub(super) fn mark_endo_exo_alternative(&self, cage: &AtomSet) {
+        *self.naming_budget.endo_exo_alternative.borrow_mut() = Some(cage.clone());
+    }
+
+    pub(super) fn has_endo_exo_alternative(&self) -> bool {
+        // Fragment naming shares this budget. Check against the complete
+        // source graph here, so an acid-side fragment cannot hide stereo on
+        // the alcohol side of an ester (or any other external group).
+        self.naming_budget
+            .endo_exo_alternative
+            .borrow()
+            .as_ref()
+            .is_some_and(|cage| {
+                self.atoms
+                    .values()
+                    .all(|atom| !atom.has_stereo() || cage.contains(&atom.idx))
+            })
+    }
+
+    pub(super) fn use_endo_exo_names(&self) -> bool {
+        self.naming_budget.endo_exo_names.get()
+    }
+
+    pub(super) fn set_endo_exo_names(&self, enabled: bool) {
+        self.naming_budget.endo_exo_names.set(enabled);
     }
 
     pub(super) fn mark_higher_order_fusion_alternative(&self) {

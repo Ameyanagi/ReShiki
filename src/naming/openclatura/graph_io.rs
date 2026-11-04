@@ -122,16 +122,12 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
                 .into(),
             );
         }
-        // Retain the winding for achiral ring centres as well, so their
-        // cis/trans alternatives can be computed independently of SMILES order.
-        let raw_stereo = if matches!(stereo.as_deref(), None | Some("r" | "s")) {
-            match legacy.metadata.atoms.get(idx).map(|a| a.chiral_tag) {
-                Some(1) => Some("CW".into()),
-                Some(2) => Some("CCW".into()),
-                _ => None,
-            }
-        } else {
-            None
+        // Cage endo/exo and ring cis/trans descriptors compare source winding
+        // to a geometric reference, independently of the CIP priority order.
+        let raw_stereo = match legacy.metadata.atoms.get(idx).map(|a| a.chiral_tag) {
+            Some(1) => Some("CW".into()),
+            Some(2) => Some("CCW".into()),
+            _ => None,
         };
         let symbol = ELEMENTS
             .get(usize::from(atom.atomic_number))
@@ -291,9 +287,11 @@ pub fn assign_local_cip_with_locant_labels(
             charge: i8::try_from(atom.charge).map_err(|_| "Invalid local stereo charge")?,
             ..graph::Atom::default()
         });
-        tags.push(match atom.raw_stereo.as_deref() {
-            Some("CW") => 1,
-            Some("CCW") => 2,
+        // Keep this local unresolved-centre labelling pass scoped as before;
+        // absolute centres already have their ordinary global CIP labels.
+        tags.push(match (atom.stereo.as_deref(), atom.raw_stereo.as_deref()) {
+            (None | Some("r" | "s"), Some("CW")) => 1,
+            (None | Some("r" | "s"), Some("CCW")) => 2,
             _ => 0,
         });
     }
@@ -361,9 +359,15 @@ mod tests {
             .atoms
             .values()
             .map(|a| {
+                // Upstream stores winding only for unresolved/relative
+                // centres. The port also retains it for cage alternatives;
+                // keep this upstream snapshot comparison on its old scope.
+                let raw_stereo = matches!(a.stereo.as_deref(), None | Some("r" | "s"))
+                    .then_some(a.raw_stereo.as_deref())
+                    .flatten();
                 json!({
                     "idx": a.idx, "symbol": a.symbol, "charge": a.charge, "isotope": a.isotope,
-                    "stereo": a.stereo, "raw_stereo": a.raw_stereo, "is_aromatic": a.is_aromatic,
+                    "stereo": a.stereo, "raw_stereo": raw_stereo, "is_aromatic": a.is_aromatic,
                     "explicit_h_count": a.explicit_h_count, "total_h_count": a.total_h_count,
                     "radical_electrons": a.radical_electrons,
                 })

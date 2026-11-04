@@ -444,6 +444,136 @@ async fn alternatives_require_independent_reconstruction() {
 }
 
 #[tokio::test]
+async fn chiral_endo_exo_alternatives_require_relative_reconstruction() {
+    use crate::naming::{AlternativeName, NameReason};
+    let smiles = "O[C@H]1C[C@@H]2CC[C@H]1C2";
+    let primary = "(1S,2S,4R)-bicyclo[2.2.1]heptan-2-ol";
+    let mirror = "(1R,2R,4S)-bicyclo[2.2.1]heptan-2-ol";
+    let endo_exo = "bicyclo[2.2.1]heptan-2-exo-ol";
+    let diastereomer = "(1S,2R,4R)-bicyclo[2.2.1]heptan-2-ol";
+    let relative = NameStatus::NotPreferred(NameReason::EndoExoStereo);
+    let request = super::super::local::verification_request(endo_exo).unwrap();
+    let reply = worker::respond(&request).unwrap();
+    let parsed = super::super::local::verification_result(endo_exo, &reply).unwrap();
+    let absolute = super::super::local::relative_stereo_smiles(&parsed.smiles).unwrap();
+    for expected in [smiles, "O[C@@H]1C[C@H]2CC[C@@H]1C2"] {
+        verify_alternative_identity(expected, &parsed.smiles, relative).unwrap();
+    }
+    assert!(
+        verify_alternative_identity(absolute, absolute, relative)
+            .unwrap_err()
+            .contains("relative stereo group")
+    );
+    assert!(
+        verify_alternative_identity("O[C@@H]1C[C@@H]2CC[C@H]1C2", &parsed.smiles, relative,)
+            .is_err()
+    );
+    let identity = Identity {
+        smiles: smiles.into(),
+        naming_smiles: None,
+        unknown_stereo_smiles: None,
+        write_unknown_stereo: false,
+        warnings: vec![],
+    };
+    let candidate = openclatura::Name {
+        text: primary.into(),
+        status: NameStatus::Preferred,
+        alternatives: [
+            (endo_exo, relative),
+            (primary, relative),
+            (mirror, relative),
+            (
+                mirror,
+                NameStatus::NotPreferred(NameReason::RelativeRingStereo),
+            ),
+            (mirror, NameStatus::Unverified(NameReason::EndoExoStereo)),
+            (mirror, NameStatus::Preferred),
+            (diastereomer, relative),
+            ("bicyclo[2.2.1]heptan-2-ol", relative),
+            ("ethanol", relative),
+        ]
+        .into_iter()
+        .map(|(name, status)| AlternativeName {
+            name: name.into(),
+            status,
+        })
+        .collect(),
+        omitted_stereo: vec![],
+        omitted_units: 0,
+        verification: None,
+    };
+    let record = reconstruct(
+        &identity,
+        super::super::canonical_smiles(smiles).unwrap(),
+        candidate,
+        &Cancel::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(record.title, primary);
+    assert_eq!(record.name_status, Some(NameStatus::Preferred));
+    assert_eq!(
+        record.alternatives,
+        [AlternativeName {
+            name: endo_exo.into(),
+            status: relative,
+        }]
+    );
+}
+
+#[test]
+fn endo_exo_relative_group_must_cover_every_tetrahedral_centre() {
+    let expected = "O[C@H]1C[C@@H]2CC[C@H]1C2";
+    let status = NameStatus::NotPreferred(super::super::NameReason::EndoExoStereo);
+    for group in ["o1:1,3,6", "o2:6,1,3"] {
+        verify_alternative_identity(expected, &format!("{expected} |{group}|"), status).unwrap();
+    }
+    for group in ["o1:1", "o1:1,3", "o1:1,o2:3,6", "&1:1,3,6", "a:1,3,6"] {
+        assert!(
+            verify_alternative_identity(expected, &format!("{expected} |{group}|"), status)
+                .is_err(),
+            "Accepted incomplete or unsupported stereo group {group}"
+        );
+    }
+}
+
+#[test]
+fn primary_and_other_alternatives_require_exact_identity() {
+    use crate::naming::NameReason;
+    let expected = "O[C@H]1C[C@@H]2CC[C@H]1C2";
+    let mirror = "O[C@@H]1C[C@H]2CC[C@@H]1C2";
+    for status in [
+        NameStatus::Preferred,
+        NameStatus::NotPreferred(NameReason::RelativeRingStereo),
+        NameStatus::Unverified(NameReason::EndoExoStereo),
+    ] {
+        verify_alternative_identity(expected, expected, status).unwrap();
+        assert!(verify_alternative_identity(expected, mirror, status).is_err());
+        assert!(
+            verify_alternative_identity(expected, &format!("{mirror} |o1:1,3,6|"), status).is_err()
+        );
+    }
+}
+
+#[test]
+fn achiral_endo_exo_alternatives_verify_without_a_relative_group() {
+    use crate::naming::NameReason;
+    let expected = "CN1[C@@H]2CC[C@H]1C[C@@H](O)C2";
+    let name = "8-methyl-8-azabicyclo[3.2.1]octan-3-endo-ol";
+    let request = super::super::local::verification_request(name).unwrap();
+    let reply = worker::respond(&request).unwrap();
+    let parsed = super::super::local::verification_result(name, &reply).unwrap();
+    let relative = NameStatus::NotPreferred(NameReason::EndoExoStereo);
+    assert!(!parsed.smiles.contains('|'));
+    verify_alternative_identity(expected, &parsed.smiles, relative).unwrap();
+    assert!(
+        verify_alternative_identity(expected, &format!("{} |o1:2,5,7|", parsed.smiles), relative)
+            .unwrap_err()
+            .contains("relative stereo group")
+    );
+}
+
+#[tokio::test]
 async fn unknown_configuration_preference_selects_the_verified_primary() {
     use crate::naming::NameReason;
     let input = "C[CH:900001](O)[C@H](Cl)C";

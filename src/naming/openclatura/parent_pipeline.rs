@@ -492,6 +492,7 @@ fn build_parent_parts(
             }
         }
     }
+    super::endo_exo_stereo::add_alternative(mol, &mut parts, numbered_path, locants);
     if selection.ring_assembly.is_none() {
         add_relative_ring_stereo(mol, &mut parts, numbered_path, locants)?;
     } else {
