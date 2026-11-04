@@ -262,7 +262,8 @@ mod tests {
             (
                 r"C1=CC=C(C=C1)COC2=CC\3=C(C=C2)NN/C3=C\4/N=C5C=CC(=CC5=N4)NCCCN6C=CN=C6",
                 "(2Z)-2-[5-(benzyloxy)-2,3-dihydro-1H-indazol-3-ylidene]-N-[3-(1H-imidazol-1-yl)propyl]-1,3-benzimidazol-5-amine",
-                NameStatus::Preferred,
+                // Four ring systems, two terminal, along ten nodes (P-52.2.5.3).
+                NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
         ] {
             let name = super::super::name_smiles(smiles).unwrap();
