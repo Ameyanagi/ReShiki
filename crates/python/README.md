@@ -3,6 +3,10 @@
 Draw, convert and analyze chemical structures with the same Rust engine as the
 ReShiki editor. Python 3.10 or later is required. The API is experimental until 1.0.
 
+```sh
+uv add reshiki  # or: pip install reshiki
+```
+
 ```python
 import reshiki
 
@@ -67,7 +71,7 @@ RDKit conversion uses `Molecule.from_rdkit(mol)` and
 `molecule.to_rdkit()` when RDKit is already installed.
 
 Outputs include PNG, SVG, PDF, CDXML, MOL/SDF, SMILES, InChI and native `.rsk`.
-EMF raises `NotImplementedError` pending a headless exporter. This PR does not
-publish to PyPI; six-platform release wheels and publishing are follow-ups.
+EMF raises `NotImplementedError` pending a headless exporter. Wheels for macOS,
+Windows and Linux on x64 and ARM64 follow each ReShiki release.
 
 See the [Python guide](../../docs/python.md) for the API and local build commands.
