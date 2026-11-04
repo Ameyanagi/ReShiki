@@ -10,6 +10,20 @@ fn parse(name: &str) -> Structure {
     assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
     result.structure.unwrap()
 }
+const CAGE_GROUP_SCOPE_ERROR: &str =
+    "rel-/rac- outside an endo/exo cage's own scope is not supported";
+
+fn assert_group_scope_refused(name: &str) {
+    let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
+    assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+    assert!(result.structure.is_none(), "{name}");
+    assert!(
+        result.message.contains(CAGE_GROUP_SCOPE_ERROR),
+        "{name}: {}",
+        result.message
+    );
+}
+
 fn canonical(text: &str) -> String {
     let imported = smiles::read(text).unwrap();
     smiles::write::write(&imported.prepared.state, Default::default())
@@ -445,7 +459,7 @@ fn achiral_cages_and_absolute_cip_anchored_cages_stay_ungrouped() {
 }
 
 #[test]
-fn cage_groups_include_all_descriptors_and_remain_independent() {
+fn cage_groups_include_all_descriptors_in_one_group() {
     for (name, kind, centres) in [
         (
             "(1R*)-bicyclo[2.2.1]heptan-2-exo-ol",
@@ -478,112 +492,68 @@ fn cage_groups_include_all_descriptors_and_remain_independent() {
             "{name}: {groups:?}"
         );
     }
-    let structure = parse(
-        "2-(bicyclo[2.2.1]heptan-2-exo-yl)-3-[rel-(2-exo)-bicyclo[2.2.1]heptan-2-yl]propan-1-ol",
-    );
-    let written = structure.semantic_cxsmiles().unwrap();
-    let imported = smiles::read(&written).unwrap();
-    let groups = &imported.prepared.state.metadata.groups;
-    assert_eq!(groups.len(), 2, "{written}");
-    assert!(
-        groups
-            .iter()
-            .all(|group| group.kind == 1 && group.atoms.len() == 3),
-        "{written}"
-    );
 }
 
 #[test]
-fn separately_scoped_cage_groups_are_independent() {
-    for (prefix, kind, extensions) in [("rel", 1, ["o1:", "o2:"]), ("rac", 2, ["&1:", "&2:"])] {
+fn explicit_groups_on_multiple_cages_are_refused() {
+    assert_group_scope_refused(
+        "2-(bicyclo[2.2.1]heptan-2-exo-yl)-3-[rel-(2-exo)-bicyclo[2.2.1]heptan-2-yl]propan-1-ol",
+    );
+    for prefix in ["rel", "rac"] {
         let name = format!(
             "2-[{prefix}-(2-exo)-bicyclo[2.2.1]heptan-2-yl]-3-[{prefix}-(2-exo)-bicyclo[2.2.1]heptan-2-yl]propan-1-ol"
         );
-        let written = parse(&name).semantic_cxsmiles().unwrap();
-        let imported = smiles::read(&written).unwrap();
-        let groups = &imported.prepared.state.metadata.groups;
-        assert_eq!(groups.len(), 2, "{name}: {written}");
-        assert!(
-            groups
-                .iter()
-                .all(|group| group.kind == kind && group.atoms.len() == 3),
-            "{name}: {written}"
-        );
-        for extension in extensions {
-            assert!(written.contains(extension), "{name}: {written}");
+        assert_group_scope_refused(&name);
+    }
+}
+
+#[test]
+fn single_cage_groups_allow_simple_ring_substituents() {
+    for substituent in ["phenyl", "cyclohexyl"] {
+        for (prefix, kind) in [("rel", "Relative"), ("rac", "Racemic")] {
+            let name = format!("{prefix}-(1R,3R)-3-{substituent}bicyclo[2.2.1]heptan-2-exo-ol");
+            let structure = parse(&name);
+            assert_eq!(
+                stereo_group_signature(&structure),
+                format!("{kind}:1,2,3,4"),
+                "{name}"
+            );
+            assert_eq!(allowed_structures(&structure).len(), 2, "{name}");
         }
     }
 }
 
 #[test]
-fn separately_scoped_cip_descriptors_keep_cage_groups_independent() {
-    for (prefix, kind, extension) in [
-        ("rel", 1, "|o1:0,1,3,o2:11,12,15|"),
-        ("rac", 2, "|&1:0,1,3,&2:11,12,15|"),
-    ] {
+fn explicitly_grouped_cip_descriptors_on_multiple_cages_are_refused() {
+    for prefix in ["rel", "rac"] {
         let suffix_name = format!(
             "2-[{prefix}-(1R)-bicyclo[2.2.1]heptan-2-exo-yl]-3-[{prefix}-(1R)-bicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol"
         );
         let combined_name = format!(
             "2-[{prefix}-(1R,2-exo)-bicyclo[2.2.1]heptan-2-yl]-3-[{prefix}-(1R,2-exo)-bicyclo[2.2.1]heptan-2-yl]propan-1-ol"
         );
-        let written = parse(&suffix_name).semantic_cxsmiles().unwrap();
-        assert!(written.ends_with(extension), "{suffix_name}: {written}");
-        assert_eq!(
-            written,
-            parse(&combined_name).semantic_cxsmiles().unwrap(),
-            "{suffix_name} differs from {combined_name}"
-        );
-        let imported = smiles::read(&written).unwrap();
-        let groups = &imported.prepared.state.metadata.groups;
-        assert_eq!(groups.len(), 2, "{suffix_name}: {written}");
-        assert!(
-            groups
-                .iter()
-                .all(|group| group.kind == kind && group.atoms.len() == 3),
-            "{suffix_name}: {written}"
-        );
+        assert_group_scope_refused(&suffix_name);
+        assert_group_scope_refused(&combined_name);
     }
 }
 
 #[test]
-fn cage_groups_remain_independent_of_stereo_centres_outside_cages() {
-    for (prefix, kind) in [("rel", 1), ("rac", 2)] {
+fn explicit_groups_on_multiple_cages_and_the_parent_are_refused() {
+    for prefix in ["rel", "rac"] {
         let name = format!(
             "{prefix}-(2R)-2-[{prefix}-(1R)-bicyclo[2.2.1]heptan-2-exo-yl]-3-[{prefix}-(1R)-bicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol"
         );
-        let written = parse(&name).semantic_cxsmiles().unwrap();
-        let imported = smiles::read(&written).unwrap();
-        let groups = &imported.prepared.state.metadata.groups;
-        assert_eq!(groups.len(), 3, "{name}: {written}");
-        assert!(
-            groups.iter().all(|group| group.kind == kind),
-            "{name}: {written}"
-        );
-        let mut group_sizes: Vec<_> = groups.iter().map(|group| group.atoms.len()).collect();
-        group_sizes.sort();
-        assert_eq!(group_sizes, [1, 3, 3], "{name}: {written}");
+        assert_group_scope_refused(&name);
     }
 }
 
 #[test]
-fn absolute_cip_centre_on_the_frame_anchors_the_entire_frame() {
+fn mixed_absolute_and_starred_frame_descriptors_are_refused() {
     for name in [
         "(1R,4S*)-bicyclo[2.2.1]heptan-2-exo-ol",
         "(1R*,4S)-bicyclo[2.2.1]heptan-2-exo-ol",
     ] {
-        let structure = parse(name);
-        let written = structure.semantic_cxsmiles().unwrap();
-        assert!(
-            structure
-                .graph
-                .atoms
-                .iter()
-                .filter_map(|atom| atom.parity.as_ref())
-                .all(|parity| parity.stereo_group.kind == StereoGroupType::Absolute),
-            "{name}: {written}"
-        );
-        assert!(!written.contains('|'), "{name}: {written}");
+        assert_group_scope_refused(name);
     }
 }
 
@@ -701,9 +671,29 @@ fn absolute_frame_anchors_preserve_the_specified_diastereomer() {
             "(3R)-3-exo-methylbicyclo[2.2.1]heptan-2-exo-ol",
             "C[C@H]1[C@H]([C@@H]2CC[C@H]1C2)O",
         ),
+        (
+            "(1R,3R)-3-[(1S)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+            "[C@H]12[C@H](C[C@H](CC1)C2)[C@@H]2[C@H]([C@@H]1CC[C@H]2C1)O",
+        ),
+        (
+            "(1R,3R)-3-(bicyclo[2.2.1]heptan-2-yl)bicyclo[2.2.1]heptan-2-exo-ol",
+            "C12C(CC(CC1)C2)[C@@H]2[C@H]([C@@H]1CC[C@H]2C1)O",
+        ),
+        (
+            "(1R,3R)-3-[(1S)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+            "F[C@@H](C)[C@H]1[C@H]([C@@H]2CC[C@H]1C2)O",
+        ),
+        (
+            "(1S,3S)-3-[(1R)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+            "F[C@H](C)[C@@H]1[C@@H]([C@H]2CC[C@@H]1C2)O",
+        ),
     ] {
         let structure = parse(name);
-        assert_eq!(structure.semantic_cxsmiles().unwrap(), expected, "{name}");
+        assert_eq!(
+            canonical(&structure.semantic_cxsmiles().unwrap()),
+            canonical(expected),
+            "{name}"
+        );
         assert!(
             structure
                 .graph
@@ -761,31 +751,10 @@ fn all_cage_descriptors_are_collected_before_choosing_the_mirror() {
 }
 
 #[test]
-fn nonabsolute_cip_outside_the_frame_keeps_its_own_group() {
-    for (descriptor, kind) in [
-        ("3R*", StereoGroupType::Relative),
-        ("3RS", StereoGroupType::Racemic),
-    ] {
+fn nonabsolute_cip_outside_the_frame_is_refused() {
+    for descriptor in ["3R*", "3S*", "3RS", "3SR"] {
         let name = format!("({descriptor})-3-methylbicyclo[2.2.1]heptan-2-exo-ol");
-        let structure = parse(&name);
-        let groups = ["1", "2", "3", "4"].map(|locant| {
-            let atom = structure
-                .graph
-                .atom_by_locant(structure.fragment, locant)
-                .unwrap();
-            structure
-                .graph
-                .atom(atom)
-                .parity
-                .as_ref()
-                .unwrap()
-                .stereo_group
-        });
-        assert_eq!(groups[0].kind, StereoGroupType::Relative, "{name}");
-        assert_eq!(groups[0], groups[1], "{name}");
-        assert_eq!(groups[0], groups[3], "{name}");
-        assert_eq!(groups[2].kind, kind, "{name}");
-        assert_ne!(groups[0], groups[2], "{name}");
+        assert_group_scope_refused(&name);
     }
 }
 
@@ -799,7 +768,8 @@ fn explicit_groups_crossing_the_cage_frame_preserve_their_correlations() {
     assert_eq!(rs.len(), 2);
     assert!(rr.is_disjoint(&rs));
 
-    // A01–A04, A16–A18, A23–A24, A27, A29–A34 from the anchor review.
+    // Correlated single-cage cases from the anchor review, including the distinct
+    // rel-/rac-(1R,3R) and (1R,3S) full-cage mirror pairs.
     for (name, expected_groups, expected_pair) in [
         (
             "(1R*,3R*)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
@@ -832,16 +802,6 @@ fn explicit_groups_crossing_the_cage_frame_preserve_their_correlations() {
             None,
         ),
         (
-            "(1R*,3R*,5S)-3,5-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
-            "Absolute:5;Relative:1,2,3,4",
-            None,
-        ),
-        (
-            "(1R*,3R*,5R)-3,5-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
-            "Absolute:5;Relative:1,2,3,4",
-            None,
-        ),
-        (
             "(1R*,4R*)-4-methylbicyclo[3.2.1]octan-2-exo-ol",
             "Relative:1,2,4,5",
             None,
@@ -849,11 +809,6 @@ fn explicit_groups_crossing_the_cage_frame_preserve_their_correlations() {
         (
             "(1RS,4RS)-4-methylbicyclo[3.2.1]octan-2-exo-ol",
             "Racemic:1,2,4,5",
-            None,
-        ),
-        (
-            "2-[(1R*,3R*)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]-3-(bicyclo[2.2.1]heptan-2-endo-yl)propan-1-ol",
-            "Relative:1,2,3,4;Relative:1,2,4",
             None,
         ),
         (
@@ -910,37 +865,116 @@ fn explicit_groups_crossing_the_cage_frame_preserve_their_correlations() {
 }
 
 #[test]
-fn correlated_cage_groups_remain_independent_of_each_other_and_the_parent() {
-    for (prefix, kind) in [("rel", "Relative"), ("rac", "Racemic")] {
+fn correlated_groups_on_multiple_cages_and_the_parent_are_refused() {
+    for prefix in ["rel", "rac"] {
         let name = format!(
             "{prefix}-(2R)-2-[{prefix}-(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]-3-[{prefix}-(1R,3S)-3-methylbicyclo[2.2.1]heptan-2-endo-yl]propan-1-ol"
         );
-        let structure = parse(&name);
-        assert_eq!(
-            stereo_group_signature(&structure),
-            format!("{kind}:1,2,3,4;{kind}:1,2,3,4;{kind}:2"),
-            "{name}"
-        );
-        assert_eq!(allowed_structures(&structure).len(), 8, "{name}");
+        assert_group_scope_refused(&name);
+    }
+}
+
+#[test]
+fn mixed_groups_within_one_cage_and_starred_groups_on_multiple_cages_are_refused() {
+    for name in [
+        "(1R*,3RS)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+        "(1RS,3R*)-3-methylbicyclo[2.2.1]heptan-2-exo-ol",
+        "(1R*,3R*,5S)-3,5-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
+        "(1R*,3R*,5R)-3,5-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
+        "2-[(1R*,3R*)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]-3-(bicyclo[2.2.1]heptan-2-endo-yl)propan-1-ol",
+    ] {
+        assert_group_scope_refused(name);
     }
 }
 
 #[test]
 fn grouped_stereo_outside_a_nested_cage_is_refused() {
-    let parser = Parser::new().unwrap();
     for descriptor in ["rel-(2R)", "rac-(2R)", "(2R*)", "(2S*)", "(2RS)", "(2SR)"] {
         let name =
             format!("{descriptor}-2-[(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol");
-        let result = parser.parse(&name, &ParseOptions::strict());
-        assert_eq!(result.status, Status::Failure, "{name}");
-        assert!(result.structure.is_none(), "{name}");
+        assert_group_scope_refused(&name);
+    }
+}
+
+#[test]
+fn explicit_cage_groups_with_other_molecular_stereo_are_refused() {
+    // Exact scope-regression names from the S855 follow-up report. An explicit
+    // cage qualifier requires every parity to belong to its single cage group.
+    for name in [
+        // S01
+        "rel-(2R)-2-[(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol",
+        // S02
+        "rac-(2R)-2-[(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol",
+        // S03
+        "rel-(1R,3R)-3-[(1R)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S04
+        "rac-(1R,3R)-3-[(1R)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S05
+        "rel-(1S,3S)-3-[(1S)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S06
+        "rac-(1S,3S)-3-[(1S)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S07
+        "rel-(1R,3R)-3-[(1S)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S08
+        "rac-(1R,3R)-3-[(1S)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S09
+        "rel-(1R,3R)-3-[(1S)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S10
+        "rac-(1R,3R)-3-[(1S)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S11
+        "rel-(1S,3S)-3-[(1R)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S12
+        "rac-(1S,3S)-3-[(1R)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S13
+        "rel-(1R)-bicyclo[2.2.1]heptan-2-exo-yl (2S)-2-hydroxypropanoate",
+        // S14
+        "rac-(1R)-bicyclo[2.2.1]heptan-2-exo-yl (2S)-2-hydroxypropanoate",
+        // S15
+        "(1R*,3R*)-3-[(1S)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S16
+        "(1RS,3RS)-3-[(1S)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S17
+        "(2S)-2-[rel-(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol",
+        // S18
+        "(2S)-2-[rac-(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol",
+        // S19
+        "(1R,3R)-3-[(1R*,2S*)-1,2-dihydroxypropyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S20
+        "(1R,3R)-3-[(1RS,2SR)-1,2-dihydroxypropyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S21
+        "(1R*,3R*)-3-[(1RS,2SR)-1,2-dihydroxypropyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S22
+        "(1RS,3RS)-3-[(1R*,2S*)-1,2-dihydroxypropyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S24
+        "(1R*,3R*)-3-[(1S)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S25
+        "(1RS,3RS)-3-[(1S)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        // S28
+        "(1R,3R)-3-[(1R*,2S*)-1,2-dihydroxypropyl]bicyclo[2.2.1]heptan-2-endo-ol",
+    ] {
+        assert_group_scope_refused(name);
+    }
+}
+
+#[test]
+fn qualifiers_on_non_cip_descriptors_are_retained_for_cage_scope_checks() {
+    for unqualified in [
+        "(1E)-1-[(1R)-bicyclo[2.2.1]heptan-2-exo-yl]-2-fluoroethene",
+        "(3alpha,5alpha)-cholestan-3-yl (1R)-bicyclo[2.2.1]heptane-2-exo-carboxylate",
+    ] {
+        let structure = parse(unqualified);
         assert!(
-            result
-                .message
-                .contains("rel-/rac- outside an endo/exo cage's own scope is not supported"),
-            "{name}: {}",
-            result.message
+            structure
+                .graph
+                .atoms
+                .iter()
+                .filter_map(|atom| atom.parity.as_ref())
+                .all(|parity| parity.stereo_group.kind == StereoGroupType::Absolute),
+            "{unqualified}"
         );
+        for prefix in ["rel", "rac"] {
+            assert_group_scope_refused(&format!("{prefix}-{unqualified}"));
+        }
     }
 }
 
@@ -957,15 +991,25 @@ fn grouped_stereo_without_cage_descriptors_is_unchanged() {
 fn grouped_stereo_outside_a_nested_cage_uses_warning_mode() {
     let mut options = ParseOptions::strict();
     options.warn_rather_than_fail_on_uninterpretable_stereochemistry = true;
-    let name = "rel-(2R)-2-[(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol";
-    let result = Parser::new().unwrap().parse(name, &options);
-    assert_eq!(result.status, Status::Warning, "{}", result.message);
-    assert!(result.warnings.iter().any(|warning| {
-        warning.kind == WarningKind::StereochemistryIgnored
-            && warning
-                .message
-                .contains("rel-/rac- outside an endo/exo cage's own scope is not supported")
-    }));
+    for name in [
+        "rel-(2R)-2-[(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol",
+        "rel-(1R,3R)-3-[(1R)-bicyclo[2.2.1]heptan-2-exo-yl]bicyclo[2.2.1]heptan-2-exo-ol",
+        "rac-(1R,3R)-3-[(1S)-1-fluoroethyl]bicyclo[2.2.1]heptan-2-exo-ol",
+        "(1R,4S*)-bicyclo[2.2.1]heptan-2-exo-ol",
+    ] {
+        assert_group_scope_refused(name);
+        let result = Parser::new().unwrap().parse(name, &options);
+        assert_eq!(result.status, Status::Warning, "{name}: {}", result.message);
+        assert!(result.structure.is_some(), "{name}");
+        assert!(
+            result.warnings.iter().any(|warning| {
+                warning.kind == WarningKind::StereochemistryIgnored
+                    && warning.message.contains(CAGE_GROUP_SCOPE_ERROR)
+            }),
+            "{name}: {:?}",
+            result.warnings
+        );
+    }
 }
 
 #[test]

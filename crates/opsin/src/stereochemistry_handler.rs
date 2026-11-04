@@ -335,6 +335,15 @@ impl<'a> StereochemistryHandler<'a> {
         }
     }
     pub fn apply_stereochemical_elements(&mut self, elements: &[NodeId]) -> Result {
+        // Descriptor-set prefixes, starred R/S and RS/SR have already been
+        // normalized to Rel/Rac attributes; standalone qualifiers keep a type.
+        let explicitly_grouped = elements.iter().any(|&id| {
+            let element = &self.arena[id];
+            matches!(
+                element.attribute(TYPE_ATR),
+                Some(REL_TYPE_VAL | RAC_TYPE_VAL)
+            ) || matches!(element.attribute(STEREOGROUP_ATR), Some("Rel" | "Rac"))
+        });
         let mut locanted = Vec::new();
         let mut unlocanted = Vec::new();
         let mut carbohydrate = Vec::new();
@@ -375,28 +384,13 @@ impl<'a> StereochemistryHandler<'a> {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
+        let has_cage_descriptor = !cage.is_empty();
         for id in cage {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
-        // Capture explicit groups before adding cage parities. Groups within
-        // separately described cages retain their own supported scopes.
-        let outside_cage_groups = self
-            .graph()
-            .atoms
-            .iter()
-            .filter(|atom| {
-                atom.active
-                    && !self
-                        .cage_stereo_groups
-                        .values()
-                        .any(|cage| cage.atoms.contains(&atom.id))
-            })
-            .filter_map(|atom| atom.parity.as_ref().map(|parity| parity.stereo_group.kind))
-            .filter(|kind| matches!(kind, StereoGroupType::Relative | StereoGroupType::Racemic))
-            .collect::<BTreeSet<_>>();
         for (atom, mut cage) in std::mem::take(&mut self.cage_stereo_groups) {
-            let result = self.resolve_cage_stereochemistry(&mut cage, &outside_cage_groups);
+            let result = self.resolve_cage_stereochemistry(&mut cage);
             if result.is_ok() {
                 self.cage_stereo_groups.insert(atom, cage);
             }
@@ -441,7 +435,37 @@ impl<'a> StereochemistryHandler<'a> {
             self.warning_or_error(result)?
         }
         self.resolve_unknown_stereo_centres()?;
+        if has_cage_descriptor && explicitly_grouped && !self.cage_scope_is_single_group() {
+            self.warning_or_error(stereo(
+                "rel-/rac- outside an endo/exo cage's own scope is not supported",
+            ))?;
+        }
+        self.cage_stereo_groups.clear();
         Ok(())
+    }
+    fn cage_scope_is_single_group(&self) -> bool {
+        if self.cage_stereo_groups.len() != 1 {
+            return false;
+        }
+        let cage = self.cage_stereo_groups.values().next().unwrap();
+        let mut group = None;
+        self.graph()
+            .atoms
+            .iter()
+            .filter(|atom| atom.active)
+            .all(|atom| {
+                let Some(parity) = &atom.parity else {
+                    return true;
+                };
+                if !cage.atoms.contains(&atom.id) {
+                    return false;
+                }
+                matches!(
+                    parity.stereo_group.kind,
+                    StereoGroupType::Relative | StereoGroupType::Racemic
+                ) && *group.get_or_insert(parity.stereo_group) == parity.stereo_group
+            })
+            && group.is_some()
     }
     pub fn remove_redundant_stereo_centres(&mut self, atoms: &[AtomId], bonds: &[BondId]) {
         for &atom in atoms {
@@ -549,26 +573,7 @@ impl<'a> StereochemistryHandler<'a> {
             "Endo/exo/syn/anti is supported only for substituted bicyclo[2.2.1]heptane and bicyclo[3.2.1]octane cages",
         )
     }
-    fn resolve_cage_stereochemistry(
-        &mut self,
-        cage: &mut CageStereochemistry,
-        outside_cage_groups: &BTreeSet<StereoGroupType>,
-    ) -> Result {
-        // Combined rel-/rac- prefixes can leave a nested cage outside their
-        // descriptor set. Refuse that unsupported scope without changing the
-        // generic prefix handling or groups wholly inside the cage itself.
-        if outside_cage_groups.iter().any(|&kind| {
-            cage.group != Some(kind)
-                && !cage.parities.keys().any(|&atom| {
-                    self.graph()
-                        .atom(atom)
-                        .parity
-                        .as_ref()
-                        .is_some_and(|parity| parity.stereo_group.kind == kind)
-                })
-        }) {
-            return stereo("rel-/rac- outside an endo/exo cage's own scope is not supported");
-        }
+    fn resolve_cage_stereochemistry(&mut self, cage: &mut CageStereochemistry) -> Result {
         let mut mirror = None;
         let existing_group = cage
             .parities
@@ -674,7 +679,7 @@ impl<'a> StereochemistryHandler<'a> {
             };
             *number = (*number).max(group.number);
         }
-        for (_, cage) in cages {
+        for cage in cages.values() {
             let mut atoms: Vec<_> = cage.parities.keys().copied().collect();
             let kind = if let Some(kind) = cage.group {
                 kind
@@ -735,6 +740,7 @@ impl<'a> StereochemistryHandler<'a> {
                 self.set_stereo_group(atom, kind, number);
             }
         }
+        self.cage_stereo_groups = cages;
         Ok(())
     }
     fn cage_has_distinct_mirror(&self, frame: &[AtomId]) -> Result<bool> {
