@@ -3,6 +3,7 @@ use super::{
     assembly_parts::{AssemblyParts, PrincipalGroupItem},
     locants::parse_locant,
     molecule::{AtomSet, Molecule, bond_ids_within},
+    nomenclature::RULES,
     perception::{PerceivedGroup, perceive_groups},
 };
 use std::collections::BTreeMap;
@@ -14,7 +15,11 @@ pub fn component_groups(mol: &Molecule, atoms: &AtomSet) -> Vec<PerceivedGroup> 
         .collect()
 }
 
-pub fn component_principal_key(groups: &[PerceivedGroup], is_substituent: bool) -> Option<String> {
+pub fn component_principal_key(
+    mol: &Molecule,
+    groups: &[PerceivedGroup],
+    is_substituent: bool,
+) -> Option<String> {
     if is_substituent {
         return None;
     }
@@ -44,7 +49,25 @@ pub fn component_principal_key(groups: &[PerceivedGroup], is_substituent: bool) 
                 }
             }
         }
-        (best, seniority.to_vec())
+        let charge: i32 = group.atom_ids().iter().map(|i| mol.atoms[i].charge).sum();
+        // P-72.7(e): anionic suffixes rank as their neutral counterparts, so
+        // carboxylate precedes olate.
+        let neutral = match group.key.as_str() {
+            "olate" => Some("alcohol"),
+            "thiolate" => Some("thiol"),
+            "selenolate" => Some("selenol"),
+            "tellurolate" => Some("tellurol"),
+            _ => None,
+        };
+        if let Some(rank) = neutral
+            .and_then(|key| RULES.functional_groups.get(key))
+            .and_then(|r| r.seniority.as_ref())
+        {
+            best = rank.clone();
+        }
+        // P-70.2: ions precede neutral classes, including charge-separated
+        // neutral groups such as azides and nitrile oxides.
+        (charge == 0, best, seniority.to_vec())
     };
     // min_by keeps the first minimum, as Python's min does.
     groups
@@ -145,4 +168,28 @@ pub fn add_component_principal_group(
                         .any(|other| !item.atom_ids.contains(other)))
     });
     parts.principal_group = Some(item);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anionic_suffixes_precede_neutral_and_charge_separated_groups() {
+        for (smiles, key) in [
+            ("[NH-]CC(=O)[O-]", "aminide"),
+            ("[O-]CCC(=O)N=[N+]=[N-]", "olate"),
+            ("[O-]CC[Se-]", "olate"),
+            ("[S-]CC[Te-]", "thiolate"),
+            ("[O-]CCC(=O)[O-]", "carboxylate"),
+        ] {
+            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+            let groups = perceive_groups(&mol);
+            assert_eq!(
+                component_principal_key(&mol, &groups, false).as_deref(),
+                Some(key),
+                "{smiles}"
+            );
+        }
+    }
 }

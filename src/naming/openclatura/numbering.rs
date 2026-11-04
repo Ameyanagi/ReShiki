@@ -510,7 +510,7 @@ pub fn indicated_hydrogen_like_atoms(
         return indicated;
     }
     if (!retained::cites_indicated_hydrogen(mol, path, name) && !include_all_ring_carbons)
-        || (name == Some("tetrazole") && path.iter().any(|idx| mol.atoms[idx].charge != 0))
+        || (name == Some("tetrazole") && path.iter().any(|idx| mol.atoms[idx].charge > 0))
     {
         return AtomSet::new();
     }

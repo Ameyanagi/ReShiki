@@ -26,7 +26,7 @@ use super::{
     ranking::{AtomMetadata, BondMetadata, Metadata},
 };
 use serde::Serialize;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -48,8 +48,72 @@ pub enum Error {
     Spatial(#[from] super::stereo::SpatialError),
     #[error(transparent)]
     Atropisomer(#[from] super::stereo::AtropError),
+    #[error(transparent)]
+    Write(Box<write::Error>),
 }
 type Result<T> = std::result::Result<T, Error>;
+
+/// The stereoisomers a structure denotes, as canonical isomeric SMILES.
+/// Ungrouped and absolute centres stay fixed; each OR (`o`) or AND (`&`)
+/// group is the given configuration or its full inversion, independently of
+/// the other groups. A molecule-level `r` makes the absolute (ABS) group
+/// relative: every other tetrahedral centre, including `a` members, forms one
+/// more such group. OR and AND groups expand alike.
+pub fn stereoisomers(text: &str) -> Result<BTreeSet<String>> {
+    let imported = read(text)?;
+    let mut state = imported.prepared.state;
+    let atoms = &state.metadata.atoms;
+    let tetrahedral = |atom: &usize| {
+        atoms
+            .get(*atom)
+            .is_some_and(|m| matches!(m.chiral_tag, 1 | 2))
+    };
+    let mut units: Vec<Vec<usize>> = state
+        .metadata
+        .groups
+        .iter()
+        .filter(|group| matches!(group.kind, 1 | 2))
+        .map(|group| group.atoms.iter().copied().filter(tetrahedral).collect())
+        .collect();
+    if imported.relative {
+        let grouped: HashSet<_> = units.iter().flatten().copied().collect();
+        units.push(
+            (0..atoms.len())
+                .filter(|atom| !grouped.contains(atom) && tetrahedral(atom))
+                .collect(),
+        );
+    }
+    units.retain(|unit| !unit.is_empty());
+    state.metadata.groups.clear();
+    (0..1usize << units.len())
+        .map(|mask| {
+            let flipped: HashSet<usize> = units
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| mask & (1 << index) != 0)
+                .flat_map(|(_, unit)| unit.iter().copied())
+                .collect();
+            let mut member = state.clone();
+            for (atom, meta) in member.metadata.atoms.iter_mut().enumerate() {
+                if flipped.contains(&atom) {
+                    meta.chiral_tag = 3 - meta.chiral_tag;
+                }
+            }
+            // Ring member signs record equal or opposite winding of two centres.
+            for (atom, properties) in member.properties.atoms.iter_mut().enumerate() {
+                for other in properties.ring_members.iter_mut().flatten() {
+                    let partner = other.unsigned_abs() as usize - 1;
+                    if flipped.contains(&atom) != flipped.contains(&partner) {
+                        *other = -*other;
+                    }
+                }
+            }
+            Ok(write::write(&member, Default::default())
+                .map_err(|error| Error::Write(Box::new(error)))?
+                .text)
+        })
+        .collect()
+}
 
 #[derive(Debug, Serialize)]
 pub struct Parsed {

@@ -36,40 +36,38 @@ annotation-interval ordering are retained. The exported table SHA256 is recorded
 in `manifest.json`; the regenerated tables include the forward/reverse `phaneLocants` recognizer and shared locant
 and stereochemistry grammar changes.
 
-For the native locanted axial and unlocanted Xi/xi extensions, `token-69`
-(the stereochemistry bracket recognizer) and `token-reversed-69` are
-generated with the checked
-`regexTokens.xml`; all other entries retain their pinned binary tables. Use
-the existing exporter with that XML copied to
-`resources/uk/ac/cam/ch/wwmm/opsin/resources/regexTokens.xml` in its fresh
-working directory, then retain only those two entries from the resulting
-table. The override is a development-only input; Cargo reads the checked
-binary directly. Frozen upstream oracle fixtures are unchanged.
+The native `regexTokens.xml` extensions (locanted axial and unlocanted Xi/xi
+descriptors) change only `token-69`, the stereochemistry bracket recognizer, and
+`token-reversed-69`. The checked table is a full export with the checked
+`regexTokens.xml` as a development resource override; every other entry equals
+the pristine export of the pinned jar. Cargo reads the checked binary directly.
+Frozen upstream oracle fixtures are unchanged.
 
-To reproduce the migration with an already available trusted JDK, use a fresh
-empty working directory so OPSIN's development `./resources` override cannot
-intercept resource loading. Paths below should be absolute:
+After editing `regexTokens.xml`, regenerate the table and every hash that pins
+it with one command. It needs the pinned jar above and a JDK 21 (Temurin
+21.0.13 reproduces the checked table byte for byte):
 
 ```sh
-cp /path/to/crates/opsin/provenance/ExportDfa.java.txt /tmp/export/ExportDfa.java
-javac -cp /path/to/pinned-opsin-core.jar -d /tmp/export /tmp/export/ExportDfa.java
-cd /tmp/empty-working-directory
-java -cp /path/to/pinned-opsin-core.jar:/tmp/export \
-  uk.ac.cam.ch.wwmm.opsin.ExportDfa /tmp/export/automata.bin
+OPSIN_JAR=/path/to/opsin-core-3.0-SNAPSHOT-jar-with-dependencies.jar \
+JAVA_HOME=/path/to/jdk-21 \
+  uv run --no-project python scripts/regenerate_opsin_grammar.py
 ```
 
-To include both native extensions, rerun that exporter from an
-isolated directory with the checked `regexTokens.xml` as a deliberate resource
-override. Only `token-69` and `token-reversed-69` differ from the pinned tables:
+`--jar` and `--java-home` replace the environment variables, and `--check`
+reports stale files without writing. The script compiles `ExportDfa.java.txt`,
+runs it in a fresh temporary directory with the checked `regexTokens.xml` as
+the `resources/uk/ac/cam/ch/wwmm/opsin/resources/regexTokens.xml` override, and
+rewrites `resources/automata.bin`, the `manifest.json` resource hashes and
+resource fingerprint, `RESOURCE_FINGERPRINT` in `src/lib.rs`, the constant
+below and `src/naming/catalog/provenance.json`. Record each new grammar change
+under `native_extensions` in `manifest.json` by hand.
 
-```sh
-mkdir -p /tmp/export/resources/uk/ac/cam/ch/wwmm/opsin/resources
-cp /path/to/crates/opsin/resources/xml/regexTokens.xml \
-  /tmp/export/resources/uk/ac/cam/ch/wwmm/opsin/resources/regexTokens.xml
-cd /tmp/export
-java -cp /path/to/pinned-opsin-core.jar:/tmp/export \
-  uk.ac.cam.ch.wwmm.opsin.ExportDfa /tmp/export/automata.bin
-```
+When two branches both change the grammar, `.gitattributes` marks
+`automata.bin` binary, so git keeps one side and reports a conflict. Merge
+`regexTokens.xml` and any prose by hand, then run the script: it takes either
+side of conflict hunks that differ only in hashes and regenerates everything
+else. `tests/resource_pins.rs` fails in CI while any hash or the fingerprint
+disagrees with the checked resources.
 
 `ExportFrontend.java.txt` records the frozen frontend fixture generator. Its
 first argument is a UTF-8 file of distinct input names (one per line); its
