@@ -55,6 +55,17 @@ pub(super) fn monatomic_cation(smiles: &str, in_salt: bool) -> Result<Option<Nam
 
 /// Assess each anion before a salt can inherit its preference status.
 pub(super) fn assess_anion_parent(mol: &Molecule, text: &str) {
+    // P-73.6: azaniumyl, not ammonio, is the preferred cation prefix, as on a
+    // zwitterion whose skeletal anion is the parent.
+    if text.contains("ammonio")
+        && mol
+            .atoms
+            .values()
+            .any(|atom| atom.charge < 0 && matches!(atom.symbol.as_str(), "C" | "N"))
+    {
+        mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
+        return;
+    }
     // Carbon-free anions take retained or additive names, not a P-72.7 parent.
     if mol.atoms.values().all(|atom| atom.symbol != "C")
         || mol.atoms.values().map(|atom| atom.charge).sum::<i32>() >= 0
@@ -101,7 +112,8 @@ pub(super) fn assess_anion_parent(mol: &Molecule, text: &str) {
                 .iter()
                 .any(|neutral| word.ends_with(neutral))
         });
-    if last.ends_with("olate") || !anionic_parent {
+    // P-72.6.1: the preferred prefix for -C(=O)O- is carboxylato.
+    if last.ends_with("olate") || !anionic_parent || text.contains("oxidocarbonyl") {
         mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
     }
 }
@@ -349,6 +361,26 @@ mod tests {
                 "[Na+].Oc1ccccc1-c1nc[n-]c1",
                 "sodium 4-(2-hydroxyphenyl)-1H-imidazol-1-ide",
                 NameStatus::Preferred,
+            ),
+            (
+                "[Na+].[n-]1nnnc1-c1ccc(O)cc1",
+                "sodium 5-(4-hydroxyphenyl)-1H-tetrazol-1-ide",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].[n-]1nnnc1C(=O)O",
+                "sodium 1H-tetrazol-1-ide-5-carboxylic acid",
+                NameStatus::Preferred,
+            ),
+            (
+                "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
+                "5-[2-(oxidocarbonyl)phenyl]-1H-pyrrol-1-ide-3-carboxylate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "[NH3+]CC1[N-]C(=O)NC1=O",
+                "5-(ammoniomethyl)imidazolidin-1-ide-2,4-dione",
+                NameStatus::Unverified(NameReason::AnionParent),
             ),
             ("CC(=O)[O-]", "acetate", NameStatus::Preferred),
             (

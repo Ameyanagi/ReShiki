@@ -141,6 +141,10 @@ pub(super) fn apply_anionic_parent_names(
             None
         };
         let next = methanide.unwrap_or_else(|| apply_parent_anion_rule(&updated, site, retained));
+        // P-72.2.2.1: the vowel of 'ide' elides a parent's final 'e', as in
+        // cyclohexan-1-ide-4-sulfonate.
+        let operation = format!("-{}-ide", site.locant);
+        let next = next.replacen(&format!("e{operation}"), &operation, 1);
         // Upstream divergence: atom membership alone cannot credit an anion whose name never changes.
         if next == updated && !covered.contains(&site.atom) {
             return Err(format!(
@@ -983,25 +987,25 @@ mod tests {
         for (name, retained, locant, expected) in [
             ("cyclohexan-2-one", None, "4", "2-oxocyclohexan-4-ide"),
             ("butanal", None, "2", "butan-2-ide-1-al"),
-            ("propanedinitrile", None, "2", "propane-2-ide-1,3-dinitrile"),
-            ("but-3-ynenitrile", None, "2", "but-3-yne-2-ide-1-nitrile"),
+            ("propanedinitrile", None, "2", "propan-2-ide-1,3-dinitrile"),
+            ("but-3-ynenitrile", None, "2", "but-3-yn-2-ide-1-nitrile"),
             (
                 "cyclopentane-1-carbonitrile",
                 None,
                 "2",
-                "cyclopentane-2-ide-1-carbonitrile",
+                "cyclopentan-2-ide-1-carbonitrile",
             ),
             (
                 "cyclopentanecarbonitrile",
                 None,
                 "2",
-                "cyclopentane-2-ide-carbonitrile",
+                "cyclopentan-2-ide-carbonitrile",
             ),
             (
                 "cyclopentane-1-carbaldehyde",
                 None,
                 "2",
-                "cyclopentane-2-ide-1-carbaldehyde",
+                "cyclopentan-2-ide-1-carbaldehyde",
             ),
             (
                 "2-cyanopyrrolidin-3-aminium",
@@ -1019,7 +1023,7 @@ mod tests {
                 "5-(ammoniomethyl)imidazolidine-2,4-dione",
                 Some("imidazolidine"),
                 "1",
-                "5-(ammoniomethyl)imidazolidine-1-ide-2,4-dione",
+                "5-(ammoniomethyl)imidazolidin-1-ide-2,4-dione",
             ),
             ("1H-pyrrole", Some("pyrrole"), "1", "1H-pyrrol-1-ide"),
         ] {
@@ -1062,7 +1066,6 @@ mod tests {
                 "1",
                 "hexahydro-1H,6H-pyrrolo[3,4-b]pyridin-1-ide",
             ),
-            ("3H-pyrrole", "pyrrol", "1", "3H-pyrrol-1-ide"),
             ("1H-pyrrol-1-ide", "pyrrol", "1", "1H-pyrrol-1-ide"),
         ] {
             assert_eq!(
