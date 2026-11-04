@@ -2,7 +2,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use opsin::graph::StereoGroupType;
-use opsin::{ParseOptions, Parser, Status, Structure};
+use opsin::{ParseOptions, Parser, Status, Structure, WarningKind};
 use reshiki_chemistry::smiles;
 
 fn parse(name: &str) -> Structure {
@@ -923,6 +923,49 @@ fn correlated_cage_groups_remain_independent_of_each_other_and_the_parent() {
         );
         assert_eq!(allowed_structures(&structure).len(), 8, "{name}");
     }
+}
+
+#[test]
+fn grouped_stereo_outside_a_nested_cage_is_refused() {
+    let parser = Parser::new().unwrap();
+    for descriptor in ["rel-(2R)", "rac-(2R)", "(2R*)", "(2S*)", "(2RS)", "(2SR)"] {
+        let name =
+            format!("{descriptor}-2-[(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol");
+        let result = parser.parse(&name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}");
+        assert!(result.structure.is_none(), "{name}");
+        assert!(
+            result
+                .message
+                .contains("rel-/rac- outside an endo/exo cage's own scope is not supported"),
+            "{name}: {}",
+            result.message
+        );
+    }
+}
+
+#[test]
+fn grouped_stereo_without_cage_descriptors_is_unchanged() {
+    for prefix in ["rel", "rac"] {
+        parse(&format!(
+            "{prefix}-(2R)-2-[(1R,2S,3R,4S)-3-methylbicyclo[2.2.1]heptan-2-yl]propan-1-ol"
+        ));
+    }
+}
+
+#[test]
+fn grouped_stereo_outside_a_nested_cage_uses_warning_mode() {
+    let mut options = ParseOptions::strict();
+    options.warn_rather_than_fail_on_uninterpretable_stereochemistry = true;
+    let name = "rel-(2R)-2-[(1R,3R)-3-methylbicyclo[2.2.1]heptan-2-exo-yl]propan-1-ol";
+    let result = Parser::new().unwrap().parse(name, &options);
+    assert_eq!(result.status, Status::Warning, "{}", result.message);
+    assert!(result.warnings.iter().any(|warning| {
+        warning.kind == WarningKind::StereochemistryIgnored
+            && warning
+                .message
+                .contains("rel-/rac- outside an endo/exo cage's own scope is not supported")
+    }));
 }
 
 #[test]

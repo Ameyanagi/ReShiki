@@ -379,8 +379,24 @@ impl<'a> StereochemistryHandler<'a> {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
+        // Capture explicit groups before adding cage parities. Groups within
+        // separately described cages retain their own supported scopes.
+        let outside_cage_groups = self
+            .graph()
+            .atoms
+            .iter()
+            .filter(|atom| {
+                atom.active
+                    && !self
+                        .cage_stereo_groups
+                        .values()
+                        .any(|cage| cage.atoms.contains(&atom.id))
+            })
+            .filter_map(|atom| atom.parity.as_ref().map(|parity| parity.stereo_group.kind))
+            .filter(|kind| matches!(kind, StereoGroupType::Relative | StereoGroupType::Racemic))
+            .collect::<BTreeSet<_>>();
         for (atom, mut cage) in std::mem::take(&mut self.cage_stereo_groups) {
-            let result = self.resolve_cage_stereochemistry(&mut cage);
+            let result = self.resolve_cage_stereochemistry(&mut cage, &outside_cage_groups);
             if result.is_ok() {
                 self.cage_stereo_groups.insert(atom, cage);
             }
@@ -533,7 +549,26 @@ impl<'a> StereochemistryHandler<'a> {
             "Endo/exo/syn/anti is supported only for substituted bicyclo[2.2.1]heptane and bicyclo[3.2.1]octane cages",
         )
     }
-    fn resolve_cage_stereochemistry(&mut self, cage: &mut CageStereochemistry) -> Result {
+    fn resolve_cage_stereochemistry(
+        &mut self,
+        cage: &mut CageStereochemistry,
+        outside_cage_groups: &BTreeSet<StereoGroupType>,
+    ) -> Result {
+        // Combined rel-/rac- prefixes can leave a nested cage outside their
+        // descriptor set. Refuse that unsupported scope without changing the
+        // generic prefix handling or groups wholly inside the cage itself.
+        if outside_cage_groups.iter().any(|&kind| {
+            cage.group != Some(kind)
+                && !cage.parities.keys().any(|&atom| {
+                    self.graph()
+                        .atom(atom)
+                        .parity
+                        .as_ref()
+                        .is_some_and(|parity| parity.stereo_group.kind == kind)
+                })
+        }) {
+            return stereo("rel-/rac- outside an endo/exo cage's own scope is not supported");
+        }
         let mut mirror = None;
         let existing_group = cage
             .parities
