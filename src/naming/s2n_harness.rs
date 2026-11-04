@@ -31,6 +31,10 @@ fn corpus(fast: bool) -> Vec<Case> {
     for line in BAKEOFF.lines().skip(1) {
         let fields: Vec<_> = line.split('\t').collect();
         assert_eq!(fields.len(), 6, "Malformed bakeoff row: {line}");
+        assert!(
+            ["correct", "declined", "opsin_unparsed", "wrong_stereo"].contains(&fields[5]),
+            "Unknown openclatura status: {line}"
+        );
         if fields[1] == "pubchem_random" {
             random_index += 1;
             if fast && (random_index - 1) % 10 != 0 {
@@ -41,7 +45,12 @@ fn corpus(fast: bool) -> Vec<Case> {
             smiles: fields[0].into(),
             category: fields[1].into(),
             pubchem_name: fields[3].into(),
-            golden: fields[4].into(),
+            golden: if fields[5] == "correct" {
+                fields[4]
+            } else {
+                ""
+            }
+            .into(),
         });
     }
     // Sample within each source category so even small categories are retained.
@@ -71,6 +80,7 @@ enum Class {
     Wrong,
     Declined,
     Unparseable,
+    KnownFailure,
 }
 
 #[derive(Clone)]
@@ -291,6 +301,7 @@ struct Counts {
     declined: usize,
     unparseable: usize,
     input_unparseable: usize,
+    known_failure: usize,
     exact: usize,
 }
 
@@ -305,6 +316,7 @@ impl Counts {
             Class::Wrong => self.wrong += 1,
             Class::Declined => self.declined += 1,
             Class::Unparseable => self.unparseable += 1,
+            Class::KnownFailure => self.known_failure += 1,
         }
         // Goldens are openclatura's spelling, which encloses with parentheses only.
         self.exact += usize::from(golden.is_some_and(|g| {
@@ -358,7 +370,10 @@ impl Report {
         if outcome.class == Class::Declined {
             *self.declines.entry(outcome.reason.clone()).or_default() += 1;
         }
-        if matches!(outcome.class, Class::Wrong | Class::Unparseable) {
+        if matches!(
+            outcome.class,
+            Class::Wrong | Class::Unparseable | Class::KnownFailure
+        ) {
             self.details.push(format!(
                 "{:?}\t{}\tsmiles={}\tname={}\texpected={}\tactual={}\treason={}",
                 outcome.class,
@@ -409,19 +424,20 @@ fn render(
     elapsed: Duration,
 ) -> String {
     let mut text = String::from(
-        "check\tcategory\tcorrect\twrong\tdeclined\tunparseable\ttotal\tinput_unparseable\tcorrect_%\texact\texact_%\n",
+        "check\tcategory\tcorrect\twrong\tdeclined\tunparseable\ttotal\tinput_unparseable\tknown_failure\tcorrect_%\texact\texact_%\n",
     );
     for (check, report) in reports {
         for (category, counts) in report.rows() {
             writeln!(
                 text,
-                "{check}\t{category}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{}\t{:.2}",
+                "{check}\t{category}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{}\t{:.2}",
                 counts.correct,
                 counts.wrong,
                 counts.declined,
                 counts.unparseable,
                 counts.total(),
                 counts.input_unparseable,
+                counts.known_failure,
                 percentage(counts.correct, counts.total()),
                 counts.exact,
                 percentage(counts.exact, counts.total())
@@ -532,6 +548,43 @@ fn ratchet(reports: &BTreeMap<&str, Report>) {
 fn run(fast: bool) {
     let start = Instant::now();
     let cases = corpus(fast);
+    let text = std::fs::read_to_string(Path::new(FIXTURES).join("name_known_failures.tsv"))
+        .expect("read name known failures");
+    let known: BTreeMap<_, _> = text
+        .lines()
+        .skip(1)
+        .map(|line| {
+            let fields: Vec<_> = line.splitn(3, '\t').collect();
+            assert_eq!(fields.len(), 3, "Malformed name known failure: {line}");
+            let issue = fields[2]
+                .strip_prefix("issue #")
+                .and_then(|r| r.split_once(':'));
+            assert!(
+                issue.is_some_and(|(number, _)| number.parse::<u32>().is_ok()),
+                "Missing issue number: {line}"
+            );
+            ((fields[0], fields[1]), fields[2])
+        })
+        .collect();
+    let mut measurements = Measurements::default();
+    // Every listed row, sampled or not, must still be a parsed mismatch.
+    for &(smiles, name) in known.keys() {
+        assert!(
+            BAKEOFF.lines().skip(1).any(|line| {
+                let fields: Vec<_> = line.split('\t').collect();
+                fields[0] == smiles && fields[3] == name
+            }),
+            "Stale entry in name_known_failures.tsv: {smiles}\t{name}"
+        );
+        let actual = measurements.parse_name(name).unwrap_or_else(|error| {
+            panic!("{smiles}: listed PubChem name no longer parses: {error}")
+        });
+        assert_ne!(
+            Ok(actual),
+            super::canonical_smiles(smiles),
+            "{smiles}: now fixed, remove it from name_known_failures.tsv"
+        );
+    }
     let generated: Vec<_> = generator::generate(if fast { 500 } else { 3_000 })
         .into_iter()
         .map(|(smiles, category)| Case {
@@ -544,7 +597,6 @@ fn run(fast: bool) {
     if fast {
         assert!(cases.len() + generated.len() <= 1_500);
     }
-    let mut measurements = Measurements::default();
     let mut reports = BTreeMap::new();
     let mut structure = Report::default();
     let mut parity = Report::default();
@@ -571,7 +623,34 @@ fn run(fast: bool) {
     let mut names = Report::default();
     for case in cases.iter().filter(|c| !c.pubchem_name.is_empty()) {
         match measurements.parse_name(&case.pubchem_name) {
-            Ok(smiles) => names.add(case, &measurements.classify(&smiles), None),
+            Ok(actual) => {
+                let expected = super::canonical_smiles(&case.smiles)
+                    .unwrap_or_else(|error| panic!("{}: {error}", case.smiles));
+                let reason = known.get(&(case.smiles.as_str(), case.pubchem_name.as_str()));
+                if actual == expected {
+                    names.add(case, &measurements.classify(&actual), None);
+                } else {
+                    names.add(
+                        case,
+                        &Outcome {
+                            class: if reason.is_some() {
+                                Class::KnownFailure
+                            } else {
+                                Class::Wrong
+                            },
+                            name: case.pubchem_name.clone(),
+                            status: None,
+                            reason: format!(
+                                "PubChem name parses to {actual}, fixture SMILES is {expected}{}",
+                                reason.map_or(String::new(), |reason| format!("; {reason}"))
+                            ),
+                            expected,
+                            actual,
+                        },
+                        None,
+                    );
+                }
+            }
             Err(reason) => names.input_unparseable(case, &reason),
         }
     }
