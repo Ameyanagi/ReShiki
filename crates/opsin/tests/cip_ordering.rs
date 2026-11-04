@@ -343,6 +343,30 @@ fn cyclopentadienide_resonance_forms_have_equal_priority() {
 }
 
 #[test]
+fn tropylium_outranks_cyclopentadienide_after_resonance_averaging() {
+    // V01: both attachment atoms have two real carbon neighbours. The next
+    // entry is the averaged duplicate: tropylium's 36/7 exceeds Cp−'s 24/5.
+    check(
+        &graph("O[C@H]([C-]1C=CC=C1)[C+]1C=CC=CC=C1", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
+    );
+}
+
+#[test]
+fn tropylium_outranks_cyclopentadienide_at_alkene_endpoint() {
+    // V03: the same 36/7 > 24/5 duplicate comparison applies after excluding
+    // the opposite endpoint of the double bond.
+    let graph = graph("F/C=C(/[C-]1C=CC=C1)[C+]1C=CC=CC=C1", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(2))
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
+            .unwrap(),
+        vec![AtomId(3), AtomId(8)]
+    );
+}
+
+#[test]
 fn fluoropyrrolide_outranks_pyrrolide_after_per_atom_averaging() {
     // X01: both attached ring atoms have a 26/5 duplicate, so remote F decides.
     check(
@@ -402,6 +426,28 @@ fn cationic_pyrylium_preserves_drawn_multiple_bond_duplicates() {
         &graph("O[C@H](C1=[O+]C=CC=C1)C(N)OC", true),
         2,
         &[El(Element::H), Id(9), Id(3), El(Element::O)],
+    );
+}
+
+#[test]
+fn ineligible_pyrylium_next_to_cyclopentadienide_preserves_drawn_ordering() {
+    // The cyclic O+ has a drawn double bond, so it disables all averaging.
+    // Drawn neighbours at the attachment atoms give [O, C, C] > Cp− [C, C].
+    check(
+        &graph("O[C@H]([C-]1C=CC=C1)C1=CC=CC=[O+]1", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
+    );
+}
+
+#[test]
+fn ineligible_pyridinium_next_to_cyclopentadienide_preserves_drawn_ordering() {
+    // The cyclic NH+ likewise has a drawn double bond and disables averaging.
+    // Its attachment sphere [N, C, C] outranks Cp−'s drawn [C, C].
+    check(
+        &graph("O[C@H]([C-]1C=CC=C1)C1=CC=CC=[NH+]1", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
     );
 }
 

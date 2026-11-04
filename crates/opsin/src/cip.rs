@@ -3,8 +3,8 @@
 //! Port of `CipSequenceRules.java`, OPSIN 2.9.0, commit
 //! `b91b610af5ab07560fedb20730d7aef46bb2bca0`.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT, see the crate license.
-//! Adds P-92.1.4.4 averaging for singly negative odd mancude cycles, including
-//! saturated fusion, when every conjugated ring anion in the graph is eligible.
+//! Adds P-92.1.4.4 averaging for singly charged odd mancude cycles, including
+//! saturated fusion, when every conjugated ring ion in the graph is eligible.
 //!
 //! Each rule is exhausted over the whole ligand before the next rule is used.
 //! Path-local histories terminate rings; terminal duplicate atoms represent
@@ -47,10 +47,10 @@ impl std::error::Error for CipOrderingError {}
 pub struct CipSequenceRules<'a> {
     graph: &'a Graph,
     chiral_atom: AtomId,
-    negative_rings: OnceCell<HashMap<AtomId, NegativeMancudeRing>>,
+    charged_rings: OnceCell<HashMap<AtomId, ChargedMancudeRing>>,
 }
 
-struct NegativeMancudeRing {
+struct ChargedMancudeRing {
     id: AtomId,
     fraction: Fraction,
 }
@@ -60,7 +60,7 @@ impl<'a> CipSequenceRules<'a> {
         Self {
             graph,
             chiral_atom,
-            negative_rings: OnceCell::new(),
+            charged_rings: OnceCell::new(),
         }
     }
 
@@ -182,20 +182,29 @@ impl<'a> CipSequenceRules<'a> {
         Err(CipOrderingError::UnresolvedTie)
     }
 
-    fn negative_rings(&self) -> &HashMap<AtomId, NegativeMancudeRing> {
-        self.negative_rings.get_or_init(|| {
+    fn charged_rings(&self) -> &HashMap<AtomId, ChargedMancudeRing> {
+        self.charged_rings.get_or_init(|| {
             let mut rings = HashMap::new();
             for candidate in self
                 .graph
                 .atoms
                 .iter()
-                .filter(|a| a.active && a.charge == -1)
+                .filter(|a| a.active && a.charge != 0)
             {
                 if candidate
                     .bonds
                     .iter()
                     .any(|&b| self.graph.bond(b).order > 1)
                 {
+                    // Charged ring atoms carrying a multiple bond are outside
+                    // the traced-cycle model; do not average other ions alone.
+                    if candidate
+                        .bonds
+                        .iter()
+                        .any(|&b| crate::cycle_detector::is_bond_in_cycle(self.graph, b))
+                    {
+                        return HashMap::new();
+                    }
                     continue;
                 }
                 let Some(mut current) = candidate
@@ -213,6 +222,9 @@ impl<'a> CipSequenceRules<'a> {
                 else {
                     continue;
                 };
+                if !matches!(candidate.charge, -1 | 1) {
+                    return HashMap::new();
+                }
                 let mut ring = vec![candidate.id];
                 let mut previous = candidate.id;
                 // Follow alternating double/single bonds around the pi cycle.
@@ -306,7 +318,7 @@ impl<'a> CipSequenceRules<'a> {
                     let fraction = Fraction((n as u32 - 1) * sum, 2 * n as u32);
                     rings.insert(
                         atom,
-                        NegativeMancudeRing {
+                        ChargedMancudeRing {
                             id: candidate.id,
                             fraction,
                         },
@@ -350,9 +362,9 @@ impl<'a> CipSequenceRules<'a> {
         visited.push(id);
         let mut neighbours = Vec::new();
         let atom = self.atom(id)?;
-        let parts = self.negative_rings();
+        let parts = self.charged_rings();
         let part = parts.get(&id);
-        let negative = atom.charge < 0 && part.is_some();
+        let charged = atom.charge != 0 && part.is_some();
         let mut added_bond_duplicate = false;
         for &bond_id in &atom.bonds {
             let bond = self
@@ -377,15 +389,17 @@ impl<'a> CipSequenceRules<'a> {
             if other != self.chiral_atom {
                 // Higher-order bonds to the root itself do not create duplicates
                 // (P-91.1.4.2.4), including e.g. the oxygen of a sulfoxide.
-                // A negative mancude atom needs one averaged duplicate even
+                // A charged mancude atom needs one averaged duplicate even
                 // without a double bond, including entry from outside its ring.
-                let duplicates =
-                    if negative && averaged.is_some() && other != previous && !added_bond_duplicate
-                    {
-                        1
-                    } else {
-                        bond.order.saturating_sub(1)
-                    };
+                let duplicates = if charged
+                    && averaged.is_some()
+                    && other != previous
+                    && !added_bond_duplicate
+                {
+                    1
+                } else {
+                    bond.order.saturating_sub(1)
+                };
                 for _ in 0..duplicates {
                     neighbours.push(Node::ghost(
                         averaged.map_or(other_number, |part| part.fraction),
@@ -541,7 +555,7 @@ mod tests {
         let mut graph = Graph::default();
         crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
         let rules = CipSequenceRules::new(&graph, AtomId(1));
-        let rings = rules.negative_rings();
+        let rings = rules.charged_rings();
         assert_eq!(rings.len(), 10);
         for id in 2..12 {
             assert_eq!(rings[&AtomId(id)].id, AtomId(if id < 7 { 2 } else { 7 }));
@@ -549,12 +563,17 @@ mod tests {
     }
 
     #[test]
-    fn ineligible_conjugated_ring_anion_disables_all_averaging() {
+    fn ineligible_conjugated_ring_ion_disables_all_averaging() {
         for excluded in [
             "[C-]1C=CC2=CC=CC=C21", // Unsaturated fusion.
             "[C-]1C=C[NH+]=C1",     // Another charge in the cycle.
             "[C-]1C=CC1",           // Alternation cannot close the cycle.
             "[C-]1C=CC(=O)C=C1",    // The double bond leaves the cycle.
+            "C1=CC=CC=[O+]1",       // The charged atom carries a double bond.
+            "C1=CC=CC=[NH+]1",
+            "[C-2]1C=CC=C1", // Only singly charged cycles are eligible.
+            "[C+2]1C=CC=C1",
+            "[C+]1C=CC2=CC=CC=C21", // Unsaturated cationic fusion.
         ] {
             for smiles in [
                 format!("OC([C-]1C=CC=C1){excluded}"),
@@ -563,14 +582,20 @@ mod tests {
                 let mut graph = Graph::default();
                 crate::smiles::build_fragment(&mut graph, &smiles, "", "").unwrap();
                 let rules = CipSequenceRules::new(&graph, AtomId(1));
-                assert!(rules.negative_rings().is_empty(), "{smiles}");
+                assert!(rules.charged_rings().is_empty(), "{smiles}");
             }
         }
     }
 
     #[test]
-    fn nonconjugated_anions_do_not_disable_ring_averaging() {
-        for spectator in ["[Cl-]", "Cl(=O)(=O)(=O)[O-]", "[CH-]1CCCC1"] {
+    fn nonconjugated_ions_do_not_disable_ring_averaging() {
+        for spectator in [
+            "[Cl-]",
+            "Cl(=O)(=O)(=O)[O-]",
+            "[CH-]1CCCC1",
+            "[NH4+]",
+            "[CH+]1CCCC1",
+        ] {
             let smiles = format!("OC([C-]1C=CC=C1).{spectator}");
             assert_ring_duplicates(&smiles, 2..7, &[Fraction(24, 5); 5]);
         }
@@ -579,6 +604,24 @@ mod tests {
     #[test]
     fn each_cyclopropenide_atom_has_one_integral_averaged_bond_duplicate() {
         for smiles in ["O[C@H](C1=CC1)C1=C[CH-]1", "O[C@H](C1=CC1)[C-]1C=C1"] {
+            assert_ring_duplicates(smiles, 5..8, &[Fraction(4, 1); 3]);
+        }
+    }
+
+    #[test]
+    fn each_tropylium_atom_has_one_averaged_bond_duplicate() {
+        for smiles in [
+            "O[C@H]([C-]1C=CC=C1)[C+]1C=CC=CC=C1",
+            "O[C@H]([C-]1C=CC=C1)C1=C[CH+]C=CC=C1",
+        ] {
+            assert_ring_duplicates(smiles, 2..7, &[Fraction(24, 5); 5]);
+            assert_ring_duplicates(smiles, 7..14, &[Fraction(36, 7); 7]);
+        }
+    }
+
+    #[test]
+    fn each_cyclopropenylium_atom_has_one_integral_averaged_bond_duplicate() {
+        for smiles in ["O[C@H](C1=CC1)[C+]1C=C1", "O[C@H](C1=CC1)C1=C[CH+]1"] {
             assert_ring_duplicates(smiles, 5..8, &[Fraction(4, 1); 3]);
         }
     }
@@ -630,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn negative_part_keeps_exocyclic_oxygen_duplicate_and_origin() {
+    fn charged_part_keeps_exocyclic_oxygen_duplicate_and_origin() {
         // Neither ring has n maximal contributors: its carbonyl carbons keep
         // their double bond outside the ring.
         for smiles in ["OC1=CC(=O)C=C[CH-]1", "OC1=CC(=O)C(=O)C=C[CH-]1"] {
@@ -638,7 +681,7 @@ mod tests {
             let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
             graph.make_hydrogens_explicit(fragment).unwrap();
             let rules = CipSequenceRules::new(&graph, AtomId(0));
-            assert!(rules.negative_rings().is_empty(), "{smiles}");
+            assert!(rules.charged_rings().is_empty(), "{smiles}");
             let carbonyl = rules
                 .real_node(AtomId(3), vec![AtomId(0), AtomId(1), AtomId(2)])
                 .unwrap();
@@ -651,7 +694,7 @@ mod tests {
     }
 
     #[test]
-    fn fused_and_multiply_charged_negative_parts_keep_drawn_duplicates() {
+    fn fused_and_multiply_charged_parts_keep_drawn_duplicates() {
         for smiles in [
             "C[C@H](O)[C-]1C=CC2=CC=CC=C21",
             "C[C@H](O)[C-]1C=C[CH-]C=C[CH-]1",
@@ -660,7 +703,7 @@ mod tests {
             let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
             graph.make_hydrogens_explicit(fragment).unwrap();
             let rules = CipSequenceRules::new(&graph, AtomId(1));
-            assert!(rules.negative_rings().is_empty(), "{smiles}");
+            assert!(rules.charged_rings().is_empty(), "{smiles}");
             let charged = rules.real_node(AtomId(3), vec![AtomId(1)]).unwrap();
             assert!(
                 rules
