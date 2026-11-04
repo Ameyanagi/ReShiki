@@ -240,8 +240,10 @@ pub fn audit_fusion_plan(
                 (indicated_hydrogens.contains(l)
                     && a.symbol == "N"
                     && a.charge == 0
-                    && a.total_h_count == 1)
-                    .then_some(id)
+                    && (a.total_h_count == 1
+                        || ast.plan_kind == "benzoheterocycle"
+                            && mancude::is_added_hydrogen_nitrogen(mol, parent_atoms, id)))
+                .then_some(id)
             })
             .collect();
         let carbon_candidates = intrinsic_carbon_candidate_atoms(ast, &specs, mol)?;
@@ -309,6 +311,7 @@ pub fn audit_fusion_plan(
         }
         audit_indicated_hydrogens(
             mol,
+            ast,
             numbering,
             bond_model,
             indicated_hydrogens,
@@ -814,7 +817,8 @@ fn audit_component_and_face_coverage(
         );
     }
     let target = molecular_edges(mol, atoms);
-    if scopes.len() < 2 {
+    // P-25.2.2.4 treats a standalone benzoheterocycle as one numbered unit.
+    if scopes.len() < 2 && !(scopes.len() == 1 && ast.plan_kind == "benzoheterocycle") {
         issue(errors, "a fusion cover requires at least two components");
     }
     if &all_atoms != atoms {
@@ -1379,6 +1383,34 @@ fn audit_numbering(
     }
     audit_face_model(mol, atoms, numbering, errors);
     audit_layout_numbering_compatibility(atoms, numbering, ast, errors)?;
+    if ast.plan_kind == "benzoheterocycle" {
+        // P-25.2.2.4 uses the generated bicycle's own locants, not a new
+        // completed-system orientation of its two constituent rings.
+        if let [component] = ast.component_occurrences.as_slice() {
+            let expected: BTreeMap<_, _> = component
+                .local_to_input_atom
+                .iter()
+                .map(|(l, a)| (*a, l.clone()))
+                .collect();
+            if !component.standalone_benzo_parent
+                || abstract_map != expected
+                || numbering
+                    .input_locant_maps
+                    .iter()
+                    .any(|map| map.iter().cloned().collect::<BTreeMap<_, _>>() != expected)
+            {
+                issue(
+                    errors,
+                    "benzoheterocycle numbering differs from its generated component",
+                );
+            }
+        } else {
+            issue(
+                errors,
+                "standalone benzoheterocycle requires one bicyclic component",
+            );
+        }
+    }
     let mut membership: BTreeMap<usize, usize> = BTreeMap::new();
     for face in &numbering.selected_face_model.faces {
         for &id in &face.atom_cycle {
@@ -1946,6 +1978,7 @@ fn audit_bond_model(graph: &FusionGraph, model: &ParentBondModel, errors: &mut V
 #[allow(clippy::too_many_arguments)]
 fn audit_indicated_hydrogens(
     mol: &Molecule,
+    ast: &FusionNameAst,
     numbering: &FusionNumberingProof,
     model: &ParentBondModel,
     cited: &[String],
@@ -1973,9 +2006,7 @@ fn audit_indicated_hydrogens(
         );
         return Ok(());
     };
-    let mut candidates: AtomSet = numbering::indicated_hydrogen_candidate_atoms(mol, &selected)
-        .into_iter()
-        .collect();
+    let mut candidates = parent_hydrogen_candidates(mol, ast, &selected);
     candidates.extend(intrinsic);
     if !cited_atoms.is_subset(&candidates) {
         issue(
@@ -2379,11 +2410,13 @@ fn has_consistent_derivative_operations(
             let neighbors = mol.get_neighbors(*id);
             a.symbol == "N"
                 && a.charge == 0
-                && a.total_h_count == 1
-                && neighbors.len() == 2
-                && neighbors.iter().all(|n| {
-                    atoms.contains(n) && mol.get_bond(*id, *n).is_some_and(|b| b.order == 1)
-                })
+                && ((a.total_h_count == 1
+                    && neighbors.len() == 2
+                    && neighbors.iter().all(|n| {
+                        atoms.contains(n) && mol.get_bond(*id, *n).is_some_and(|b| b.order == 1)
+                    }))
+                    || ast.plan_kind == "benzoheterocycle"
+                        && mancude::is_added_hydrogen_nitrogen(mol, &atoms, *id))
                 && single_assignment(*id)
         })
         .collect();
