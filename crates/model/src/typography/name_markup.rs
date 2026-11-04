@@ -185,11 +185,16 @@ fn boughton_nuclide(text: &str) -> Option<(NameMarkup, usize)> {
     }
     let consumed = mass_bytes + symbol_bytes + count_bytes;
     let tail = after(text, consumed);
+    // A following isotope suffix may carry its own locants (`-1,1-d2`), but
+    // indicated hydrogen before a locant-led parent (`-2H-1,3-benzimidazole`)
+    // is not followed by a nuclide.
     if !tail.is_empty()
         && !tail.strip_prefix('-').is_some_and(|tail| {
-            tail.starts_with(|c: char| {
-                c.is_ascii_digit() || superscript_digit(c).is_some() || c == 'd'
-            })
+            let next = tail
+                .split_once('-')
+                .filter(|(locants, _)| locants.split(',').all(numeric_locant))
+                .map_or(tail, |(_, next)| next);
+            boughton_nuclide(next).is_some()
         })
     {
         return None;
@@ -841,6 +846,16 @@ mod tests {
             ("furo[2,3-b]pyridine", vec!["b"]),
             ("tetrahydro-1H,3H-furo[3,4-c]furan", vec!["H", "H", "c"]),
             ("trans,trans-muconic acid", vec!["trans", "trans"]),
+            ("bicyclo[2.2.1]heptan-2-exo-ol", vec!["exo"]),
+            (
+                "2-endo-bromo-7-anti-fluorobicyclo[2.2.1]heptane",
+                vec!["endo", "anti"],
+            ),
+            ("8-syn-methylbicyclo[3.2.1]octane", vec!["syn"]),
+            (
+                "5-endo,7-anti-dimethylbicyclo[2.2.1]heptan-2-exo-ol",
+                vec!["endo", "anti", "exo"],
+            ),
             ("(3a^1R,4S)-indene", vec!["R", "S"]),
             ("(3a¹R)-indene", vec!["R"]),
             ("N1,N1-dimethyl", vec!["N", "N"]),
@@ -1114,6 +1129,21 @@ mod tests {
             name_markup("ethane-1-13C-1,1-d2").unicode().text,
             "ethane-1-¹³C-1,1-d₂"
         );
+        for (name, italic) in [
+            (
+                "N-[3-(1H-imidazol-1-yl)propyl]-2H-1,3-benzimidazol-5-amine",
+                &["N", "H", "H"][..],
+            ),
+            ("octahydro-2H-2lambda^4-benzothiophen-2-one", &["H"]),
+        ] {
+            let markup = name_markup(name);
+            assert_eq!(parts(&markup, NameRun::Italic), italic, "{name}");
+            assert!(
+                !markup.unicode().text.contains('²'),
+                "{}",
+                markup.unicode().text
+            );
+        }
         for text in ["(13C prose)", "(1,2)", "(18Ox)", "(13C,)", "1H2O"] {
             assert!(name_markup(text).runs.is_empty(), "{text}");
         }

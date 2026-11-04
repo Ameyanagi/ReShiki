@@ -235,6 +235,40 @@ pub fn build_parent_assembly_plan_with_parent(
                 .map(move |map| (map.into_iter().collect(), hydrogen.clone()))
         })
         .collect();
+    if root.is_none()
+        && !selection.is_spiro
+        && !principal_carbons.is_empty()
+        && parent
+            .as_ref()
+            .is_some_and(RingParent::is_systematic_fusion)
+        && !variants.is_empty()
+    {
+        let ketones: AtomSet = super::perception::perceive_groups(mol)
+            .into_iter()
+            .filter(|group| group.key == "ketone")
+            .map(|group| group.attachment_carbon)
+            .collect();
+        let suffix: AtomSet = principal_carbons.iter().copied().collect();
+        if suffix.is_subset(&ketones) {
+            for plan in &variants {
+                for map in plan.numbering.string_input_locant_maps() {
+                    if !suffix.iter().all(|atom| map.contains_key(atom)) {
+                        continue;
+                    }
+                    if let Some((indicated, _, state)) =
+                        super::additive::systematic_suffix_hydrogen_state(mol, plan, &suffix, &map)?
+                    {
+                        let hydro = state
+                            .hydro_operations
+                            .iter()
+                            .flat_map(|op| op.locants.iter().cloned())
+                            .collect();
+                        proven_hydrogens.insert(map.into_iter().collect(), (indicated, hydro));
+                    }
+                }
+            }
+        }
+    }
     if let Some(assembly) = &selection.ring_assembly {
         for map in &assembly.locant_maps {
             proven_hydrogens.insert(
@@ -474,6 +508,7 @@ fn build_parent_parts(
             }
         }
     }
+    super::endo_exo_stereo::add_alternative(mol, &mut parts, numbered_path, locants);
     if selection.ring_assembly.is_none() {
         add_relative_ring_stereo(mol, &mut parts, numbered_path, locants)?;
     } else {

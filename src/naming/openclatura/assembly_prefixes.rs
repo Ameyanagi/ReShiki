@@ -91,6 +91,12 @@ fn substituent_locant_string(
     locs: &[String],
     grouped_count: usize,
 ) -> String {
+    if locs
+        .iter()
+        .any(|locant| parts.endo_exo_descriptors.contains_key(locant))
+    {
+        return parts.stereochemical_locants(locs);
+    }
     let imino_beside = grouped_count > 1 && parts.substituents.iter().any(|s| s.name == "imino");
     if parts.parent_length == 1
         && parts.retained_name.as_deref() != Some("guanidine")

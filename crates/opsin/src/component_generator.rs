@@ -844,6 +844,9 @@ impl<'a> ComponentGenerator<'a> {
                 return err(format!("Malformed stereochemistry element: {original}"));
             };
             let n = self.token(STEREOCHEMISTRY_EL, descriptor.clone(), &[]);
+            if let Some(group) = group {
+                self.add(n, STEREOGROUP_ATR, group);
+            }
             if !c[1].is_empty() {
                 self.add(
                     n,
