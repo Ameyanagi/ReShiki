@@ -8,12 +8,13 @@ use super::{
     },
     model::{FaceModel, FusedLayout},
 };
-use serde::Deserialize;
+use serde::{Deserialize, de::IgnoredAny};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::OnceLock,
+    sync::LazyLock,
 };
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DirectionRow {
     relative: Vec<i64>,
     forbidden_ports: Vec<usize>,
@@ -21,7 +22,12 @@ struct DirectionRow {
     required_ports: Vec<usize>,
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DirectionData {
+    #[serde(rename = "source")]
+    _source: IgnoredAny,
+    #[serde(rename = "rule_reference")]
+    _rule_reference: IgnoredAny,
     directions: BTreeMap<usize, Vec<DirectionRow>>,
     steps: BTreeMap<i64, Point>,
 }
@@ -29,28 +35,27 @@ struct DirectionData {
     clippy::expect_used,
     reason = "the bundled immutable JSON table is checked by geometry tests"
 )]
-fn tables() -> &'static DirectionData {
-    static TABLES: OnceLock<DirectionData> = OnceLock::new();
-    TABLES.get_or_init(|| {
-        let d: DirectionData =
-            serde_json::from_str(include_str!("../data/fusion_entry_geometry.json"))
-                .expect("entry direction tables");
-        assert_eq!(d.steps.len(), 8);
-        for (&n, rows) in &d.directions {
-            assert!(n >= 3 && !rows.is_empty());
-            for row in rows {
-                assert_eq!(row.relative.len(), n - 1);
-                assert!(row.relative.iter().all(|r| d.steps.contains_key(r)));
-                assert!(
-                    row.forbidden_ports
-                        .iter()
-                        .chain(&row.required_ports)
-                        .all(|&p| p >= 1 && p < n)
-                )
-            }
+static TABLES: LazyLock<DirectionData> = LazyLock::new(|| {
+    let d: DirectionData = serde_json::from_str(include_str!("../data/fusion_entry_geometry.json"))
+        .expect("entry direction tables");
+    assert_eq!(d.steps.len(), 8);
+    for (&n, rows) in &d.directions {
+        assert!(n >= 3 && !rows.is_empty());
+        for row in rows {
+            assert_eq!(row.relative.len(), n - 1);
+            assert!(row.relative.iter().all(|r| d.steps.contains_key(r)));
+            assert!(
+                row.forbidden_ports
+                    .iter()
+                    .chain(&row.required_ports)
+                    .all(|&p| p >= 1 && p < n)
+            )
         }
-        d
-    })
+    }
+    d
+});
+fn tables() -> &'static DirectionData {
+    &TABLES
 }
 pub fn allowed_entry_directions(size: usize, occupied: &AtomSet) -> Vec<Vec<i64>> {
     let Some(options) = tables().directions.get(&size) else {

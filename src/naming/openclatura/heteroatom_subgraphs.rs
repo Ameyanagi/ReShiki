@@ -12,15 +12,39 @@ use super::nomenclature::section;
 use super::rules::{elements, multipliers};
 use super::subgraph_tools::subgraph_component;
 use crate::naming::{NameReason, NameStatus};
-use serde_json::Value;
+use serde::Deserialize;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::LazyLock;
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SubstituentData {
+    heteroatom_substituents: BTreeMap<String, HeteroatomSubstituent>,
+    central_oxo_substituent_classes: Vec<CentralOxoClass>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HeteroatomSubstituent {
+    unsubstituted_prefixes: BTreeMap<usize, String>,
+    #[serde(default)]
+    ligand_deficient_prefixes: BTreeMap<usize, String>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CentralOxoClass {
+    symbol: String,
+    oxo: usize,
+    oxido: usize,
+    hydroxy: usize,
+    alkoxy: usize,
+    peroxy: usize,
+    prefix: String,
+}
 #[expect(
     clippy::expect_used,
     reason = "the embedded, checked-in substituent table is validated during development"
 )]
-static SPECS: LazyLock<Value> = LazyLock::new(|| {
+static SPECS: LazyLock<SubstituentData> = LazyLock::new(|| {
     serde_json::from_str(include_str!("data/heteroatom_substituents.json"))
         .expect("heteroatom substituent data")
 });
@@ -87,9 +111,12 @@ fn stereo(mol: &Molecule, idx: usize) -> String {
         .unwrap_or_default()
 }
 fn prefix(symbol: &str, oxo: usize) -> Option<String> {
-    SPECS["heteroatom_substituents"][symbol]["unsubstituted_prefixes"][oxo.to_string()]
-        .as_str()
-        .map(str::to_owned)
+    SPECS
+        .heteroatom_substituents
+        .get(symbol)?
+        .unsubstituted_prefixes
+        .get(&oxo)
+        .cloned()
 }
 fn charged_prefix(symbol: &str, charge: i32, order: usize) -> Option<String> {
     let kind = match order {
@@ -962,20 +989,22 @@ fn central_oxo(
         oxygen.push(n);
     }
     let class = if role_classified {
-        SPECS["central_oxo_substituent_classes"]
-            .as_array()
-            .and_then(|rows| {
-                rows.iter().find(|row| {
-                    row["symbol"].as_str() == Some(symbol)
-                        && ["oxo", "oxido", "hydroxy", "alkoxy", "peroxy"]
-                            .iter()
-                            .all(|k| {
-                                row[*k].as_u64().unwrap_or(0) == *counts.get(k).unwrap_or(&0) as u64
-                            })
-                })
+        SPECS
+            .central_oxo_substituent_classes
+            .iter()
+            .find(|row| {
+                &row.symbol == symbol
+                    && [
+                        (row.oxo, "oxo"),
+                        (row.oxido, "oxido"),
+                        (row.hydroxy, "hydroxy"),
+                        (row.alkoxy, "alkoxy"),
+                        (row.peroxy, "peroxy"),
+                    ]
+                    .into_iter()
+                    .all(|(n, k)| n == counts.get(k).copied().unwrap_or(0))
             })
-            .and_then(|row| row["prefix"].as_str())
-            .map(str::to_owned)
+            .map(|row| row.prefix.clone())
     } else {
         None
     };
@@ -1297,18 +1326,12 @@ pub fn name_heteroatom_subgraph(
                 .filter(|n| !oxo.contains(n))
                 .collect();
             let deficient = if class.is_none() && roots.len() < 2 {
-                SPECS["heteroatom_substituents"][symbol]["ligand_deficient_prefixes"]
-                    [oxo.len().to_string()]
-                .as_str()
-                .map(str::to_owned)
-                .or_else(|| {
-                    if oxo.is_empty() {
-                        None
-                    } else {
-                        SPECS["heteroatom_substituents"][symbol]["ligand_deficient_prefixes"]["1"]
-                            .as_str()
-                            .map(str::to_owned)
-                    }
+                SPECS.heteroatom_substituents.get(symbol).and_then(|spec| {
+                    let deficient = &spec.ligand_deficient_prefixes;
+                    deficient
+                        .get(&oxo.len())
+                        .or_else(|| (!oxo.is_empty()).then(|| deficient.get(&1)).flatten())
+                        .cloned()
                 })
             } else {
                 None

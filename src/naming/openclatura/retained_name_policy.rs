@@ -1,17 +1,16 @@
 //! Preferred retained spellings and explicitly declared hydrogenation policies.
 use super::{formatting::format_multiplier, locants::retained_locant_sort_key as parse_locant};
-use serde::Deserialize;
+use serde::{Deserialize, de::IgnoredAny};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::LazyLock,
 };
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RetainedHydrogenationPolicy {
     pub base_parent: String,
-    #[serde(default)]
     pub hydro_locants: Vec<String>,
-    #[serde(default)]
     pub indicated_hydrogen_locants: Vec<String>,
 }
 impl RetainedHydrogenationPolicy {
@@ -70,15 +69,40 @@ impl RetainedHydrogenationPolicy {
         )
     }
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RetainedParentNamePolicy {
     pub template_name: String,
     pub preferred_name: String,
     #[serde(default = "all_contexts")]
     pub preferred_contexts: Vec<String>,
+    #[serde(default)]
     pub hydrogenation: Option<RetainedHydrogenationPolicy>,
     #[serde(default)]
     pub context_names: BTreeMap<String, String>,
+    #[serde(rename = "reason")]
+    _reason: IgnoredAny,
+}
+
+impl std::fmt::Debug for RetainedParentNamePolicy {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RetainedParentNamePolicy")
+            .field("template_name", &self.template_name)
+            .field("preferred_name", &self.preferred_name)
+            .field("preferred_contexts", &self.preferred_contexts)
+            .field("hydrogenation", &self.hydrogenation)
+            .field("context_names", &self.context_names)
+            .finish()
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetainedParentNamePolicyData {
+    #[serde(rename = "bluebook_rule")]
+    _bluebook_rule: IgnoredAny,
+    parents: Vec<RetainedParentNamePolicy>,
 }
 fn all_contexts() -> Vec<String> {
     vec!["all".into()]
@@ -103,11 +127,10 @@ impl RetainedParentNamePolicy {
     reason = "Immutable checked-in retained policy table"
 )]
 static POLICIES: LazyLock<Vec<RetainedParentNamePolicy>> = LazyLock::new(|| {
-    let raw: serde_json::Value =
+    let data: RetainedParentNamePolicyData =
         serde_json::from_str(include_str!("data/retained_parent_name_policy.json"))
-            .expect("retained name policy data");
-    let mut rows: Vec<RetainedParentNamePolicy> =
-        serde_json::from_value(raw["parents"].clone()).expect("retained name policy rows");
+            .expect("checked-in retained name policy data");
+    let mut rows = data.parents;
     for row in &mut rows {
         if let Some(h) = &row.hydrogenation {
             row.preferred_name = h.render();
