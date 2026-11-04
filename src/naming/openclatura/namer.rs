@@ -583,7 +583,9 @@ fn acylamino_amido_prefix(
                 .and_modify(|atom| atom.total_h_count += 1);
             // P-66.1.1.4.3(1): derive the prefix from the complete amide name,
             // sharing its prefix ordering, multipliers and enclosing marks.
-            let name = name_component_with_citation(&amide, &atoms, None);
+            // Fix its suffix at this N before selection, so remote amides do
+            // not compete or mark the prefix with a provisional suffix tie.
+            let name = name_component_with_citation(&amide, &atoms, None, Some(nitrogen));
             // An exhausted budget still aborts; other failures fall back below.
             mol.spend_naming_work(0)?;
             Ok(name.ok().and_then(|name| {

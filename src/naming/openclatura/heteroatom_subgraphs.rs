@@ -758,6 +758,26 @@ fn name_nitrogen(
             }
         };
         if !b.is_empty() {
+            if order == 1
+                && atom.charge == 0
+                && mol.atoms[&n].is_carbon()
+                && mol.bond_order(start, n) == 1
+                && mol.get_neighbors(n).iter().any(|&chalcogen| {
+                    matches!(
+                        mol.atoms[&chalcogen].symbol.as_str(),
+                        "O" | "S" | "Se" | "Te"
+                    ) && mol.bond_order(n, chalcogen) == 2
+                        && mol.degree(chalcogen) == 1
+                        && mol
+                            .get_neighbors(n)
+                            .iter()
+                            .all(|i| *i == start || *i == chalcogen || mol.atoms[i].is_carbon())
+                })
+            {
+                // P-66.1.1.4.3(2): acylamino is a general-nomenclature
+                // fallback; the preferred prefix is acid-derived amido.
+                mol.mark_name(NameStatus::NotPreferred(NameReason::AminoPrefix));
+            }
             names.push(b);
         }
     }

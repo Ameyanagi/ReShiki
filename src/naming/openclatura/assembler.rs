@@ -845,19 +845,42 @@ mod tests {
 
     #[test]
     fn competing_amide_suffixes_keep_the_attachment_nitrogen() {
-        for (smiles, expected) in [
+        for (smiles, expected, status) in [
             (
                 "O=C(O)CN(CCNC(=O)CCCC)C(C)=O",
-                "{acetyl[2-(pentanamido)ethyl]amino}acetic acid",
+                "{N-[2-(pentanamido)ethyl]acetamido}acetic acid",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=C(O)CCN(CCNC(=O)CCCC)C=O",
+                "3-{N-[2-(pentanamido)ethyl]formamido}propanoic acid",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=C(O)CCN(CCNC(=O)c1ccccc1)C(C)=O",
+                "3-[N-(2-benzamidoethyl)acetamido]propanoic acid",
+                NameStatus::Preferred,
+            ),
+            (
+                "OC(=O)CCN(CCNC(=O)CCCC)C(=O)c1ccc(C)cc1",
+                "3-{4-methyl-N-[2-(pentanamido)ethyl]benzamido}propanoic acid",
+                NameStatus::Preferred,
             ),
             (
                 "O=C(O)CN(CCNC(=[Se])CCCC)S(=O)(=O)c1ccccc1",
-                "({2-[(pentaneselenoyl)amino]ethyl}(phenylsulfonyl)amino)acetic acid",
+                "(N-{2-[(pentaneselenoyl)amino]ethyl}benzenesulfonamido)acetic acid",
+                NameStatus::NotPreferred(NameReason::AminoPrefix),
+            ),
+            (
+                "O=C(O)CCN(C(C)=O)C(C)=O",
+                "3-(diacetylamino)propanoic acid",
+                NameStatus::NotPreferred(NameReason::AminoPrefix),
             ),
         ] {
             let input = crate::naming::canonical_smiles(smiles).unwrap();
             let name = super::super::name_smiles(&input).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
             let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
