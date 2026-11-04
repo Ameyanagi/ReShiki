@@ -300,20 +300,20 @@ The engine marks the status where it makes the choice, so the name text is
 unchanged. A naming attempt it discards leaves no mark. Reasons for a name
 that is not the PIN:
 
-| Reason                       | Example the engine writes                                                                       | Preferred form                                                                               |
-| ---------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `sulfonyl_prefix`            | `N-methyltosylamino`, `(methylsulfinyl)amino`                                                   | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                                    |
-| `amino_prefix`               | `3-methylguanidino`                                                                             | `(N-methylcarbamimidoyl)amino`                                                               |
-| `functional_class`           | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide`        | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene`     |
-| `hydride_parent`             | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                         | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`       |
-| `unretained_parent`          | `N-methylethanediamide`, `hydroxyformyl chloride`                                               | `N1-methyloxamide`, `carbonochloridic acid`                                                  |
-| `diamide_locants`            | `N,N'-diethylpropanediamide`, `N-methylbutanediamide`                                           | `N1,N3-diethylpropanediamide`, `N1-methylbutanediamide`                                      |
-| `fusion_component`           | `azuleno[4,5-c]isoxazole`, `benzo[d]isothiazole`                                                | `azuleno[4,5-c][1,2]oxazole`, `1,2-benzothiazole`                                            |
-| `unregistered_retained_component` | `12H-naphtho[2,1-b][1]benzothiopyran` | `12H-benzo[a]thioxanthene` (P-25.3.2.4; P-25.2.1, Table 2.8) |
-| `multiplicative`             | `phenoxybenzene`, `(benzenesulfinyl)benzene`, `benzylbenzene`                                   | `1,1'-oxydibenzene`, `1,1'-sulfinyldibenzene`, `1,1'-methylenedibenzene`                     |
-| `acyl_prefix`                | `4-(cyclohexylcarbonyl)benzoic acid`, `(dimethyloxophosphanyl)`, `(methyloxophosphanyl)methane` | `4-(cyclohexanecarbonyl)benzoic acid`, `dimethylphosphinoyl`, `dimethyl-lambda5-phosphanone` |
-| `ring_assembly`              | `2-(pyridin-2-yl)pyridine`, `cyclopropylcyclopropane`, `4-phenylphenol`                         | `2,2'-bipyridine`, `1,1'-bi(cyclopropane)`, `[1,1'-biphenyl]-4-ol`                           |
-| `von_baeyer_fusion_fallback` | `17-azapentacyclo[10.7.1.1^{3,6}.0^{10,21}.0^{16,20}]henicosa-...-decaene`                      | `7H-indeno[7',1':5,6,7]cycloocta[1,2,3-de]quinoline`                                         |
+| Reason                            | Example the engine writes                                                                       | Preferred form                                                                               |
+| --------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `sulfonyl_prefix`                 | `N-methyltosylamino`, `(methylsulfinyl)amino`                                                   | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                                    |
+| `amino_prefix`                    | `3-methylguanidino`                                                                             | `(N-methylcarbamimidoyl)amino`                                                               |
+| `functional_class`                | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide`        | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene`     |
+| `hydride_parent`                  | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                         | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`       |
+| `unretained_parent`               | `N-methylethanediamide`, `hydroxyformyl chloride`                                               | `N1-methyloxamide`, `carbonochloridic acid`                                                  |
+| `diamide_locants`                 | `N,N'-diethylpropanediamide`, `N-methylbutanediamide`                                           | `N1,N3-diethylpropanediamide`, `N1-methylbutanediamide`                                      |
+| `fusion_component`                | `azuleno[4,5-c]isoxazole`, `benzo[d]isothiazole`                                                | `azuleno[4,5-c][1,2]oxazole`, `1,2-benzothiazole`                                            |
+| `unregistered_retained_component` | `12H-naphtho[2,1-b][1]benzothiopyran`                                                           | `12H-benzo[a]thioxanthene` (P-25.3.2.4; P-25.2.1, Table 2.8)                                 |
+| `multiplicative`                  | `phenoxybenzene`, `(benzenesulfinyl)benzene`, `benzylbenzene`                                   | `1,1'-oxydibenzene`, `1,1'-sulfinyldibenzene`, `1,1'-methylenedibenzene`                     |
+| `acyl_prefix`                     | `4-(cyclohexylcarbonyl)benzoic acid`, `(dimethyloxophosphanyl)`, `(methyloxophosphanyl)methane` | `4-(cyclohexanecarbonyl)benzoic acid`, `dimethylphosphinoyl`, `dimethyl-lambda5-phosphanone` |
+| `ring_assembly`                   | `2-(pyridin-2-yl)pyridine`, `cyclopropylcyclopropane`, `4-phenylphenol`                         | `2,2'-bipyridine`, `1,1'-bi(cyclopropane)`, `[1,1'-biphenyl]-4-ol`                           |
+| `von_baeyer_fusion_fallback`      | `17-azapentacyclo[10.7.1.1^{3,6}.0^{10,21}.0^{16,20}]henicosa-...-decaene`                      | `7H-indeno[7',1':5,6,7]cycloocta[1,2,3-de]quinoline`                                         |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
