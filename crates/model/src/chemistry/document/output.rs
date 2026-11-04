@@ -4,7 +4,7 @@ use super::{Error, Molecule, WORLD_PER_DEPICT_UNIT, at, invalid};
 use crate::{
     chemistry::{
         ELEMENTS, RDKIT_VERSION, kekulize, ranking,
-        stereo::{allene, atom_priorities, cip::label, perception::RingKind, wedging},
+        stereo::{allene, cip::label, perception::RingKind, stereogenic_odd_cumulenes, wedging},
     },
     document::{Atom, AtomStereo, Bond, Document, Point},
 };
@@ -464,7 +464,7 @@ pub fn for_generated(
         options,
     )?;
     preserve_unspecified_alkenes(&molecule, &mut drawing.document);
-    preserve_unspecified_cumulenes(&molecule, &mut drawing.document)?;
+    preserve_unspecified_cumulenes(&molecule, &mut drawing.document);
     drawing.document.validate().map_err(Error::Drawing)?;
     Ok(drawing)
 }
@@ -489,92 +489,17 @@ fn preserve_unspecified_alkenes(molecule: &Molecule, document: &mut Document) {
 }
 
 // InChI can perceive E/Z on odd cumulene chains from XY even though our own
-// perception cannot. Generated coordinates must not supply that missing stereo.
-fn preserve_unspecified_cumulenes(
-    molecule: &Molecule,
-    document: &mut Document,
-) -> Result<(), Error> {
-    let state = &molecule.state;
-    let graph = &state.graph;
-    let mut ranks: Option<Vec<u32>> = None;
-    let mut neighbors = vec![Vec::new(); graph.atoms.len()];
-    let mut doubles = vec![Vec::new(); graph.atoms.len()];
-    for (i, bond) in graph.bonds.iter().enumerate() {
-        for (a, b) in [(bond.a, bond.b), (bond.b, bond.a)] {
-            neighbors
-                .get_mut(a)
-                .ok_or_else(|| invalid("Missing cumulene atom"))?
-                .push(b);
-            if bond.order == 2 {
-                doubles
-                    .get_mut(a)
-                    .ok_or_else(|| invalid("Missing cumulene atom"))?
-                    .push((b, i));
-            }
-        }
-    }
-    let distinct = |atom: usize, inner: usize, ranks: &[u32]| -> Result<bool, Error> {
-        let substituents: Vec<_> = at(&neighbors, atom)?
-            .iter()
-            .copied()
-            .filter(|&other| other != inner)
-            .collect();
-        let hydrogens = u32::from(at(&graph.atoms, atom)?.explicit_hydrogens)
-            + at(&state.valences, atom)?.implicit_hydrogens;
-        Ok(match (substituents.as_slice(), hydrogens) {
-            ([a], 1) => {
-                let ligand = at(&graph.atoms, *a)?;
-                ligand.atomic_number != 1 || ligand.isotope > 1
-            }
-            ([a, b], 0) => at(ranks, *a)? != at(ranks, *b)?,
-            _ => false,
-        })
+// perception cannot. Generated coordinates must not supply that missing stereo;
+// an unrankable graph keeps its drawing unchanged, as for alkenes.
+fn preserve_unspecified_cumulenes(molecule: &Molecule, document: &mut Document) {
+    let Ok(cumulenes) = stereogenic_odd_cumulenes(&molecule.state) else {
+        return;
     };
-    for (start, bonds) in doubles.iter().enumerate() {
-        let &[(inner, first)] = bonds.as_slice() else {
-            continue;
-        };
-        let mut end = inner;
-        let mut chain = vec![first];
-        let mut previous = start;
-        while let &[a, b] = at(&doubles, end)?.as_slice() {
-            let (next, bond) = if a.0 == previous { b } else { a };
-            chain.push(bond);
-            previous = end;
-            end = next;
-        }
-        if start >= end
-            || at(&doubles, end)?.len() != 1
-            || chain.len() < 3
-            || chain.len().is_multiple_of(2)
-        {
-            continue;
-        }
-        if ranks.is_none() {
-            // Atom maps must not distinguish otherwise equivalent ligands.
-            let mut metadata = state.metadata.clone();
-            for atom in &mut metadata.atoms {
-                atom.map_number = 0;
-                atom.map_present = false;
-            }
-            // An unrankable graph keeps its drawing unchanged, as for alkenes.
-            let Ok(computed) = atom_priorities(graph, &metadata) else {
-                return Ok(());
-            };
-            ranks = Some(computed);
-        }
-        let ranks = ranks.as_deref().unwrap_or_default();
-        if distinct(start, inner, ranks)? && distinct(end, previous, ranks)? {
-            for i in chain {
-                document
-                    .bonds
-                    .get_mut(i)
-                    .ok_or_else(|| invalid("Missing cumulene bond"))?
-                    .stereo_authoritative = true;
-            }
+    for &index in cumulenes.iter().flat_map(|cumulene| &cumulene.bonds) {
+        if let Some(bond) = document.bonds.get_mut(index) {
+            bond.stereo_authoritative = true;
         }
     }
-    Ok(())
 }
 
 pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
