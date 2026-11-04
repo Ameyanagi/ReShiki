@@ -9,7 +9,9 @@ use super::{
     exocyclic::{is_neutral_external_pi_ligand, neutral_lambda_oxo_bonding_number},
     mancude::*,
     model::*,
-    numbering::{parent_bond_model, parent_pi_capable_atom_ids},
+    numbering::{
+        observed_parent_matches_bond_model, parent_bond_model, parent_pi_capable_atom_ids,
+    },
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -380,9 +382,21 @@ pub(super) fn is_intrinsic_carbon_h_site(mol: &Molecule, id: usize, atoms: &Atom
         return false;
     }
     let ns = mol.get_neighbors(id);
-    let external = ns.iter().filter(|n| !atoms.contains(n)).count();
-    let degree = ns.len() - external;
-    matches!(degree, 2 | 3) && a.total_h_count + external == 4 - degree && all_single(mol, id)
+    let degree = ns.iter().filter(|n| atoms.contains(n)).count();
+    let external: usize = ns
+        .iter()
+        .filter(|n| !atoms.contains(n))
+        .map(|&n| mol.bond_order(id, n))
+        .sum();
+    // Substitution replaces the parent hydrogen before the indicated-H
+    // citation is selected, including two hydrogens replaced by an external
+    // double bond. The parent site remains single-bonded within the ring.
+    matches!(degree, 2 | 3)
+        && a.total_h_count + external == 4 - degree
+        && ns
+            .iter()
+            .filter(|n| atoms.contains(n))
+            .all(|&n| mol.bond_order(id, n) == 1)
 }
 fn is_pi_bearing_carbon_junction(mol: &Molecule, id: usize, atoms: &AtomSet) -> bool {
     let a = &mol.atoms[&id];
@@ -671,7 +685,7 @@ pub(super) fn intrinsic_carbon_parent_model(
                 .any(|a| mol.atoms[a].is_aromatic)
         {
             let indicated: AtomSet = hydrogen_atoms.union(&sites).copied().collect();
-            prove_pi_redistribution(mol, &atoms, &constrained, &delta, &indicated, &[])?
+            prove_pi_redistribution(mol, &atoms, &constrained, &delta, &indicated, &[], None)?
         } else {
             None
         };
@@ -700,7 +714,9 @@ pub(super) fn intrinsic_carbon_parent_model(
         );
         if !hydro_n_h.is_subset(&hydro)
             || hydro.iter().any(|a| mol.atoms[a].is_aromatic)
-            || (!sites.is_disjoint(&oxo) && delta.intrinsic_hydro_operations.is_empty())
+            || (!sites.is_disjoint(&oxo)
+                && delta.intrinsic_hydro_operations.is_empty()
+                && !observed_parent_matches_bond_model(mol, &constrained))
         {
             continue;
         }

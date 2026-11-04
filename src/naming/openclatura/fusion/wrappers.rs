@@ -1307,6 +1307,7 @@ fn wrapper_parent_derivative_state(
                 preserve_retained_parent_state: true,
                 allow_pi_redistribution: Some(true),
                 compose_retained_external_pi: true,
+                ..Default::default()
             },
         )? && !composed.bond_delta.added_hydrogen_operations.is_empty()
         {
