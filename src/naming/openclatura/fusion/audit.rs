@@ -1147,7 +1147,7 @@ fn audit_descriptors(
     if audit_multiplicity && actual_groups != expected_groups {
         issue(
             errors,
-            "multiplicative groups do not match exact sibling interface orbits",
+            "multiplicative groups do not match identical leaf siblings",
         );
     }
     for &i in &citation.cycle_closing_join_indices {

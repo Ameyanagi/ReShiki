@@ -63,6 +63,7 @@
       "2,7-naphthyridine",
       "2,7-phenanthroline",
       "2,8-phenanthroline",
+      "2,9-phenanthroline",
       "2-benzofuran",
       "2-benzothiophene",
       "2H-1,3-benzoxazine",
@@ -73,9 +74,12 @@
       "2H-quinolizine",
       "3,5-phenanthroline",
       "3,6-phenanthroline",
+      "3,7-phenanthroline",
+      "3,8-phenanthroline",
       "3H-2-benzopyran",
       "3H-indole",
       "4,5-phenanthroline",
+      "4,7-phenanthroline",
       "4H-1,3-benzodioxine",
       "4H-1,4-benzothiazine",
       "4H-1-benzopyran",
@@ -89,6 +93,9 @@
       "7H-pyrrolo[2,3-d]pyrimidine",
       "9H-fluorene",
       "9H-pyrido[3,4-b]indole",
+      "9H-selenoxanthene",
+      "9H-telluroxanthene",
+      "9H-thioxanthene",
       "[1,2,4]triazolo[1,5-a]pyrimidine",
       "[1,2,4]triazolo[4,3-a]pyrazine",
       "[1,2,4]triazolo[4,3-a]pyridine",
@@ -716,6 +723,18 @@
       ],
       "derivative_status": "production_safe"
     },
+    "2,9-phenanthroline": {
+      "parent_stems": [
+        "2,9-phenanthrolin"
+      ],
+      "substituent_stems": [
+        "2,9-phenanthrolin"
+      ],
+      "fusion_stems": [
+        "2,9-phenanthrolino"
+      ],
+      "derivative_status": "production_safe"
+    },
     "2-benzofuran": {
       "parent_stems": [
         "2-benzofuran"
@@ -847,6 +866,30 @@
       ],
       "derivative_status": "production_safe"
     },
+    "3,7-phenanthroline": {
+      "parent_stems": [
+        "3,7-phenanthrolin"
+      ],
+      "substituent_stems": [
+        "3,7-phenanthrolin"
+      ],
+      "fusion_stems": [
+        "3,7-phenanthrolino"
+      ],
+      "derivative_status": "production_safe"
+    },
+    "3,8-phenanthroline": {
+      "parent_stems": [
+        "3,8-phenanthrolin"
+      ],
+      "substituent_stems": [
+        "3,8-phenanthrolin"
+      ],
+      "fusion_stems": [
+        "3,8-phenanthrolino"
+      ],
+      "derivative_status": "production_safe"
+    },
     "3H-2-benzopyran": {
       "parent_stems": [
         "2-benzopyran"
@@ -886,6 +929,18 @@
       ],
       "fusion_stems": [
         "4,5-phenanthrolino"
+      ],
+      "derivative_status": "production_safe"
+    },
+    "4,7-phenanthroline": {
+      "parent_stems": [
+        "4,7-phenanthrolin"
+      ],
+      "substituent_stems": [
+        "4,7-phenanthrolin"
+      ],
+      "fusion_stems": [
+        "4,7-phenanthrolino"
       ],
       "derivative_status": "production_safe"
     },
@@ -1061,6 +1116,51 @@
       ],
       "fusion_stems": [],
       "derivative_status": "production_safe"
+    },
+    "9H-selenoxanthene": {
+      "parent_stems": [
+        "selenoxanthen"
+      ],
+      "substituent_stems": [
+        "selenoxanthen"
+      ],
+      "fusion_stems": [
+        "selenoxantheno"
+      ],
+      "derivative_status": "production_safe",
+      "default_indicated_h": [
+        "9"
+      ]
+    },
+    "9H-telluroxanthene": {
+      "parent_stems": [
+        "telluroxanthen"
+      ],
+      "substituent_stems": [
+        "telluroxanthen"
+      ],
+      "fusion_stems": [
+        "telluroxantheno"
+      ],
+      "derivative_status": "production_safe",
+      "default_indicated_h": [
+        "9"
+      ]
+    },
+    "9H-thioxanthene": {
+      "parent_stems": [
+        "thioxanthen"
+      ],
+      "substituent_stems": [
+        "thioxanthen"
+      ],
+      "fusion_stems": [
+        "thioxantheno"
+      ],
+      "derivative_status": "production_safe",
+      "default_indicated_h": [
+        "9"
+      ]
     },
     "[1,2,4]triazolo[1,5-a]pyrimidine": {
       "parent_stems": [
