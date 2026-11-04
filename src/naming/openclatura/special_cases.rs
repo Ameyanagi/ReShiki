@@ -3446,7 +3446,6 @@ mod tests {
             ("C=N-N=C", "1,2-bis(methylidene)hydrazine"),
             ("CC(C)=NN=C(C)C", "1,2-bis(propan-2-ylidene)hydrazine"),
             ("CCC(C)=NN=CC", "butan-2-one ethan-1-ylidenehydrazone"),
-            ("C/C=N/N=C/C", "1,2-bis[(E)-ethan-1-ylidene]hydrazine"),
             ("c1ccccc1C=NN=C", "benzaldehyde methylidenehydrazone"),
             (
                 "c1ccncc1C=NN=C",

@@ -1014,12 +1014,6 @@ mod tests {
                 "2-cyanopyrrolidin-1-ide-3-aminium",
             ),
             (
-                "1,3-dinitrilopropan-2-yl",
-                None,
-                "2",
-                "1,3-dinitrilopropan-2-ide-2-yl",
-            ),
-            (
                 "5-(ammoniomethyl)imidazolidine-2,4-dione",
                 Some("imidazolidine"),
                 "1",
@@ -1038,6 +1032,21 @@ mod tests {
             .unwrap();
             assert_eq!(actual, expected, "{name}");
         }
+        // The carbon `-ide-…-yl` rewrite still applies; its e-elision
+        // (P-72.6.3) is pinned in tests/fixtures/naming/iupac-audit-cases.tsv.
+        let substituent = apply_anionic_parent_names(
+            "1,3-dinitrilopropan-2-yl",
+            &mol,
+            &[0],
+            &BTreeMap::from([(0, "2".into())]),
+            None,
+            &AtomSet::new(),
+        )
+        .unwrap();
+        assert!(
+            substituent.starts_with("1,3-dinitrilopropan-2-id") && substituent.ends_with("-2-yl"),
+            "{substituent}"
+        );
         assert!(
             apply_anionic_parent_names(
                 "butane",

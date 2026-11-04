@@ -825,3 +825,63 @@ fn unknown_bond_that_cannot_be_e_z_is_not_marked() {
     assert_eq!(identity.smiles, canonical_smiles("CC=C(C)C").unwrap());
     assert_eq!(identity.naming_smiles, None);
 }
+
+/// Confident cases from independent IUPAC audits. A `known-failure` row is
+/// still wrong on main; it fails once fixed so that it is flipped to `pass`.
+#[tokio::test]
+async fn iupac_audit_cases() {
+    let mut errors = vec![];
+    for line in include_str!("../../tests/fixtures/naming/iupac-audit-cases.tsv")
+        .lines()
+        .skip(1)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+    {
+        let [smiles, name, status, _rule, source, state] = line.split('\t').collect::<Vec<_>>()[..]
+        else {
+            panic!("malformed row: {line}");
+        };
+        // As `reshiki --cli name`: import, generate, then the reconstruction gate.
+        let named = async {
+            canonical_smiles(smiles.split_whitespace().next().unwrap_or_default())?;
+            let response = crate::engine::LocalEngine::in_process()
+                .request(crate::engine::Request::import_smiles(smiles))
+                .await?;
+            let identity = document_identity(&response.document.ok_or("no document")?)?;
+            let expected = canonical_smiles(&identity.smiles)?;
+            let name = openclatura::name_smiles(identity.generation_smiles(&expected))?;
+            let (parser_name, target) = name
+                .verification
+                .as_ref()
+                .map_or((&name.text, &expected), |v| (&v.name, &v.smiles));
+            let request =
+                local::verification_request(parser_name).map_err(|error| error.to_string())?;
+            let reply = worker::respond(&request)?;
+            let parsed = local::verification_result(parser_name, &reply)
+                .map_err(|error| error.to_string())?;
+            verify_identity(target, &parsed.smiles)?;
+            Ok::<_, String>(name)
+        };
+        let (actual, actual_status) = match named.await {
+            Ok(name) => (
+                name.text,
+                match name.status {
+                    NameStatus::Preferred => "preferred",
+                    NameStatus::NotPreferred(_) => "not_preferred",
+                    NameStatus::Unverified(_) => "unverified",
+                },
+            ),
+            Err(_) => (String::new(), "refuse"),
+        };
+        match (state, actual == name && actual_status == status) {
+            ("pass", false) => errors.push(format!(
+                "{smiles}: expected {name} ({status}), got {actual} ({actual_status})"
+            )),
+            ("known-failure", true) => {
+                errors.push(format!("{smiles} ({source}): now fixed, flip to pass"))
+            }
+            ("pass" | "known-failure", _) => {}
+            _ => panic!("unknown state: {line}"),
+        }
+    }
+    assert!(errors.is_empty(), "{}", errors.join("\n"));
+}
