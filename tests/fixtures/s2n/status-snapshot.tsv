@@ -62,7 +62,7 @@ CC(=C)C1=CC=CC=C1	(prop-1-en-2-yl)benzene	preferred
 OC/C=C/c1ccccc1	(2E)-3-phenylprop-2-en-1-ol	preferred	
 C=CC1=CC=NC=C1	4-ethenylpyridine	preferred	
 COC1=C(C=CC(=C1)CC=C)O	2-methoxy-4-(prop-2-en-1-yl)phenol	preferred	
-C=CCC1=CC2=C(C=C1)OCO2	5-(prop-2-en-1-yl)-1,3-benzodioxole	preferred	
+C=CCC1=CC2=C(C=C1)OCO2	5-(prop-2-en-1-yl)-2H-1,3-benzodioxole	preferred	
 COc1ccc(/C=C/C)cc1	1-methoxy-4-[(1E)-prop-1-en-1-yl]benzene	preferred	
 C1CCNCC1	piperidine	preferred	
 C1COCCN1	morpholine	preferred	
@@ -113,7 +113,7 @@ C[C@@H]1CC[C@H]([C@@H](C1)O)C(C)C	(1R,2S,5R)-5-methyl-2-(propan-2-yl)cyclohexan-
 C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C	(1R,3aS,3bS,7S,9aR,9bS,11aR)-9a,11a-dimethyl-1-[(2R)-6-methylheptan-2-yl]-2,3,3a,3b,4,6,7,8,9,9a,9b,10,11,11a-tetradecahydro-1H-cyclopenta[a]phenanthren-7-ol	unverified	opsin_fusion_layout
 C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@]34C	(1S,3aS,3bR,9aR,9bS,11aS)-1-hydroxy-9a,11a-dimethyl-2,3,3a,3b,4,5,9,9a,9b,10,11,11a-dodecahydrocyclopenta[a]phenanthren-7(1H,8H)-one	unverified	opsin_fusion_layout
 CN1CC[C@]23[C@@H]4[C@H]1CC5=C2C(=C(C=C5)O)O[C@H]3[C@H](C=C4)O	(4R,4aR,7S,7aR,12bS)-3-methyl-2,3,4,4a,7,7a-hexahydro-4,12-methano-1H-[1]benzofuro[3,2-e]isoquinoline-7,9-diol	unverified	opsin_fusion_layout
-C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O	(3R,4S,5S,6R)-6-(hydroxymethyl)oxane-2,3,4,5-tetraol	preferred	
+C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O	(3R,4S,5S,6R)-6-(hydroxymethyl)oxane-2,3,4,5-tetrol	preferred	
 C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O[C@]2([C@H]([C@@H]([C@H](O2)CO)O)O)CO)O)O)O)O	(2R,3R,4S,5S,6R)-2-{[(2S,3S,4S,5R)-3,4-dihydroxy-2,5-bis(hydroxymethyl)oxolan-2-yl]oxy}-6-(hydroxymethyl)oxane-3,4,5-triol	preferred	
 COC1=CC2=C(C=CN=C2C=C1)[C@H]([C@@H]3C[C@@H]4CCN3C[C@@H]4C=C)O	(R)-[(2S,4S,5R)-5-ethenyl-1-azabicyclo[2.2.2]octan-2-yl](6-methoxyquinolin-4-yl)methanol	preferred	
 CC1=CC[C@@H](CC1)C(=C)C	(4R)-1-methyl-4-(prop-1-en-2-yl)cyclohex-1-ene	preferred	
@@ -203,8 +203,8 @@ C1CCCCCCCCCCC1	cyclododecane	preferred
 C1CCCCCCCCCCCCCCC1	cyclohexadecane	preferred	
 C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC[C@@H]4[C@@]3(CCCC4)C)C	(5R,8R,9S,10S,13R,14S,17R)-10,13-dimethyl-17-[(2R)-6-methylheptan-2-yl]gonane	unverified	unaudited_parent
 CN(CC1=CC(=C(C=C1)OC(F)F)OC)C(=O)NC2=C(C=CC(=C2)OC)Cl	N-(2-chloro-5-methoxyphenyl)-N'-({4-[(difluoromethyl)oxy]-3-methoxyphenyl}methyl)-N'-methylurea	preferred	
-C[C@@H](C1=NC(=NO1)C2=CC=CS2)N3CCN(CC3)CC4=CC5=C(C=C4)OCO5	5-[(1S)-1-{4-[(1,3-benzodioxol-5-yl)methyl]piperazin-1-yl}ethyl]-3-(thiophen-2-yl)-1,2,4-oxadiazole	preferred	
-COC(=O)C[C@@H](C1=CC=CC=C1Cl)NC(=O)C2CCN(CC2)C3=NS(=O)(=O)C4=CC=CC=C43	methyl (3S)-3-(2-chlorophenyl)-3-[1-(1,1-dioxo-1,2-benzothiazol-3-yl)piperidine-4-carboxamido]propanoate	preferred	
+C[C@@H](C1=NC(=NO1)C2=CC=CS2)N3CCN(CC3)CC4=CC5=C(C=C4)OCO5	5-[(1S)-1-{4-[(2H-1,3-benzodioxol-5-yl)methyl]piperazin-1-yl}ethyl]-3-(thiophen-2-yl)-1,2,4-oxadiazole	preferred	
+COC(=O)C[C@@H](C1=CC=CC=C1Cl)NC(=O)C2CCN(CC2)C3=NS(=O)(=O)C4=CC=CC=C43	methyl (3S)-3-(2-chlorophenyl)-3-[1-(1,1-dioxo-1H-1lambda^6,2-benzothiazol-3-yl)piperidine-4-carboxamido]propanoate	preferred	
 CC(C)CC(=O)NC1=CC=C(C=C1)NC(=O)C2=C(N=CC=C2)SC3=CC=CC=C3	3-methyl-N-{4-[2-(phenylsulfanyl)pyridine-3-carboxamido]phenyl}butanamide	unverified	principal_group_tie
 CCOC(=O)C1=C(NC2=C(C1C3=C(C(=CC=C3)OC)OC)C(=O)CC(C2)C4=CC=C(C=C4)OC)C	ethyl 4-(2,3-dimethoxyphenyl)-7-(4-methoxyphenyl)-2-methyl-5-oxo-4,6,7,8-tetrahydroquinoline-3(1H)-carboxylate	preferred	
 CCCN(CC#C)C(=O)NC(C)C1=CC(=CC=C1)N2CCCC2=O	N-{1-[3-(2-oxopyrrolidin-1-yl)phenyl]ethyl}-N'-(prop-2-yn-1-yl)-N'-propylurea	preferred	
@@ -226,7 +226,7 @@ CC(C)[C@@H](C(=O)NCCC1=CCCCC1)NC(=O)C2=CC=C(C=C2)Cl	4-chloro-N-[(2S)-1-{[2-(cycl
 CC(=O)N1CCN(CC1)C2=CC=C(C=C2)CN([C@@H](CC3=CC=CC=C3)C(=O)N(C)CCOCC4=CC(=CC=C4)C#N)C(=O)/C=C/C5=CC=C(C=C5)C(F)(F)F	(2E)-N-{[4-(4-acetylpiperazin-1-yl)phenyl]methyl}-N-{(2S)-1-[(2-{[(3-cyanophenyl)methyl]oxy}ethyl)(methyl)amino]-1-oxo-3-phenylpropan-2-yl}-3-[4-(trifluoromethyl)phenyl]prop-2-enamide	preferred	
 CC1=C(C=C(C=C1)C(=O)C2=C(C=CC=N2)C(=O)OC)[N+](=O)[O-]	methyl 2-[(4-methyl-3-nitrophenyl)carbonyl]pyridine-3-carboxylate	not_preferred	acyl_prefix
 CCOC(=O)[C@H](CSCC(=O)C1=CC=C(C=C1)Cl)NC(=O)OC(C)(C)C	ethyl (2R)-2-(tert-butoxycarbonylamino)-3-{[2-(4-chlorophenyl)-2-oxoethyl]sulfanyl}propanoate	preferred	
-C1=CC=C2C(=C1)C(=O)N(C2=O)SSC3=CC=C(C=C3)O	2-{[(4-hydroxyphenyl)sulfanyl]sulfanyl}-2H-isoindole-1,3-dione	preferred	
+C1=CC=C2C(=C1)C(=O)N(C2=O)SSC3=CC=C(C=C3)O	2-{[(4-hydroxyphenyl)sulfanyl]sulfanyl}-1H-isoindole-1,3(2H)-dione	preferred	
 C[C@H]([C@@H]1[C@H]2CC(=C(N2C1=O)C(=O)OCC=C)SC3=CC=NC=C3)O[Si](C)(C)C(C)(C)C	prop-2-en-1-yl (5R,6S)-6-[(1R)-1-{[(tert-butyl)dimethylsilyl]oxy}ethyl]-7-oxo-3-[(pyridin-4-yl)sulfanyl]-1-azabicyclo[3.2.0]hept-2-ene-2-carboxylate	preferred	
 CCCS(=O)(=O)N1CCN(CC1)CC(=O)N(CC2=CSC=C2)C3CC3	N-cyclopropyl-2-[4-(propane-1-sulfonyl)piperazin-1-yl]-N-[(thiophen-3-yl)methyl]acetamide	preferred	
 CN(C)CCOC1=CC=CC=C1O	2-{[2-(dimethylamino)ethyl]oxy}phenol	preferred	
@@ -415,7 +415,7 @@ CC(=O)N=[N+]=[N-]	acetyl azide	preferred
 CC(=O)N=C=[Se]	acetyl isoselenocyanate	preferred	
 CC1Cc2ncccc2C1=O	6-methyl-6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	preferred	
 Cc1nc2cc(O)c3ccccc3c2o1	2-methylnaphtho[2,1-d][1,3]oxazol-5-ol	preferred	
-C1Cc2nccnc2C1=O	5H-cyclopenta[b]pyrazin-7(6H)-one	preferred	
+C1Cc2nccnc2C1=O	6,7-dihydro-5H-cyclopenta[b]pyrazin-5-one	preferred	
 O=C1OC2=C(O1)C=CN2	4H-[1,3]dioxolo[4,5-b]pyrrol-2-one	preferred	
 C1CC2=CNC=C2N1	1,2,3,5-tetrahydropyrrolo[3,4-b]pyrrole	preferred	
 C12=CC=C(C3=CC=CC=C13)CCCCCC2	1,4-hexanonaphthalene	unverified	bridged_fused_parent
