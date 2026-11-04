@@ -2656,7 +2656,12 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             continue;
         };
         if l.role == LigandRole::DoubleBonded {
-            if !m.atoms[&center].is_carbon() {
+            // An oxo group on a skeletal ring heteroatom is cited by the same
+            // suffix as a ketone; its expanded valence belongs to the parent.
+            let ring_heterone = l.element == "O"
+                && cyclic.contains(&center)
+                && super::fusion::exocyclic::neutral_lambda_oxo_bonding_number(m, center).is_some();
+            if !m.atoms[&center].is_carbon() && !ring_heterone {
                 continue;
             }
             if l.element != "O"
@@ -2707,7 +2712,14 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             });
         let noncarbon_anion =
             l.role == LigandRole::Anionic && l.element != "O" && !charge_separated;
-        if !m.atoms[&center].is_carbon() && !noncarbon_anion {
+        // A hydroxy group can likewise replace hydrogen at a ring heteroatom.
+        // Keep it in the ordinary alcohol seniority class so a higher suffix
+        // cites it as a hydroxy prefix instead.
+        let ring_heterol = cyclic.contains(&center)
+            && m.atoms[&center].charge == 0
+            && l.element == "O"
+            && l.role == LigandRole::HydrogenBearing;
+        if !m.atoms[&center].is_carbon() && !noncarbon_anion && !ring_heterol {
             continue;
         }
         let derivative = if a.charge < 0 { "anion" } else { "alcohol" };
@@ -2789,6 +2801,61 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes() {
+        use crate::naming::{NameStatus, verify_identity};
+
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            ("O=S1CCCC1", "1lambda^4-thiolan-1-one"),
+            ("O=S1CCCCC1", "1lambda^4-thian-1-one"),
+            ("O=S1(=O)CCCC1", "1lambda^6-thiolane-1,1-dione"),
+            (
+                "O=C(O)c1ccc(N2CCS(=O)(=O)CC2)cc1",
+                "4-(1,1-dioxo-1lambda^6-thiomorpholin-4-yl)benzoic acid",
+            ),
+            (
+                "COC(=O)C[C@@H](C1=CC=CC=C1Cl)NC(=O)C2CCN(CC2)C3=NS(=O)(=O)C4=CC=CC=C43",
+                "methyl (3S)-3-(2-chlorophenyl)-3-[1-(1,1-dioxo-1H-1lambda^6,2-benzothiazol-3-yl)piperidine-4-carboxamido]propanoate",
+            ),
+            (
+                "CC1=CC(=C(C=C1)NC(=O)C(C2=CC=CC=C2)OC(=O)C3=CC4=C(C=C3)C(=O)C5=CC=CC=C5S4(=O)=O)[N+](=O)[O-]",
+                "2-[(4-methyl-2-nitrophenyl)amino]-2-oxo-1-phenylethyl 5,5,10-trioxo-5H,10H-5lambda^6-dibenzo[b,e]thiine-3-carboxylate",
+            ),
+            ("ON1CCCCC1", "piperidin-1-ol"),
+            ("ON1CCCC1O", "pyrrolidine-1,2-diol"),
+            ("CC1(C)CCCC(C)(C)N1O", "2,2,6,6-tetramethylpiperidin-1-ol"),
+            ("ON1CCOCC1", "morpholin-4-ol"),
+            ("On1nnc2ccccc21", "1H-1,2,3-benzotriazol-1-ol"),
+            ("O=C1CCCCN1O", "1-hydroxypiperidin-2-one"),
+            ("OC1CCNCC1", "piperidin-4-ol"),
+            (
+                "O=S1CC2CCCCC2C1",
+                "octahydro-2H-2lambda^4-benzothiophen-2-one",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            for candidate in std::iter::once(name.text.as_str()).chain(
+                name.alternatives
+                    .iter()
+                    .map(|alternative| alternative.name.as_str()),
+            ) {
+                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                assert_eq!(
+                    parsed.status,
+                    opsin::Status::Success,
+                    "{candidate}: {}",
+                    parsed.message
+                );
+                let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+                verify_identity(smiles, &reconstructed)
+                    .unwrap_or_else(|error| panic!("{smiles} -> {candidate}: {error}"));
+            }
+        }
+    }
 
     #[test]
     fn cyano_chalcogen_ligands_do_not_consume_a_ring_skeleton() {

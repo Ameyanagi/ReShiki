@@ -738,7 +738,7 @@ mod tests {
             ("CN1CCC(O)CC1", "1-methylpiperidin-4-ol"),
             (
                 "COC(=O)C[C@@H](C1=CC=CC=C1Cl)NC(=O)C2CCN(CC2)C3=NS(=O)(=O)C4=CC=CC=C43",
-                "methyl (3S)-3-(2-chlorophenyl)-3-[1-(1,1-dioxo-1,2-benzothiazol-3-yl)piperidine-4-carboxamido]propanoate",
+                "methyl (3S)-3-(2-chlorophenyl)-3-[1-(1,1-dioxo-1H-1lambda^6,2-benzothiazol-3-yl)piperidine-4-carboxamido]propanoate",
             ),
             (
                 "CC1=C(C=C(C=C1)NC(=O)C2CCCCN2C(=O)C3=CC=CS3)S(=O)(=O)N4CCCCCC4",
@@ -888,7 +888,7 @@ mod tests {
             ),
             (
                 "CCCCCN1C(=O)COC2=C1C=C(C(=C2)F)N3C(=O)C4=CC=CC=C4N=N3",
-                "7-fluoro-6-(4-oxo-3,4-dihydro-1,2,3-benzotriazin-3-yl)-4-pentyl-1,4-benzoxazin-3(4H)-one",
+                "7-fluoro-6-(4-oxo-3,4-dihydro-1,2,3-benzotriazin-3-yl)-4-pentyl-2H-1,4-benzoxazin-3(4H)-one",
             ),
             (
                 "O=C1[CH-]NC2=C1C[NH2+]C2",

@@ -531,11 +531,103 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
         {
             return Ok((stem, spec.substituent_terminal.unwrap_or_default()));
         }
-        return Ok(if let Some(stem) = name.strip_suffix('e') {
-            (stem.into(), "e".into())
+        // Expanded valence belongs to the retained parent whether its oxo
+        // ligands are cited as suffixes or prefixes.
+        let mut descriptors = Vec::new();
+        for (locant, symbol) in &parts.parent_atom_symbols_by_locant {
+            let has_oxo = parts
+                .principal_group
+                .as_ref()
+                .is_some_and(|g| g.key == "ketone" && g.locants.contains(locant))
+                || parts
+                    .substituents
+                    .iter()
+                    .any(|s| s.name == "oxo" && s.locants.contains(locant));
+            if !has_oxo
+                || symbol == "C"
+                || parts
+                    .parent_atom_charges_by_locant
+                    .get(locant)
+                    .copied()
+                    .unwrap_or(0)
+                    != 0
+            {
+                continue;
+            }
+            let Some(element) = super::rules::elements::get(symbol) else {
+                continue;
+            };
+            let bonding = parts
+                .parent_atom_hydrogens_by_locant
+                .get(locant)
+                .copied()
+                .unwrap_or(0)
+                + parts
+                    .parent_bond_orders_by_locants
+                    .iter()
+                    .filter(|((a, b), _)| a == locant || b == locant)
+                    .map(|(_, order)| order)
+                    .sum::<usize>()
+                + parts
+                    .parent_external_bonds_by_locant
+                    .get(locant)
+                    .into_iter()
+                    .flatten()
+                    .map(|(_, order, _)| order)
+                    .sum::<usize>();
+            if bonding > element.standard_valence {
+                descriptors.push((locant, bonding));
+            }
+        }
+        if descriptors.is_empty() {
+            return Ok(split_parent_terminal(name));
+        }
+        descriptors.sort_by_key(|(locant, _)| parse_locant(locant));
+        let (hydrogen, parent) = name
+            .split_once('-')
+            .filter(|(run, _)| run.split(',').all(|locant| locant.ends_with('H')))
+            .map_or((None, name.as_str()), |(hydrogen, parent)| {
+                (Some(hydrogen), parent)
+            });
+        let parent = if let Some((skeletal_locants, stem)) =
+            parent.split_once('-').filter(|(run, _)| {
+                run.split(',').all(|locant| {
+                    parts
+                        .parent_atom_symbols_by_locant
+                        .get(locant)
+                        .is_some_and(|symbol| symbol != "C")
+                }) && descriptors
+                    .iter()
+                    .all(|(locant, _)| run.split(',').any(|cited| cited == locant.as_str()))
+            }) {
+            let skeletal_locants = skeletal_locants
+                .split(',')
+                .map(|locant| {
+                    descriptors
+                        .iter()
+                        .find(|(expanded, _)| expanded.as_str() == locant)
+                        .map_or_else(
+                            || locant.to_owned(),
+                            |(_, bonding)| format!("{locant}lambda^{bonding}"),
+                        )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{skeletal_locants}-{stem}")
         } else {
-            (name.clone(), String::new())
-        });
+            let lambda = descriptors
+                .into_iter()
+                .map(|(locant, bonding)| format!("{locant}lambda^{bonding}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{lambda}-{parent}")
+        };
+        let name = if let Some(hydrogen) = hydrogen {
+            format!("{hydrogen}-{parent}")
+        } else {
+            parent
+        };
+        return Ok(split_parent_terminal(&name));
     }
     if let Some(name) = parts
         .parent_hydride
@@ -572,6 +664,7 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
         "e".into(),
     ))
 }
+
 fn split_parent_terminal(name: &str) -> (String, String) {
     if let Some(stem) = name.strip_suffix('e') {
         (stem.into(), "e".into())

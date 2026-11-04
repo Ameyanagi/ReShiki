@@ -555,8 +555,8 @@ CC1CCC2(CC1)CCCCC2	3-methylspiro[5.5]undecane	roundtrip/test_polycycles.py
 C1C2CC3CC1CC(C2)C3	adamantane	roundtrip/test_polycycles.py	
 C12C3C4C1C1C2C3C41	cubane	roundtrip/test_polycycles.py	
 C1CN2CCC1CC2	1-azabicyclo[2.2.2]octane	roundtrip/test_polycycles.py	
-O=S1CC2CCCCC2C1	2-oxooctahydro-2lambda^4-benzo[c]thiophene	roundtrip/test_polycyclic_descriptors.py	
-O=S1CCCC1	1-oxothiolane	roundtrip/test_polycyclic_descriptors.py	
+O=S1CC2CCCCC2C1	octahydro-2H-2lambda^4-benzothiophen-2-one	roundtrip/test_polycyclic_descriptors.py	
+O=S1CCCC1	1lambda^4-thiolan-1-one	roundtrip/test_polycyclic_descriptors.py	
 C1=CC2CCCCC2C=C1	1,2,3,4,4a,8a-hexahydronaphthalene	roundtrip/test_polycyclic_descriptors.py	
 C1=CC2CCC1C2	bicyclo[2.2.1]hept-2-ene	roundtrip/test_polycyclic_descriptors.py	
 CN1CC11C2C3CC2C13	1-methylspiro[aziridine-2,3'-tricyclo[2.2.0.0^{2,5}]hexane]	roundtrip/test_polycyclic_descriptors.py	
@@ -625,7 +625,7 @@ c1ccccc1P(c2ccccc2)c2ccccc2	triphenylphosphane	roundtrip/test_replacement_parent
 CO[Si](Cl)(C)c1ccccc1	chloro(methoxy)(methyl)(phenyl)silane	roundtrip/test_replacement_parents.py	
 CP(=O)(OC)c1ccccc1	methyl methyl(phenyl)phosphinate	roundtrip/test_replacement_parents.py	
 FP(F)(F)(F)F	pentafluoro-lambda5-phosphane	roundtrip/test_replacement_parents.py	
-N1=CC=CC2=CC=C3C(NC(CC3=C12)=O)=O	8,10-dihydro-1,8-phenanthroline-7,9-dione	roundtrip/test_retained_fused_production.py	1
+N1=CC=CC2=CC=C3C(NC(CC3=C12)=O)=O	1,8-phenanthroline-7,9(8H,10H)-dione	roundtrip/test_retained_fused_production.py	1
 N1C(N=C2N=CN=C2C1=O)=O	1H-purine-2,6-dione	roundtrip/test_retained_fused_production.py	1
 C(C)O	ethanol	roundtrip/test_retained_fused_production.py	
 CP(C)(N=C=O)(N=C=O)N=C=O	(triisocyanato(methyl)-lambda^5-phosphanyl)methane	roundtrip/test_role_models.py	
@@ -839,10 +839,10 @@ Cc1nc2cc(O)c3ccccc3c2o1	2-methylnaphtho[2,1-d][1,3]oxazol-5-ol	unit/test_fusion_
 Cc1c2ccccc2nc2cc3ccccc3n12	12-methylindolo[1,2-a]benzo[d]pyrimidine	unit/test_fusion_candidate_budget.py	1
 COC(=O)c1cc2c(cn1)ncn2Cc1ccc(F)cc1	methyl 1-((4-fluorophenyl)methyl)imidazo[4,5-c]pyridine-6-carboxylate	unit/test_fusion_candidate_budget.py	1
 C1C(C)c2ncccc2C1=O	7-methyl-6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	unit/test_fusion_carbon_h_oxo_composition.py	0
-C1Cc2cnccc2C1=O	7H-cyclopenta[c]pyridin-5(6H)-one	unit/test_fusion_carbon_h_oxo_composition.py	0
-C1Cc2nccnc2C1=O	5H-cyclopenta[b]pyrazin-7(6H)-one	unit/test_fusion_carbon_h_oxo_composition.py	0
+C1Cc2cnccc2C1=O	6,7-dihydro-5H-cyclopenta[c]pyridin-5-one	unit/test_fusion_carbon_h_oxo_composition.py	0
+C1Cc2nccnc2C1=O	6,7-dihydro-5H-cyclopenta[b]pyrazin-5-one	unit/test_fusion_carbon_h_oxo_composition.py	0
 C1N=CN(C)C2=C1N=CO2	4-methyl-4,7-dihydrooxazolo[5,4-d]pyrimidine	unit/test_fusion_heteroatom_pi_redistribution.py	1
-O=C1C=CC2=C1NC=C2	1H-cyclopenta[b]pyrrol-6-one	unit/test_fusion_intrinsic_h_suffix.py	1
+O=C1C=CC2=C1NC=C2	cyclopenta[b]pyrrol-6(1H)-one	unit/test_fusion_intrinsic_h_suffix.py	1
 O=C1NC2=C(O1)C=CO2	furo[2,3-d][1,3]oxazol-2(3H)-one	unit/test_fusion_intrinsic_h_suffix.py	1
 O=C1NC2=C(OC=C2)O1	furo[3,2-d][1,3]oxazol-2(1H)-one	unit/test_fusion_intrinsic_h_suffix.py	1
 O=C1OC2=C(O1)C=CN2	4H-[1,3]dioxolo[4,5-b]pyrrol-2-one	unit/test_fusion_intrinsic_h_suffix.py	1

@@ -406,16 +406,16 @@ fn component_pipeline(
         numbered,
         locants,
     );
-    add_indicated_hydrogens(mol, parts, numbered, locants)?;
+    parts.is_spiro_side_projection = projection.is_some();
     for &idx in numbered {
         for mut item in mapping.remove(&idx).unwrap_or_default() {
             item.locants.push(locants[&idx].clone());
             super::subgraph_tools::add_substituent(parts, item);
         }
     }
+    add_indicated_hydrogens(mol, parts, numbered, locants)?;
     if projection.is_some() {
         parts.omit_redundant_locants = false;
-        parts.is_spiro_side_projection = true;
     }
     super::locant_elision::apply_redundant_locant_elision(parts);
     // Preserve the upstream complete-name requirement without its trace/audit machinery.
