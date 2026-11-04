@@ -170,6 +170,18 @@ fn worker_names_with_the_port_or_declines() {
     assert!(isotope.text.contains("13C"));
 }
 
+#[test]
+fn worker_declines_specified_cumulene_ez() {
+    for smiles in ["C/C=C=C=C/C", r"C/C=C=C=C\C"] {
+        let reply = worker::respond(&generate_request(smiles).unwrap()).unwrap();
+        let error = parse_response(&reply, smiles).unwrap_err();
+        assert!(
+            error.to_string().contains("Naming does not support cumulene E/Z configuration yet; no less specific name was substituted"),
+            "{smiles}: {error}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn native_worker_then_local_opsin_verifies_supported_names() -> Result<(), String> {
     // The removed rules namer's cases, which the harness checks in-process.

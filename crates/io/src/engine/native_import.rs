@@ -89,6 +89,8 @@ pub enum Error {
     Task(#[from] tokio::task::JoinError),
 }
 
+const CUMULENE_EZ_NOTICE: &str = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored";
+
 struct Prepared {
     molecule: molecular::Molecule,
     document: Document,
@@ -205,7 +207,11 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                         .map_err(|_| Error::AxisMarkers)?;
             }
             let mut molecule = molecule(imported.prepared.state)?;
-            let warnings = layout(&mut molecule, &imported.reaction_properties)?;
+            let mut warnings = layout(&mut molecule, &imported.reaction_properties)?;
+            // Import perception does not keep cumulene E/Z; say so.
+            if imported.dropped_cumulene_ez {
+                warnings.push(CUMULENE_EZ_NOTICE.into());
+            }
             let mut prepared =
                 finish_molecule(molecule, &imported.prepared.dummy_labels, drawing_options)?;
             prepared.warnings.extend(warnings);
