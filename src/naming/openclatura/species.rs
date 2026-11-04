@@ -157,7 +157,8 @@ pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, Strin
     let mut status = NameStatus::Preferred;
     let mut words = Vec::new();
     for (_, (name, count)) in ions {
-        if status == NameStatus::Preferred && name.status != NameStatus::Preferred {
+        // The strongest ion downgrade wins; ties keep the first ion's reason.
+        if name.status.severity() > status.severity() {
             status = name.status;
         }
         let complex = name.text.chars().any(|c| !c.is_ascii_alphabetic())
@@ -504,6 +505,123 @@ mod tests {
             let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
             crate::naming::verify_identity(smiles, &reconstructed)
                 .unwrap_or_else(|e| panic!("{smiles} -> {} -> {reconstructed}: {e}", name.text));
+        }
+    }
+
+    /// A salt takes its strongest ion assessment (Preferred < Unverified <
+    /// NotPreferred; ties keep the first ion's reason in citation order), so a
+    /// known departure is never masked by an unchecked ion (P-77.1.1, P-77.2.1).
+    /// Texts are the current output; this test pins statuses, not spellings.
+    #[test]
+    fn salt_status_is_the_strongest_ion_downgrade() {
+        use NameReason::{AnionParent, BridgedFusedParent, Multiplicative, RingAssembly};
+        use NameStatus::{NotPreferred, Preferred, Unverified};
+        const NTA: &str = "O=C([O-])CN(CC(=O)[O-])CC(=O)[O-]";
+        const OXYDIBENZOATE: &str = "O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]";
+        const EPOXY_AMINIUM: &str = "C[N+](C)(C)c1ccc2c(c1)C1CCC2O1";
+        const NONANYL_AMINIUM: &str = "C[N+](C)(C)CC1C2CC3CC1CC2C3";
+        const BIS_AMINIUM: &str = "C[N+](C)(C)Cc1ccc(cc1)C[N+](C)(C)C";
+        const PENTALENE_CARBOXYLATE: &str = "C1C2CC3CC1CC2C3C(=O)[O-]";
+        for (smiles, expected, status) in [
+            (
+                format!("[Na+].[Na+].[Na+].[Na+].[O-]c1ccccc1.{NTA}"),
+                "tetrasodium benzenolate [bis(2-oxido-2-oxoethyl)amino]acetate",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                format!("{NTA}.[O-]c1ccccc1.[Na+].[Na+].[Na+].[Na+]"),
+                "tetrasodium benzenolate [bis(2-oxido-2-oxoethyl)amino]acetate",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                format!("{EPOXY_AMINIUM}.[Na+].[Na+].[Na+].C1=CCCCC1-C1=CCCC(C1)C(=O)[O-].{NTA}"),
+                "N,N,N-trimethyl-1,4-epoxy-1,2,3,4-tetrahydronaphthalen-7-aminium trisodium 3-(cyclohex-2-en-1-yl)cyclohex-3-ene-1-carboxylate [bis(2-oxido-2-oxoethyl)amino]acetate",
+                NotPreferred(RingAssembly),
+            ),
+            (
+                "C[N+](C)(C)C1=CCCCC1-C1=CCCCC1.[Na+].[O-]c1ccccc1.[O-]C(=O)c1ccccc1".into(),
+                "6-(cyclohex-1-en-1-yl)-N,N,N-trimethylcyclohex-1-en-1-aminium sodium benzenolate benzoate",
+                NotPreferred(RingAssembly),
+            ),
+            (
+                format!("[Na+].[Na+].[Na+].CC(=O)CC[O-].{OXYDIBENZOATE}"),
+                "trisodium 3-oxobutan-1-olate 4-{[4-(oxidocarbonyl)phenyl]oxy}benzoate",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                format!("[K+].[S-]c1ccccc1.[K+].[K+].[K+].{NTA}"),
+                "tetrapotassium benzenethiolate [bis(2-oxido-2-oxoethyl)amino]acetate",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                format!("{EPOXY_AMINIUM}.{EPOXY_AMINIUM}.{OXYDIBENZOATE}"),
+                "bis(N,N,N-trimethyl-1,4-epoxy-1,2,3,4-tetrahydronaphthalen-7-aminium) 4-{[4-(oxidocarbonyl)phenyl]oxy}benzoate",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                "[Na+].[O-]C(=O)c1ccccc1".into(),
+                "sodium benzoate",
+                Preferred,
+            ),
+            (
+                "[Na+].[O-]c1ccccc1".into(),
+                "sodium benzenolate",
+                Unverified(AnionParent),
+            ),
+            (
+                "[Na+].[O-]c1ccccc1.[Na+].[O-]C(=O)c1ccccc1".into(),
+                "disodium benzenolate benzoate",
+                Unverified(AnionParent),
+            ),
+            (
+                format!("[Na+].[Na+].{OXYDIBENZOATE}"),
+                "disodium 4-{[4-(oxidocarbonyl)phenyl]oxy}benzoate",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                format!("[O-]c1ccccc1.[O-]c1ccccc1.{BIS_AMINIUM}"),
+                "N,N,N-trimethyl-1-{4-[(trimethylammonio)methyl]phenyl}methanaminium dibenzenolate",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                format!("{PENTALENE_CARBOXYLATE}.{BIS_AMINIUM}.{PENTALENE_CARBOXYLATE}"),
+                "N,N,N-trimethyl-1-{4-[(trimethylammonio)methyl]phenyl}methanaminium bis(1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene-1-carboxylate)",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                format!("{NONANYL_AMINIUM}.[O-]C(=O)c1ccccc1"),
+                "N,N,N-trimethyl-1-(tricyclo[3.3.1.0^{3,7}]nonan-2-yl)methanaminium benzoate",
+                Preferred,
+            ),
+            (
+                format!("{EPOXY_AMINIUM}.[O-]c1ccccc1"),
+                "N,N,N-trimethyl-1,4-epoxy-1,2,3,4-tetrahydronaphthalen-7-aminium benzenolate",
+                Unverified(BridgedFusedParent),
+            ),
+            (
+                format!("{NONANYL_AMINIUM}.{NONANYL_AMINIUM}.{OXYDIBENZOATE}"),
+                "bis[N,N,N-trimethyl-1-(tricyclo[3.3.1.0^{3,7}]nonan-2-yl)methanaminium] 4-{[4-(oxidocarbonyl)phenyl]oxy}benzoate",
+                NotPreferred(Multiplicative),
+            ),
+            (
+                "[O-]c1ccccc1".into(),
+                "benzenolate",
+                Unverified(AnionParent),
+            ),
+            (
+                NTA.into(),
+                "[bis(2-oxido-2-oxoethyl)amino]acetate",
+                NotPreferred(Multiplicative),
+            ),
+            ("CC(=O)O".into(), "acetic acid", Preferred),
+        ] {
+            let name =
+                super::super::name_smiles(&smiles).unwrap_or_else(|e| panic!("{smiles}: {e}"));
+            assert_eq!(
+                (name.text.as_str(), name.status),
+                (expected, status),
+                "{smiles}"
+            );
         }
     }
 
