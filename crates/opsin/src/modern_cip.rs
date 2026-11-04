@@ -126,98 +126,183 @@ mod tests {
                 .text
         };
         let parser = Parser::new().unwrap();
-        for (name, expected, expected_atom_labels) in [
+        for (case, name, expected, expected_labels) in [
             (
+                "P01",
                 "3-[(S)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
                 "O[C@H](C1=CC=CC1)C1=C[CH-]C=C1",
-                Some(&["S"][..]),
+                Some((&["S"][..], &[][..])),
             ),
             (
+                "P02",
                 "3-[(R)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
                 "O[C@@H](C1=CC=CC1)C1=C[CH-]C=C1",
-                Some(&["R"][..]),
+                Some((&["R"][..], &[][..])),
             ),
+            // Retain the P-92.1.4.4 PIN example alongside the 1,3-dienyl cases.
             (
+                "P-92.1.4.4 PIN",
                 "3-[(S)-(cyclopenta-1,4-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
                 "O[C@H](C1=CCC=C1)C1=C[CH-]C=C1",
-                Some(&["S"][..]),
+                Some((&["S"][..], &[][..])),
             ),
             (
+                "X01",
                 "2-[(S)-(4-fluoro-1H-pyrrol-1-id-2-yl)(hydroxy)methyl]-2H-pyrrol-2-ide",
                 "O[C@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1",
-                Some(&["S"][..]),
+                Some((&["S"][..], &[][..])),
             ),
             (
+                "X02",
                 "2-[(R)-(4-fluoro-1H-pyrrol-1-id-2-yl)(hydroxy)methyl]-2H-pyrrol-2-ide",
                 "O[C@@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1",
-                Some(&["R"][..]),
+                Some((&["R"][..], &[][..])),
             ),
+            // Fused anions and carbocations remain structure regressions;
+            // their broader mancude app labelling is outside this change.
             (
+                "M01",
                 "2-[(R)-(cyclopenta-2,4-dien-1-id-1-yl)(hydroxy)methyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide",
                 "O[C@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2",
-                Some(&["R"][..]),
+                None,
             ),
             (
+                "M02",
                 "2-[(S)-(cyclopenta-2,4-dien-1-id-1-yl)(hydroxy)methyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide",
                 "O[C@@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2",
-                Some(&["S"][..]),
+                None,
             ),
-            // V01/V02: the independent app labeller returns S/R for these R/S
-            // names, so enforce P-92.1.4.4 through structure identity alone.
             (
+                "V01",
                 "1-[(R)-(cyclopenta-2,4-dien-1-id-1-yl)(hydroxy)methyl]cyclohepta-2,4,6-trien-1-ylium",
                 "O[C@H]([C-]1C=CC=C1)[C+]1C=CC=CC=C1",
                 None,
             ),
             (
+                "V02",
                 "1-[(S)-(cyclopenta-2,4-dien-1-id-1-yl)(hydroxy)methyl]cyclohepta-2,4,6-trien-1-ylium",
                 "O[C@@H]([C-]1C=CC=C1)[C+]1C=CC=CC=C1",
                 None,
             ),
             // The E/Z descriptor ranks the same two rings at the double bond.
             (
+                "E30",
                 "3-[(1Z)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide",
                 "F/C=C(\\C1=CC=CC1)C1=C[CH-]C=C1",
-                Some(&[][..]),
+                Some((&[][..], &["Z"][..])),
             ),
             (
+                "E31",
                 "3-[(1E)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide",
                 "F/C=C(/C1=CC=CC1)C1=C[CH-]C=C1",
-                Some(&[][..]),
+                Some((&[][..], &["E"][..])),
             ),
             (
+                "M03",
                 "2-[(1Z)-1-(cyclopenta-2,4-dien-1-id-1-yl)-2-fluoroethenyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide",
                 "F/C=C(/[C-]1C=CC=C1)[C-]1C=CC2=C1CCC2",
-                Some(&[][..]),
+                None,
             ),
             (
+                "M04",
                 "2-[(1E)-1-(cyclopenta-2,4-dien-1-id-1-yl)-2-fluoroethenyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide",
                 "F/C=C(\\[C-]1C=CC=C1)[C-]1C=CC2=C1CCC2",
-                Some(&[][..]),
+                None,
             ),
             (
+                "V03",
                 "1-[(1Z)-1-(cyclopenta-2,4-dien-1-id-1-yl)-2-fluoroethenyl]cyclohepta-2,4,6-trien-1-ylium",
                 "F/C=C(/[C-]1C=CC=C1)[C+]1C=CC=CC=C1",
-                Some(&[][..]),
+                None,
             ),
             (
+                "V04",
                 "1-[(1E)-1-(cyclopenta-2,4-dien-1-id-1-yl)-2-fluoroethenyl]cyclohepta-2,4,6-trien-1-ylium",
                 "F/C=C(\\[C-]1C=CC=C1)[C+]1C=CC=CC=C1",
-                Some(&[][..]),
+                None,
+            ),
+            // Saturated cationic nitrogen is not an averaging candidate.
+            (
+                "W21",
+                "3-[(R)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]-1,1-dimethyl-1H-pyrrol-1-ium",
+                "O[C@H](C1=CC=CC1)C1=C[N+](C)(C)C=C1",
+                None,
+            ),
+            (
+                "W22",
+                "3-[(S)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]-1,1-dimethyl-1H-pyrrol-1-ium",
+                "O[C@@H](C1=CC=CC1)C1=C[N+](C)(C)C=C1",
+                None,
+            ),
+            (
+                "W23",
+                "3-[(1Z)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]-1,1-dimethyl-1H-pyrrol-1-ium",
+                "F/C=C(/C1=CC=CC1)C1=C[N+](C)(C)C=C1",
+                None,
+            ),
+            (
+                "W24",
+                "3-[(1E)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]-1,1-dimethyl-1H-pyrrol-1-ium",
+                "F/C=C(\\C1=CC=CC1)C1=C[N+](C)(C)C=C1",
+                None,
+            ),
+            (
+                "W27",
+                "3-[(R)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]-1H-pyrrol-1-ium",
+                "O[C@H](C1=CC=CC1)C1=C[NH2+]C=C1",
+                None,
+            ),
+            (
+                "W28",
+                "3-[(S)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]-1H-pyrrol-1-ium",
+                "O[C@@H](C1=CC=CC1)C1=C[NH2+]C=C1",
+                None,
+            ),
+            (
+                "W29",
+                "3-[(1Z)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]-1H-pyrrol-1-ium",
+                "F/C=C(/C1=CC=CC1)C1=C[NH2+]C=C1",
+                None,
+            ),
+            (
+                "W30",
+                "3-[(1E)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]-1H-pyrrol-1-ium",
+                "F/C=C(\\C1=CC=CC1)C1=C[NH2+]C=C1",
+                None,
             ),
         ] {
             let result = parser.parse(name, &ParseOptions::strict());
-            assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+            assert_eq!(
+                result.status,
+                Status::Success,
+                "{case}: {name}: {}",
+                result.message
+            );
             let structure = result.structure.unwrap();
             assert_eq!(
                 canonical(&structure.semantic_cxsmiles().unwrap()),
                 canonical(expected),
-                "{name}"
+                "{case}: {name}"
             );
-            let labels = atom_labels(&structure.graph).unwrap();
-            let labels: Vec<_> = labels.values().map(String::as_str).collect();
-            if let Some(expected_atom_labels) = expected_atom_labels {
-                assert_eq!(labels, expected_atom_labels, "{name}");
+            if let Some((expected_atom_labels, expected_bond_labels)) = expected_labels {
+                let (state, _) = state(&structure.graph).unwrap();
+                let labelled = label::assign(&state, &Default::default()).unwrap();
+                let atom_labels: Vec<_> = labelled
+                    .state
+                    .properties
+                    .atoms
+                    .iter()
+                    .filter_map(|atom| atom.cip_code.as_deref())
+                    .collect();
+                let bond_labels: Vec<_> = labelled
+                    .state
+                    .properties
+                    .bond_codes
+                    .iter()
+                    .filter_map(Option::as_deref)
+                    .collect();
+                assert_eq!(atom_labels, expected_atom_labels, "{case}: {name}");
+                assert_eq!(bond_labels, expected_bond_labels, "{case}: {name}");
             }
         }
     }

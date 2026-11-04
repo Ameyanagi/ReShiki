@@ -343,32 +343,19 @@ fn cyclopentadienide_resonance_forms_have_equal_priority() {
 }
 
 #[test]
-fn tropylium_outranks_cyclopentadienide_after_resonance_averaging() {
-    // V01: both attachment atoms have two real carbon neighbours. The next
-    // entry is the averaged duplicate: tropylium's 36/7 exceeds Cp−'s 24/5.
+fn sodium_counterion_does_not_disable_cyclopentadienide_averaging() {
+    // The disconnected Na+ does not change P01's ligand priorities.
     check(
-        &graph("O[C@H]([C-]1C=CC=C1)[C+]1C=CC=CC=C1", true),
-        2,
-        &[El(Element::H), Id(3), Id(8), El(Element::O)],
+        &graph("[Na+].O[C@H](C1=CC=CC1)C1=C[CH-]C=C1", true),
+        3,
+        &[El(Element::H), Id(9), Id(4), El(Element::O)],
     );
 }
 
 #[test]
-fn tropylium_outranks_cyclopentadienide_at_alkene_endpoint() {
-    // V03: the same 36/7 > 24/5 duplicate comparison applies after excluding
-    // the opposite endpoint of the double bond.
-    let graph = graph("F/C=C(/[C-]1C=CC=C1)[C+]1C=CC=CC=C1", true);
-    assert_eq!(
-        CipSequenceRules::new(&graph, AtomId(2))
-            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
-            .unwrap(),
-        vec![AtomId(3), AtomId(8)]
-    );
-}
-
-#[test]
-fn fluoropyrrolide_outranks_pyrrolide_after_per_atom_averaging() {
-    // X01: both attached ring atoms have a 26/5 duplicate, so remote F decides.
+fn fluoropyrrolide_preserves_drawn_ordering() {
+    // X01: the hetero anions use origin/main's drawn-bond comparison.
+    // The first attachment has [N, C, C], above the second's [N, C].
     check(
         &graph("O[C@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1", true),
         2,
@@ -377,26 +364,14 @@ fn fluoropyrrolide_outranks_pyrrolide_after_per_atom_averaging() {
 }
 
 #[test]
-fn pyrrolide_resonance_forms_have_equal_priority() {
-    let forms = [
-        "C1=CC=C[N-]1",
-        "[C-]1C=CC=N1",
-        "C1[CH-]C=CN=1",
-        "C1=C[CH-]C=N1",
-        "C1C=C[CH-]N=1",
-    ];
-    for a in forms {
-        for b in forms {
-            // Includes X03, and every other pair of drawn charge positions.
-            let smiles = format!("FC({a}){b}");
-            let graph = graph(&smiles, true);
-            assert_eq!(
-                CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(7)),
-                Err(CipOrderingError::UnresolvedTie),
-                "{smiles}"
-            );
-        }
-    }
+fn pyrrolide_resonance_forms_preserve_drawn_ordering() {
+    // X03: as on origin/main, [N, C, C] outranks [N, C]. Hetero anions do
+    // not receive averaged duplicates that would make these ligands tie.
+    let graph = graph("FC(C1=CC=C[N-]1)[C-]1C=CC=N1", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(7)),
+        Ok(Ordering::Greater)
+    );
 }
 
 #[test]
@@ -430,8 +405,18 @@ fn cationic_pyrylium_preserves_drawn_multiple_bond_duplicates() {
 }
 
 #[test]
+fn ammonium_diene_outranks_neutral_cyclopentadienyl() {
+    // W21: the saturated N+ retains its drawn neighbours, as on origin/main.
+    check(
+        &graph("O[C@H](C1=CC=CC1)C1=C[N+](C)(C)C=C1", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
+    );
+}
+
+#[test]
 fn ineligible_pyrylium_next_to_cyclopentadienide_preserves_drawn_ordering() {
-    // The cyclic O+ has a drawn double bond, so it disables all averaging.
+    // The O+ charge in the same component disables all averaging.
     // Drawn neighbours at the attachment atoms give [O, C, C] > Cp− [C, C].
     check(
         &graph("O[C@H]([C-]1C=CC=C1)C1=CC=CC=[O+]1", true),
@@ -442,7 +427,7 @@ fn ineligible_pyrylium_next_to_cyclopentadienide_preserves_drawn_ordering() {
 
 #[test]
 fn ineligible_pyridinium_next_to_cyclopentadienide_preserves_drawn_ordering() {
-    // The cyclic NH+ likewise has a drawn double bond and disables averaging.
+    // The NH+ charge in the same component likewise disables averaging.
     // Its attachment sphere [N, C, C] outranks Cp−'s drawn [C, C].
     check(
         &graph("O[C@H]([C-]1C=CC=C1)C1=CC=CC=[NH+]1", true),
@@ -484,8 +469,9 @@ fn multiply_charged_ring_preserves_drawn_ordering() {
 }
 
 #[test]
-fn saturated_fused_cyclopentadienide_outranks_simple_cyclopentadienide() {
-    // M01: both rings have a 24/5 duplicate; the saturated fusion decides later.
+fn saturated_fused_anion_preserves_drawn_ordering_against_simple_cyclopentadienide() {
+    // M01: fusion disables averaging throughout the component. Origin/main's
+    // drawn-bond comparison places the fused ligand above the simple ring.
     check(
         &graph("O[C@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2", true),
         2,
@@ -494,18 +480,18 @@ fn saturated_fused_cyclopentadienide_outranks_simple_cyclopentadienide() {
 }
 
 #[test]
-fn saturated_fused_cyclopentadienide_outranks_cyclopropyl() {
+fn saturated_fused_anion_preserves_drawn_ordering_against_cyclopropyl() {
     let graph = graph("O[C@H](C1CC1)[C-]1C=CC2=C1CCC2", true);
-    // Only the conjugated ring is averaged: [C, C, 24/5] > [C, C, H].
+    // Origin/main's drawn attachment neighbours give [C, C] < [C, C, H].
     assert_eq!(
         CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(5), AtomId(2)),
-        Ok(Ordering::Greater)
+        Ok(Ordering::Less)
     );
 }
 
 #[test]
-fn saturated_fused_cyclopentadienide_outranks_simple_cyclopentadienide_at_alkene_endpoint() {
-    // M03: the saturated fusion also decides between two averaged alkene ligands.
+fn saturated_fused_anion_preserves_drawn_ordering_at_alkene_endpoint() {
+    // M03: the same origin/main ordering applies at the alkene endpoint.
     let graph = graph("F/C=C(/[C-]1C=CC=C1)[C-]1C=CC2=C1CCC2", true);
     assert_eq!(
         CipSequenceRules::new(&graph, AtomId(2))
@@ -516,18 +502,18 @@ fn saturated_fused_cyclopentadienide_outranks_simple_cyclopentadienide_at_alkene
 }
 
 #[test]
-fn saturated_fused_cyclopentadienide_outranks_cyclopropyl_at_alkene_endpoint() {
+fn saturated_fused_anion_ranks_below_cyclopropyl_at_alkene_endpoint() {
     let graph = graph("F/C=C(/C1CC1)[C-]1C=CC2=C1CCC2", true);
     assert_eq!(
         CipSequenceRules::new(&graph, AtomId(2))
             .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
             .unwrap(),
-        vec![AtomId(3), AtomId(6)]
+        vec![AtomId(6), AtomId(3)]
     );
 }
 
 #[test]
-fn ineligible_fused_indenide_disables_all_resonance_averaging() {
+fn ineligible_fused_indenide_disables_component_resonance_averaging() {
     let mut graph = Graph::default();
     let fragment =
         build_fragment(&mut graph, "O[C@H]([C-]1C=CC=C1)[C-]1C=Cc2ccccc21", "", "").unwrap();
@@ -549,16 +535,5 @@ fn stereocentre_inside_the_anion_ring_keeps_drawn_ordering() {
     assert_eq!(
         CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(3), AtomId(6)),
         Err(CipOrderingError::UnresolvedTie)
-    );
-}
-
-#[test]
-fn averaged_duplicate_outranks_a_real_atom_of_equal_atomic_number() {
-    // Cyclopropenide duplicates average to Z = 4; they stay duplicates for
-    // rule 1b, so they rank above the real beryllium atoms opposite.
-    let graph = graph("O[C@H]([C-]1C=C1)C1([Be+])C([Be+])C1[Be+]", true);
-    assert_eq!(
-        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(5)),
-        Ok(Ordering::Greater)
     );
 }

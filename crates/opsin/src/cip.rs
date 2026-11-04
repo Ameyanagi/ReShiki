@@ -3,8 +3,8 @@
 //! Port of `CipSequenceRules.java`, OPSIN 2.9.0, commit
 //! `b91b610af5ab07560fedb20730d7aef46bb2bca0`.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT, see the crate license.
-//! Adds P-92.1.4.4 averaging for singly charged odd mancude cycles, including
-//! saturated fusion, when every conjugated ring ion in the graph is eligible.
+//! Adds P-92.1.4.4 averaging for isolated odd all-carbon monoanion rings
+//! outside the stereocentre, only if every charge in its component is eligible.
 //!
 //! Each rule is exhausted over the whole ligand before the next rule is used.
 //! Path-local histories terminate rings; terminal duplicate atoms represent
@@ -15,11 +15,11 @@
 //! placeholders are not virtual neighbours: callers must use the same explicit
 //! hydrogen construction stage as OPSIN when hydrogen participation is needed.
 
-use crate::graph::{Atom, AtomId, Graph};
+use crate::graph::{Atom, AtomId, Element, Graph};
 use reshiki_chemistry::stereo::cip::Fraction;
 use std::cell::OnceCell;
 use std::cmp::Ordering;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 
 const UNRESOLVED_MESSAGE: &str = "Failed to assign CIP stereochemistry, this indicates a bug in OPSIN or a limitation in OPSIN's implementation of the sequence rules";
@@ -47,12 +47,7 @@ impl std::error::Error for CipOrderingError {}
 pub struct CipSequenceRules<'a> {
     graph: &'a Graph,
     chiral_atom: AtomId,
-    charged_rings: OnceCell<HashMap<AtomId, ChargedMancudeRing>>,
-}
-
-struct ChargedMancudeRing {
-    id: AtomId,
-    fraction: Fraction,
+    charged_rings: OnceCell<HashMap<AtomId, Fraction>>,
 }
 
 impl<'a> CipSequenceRules<'a> {
@@ -182,147 +177,84 @@ impl<'a> CipSequenceRules<'a> {
         Err(CipOrderingError::UnresolvedTie)
     }
 
-    fn charged_rings(&self) -> &HashMap<AtomId, ChargedMancudeRing> {
+    fn charged_rings(&self) -> &HashMap<AtomId, Fraction> {
         self.charged_rings.get_or_init(|| {
             let mut rings = HashMap::new();
-            for candidate in self
-                .graph
-                .atoms
-                .iter()
-                .filter(|a| a.active && a.charge != 0)
-            {
-                if candidate
-                    .bonds
-                    .iter()
-                    .any(|&b| self.graph.bond(b).order > 1)
-                {
-                    // Charged ring atoms carrying a multiple bond are outside
-                    // the traced-cycle model; do not average other ions alone.
-                    if candidate
+            let mut seen = HashSet::new();
+            let mut pending = vec![self.chiral_atom];
+            while let Some(id) = pending.pop() {
+                if !seen.insert(id) {
+                    continue;
+                }
+                pending.extend(self.graph.neighbours(id));
+                let candidate = self.graph.atom(id);
+                if candidate.charge == 0 {
+                    continue;
+                }
+                if candidate.element != Element::C
+                    || candidate.charge != -1
+                    || candidate
                         .bonds
                         .iter()
-                        .any(|&b| crate::cycle_detector::is_bond_in_cycle(self.graph, b))
-                    {
-                        return HashMap::new();
-                    }
-                    continue;
-                }
-                let Some(mut current) = candidate
-                    .bonds
-                    .iter()
-                    .filter(|&&b| crate::cycle_detector::is_bond_in_cycle(self.graph, b))
-                    .filter_map(|&b| self.graph.bond(b).other_atom(candidate.id))
-                    .find(|&a| {
-                        self.graph
-                            .atom(a)
-                            .bonds
-                            .iter()
-                            .any(|&b| self.graph.bond(b).order == 2)
-                    })
-                else {
-                    continue;
-                };
-                if !matches!(candidate.charge, -1 | 1) {
+                        .any(|&b| self.graph.bond(b).order > 1)
+                {
                     return HashMap::new();
                 }
-                let mut ring = vec![candidate.id];
-                let mut previous = candidate.id;
-                // Follow alternating double/single bonds around the pi cycle.
-                // Any ineligible candidate disables averaging throughout the graph.
-                while current != candidate.id {
+                let mut ring = Vec::new();
+                let mut previous = None;
+                let mut current = id;
+                loop {
                     if ring.contains(&current) {
                         return HashMap::new();
                     }
                     ring.push(current);
                     let atom = self.graph.atom(current);
-                    let mut multiple_bonds = atom
+                    let cyclic: Vec<_> = atom
                         .bonds
                         .iter()
-                        .map(|&b| self.graph.bond(b))
-                        .filter(|b| b.order > 1);
-                    let Some(double) = multiple_bonds.next() else {
-                        return HashMap::new();
-                    };
-                    if atom.charge != 0
-                        || double.order != 2
-                        || multiple_bonds.next().is_some()
-                        || !crate::cycle_detector::is_bond_in_cycle(self.graph, double.id)
+                        .copied()
+                        .filter(|&b| crate::cycle_detector::is_bond_in_cycle(self.graph, b))
+                        .collect();
+                    if atom.element != Element::C
+                        || current == self.chiral_atom
+                        || cyclic.len() != 2
                     {
                         return HashMap::new();
                     }
-                    let Some(mut next) = double.other_atom(current) else {
-                        return HashMap::new();
-                    };
-                    if next == previous {
-                        let mut next_atoms = atom
+                    if current != id {
+                        let mut multiple = atom
                             .bonds
                             .iter()
                             .map(|&b| self.graph.bond(b))
-                            .filter(|b| {
-                                b.order == 1
-                                    && crate::cycle_detector::is_bond_in_cycle(self.graph, b.id)
-                            })
-                            .filter_map(|b| b.other_atom(current))
-                            .filter(|&a| {
-                                a == candidate.id
-                                    || self
-                                        .graph
-                                        .atom(a)
-                                        .bonds
-                                        .iter()
-                                        .any(|&b| self.graph.bond(b).order == 2)
-                            });
-                        let Some(single_partner) = next_atoms.next() else {
+                            .filter(|b| b.order > 1);
+                        let Some(double) = multiple.next() else {
                             return HashMap::new();
                         };
-                        if next_atoms.next().is_some() {
+                        if atom.charge != 0
+                            || double.order != 2
+                            || !cyclic.contains(&double.id)
+                            || multiple.next().is_some()
+                        {
                             return HashMap::new();
                         }
-                        next = single_partner;
                     }
-                    previous = current;
+                    let next = cyclic
+                        .iter()
+                        .filter_map(|&b| self.graph.bond(b).other_atom(current))
+                        .find(|&a| Some(a) != previous)
+                        .unwrap();
+                    if next == id {
+                        break;
+                    }
+                    previous = Some(current);
                     current = next;
                 }
-                // A stereocentre inside the ring suppresses duplicates of its own
-                // bonds, so averaging would split the two ring directions.
-                if ring.contains(&self.chiral_atom) {
+                let n = ring.len() as u32;
+                if n.is_multiple_of(2) {
                     return HashMap::new();
                 }
-                // Unsaturated fusion adds contributors beyond this odd cycle.
-                for &atom in &ring {
-                    for &b in &self.graph.atom(atom).bonds {
-                        if !crate::cycle_detector::is_bond_in_cycle(self.graph, b) {
-                            continue;
-                        }
-                        if self.graph.bond(b).other_atom(atom).is_some_and(|a| {
-                            !ring.contains(&a)
-                                && self
-                                    .graph
-                                    .atom(a)
-                                    .bonds
-                                    .iter()
-                                    .any(|&b| self.graph.bond(b).order > 1)
-                        }) {
-                            return HashMap::new();
-                        }
-                    }
-                }
-                let n = ring.len();
-                for (i, &atom) in ring.iter().enumerate() {
-                    let sum: u32 = [ring[(i + n - 1) % n], ring[(i + 1) % n]]
-                        .iter()
-                        .map(|&a| u32::from(self.graph.atom(a).element.atomic_number()))
-                        .sum();
-                    // In the n maximal contributors this atom is charged once
-                    // and double-bonded to each neighbour (n - 1) / 2 times.
-                    let fraction = Fraction((n as u32 - 1) * sum, 2 * n as u32);
-                    rings.insert(
-                        atom,
-                        ChargedMancudeRing {
-                            id: candidate.id,
-                            fraction,
-                        },
-                    );
+                for atom in ring {
+                    rings.insert(atom, Fraction(6 * (n - 1), n));
                 }
             }
             rings
@@ -384,12 +316,15 @@ impl<'a> CipSequenceRules<'a> {
             let other_atom = self.atom(other)?;
             let other_number = Fraction(u32::from(other_atom.element.atomic_number()), 1);
             let origin = node.visited.iter().position(|&ancestor| ancestor == other);
-            let averaged =
-                part.filter(|part| parts.get(&other).is_some_and(|other| part.id == other.id));
+            // Eligible rings are isolated; a cyclic bond cannot join two of them.
+            let averaged = part.filter(|_| {
+                parts.contains_key(&other)
+                    && crate::cycle_detector::is_bond_in_cycle(self.graph, bond_id)
+            });
             if other != self.chiral_atom {
                 // Higher-order bonds to the root itself do not create duplicates
                 // (P-91.1.4.2.4), including e.g. the oxygen of a sulfoxide.
-                // A charged mancude atom needs one averaged duplicate even
+                // The anion needs one averaged duplicate even
                 // without a double bond, including entry from outside its ring.
                 let duplicates = if charged
                     && averaged.is_some()
@@ -402,7 +337,7 @@ impl<'a> CipSequenceRules<'a> {
                 };
                 for _ in 0..duplicates {
                     neighbours.push(Node::ghost(
-                        averaged.map_or(other_number, |part| part.fraction),
+                        averaged.copied().unwrap_or(other_number),
                         visited.clone(),
                         // An averaged duplicate stands for every resonance position: it stays a
                         // duplicate for rule 1b, but never a ring closure to one drawn partner.
@@ -541,35 +476,37 @@ mod tests {
         for smiles in [
             "O[C@H](C1=CC=CC1)C1=C[CH-]C=C1",
             "O[C@H](C1=CC=CC1)[C-]1C=CC=C1",
+            "OC([C-]1C=CC=C1)[C-]1C=CC=C1",
         ] {
             assert_ring_duplicates(smiles, 7..12, &[Fraction(24, 5); 5]);
         }
+        // Directly connected eligible rings still get one duplicate per atom.
+        let smiles = "OC(C)C1=CC=C[C-]1[C-]1C=CC=C1";
+        assert_ring_duplicates(smiles, 3..8, &[Fraction(24, 5); 5]);
+        assert_ring_duplicates(smiles, 8..13, &[Fraction(24, 5); 5]);
     }
 
     #[test]
-    fn saturated_fusion_preserves_one_averaged_duplicate_per_pi_cycle_atom() {
-        let smiles = "O[C@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2";
-        assert_ring_duplicates(smiles, 2..7, &[Fraction(24, 5); 5]);
-        assert_ring_duplicates(smiles, 7..12, &[Fraction(24, 5); 5]);
-
-        let mut graph = Graph::default();
-        crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
-        let rules = CipSequenceRules::new(&graph, AtomId(1));
-        let rings = rules.charged_rings();
-        assert_eq!(rings.len(), 10);
-        for id in 2..12 {
-            assert_eq!(rings[&AtomId(id)].id, AtomId(if id < 7 { 2 } else { 7 }));
-        }
-    }
-
-    #[test]
-    fn ineligible_conjugated_ring_ion_disables_all_averaging() {
+    fn any_ineligible_charge_in_the_component_disables_all_averaging() {
         for excluded in [
-            "[C-]1C=CC2=CC=CC=C21", // Unsaturated fusion.
-            "[C-]1C=C[NH+]=C1",     // Another charge in the cycle.
-            "[C-]1C=CC1",           // Alternation cannot close the cycle.
-            "[C-]1C=CC(=O)C=C1",    // The double bond leaves the cycle.
-            "C1=CC=CC=[O+]1",       // The charged atom carries a double bond.
+            "[C-]1C=CC2=CC=CC=C21",     // Unsaturated fusion.
+            "[C-]1C=CC2=C1CCC2",        // Saturated fusion.
+            "[C-]1C=CC=C1[NH3+]",       // A second ion outside the ring.
+            "[C-]1C=CC=C1[N+](=O)[O-]", // Nitro substituent.
+            "[N-]1C=CC=C1",             // Hetero anion.
+            "[C-]1C=CC=N1",             // Hetero ring with a carbon anion.
+            "C1=C[N+](C)(C)C=C1",       // Ammonium diene (W21).
+            "C1=C[NH2+]C=C1",           // Ammonium diene (W27).
+            "[C+]1C=CC=CC=C1",          // Tropylium.
+            "[C+]1C=C1",                // Cyclopropenylium.
+            "[O-]",                     // Acyclic ions in this component.
+            "[NH3+]",
+            "[CH2-]",
+            "[CH-]1CCCC1",
+            "[C-]1C=C[NH+]=C1",  // Another charge in the cycle.
+            "[C-]1C=CC1",        // Even, incompletely unsaturated ring.
+            "[C-]1C=CC(=O)C=C1", // The double bond leaves the cycle.
+            "C1=CC=CC=[O+]1",    // The charged atom carries a double bond.
             "C1=CC=CC=[NH+]1",
             "[C-2]1C=CC=C1", // Only singly charged cycles are eligible.
             "[C+2]1C=CC=C1",
@@ -588,8 +525,11 @@ mod tests {
     }
 
     #[test]
-    fn nonconjugated_ions_do_not_disable_ring_averaging() {
+    fn charges_in_other_components_do_not_disable_ring_averaging() {
         for spectator in [
+            "[Na+]",
+            "[C+]1C=CC=CC=C1",
+            "[N-]1C=CC=C1",
             "[Cl-]",
             "Cl(=O)(=O)(=O)[O-]",
             "[CH-]1CCCC1",
@@ -605,41 +545,6 @@ mod tests {
     fn each_cyclopropenide_atom_has_one_integral_averaged_bond_duplicate() {
         for smiles in ["O[C@H](C1=CC1)C1=C[CH-]1", "O[C@H](C1=CC1)[C-]1C=C1"] {
             assert_ring_duplicates(smiles, 5..8, &[Fraction(4, 1); 3]);
-        }
-    }
-
-    #[test]
-    fn each_tropylium_atom_has_one_averaged_bond_duplicate() {
-        for smiles in [
-            "O[C@H]([C-]1C=CC=C1)[C+]1C=CC=CC=C1",
-            "O[C@H]([C-]1C=CC=C1)C1=C[CH+]C=CC=C1",
-        ] {
-            assert_ring_duplicates(smiles, 2..7, &[Fraction(24, 5); 5]);
-            assert_ring_duplicates(smiles, 7..14, &[Fraction(36, 7); 7]);
-        }
-    }
-
-    #[test]
-    fn each_cyclopropenylium_atom_has_one_integral_averaged_bond_duplicate() {
-        for smiles in ["O[C@H](C1=CC1)[C+]1C=C1", "O[C@H](C1=CC1)C1=C[CH+]1"] {
-            assert_ring_duplicates(smiles, 5..8, &[Fraction(4, 1); 3]);
-        }
-    }
-
-    #[test]
-    fn pyrrolide_duplicates_average_each_atoms_ring_neighbours() {
-        for smiles in ["OC(C1=CC=C[N-]1)", "OC([C-]1C=CC=N1)"] {
-            assert_ring_duplicates(
-                smiles,
-                2..7,
-                &[
-                    Fraction(26, 5),
-                    Fraction(24, 5),
-                    Fraction(24, 5),
-                    Fraction(26, 5),
-                    Fraction(24, 5),
-                ],
-            );
         }
     }
 
@@ -690,6 +595,28 @@ mod tests {
             assert_eq!(duplicates.len(), 1);
             assert_eq!(duplicates[0].atomic_number, Fraction(8, 1));
             assert_eq!(duplicates[0].duplicate_origin, Some(4));
+        }
+    }
+
+    #[test]
+    fn eligible_ring_keeps_external_carbonyl_duplicate_and_origin() {
+        let mut graph = Graph::default();
+        crate::smiles::build_fragment(&mut graph, "OC([C-]1C=CC=C1)C=O", "", "").unwrap();
+        let rules = CipSequenceRules::new(&graph, AtomId(1));
+        assert_eq!(rules.charged_rings().len(), 5);
+        for visited in [vec![AtomId(1)], vec![AtomId(1), AtomId(8)]] {
+            let carbonyl = rules.real_node(AtomId(7), visited.clone()).unwrap();
+            let neighbours = rules.next_atoms(carbonyl, 0).unwrap();
+            let duplicates: Vec<_> = neighbours
+                .iter()
+                .filter(|n| n.atom.is_none() && n.atomic_number == Fraction(8, 1))
+                .collect();
+            assert_eq!(duplicates.len(), 1);
+            let duplicate = duplicates[0];
+            assert_eq!(
+                duplicate.duplicate_origin,
+                Some(if visited.len() == 1 { 2 } else { 1 })
+            );
         }
     }
 
