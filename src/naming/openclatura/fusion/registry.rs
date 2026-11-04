@@ -1541,6 +1541,44 @@ mod tests {
             component_spec_seniority_key(&r.get("acridine").unwrap().spec)
                 < component_spec_seniority_key(&r.get("phenanthridine").unwrap().spec)
         );
+        // P-25.2.1, Table 2.8: these retained isomers compete directly with
+        // acridine, preserving phenanthroline numbering and angular geometry.
+        for locants in [
+            "1,7", "1,8", "1,9", "1,10", "2,7", "2,8", "2,9", "3,7", "3,8", "4,7",
+        ] {
+            let spec = r.get(&format!("{locants}-phenanthroline")).unwrap().spec;
+            assert!(spec.usable_as_parent && spec.usable_as_attached);
+            assert_eq!(spec.parent_name, format!("[{locants}]phenanthroline"));
+            assert_eq!(spec.attached_prefix, format!("[{locants}]phenanthrolino"));
+            assert_eq!(spec.rings.len(), 3);
+            assert_eq!(spec.horizontal_ring_count, 2);
+            assert_eq!(
+                spec.peripheral_order,
+                [
+                    "1", "2", "3", "4", "4a", "5", "6", "6a", "7", "8", "9", "10", "10a", "10b",
+                ]
+            );
+            let sides = super::super::descriptor::component_sides(&spec).unwrap();
+            for (index, letter, start, end) in [(1, "b", "2", "3"), (9, "j", "8", "9")] {
+                assert_eq!(sides[index].letter, letter);
+                assert_eq!(sides[index].start_locant, start);
+                assert_eq!(sides[index].end_locant, end);
+            }
+            assert!(spec.template.default_indicated_h.is_empty());
+            assert_eq!(
+                spec.template
+                    .atoms
+                    .iter()
+                    .filter(|atom| atom.symbol == "N")
+                    .map(|atom| atom.locant.as_str())
+                    .collect::<Vec<_>>(),
+                locants.split(',').collect::<Vec<_>>()
+            );
+            assert!(
+                component_spec_seniority_key(&spec)
+                    < component_spec_seniority_key(&r.get("acridine").unwrap().spec)
+            );
+        }
     }
     #[test]
     fn retained_pyrans_exclude_generated_hw_citations() {
@@ -1824,7 +1862,7 @@ mod tests {
         }
     }
 
-    /// P-25.3.2.4(b,g): ring count, then rings in a horizontal row.
+    /// P-25.3.2.4(b,d,g): ring count, heteroatom count, then horizontal rings.
     #[test]
     fn retained_tricycles_compete_as_parent_components() {
         let parser = opsin::Parser::new().unwrap();
@@ -1833,6 +1871,19 @@ mod tests {
             ("c1ccc2c(c1)cnc1ccccc12", "phenanthridine"),
             ("c1ccc2c(c1)[nH]c1ccccc12", "9H-carbazole"),
             ("c1ccc2nc3ccccc3nc2c1", "phenazine"),
+            ("n1cccc2ccc3cccnc3c12", "1,10-phenanthroline"),
+            (
+                "C1=CC=NC=2C=CC=3C=C4C(=NC3C12)C=CC=C4",
+                "benzo[b][1,7]phenanthroline",
+            ),
+            (
+                "N1=CC=CC2=CC=C3N=C4C(=CC3=C12)C=CC=C4",
+                "benzo[j][1,7]phenanthroline",
+            ),
+            (
+                "N1=CC=CC2=CC=C3C=C4C(=NC3=C12)C=CC=C4",
+                "benzo[b][1,10]phenanthroline",
+            ),
             ("c1c3ncncc3cc4nc2ccccc2cc14", "pyrimido[4,5-b]acridine"),
             (
                 "c2c4c1ccccc1ncc4cc5nc3ccccc3cc25",

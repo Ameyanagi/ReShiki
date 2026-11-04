@@ -124,6 +124,74 @@ fn indicated_run(text: &str) -> Option<IndicatedHydrogenRun<'_>> {
         .collect::<Option<_>>()?;
     Some(IndicatedHydrogenRun { locants, remainder })
 }
+
+fn retained_parent_lambda_stem(parts: &AssemblyParts, stem: &str) -> (String, bool) {
+    let enabled = parts.retained_name.as_ref().is_some_and(|name| {
+        section("retained_parent_lambda_convention")["parent_names"]
+            .as_array()
+            .is_some_and(|parents| parents.iter().any(|parent| parent.as_str() == Some(name)))
+    });
+    if !enabled {
+        return (stem.into(), false);
+    }
+    let mut descriptors = Vec::new();
+    for (locant, symbol) in &parts.parent_atom_symbols_by_locant {
+        if symbol == "C"
+            || parts
+                .parent_atom_charges_by_locant
+                .get(locant)
+                .copied()
+                .unwrap_or(0)
+                != 0
+        {
+            continue;
+        }
+        let Some(element) = super::rules::elements::get(symbol) else {
+            continue;
+        };
+        let internal: usize = parts
+            .parent_bond_orders_by_locants
+            .iter()
+            .filter(|((left, right), _)| left == locant || right == locant)
+            .map(|(_, order)| *order)
+            .sum();
+        let external: usize = parts
+            .parent_external_bonds_by_locant
+            .get(locant)
+            .into_iter()
+            .flatten()
+            .map(|(_, order, _)| *order)
+            .sum();
+        let bonding = internal
+            + external
+            + parts
+                .parent_atom_hydrogens_by_locant
+                .get(locant)
+                .copied()
+                .unwrap_or(0);
+        if bonding > element.standard_valence {
+            descriptors.push((locant, bonding));
+        }
+    }
+    descriptors.sort_by_key(|(locant, bonding)| (parse_locant(locant), *bonding));
+    if descriptors.is_empty() {
+        return (stem.into(), false);
+    }
+    let lambda = descriptors
+        .iter()
+        .map(|(locant, bonding)| format!("{locant}lambda^{bonding}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    // P-14.1: indicated hydrogen precedes the lambda convention in the parent.
+    let decorated = if let Some(run) = indicated_run(stem) {
+        let boundary = stem.len() - run.remainder.len();
+        format!("{}{lambda}-{}", &stem[..boundary], run.remainder)
+    } else {
+        format!("{lambda}-{stem}")
+    };
+    (decorated, true)
+}
+
 /// Saturation beyond the retained hydride's quota is added H or a hydro prefix.
 fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> String {
     let Some(quota) = super::additive::parent_indicated_hydrogen_quota(parts) else {
@@ -590,6 +658,8 @@ pub(super) fn assemble_name_with_parent(
         name.clone()
     } else {
         let (stem, terminal) = parent_stem_and_terminal(parts)?;
+        let (stem, lambda_cites_locants) = retained_parent_lambda_stem(parts, &stem);
+        cites_locants |= lambda_cites_locants;
         let parent_terminal = if parts
             .parent_hydride
             .as_ref()

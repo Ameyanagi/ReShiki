@@ -1051,6 +1051,79 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn xanthene_congener_templates_keep_heteroatom_and_methylene_locants() {
+        for (smiles, name, symbol) in [
+            ("O1c2ccccc2Cc2ccccc21", "xanthene", "O"),
+            ("S1c2ccccc2Cc2ccccc21", "9H-thioxanthene", "S"),
+            ("[Se]1c2ccccc2Cc2ccccc21", "9H-selenoxanthene", "Se"),
+            ("[Te]1c2ccccc2Cc2ccccc21", "9H-telluroxanthene", "Te"),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let rows = matches(smiles, MatchOptions::default());
+            assert_eq!(rows.len(), 2, "{smiles}");
+            for row in rows {
+                assert_eq!(row.template.name, name, "{smiles}");
+                assert_eq!(row.indicated_h, ["9"], "{smiles}");
+                assert_eq!(row.template.metadata().inherent_saturated_locants, ["9"]);
+                assert_eq!(mol.atoms[&row.locant_to_atom["10"]].symbol, symbol);
+                let methylene = &mol.atoms[&row.locant_to_atom["9"]];
+                assert_eq!(methylene.symbol, "C");
+                assert_eq!(methylene.total_h_count, 2, "{smiles}");
+            }
+        }
+    }
+
+    #[test]
+    fn added_phenanthroline_isomers_have_exact_retained_graphs() {
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected, nitrogen_locants) in [
+            ("c1nccc2ccc3ccncc3c12", "2,9-phenanthroline", ["2", "9"]),
+            ("c1cncc2ccc3ncccc3c12", "3,7-phenanthroline", ["3", "7"]),
+            ("c1cncc2ccc3cnccc3c12", "3,8-phenanthroline", ["3", "8"]),
+            ("c1ccnc2ccc3ncccc3c12", "4,7-phenanthroline", ["4", "7"]),
+        ] {
+            let rows = matches(smiles, MatchOptions::default());
+            assert!(!rows.is_empty(), "{smiles}");
+            for row in rows {
+                assert_eq!(row.template.name, expected, "{smiles}");
+                let actual: BTreeSet<_> = row
+                    .template
+                    .atoms
+                    .iter()
+                    .filter(|atom| atom.symbol == "N")
+                    .map(|atom| atom.locant.as_str())
+                    .collect();
+                assert_eq!(actual, nitrogen_locants.into_iter().collect());
+            }
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            for candidate in std::iter::once(&name.text).chain(
+                name.alternatives
+                    .iter()
+                    .map(|alternative| &alternative.name),
+            ) {
+                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                assert_eq!(
+                    parsed.status,
+                    opsin::Status::Success,
+                    "{candidate}: {}",
+                    parsed.message
+                );
+                assert!(
+                    parsed.warnings.is_empty(),
+                    "{candidate}: {:?}",
+                    parsed.warnings
+                );
+                let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+                crate::naming::verify_identity(smiles, &reconstructed)
+                    .unwrap_or_else(|error| panic!("{smiles} -> {candidate}: {error}"));
+            }
+        }
+    }
+
     #[test]
     fn exact_charges_and_graph_connectivity_are_not_relaxed() {
         assert!(
