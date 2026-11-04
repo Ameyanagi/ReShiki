@@ -2856,7 +2856,7 @@ mod tests {
             ),
             (
                 "O=C1c2ccccc2S(=O)(=O)c2ccccc12",
-                "5lambda^6-dibenzo[b,e]thiine-5,5,10-trione",
+                "10lambda^6-thioxanthene-9,10,10-trione",
             ),
             ("O=[PH]1C=CC=CC1", "1,2-dihydro-1lambda^5-phosphinin-1-one"),
             ("O=[PH]1C=CC=C1", "1H-1lambda^5-phosphol-1-one"),
@@ -2883,7 +2883,7 @@ mod tests {
             ),
             (
                 "CC1=CC(=C(C=C1)NC(=O)C(C2=CC=CC=C2)OC(=O)C3=CC4=C(C=C3)C(=O)C5=CC=CC=C5S4(=O)=O)[N+](=O)[O-]",
-                "2-[(4-methyl-2-nitrophenyl)amino]-2-oxo-1-phenylethyl 5,5,10-trioxo-5,10-dihydro-5lambda^6-dibenzo[b,e]thiine-3-carboxylate",
+                "2-[(4-methyl-2-nitrophenyl)amino]-2-oxo-1-phenylethyl 9,10,10-trioxo-9,10-dihydro-10lambda^6-thioxanthene-3-carboxylate",
             ),
             (
                 "C1[C@@H]2[C@@H](CS1(=O)=O)SC(=NC(=O)CC3=CC=CC=C3)N2C4=C(C(=CC=C4)Cl)Cl",

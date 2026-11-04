@@ -1,14 +1,4 @@
 {
-  "retained_parent_lambda_convention": {
-    "bluebook_rule": "P-14.1 lambda convention; graph-derived nonstandard bonding numbers for the enabled retained xanthene congeners.",
-    "values": {
-      "parent_names": [
-        "9H-thioxanthene",
-        "9H-selenoxanthene",
-        "9H-telluroxanthene"
-      ]
-    }
-  },
   "parent_selection_criteria": {
     "bluebook_rule": "Brief Guide section 6; active criteria for selecting the senior parent compound.",
     "values": [
