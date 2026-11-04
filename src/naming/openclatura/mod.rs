@@ -60,10 +60,14 @@ mod rules;
 mod small_ring_stereo;
 mod special_cases;
 mod species;
+mod spelling;
 mod spiro_subgraph;
 mod subgraph_tools;
 mod unknown_stereo;
 mod von_baeyer;
+
+#[cfg(test)]
+mod anion_spelling_tests;
 
 /// The naming profile on the worker wire and in generated-name warnings.
 pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
@@ -335,7 +339,7 @@ pub(super) fn assess_parent_name(mol: &molecule::Molecule, text: &str) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::LinearPhane,
         ));
-    } else if has_ring_assembly(mol) {
+    } else if has_ring_assembly(mol) || has_anionic_ring_assembly(mol) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::RingAssembly,
         ));
@@ -646,6 +650,30 @@ fn identical_multiplicative_branches(
 /// PIN, cyclohexylbenzene (P-61.2.2).
 fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
     ring_assembly::assembly_junctions(mol)
+        .iter()
+        .any(|&junction| !mol.ring_assembly_is_named(junction))
+}
+
+/// Removing or adding a hydron does not change the parent hydride, so a
+/// pyrrolide joined to a pyrrole still has a ring assembly parent (P-28,
+/// P-72.2.2.1, P-73.1).
+fn has_anionic_ring_assembly(mol: &molecule::Molecule) -> bool {
+    if mol.atoms.values().all(|atom| atom.charge != -1) {
+        return false;
+    }
+    let mut neutral = mol.clone();
+    for atom in neutral.atoms.values_mut() {
+        if atom.charge == -1 {
+            atom.charge = 0;
+            atom.total_h_count += 1;
+            atom.explicit_h_count += 1;
+        } else if atom.charge == 1 && atom.total_h_count > 0 {
+            atom.charge = 0;
+            atom.total_h_count -= 1;
+            atom.explicit_h_count = atom.explicit_h_count.saturating_sub(1);
+        }
+    }
+    ring_assembly::assembly_junctions(&neutral)
         .iter()
         .any(|&junction| !mol.ring_assembly_is_named(junction))
 }

@@ -273,7 +273,6 @@ pub struct ChargeRules {
     pub parent_charge_suffixes: BTreeMap<String, ParentChargeSuffixRule>,
     pub replacement_charge_prefixes: BTreeMap<String, String>,
     pub heteroatom_charge_prefixes: BTreeMap<String, String>,
-    pub anion_suffix_placements: Vec<Value>,
 }
 #[derive(Debug, Default)]
 pub struct AssemblyRules {
@@ -382,7 +381,6 @@ pub static RULES: LazyLock<NomenclatureRegistry> = LazyLock::new(|| Nomenclature
             .collect(),
         replacement_charge_prefixes: string_map("replacement_charge_prefixes"),
         heteroatom_charge_prefixes: string_map("heteroatom_charge_prefixes"),
-        anion_suffix_placements: rows("anion_suffix_placements").to_vec(),
     },
     assembly: AssemblyRules {
         replacement_prefix_order: usize_map("replacement_prefix_order"),

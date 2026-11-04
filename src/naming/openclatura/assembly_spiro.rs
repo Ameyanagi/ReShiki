@@ -693,6 +693,9 @@ fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
     for q in &mut parts.parent_charges {
         q.locant = prime(&q.locant);
     }
+    if let Some(anion) = &mut parts.anion_suffix {
+        anion.locants = anion.locants.iter().map(|l| prime(l)).collect();
+    }
     parts.front_modifier_locants = parts
         .front_modifier_locants
         .iter()

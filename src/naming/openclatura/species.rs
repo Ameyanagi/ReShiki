@@ -198,13 +198,13 @@ mod tests {
         for (smiles, text) in [
             (
                 "Oc1ccccc1-c1[n-]ccc1C",
-                "2-(3-methyl-1H-pyrrol-1-ide-2-yl)phenol",
+                "2-(3-methyl-1H-pyrrol-1-id-2-yl)phenol",
             ),
             ("Oc1ccccc1[CH2-]", "2-methanidylphenol"),
-            ("OCCc1cc[n-]c1", "2-(1H-pyrrol-1-ide-3-yl)ethan-1-ol"),
+            ("OCCc1cc[n-]c1", "2-(1H-pyrrol-1-id-3-yl)ethan-1-ol"),
             (
                 "OC(=O)c1ccccc1-c1[n-]ccc1",
-                "2-(1H-pyrrol-1-ide-2-yl)benzoic acid",
+                "2-(1H-pyrrol-1-id-2-yl)benzoic acid",
             ),
         ] {
             let mol = super::super::graph_io::read_smiles(smiles).unwrap();
