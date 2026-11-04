@@ -16,20 +16,20 @@ use super::{
     indicated_hydrogen::{
         component_carbon_h_relocation_scope, component_h_locants, component_parent_atoms,
         component_parent_graph, intrinsic_carbon_candidate_atoms, intrinsic_carbon_parent_model,
-        intrinsic_parent_lone_pair_sites,
+        intrinsic_parent_lone_pair_sites, parent_hydrogen_candidates,
     },
     layout::{
         can_use_component_entry_layout, component_entry_layouts, preferred_intrinsic_layouts,
     },
     mancude::{
         ParentDerivativeOptions, ParentDerivativeState, has_complete_saturated_hydrogenation,
-        indicated_hydrogen_parent_bond_model, parent_derivative_state,
+        indicated_hydrogen_parent_bond_model, is_added_hydrogen_nitrogen, parent_derivative_state,
         protonated_hydrogenation_is_complete, saturated_nitrogen_hydrogen_sites,
     },
     model::*,
     numbering::{
         CompletedNumberingSelection, completed_system_numbering_selection,
-        indicated_hydrogen_candidate_atoms, observed_parent_matches_bond_model, parent_bond_model,
+        observed_parent_matches_bond_model, parent_bond_model,
     },
     registry::{FusionComponentRegistry, fusion_component_registry},
     rules::{fusion_ring_size_gate, fusion_supported},
@@ -108,6 +108,12 @@ fn plan_uncached(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
         Ok(matches) => matches,
         Err(error) => return rejected(error),
     };
+    if mol.use_benzoheterocycle_names()
+        && face_model.faces.len() == 2
+        && let Some(plan) = plan_benzoheterocycle(mol, atoms, &matches, registry, &face_model)?
+    {
+        return Ok(Some(plan));
+    }
     let mut intrinsic_layouts = None;
     if !can_use_component_entry_layout(&face_model) {
         match preferred_intrinsic_layouts(&face_model, config.search.layout_states) {
@@ -303,6 +309,77 @@ pub(super) fn plan_numbered_candidate(
     Ok(Some(plan))
 }
 
+fn plan_benzoheterocycle(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    matches: &[FusionComponentMatch],
+    registry: &FusionComponentRegistry,
+    face_model: &FaceModel,
+) -> PlanResult {
+    let mut variants = Vec::new();
+    for benzo in matches.iter().filter(|m| m.spec_key == "benzene") {
+        for hetero in matches.iter().filter(|m| m.spec_key != "benzene") {
+            for matched in registry.benzoheterocycle_parent_matches(benzo, hetero)? {
+                if variants
+                    .iter()
+                    .any(|p: &FusionParentPlan| p.ast.component_occurrences == [matched.clone()])
+                {
+                    continue;
+                }
+                // P-25.2.2.4 fixes numbering on the heterocyclic perimeter;
+                // the generated component supplies both admissible directions.
+                let locants: Vec<_> = matched
+                    .local_to_input_atom
+                    .iter()
+                    .map(|(l, a)| (*a, l.clone()))
+                    .collect();
+                let ast = FusionNameAst {
+                    plan_kind: "benzoheterocycle".into(),
+                    parent_occurrences: vec![matched.occurrence_id],
+                    citation_tree: Some(FusionCitationNode {
+                        occurrence_id: matched.occurrence_id,
+                        children: vec![],
+                    }),
+                    component_occurrences: vec![matched],
+                    ..Default::default()
+                };
+                let specs = component_specs(&ast, registry)?;
+                let graph = component_parent_graph(
+                    &ast,
+                    &specs,
+                    component_carbon_h_relocation_scope(&ast, &specs),
+                )?;
+                let intrinsic_sites = intrinsic_parent_lone_pair_sites(mol, &graph);
+                let model = if intrinsic_sites.is_empty() {
+                    parent_bond_model(&graph)?
+                } else {
+                    indicated_hydrogen_parent_bond_model(&graph, &intrinsic_sites)?
+                };
+                let numbering = FusionNumberingProof {
+                    selected_face_model: face_model.clone(),
+                    abstract_atom_to_locant: locants.clone(),
+                    input_locant_maps: vec![locants],
+                    ..Default::default()
+                };
+                if let Some(plan) = complete_fusion_plan(
+                    mol, atoms, &ast, registry, &specs, numbering, &graph, &model,
+                )? {
+                    variants.push(plan);
+                }
+            }
+        }
+    }
+    let Some(mut plan) = variants.first().cloned() else {
+        return Ok(None);
+    };
+    plan.numbering.input_locant_maps = variants
+        .iter()
+        .map(|p| p.numbering.input_locant_maps[0].clone())
+        .collect();
+    plan.numbering_variants = variants;
+    Ok(Some(plan))
+}
+
 fn component_specs(
     ast: &FusionNameAst,
     registry: &FusionComponentRegistry,
@@ -334,19 +411,51 @@ fn complete_fusion_plan(
             initial_citations.contains(l)
                 && mol.atoms[a].symbol == "N"
                 && mol.atoms[a].charge == 0
-                && mol.atoms[a].total_h_count == 1
+                && (mol.atoms[a].total_h_count == 1
+                    || ast.plan_kind == "benzoheterocycle"
+                        && is_added_hydrogen_nitrogen(mol, atoms, **a))
         })
         .map(|(&a, _)| a)
         .collect();
-    let (bond_model, intrinsic_carbon_h) = intrinsic_carbon_parent_model(
+    let carbon_candidates = intrinsic_carbon_candidate_atoms(ast, specs, mol)?;
+    let (mut bond_model, mut intrinsic_carbon_h) = intrinsic_carbon_parent_model(
         mol,
         graph,
         initial_model,
         &input_locants,
-        &intrinsic_carbon_candidate_atoms(ast, specs, mol)?,
+        &carbon_candidates,
         &intrinsic_n_h,
         &cited_n_h,
     )?;
+    if ast.plan_kind == "benzoheterocycle" && !cited_n_h.is_subset(&intrinsic_n_h) {
+        // P-31.1.4.2.4 / P-58.2: indicated hydrogen precedes hydro locants,
+        // including parent N-H replaced by a substituent. Either may instead
+        // be supplied by hydrogenation of C=N.
+        let (candidate, carbon_h) = intrinsic_carbon_parent_model(
+            mol,
+            graph,
+            initial_model,
+            &input_locants,
+            &carbon_candidates,
+            &intrinsic_n_h,
+            &AtomSet::new(),
+        )?;
+        let hydrogen_key = |sites: AtomSet| {
+            let mut locants: Vec<_> = sites
+                .iter()
+                .map(|a| locant_key(&input_locants[a]))
+                .collect();
+            locants.sort();
+            locants
+        };
+        if !carbon_h.is_empty()
+            && hydrogen_key(carbon_h.union(&intrinsic_n_h).copied().collect())
+                < hydrogen_key(intrinsic_carbon_h.union(&cited_n_h).copied().collect())
+        {
+            bond_model = candidate;
+            intrinsic_carbon_h = carbon_h;
+        }
+    }
     let mut indicated_h = cited_indicated_hydrogens(mol, ast, specs, &numbering, &bond_model)?;
     indicated_h.extend(intrinsic_carbon_h.iter().map(|a| input_locants[a].clone()));
     indicated_h.sort_by_key(|l| locant_key(l));
@@ -436,7 +545,14 @@ fn complete_fusion_plan(
         );
         rendered.push('-');
     }
-    if !lambda_descriptors.is_empty() {
+    let benzo_name = ast
+        .component_occurrences
+        .first()
+        .filter(|m| m.standalone_benzo_parent)
+        .and_then(|m| specs[&m.occurrence_id].benzo_parent_name.as_ref());
+    if let Some(name) = benzo_name {
+        rendered.push_str(&name.render(&lambda_descriptors));
+    } else if !lambda_descriptors.is_empty() {
         rendered.push_str(
             &lambda_descriptors
                 .iter()
@@ -446,7 +562,9 @@ fn complete_fusion_plan(
         );
         rendered.push('-');
     }
-    rendered.push_str(&rendered_core);
+    if benzo_name.is_none() {
+        rendered.push_str(&rendered_core);
+    }
     let mut plan = FusionParentPlan {
         ast: ast.clone(),
         rendered_base_name: rendered,
@@ -507,12 +625,11 @@ fn cited_indicated_hydrogens(
     bond_model: &ParentBondModel,
 ) -> Result<Vec<String>, String> {
     let locants: BTreeMap<_, _> = numbering.abstract_atom_to_locant.iter().cloned().collect();
-    let candidates = indicated_hydrogen_candidate_atoms(mol, &locants);
-    let candidate_atoms: AtomSet = candidates.iter().copied().collect();
+    let candidates = parent_hydrogen_candidates(mol, ast, &locants);
     let mut unpaired = AtomSet::new();
     for assignment in &bond_model.allowed_kekule_assignments {
         let paired = assignment.paired_atoms();
-        unpaired.extend(candidate_atoms.difference(&paired));
+        unpaired.extend(candidates.difference(&paired));
     }
     let mut component_h_roles = AtomSet::new();
     for occurrence in &ast.component_occurrences {
@@ -530,7 +647,7 @@ fn cited_indicated_hydrogens(
                 && (mol.atoms[a].is_aromatic
                     || mol.atoms[a].charge != 0
                     || unpaired.contains(a)
-                    || component_h_roles.contains(a))
+                    || ast.plan_kind != "benzoheterocycle" && component_h_roles.contains(a))
         })
         .copied()
         .collect();

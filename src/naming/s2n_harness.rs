@@ -805,9 +805,10 @@ fn fr35_source_examples_and_generated_names_preserve_structures() {
         (
             "thieno[3',2':5,6]phenanthro[4,3-e][1]benzothiophene",
             "c1cc2c(ccc3ccc4ccc5ccc6sccc6c5c4c32)s1",
-            // The current OPSIN layout changes component locants, preserving identity.
+            // FR-4.5(c) minimizes first-order phenanthro locants before the
+            // higher-order thieno locants, recovering the FR-3.5 source form.
             layout,
-            Some("thieno[2',3':3,4]phenanthro[5,6-e][1]benzothiophene"),
+            None,
         ),
     ] {
         let expected = super::canonical_smiles(smiles).unwrap();
@@ -847,7 +848,7 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
         (
             "O=c1c2ccccc2nc2n1CC=C2",
             "pyrrolo[2,1-b]quinazolin-9(1H)-one",
-            Some("pyrrolo[1,2-a]benzo[d]pyrimidin-9(1H)-one"),
+            Some("benzo[d]pyrrolo[1,2-a]pyrimidin-9(1H)-one"),
         ),
         (
             "S1CC2=CC=CC3=C2C1=CC=C3",
@@ -857,12 +858,12 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
         (
             "c1nc2ccc3ocnc3c2s1",
             "[1,3]thiazolo[5,4-e][1,3]benzoxazole",
-            Some("[1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazole"),
+            Some("[1,3]thiazolo[4',5':5,6]benzo[1,2-d][1,3]oxazole"),
         ),
         (
             "c1nc2cc3ocnc3cc2s1",
             "[1,3]thiazolo[5,4-f][1,3]benzoxazole",
-            Some("[1,3]thiazolo[4',5':1,2]benzo[4,5-d][1,3]oxazole"),
+            Some("[1,3]thiazolo[4',5':4,5]benzo[1,2-d][1,3]oxazole"),
         ),
         (
             "c1nc2cc3ncsc3cc2s1",
@@ -872,7 +873,7 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
         (
             "O=C(O)Cc1nc2ccc3ocnc3c2s1",
             "([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid",
-            Some("([1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"),
+            Some("([1,3]thiazolo[4',5':5,6]benzo[1,2-d][1,3]oxazol-7-yl)acetic acid"),
         ),
     ] {
         let name = namer(smiles).unwrap();
@@ -899,20 +900,127 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
             );
         }
     }
-    // In this four-ring system the selected benzo/pyrazine pair forms quinoxaline.
+    // FR-2.3(b) selects the retained tricyclic phenazine component before
+    // FR-3.5 can combine any benzo/pyrazine pair as quinoxaline.
     let smiles = "c1oc2cc3nc4ccccc4nc3cc2c1";
     let name = namer(smiles).unwrap();
-    assert_eq!(name.text, "furo[2,3-g]benzo[b]quinoxaline");
+    assert_eq!(name.text, "furo[2,3-b]phenazine");
     assert_eq!(
         name.status,
         NameStatus::Unverified(NameReason::OpsinFusionLayout)
     );
-    assert!(!name.alternatives.is_empty());
     assert!(name.alternatives.iter().all(|alternative| {
         alternative.status == NameStatus::NotPreferred(NameReason::HigherOrderFusion)
     }));
     let expected = super::canonical_smiles(smiles).unwrap();
     for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
         assert_eq!(measurements.parse_name(text).unwrap(), expected, "{text}");
+    }
+}
+
+#[test]
+fn standalone_benzoheterocycles_round_trip() {
+    use super::{NameReason, NameStatus};
+    let mut measurements = Measurements::default();
+    let mut failures = Vec::new();
+    // Each structure is obtained from the OPSIN port, rather than hand-written SMILES.
+    for expected in [
+        "1-benzoxepine",
+        "2-benzoxepine",
+        "3-benzoxepine",
+        "1H-3-benzazepine",
+        "1,3-benzoxazepine",
+        "1,5-benzoxazepine",
+        "4,1-benzoxazepine",
+        "2,1-benzothiazole",
+        "2H-1-benzoxocine",
+        "1-benzoxonine",
+        "2H-1-benzoxecine",
+        "4-methyl-1,3-benzoxazepine",
+        "1-methyl-3-benzoxepine",
+        "1,3-benzoxazepin-7-ol",
+        "1,3-benzoxazepine-8-carboxylic acid",
+        "2,3,4,5-tetrahydro-1H-3-benzazepine",
+        "2,3,4,5-tetrahydro-1H-1-benzazepine",
+        "1-methyl-2,3,4,5-tetrahydro-1H-1-benzazepine",
+        "3-methyl-2,3,4,5-tetrahydro-1H-3-benzazepine",
+    ] {
+        let smiles = measurements
+            .parse_name(expected)
+            .unwrap_or_else(|e| panic!("{expected}: {e}"));
+        let name = match namer(&smiles) {
+            Ok(name) => name,
+            Err(error) => {
+                failures.push(format!("{expected}: {error}"));
+                continue;
+            }
+        };
+        eprintln!(
+            "{expected}\t{smiles}\t{}\t{:?}\t{:?}",
+            name.text, name.status, name.alternatives
+        );
+        if name.text != expected || name.status != NameStatus::Preferred {
+            failures.push(format!("{expected}: got {} ({:?})", name.text, name.status));
+        }
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            if measurements.parse_name(text).as_ref() != Ok(&smiles) {
+                failures.push(format!("{expected}: round trip failed for {text}"));
+            }
+        }
+        if name.alternatives.is_empty()
+            || name
+                .alternatives
+                .iter()
+                .any(|n| n.status != NameStatus::NotPreferred(NameReason::BenzoFusion))
+        {
+            failures.push(format!(
+                "{expected}: missing nonpreferred fusion alternative"
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn standalone_benzoheterocycles_lambda_locants() {
+    let mut measurements = Measurements::default();
+    // P-25.6: lambda is part of the heteroatom locant set. These corpus
+    // regressions deliberately retain their existing hydro/added-H treatment.
+    for expected in [
+        "2-oxooctahydro-2lambda^4-benzothiophene",
+        "N-(2-phenylethyl)-2-[(2R)-1,1,4-trioxo-2-phenyl-2,3-dihydro-5H-1lambda^6,5-benzothiazepin-5-yl]acetamide",
+    ] {
+        let smiles = measurements.parse_name(expected).unwrap();
+        let name = namer(&smiles).unwrap();
+        assert_eq!(name.text, expected);
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            assert_eq!(measurements.parse_name(text).unwrap(), smiles, "{text}");
+        }
+    }
+}
+
+#[test]
+fn standalone_benzoheterocycles_preserve_retained_parents() {
+    use super::NameStatus;
+    let mut measurements = Measurements::default();
+    for expected in [
+        "1-benzofuran",
+        "1,3-benzoxazole",
+        "1H-1,3-benzimidazole",
+        "1H-1,2,3-benzotriazole",
+        "1-methyl-1H-1,3-benzimidazole",
+        "quinoline",
+        "1H-indole",
+        "2H-1-benzopyran",
+        "1,4-benzodioxine",
+        "4H-1,4-benzothiazine",
+        "4H-3,1-benzoxazine",
+    ] {
+        let smiles = measurements.parse_name(expected).unwrap();
+        let name = namer(&smiles).unwrap();
+        assert_eq!(name.text, expected);
+        assert_eq!(name.status, NameStatus::Preferred);
+        assert!(name.alternatives.is_empty(), "{expected}");
+        assert_eq!(measurements.parse_name(&name.text).unwrap(), smiles);
     }
 }

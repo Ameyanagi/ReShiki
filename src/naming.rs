@@ -122,6 +122,7 @@ pub enum NameReason {
     DiamideLocants,
     FusionComponent,
     HigherOrderFusion,
+    BenzoFusion,
     Multiplicative,
     AcylPrefix,
     RingAssembly,
@@ -171,6 +172,9 @@ impl NameReason {
             Self::HigherOrderFusion => {
                 "Cites an isolated benzo ring as a separate higher-order component, as in [1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazole; preferred IUPAC names treat the benzo ring and an ortho-fused heteromonocycle as one benzoheterocycle component, as in [1,3]thiazolo[5,4-e][1,3]benzoxazole (P-25.3.5, P-25.2.2.4; FR-3.5)."
             }
+            Self::BenzoFusion => {
+                "Uses a fusion descriptor for a benzene ring ortho-fused to a heteromonocycle, as in benzo[b]oxepine; preferred IUPAC names cite the heteroatom locants of the whole bicycle before its benzo name, as in 1-benzoxepine, or the retained name, as in quinoline (P-25.2.2.4, P-25.2.1)."
+            }
             Self::Multiplicative => {
                 "Names identical senior parent units joined by a linking group substitutively; the preferred IUPAC name is multiplicative. The units include identical substituents and suffix groups at identical locants, while the central linking group need not be symmetric, as in 1,1'-oxydibenzene or 2,2'-sulfanediyldiacetic acid (P-15.3, P-51.1.5, P-51.3.1)."
             }
@@ -181,7 +185,7 @@ impl NameReason {
                 "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions, assemblies requiring skeletal-replacement or hydro prefixes, and linear phanes with at least four ring systems and seven skeletal nodes (P-28, P-31.2.3.3.5, P-51.3.2, P-52.2.5.1, P-52.2.7)."
             }
             Self::OpsinFusionLayout => {
-                "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."
+                "Uses a fusion layout or citation order selected for OPSIN compatibility; its preferred IUPAC numbering or alphabetical citation order (FR-3.6 / P-25.3.4.2.3) has not been verified."
             }
             Self::BridgedFusedParent => {
                 "The preferred parent choice for this bridged-fused system has not been verified."

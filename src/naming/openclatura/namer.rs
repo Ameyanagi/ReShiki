@@ -368,6 +368,12 @@ pub(super) fn name_subgraph_rendered(
         retained_name = Some(retained.name);
         maps = retained.locant_maps;
         retained_metadata = Some(retained.metadata);
+    } else if let Some(name) = retained_name
+        .as_deref()
+        .and_then(super::retained_name_policy::retained_parent_name_policy)
+        .and_then(|policy| policy.context_names.get("substituent_parent"))
+    {
+        retained_name = Some(name.clone());
     }
     let plan = build_parent_assembly_plan(
         mol,
