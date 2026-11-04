@@ -390,18 +390,18 @@ impl<'a> CipSequenceRules<'a> {
                     neighbours.push(Node::ghost(
                         averaged.map_or(other_number, |part| part.fraction),
                         visited.clone(),
-                        // An averaged duplicate stands for every resonance position, so rule 1b
-                        // has no single duplicated atom; an origin would split equivalent forms.
-                        averaged
-                            .is_none()
-                            .then_some(origin.unwrap_or(node.visited.len() + 1)),
+                        // An averaged duplicate stands for every resonance position: it stays a
+                        // duplicate for rule 1b, but never a ring closure to one drawn partner.
+                        origin
+                            .filter(|_| averaged.is_none())
+                            .unwrap_or(node.visited.len() + 1),
                     ));
                     added_bond_duplicate = true;
                 }
             }
             if other != previous {
                 if let Some(origin) = origin {
-                    neighbours.push(Node::ghost(other_number, visited.clone(), Some(origin)));
+                    neighbours.push(Node::ghost(other_number, visited.clone(), origin));
                 } else {
                     neighbours.push(self.real_node(other, visited.clone())?);
                 }
@@ -423,13 +423,13 @@ struct Node {
 }
 
 impl Node {
-    fn ghost(atomic_number: Fraction, visited: Vec<AtomId>, origin: Option<usize>) -> Self {
+    fn ghost(atomic_number: Fraction, visited: Vec<AtomId>, origin: usize) -> Self {
         Self {
             atom: None,
             atomic_number,
             isotope: None,
             visited,
-            duplicate_origin: origin,
+            duplicate_origin: Some(origin),
         }
     }
 }
@@ -514,7 +514,7 @@ mod tests {
 
     #[test]
     fn fractional_atomic_numbers_compare_exactly() {
-        let node = |n, d| Node::ghost(Fraction(n, d), Vec::new(), Some(0));
+        let node = |n, d| Node::ghost(Fraction(n, d), Vec::new(), 0);
         assert_eq!(compare_nodes(&node(24, 5), &node(6, 1), 0), Ordering::Less);
         assert_eq!(
             compare_nodes(&node(24, 5), &node(48, 10), 0),
@@ -612,9 +612,10 @@ mod tests {
         ];
         while let Some(node) = pending.pop() {
             let id = node.atom.unwrap();
+            let depth = node.visited.len() + 1;
             let neighbours = rules.next_atoms(node, 0).unwrap();
             if ring.contains(&id.0) {
-                let expected = Node::ghost(fractions[id.0 - ring.start], Vec::new(), None);
+                let expected = Node::ghost(fractions[id.0 - ring.start], Vec::new(), depth);
                 let duplicates: Vec<_> = neighbours
                     .iter()
                     .filter(|n| {
@@ -622,7 +623,7 @@ mod tests {
                     })
                     .collect();
                 assert_eq!(duplicates.len(), 1, "{smiles}: atom {}", id.0);
-                assert_eq!(duplicates[0].duplicate_origin, None);
+                assert_eq!(duplicates[0].duplicate_origin, Some(depth));
             }
             pending.extend(neighbours.into_iter().filter(|n| n.atom.is_some()));
         }

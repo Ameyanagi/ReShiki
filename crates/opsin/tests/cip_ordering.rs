@@ -505,3 +505,14 @@ fn stereocentre_inside_the_anion_ring_keeps_drawn_ordering() {
         Err(CipOrderingError::UnresolvedTie)
     );
 }
+
+#[test]
+fn averaged_duplicate_outranks_a_real_atom_of_equal_atomic_number() {
+    // Cyclopropenide duplicates average to Z = 4; they stay duplicates for
+    // rule 1b, so they rank above the real beryllium atoms opposite.
+    let graph = graph("O[C@H]([C-]1C=C1)C1([Be+])C([Be+])C1[Be+]", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(5)),
+        Ok(Ordering::Greater)
+    );
+}
