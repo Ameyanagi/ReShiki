@@ -172,12 +172,7 @@ impl Molecule {
     }
 
     pub(super) fn mark_name(&self, status: NameStatus) {
-        let strength = |status| match status {
-            NameStatus::Preferred => 0,
-            NameStatus::Unverified(_) => 1,
-            NameStatus::NotPreferred(_) => 2,
-        };
-        if strength(status) > strength(self.name_status()) {
+        if status.severity() > self.name_status().severity() {
             self.set_name_status(status);
         }
     }
