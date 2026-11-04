@@ -126,6 +126,7 @@ pub enum NameReason {
     Multiplicative,
     AcylPrefix,
     RingAssembly,
+    LinearPhane,
     OpsinFusionLayout,
     BridgedFusedParent,
     UnauditedParent,
@@ -153,7 +154,7 @@ impl NameReason {
                 "Uses a concatenated sulfonyl or sulfinyl prefix such as N-methyltosylamino or (methylsulfinyl)amino; preferred IUPAC names use acid-derived forms such as N,4-dimethylbenzene-1-sulfonamido or methanesulfinamido (P-65.3.2.2.2, P-66.1.1.4.3)."
             }
             Self::AminoPrefix => {
-                "Uses a guanidino prefix substituted on its outer nitrogens or with an E/Z descriptor, such as 3-methylguanidino; preferred IUPAC names cite carbamimidoyl inside an amino prefix, as in (N-methylcarbamimidoyl)amino (P-66.4.1.2.1.3)."
+                "Uses an acylamino prefix instead of the preferred acid-derived amido form (P-66.1.1.4.3), or a guanidino prefix substituted on its outer nitrogens or with an E/Z descriptor, such as 3-methylguanidino; preferred IUPAC names cite carbamimidoyl inside an amino prefix, as in (N-methylcarbamimidoyl)amino (P-66.4.1.2.1.3)."
             }
             Self::FunctionalClass => {
                 "Uses a functional-class form such as a hydrazone, a chiral sulfoxide, a mixed chalcogen peroxide or a phosphane oxide with halide or alkoxy ligands; preferred IUPAC names use substitutive or acid-derived forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane, [(phenylselanyl)tellanyl]benzene or dimethylphosphinic fluoride (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2, P-68.3.2.3.1)."
@@ -183,7 +184,10 @@ impl NameReason {
                 "Uses an acyl prefix built from a substituent, such as (4-methylphenyl)carbonyl, cyclohexylcarbonothioyl, (dimethyloxophosphanyl) or (dimethyloxoarsanyl), or an oxophosphanyl prefix on a parent, as in (methyloxophosphanyl)methane; preferred IUPAC names use the acid-derived forms 4-methylbenzoyl, cyclohexanecarbothioyl, dimethylphosphinoyl, dimethylarsinoyl and dimethyl-lambda5-phosphanone (P-65.1.7.4.2, P-67.1.4.1.1.3, P-68.3.2.3.1)."
             }
             Self::RingAssembly => {
-                "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions, assemblies requiring skeletal-replacement or hydro prefixes, and linear phanes with at least four ring systems and seven skeletal nodes (P-28, P-31.2.3.3.5, P-51.3.2, P-52.2.5.1, P-52.2.7)."
+                "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions and assemblies requiring skeletal-replacement or hydro prefixes (P-28, P-31.2.3.3.5, P-52.2.7)."
+            }
+            Self::LinearPhane => {
+                "The structure is a linear phane: at least four ring systems, two of them terminal, along a path of at least seven skeletal nodes. Its preferred IUPAC name is a phane name, such as 2,4,6-trioxa-1,7(1),3,5(1,4)-tetrabenzenaheptaphane, even where substitutive or multiplicative names exist (P-52.2.5.3). ReShiki does not yet generate linear phane names."
             }
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout or citation order selected for OPSIN compatibility; its preferred IUPAC numbering or alphabetical citation order (FR-3.6 / P-25.3.4.2.3) has not been verified."

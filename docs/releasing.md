@@ -145,6 +145,8 @@ Leave `/demo/` and `/demo/index.html` out of the rule, so a release reaches visi
 
 The **npm** job then publishes the browser package `@ameyanagi/reshiki` (`packages/editor`) from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs the package tests, sets the package version to the app's version from `Cargo.toml` (which the tag matches, so `v0.13.1` publishes `0.13.1`; the `version` in `packages/editor/package.json` is only a placeholder), and publishes with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.1-rc.1` get `next`, and a stable version older than the current `latest` gets `release-<major.minor>`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Without a credential, or when npm refuses it (an expired token, or a trusted publisher that is not set up), the job leaves a notice and succeeds, so npm never fails a release. See [Configure npm publishing](#configure-npm-publishing).
 
+The **pypi** job publishes the Python package `reshiki` (`crates/python`) after the GitHub release. The reusable **Python wheels** workflow (`python-wheels.yml`) builds abi3 wheels for all six targets: manylinux2014 x64 and ARM64, macOS ARM64 and Intel, and Windows x64 and ARM64. It runs the Python tests against the built wheel on Linux x64, Linux ARM64, macOS ARM64 and Windows x64; the tests' RDKit has no Intel macOS or Windows ARM64 wheel. The wheel version is the app's version from `Cargo.toml`, which maturin writes in PEP 440 form, so `v0.13.1` publishes `0.13.1` and `v0.13.1-rc.1` publishes `0.13.1rc1`. pip and uv skip prereleases unless asked for one. There is no sdist: the package compiles assets, presets and vendored crates from the repository root, which a maturin source distribution cannot include. Nightly builds never publish to PyPI, and files already on PyPI are skipped, so rerunning a release is safe. Pull requests that change `crates/python` or that workflow build and test the same wheels without publishing. See [Configure PyPI publishing](#configure-pypi-publishing).
+
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
 Packaging and macOS signing use Python's standard library. Windows signing uses
@@ -197,6 +199,31 @@ npm can only add a trusted publisher to a package that already exists, so the fi
 3. **Delete the token.** Once a version has published through trusted publishing, delete the `NPM_TOKEN` secret and revoke the token on npmjs.com. Under the package's **Settings → Publishing access**, choose to require two-factor authentication and disallow tokens. Trusted publishing keeps working.
 
 After that, every version tag publishes to npm with no further steps.
+
+## Configure PyPI publishing
+
+The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) from the `pypi` GitHub environment, which GitHub creates on its first run. It needs no token or secret. The project's pending publisher on pypi.org uses:
+
+| Field             | Value         |
+| ----------------- | ------------- |
+| PyPI project name | `reshiki`     |
+| Owner             | `Ameyanagi`   |
+| Repository name   | `ReShiki`     |
+| Workflow name     | `release.yml` |
+| Environment name  | `pypi`        |
+
+A pending publisher creates the project on its first upload. The first PyPI release is the next version tag, published like any release. Each version must match its tag's code, so the manual `pypi_only` run refuses to publish when `v<version>` is already tagged at another commit: main is past `v0.13.1`, which predates the Python package, so main cannot publish as 0.13.1. A `pypi_only` run is for publishing right after a version bump on main, before that version is tagged:
+
+```sh
+gh workflow run release.yml --ref main -f pypi_only=true
+gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+```
+
+`pypi_only` runs only on main and skips every app build, signing, GitHub release, demo and npm job. It builds and tests the wheels, then publishes the version in `Cargo.toml` on main. To retry a tag's failed upload, rerun the failed jobs of that tag's run instead.
+
+To try the publishing path on [TestPyPI](https://test.pypi.org/) first, add a pending publisher there with the same values, then run with `-f pypi_only=true -f pypi_repository=testpypi`. TestPyPI is a sandbox, so the version check is skipped there. It keeps the first upload of each version, and later runs skip it.
+
+After the first release, protect the `pypi` environment if publishing should wait for an approval (**Settings → Environments → pypi → Required reviewers**), and install with `uv add reshiki` or `pip install reshiki`.
 
 ## Configure macOS signing
 

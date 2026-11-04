@@ -3,7 +3,7 @@ use super::assembly_parts::{AssemblyParts, RenderedSubstituentName, SubstituentI
 use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{find_all_carbon_paths, find_ring_systems, get_cyclic_atoms};
 use super::component_group_rules::amide_nitrogen;
-use super::component_namer::name_component;
+use super::component_namer::{name_component, name_component_with_citation};
 use super::formatting::{
     format_center_ligands_by, is_complex_prefix, is_composite_prefix, strip_outer_parentheses,
 };
@@ -14,7 +14,7 @@ use super::nomenclature::RULES;
 use super::parent_pipeline::{build_parent_assembly_plan, resolve_retained_parent};
 use super::parent_selection::{ParentSelection, select_principal_parent_with_excluded};
 use super::perception::{PerceivedGroup, perceive_groups};
-use super::rules::{multipliers, stems};
+use super::rules::stems;
 use super::subgraph_tools::{
     add_indicated_hydrogens, add_parent_features, add_substituent, emit_bond_stereo,
     subgraph_component,
@@ -571,68 +571,54 @@ fn acylamino_amido_prefix(
     let &[center] = centers.as_slice() else {
         return Ok(None);
     };
-    let mut blocked = exclude.clone();
-    blocked.insert(nitrogen);
-    let acid_atoms = subgraph_component(mol, center, &blocked);
-    let status = mol.name_status();
-    let Some(acid_name) = capped_acid_name(mol, center, &acid_atoms, true)? else {
+    let amido = if neighbors.iter().any(|n| *n != center) {
+        mol.candidate(|| {
+            let mut blocked = exclude.clone();
+            blocked.insert(upstream);
+            let atoms = subgraph_component(mol, nitrogen, &blocked);
+            let mut amide = mol.subgraph(&atoms);
+            amide
+                .atoms
+                .entry(nitrogen)
+                .and_modify(|atom| atom.total_h_count += 1);
+            // P-66.1.1.4.3(1): derive the prefix from the complete amide name,
+            // sharing its prefix ordering, multipliers and enclosing marks.
+            // Fix its suffix at this N before selection, so remote amides do
+            // not compete or mark the prefix with a provisional suffix tie.
+            let name = name_component_with_citation(&amide, &atoms, None, Some(nitrogen));
+            // An exhausted budget still aborts; other failures fall back below.
+            mol.spend_naming_work(0)?;
+            Ok(name.ok().and_then(|name| {
+                // The suffix must still identify this nitrogen alone.
+                if !name
+                    .principal_group_atoms
+                    .iter()
+                    .filter(|id| amide.atoms[id].symbol == "N")
+                    .copied()
+                    .eq([nitrogen])
+                {
+                    return None;
+                }
+                name.text
+                    .strip_suffix("amide")
+                    .map(|stem| format!("{stem}amido"))
+            }))
+        })?
+    } else {
+        let mut blocked = exclude.clone();
+        blocked.insert(nitrogen);
+        let acid_atoms = subgraph_component(mol, center, &blocked);
+        let status = mol.name_status();
+        let amido = capped_acid_name(mol, center, &acid_atoms, true)?
+            .and_then(|acid| acid_name_to_amido(&acid));
+        if amido.is_none() {
+            mol.set_name_status(status);
+        }
+        amido
+    };
+    let Some(amido) = amido else {
         return Ok(None);
     };
-    let n_sub: Vec<_> = neighbors.into_iter().filter(|n| *n != center).collect();
-    // N prefixes are not merged into the acid's own (N,4-dimethylbenzene-1-sulfonamido),
-    // so an N-substituted tosyl amide keeps the shorthand and its mark.
-    let Some(mut amido) = RULES
-        .heteroatoms
-        .retained_sulfonyl_group_acids
-        .get(&acid_name)
-        .filter(|_| !n_sub.is_empty())
-        .map(|s| {
-            mol.mark_name(crate::naming::NameStatus::NotPreferred(
-                crate::naming::NameReason::SulfonylPrefix,
-            ));
-            format!("{s}amino")
-        })
-        .or_else(|| acid_name_to_amido(&acid_name))
-    else {
-        mol.set_name_status(status);
-        return Ok(None);
-    };
-    if !n_sub.is_empty() {
-        let mut ex = exclude.clone();
-        ex.insert(nitrogen);
-        ex.extend(&acid_atoms);
-        let mut counts = BTreeMap::<String, usize>::new();
-        for n in n_sub {
-            let name =
-                strip_outer_parentheses(&name_subgraph_with_upstream(mol, n, &ex, Some(nitrogen))?);
-            *counts.entry(name).or_default() += 1;
-        }
-        let mut prefixes = Vec::new();
-        for (name, count) in counts {
-            let display = if is_complex_prefix(&name) || is_composite_prefix(&name) {
-                format!("({name})")
-            } else {
-                name.clone()
-            };
-            let mult = if count == 1 {
-                String::new()
-            } else if is_complex_prefix(&name) {
-                multipliers::complex_(count)
-            } else {
-                multipliers::basic(count)
-            };
-            prefixes.push(format!("{}-{mult}{display}", vec!["N"; count].join(",")));
-        }
-        let prefix = prefixes.join("-");
-        amido = format!(
-            "{prefix}{}{amido}",
-            if amido.starts_with(|c: char| c.is_ascii_digit()) {
-                "-"
-            } else {
-                ""
-            }
-        );
-    }
     Ok(Some(if is_complex_prefix(&amido) {
         format!("({amido})")
     } else {

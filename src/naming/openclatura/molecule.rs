@@ -131,6 +131,8 @@ pub struct Molecule {
     pub stereogenic_bonds: AtomSet,
     /// Functional centres whose capped fragments omit real substitution sites.
     pub projected_substitution_centers: AtomSet,
+    /// Component boundaries of the chosen functional-class name, local to this graph.
+    pub(super) named_component_splits: RefCell<BTreeSet<Edge>>,
     /// A plan is valid only for this molecular graph and its chemical state.
     pub(crate) fusion_plan_cache:
         RefCell<BTreeMap<AtomSet, Result<Option<super::fusion::model::FusionParentPlan>, String>>>,
@@ -156,6 +158,7 @@ impl Clone for Molecule {
             stereogenic_atoms: self.stereogenic_atoms.clone(),
             stereogenic_bonds: self.stereogenic_bonds.clone(),
             projected_substitution_centers: self.projected_substitution_centers.clone(),
+            named_component_splits: RefCell::default(),
             fusion_plan_cache: RefCell::default(),
             third_component_plan_cache: RefCell::default(),
             naming_budget: Rc::clone(&self.naming_budget),
@@ -290,6 +293,7 @@ impl Molecule {
         let status = self.name_status();
         let unknown_units = self.naming_budget.unknown_units.borrow().clone();
         let ring_assemblies = self.naming_budget.ring_assembly_junctions.borrow().clone();
+        let component_splits = self.named_component_splits.borrow().clone();
         let higher_order_fusion = self.has_higher_order_fusion_alternative();
         let benzo_fusion = self.has_benzo_fusion_alternative();
         let result = name();
@@ -297,6 +301,7 @@ impl Molecule {
             self.set_name_status(status);
             *self.naming_budget.unknown_units.borrow_mut() = unknown_units;
             *self.naming_budget.ring_assembly_junctions.borrow_mut() = ring_assemblies;
+            *self.named_component_splits.borrow_mut() = component_splits;
             self.naming_budget
                 .higher_order_fusion_alternative
                 .set(higher_order_fusion);
