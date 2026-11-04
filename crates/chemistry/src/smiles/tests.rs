@@ -8,6 +8,135 @@ fn binol(wedges: &str) -> String {
 }
 
 #[test]
+fn stereoisomers_preserve_absolute_and_expand_relative_lactic_acid() -> anyhow::Result<()> {
+    let absolute = "C[C@H](O)C(=O)O";
+    let options = super::write::Options::default();
+    assert!(options.canonical);
+    assert!(options.symbols.isomeric);
+    assert_eq!(
+        super::stereoisomers(absolute)?,
+        [super::write::write(&super::read(absolute)?.prepared.state, options)?.text].into()
+    );
+    let expected = [absolute.into(), "C[C@@H](O)C(=O)O".into()].into();
+    for extension in ["o1:1", "&1:1", "r"] {
+        assert_eq!(
+            super::stereoisomers(&format!("{absolute} |{extension}|"))?,
+            expected,
+            "{extension}"
+        );
+    }
+    assert_eq!(super::stereoisomers("CC(O)C(=O)O")?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)[C@H](F)Cl";
+    let expected = [
+        "C[C@H](O)[C@H](F)Cl".into(),
+        "C[C@H](O)[C@@H](F)Cl".into(),
+        "C[C@@H](O)[C@H](F)Cl".into(),
+        "C[C@@H](O)[C@@H](F)Cl".into(),
+    ]
+    .into();
+    for extension in ["o1:1,&1:3", "o1:1,o2:3", "&1:1,&2:3", "r,o1:1,a:3"] {
+        assert_eq!(
+            super::stereoisomers(&format!("{molecule} |{extension}|"))?,
+            expected,
+            "{extension}"
+        );
+    }
+    let paired = ["C[C@H](O)[C@H](F)Cl".into(), "C[C@@H](O)[C@@H](F)Cl".into()].into();
+    for extension in ["o1:1,3", "&1:1,3", "r", "o1:1,3,r", "r,a:1,3"] {
+        assert_eq!(
+            super::stereoisomers(&format!("{molecule} |{extension}|"))?,
+            paired,
+            "{extension}"
+        );
+    }
+    assert_eq!(
+        super::stereoisomers(&format!("{molecule} |a:1,&1:3|"))?,
+        ["C[C@H](O)[C@H](F)Cl".into(), "C[C@H](O)[C@@H](F)Cl".into(),].into()
+    );
+    Ok(())
+}
+
+#[test]
+fn stereoisomers_deduplicate_meso_and_refresh_ring_relationships() -> anyhow::Result<()> {
+    let molecule = "O[C@H]1CC[C@@H](O)CC1";
+    let expected = super::stereoisomers(molecule)?;
+    assert_eq!(expected.len(), 1);
+    assert_eq!(super::stereoisomers(&format!("{molecule} |r|"))?, expected);
+    let mut independent = expected;
+    independent.extend(super::stereoisomers("O[C@H]1CC[C@H](O)CC1")?);
+    assert_eq!(independent.len(), 2);
+    assert_eq!(
+        super::stereoisomers(&format!("{molecule} |o1:1,&1:4|"))?,
+        independent
+    );
+    Ok(())
+}
+
+#[test]
+fn stereoisomers_use_group_indices_after_explicit_hydrogen_removal() -> anyhow::Result<()> {
+    let molecule = "[H][C@](C)(O)C(=O)O |o1:1|";
+    let imported = super::read(molecule)?;
+    assert_eq!(imported.prepared.state.graph.atoms.len(), 6);
+    assert_eq!(imported.prepared.state.metadata.groups[0].atoms, [0]);
+    assert!(matches!(
+        imported.prepared.state.metadata.atoms[0].chiral_tag,
+        1 | 2
+    ));
+    assert_eq!(
+        super::stereoisomers(molecule)?,
+        ["C[C@H](O)C(=O)O".into(), "C[C@@H](O)C(=O)O".into()].into()
+    );
+    Ok(())
+}
+
+#[test]
+fn stereoisomers_preserve_double_bond_stereo_across_group_inversions() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)/C=C/F";
+    let mut expected = super::stereoisomers(molecule)?;
+    expected.extend(super::stereoisomers("C[C@@H](O)/C=C/F")?);
+    assert_eq!(expected.len(), 2);
+    assert_eq!(
+        super::stereoisomers(&format!("{molecule} |o1:1|"))?,
+        expected
+    );
+    for text in expected {
+        assert!(text.contains('/') || text.contains('\\'));
+        let state = super::read(&text)?.prepared.state;
+        let double = state.graph.bonds.iter().position(|b| b.order == 2).unwrap();
+        assert_eq!(state.metadata.bonds[double].stereo, 3);
+    }
+    Ok(())
+}
+
+#[test]
+fn relative_cx_marker_is_exact_and_does_not_change_import_output() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)C(=O)O";
+    let absolute = super::read(molecule)?;
+    let relative = super::read(&format!("{molecule} |r|"))?;
+    assert!(!absolute.relative);
+    assert!(relative.relative);
+    assert_eq!(
+        serde_json::to_value(&absolute)?,
+        serde_json::to_value(&relative)?
+    );
+    for extension in ["rb:", "rr", "r1", "r:", "xr"] {
+        let imported = super::read(&format!("{molecule} |{extension}|"))?;
+        assert!(!imported.relative, "{extension}");
+        assert_eq!(
+            serde_json::to_value(&absolute)?,
+            serde_json::to_value(imported)?
+        );
+    }
+    assert!(super::read(&format!("{molecule} |rb:0:0|")).is_err());
+    Ok(())
+}
+
+#[test]
 fn stereochemistry_work_limit_keeps_its_actionable_message() {
     let message = crate::stereo::CIP_WORK_LIMIT_MESSAGE;
     assert_eq!(Error::Stereo(message.into()).to_string(), message);
