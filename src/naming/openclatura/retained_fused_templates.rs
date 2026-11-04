@@ -514,6 +514,62 @@ fn atom_matches(
     }
     !(fixed_hydrogenation && !a.aromatic && !a.saturated && a.symbol != "C" && doubles > 0)
 }
+/// Element-labelled graph maps for fusion status checks, independent of the
+/// complete retained parent's bond orders, hydrogenation and charge state.
+pub(super) fn match_retained_graph_template_topology_maps(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    t: &RetainedGraphTemplate,
+) -> Vec<BTreeMap<String, usize>> {
+    if atoms.len() != t.atoms.len() {
+        return Vec::new();
+    }
+    let index: BTreeMap<_, _> = t.locants.iter().enumerate().map(|(i, l)| (l, i)).collect();
+    let mut neighbors = vec![BTreeSet::new(); t.locants.len()];
+    for b in &t.bonds {
+        let (i, j) = (index[&b.locants.0], index[&b.locants.1]);
+        neighbors[i].insert(j);
+        neighbors[j].insert(i);
+    }
+    let by_locant = t.atom_by_locant();
+    let candidates: Vec<Vec<usize>> = t
+        .locants
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            atoms
+                .iter()
+                .copied()
+                .filter(|a| {
+                    mol.atoms[a].symbol == by_locant[l].symbol
+                        && mol
+                            .get_neighbors(*a)
+                            .iter()
+                            .filter(|n| atoms.contains(n))
+                            .count()
+                            == neighbors[i].len()
+                })
+                .collect()
+        })
+        .collect();
+    let mut topology = t.clone();
+    topology.aromatic_equivalence_policy.clear();
+    let mut assignments = Vec::new();
+    collect_assignments(
+        mol,
+        &topology,
+        &neighbors,
+        &BTreeMap::new(),
+        &candidates,
+        &mut vec![None; t.locants.len()],
+        &mut AtomSet::new(),
+        &mut assignments,
+    );
+    assignments
+        .into_iter()
+        .map(|a| t.locants.iter().cloned().zip(a).collect())
+        .collect()
+}
 pub(super) fn match_retained_graph_template_maps_with_options(
     mol: &Molecule,
     atoms: &AtomSet,

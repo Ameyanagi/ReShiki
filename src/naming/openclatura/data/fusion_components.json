@@ -2,6 +2,19 @@
   "schema_version": 1,
   "registry_version": "2026.1",
   "graph_source": "retained_graph_templates",
+  "retained_component_status": {
+    "rule": "P-25.3.2.4; P-25.2.1 Table 2.8; P-25.2.2.2-3; FR-2.2.3",
+    "components": [
+      {"template_name": "xanthene", "horizontal_ring_count": 3},
+      {"template_name": "9H-thioxanthene", "horizontal_ring_count": 3},
+      {"template_name": "9H-selenoxanthene", "horizontal_ring_count": 3},
+      {"template_name": "9H-telluroxanthene", "horizontal_ring_count": 3},
+      {"template_name": "10H-phenoxazine", "horizontal_ring_count": 3},
+      {"template_name": "10H-phenothiazine", "horizontal_ring_count": 3},
+      {"template_name": "phenoxathiine", "horizontal_ring_count": 3},
+      {"template_name": "thianthrene", "horizontal_ring_count": 3}
+    ]
+  },
   "rules": {
     "planner_tier": "bounded-polycomponent-v3",
     "support": {

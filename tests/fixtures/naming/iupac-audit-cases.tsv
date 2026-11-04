@@ -197,6 +197,14 @@ CCN1CC[NH+](CC1)CCNC2=NC3=CC(=NN3C4=CC=CC=C42)C	N-[2-(4-ethylpiperazin-1-ium-1-y
 c1oc2cc3nnccc3cc2c1	furo[3,2-g]cinnoline	preferred	FR-3.5 https://iupac.qmul.ac.uk/fusedring/FR34.html#35	PR #910	pass
 c1sc2cc3nccnc3cc2c1	thieno[2,3-g]quinoxaline	preferred	FR-3.5 https://iupac.qmul.ac.uk/fusedring/FR34.html#35	PR #910	pass
 # fusion-multi-check (audit of PR #932)
+c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2	8H-quinolino[3,4-b]phenoxazine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
+c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1S2	8H-quinolino[3,4-b]phenothiazine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
+c1ccc2c(c1)Cc1c(ccc3ccccc13)S2	12H-benzo[a]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
+c1ccc2c(c1)Cc1cc3ccccc3cc1S2	12H-benzo[b]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
+c1ccc2c(c1)Cc1ccc3ccccc3c1S2	7H-benzo[c]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
+c1ccc2cc3c(cc2c1)Cc1cc2ccccc2cc1S3	13H-dibenzo[b,i]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
+c1ccc2c(c1)Cc1c(ccc3ccccc13)O2	12H-benzo[a]xanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
+c1ccc2cc3c(cc2c1)Nc1cc2ccccc2cc1O3	13H-dibenzo[b,i]phenoxazine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
 c1ccc2ncccc2c1	quinoline	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
 c1ccc2[nH]ccc2c1	1H-indole	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
 c1ccc2ncncc2c1	quinazoline	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass

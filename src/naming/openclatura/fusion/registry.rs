@@ -4,7 +4,8 @@ use super::super::{
     molecule::{AtomSet, Molecule},
     nomenclature::section,
     retained_fused_templates::{
-        TopologyKey, match_retained_graph_template_maps_with_options, molecule_graph_topology_key,
+        TopologyKey, match_retained_graph_template_maps_with_options,
+        match_retained_graph_template_topology_maps, molecule_graph_topology_key,
         retained_graph_template_topology_key, retained_graph_templates,
     },
     retained_graph_model::{
@@ -13,7 +14,7 @@ use super::super::{
     retained_name_policy::retained_parent_name_policy,
     rules::{retained, stems},
 };
-use super::{config::annulene_ring_sizes_from_data, model::*};
+use super::{config::annulene_ring_sizes_from_data, model::*, rules::component_spec_seniority_key};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -53,6 +54,7 @@ pub struct FusionComponentRegistry {
     template_by_name: BTreeMap<String, FusionComponentSpec>,
     topology_index: BTreeMap<(usize, TopologyKey), Vec<(usize, usize)>>,
     generated_hw_policy: Option<GeneratedHWPolicy>,
+    retained_component_status: Vec<FusionComponentSpec>,
 }
 fn strings(v: &Value) -> Vec<String> {
     v.as_array()
@@ -280,6 +282,7 @@ impl FusionComponentRegistry {
             template_by_name: BTreeMap::new(),
             topology_index: BTreeMap::new(),
             generated_hw_policy: None,
+            retained_component_status: Vec::new(),
         };
         for t in retained_graph_templates(true) {
             if let Some(row) = rows.get(&t.name) {
@@ -287,6 +290,23 @@ impl FusionComponentRegistry {
                     .template_by_name
                     .insert(t.name.clone(), metadata(t.clone(), row));
             }
+        }
+        for row in data["retained_component_status"]["components"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let name = txt(row, "template_name");
+            let mut spec = registry
+                .template_by_name
+                .get(&name)
+                .cloned()
+                .ok_or_else(|| format!("unknown retained status template {name}"))?;
+            spec.horizontal_ring_count = row["horizontal_ring_count"]
+                .as_u64()
+                .ok_or_else(|| format!("missing horizontal ring count for {name}"))?
+                as usize;
+            registry.retained_component_status.push(spec);
         }
         // P-22.2.1, Table 2.2: the Se/Te analogues retain pyran numbering
         // and indicated hydrogen, but have no standalone graph templates yet.
@@ -504,6 +524,70 @@ impl FusionComponentRegistry {
         model: &FaceModel,
     ) -> Result<Vec<FusionComponentMatch>, String> {
         self.match_faces(mol, &model.faces, None)
+    }
+    /// P-25.3.2.4: assess the rendered parent without adding planning candidates.
+    pub fn has_senior_unregistered_retained_component(
+        &self,
+        mol: &Molecule,
+        plan: &FusionParentPlan,
+    ) -> bool {
+        let Some(parent_key) = plan
+            .ast
+            .component_occurrences
+            .iter()
+            .filter(|m| plan.ast.parent_occurrences.contains(&m.occurrence_id))
+            .filter_map(|m| self.spec_for_match(m).ok())
+            .map(|s| component_spec_seniority_key(&s))
+            .min()
+        else {
+            return false;
+        };
+        let faces: Vec<_> = plan.numbering.selected_face_model.faces.iter().collect();
+        let candidates: Vec<_> = self
+            .retained_component_status
+            .iter()
+            .filter(|s| {
+                // A complete retained parent is not a bypassed fusion component.
+                s.rings.len() < faces.len()
+                    && component_spec_seniority_key(s) < parent_key
+                    && !self
+                        .components
+                        .iter()
+                        .any(|c| c.template_names.contains(&s.template.name))
+            })
+            .collect();
+        let sizes = candidates.iter().map(|s| s.rings.len()).collect();
+        for indices in connected_face_subsets(&faces, &sizes) {
+            let subset: Vec<_> = indices.iter().map(|&i| faces[i]).collect();
+            let atoms = subset
+                .iter()
+                .flat_map(|f| f.atom_cycle.iter().copied())
+                .collect();
+            let topology = molecule_graph_topology_key(mol, &atoms);
+            let expected: BTreeSet<AtomSet> = subset
+                .iter()
+                .map(|f| f.atom_cycle.iter().copied().collect())
+                .collect();
+            for spec in &candidates {
+                if spec.rings.len() != subset.len()
+                    || retained_graph_template_topology_key(&spec.template) != topology
+                {
+                    continue;
+                }
+                for map in match_retained_graph_template_topology_maps(mol, &atoms, &spec.template)
+                {
+                    let mapped: BTreeSet<AtomSet> = spec
+                        .rings
+                        .iter()
+                        .map(|r| r.iter().map(|l| map[l]).collect())
+                        .collect();
+                    if mapped == expected {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
     pub fn match_faces(
         &self,
@@ -1501,6 +1585,99 @@ mod tests {
             matches.iter().filter(|m| m.spec_key == "benzene").count(),
             24
         );
+    }
+    #[test]
+    fn unregistered_retained_status_requires_exact_faces_and_template_identity() {
+        let mut mol = read_smiles("c1ccc2c(c1)Cc1c(ccc3ccccc13)S2").unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let mut plan = super::super::planner::plan_fusion_parent(&mol, &atoms)
+            .unwrap()
+            .unwrap();
+        let mut registry = fusion_component_registry().clone();
+        assert!(registry.has_senior_unregistered_retained_component(&mol, &plan));
+
+        // Bond orders and retained hydrogenation are irrelevant to this proof.
+        for order in [1, 2] {
+            for bond in mol.bonds.values_mut() {
+                bond.order = order;
+            }
+            assert!(registry.has_senior_unregistered_retained_component(&mol, &plan));
+        }
+
+        // Preserve the element inventory and degrees, but move S off the middle ring.
+        let sulfur = *mol.atoms.iter().find(|(_, a)| a.symbol == "S").unwrap().0;
+        let carbon = *mol
+            .atoms
+            .iter()
+            .find(|(id, a)| a.symbol == "C" && a.is_aromatic && mol.get_neighbors(**id).len() == 2)
+            .unwrap()
+            .0;
+        mol.atoms.get_mut(&sulfur).unwrap().symbol = "C".into();
+        mol.atoms.get_mut(&carbon).unwrap().symbol = "S".into();
+        assert!(!registry.has_senior_unregistered_retained_component(&mol, &plan));
+        mol.atoms.get_mut(&sulfur).unwrap().symbol = "S".into();
+        mol.atoms.get_mut(&carbon).unwrap().symbol = "C".into();
+        assert!(registry.has_senior_unregistered_retained_component(&mol, &plan));
+
+        // The same atom union alone is insufficient: selected faces must match.
+        let faces = &mut plan.numbering.selected_face_model.faces;
+        let original = faces.clone();
+        for face in faces {
+            face.atom_cycle = atoms.iter().copied().collect();
+            face.size = atoms.len();
+        }
+        assert!(!registry.has_senior_unregistered_retained_component(&mol, &plan));
+        plan.numbering.selected_face_model.faces = original;
+
+        // Even an exact atom graph must map the template rings to these faces.
+        let mut wrong_rings = registry.clone();
+        wrong_rings
+            .retained_component_status
+            .iter_mut()
+            .find(|s| s.template.name == "9H-thioxanthene")
+            .unwrap()
+            .rings[0][0] = "9".into();
+        assert!(!wrong_rings.has_senior_unregistered_retained_component(&mol, &plan));
+
+        // Display names do not register a retained template.
+        registry.components[0].spec.parent_name = "9H-thioxanthene".into();
+        assert!(registry.has_senior_unregistered_retained_component(&mol, &plan));
+        registry.components[0]
+            .template_names
+            .push("9H-thioxanthene".into());
+        assert!(!registry.has_senior_unregistered_retained_component(&mol, &plan));
+    }
+    #[test]
+    fn unregistered_retained_status_requires_a_strictly_senior_proper_component() {
+        let registry = fusion_component_registry();
+        for (smiles, parent, expected) in [
+            ("c1ccc2c(c1)Cc1c(ccc3ccccc13)O2", "pyran", true),
+            ("c1ccc2c(c1)Cc1cc3ncccc3cc1O2", "quinoline", false),
+            ("c1ccc2c(c1)Cc1ccccc1O2", "pyran", false),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
+            let mut plan = FusionParentPlan::default();
+            plan.numbering.selected_face_model = typed_face_model(&mol, &bounded);
+            plan.ast.parent_occurrences = vec![0];
+            plan.ast.component_occurrences = vec![FusionComponentMatch {
+                spec_key: parent.into(),
+                ..Default::default()
+            }];
+            assert_eq!(
+                registry.has_senior_unregistered_retained_component(&mol, &plan),
+                expected,
+                "{smiles}"
+            );
+            if expected {
+                let mut equal = registry.clone();
+                let index = equal.by_key[parent];
+                equal.components[index].spec = registry.template_spec("xanthene").unwrap().clone();
+                equal.components[index].spec.horizontal_ring_count = 3;
+                assert!(!equal.has_senior_unregistered_retained_component(&mol, &plan));
+            }
+        }
     }
     #[test]
     fn retained_tricycles_preserve_numbering_and_seniority() {

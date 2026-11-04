@@ -309,6 +309,7 @@ that is not the PIN:
 | `unretained_parent`          | `N-methylethanediamide`, `hydroxyformyl chloride`                                               | `N1-methyloxamide`, `carbonochloridic acid`                                                  |
 | `diamide_locants`            | `N,N'-diethylpropanediamide`, `N-methylbutanediamide`                                           | `N1,N3-diethylpropanediamide`, `N1-methylbutanediamide`                                      |
 | `fusion_component`           | `azuleno[4,5-c]isoxazole`, `benzo[d]isothiazole`                                                | `azuleno[4,5-c][1,2]oxazole`, `1,2-benzothiazole`                                            |
+| `unregistered_retained_component` | `12H-naphtho[2,1-b][1]benzothiopyran` | `12H-benzo[a]thioxanthene` (P-25.3.2.4; P-25.2.1, Table 2.8) |
 | `multiplicative`             | `phenoxybenzene`, `(benzenesulfinyl)benzene`, `benzylbenzene`                                   | `1,1'-oxydibenzene`, `1,1'-sulfinyldibenzene`, `1,1'-methylenedibenzene`                     |
 | `acyl_prefix`                | `4-(cyclohexylcarbonyl)benzoic acid`, `(dimethyloxophosphanyl)`, `(methyloxophosphanyl)methane` | `4-(cyclohexanecarbonyl)benzoic acid`, `dimethylphosphinoyl`, `dimethyl-lambda5-phosphanone` |
 | `ring_assembly`              | `2-(pyridin-2-yl)pyridine`, `cyclopropylcyclopropane`, `4-phenylphenol`                         | `2,2'-bipyridine`, `1,1'-bi(cyclopropane)`, `[1,1'-biphenyl]-4-ol`                           |
