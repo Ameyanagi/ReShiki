@@ -110,6 +110,44 @@ fn names_match_intended_stereoisomer_sets() {
             "O[C@H]1[C@@H](C)CCCC1 |r|",
             None,
         ),
+        // A ring cis/trans descriptor keeps the rel/rac group of the centre
+        // an earlier R*/RS descriptor configured. CLI: cis is (1R,2S),
+        // trans (1R,2R), cis acid (1S,2R).
+        (
+            "(1R*)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "rel-(1R)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "rac-(1R)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "(1RS)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "(1R*)-trans-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "rac-(1S)-cis-2-phenylcyclopropane-1-carboxylic acid",
+            "OC(=O)[C@H]1C[C@H]1c1ccccc1 |r|",
+            None,
+        ),
+        (
+            "(1R)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1",
+            None,
+        ),
         // #934: leading rel-/rac- does not reach nested descriptor sets.
         (
             "rel-(2R)-2-[(1R,2S,3R,4S)-3-methylbicyclo[2.2.1]heptan-2-yl]propan-1-ol",
