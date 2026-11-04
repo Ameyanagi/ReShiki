@@ -457,3 +457,12 @@ fn saturated_fused_ring_preserves_alkene_endpoint_ordering() {
         vec![AtomId(6), AtomId(3)]
     );
 }
+
+#[test]
+fn stereocentre_inside_the_anion_ring_keeps_drawn_ordering() {
+    let graph = graph("F[P@]1(Cl)=CC=C[CH-]1", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(3), AtomId(6)),
+        Err(CipOrderingError::UnresolvedTie)
+    );
+}

@@ -241,7 +241,9 @@ impl<'a> CipSequenceRules<'a> {
                     }
                 }
                 let n = ring.len();
-                if n.is_multiple_of(2) {
+                // A stereocentre inside the ring suppresses duplicates of its own
+                // bonds, so averaging would split the two ring directions.
+                if n.is_multiple_of(2) || ring.contains(&self.chiral_atom) {
                     continue;
                 }
                 for (i, &atom) in ring.iter().enumerate() {
