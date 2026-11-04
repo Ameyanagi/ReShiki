@@ -1151,13 +1151,9 @@ fn format_side_suffixes(suffixes: &[(String, String)]) -> String {
         .map(|(s, mut locants)| {
             locants.sort_by_key(|l| parse_locant(l));
             format!(
-                "-{}-{}{s}",
+                "-{}-{}",
                 locants.join(","),
-                if locants.len() > 1 {
-                    multipliers::basic(locants.len())
-                } else {
-                    String::new()
-                }
+                multipliers::suffix(locants.len(), s)
             )
         })
         .collect()
@@ -1170,17 +1166,11 @@ fn suffix_run(text: &str, allow_multiplier: bool) -> Option<(Vec<String>, &str)>
     {
         return None;
     }
-    let word = if allow_multiplier {
-        ["di", "tri", "tetra"]
-            .iter()
-            .find_map(|m| word.strip_prefix(m))
-            .unwrap_or(word)
-    } else {
-        word
-    };
-    ["ol", "one"]
-        .contains(&word)
-        .then(|| (locants.split(',').map(str::to_owned).collect(), word))
+    let locants: Vec<_> = locants.split(',').map(str::to_owned).collect();
+    let word = ["ol", "one"].into_iter().find(|suffix| {
+        word == *suffix || (allow_multiplier && word == multipliers::suffix(locants.len(), suffix))
+    })?;
+    Some((locants, word))
 }
 fn merge_terminal_and_side_suffixes(terminal: &str, side: &[(String, String)]) -> String {
     if side.is_empty() {
@@ -1199,13 +1189,9 @@ fn merge_terminal_and_side_suffixes(terminal: &str, side: &[(String, String)]) -
     }
     locants.extend(same.into_iter().map(|(l, _)| l));
     format!(
-        "-{}-{}{word}{}",
+        "-{}-{}{}",
         locants.join(","),
-        if locants.len() > 1 {
-            multipliers::basic(locants.len())
-        } else {
-            String::new()
-        },
+        multipliers::suffix(locants.len(), word),
         format_side_suffixes(&other)
     )
 }
@@ -1223,13 +1209,9 @@ fn merge_principal_and_side_suffixes(
     locants.extend(same.into_iter().map(|(l, _)| l));
     (
         format!(
-            "-{}-{}{word}",
+            "-{}-{}",
             locants.join(","),
-            if locants.len() > 1 {
-                multipliers::basic(locants.len())
-            } else {
-                String::new()
-            }
+            multipliers::suffix(locants.len(), word)
         ),
         other,
     )
@@ -1713,6 +1695,35 @@ mod tests {
         assert_eq!(formatted.suffix, "-2,2'-dione");
         assert!(formatted.core.ends_with(']'));
     }
+    #[test]
+    fn spiro_suffix_merging_uses_numerical_suffix_elision() {
+        let ketones: Vec<_> = ["2", "3", "2'", "3'"]
+            .into_iter()
+            .map(|locant| (locant.into(), "one".into()))
+            .collect();
+        assert_eq!(format_side_suffixes(&ketones), "-2,2',3,3'-tetrone");
+        assert_eq!(
+            merge_terminal_and_side_suffixes("-2-one", &ketones[1..]),
+            "-2,3,2',3'-tetrone"
+        );
+        let (merged, other) =
+            merge_principal_and_side_suffixes("-2,3,4-trione", vec![("2'".into(), "one".into())]);
+        assert_eq!(merged, "-2,3,4,2'-tetrone");
+        assert!(other.is_empty());
+        let (merged, other) = merge_principal_and_side_suffixes(
+            "-2,3,4,5-tetrone",
+            vec![("2'".into(), "one".into())],
+        );
+        assert_eq!(merged, "-2,3,4,5,2'-pentone");
+        assert!(other.is_empty());
+        let (merged, other) = merge_principal_and_side_suffixes(
+            "-2,3,4,5,6-pentol",
+            vec![("2'".into(), "ol".into())],
+        );
+        assert_eq!(merged, "-2,3,4,5,6,2'-hexol");
+        assert!(other.is_empty());
+    }
+
     #[test]
     fn dispiro_replacements_keep_each_components_final_scope() {
         let first = SpiroAssembly {

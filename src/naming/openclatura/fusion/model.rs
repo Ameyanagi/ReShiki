@@ -139,15 +139,6 @@ pub enum FusionJoinKind {
     OrthoPeri,
     HigherOrder,
 }
-impl FusionJoinKind {
-    pub(super) fn as_str(self) -> &'static str {
-        match self {
-            Self::Ortho => "ortho",
-            Self::OrthoPeri => "ortho_peri",
-            Self::HigherOrder => "higher_order",
-        }
-    }
-}
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ComponentLocant {
     pub component_id: usize,

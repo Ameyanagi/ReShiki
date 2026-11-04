@@ -482,6 +482,11 @@ const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
     std::time::Duration::from_secs(5)
 };
 
+/// Leaves the focused field or control, so the next key reaches the drawing.
+fn focus_drawing() -> Task<Message> {
+    iced::advanced::widget::operate(iced::advanced::widget::operation::focusable::unfocus())
+}
+
 impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
@@ -909,7 +914,7 @@ impl App {
         self.sync_typography();
         self.error = false;
         self.status = "New document".into();
-        iced::advanced::widget::operate(iced::advanced::widget::operation::focusable::unfocus())
+        focus_drawing()
     }
     fn display_document(&self) -> &Document {
         if let Some(session) =
@@ -1255,9 +1260,21 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
+        let preview = self.tab.cleanup.is_some()
+            || (self.tab.optimization.is_some()
+                && self.inspector_open
+                && self.inspector_tab == InspectorTab::Properties);
+        let dialog = self.prompt.is_some()
+            || self.recovery_manager.open()
+            || self.updates.open
+            || self.assistant.viewed_image.is_some()
+            || self.help_open
+            || self.tab.atom_text.is_some()
+            || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
-        let traverse =
-            !self.commands.open || self.updates.open || self.assistant.viewed_image.is_some();
+        // A visible cleanup or 3D preview keeps Tab within its own controls.
+        let traverse = (!preview || dialog)
+            && (!self.commands.open || self.updates.open || self.assistant.viewed_image.is_some());
         reshiki::accessibility::focus_scope_with(
             file_shortcuts::wrap(
                 // The command palette sits above the floating NMR panel so its

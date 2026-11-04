@@ -19,6 +19,7 @@ mod chains;
 mod component_group_rules;
 mod component_modifiers;
 mod component_namer;
+mod endo_exo_stereo;
 mod formatting;
 mod functional_prefixes;
 mod fused_ion_templates;
@@ -270,6 +271,21 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
                 name: nest_enclosing_marks(&relative),
                 status: crate::naming::NameStatus::NotPreferred(
                     crate::naming::NameReason::RelativeRingStereo,
+                ),
+            });
+        }
+        mol.set_relative_ring_names(false);
+    }
+    if mol.has_endo_exo_alternative() {
+        mol.set_endo_exo_names(true);
+        mol.set_name_status(status);
+        if let Ok(relative) = component_namer::name_component(&mol, &components[0])
+            && relative != text
+        {
+            alternatives.push(crate::naming::AlternativeName {
+                name: nest_enclosing_marks(&relative),
+                status: crate::naming::NameStatus::NotPreferred(
+                    crate::naming::NameReason::EndoExoStereo,
                 ),
             });
         }
@@ -1681,9 +1697,131 @@ mod tests {
     }
 
     #[test]
+    fn preferred_von_baeyer_controls_do_not_report_fusion_fallback() {
+        use crate::naming::NameStatus;
+        for (smiles, expected) in [
+            ("C1CCC2CCCCC2C1", "decahydronaphthalene"),
+            ("C1CC2=CC=CC=C12", "bicyclo[4.2.0]octa-1,3,5-triene"),
+            ("C1CC2CCC1CC2", "bicyclo[2.2.2]octane"),
+            ("C1C2CC12", "bicyclo[1.1.0]butane"),
+            ("C1CC2CCC1C2", "bicyclo[2.2.1]heptane"),
+            ("C1CCC2(CC1)CCCC2", "spiro[4.5]decane"),
+            // A retained fused parent bypasses the fallback assessment.
+            ("c1ccc2ccccc2c1", "naphthalene"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::Preferred,
+                "{smiles}: {}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn fusion_unregistered_retained_components_keep_names_and_report_departures() {
+        use crate::naming::{NameReason, NameStatus};
+        // P-25.3.2.4 requires the retained components in Table 2.8. Until
+        // those components are registered, preserve the generated alternatives.
+        for (smiles, expected) in [
+            (
+                "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2",
+                "8H-[1,4]benzoxazino[3,2-j]phenanthridine",
+            ),
+            (
+                "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1S2",
+                "8H-[1,4]benzothiazino[3,2-j]phenanthridine",
+            ),
+            (
+                "c1ccc2c(c1)Cc1c(ccc3ccccc13)S2",
+                "12H-naphtho[2,1-b][1]benzothiopyran",
+            ),
+            (
+                "c1ccc2c(c1)Cc1cc3ccccc3cc1S2",
+                "12H-naphtho[2,3-b][1]benzothiopyran",
+            ),
+            (
+                "c1ccc2c(c1)Cc1ccc3ccccc3c1S2",
+                "7H-naphtho[1,2-b][1]benzothiopyran",
+            ),
+            (
+                "c1ccc2cc3c(cc2c1)Cc1cc2ccccc2cc1S3",
+                "13H-dinaphtho[2,3-b:2',3'-e]thiopyran",
+            ),
+            (
+                "c1ccc2c(c1)Cc1c(ccc3ccccc13)O2",
+                "12H-naphtho[2,1-b][1]benzopyran",
+            ),
+            (
+                "c1ccc2cc3c(cc2c1)Nc1cc2ccccc2cc1O3",
+                "13H-dinaphtho[2,3-b:2',3'-e][1,4]oxazine",
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::NotPreferred(NameReason::UnregisteredRetainedComponent),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn fusion_retained_component_controls_remain_preferred() {
+        use crate::naming::NameStatus;
+        for (smiles, expected) in [
+            (
+                "c1ccc2c(c1)Cc1cc3ncccc3cc1O2",
+                "11H-[1]benzopyrano[2,3-g]quinoline",
+            ),
+            ("S1c2ccccc2Cc2ccccc21", "9H-thioxanthene"),
+            ("c1ccc2c(c1)Cc1ccccc1O2", "9H-xanthene"),
+            ("c1ccc2c(c1)Nc1ccccc1O2", "10H-phenoxazine"),
+            ("c1ccc2c(c1)Nc1ccccc1S2", "10H-phenothiazine"),
+            (
+                "C1=CC(=CC=2SC3=CC=CC=C3CC12)C(=O)O",
+                "9H-thioxanthene-3-carboxylic acid",
+            ),
+            (
+                "N1=CC=CC2=CC=C3C=C4C(=NC3=C12)C=CC=C4",
+                "benzo[b][1,10]phenanthroline",
+            ),
+            ("c1c3ncncc3cc4nc2ccccc2cc14", "pyrimido[4,5-b]acridine"),
+            ("c1ccc2cc3nccnc3cc2c1", "benzo[g]quinoxaline"),
+            ("O1C=CC2=NC=3C(C=C21)=COC3", "difuro[3,2-b:3',4'-e]pyridine"),
+            ("c1ccc2c(c1)oc1ccccc12", "dibenzofuran"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn fusion_registered_carbazole_keeps_existing_layout_status() {
+        use crate::naming::{NameReason, NameStatus};
+        // Carbazole is registered, but this first-order fusion still uses an
+        // OPSIN-entry layout; its existing numbering status remains unverified.
+        let name = name_smiles("c1ccc2c(c1)ccc1c2[nH]c2ccccc12").unwrap();
+        assert_eq!(name.text, "11H-benzo[a]carbazole");
+        assert_eq!(
+            name.status,
+            NameStatus::Unverified(NameReason::OpsinFusionLayout)
+        );
+    }
+
+    #[test]
     fn known_departures_keep_their_names_and_report_the_rule_family() {
         use crate::naming::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
+            (
+                "C1=CN=C2C=CC=C3C2=C1C=C1C2=C(C3)C=CC=C2C=C1",
+                "17-azapentacyclo[10.7.1.1^{3,6}.0^{10,21}.0^{16,20}]henicosa-1(19),2,4,6(21),7,9,12(20),13,15,17-decaene",
+                R::VonBaeyerFusionFallback,
+            ),
             (
                 "OC(=O)CS(=O)(=O)CS(=O)(=O)O",
                 "(sulfomethylsulfonyl)acetic acid",

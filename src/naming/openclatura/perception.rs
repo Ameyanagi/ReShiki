@@ -2656,7 +2656,13 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             continue;
         };
         if l.role == LigandRole::DoubleBonded {
-            if !m.atoms[&center].is_carbon() {
+            // An oxo group on a skeletal ring heteroatom is cited by the same
+            // suffix as a ketone; its expanded valence belongs to the parent
+            // (including phosphine oxides under P-74.2.1.4).
+            let ring_heterone = l.element == "O"
+                && cyclic.contains(&center)
+                && super::fusion::exocyclic::neutral_lambda_oxo_bonding_number(m, center).is_some();
+            if !m.atoms[&center].is_carbon() && !ring_heterone {
                 continue;
             }
             if l.element != "O"
@@ -2707,7 +2713,14 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             });
         let noncarbon_anion =
             l.role == LigandRole::Anionic && l.element != "O" && !charge_separated;
-        if !m.atoms[&center].is_carbon() && !noncarbon_anion {
+        // A hydroxy group can likewise replace hydrogen at a ring heteroatom.
+        // Keep it in the ordinary alcohol seniority class so a higher suffix
+        // cites it as a hydroxy prefix instead.
+        let ring_heterol = cyclic.contains(&center)
+            && m.atoms[&center].charge == 0
+            && l.element == "O"
+            && l.role == LigandRole::HydrogenBearing;
+        if !m.atoms[&center].is_carbon() && !noncarbon_anion && !ring_heterol {
             continue;
         }
         let derivative = if a.charge < 0 { "anion" } else { "alcohol" };
@@ -2789,6 +2802,143 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn unrecomputed_lambda_parent_hydrogens_are_unverified() {
+        use crate::naming::{NameReason, NameStatus};
+
+        for (smiles, expected) in [
+            ("O=[PH]1C=CC1", "1lambda^5-phosphet-1(2H)-one"),
+            ("O=P1(C)C=CC1", "1-methyl-1lambda^5-phosphet-1(2H)-one"),
+            ("O=[AsH]1C=CC=CC1", "1-oxo-2H-1lambda^5-arsinine"),
+            ("O=[AsH]1C=CC=C1", "1-oxo-1H-1lambda^5-arsole"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::Unverified(NameReason::LambdaParentHydrogen),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes() {
+        use crate::naming::{NameStatus, verify_identity};
+
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            ("O=S1CCCC1", "1lambda^4-thiolan-1-one"),
+            ("O=S1CCCCC1", "1lambda^4-thian-1-one"),
+            ("O=S1(=O)CCCC1", "1lambda^6-thiolane-1,1-dione"),
+            ("O=[PH]1CCCC1", "1lambda^5-phospholan-1-one"),
+            ("O=[AsH]1CCCC1", "1-oxo-1lambda^5-arsolane"),
+            (
+                "O=S1(=O)CNC(=O)c2ccccc21",
+                "2,3-dihydro-1lambda^6,3-benzothiazine-1,1,4-trione",
+            ),
+            (
+                "O=S1(=O)CC(=O)Nc2ccccc21",
+                "1lambda^6,4-benzothiazine-1,1,3(2H,4H)-trione",
+            ),
+            (
+                "O=S1(=O)c2ccccc2S(=O)(=O)c2ccccc21",
+                "5lambda^6,10lambda^6-thianthrene-5,5,10,10-tetrone",
+            ),
+            (
+                "O=S1(=O)CCS(=O)(=O)CC1",
+                "1lambda^6,4lambda^6-dithiane-1,1,4,4-tetrone",
+            ),
+            (
+                "O=S1(=O)CC=CC1",
+                "2,5-dihydro-1H-1lambda^6-thiophene-1,1-dione",
+            ),
+            (
+                "O=C1c2ccccc2S(=O)(=O)c2ccccc12",
+                "10lambda^6-thioxanthene-9,10,10-trione",
+            ),
+            ("O=[PH]1C=CC=CC1", "1,2-dihydro-1lambda^5-phosphinin-1-one"),
+            ("O=[PH]1C=CC=C1", "1H-1lambda^5-phosphol-1-one"),
+            ("O=[PH]1C=C1", "1H-1lambda^5-phosphiren-1-one"),
+            ("O=[PH]1C=CC=CC=C1", "1H-1lambda^5-phosphepin-1-one"),
+            ("O=P1(C)C=CC=C1", "1-methyl-1H-1lambda^5-phosphol-1-one"),
+            (
+                "O=P1(C)C=CC=CC1",
+                "1-methyl-1,2-dihydro-1lambda^5-phosphinin-1-one",
+            ),
+            // Phosphorus acids, P-OH rings, and acyclic phosphine oxides
+            // retain their existing naming paths.
+            ("O=P1(O)CCCC1", "1-oxo-1lambda^5-phospholan-1-ol"),
+            ("CP(C)(C)=O", "trimethyl-lambda5-phosphanone"),
+            ("CP(=O)(O)C", "dimethylphosphinic acid"),
+            ("CP(=O)(O)O", "methylphosphonic acid"),
+            (
+                "O=C(O)c1ccc(N2CCS(=O)(=O)CC2)cc1",
+                "4-(1,1-dioxo-1lambda^6-thiomorpholin-4-yl)benzoic acid",
+            ),
+            (
+                "COC(=O)C[C@@H](C1=CC=CC=C1Cl)NC(=O)C2CCN(CC2)C3=NS(=O)(=O)C4=CC=CC=C43",
+                "methyl (3S)-3-(2-chlorophenyl)-3-[1-(1,1-dioxo-1H-1lambda^6,2-benzothiazol-3-yl)piperidine-4-carboxamido]propanoate",
+            ),
+            (
+                "CC1=CC(=C(C=C1)NC(=O)C(C2=CC=CC=C2)OC(=O)C3=CC4=C(C=C3)C(=O)C5=CC=CC=C5S4(=O)=O)[N+](=O)[O-]",
+                "2-[(4-methyl-2-nitrophenyl)amino]-2-oxo-1-phenylethyl 9,10,10-trioxo-9,10-dihydro-10lambda^6-thioxanthene-3-carboxylate",
+            ),
+            (
+                "C1[C@@H]2[C@@H](CS1(=O)=O)SC(=NC(=O)CC3=CC=CC=C3)N2C4=C(C(=CC=C4)Cl)Cl",
+                "N-[(3aR,6aS)-3-(2,3-dichlorophenyl)-5,5-dioxohexahydro-2H-5lambda^6-thieno[3,4-d][1,3]thiazol-2-ylidene]-2-phenylacetamide",
+            ),
+            (
+                "C1[C@@H](S(=O)(=O)C2=CC=CC=C2N(C1=O)CC(=O)NCCC3=CC=CC=C3)C4=CC=CC=C4",
+                "N-(2-phenylethyl)-2-[(2R)-1,1,4-trioxo-2-phenyl-1,2,3,4-tetrahydro-5H-1lambda^6,5-benzothiazepin-5-yl]acetamide",
+            ),
+            (
+                "O=S1c2ccccc2S(=O)c2ccccc21",
+                "5lambda^4,10lambda^4-thianthrene-5,10-dione",
+            ),
+            (
+                "O=S1C=CS(=O)c2ccccc21",
+                "1lambda^4,4lambda^4-benzodithiine-1,4-dione",
+            ),
+            ("O=S1CCC(=O)CC1", "1lambda^4-thiane-1,4-dione"),
+            ("O=S1(=O)CCC(=O)CC1", "1lambda^6-thiane-1,1,4-trione"),
+            ("O=[Se]1C=CC=C1", "1H-1lambda^4-selenophen-1-one"),
+            ("O=S1C=CS(=O)C=C1", "1lambda^4,4lambda^4-dithiine-1,4-dione"),
+            ("O=[S@]1CCCC1C", "(1S)-2-methyl-1lambda^4-thiolan-1-one"),
+            ("ON1CCCCC1", "piperidin-1-ol"),
+            ("ON1CCCC1O", "pyrrolidine-1,2-diol"),
+            ("CC1(C)CCCC(C)(C)N1O", "2,2,6,6-tetramethylpiperidin-1-ol"),
+            ("ON1CCOCC1", "morpholin-4-ol"),
+            ("On1nnc2ccccc21", "1H-1,2,3-benzotriazol-1-ol"),
+            ("O=C1CCCCN1O", "1-hydroxypiperidin-2-one"),
+            ("OC1CCNCC1", "piperidin-4-ol"),
+            (
+                "O=S1CC2CCCCC2C1",
+                "octahydro-2H-2lambda^4-benzothiophen-2-one",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            for candidate in std::iter::once(name.text.as_str()).chain(
+                name.alternatives
+                    .iter()
+                    .map(|alternative| alternative.name.as_str()),
+            ) {
+                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                assert_eq!(
+                    parsed.status,
+                    opsin::Status::Success,
+                    "{candidate}: {}",
+                    parsed.message
+                );
+                let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+                verify_identity(smiles, &reconstructed)
+                    .unwrap_or_else(|error| panic!("{smiles} -> {candidate}: {error}"));
+            }
+        }
+    }
 
     #[test]
     fn cyano_chalcogen_ligands_do_not_consume_a_ring_skeleton() {

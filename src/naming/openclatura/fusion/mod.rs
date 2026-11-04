@@ -47,7 +47,7 @@ pub(super) mod descriptor;
 mod entry_geometry;
 pub(super) mod exocyclic;
 mod external_pi_consumption;
-mod faces;
+pub(super) mod faces;
 mod indicated_hydrogen;
 mod layout;
 pub(super) mod mancude;

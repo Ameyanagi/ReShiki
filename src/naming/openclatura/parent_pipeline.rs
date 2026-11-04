@@ -19,6 +19,17 @@ pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts)
         mark_parent_hydride_status(mol, parent);
     } else if let Some(plan) = &parts.fusion_plan {
         mark_fusion_plan_status(mol, plan);
+    } else if parts.retained_name.is_none()
+        && !parts.is_spiro
+        && (parts.is_bicycle
+            || super::ring_renderer::is_von_baeyer_descriptor(
+                parts.polycycle_descriptor.as_deref(),
+            ))
+        && super::fusion::faces::bridge_free_fusion_parent_eligible(mol, &parts.parent_atom_ids)
+    {
+        mol.mark_name(NameStatus::NotPreferred(
+            NameReason::VonBaeyerFusionFallback,
+        ));
     }
     if let Some(name) = &parts.retained_name {
         mark_retained_parent_status(mol, name);
@@ -50,6 +61,13 @@ fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionPa
         mol.mark_higher_order_fusion_alternative();
     }
     mark_retained_parent_status(mol, &plan.rendered_base_name);
+    if super::fusion::registry::fusion_component_registry()
+        .has_senior_unregistered_retained_component(mol, plan)
+    {
+        mol.mark_name(NameStatus::NotPreferred(
+            NameReason::UnregisteredRetainedComponent,
+        ));
+    }
     // PIN fusion names use [1,2]oxazole and [1,2]thiazole (P-25.3.2.1.2).
     if ["isoxazole", "isothiazole"]
         .iter()
@@ -235,6 +253,40 @@ pub fn build_parent_assembly_plan_with_parent(
                 .map(move |map| (map.into_iter().collect(), hydrogen.clone()))
         })
         .collect();
+    if root.is_none()
+        && !selection.is_spiro
+        && !principal_carbons.is_empty()
+        && parent
+            .as_ref()
+            .is_some_and(RingParent::is_systematic_fusion)
+        && !variants.is_empty()
+    {
+        let ketones: AtomSet = super::perception::perceive_groups(mol)
+            .into_iter()
+            .filter(|group| group.key == "ketone")
+            .map(|group| group.attachment_carbon)
+            .collect();
+        let suffix: AtomSet = principal_carbons.iter().copied().collect();
+        if suffix.is_subset(&ketones) {
+            for plan in &variants {
+                for map in plan.numbering.string_input_locant_maps() {
+                    if !suffix.iter().all(|atom| map.contains_key(atom)) {
+                        continue;
+                    }
+                    if let Some((indicated, _, state)) =
+                        super::additive::systematic_suffix_hydrogen_state(mol, plan, &suffix, &map)?
+                    {
+                        let hydro = state
+                            .hydro_operations
+                            .iter()
+                            .flat_map(|op| op.locants.iter().cloned())
+                            .collect();
+                        proven_hydrogens.insert(map.into_iter().collect(), (indicated, hydro));
+                    }
+                }
+            }
+        }
+    }
     if let Some(assembly) = &selection.ring_assembly {
         for map in &assembly.locant_maps {
             proven_hydrogens.insert(
@@ -474,6 +526,7 @@ fn build_parent_parts(
             }
         }
     }
+    super::endo_exo_stereo::add_alternative(mol, &mut parts, numbered_path, locants);
     if selection.ring_assembly.is_none() {
         add_relative_ring_stereo(mol, &mut parts, numbered_path, locants)?;
     } else {
@@ -657,6 +710,24 @@ mod tests {
             mark_rendered_parent_status(&mol, &parts);
             assert_eq!(mol.name_status(), expected, "{name}");
         }
+    }
+
+    #[test]
+    fn unregistered_retained_fusion_status_is_deferred_until_rendering() {
+        use super::super::{fusion::planner::plan_fusion_parent, graph_io::read_smiles};
+        let mol = read_smiles("c1ccc2c(c1)Cc1c(ccc3ccccc13)S2").unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
+        assert_eq!(mol.name_status(), NameStatus::Preferred);
+        let mut parts = AssemblyParts::new(1);
+        parts.fusion_plan = Some(plan);
+        mark_rendered_parent_status(&mol, &parts);
+        let status = NameStatus::NotPreferred(NameReason::UnregisteredRetainedComponent);
+        assert_eq!(mol.name_status(), status);
+        assert_eq!(
+            serde_json::to_value(status).unwrap()["reason"],
+            "unregistered_retained_component"
+        );
     }
 
     #[test]

@@ -185,7 +185,22 @@ pub(super) fn plan_numbered_candidate(
     for spec in specs.values() {
         changed_component_parent |= component_parent_atoms(spec)? != spec.atoms();
     }
-    let prove_carbon_h = !intrinsic_carbon_candidate_atoms(ast, &specs, mol)?.is_empty()
+    let carbon_h_candidates = intrinsic_carbon_candidate_atoms(ast, &specs, mol)?;
+    let suffix_carbon_h: AtomSet = carbon_h_candidates
+        .iter()
+        .copied()
+        .filter(|&a| {
+            mol.atoms[&a].symbol == "C"
+                && mol.atoms[&a].charge == 0
+                && mol.get_neighbors(a).iter().any(|&n| {
+                    !atoms.contains(&n)
+                        && mol.atoms[&n].symbol == "O"
+                        && mol.atoms[&n].charge == 0
+                        && mol.get_bond(a, n).is_some_and(|b| b.order == 2)
+                })
+        })
+        .collect();
+    let prove_carbon_h = !carbon_h_candidates.is_empty()
         || (changed_component_parent
             && specs
                 .values()
@@ -228,6 +243,43 @@ pub(super) fn plan_numbered_candidate(
     {
         return Ok(None);
     }
+    // Keep the intrinsic FR-5 proof when every preferred numbering is also
+    // witnessed by the parser's component-entry perimeter.
+    let independent = if ast.joins.iter().any(|join| join.order > 1)
+        && layouts
+            .iter()
+            .all(|layout| layout.kind == LayoutKind::OpsinEntry)
+    {
+        preferred_intrinsic_layouts(
+            face_model,
+            fusion_nomenclature_config().search.layout_states,
+        )
+        .ok()
+        .and_then(|layouts| {
+            let intrinsic = completed_system_numbering_selection(
+                mol,
+                bounded,
+                Some(face_model),
+                &layouts,
+                prove_carbon_h,
+            )
+            .ok()?;
+            let directed_maps: Vec<_> = selection.accepted.iter().map(|n| n.string_map()).collect();
+            (!intrinsic.accepted.is_empty()
+                && intrinsic
+                    .accepted
+                    .iter()
+                    .all(|n| directed_maps.contains(&n.string_map())))
+            .then_some((layouts, intrinsic))
+        })
+    } else {
+        None
+    };
+    let (layouts, selection) = independent
+        .as_ref()
+        .map_or((layouts, &selection), |(layouts, selection)| {
+            (layouts.as_slice(), selection)
+        });
     let graph = component_parent_graph(
         ast,
         &specs,
@@ -281,7 +333,36 @@ pub(super) fn plan_numbered_candidate(
     if alternatives.is_empty() {
         return Ok(None);
     }
-    if prove_carbon_h {
+    let mut suffix_composition_proved = false;
+    if !suffix_carbon_h.is_empty() {
+        for plan in &alternatives {
+            let Some(locants) = plan.numbering.string_input_locant_maps().into_iter().next() else {
+                continue;
+            };
+            let carbon_h = |cited: &[String]| {
+                locants
+                    .iter()
+                    .any(|(a, l)| mol.atoms[a].symbol == "C" && cited.contains(l))
+            };
+            if carbon_h(&plan.indicated_hydrogens)
+                && let Some((indicated, _, _)) =
+                    super::super::additive::systematic_suffix_hydrogen_state(
+                        mol,
+                        plan,
+                        &suffix_carbon_h,
+                        &locants,
+                    )?
+                && carbon_h(&indicated)
+            {
+                suffix_composition_proved = true;
+                break;
+            }
+        }
+    }
+    // A ketone suffix can consume intrinsic carbon H at a different site.
+    // Keep tied skeletal numberings for suffix composition in the assembly
+    // pipeline before comparing indicated-H and suffix locants (P-14.4).
+    if prove_carbon_h && !suffix_composition_proved {
         let best = alternatives
             .iter()
             .map(|p| {
@@ -827,6 +908,48 @@ fn unresolved_localized_pi_cycle(
 mod tests {
     use super::super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn higher_order_components_preserve_intrinsic_numbering_and_identity() {
+        for (smiles, expected) in [
+            (
+                "C1=NN=C2C1=C1C(=NC=3C=CC=CC13)C=CO2",
+                "pyrazolo[4',3':6,7]oxepino[4,5-b]indole",
+            ),
+            (
+                "O1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2",
+                "pyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
+            ),
+            (
+                "S1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2",
+                "thiopyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
+            ),
+            (
+                "[Se]1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2",
+                "selenopyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
+            ),
+            (
+                "[Te]1C=CC=C2C1=C1C(=C3N=NC=C3O1)C=CS2",
+                "telluropyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
+            ),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            let plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
+            assert!(plan.audit.confirmed(), "{:?}", plan.audit);
+            assert_eq!(plan.numbering.selected_layout.kind, LayoutKind::Intrinsic);
+            let name = crate::naming::openclatura::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected);
+            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            let parsed = opsin::Parser::new()
+                .unwrap()
+                .parse(&name.text, &opsin::ParseOptions::strict());
+            assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
+            assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
+            let round_trip = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            crate::naming::verify_identity(smiles, &round_trip).unwrap();
+        }
+    }
 
     #[test]
     fn protonated_fused_citations_preserve_carbon_hydrogenation() {
