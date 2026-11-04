@@ -113,11 +113,11 @@ fn permits(exec: &Executor) -> usize {
     exec.shared.permits.available_permits()
 }
 
-/// No registry entry, no waiting or live call, and every permit free.
+/// No registry entry, no live call, and every permit free.
 fn assert_idle(exec: &Executor) {
     let registry = exec.shared.registry();
     assert!(registry.tokens.is_empty());
-    assert_eq!((registry.waiting, registry.live), (0, 0));
+    assert_eq!(registry.live, 0);
     drop(registry);
     assert_eq!(permits(exec), exec.shared.budgets.concurrency);
 }
@@ -474,6 +474,43 @@ async fn panics_become_internal_errors() {
     assert_eq!(effect.await, Err(internal()));
     assert_eq!(internal().kind, ErrorKind::Failed);
     assert_eq!(internal().message, "internal error");
+    assert_idle(&exec);
+}
+
+/// A call handed the permit stops counting against the queue at once, not
+/// when its task next runs: once the running call has answered, the next
+/// call is admitted while the one handed the permit has not resumed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_call_handed_the_permit_frees_its_queue_slot() {
+    let exec = executor(1, 1);
+    let gate = Gate::new();
+    let running = spawn_gated(&exec, 1, &gate);
+    wait(&gate.started).await;
+    // Request 2 parks once it wins the permit, before its task goes on.
+    let handed = Gate::new();
+    let (started, release) = (handed.started.clone(), handed.release.clone());
+    exec.set_hooks(Hooks {
+        acquired: Some(Arc::new(move || {
+            started.wait();
+            release.wait();
+        })),
+        ..Hooks::default()
+    });
+    let ran = Arc::new(AtomicBool::new(false));
+    let queued = spawn_flagged(&exec, 2, &ran);
+    until(|| exec.queued() == 1).await;
+    wait(&gate.release).await;
+    assert_eq!(bounded(running).await.unwrap(), Ok(()));
+    wait(&handed.started).await;
+    exec.set_hooks(Hooks::default());
+
+    let third_ran = Arc::new(AtomicBool::new(false));
+    let third = spawn_flagged(&exec, 3, &third_ran);
+    until(|| admitted(&exec, 3) || third.is_finished()).await;
+    wait(&handed.release).await;
+    assert_eq!(bounded(queued).await.unwrap(), Ok(()));
+    assert_eq!(bounded(third).await.unwrap(), Ok(()));
+    assert!(ran.load(Ordering::SeqCst) && third_ran.load(Ordering::SeqCst));
     assert_idle(&exec);
 }
 

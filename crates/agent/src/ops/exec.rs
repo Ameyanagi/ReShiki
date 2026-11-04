@@ -1,7 +1,8 @@
 //! The bounded executor: request IDs, admission, permits, cooperative
 //! cancellation, deadlines and an uncancellable effect phase.
 //!
-//! [`Executor::run`] admits a call, waits for one of
+//! [`Executor::run`] admits a call while fewer than [`Budgets::concurrency`]
+//! plus [`Budgets::queue`] are admitted, waits for one of
 //! [`Budgets::concurrency`] permits and runs the operation on its own task,
 //! which is never aborted. The admission and the permit form a lease shared
 //! by that task and every [`Context::blocking`] and [`Context::effect`] job
@@ -97,8 +98,6 @@ impl CancelToken {
 struct Registry {
     /// Set by [`Executor::drained`]; no call is admitted afterwards.
     closed: bool,
-    /// Admitted calls still waiting for a permit.
-    waiting: usize,
     /// Admitted calls, waiting or running.
     live: usize,
     tokens: HashMap<Key, CancelToken>,
@@ -126,17 +125,12 @@ impl Shared {
 struct Admission {
     shared: Arc<Shared>,
     key: Key,
-    /// Still counted in `waiting`.
-    queued: bool,
 }
 
 impl Drop for Admission {
     fn drop(&mut self) {
         let mut registry = self.shared.registry();
         registry.tokens.remove(&self.key);
-        if self.queued {
-            registry.waiting = registry.waiting.saturating_sub(1);
-        }
         registry.live = registry.live.saturating_sub(1);
         if registry.live == 0 {
             self.shared.idle.notify_waiters();
@@ -190,7 +184,8 @@ impl Executor {
     ///
     /// - [`ErrorKind::Busy`] when the executor is shutting down, `id` is
     ///   already in flight for `who` (MCP forbids reusing in-flight IDs), or
-    ///   [`Budgets::queue`] calls already wait for a permit.
+    ///   [`Budgets::concurrency`] plus [`Budgets::queue`] calls are already
+    ///   admitted and have not ended.
     /// - [`ErrorKind::Cancelled`] when the call is cancelled at any point,
     ///   whatever `f` returned; `f` never runs if the call is cancelled while
     ///   it waits for a permit.
@@ -212,7 +207,7 @@ impl Executor {
         T: Send + 'static,
     {
         let deadline = Instant::now().checked_add(self.shared.budgets.op_deadline);
-        let (token, mut admission) = self.admit((who, id))?;
+        let (token, admission) = self.admit((who, id))?;
         let permit = {
             let mut permit = pin!(Arc::clone(&self.shared.permits).acquire_owned());
             let mut cancel = pin!(token.cancelled());
@@ -242,17 +237,10 @@ impl Executor {
         if let Some(acquired) = &hooks.acquired {
             acquired();
         }
-        {
-            let mut registry = self.shared.registry();
-            // The wait above misses a cancel landing between its two polls.
-            // `cancel` and `drained` set tokens under this lock, so a call
-            // leaves the queue only if it was not cancelled while waiting and
-            // `f` never runs otherwise. The guard drops first on return.
-            if token.is_cancelled() {
-                return Err(cancelled());
-            }
-            registry.waiting = registry.waiting.saturating_sub(1);
-            admission.queued = false;
+        // The wait above misses a cancel landing between its two polls; `f`
+        // never runs once the call was cancelled while waiting.
+        if token.is_cancelled() {
+            return Err(cancelled());
         }
         let lease = Arc::new(Lease {
             _permit: permit,
@@ -286,6 +274,12 @@ impl Executor {
     }
 
     /// Admits `key` under one registry lock.
+    ///
+    /// Counts the admitted calls that have not ended rather than those still
+    /// waiting: a call handed a permit would count as waiting until its task
+    /// runs again, which can be after the call that released the permit has
+    /// answered. A call waits only while every permit is held, so at most
+    /// [`Budgets::queue`] calls wait.
     fn admit(&self, key: Key) -> Result<(CancelToken, Admission), OpError> {
         let mut registry = self.shared.registry();
         if registry.closed {
@@ -294,17 +288,16 @@ impl Executor {
         if registry.tokens.contains_key(&key) {
             return Err(busy("request id already in use"));
         }
-        if registry.waiting >= self.shared.budgets.queue {
+        let budgets = &self.shared.budgets;
+        if registry.live >= budgets.concurrency.saturating_add(budgets.queue) {
             return Err(busy("server busy; retry later"));
         }
         let token = CancelToken::default();
         registry.tokens.insert(key.clone(), token.clone());
-        registry.waiting += 1;
         registry.live += 1;
         let admission = Admission {
             shared: Arc::clone(&self.shared),
             key,
-            queued: true,
         };
         Ok((token, admission))
     }
@@ -352,10 +345,12 @@ impl Executor {
             .unwrap_or_else(PoisonError::into_inner) = hooks;
     }
 
-    /// Admitted calls still waiting for a permit.
+    /// Admitted calls holding no permit.
     #[cfg(test)]
     pub(crate) fn queued(&self) -> usize {
-        self.shared.registry().waiting
+        // Under the lock, so a call ending in between is not half counted.
+        let registry = self.shared.registry();
+        registry.live - (self.shared.budgets.concurrency - self.shared.permits.available_permits())
     }
 
     /// Permits no call holds.
@@ -370,8 +365,7 @@ impl Executor {
 #[cfg(test)]
 #[derive(Clone, Default)]
 pub(crate) struct Hooks {
-    /// Called once the call wins its permit, before it checks for a cancel
-    /// and leaves the queue.
+    /// Called once the call wins its permit, before it checks for a cancel.
     pub(crate) acquired: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Waited on by the blocking job just before the effect runs.
     pub(crate) before_effect: Option<Arc<Barrier>>,
