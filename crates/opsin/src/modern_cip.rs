@@ -123,7 +123,7 @@ mod tests {
     use crate::{ParseOptions, Parser, Status};
 
     #[test]
-    fn mancude_names_preserve_the_named_enantiomer() {
+    fn mancude_names_preserve_the_named_configuration() {
         use reshiki_chemistry::smiles;
 
         let canonical = |text: &str| {
@@ -137,17 +137,38 @@ mod tests {
             (
                 "3-[(S)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
                 "O[C@H](C1=CC=CC1)C1=C[CH-]C=C1",
-                "S",
+                Some("S"),
             ),
             (
                 "3-[(R)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
                 "O[C@@H](C1=CC=CC1)C1=C[CH-]C=C1",
-                "R",
+                Some("R"),
             ),
             (
                 "3-[(S)-(cyclopenta-1,4-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide",
                 "O[C@H](C1=CCC=C1)C1=C[CH-]C=C1",
-                "S",
+                Some("S"),
+            ),
+            (
+                "2-[(S)-(4-fluoro-1H-pyrrol-1-id-2-yl)(hydroxy)methyl]-2H-pyrrol-2-ide",
+                "O[C@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1",
+                Some("S"),
+            ),
+            (
+                "2-[(R)-(4-fluoro-1H-pyrrol-1-id-2-yl)(hydroxy)methyl]-2H-pyrrol-2-ide",
+                "O[C@@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1",
+                Some("R"),
+            ),
+            // The E/Z descriptor ranks the same two rings at the double bond.
+            (
+                "3-[(1Z)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide",
+                "F/C=C(\\C1=CC=CC1)C1=C[CH-]C=C1",
+                None,
+            ),
+            (
+                "3-[(1E)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide",
+                "F/C=C(/C1=CC=CC1)C1=C[CH-]C=C1",
+                None,
             ),
         ] {
             let result = parser.parse(name, &ParseOptions::strict());
@@ -159,8 +180,8 @@ mod tests {
                 "{name}"
             );
             let labels = atom_labels(&structure.graph).unwrap();
-            assert_eq!(labels.len(), 1, "{name}: {labels:?}");
-            assert_eq!(labels.values().next().unwrap(), label, "{name}");
+            let labels: Vec<_> = labels.values().map(String::as_str).collect();
+            assert_eq!(labels, Vec::from_iter(label), "{name}");
         }
     }
 

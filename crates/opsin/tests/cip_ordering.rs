@@ -343,6 +343,48 @@ fn cyclopentadienide_resonance_forms_have_equal_priority() {
 }
 
 #[test]
+fn fluoropyrrolide_outranks_pyrrolide_after_per_atom_averaging() {
+    // X01: both attached ring atoms have a 26/5 duplicate, so remote F decides.
+    check(
+        &graph("O[C@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1", true),
+        2,
+        &[El(Element::H), Id(9), Id(3), El(Element::O)],
+    );
+}
+
+#[test]
+fn pyrrolide_resonance_forms_have_equal_priority() {
+    let forms = [
+        "C1=CC=C[N-]1",
+        "[C-]1C=CC=N1",
+        "C1[CH-]C=CN=1",
+        "C1=C[CH-]C=N1",
+        "C1C=C[CH-]N=1",
+    ];
+    for a in forms {
+        for b in forms {
+            // Includes X03, and every other pair of drawn charge positions.
+            let smiles = format!("FC({a}){b}");
+            let graph = graph(&smiles, true);
+            assert_eq!(
+                CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(7)),
+                Err(CipOrderingError::UnresolvedTie),
+                "{smiles}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fused_indenide_preserves_drawn_kekule_ordering() {
+    let mut graph = Graph::default();
+    let fragment = build_fragment(&mut graph, "C[C@H](O)[C-]1C=Cc2ccccc21", "", "").unwrap();
+    opsin::fragment_tools::convert_spare_valencies_to_double_bonds(&mut graph, fragment).unwrap();
+    graph.make_hydrogens_explicit(fragment).unwrap();
+    check(&graph, 2, &[El(Element::H), Id(1), Id(4), El(Element::O)]);
+}
+
+#[test]
 fn neutral_azaquinone_preserves_exocyclic_oxygen_duplicates() {
     // The decisive carbonyl branches are [O, O, N] versus [O, O, C].
     // A ring C/N average must not replace the exocyclic C=O oxygen duplicate.

@@ -3,7 +3,8 @@
 //! Port of `CipSequenceRules.java`, OPSIN 2.9.0, commit
 //! `b91b610af5ab07560fedb20730d7aef46bb2bca0`.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT, see the crate license.
-//! Adds P-92.1.4.4 anionic mancude averaging, which is absent from upstream OPSIN.
+//! Adds P-92.1.4.4 averaging for singly negative odd monocyclic mancude parts,
+//! which is absent from upstream OPSIN.
 //!
 //! Each rule is exhausted over the whole ligand before the next rule is used.
 //! Path-local histories terminate rings; terminal duplicate atoms represent
@@ -191,15 +192,64 @@ impl<'a> CipSequenceRules<'a> {
                     .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?;
                 let mut molecule = Molecule::new(&state)
                     .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?;
-                let mut parts = HashMap::new();
+                let mut membership = HashMap::new();
+                let mut rings: HashMap<usize, Vec<AtomId>> = HashMap::new();
                 for (atom, index) in indices {
                     if let Some(id) = molecule
                         .negative_mancude_part(index)
                         .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?
                     {
-                        let fraction = molecule
-                            .fraction(index)
-                            .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?;
+                        membership.insert(atom, id);
+                        rings.entry(id).or_default().push(atom);
+                    }
+                }
+                let mut parts = HashMap::new();
+                for (id, ring) in rings {
+                    let n = ring.len() as u32;
+                    if n.is_multiple_of(2)
+                        || ring
+                            .iter()
+                            .filter(|&&a| self.graph.atom(a).charge < 0)
+                            .count()
+                            != 1
+                    {
+                        continue;
+                    }
+                    let neighbours: Vec<_> = ring
+                        .iter()
+                        .map(|&a| {
+                            self.graph
+                                .neighbours(a)
+                                .into_iter()
+                                .filter(|b| membership.get(b) == Some(&id))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect();
+                    // A single ring whose uncharged atoms all have their double
+                    // bond inside it (no exocyclic C=O), so n contributors exist.
+                    let ring_double_bond_ends = ring
+                        .iter()
+                        .zip(&neighbours)
+                        .flat_map(|(&a, atoms)| atoms.iter().map(move |&b| (a, b)))
+                        .filter(|&(a, b)| {
+                            self.graph
+                                .bond_between(a, b)
+                                .is_some_and(|bond| self.graph.bond(bond).order == 2)
+                        })
+                        .count();
+                    if neighbours.iter().any(|atoms| atoms.len() != 2)
+                        || ring_double_bond_ends as u32 != n - 1
+                    {
+                        continue;
+                    }
+                    for (atom, neighbours) in ring.into_iter().zip(neighbours) {
+                        let sum: u32 = neighbours
+                            .iter()
+                            .map(|&a| u32::from(self.graph.atom(a).element.atomic_number()))
+                            .sum();
+                        // In the n maximal contributors this atom is charged once
+                        // and double-bonded to each neighbour (n - 1) / 2 times.
+                        let fraction = Fraction((n - 1) * sum, 2 * n);
                         parts.insert(atom, NegativeMancudePart { id, fraction });
                     }
                 }
@@ -420,18 +470,35 @@ mod tests {
             "O[C@H](C1=CC=CC1)C1=C[CH-]C=C1",
             "O[C@H](C1=CC=CC1)[C-]1C=CC=C1",
         ] {
-            assert_ring_duplicates(smiles, 7..12, Fraction(24, 5));
+            assert_ring_duplicates(smiles, 7..12, &[Fraction(24, 5); 5]);
         }
     }
 
     #[test]
     fn each_cyclopropenide_atom_has_one_integral_averaged_bond_duplicate() {
         for smiles in ["O[C@H](C1=CC1)C1=C[CH-]1", "O[C@H](C1=CC1)[C-]1C=C1"] {
-            assert_ring_duplicates(smiles, 5..8, Fraction(4, 1));
+            assert_ring_duplicates(smiles, 5..8, &[Fraction(4, 1); 3]);
         }
     }
 
-    fn assert_ring_duplicates(smiles: &str, ring: std::ops::Range<usize>, fraction: Fraction) {
+    #[test]
+    fn pyrrolide_duplicates_average_each_atoms_ring_neighbours() {
+        for smiles in ["OC(C1=CC=C[N-]1)", "OC([C-]1C=CC=N1)"] {
+            assert_ring_duplicates(
+                smiles,
+                2..7,
+                &[
+                    Fraction(26, 5),
+                    Fraction(24, 5),
+                    Fraction(24, 5),
+                    Fraction(26, 5),
+                    Fraction(24, 5),
+                ],
+            );
+        }
+    }
+
+    fn assert_ring_duplicates(smiles: &str, ring: std::ops::Range<usize>, fractions: &[Fraction]) {
         let mut graph = Graph::default();
         let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
         graph.make_hydrogens_explicit(fragment).unwrap();
@@ -445,9 +512,12 @@ mod tests {
             let id = node.atom.unwrap();
             let neighbours = rules.next_atoms(node, 0).unwrap();
             if ring.contains(&id.0) {
+                let expected = Node::ghost(fractions[id.0 - ring.start], Vec::new(), None);
                 let duplicates: Vec<_> = neighbours
                     .iter()
-                    .filter(|n| n.atom.is_none() && n.atomic_number == fraction)
+                    .filter(|n| {
+                        n.atom.is_none() && compare_nodes(n, &expected, 0) == Ordering::Equal
+                    })
                     .collect();
                 assert_eq!(duplicates.len(), 1, "{smiles}: atom {}", id.0);
                 assert_eq!(duplicates[0].duplicate_origin, None);
@@ -458,19 +528,44 @@ mod tests {
 
     #[test]
     fn negative_part_keeps_exocyclic_oxygen_duplicate_and_origin() {
-        let mut graph = Graph::default();
-        let fragment =
-            crate::smiles::build_fragment(&mut graph, "OC1=CC(=O)C=C[CH-]1", "", "").unwrap();
-        graph.make_hydrogens_explicit(fragment).unwrap();
-        let rules = CipSequenceRules::new(&graph, AtomId(0));
-        assert!(rules.negative_parts().unwrap().contains_key(&AtomId(3)));
-        let carbonyl = rules
-            .real_node(AtomId(3), vec![AtomId(0), AtomId(1), AtomId(2)])
-            .unwrap();
-        let neighbours = rules.next_atoms(carbonyl, 0).unwrap();
-        let duplicates: Vec<_> = neighbours.iter().filter(|n| n.atom.is_none()).collect();
-        assert_eq!(duplicates.len(), 1);
-        assert_eq!(duplicates[0].atomic_number, Fraction(8, 1));
-        assert_eq!(duplicates[0].duplicate_origin, Some(4));
+        // Neither ring has n maximal contributors: its carbonyl carbons keep
+        // their double bond outside the ring.
+        for smiles in ["OC1=CC(=O)C=C[CH-]1", "OC1=CC(=O)C(=O)C=C[CH-]1"] {
+            let mut graph = Graph::default();
+            let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
+            graph.make_hydrogens_explicit(fragment).unwrap();
+            let rules = CipSequenceRules::new(&graph, AtomId(0));
+            assert!(rules.negative_parts().unwrap().is_empty(), "{smiles}");
+            let carbonyl = rules
+                .real_node(AtomId(3), vec![AtomId(0), AtomId(1), AtomId(2)])
+                .unwrap();
+            let neighbours = rules.next_atoms(carbonyl, 0).unwrap();
+            let duplicates: Vec<_> = neighbours.iter().filter(|n| n.atom.is_none()).collect();
+            assert_eq!(duplicates.len(), 1);
+            assert_eq!(duplicates[0].atomic_number, Fraction(8, 1));
+            assert_eq!(duplicates[0].duplicate_origin, Some(4));
+        }
+    }
+
+    #[test]
+    fn fused_and_multiply_charged_negative_parts_keep_drawn_duplicates() {
+        for smiles in [
+            "C[C@H](O)[C-]1C=CC2=CC=CC=C21",
+            "C[C@H](O)[C-]1C=C[CH-]C=C[CH-]1",
+        ] {
+            let mut graph = Graph::default();
+            let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
+            graph.make_hydrogens_explicit(fragment).unwrap();
+            let rules = CipSequenceRules::new(&graph, AtomId(1));
+            assert!(rules.negative_parts().unwrap().is_empty(), "{smiles}");
+            let charged = rules.real_node(AtomId(3), vec![AtomId(1)]).unwrap();
+            assert!(
+                rules
+                    .next_atoms(charged, 0)
+                    .unwrap()
+                    .iter()
+                    .all(|n| n.atom.is_some())
+            );
+        }
     }
 }
