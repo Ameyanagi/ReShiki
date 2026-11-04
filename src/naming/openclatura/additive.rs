@@ -272,49 +272,6 @@ pub fn add_indicated_hydrogens(
         return Ok(());
     }
     collect_indicated_hydrogens(mol, parts, numbered_path, locants)?;
-    if parts
-        .retained_parent_metadata
-        .as_ref()
-        .is_some_and(|m| m.mancude_double_bonds > 0)
-    {
-        // P-58.2.3 / P-64.4.2: lambda-center H is additional to the
-        // ordinary parent state just proved, including its rendered H run.
-        let mut sites: Vec<_> = numbered_path
-            .iter()
-            .copied()
-            .filter(|&id| {
-                super::fusion::exocyclic::neutral_lambda_oxo_bonding_number(mol, id).is_some()
-            })
-            .map(|id| (locants[&id].clone(), id))
-            .collect();
-        if !sites.is_empty() {
-            let declared = name_indicated_hydrogen_locants(
-                parts
-                    .retained_name
-                    .as_deref()
-                    .or_else(|| parts.parent_hydride.as_ref().and_then(|p| p.base_name())),
-            );
-            sites.extend(
-                locants
-                    .iter()
-                    .filter(|(_, locant)| declared.contains(*locant))
-                    .map(|(&id, locant)| (locant.clone(), id)),
-            );
-            sites.extend(
-                parts
-                    .hydro_operations
-                    .iter()
-                    .filter(|op| {
-                        op.operation_kind == "indicated_hydrogen" && op.key != "added_hydrogen"
-                    })
-                    .flat_map(|op| op.locants.iter().cloned().zip(op.atom_ids.iter().copied())),
-            );
-            sort_sites(&mut sites);
-            sites.dedup_by(|a, b| a.0 == b.0);
-            sites.retain(|(locant, _)| !parts.indicated_hydrogens.contains(locant));
-            add_citations(parts, "indicated_hydrogen", &sites);
-        }
-    }
     validate_retained_hydrogen_sites(mol, parts)
 }
 
@@ -986,10 +943,7 @@ pub(super) fn systematic_suffix_hydrogen_state(
     suffix: &AtomSet,
     locants: &BTreeMap<usize, String>,
 ) -> Result<Option<SuffixHydrogenState>, String> {
-    use super::fusion::{
-        mancude::{spiro_carbon_sites, suffix_hydrogen_state},
-        numbering,
-    };
+    use super::fusion::{mancude::spiro_carbon_sites, numbering};
     let atoms: AtomSet = locants.keys().copied().collect();
     if suffix.is_empty()
         || !suffix.is_subset(&atoms)
@@ -998,26 +952,8 @@ pub(super) fn systematic_suffix_hydrogen_state(
     {
         return Ok(None);
     }
-    let suffix_locants: BTreeSet<_> = suffix.iter().map(|a| locants[a].clone()).collect();
-    let fusion: Vec<_> = locants
-        .iter()
-        .filter(|(id, _)| ring_bonds(mol, **id, &atoms).len() > 2)
-        .map(|(_, l)| l.clone())
-        .collect();
     let model = numbering::parent_bond_model(&plan.abstract_parent_graph)?;
-    // Atoms that can never carry a parent double bond are inherently
-    // saturated, not movable indicated-H sites (e.g. carbon between two O).
-    let capable: AtomSet = model
-        .allowed_kekule_assignments
-        .iter()
-        .flat_map(|assignment| {
-            assignment
-                .orders
-                .iter()
-                .filter(|(_, order)| *order == 2)
-                .flat_map(|(edge, _)| [edge.0, edge.1])
-        })
-        .collect();
+    let capable = parent_pi_atoms(&model);
     let quota = capable
         .len()
         .saturating_sub(2 * model.maximum_non_cumulative_double_bonds);
@@ -1030,6 +966,48 @@ pub(super) fn systematic_suffix_hydrogen_state(
     if quota > carbon_h {
         return Ok(None);
     }
+    graph_suffix_hydrogen_state(mol, &plan.abstract_parent_graph, suffix, suffix, locants)
+}
+
+fn parent_pi_atoms(model: &super::fusion::model::ParentBondModel) -> AtomSet {
+    // Atoms that can never carry a parent double bond are inherently
+    // saturated, not movable indicated-H sites (e.g. carbon between two O).
+    model
+        .allowed_kekule_assignments
+        .iter()
+        .flat_map(|assignment| {
+            assignment
+                .orders
+                .iter()
+                .filter(|(_, order)| *order == 2)
+                .flat_map(|(edge, _)| [edge.0, edge.1])
+        })
+        .collect()
+}
+
+fn graph_suffix_hydrogen_state(
+    mol: &Molecule,
+    graph: &super::fusion::model::FusionGraph,
+    suffix: &AtomSet,
+    free_valences: &AtomSet,
+    locants: &BTreeMap<usize, String>,
+) -> Result<Option<SuffixHydrogenState>, String> {
+    use super::fusion::{mancude::suffix_hydrogen_state, numbering};
+    let atoms: AtomSet = locants.keys().copied().collect();
+    let suffix_locants: BTreeSet<_> = suffix
+        .union(free_valences)
+        .map(|a| locants[a].clone())
+        .collect();
+    let fusion: Vec<_> = locants
+        .iter()
+        .filter(|(id, _)| ring_bonds(mol, **id, &atoms).len() > 2)
+        .map(|(_, l)| l.clone())
+        .collect();
+    let model = numbering::parent_bond_model(graph)?;
+    let capable = parent_pi_atoms(&model);
+    let quota = capable
+        .len()
+        .saturating_sub(2 * model.maximum_non_cumulative_double_bonds);
     let citations = model.allowed_kekule_assignments.iter().map(|assignment| {
         let paired: AtomSet = assignment
             .orders
@@ -1051,7 +1029,7 @@ pub(super) fn systematic_suffix_hydrogen_state(
         {
             continue;
         }
-        let mut graph = plan.abstract_parent_graph.clone();
+        let mut graph = graph.clone();
         for atom in &mut graph.atoms {
             atom.forced_single |= indicated.contains(&locants[&atom.id]);
         }
@@ -1064,13 +1042,135 @@ pub(super) fn systematic_suffix_hydrogen_state(
         let Some(state) = suffix_hydrogen_state(mol, &atoms, &constrained, suffix, locants)? else {
             continue;
         };
-        let rank = suffix_hydrogen_rank(&indicated, &suffix_locants, suffix.len(), &fusion, &state);
+        let rank = suffix_hydrogen_rank(
+            &indicated,
+            &suffix_locants,
+            suffix_locants.len(),
+            &fusion,
+            &state,
+        );
         candidates.push((rank, indicated, constrained, state));
     }
     Ok(candidates
         .into_iter()
         .min_by(|a, b| a.0.cmp(&b.0))
         .map(|(_, indicated, model, state)| (indicated, model, state)))
+}
+
+fn apply_parent_hydrogen_state(
+    parts: &mut AssemblyParts,
+    indicated: Vec<String>,
+    model: super::fusion::model::ParentBondModel,
+    state: super::fusion::mancude::ParentDerivativeState,
+) {
+    parts
+        .hydro_operations
+        .extend(state.hydro_operations.clone());
+    parts
+        .hydro_operations
+        .extend(state.bond_delta.added_hydrogen_operations.clone());
+    for plan in parts
+        .parent_hydride
+        .iter_mut()
+        .flat_map(|p| p.fusion_plan.iter_mut())
+        .chain(parts.fusion_plan.iter_mut())
+    {
+        plan.rendered_base_name = super::retained_name_policy::render_retained_hydrogen_state(
+            &plan.rendered_base_name,
+            &plan.indicated_hydrogens,
+            Some(&indicated),
+        );
+        plan.indicated_hydrogens = indicated.clone();
+        plan.bond_model = model.clone();
+        plan.derivative_state = state.clone();
+    }
+    for metadata in parts.retained_parent_metadata.iter_mut().chain(
+        parts
+            .parent_hydride
+            .iter_mut()
+            .flat_map(|p| p.hydride_metadata.iter_mut()),
+    ) {
+        metadata.indicated_hydrogen_count = indicated.len();
+        metadata.relocated_indicated_h = metadata.default_indicated_h != indicated;
+        metadata.default_indicated_h = indicated.clone();
+        metadata.mancude_double_bonds = model.maximum_non_cumulative_double_bonds;
+    }
+    if let Some(parent) = &mut parts.parent_hydride {
+        parent.parent_bond_model = Some(model.clone());
+    }
+    parts.parent_bond_model = Some(model);
+    parts.parent_bond_delta = Some(state.bond_delta.clone());
+    parts.parent_derivative_state = Some(state);
+}
+
+fn apply_lambda_parent_hydrogens(
+    mol: &Molecule,
+    parts: &mut AssemblyParts,
+    locants: &BTreeMap<usize, String>,
+) -> Result<bool, String> {
+    use super::fusion::{exocyclic::neutral_lambda_oxo_bonding_number, numbering};
+    if parts
+        .retained_parent_metadata
+        .as_ref()
+        .is_none_or(|m| m.mancude_double_bonds == 0)
+        || !parts
+            .parent_atom_ids
+            .iter()
+            .any(|&id| neutral_lambda_oxo_bonding_number(mol, id).is_some())
+    {
+        return Ok(false);
+    }
+    // P-25.6 / P-25.7.1.1, Lm-3.1–3.2: complete the entire mancude
+    // lambda parent before assigning indicated H, suffix H and hydro prefixes.
+    let graph = numbering::parent_bond_graph(mol, &parts.parent_atom_ids);
+    let mut suffix: AtomSet = parts
+        .principal_group
+        .as_ref()
+        .filter(|group| group.key == "ketone")
+        .map(|group| {
+            group
+                .atom_ids
+                .intersection(&parts.parent_atom_ids)
+                .copied()
+                .collect()
+        })
+        .unwrap_or_default();
+    let free_valences: AtomSet = if parts.is_substituent {
+        AtomSet::from([parts.parent_atom_ids_by_locant[&parts.attachment_locant]])
+    } else {
+        AtomSet::new()
+    };
+    if parts.attachment_order == 2 {
+        suffix.extend(&free_valences);
+    }
+    let Some((indicated, model, state)) =
+        graph_suffix_hydrogen_state(mol, &graph, &suffix, &free_valences, locants)?
+    else {
+        return Err("openclatura: lambda parent hydrogen state not proved".into());
+    };
+    if let Some(name) = &mut parts.retained_name {
+        let declared = name_indicated_hydrogen_locants(Some(name))
+            .into_iter()
+            .collect::<Vec<_>>();
+        *name = super::retained_name_policy::render_retained_hydrogen_state(
+            name,
+            &declared,
+            Some(&indicated),
+        );
+    }
+    if let Some(parent) = &mut parts.parent_hydride {
+        parent.parent_name = parts.retained_name.clone();
+    }
+    for plan in parts
+        .parent_hydride
+        .iter_mut()
+        .flat_map(|parent| parent.fusion_plan.iter_mut())
+        .chain(parts.fusion_plan.iter_mut())
+    {
+        plan.abstract_parent_graph = graph.clone();
+    }
+    apply_parent_hydrogen_state(parts, indicated, model, state);
+    Ok(true)
 }
 
 fn apply_suffix_hydrogens(
@@ -1085,13 +1185,23 @@ fn apply_suffix_hydrogens(
     if parts.is_spiro_side_projection || parts.substituents.iter().any(|s| s.spiro.is_some()) {
         return Ok(false);
     }
+    // Charge operations have their own parent-hydride composition.
+    if parts
+        .parent_atom_ids
+        .iter()
+        .any(|id| mol.atoms[id].charge != 0)
+    {
+        return Ok(false);
+    }
+    if apply_lambda_parent_hydrogens(mol, parts, locants)? {
+        return Ok(true);
+    }
     let Some(group) = parts.principal_group.as_ref().filter(|g| g.key == "ketone") else {
         return Ok(false);
     };
     let atoms = &parts.parent_atom_ids;
     let suffix: AtomSet = group.atom_ids.intersection(atoms).copied().collect();
-    // Charge operations have their own parent-hydride composition.
-    if suffix.is_empty() || atoms.iter().any(|id| mol.atoms[id].charge != 0) {
+    if suffix.is_empty() {
         return Ok(false);
     }
     let suffix_locants: BTreeSet<_> = suffix.iter().map(|a| locants[a].clone()).collect();
@@ -1106,44 +1216,7 @@ fn apply_suffix_hydrogens(
         else {
             return Ok(false);
         };
-        parts
-            .hydro_operations
-            .extend(state.hydro_operations.clone());
-        parts
-            .hydro_operations
-            .extend(state.bond_delta.added_hydrogen_operations.clone());
-        for plan in parts
-            .parent_hydride
-            .iter_mut()
-            .flat_map(|p| p.fusion_plan.iter_mut())
-            .chain(parts.fusion_plan.iter_mut())
-        {
-            plan.rendered_base_name = super::retained_name_policy::render_retained_hydrogen_state(
-                &plan.rendered_base_name,
-                &plan.indicated_hydrogens,
-                Some(&indicated),
-            );
-            plan.indicated_hydrogens = indicated.clone();
-            plan.bond_model = model.clone();
-            plan.derivative_state = state.clone();
-        }
-        for metadata in parts.retained_parent_metadata.iter_mut().chain(
-            parts
-                .parent_hydride
-                .iter_mut()
-                .flat_map(|p| p.hydride_metadata.iter_mut()),
-        ) {
-            metadata.indicated_hydrogen_count = indicated.len();
-            metadata.relocated_indicated_h = metadata.default_indicated_h != indicated;
-            metadata.default_indicated_h = indicated.clone();
-            metadata.mancude_double_bonds = model.maximum_non_cumulative_double_bonds;
-        }
-        if let Some(parent) = &mut parts.parent_hydride {
-            parent.parent_bond_model = Some(model.clone());
-        }
-        parts.parent_bond_model = Some(model);
-        parts.parent_bond_delta = Some(state.bond_delta.clone());
-        parts.parent_derivative_state = Some(state);
+        apply_parent_hydrogen_state(parts, indicated, model, state);
         return Ok(true);
     }
     if parts

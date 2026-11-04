@@ -2821,8 +2821,29 @@ mod tests {
             ),
             (
                 "CC1=CC(=C(C=C1)NC(=O)C(C2=CC=CC=C2)OC(=O)C3=CC4=C(C=C3)C(=O)C5=CC=CC=C5S4(=O)=O)[N+](=O)[O-]",
-                "2-[(4-methyl-2-nitrophenyl)amino]-2-oxo-1-phenylethyl 5,5,10-trioxo-5H,10H-5lambda^6-dibenzo[b,e]thiine-3-carboxylate",
+                "2-[(4-methyl-2-nitrophenyl)amino]-2-oxo-1-phenylethyl 5,5,10-trioxo-5,10-dihydro-5lambda^6-dibenzo[b,e]thiine-3-carboxylate",
             ),
+            (
+                "C1[C@@H]2[C@@H](CS1(=O)=O)SC(=NC(=O)CC3=CC=CC=C3)N2C4=C(C(=CC=C4)Cl)Cl",
+                "N-[(3aR,6aS)-3-(2,3-dichlorophenyl)-5,5-dioxohexahydro-2H-5lambda^6-thieno[3,4-d][1,3]thiazol-2-ylidene]-2-phenylacetamide",
+            ),
+            (
+                "C1[C@@H](S(=O)(=O)C2=CC=CC=C2N(C1=O)CC(=O)NCCC3=CC=CC=C3)C4=CC=CC=C4",
+                "N-(2-phenylethyl)-2-[(2R)-1,1,4-trioxo-2-phenyl-1,2,3,4-tetrahydro-5H-1lambda^6,5-benzothiazepin-5-yl]acetamide",
+            ),
+            (
+                "O=S1c2ccccc2S(=O)c2ccccc21",
+                "5lambda^4,10lambda^4-thianthrene-5,10-dione",
+            ),
+            (
+                "O=S1C=CS(=O)c2ccccc21",
+                "1lambda^4,4lambda^4-benzodithiine-1,4-dione",
+            ),
+            ("O=S1CCC(=O)CC1", "1lambda^4-thiane-1,4-dione"),
+            ("O=S1(=O)CCC(=O)CC1", "1lambda^6-thiane-1,1,4-trione"),
+            ("O=[Se]1C=CC=C1", "1H-1lambda^4-selenophen-1-one"),
+            ("O=S1C=CS(=O)C=C1", "1lambda^4,4lambda^4-dithiine-1,4-dione"),
+            ("O=[S@]1CCCC1C", "(1S)-2-methyl-1lambda^4-thiolan-1-one"),
             ("ON1CCCCC1", "piperidin-1-ol"),
             ("ON1CCCC1O", "pyrrolidine-1,2-diol"),
             ("CC1(C)CCCC(C)(C)N1O", "2,2,6,6-tetramethylpiperidin-1-ol"),

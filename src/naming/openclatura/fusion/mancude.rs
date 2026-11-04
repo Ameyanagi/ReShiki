@@ -713,7 +713,7 @@ pub(super) fn prove_pi_redistribution(
     }
     for &id in &sites {
         let value = &mol.atoms[&id];
-        if value.symbol == "C" {
+        if value.symbol == "C" || neutral_lambda_oxo_bonding_number(mol, id).is_some() {
             continue;
         }
         if value.symbol != "N"
