@@ -258,8 +258,8 @@ pub fn select_principal_parent_with_excluded(
     .map(|(_, selection)| selection)
 }
 
-/// P-51.3.1: multiplicative units must tie as the senior parent, before the
-/// atom-order fallback used to select one equivalent substitutive parent.
+/// P-15.3 / P-51.3.1: multiplicative units must tie on parent seniority,
+/// before substituent counts, locants and citation order select one parent.
 pub(super) fn senior_parent_candidates(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -268,7 +268,7 @@ pub(super) fn senior_parent_candidates(
     groups: &[PerceivedGroup],
     excluded: &AtomSet,
 ) -> Vec<ParentSelection> {
-    let candidates = parent_candidates(
+    let mut candidates = parent_candidates(
         mol,
         chains,
         ring_systems,
@@ -277,6 +277,11 @@ pub(super) fn senior_parent_candidates(
         excluded,
         false,
     );
+    for (score, _) in &mut candidates {
+        score.attached_prefixes = 0;
+        score.assembly_substituent_locants = None;
+        score.assembly_substituent_citation = None;
+    }
     let best = candidates.iter().map(|(score, _)| score).min().cloned();
     candidates
         .into_iter()

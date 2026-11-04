@@ -245,7 +245,6 @@ pub struct HeteroatomRules {
     pub alkyl_oxy_prefixes: BTreeMap<String, String>,
     pub simple_sulfanyl_prefixes: BTreeSet<String>,
     pub simple_selanyl_prefixes: BTreeSet<String>,
-    pub retained_sulfonyl_group_acids: BTreeMap<String, String>,
 }
 #[derive(Debug, Default)]
 pub struct PrefixRules {
@@ -348,11 +347,6 @@ pub static RULES: LazyLock<NomenclatureRegistry> = LazyLock::new(|| Nomenclature
         alkyl_oxy_prefixes: string_map("alkyl_oxy_prefixes"),
         simple_sulfanyl_prefixes: string_set("simple_sulfanyl_prefixes"),
         simple_selanyl_prefixes: string_set("simple_selanyl_prefixes"),
-        retained_sulfonyl_group_acids: rows("retained_sulfonyl_group_names")
-            .iter()
-            .filter(|v| v["acid"].is_string())
-            .map(|v| (s(v, "acid"), s(v, "name")))
-            .collect(),
     },
     prefixes: PrefixRules {
         peroxy_ester_groups: string_set("peroxy_ester_groups"),
