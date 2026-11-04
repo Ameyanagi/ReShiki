@@ -18,6 +18,9 @@ pub struct Imported {
     pub name: Option<String>,
     /// SMILES directions specified odd-cumulene E/Z that preparation discarded.
     pub dropped_cumulene_ez: bool,
+    /// Molecule-level CX relative stereochemistry (`r`).
+    #[serde(skip)]
+    pub relative: bool,
     /// Reaction CX attachment markers affect wedge selection before drawing.
     #[serde(skip)]
     pub reaction_attachments: Vec<bool>,
@@ -41,6 +44,7 @@ struct Annotations {
     groups: HashMap<u32, usize>,
     labels_processed: bool,
     atom_stereo: bool,
+    relative: bool,
     work: usize,
 }
 impl Annotations {
@@ -52,6 +56,7 @@ impl Annotations {
             groups: HashMap::new(),
             labels_processed: false,
             atom_stereo: false,
+            relative: false,
             work: 2_000_000,
         }
     }
@@ -181,6 +186,7 @@ impl Annotations {
                     });
                 }
             }
+            cx::Event::RelativeStereo => self.relative = true,
             cx::Event::QueryAtom(atom) => put(&mut self.queries, atom, true)?,
             cx::Event::SubstanceGroup { atoms, bonds } => {
                 let members = atoms.iter().copied().collect::<HashSet<_>>();
@@ -394,6 +400,7 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         .collect();
     Ok(Imported {
         dropped_cumulene_ez: false,
+        relative: annotations.relative,
         reaction_properties,
         reaction_attachments: annotations
             .properties
@@ -555,6 +562,7 @@ pub fn read(text: &str) -> Result<Imported> {
         .collect::<Result<Vec<_>>>()?;
     Ok(Imported {
         dropped_cumulene_ez,
+        relative: annotations.relative,
         prepared,
         conformers,
         name: (!name.is_empty()).then(|| name.to_owned()),

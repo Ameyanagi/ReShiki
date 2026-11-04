@@ -131,7 +131,20 @@ pub(super) fn apply_anionic_parent_names(
     }
     // The wrapper selects negative sites only, retaining numbered-path order.
     for site in sites.iter().filter(|site| site.charge < 0) {
-        let next = apply_parent_anion_rule(&updated, site, retained);
+        // A one-carbon parent takes the unlocanted methane -> methanide
+        // operation. Match only the terminal parent, leaving prefix names intact.
+        let methanide = if path.len() == 1 && site.symbol == "C" && site.locant == "1" {
+            updated
+                .strip_suffix("methane")
+                .map(|prefix| format!("{prefix}methanide"))
+        } else {
+            None
+        };
+        let next = methanide.unwrap_or_else(|| apply_parent_anion_rule(&updated, site, retained));
+        // P-72.2.2.1: the vowel of 'ide' elides a parent's final 'e', as in
+        // cyclohexan-1-ide-4-sulfonate.
+        let operation = format!("-{}-ide", site.locant);
+        let next = next.replacen(&format!("e{operation}"), &operation, 1);
         // Upstream divergence: atom membership alone cannot credit an anion whose name never changes.
         if next == updated && !covered.contains(&site.atom) {
             return Err(format!(
@@ -663,20 +676,9 @@ fn replace_retained_stem_with_ide(name: &str, stem: &str, locant: &str) -> Strin
                 if already_ide {
                     continue;
                 }
-                let prefix = name
-                    .get(start..stem_start)
-                    .unwrap_or_default()
-                    .strip_suffix('-')
-                    .unwrap_or_default();
-                let kept = prefix
-                    .split(',')
-                    .filter(|token| !token.is_empty() && token.strip_suffix('H') != Some(locant))
-                    .collect::<Vec<_>>();
-                let prefix = if kept.is_empty() {
-                    String::new()
-                } else {
-                    format!("{}-", kept.join(","))
-                };
+                // P-14.7.1 keeps the mancude parent's indicated hydrogen
+                // when an ionic suffix denotes removal of that hydrogen.
+                let prefix = name.get(start..stem_start).unwrap_or_default();
                 matched = Some((end, format!("{prefix}{stem}-{locant}-ide")));
                 break;
             }
@@ -985,25 +987,25 @@ mod tests {
         for (name, retained, locant, expected) in [
             ("cyclohexan-2-one", None, "4", "2-oxocyclohexan-4-ide"),
             ("butanal", None, "2", "butan-2-ide-1-al"),
-            ("propanedinitrile", None, "2", "propane-2-ide-1,3-dinitrile"),
-            ("but-3-ynenitrile", None, "2", "but-3-yne-2-ide-1-nitrile"),
+            ("propanedinitrile", None, "2", "propan-2-ide-1,3-dinitrile"),
+            ("but-3-ynenitrile", None, "2", "but-3-yn-2-ide-1-nitrile"),
             (
                 "cyclopentane-1-carbonitrile",
                 None,
                 "2",
-                "cyclopentane-2-ide-1-carbonitrile",
+                "cyclopentan-2-ide-1-carbonitrile",
             ),
             (
                 "cyclopentanecarbonitrile",
                 None,
                 "2",
-                "cyclopentane-2-ide-carbonitrile",
+                "cyclopentan-2-ide-carbonitrile",
             ),
             (
                 "cyclopentane-1-carbaldehyde",
                 None,
                 "2",
-                "cyclopentane-2-ide-1-carbaldehyde",
+                "cyclopentan-2-ide-1-carbaldehyde",
             ),
             (
                 "2-cyanopyrrolidin-3-aminium",
@@ -1011,6 +1013,13 @@ mod tests {
                 "1",
                 "2-cyanopyrrolidin-1-ide-3-aminium",
             ),
+            (
+                "5-(ammoniomethyl)imidazolidine-2,4-dione",
+                Some("imidazolidine"),
+                "1",
+                "5-(ammoniomethyl)imidazolidin-1-ide-2,4-dione",
+            ),
+            ("1H-pyrrole", Some("pyrrole"), "1", "1H-pyrrol-1-ide"),
         ] {
             let actual = apply_anionic_parent_names(
                 name,
@@ -1049,6 +1058,80 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn retained_anion_parent_keeps_indicated_hydrogen() {
+        for (name, stem, locant, expected) in [
+            (
+                "2-methyl-1H-pyrrole",
+                "pyrrol",
+                "1",
+                "2-methyl-1H-pyrrol-1-ide",
+            ),
+            (
+                "hexahydro-1H,6H-pyrrolo[3,4-b]pyridine",
+                "pyrrolo[3,4-b]pyridin",
+                "1",
+                "hexahydro-1H,6H-pyrrolo[3,4-b]pyridin-1-ide",
+            ),
+            ("1H-pyrrol-1-ide", "pyrrol", "1", "1H-pyrrol-1-ide"),
+        ] {
+            assert_eq!(
+                replace_retained_stem_with_ide(name, stem, locant),
+                expected,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn substituted_methane_parent_uses_methanide() {
+        use super::super::graph_io::read_smiles;
+        for (smiles, name, expected) in [
+            (
+                "Oc1ccccc1[CH2-]",
+                "(2-hydroxyphenyl)methane",
+                "(2-hydroxyphenyl)methanide",
+            ),
+            (
+                "Oc1ccc(cc1)[CH2-]",
+                "(4-hydroxyphenyl)methane",
+                "(4-hydroxyphenyl)methanide",
+            ),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let carbon = mol
+                .atoms
+                .values()
+                .find(|atom| atom.is_carbon() && atom.charge == -1)
+                .unwrap()
+                .idx;
+            assert_eq!(
+                apply_anionic_parent_names(
+                    name,
+                    &mol,
+                    &[carbon],
+                    &BTreeMap::from([(carbon, "1".into())]),
+                    None,
+                    &AtomSet::new(),
+                )
+                .unwrap(),
+                expected,
+                "{smiles}"
+            );
+            assert!(
+                apply_anionic_parent_names(
+                    &format!("({name})ethane"),
+                    &mol,
+                    &[carbon],
+                    &BTreeMap::from([(carbon, "1".into())]),
+                    None,
+                    &AtomSet::new(),
+                )
+                .is_err()
+            );
+        }
     }
 
     #[test]
