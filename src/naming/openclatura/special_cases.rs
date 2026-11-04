@@ -1184,7 +1184,12 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
     }
     require_stereo_free_core(mol, &oxygens.into_iter().collect())?;
     // Upstream divergence: an unassigned sulfoxide raw tag is not a rendered absolute descriptor.
-    if mol.atoms[&central].raw_stereo.is_some() {
+    if mol.atoms[&central].raw_stereo.is_some()
+        && matches!(
+            mol.atoms[&central].stereo.as_deref(),
+            None | Some("r" | "s")
+        )
+    {
         return Err(SHORTCUT_STEREO_ERROR.into());
     }
     // Achiral sulfoxides take substitutive names (P-63.6); a chiral one keeps the

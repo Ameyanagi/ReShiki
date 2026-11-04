@@ -12,7 +12,7 @@ use opsin::stereochemistry_handler::{
     swaps_required_to_sort,
 };
 use opsin::xml_declarations::*;
-use opsin::{ParseOptions, WarningKind};
+use opsin::{ParseOptions, Parser, Status, WarningKind};
 
 fn token(a: &mut Arena, p: NodeId, name: &str, value: &str, attrs: &[(&str, &str)]) -> NodeId {
     let n = a.token(name, value);
@@ -109,6 +109,58 @@ fn cip_r_and_s_use_the_source_reference_order() {
         assert!(a[id].parent.is_none());
     }
 }
+
+#[test]
+fn lowercase_cip_validates_preassigned_cage_parity_without_overwriting_it() {
+    let parser = Parser::new().unwrap();
+    let options = ParseOptions::strict();
+    let cage = parser.parse(
+        "(1R,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-endo-ol",
+        &options,
+    );
+    assert_eq!(cage.status, Status::Success, "{}", cage.message);
+    let cage = cage.structure.unwrap();
+    let agreeing = parser.parse(
+        "(1R,3r,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-endo-ol",
+        &options,
+    );
+    assert_eq!(agreeing.status, Status::Success, "{}", agreeing.message);
+    let agreeing = agreeing.structure.unwrap();
+
+    let name = "(1R,3s,5S)-8-methyl-8-azabicyclo[3.2.1]octan-3-endo-ol";
+    let contradictory = parser.parse(name, &options);
+    assert_eq!(contradictory.status, Status::Failure);
+    assert!(
+        contradictory
+            .message
+            .contains("Contradictory pseudoasymmetric stereochemistry"),
+        "{}",
+        contradictory.message
+    );
+    let mut options = options;
+    options.warn_rather_than_fail_on_uninterpretable_stereochemistry = true;
+    let warning = parser.parse(name, &options);
+    assert_eq!(warning.status, Status::Warning, "{}", warning.message);
+    assert!(warning.warnings.iter().any(|warning| {
+        warning.kind == WarningKind::StereochemistryIgnored
+            && warning
+                .message
+                .contains("Contradictory pseudoasymmetric stereochemistry")
+    }));
+    let warning = warning.structure.unwrap();
+    for locant in ["1", "3", "5"] {
+        let expected = cage.graph.atom_by_locant(cage.fragment, locant).unwrap();
+        let expected = cage.graph.atom(expected).parity.as_ref().unwrap();
+        for structure in [&agreeing, &warning] {
+            let atom = structure
+                .graph
+                .atom_by_locant(structure.fragment, locant)
+                .unwrap();
+            assert_eq!(structure.graph.atom(atom).parity.as_ref(), Some(expected));
+        }
+    }
+}
+
 #[test]
 fn lone_pair_is_the_centre_atom_reference() {
     let (mut state, mut a, r, _, f) = fixture("[S](=O)(C)CC");
@@ -272,7 +324,11 @@ fn unsupported_descriptors_follow_exact_warning_categories() {
                 assert_eq!(state.warnings[0].kind, WarningKind::StereochemistryIgnored);
                 assert_eq!(
                     state.warnings[0].message,
-                    format!("{kind} stereochemistry is not currently interpretable by OPSIN")
+                    if kind == ENDO_EXO_SYN_ANTI_TYPE_VAL {
+                        "Endo/exo/syn/anti is supported only for substituted bicyclo[2.2.1]heptane and bicyclo[3.2.1]octane cages".to_string()
+                    } else {
+                        format!("{kind} stereochemistry is not currently interpretable by OPSIN")
+                    }
                 );
                 assert!(a[id].parent.is_some())
             } else {

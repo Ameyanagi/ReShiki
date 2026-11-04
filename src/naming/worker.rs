@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
 };
 
-pub(super) const PROTOCOL: u32 = 5;
+pub(super) const PROTOCOL: u32 = 6;
 pub(super) const WIRE_LIMIT: usize = 32_768;
 pub(super) const OUTPUT_LIMIT: usize = 65_536;
 pub(super) const MAX_NAME_BYTES: usize = 2_048;
