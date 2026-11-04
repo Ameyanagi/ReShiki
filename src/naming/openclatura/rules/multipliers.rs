@@ -65,6 +65,20 @@ pub fn get(count: usize) -> Multiplier {
 pub fn basic(count: usize) -> String {
     get(count).basic
 }
+/// Render a multiplied suffix with the elision required by P-16.7.1(c).
+/// Only suffixes beginning with `a` or `o` elide a numerical prefix's terminal
+/// `a`; substituent prefixes and other suffix initials keep it.
+/// https://iupac.qmul.ac.uk/BlueBook/P1.html#160701
+pub fn suffix(count: usize, suffix: &str) -> String {
+    if count <= 1 {
+        return suffix.into();
+    }
+    let mut multiplier = basic(count);
+    if suffix.starts_with(['a', 'o']) && multiplier.ends_with('a') {
+        multiplier.pop();
+    }
+    format!("{multiplier}{suffix}")
+}
 pub fn complex_(count: usize) -> String {
     get(count).complex
 }
@@ -80,4 +94,42 @@ pub fn candidate_splits(name: &str) -> Vec<(usize, String)> {
     }
     found.sort_by_key(|(len, _, _)| std::cmp::Reverse(*len));
     found.into_iter().map(|(_, n, s)| (n, s)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suffix_multiplier_elides_a_only_before_a_or_o() {
+        for (ending, expected) in [
+            ("amine", "tetramine"),
+            ("one", "tetrone"),
+            ("ol", "tetrol"),
+            ("oic acid", "tetroic acid"),
+            ("ene", "tetraene"),
+            ("imine", "tetraimine"),
+            ("uide", "tetrauide"),
+            ("yl", "tetrayl"),
+            ("carboxylic acid", "tetracarboxylic acid"),
+        ] {
+            assert_eq!(suffix(4, ending), expected, "{ending}");
+        }
+        assert_eq!(basic(4), "tetra");
+    }
+
+    #[test]
+    fn suffix_multiplier_handles_single_and_larger_counts() {
+        for (count, ending, expected) in [
+            (1, "one", "one"),
+            (2, "one", "dione"),
+            (3, "one", "trione"),
+            (6, "ol", "hexol"),
+            (11, "one", "undecone"),
+            (20, "one", "icosone"),
+            (1000, "one", "kilione"),
+        ] {
+            assert_eq!(suffix(count, ending), expected, "{count} {ending}");
+        }
+    }
 }

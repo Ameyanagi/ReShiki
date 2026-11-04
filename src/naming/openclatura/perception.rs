@@ -2657,7 +2657,8 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
         };
         if l.role == LigandRole::DoubleBonded {
             // An oxo group on a skeletal ring heteroatom is cited by the same
-            // suffix as a ketone; its expanded valence belongs to the parent.
+            // suffix as a ketone; its expanded valence belongs to the parent
+            // (including phosphine oxides under P-74.2.1.4).
             let ring_heterone = l.element == "O"
                 && cyclic.contains(&center)
                 && super::fusion::exocyclic::neutral_lambda_oxo_bonding_number(m, center).is_some();
@@ -2811,6 +2812,43 @@ mod tests {
             ("O=S1CCCC1", "1lambda^4-thiolan-1-one"),
             ("O=S1CCCCC1", "1lambda^4-thian-1-one"),
             ("O=S1(=O)CCCC1", "1lambda^6-thiolane-1,1-dione"),
+            (
+                "O=S1(=O)CNC(=O)c2ccccc21",
+                "2,3-dihydro-1lambda^6,3-benzothiazine-1,1,4-trione",
+            ),
+            (
+                "O=S1(=O)CC(=O)Nc2ccccc21",
+                "1lambda^6,4-benzothiazine-1,1,3(2H,4H)-trione",
+            ),
+            (
+                "O=S1(=O)c2ccccc2S(=O)(=O)c2ccccc21",
+                "5lambda^6,10lambda^6-thianthrene-5,5,10,10-tetrone",
+            ),
+            (
+                "O=S1(=O)CCS(=O)(=O)CC1",
+                "1lambda^6,4lambda^6-dithiane-1,1,4,4-tetrone",
+            ),
+            (
+                "O=S1(=O)CC=CC1",
+                "2,5-dihydro-1H-1lambda^6-thiophene-1,1-dione",
+            ),
+            (
+                "O=C1c2ccccc2S(=O)(=O)c2ccccc12",
+                "5lambda^6-dibenzo[b,e]thiine-5,5,10-trione",
+            ),
+            ("O=[PH]1C=CC=CC1", "1,2-dihydro-1lambda^5-phosphinin-1-one"),
+            ("O=[PH]1C=CC=C1", "1H-1lambda^5-phosphol-1-one"),
+            ("O=P1(C)C=CC=C1", "1-methyl-1H-1lambda^5-phosphol-1-one"),
+            (
+                "O=P1(C)C=CC=CC1",
+                "1-methyl-1,2-dihydro-1lambda^5-phosphinin-1-one",
+            ),
+            // Phosphorus acids, P-OH rings, and acyclic phosphine oxides
+            // retain their existing naming paths.
+            ("O=P1(O)CCCC1", "1-oxo-1lambda^5-phospholan-1-ol"),
+            ("CP(C)(C)=O", "trimethyl-lambda5-phosphanone"),
+            ("CP(=O)(O)C", "dimethylphosphinic acid"),
+            ("CP(=O)(O)O", "methylphosphonic acid"),
             (
                 "O=C(O)c1ccc(N2CCS(=O)(=O)CC2)cc1",
                 "4-(1,1-dioxo-1lambda^6-thiomorpholin-4-yl)benzoic acid",

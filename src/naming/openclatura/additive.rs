@@ -1408,6 +1408,18 @@ mod tests {
                 "2-hydroxy-1H-isoindole-1,3(2H)-dione",
             ),
             ("O=C1CCCc2ccccc12", "3,4-dihydronaphthalen-1(2H)-one"),
+            // P-58.2.2.3 / P-58.2.5: pair suffix deficits before
+            // citing the remaining reduction with hydro prefixes.
+            ("O=C1CCC(=O)c2ccccc21", "2,3-dihydronaphthalene-1,4-dione"),
+            ("O=C1CC(=O)Cc2ccccc21", "naphthalene-1,3(2H,4H)-dione"),
+            ("O=C1C(=O)C(=O)Cc2ccccc21", "naphthalene-1,2,3(4H)-trione"),
+            ("O=C1CC(=O)c2ccccc21", "1H-indene-1,3(2H)-dione"),
+            ("O=C1C(=O)C=Cc2ccccc21", "naphthalene-1,2-dione"),
+            // P-16.7.1(c): a numerical multiplier loses terminal a
+            // only before a suffix beginning with a or o.
+            ("O=C1C(=O)C(=O)C(=O)CC1", "cyclohexane-1,2,3,4-tetrone"),
+            ("OCC(O)C(O)CO", "butane-1,2,3,4-tetrol"),
+            ("NCC(N)C(N)CN", "butane-1,2,3,4-tetramine"),
             ("O=C1CCc2ccccc2C1", "3,4-dihydronaphthalen-2(1H)-one"),
             ("O=C1C=CCc2ccccc12", "naphthalen-1(4H)-one"),
             ("O=C1C=CC(=N)c2ccccc21", "4-iminonaphthalen-1(4H)-one"),
@@ -1483,6 +1495,12 @@ mod tests {
     #[test]
     fn retained_derivatives_use_bond_consistent_hydrogen_states() {
         for (smiles, expected) in [
+            // The generic external-pi fallback does not own suffix or
+            // intrinsic-H allocation; keep its existing composition state.
+            (
+                "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@]34C",
+                "(1S,3aS,3bR,9aR,9bS,11aS)-1-hydroxy-9a,11a-dimethyl-2,3,3a,3b,4,5,9,9a,9b,10,11,11a-dodecahydrocyclopenta[a]phenanthren-7(1H,8H)-one",
+            ),
             ("O=C1C=C2C=CC=CC2=N1", "2H-indol-2-one"),
             ("O=C1Cc2ccccc2N1", "1,3-dihydro-2H-indol-2-one"),
             ("O=C1C=Nc2ccccc21", "3H-indol-3-one"),

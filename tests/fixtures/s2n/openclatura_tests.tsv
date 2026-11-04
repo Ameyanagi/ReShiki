@@ -140,8 +140,8 @@ OCC(N)C(=O)O	2-amino-3-hydroxypropanoic acid	fixtures/diverse_corpus.golden.json
 NC(Cc1ccccc1)C(=O)O	2-amino-3-phenylpropanoic acid	fixtures/diverse_corpus.golden.json	1
 NC(C(=O)O)C	2-aminopropanoic acid	fixtures/diverse_corpus.golden.json	1
 CC(N)C(=O)O	2-aminopropanoic acid	fixtures/diverse_corpus.golden.json	1
-OC1OC(CO)C(O)C(O)C1O	6-(hydroxymethyl)oxane-2,3,4,5-tetraol	fixtures/diverse_corpus.golden.json	1
-OCC1OC(O)C(O)C(O)C1O	6-(hydroxymethyl)oxane-2,3,4,5-tetraol	fixtures/diverse_corpus.golden.json	1
+OC1OC(CO)C(O)C(O)C1O	6-(hydroxymethyl)oxane-2,3,4,5-tetrol	fixtures/diverse_corpus.golden.json	1
+OCC1OC(O)C(O)C(O)C1O	6-(hydroxymethyl)oxane-2,3,4,5-tetrol	fixtures/diverse_corpus.golden.json	1
 CCCCCC=CCC=CCCCCCCCC(=O)O	octadeca-9,12-dienoic acid	fixtures/diverse_corpus.golden.json	1
 CCCCCCCCCCCCCC(=O)O	tetradecanoic acid	fixtures/diverse_corpus.golden.json	1
 Oc1ccc(O)cc1	benzene-1,4-diol	fixtures/diverse_corpus.golden.json	1
