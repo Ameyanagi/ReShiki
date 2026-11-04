@@ -3,7 +3,7 @@
 //! Port of `CipSequenceRules.java`, OPSIN 2.9.0, commit
 //! `b91b610af5ab07560fedb20730d7aef46bb2bca0`.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT, see the crate license.
-//! Adds P-92.1.4.4 averaging for singly negative odd monocyclic mancude parts,
+//! Adds P-92.1.4.4 averaging for singly negative odd monocyclic mancude rings,
 //! which is absent from upstream OPSIN.
 //!
 //! Each rule is exhausted over the whole ligand before the next rule is used.
@@ -16,7 +16,7 @@
 //! hydrogen construction stage as OPSIN when hydrogen participation is needed.
 
 use crate::graph::{Atom, AtomId, Graph};
-use reshiki_chemistry::stereo::cip::{Fraction, Molecule};
+use reshiki_chemistry::stereo::cip::Fraction;
 use std::cell::OnceCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
@@ -47,11 +47,11 @@ impl std::error::Error for CipOrderingError {}
 pub struct CipSequenceRules<'a> {
     graph: &'a Graph,
     chiral_atom: AtomId,
-    negative_parts: OnceCell<Result<HashMap<AtomId, NegativeMancudePart>, CipOrderingError>>,
+    negative_rings: OnceCell<HashMap<AtomId, NegativeMancudeRing>>,
 }
 
-struct NegativeMancudePart {
-    id: usize,
+struct NegativeMancudeRing {
+    id: AtomId,
     fraction: Fraction,
 }
 
@@ -60,7 +60,7 @@ impl<'a> CipSequenceRules<'a> {
         Self {
             graph,
             chiral_atom,
-            negative_parts: OnceCell::new(),
+            negative_rings: OnceCell::new(),
         }
     }
 
@@ -182,81 +182,87 @@ impl<'a> CipSequenceRules<'a> {
         Err(CipOrderingError::UnresolvedTie)
     }
 
-    fn negative_parts(&self) -> Result<&HashMap<AtomId, NegativeMancudePart>, CipOrderingError> {
-        self.negative_parts
-            .get_or_init(|| {
-                if !self.graph.atoms.iter().any(|a| a.active && a.charge < 0) {
-                    return Ok(HashMap::new());
+    fn negative_rings(&self) -> &HashMap<AtomId, NegativeMancudeRing> {
+        self.negative_rings.get_or_init(|| {
+            let mut rings = HashMap::new();
+            'candidates: for candidate in self
+                .graph
+                .atoms
+                .iter()
+                .filter(|a| a.active && a.charge == -1)
+            {
+                if candidate
+                    .bonds
+                    .iter()
+                    .any(|&b| self.graph.bond(b).order > 1)
+                {
+                    continue;
                 }
-                let (state, indices) = crate::modern_cip::constitutional_state(self.graph)
-                    .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?;
-                let mut molecule = Molecule::new(&state)
-                    .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?;
-                let mut membership = HashMap::new();
-                let mut rings: HashMap<usize, Vec<AtomId>> = HashMap::new();
-                for (atom, index) in indices {
-                    if let Some(id) = molecule
-                        .negative_mancude_part(index)
-                        .map_err(|error| CipOrderingError::InvalidGraph(error.to_string()))?
-                    {
-                        membership.insert(atom, id);
-                        rings.entry(id).or_default().push(atom);
-                    }
-                }
-                let mut parts = HashMap::new();
-                for (id, ring) in rings {
-                    let n = ring.len() as u32;
-                    if n.is_multiple_of(2)
-                        || ring
-                            .iter()
-                            .filter(|&&a| self.graph.atom(a).charge < 0)
-                            .count()
-                            != 1
-                    {
-                        continue;
-                    }
-                    let neighbours: Vec<_> = ring
+                let mut ring = Vec::new();
+                let mut previous = candidate.id;
+                let mut current = candidate.id;
+                loop {
+                    let atom = self.graph.atom(current);
+                    let ring_bonds: Vec<_> = atom
+                        .bonds
                         .iter()
-                        .map(|&a| {
-                            self.graph
-                                .neighbours(a)
-                                .into_iter()
-                                .filter(|b| membership.get(b) == Some(&id))
-                                .collect::<Vec<_>>()
-                        })
+                        .copied()
+                        .filter(|&b| crate::cycle_detector::is_bond_in_cycle(self.graph, b))
                         .collect();
-                    // A single ring whose uncharged atoms all have their double
-                    // bond inside it (no exocyclic C=O), so n contributors exist.
-                    let ring_double_bond_ends = ring
-                        .iter()
-                        .zip(&neighbours)
-                        .flat_map(|(&a, atoms)| atoms.iter().map(move |&b| (a, b)))
-                        .filter(|&(a, b)| {
-                            self.graph
-                                .bond_between(a, b)
-                                .is_some_and(|bond| self.graph.bond(bond).order == 2)
-                        })
-                        .count();
-                    if neighbours.iter().any(|atoms| atoms.len() != 2)
-                        || ring_double_bond_ends as u32 != n - 1
-                    {
-                        continue;
+                    // Count all cyclic bonds, including those in saturated rings.
+                    if ring_bonds.len() != 2 {
+                        continue 'candidates;
                     }
-                    for (atom, neighbours) in ring.into_iter().zip(neighbours) {
-                        let sum: u32 = neighbours
+                    if current != candidate.id {
+                        let multiple_bonds: Vec<_> = atom
+                            .bonds
                             .iter()
-                            .map(|&a| u32::from(self.graph.atom(a).element.atomic_number()))
-                            .sum();
-                        // In the n maximal contributors this atom is charged once
-                        // and double-bonded to each neighbour (n - 1) / 2 times.
-                        let fraction = Fraction((n - 1) * sum, 2 * n);
-                        parts.insert(atom, NegativeMancudePart { id, fraction });
+                            .copied()
+                            .filter(|&b| self.graph.bond(b).order > 1)
+                            .collect();
+                        if atom.charge != 0
+                            || multiple_bonds.len() != 1
+                            || self.graph.bond(multiple_bonds[0]).order != 2
+                            || !ring_bonds.contains(&multiple_bonds[0])
+                        {
+                            continue 'candidates;
+                        }
+                    }
+                    ring.push(current);
+                    let next = ring_bonds
+                        .iter()
+                        .map(|&b| self.graph.bond(b).other_atom(current).unwrap())
+                        .find(|&a| a != previous)
+                        .unwrap();
+                    previous = current;
+                    current = next;
+                    if current == candidate.id {
+                        break;
                     }
                 }
-                Ok(parts)
-            })
-            .as_ref()
-            .map_err(Clone::clone)
+                let n = ring.len();
+                if n.is_multiple_of(2) {
+                    continue;
+                }
+                for (i, &atom) in ring.iter().enumerate() {
+                    let sum: u32 = [ring[(i + n - 1) % n], ring[(i + 1) % n]]
+                        .iter()
+                        .map(|&a| u32::from(self.graph.atom(a).element.atomic_number()))
+                        .sum();
+                    // In the n maximal contributors this atom is charged once
+                    // and double-bonded to each neighbour (n - 1) / 2 times.
+                    let fraction = Fraction((n as u32 - 1) * sum, 2 * n as u32);
+                    rings.insert(
+                        atom,
+                        NegativeMancudeRing {
+                            id: candidate.id,
+                            fraction,
+                        },
+                    );
+                }
+            }
+            rings
+        })
     }
 
     fn real_node(&self, id: AtomId, visited: Vec<AtomId>) -> Result<Node, CipOrderingError> {
@@ -292,7 +298,7 @@ impl<'a> CipSequenceRules<'a> {
         visited.push(id);
         let mut neighbours = Vec::new();
         let atom = self.atom(id)?;
-        let parts = self.negative_parts()?;
+        let parts = self.negative_rings();
         let part = parts.get(&id);
         let negative = atom.charge < 0 && part.is_some();
         let mut added_bond_duplicate = false;
@@ -535,7 +541,7 @@ mod tests {
             let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
             graph.make_hydrogens_explicit(fragment).unwrap();
             let rules = CipSequenceRules::new(&graph, AtomId(0));
-            assert!(rules.negative_parts().unwrap().is_empty(), "{smiles}");
+            assert!(rules.negative_rings().is_empty(), "{smiles}");
             let carbonyl = rules
                 .real_node(AtomId(3), vec![AtomId(0), AtomId(1), AtomId(2)])
                 .unwrap();
@@ -557,7 +563,7 @@ mod tests {
             let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
             graph.make_hydrogens_explicit(fragment).unwrap();
             let rules = CipSequenceRules::new(&graph, AtomId(1));
-            assert!(rules.negative_parts().unwrap().is_empty(), "{smiles}");
+            assert!(rules.negative_rings().is_empty(), "{smiles}");
             let charged = rules.real_node(AtomId(3), vec![AtomId(1)]).unwrap();
             assert!(
                 rules

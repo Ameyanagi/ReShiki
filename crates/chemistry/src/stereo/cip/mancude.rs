@@ -9,9 +9,7 @@ enum Kind {
     Negative,
 }
 
-pub(super) fn calculate(
-    mol: &mut Molecule<'_>,
-) -> Result<(Vec<Fraction>, Vec<Option<usize>>), Error> {
+pub(super) fn calculate(mol: &mut Molecule<'_>) -> Result<Vec<Fraction>, Error> {
     let n = mol.state.graph.atoms.len();
     let mut fractions = mol
         .state
@@ -20,7 +18,6 @@ pub(super) fn calculate(
         .iter()
         .map(|a| Fraction(u32::from(a.atomic_number), 1))
         .collect::<Vec<_>>();
-    let mut negative_parts = vec![None; n];
     let mut kinds = vec![Kind::Other; n];
     let mut resonant = false;
     for i in 0..n {
@@ -57,7 +54,7 @@ pub(super) fn calculate(
         *at_mut(&mut kinds, i)? = kind;
     }
     if !resonant {
-        return Ok((fractions, negative_parts));
+        return Ok(fractions);
     }
     let mut counts = vec![0_i32; n];
     let mut queue = VecDeque::new();
@@ -147,8 +144,7 @@ pub(super) fn calculate(
         if *at(&negative, part)? {
             let (numerator, denominator) = *at(&sums, part)?;
             *at_mut(&mut fractions, i)? = Fraction::new(numerator, denominator);
-            *at_mut(&mut negative_parts, i)? = Some(part);
         }
     }
-    Ok((fractions, negative_parts))
+    Ok(fractions)
 }

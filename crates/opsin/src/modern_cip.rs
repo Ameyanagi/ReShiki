@@ -18,9 +18,10 @@ fn error(message: impl ToString) -> StereochemistryError {
     StereochemistryError::Uninterpretable(message.to_string())
 }
 
-/// Keep physical hydrogens and bond insertion order without reading stereo
-/// references, which may still contain hydrogen placeholders during finalization.
-pub(crate) fn constitutional_state(
+/// Keep the OPSIN graph's physical hydrogens and bond insertion order. A
+/// parity's centre reference denotes a lone pair, which the CIP adapter also
+/// represents with the central atom after its physical neighbours.
+pub(crate) fn state(
     graph: &Graph,
 ) -> Result<(State, HashMap<AtomId, usize>), StereochemistryError> {
     let atoms: Vec<_> = graph.atoms.iter().filter(|a| a.active).collect();
@@ -49,26 +50,8 @@ pub(crate) fn constitutional_state(
             })
             .collect(),
     };
-    let state = State {
-        valences: cip_graph.valences().map_err(error)?,
-        directions: vec![Direction::None; cip_graph.bonds.len()],
-        conjugated: vec![false; cip_graph.bonds.len()],
-        hybridizations: vec![Hybridization::Unspecified; cip_graph.atoms.len()],
-        properties: Properties::unspecified(&cip_graph),
-        rings: RingCache::default(),
-        metadata: Metadata::unspecified(&cip_graph),
-        graph: cip_graph,
-    };
-    Ok((state, indices))
-}
-
-/// A parity's centre reference denotes a lone pair, which the CIP adapter
-/// represents with the central atom after its physical neighbours.
-pub(crate) fn state(
-    graph: &Graph,
-) -> Result<(State, HashMap<AtomId, usize>), StereochemistryError> {
-    let (mut state, indices) = constitutional_state(graph)?;
-    for (index, atom) in graph.atoms.iter().filter(|a| a.active).enumerate() {
+    let mut metadata = Metadata::unspecified(&cip_graph);
+    for (index, atom) in atoms.iter().enumerate() {
         let Some(parity) = &atom.parity else { continue };
         let mut carriers: Vec<_> = graph.neighbours(atom.id).into_iter().map(Some).collect();
         if carriers.len() == 3 {
@@ -84,22 +67,32 @@ pub(crate) fn state(
                 "Full CIP tetrahedral references do not match atom neighbours",
             ));
         }
-        state.metadata.atoms[index].chiral_tag = if (parity.parity == 1) ^ (permutation == 1) {
+        metadata.atoms[index].chiral_tag = if (parity.parity == 1) ^ (permutation == 1) {
             1
         } else {
             2
         };
     }
-    for (index, bond) in graph.bonds.iter().filter(|b| b.active).enumerate() {
+    for (index, bond) in source_bonds.iter().enumerate() {
         if let Some(stereo) = &bond.stereo {
-            state.metadata.bonds[index].stereo = match stereo.value {
+            metadata.bonds[index].stereo = match stereo.value {
                 BondStereoValue::Cis => 4,
                 BondStereoValue::Trans => 5,
             };
-            state.metadata.bonds[index].stereo_atoms =
+            metadata.bonds[index].stereo_atoms =
                 vec![indices[&stereo.atom_refs[0]], indices[&stereo.atom_refs[3]]];
         }
     }
+    let state = State {
+        valences: cip_graph.valences().map_err(error)?,
+        directions: vec![Direction::None; cip_graph.bonds.len()],
+        conjugated: vec![false; cip_graph.bonds.len()],
+        hybridizations: vec![Hybridization::Unspecified; cip_graph.atoms.len()],
+        properties: Properties::unspecified(&cip_graph),
+        rings: RingCache::default(),
+        graph: cip_graph,
+        metadata,
+    };
     Ok((state, indices))
 }
 

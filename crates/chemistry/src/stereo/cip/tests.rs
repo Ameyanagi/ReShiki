@@ -70,11 +70,9 @@ fn rejects_malformed_graph_caches_and_indices() -> anyhow::Result<()> {
     assert!(mol.bond_order(usize::MAX).is_err());
     assert!(mol.is_in_ring(usize::MAX).is_err());
     assert!(mol.fraction(usize::MAX).is_err());
-    assert!(mol.negative_mancude_part(usize::MAX).is_err());
     assert!(mol.bond_types.is_none());
     assert!(mol.ring_bonds.is_none());
     assert!(mol.fractions.is_none());
-    assert!(mol.negative_mancude_parts.is_none());
     Ok(())
 }
 
@@ -139,31 +137,6 @@ fn negative_mancude_fractions_average_the_complete_part_independent_of_order() -
                 assert_eq!(molecule.fraction(atom)?, Fraction(24, 5), "{text}, {atom}");
             }
         }
-    }
-    Ok(())
-}
-
-#[test]
-fn negative_mancude_membership_is_explicit_and_distinguishes_parts() -> anyhow::Result<()> {
-    let state = crate::smiles::read("[CH-]1C=CC=C1.[CH-]1C=C1.n1ccccc1.[nH+]1ccccc1")?
-        .prepared
-        .state;
-    let mut molecule = Molecule::new(&state)?;
-    // Membership initializes the same cache as fraction(), including the 4/1
-    // cyclopropenide average that cannot be recognized from its denominator.
-    let first_part = molecule.negative_mancude_part(0)?.unwrap();
-    let second_part = molecule.negative_mancude_part(5)?.unwrap();
-    assert_ne!(first_part, second_part);
-    for atom in 0..5 {
-        assert_eq!(molecule.fraction(atom)?, Fraction(24, 5));
-        assert_eq!(molecule.negative_mancude_part(atom)?, Some(first_part));
-    }
-    for atom in 5..8 {
-        assert_eq!(molecule.fraction(atom)?, Fraction(4, 1));
-        assert_eq!(molecule.negative_mancude_part(atom)?, Some(second_part));
-    }
-    for atom in 8..state.graph.atoms.len() {
-        assert_eq!(molecule.negative_mancude_part(atom)?, None);
     }
     Ok(())
 }

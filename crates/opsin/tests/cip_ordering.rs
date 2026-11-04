@@ -415,3 +415,45 @@ fn neutral_azaquinone_alkene_endpoint_preserves_oxygen_duplicates() {
         vec![AtomId(11), AtomId(3)]
     );
 }
+
+#[test]
+fn perchlorate_spectator_preserves_ligand_ordering() {
+    let graph = graph("[NH3+][C@H](C)CC.Cl(=O)(=O)(=O)[O-]", true);
+    // OPSIN's perchlorate representation must not impose a valence check on
+    // this ordinary methyl [H, H, H] versus ethyl [C, H, H] comparison.
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(3)),
+        Ok(Ordering::Less)
+    );
+}
+
+#[test]
+fn multiply_charged_ring_preserves_drawn_ordering() {
+    let graph = graph("O[C@H](C1CC1)[C-]1C=C[NH+]=C1", true);
+    // The extra positive charge excludes averaging: [C, C] < [C, C, H].
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(5), AtomId(2)),
+        Ok(Ordering::Less)
+    );
+}
+
+#[test]
+fn saturated_fused_ring_preserves_drawn_ordering() {
+    let graph = graph("O[C@H](C1CC1)[C-]1C=CC2=C1CCC2", true);
+    // The saturated ring still makes this a fused system: [C, C] < [C, C, H].
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(5), AtomId(2)),
+        Ok(Ordering::Less)
+    );
+}
+
+#[test]
+fn saturated_fused_ring_preserves_alkene_endpoint_ordering() {
+    let graph = graph("F/C=C(/C1CC1)[C-]1C=CC2=C1CCC2", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(2))
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
+            .unwrap(),
+        vec![AtomId(6), AtomId(3)]
+    );
+}
