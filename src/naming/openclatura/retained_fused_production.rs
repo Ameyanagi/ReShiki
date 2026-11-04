@@ -1,6 +1,11 @@
 //! Retained fused-parent production gate and derivative admission policies.
 use super::{
     assembly_parts::{RetainedParentMetadata, SubstituentItem},
+    fusion::{
+        exocyclic::is_neutral_external_pi_ligand,
+        mancude::suffix_hydrogen_state,
+        numbering::{RETAINED_PARENT_BOND_CAPACITY_ERROR, retained_template_parent_bond_model},
+    },
     molecule::{AtomSet, Molecule},
     perception::PerceivedGroup,
     retained_derivative_hydrogen::prove_retained_oxo_carbon_hydrogen,
@@ -60,18 +65,42 @@ pub fn production_retained_fused_parent(
     {
         return Ok(None);
     }
-    if perceived_groups
+    let unlisted_groups: Vec<_> = perceived_groups
         .iter()
         .filter(|g| parent_atoms.contains(&g.attachment_carbon))
-        .any(|g| {
+        .filter(|g| {
             !g.resolved_rule
                 .as_ref()
                 .is_some_and(|r| r.has_capability("promotes_member_groups"))
                 && !listed("allowed_group_keys", &g.key)
         })
-    {
-        return Ok(None);
-    }
+        .collect();
+    let required_suffix_state = if unlisted_groups.is_empty() {
+        None
+    } else {
+        if principal_key != Some("ketone")
+            || unlisted_groups.iter().any(|g| {
+                let ligands: Vec<_> = g
+                    .atoms_involved
+                    .iter()
+                    .filter(|a| !parent_atoms.contains(a))
+                    .collect();
+                ligands.is_empty()
+                    || ligands
+                        .iter()
+                        .any(|&&a| !is_neutral_external_pi_ligand(mol, g.attachment_carbon, a))
+            })
+        {
+            return Ok(None);
+        }
+        Some(
+            perceived_groups
+                .iter()
+                .filter(|g| g.key == "ketone" && parent_atoms.contains(&g.attachment_carbon))
+                .map(|g| g.attachment_carbon)
+                .collect::<AtomSet>(),
+        )
+    };
     if substituent_mapping
         .values()
         .flatten()
@@ -96,7 +125,13 @@ pub fn production_retained_fused_parent(
         },
     );
     let strict_present = !strict.is_empty();
-    let mut matches = eligible(mol, &parent_atoms, strict, principal_key)?;
+    let mut matches = eligible(
+        mol,
+        &parent_atoms,
+        strict,
+        principal_key,
+        required_suffix_state.as_ref(),
+    )?;
     if strict_present && matches.is_empty() {
         return Ok(None);
     }
@@ -114,7 +149,13 @@ pub fn production_retained_fused_parent(
                     ..Default::default()
                 },
             );
-            for m in eligible(mol, &parent_atoms, found, principal_key)? {
+            for m in eligible(
+                mol,
+                &parent_atoms,
+                found,
+                principal_key,
+                required_suffix_state.as_ref(),
+            )? {
                 if seen.insert((m.template.name.clone(), m.atom_to_locant.clone())) {
                     pooled.push(m);
                 }
@@ -180,28 +221,48 @@ fn eligible(
     parent_atoms: &AtomSet,
     mut matches: Vec<RetainedGraphTemplateMatch>,
     principal_key: Option<&str>,
+    required_suffix_state: Option<&AtomSet>,
 ) -> Result<Vec<RetainedGraphTemplateMatch>, String> {
     if principal_key == Some("ketone") {
         for m in &mut matches {
-            if let Some(proof) =
+            if let Some(indicated_h) =
                 prove_retained_oxo_carbon_hydrogen(mol, &m.template, &m.locant_to_atom, &[])?
             {
-                m.indicated_h = proof.indicated_h;
+                m.indicated_h = indicated_h;
             }
         }
     }
     matches.sort_by_key(|m| m.indicated_h.is_empty());
-    Ok(matches
-        .into_iter()
-        .filter(|m| {
-            listed("production_parent_names", &m.template.name)
-                && m.template.derivative_production_enabled
-                && (principal_key != Some("ketone")
-                    || has_mancude_unsaturation(mol, parent_atoms, m)
-                    || saturation_is_hydro_citable(mol, m))
-                && added_hydrogen_is_citable(mol, m)
-        })
-        .collect())
+    let mut admitted = Vec::new();
+    for m in matches {
+        if !listed("production_parent_names", &m.template.name)
+            || !m.template.derivative_production_enabled
+            || (principal_key == Some("ketone")
+                && !has_mancude_unsaturation(mol, parent_atoms, &m)
+                && !saturation_is_hydro_citable(mol, &m))
+            || !added_hydrogen_is_citable(mol, &m)
+        {
+            continue;
+        }
+        if let Some(suffix) = required_suffix_state {
+            let model = match retained_template_parent_bond_model(
+                &m.template,
+                &m.locant_to_atom,
+                Some(&m.indicated_h),
+            ) {
+                Ok(model) => model,
+                Err(error) if error == RETAINED_PARENT_BOND_CAPACITY_ERROR => continue,
+                Err(error) => return Err(error),
+            };
+            if suffix_hydrogen_state(mol, &m.matched_atoms, &model, suffix, &m.atom_to_locant)?
+                .is_none()
+            {
+                continue;
+            }
+        }
+        admitted.push(m);
+    }
+    Ok(admitted)
 }
 pub fn added_hydrogen_is_citable(mol: &Molecule, m: &RetainedGraphTemplateMatch) -> bool {
     let by = m.template.atom_by_locant();

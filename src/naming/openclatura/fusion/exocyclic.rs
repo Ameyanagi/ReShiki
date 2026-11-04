@@ -4,12 +4,13 @@ use super::super::molecule::Molecule;
 pub fn neutral_lambda_oxo_bonding_number(mol: &Molecule, parent: usize) -> Option<usize> {
     let atom = &mol.atoms[&parent];
     let policy = atom.element()?;
-    if !matches!(atom.symbol.as_str(), "P" | "S" | "Se" | "Cl" | "Br" | "I")
-        || policy.standard_valence != 2
-        || !policy.mancude_forced_single
+    let phosphorus = atom.symbol == "P";
+    if !(phosphorus || matches!(atom.symbol.as_str(), "S" | "Se"))
+        || policy.standard_valence != if phosphorus { 3 } else { 2 }
+        || (!phosphorus && !policy.mancude_forced_single)
         || policy.mancude_bonding_limit.is_some()
         || atom.charge != 0
-        || atom.total_h_count != 0
+        || (!phosphorus && atom.total_h_count != 0)
         || atom.is_aromatic
     {
         return None;
@@ -52,8 +53,17 @@ pub fn neutral_lambda_oxo_bonding_number(mol: &Molecule, parent: usize) -> Optio
         }
         oxo += 1;
     }
-    (single == policy.standard_valence && matches!(oxo, 1 | 2) && single + oxo == neighbors.len())
-        .then_some(policy.standard_valence + 2 * oxo)
+    // P-74.2.1.4: neutral phosphine oxides are lambda5 heterones,
+    // including a P-H bond. Keep the single-O ligand exclusions above:
+    // phosphinic/phosphonic acids and P-OH rings have their own naming path.
+    (single + atom.total_h_count == policy.standard_valence
+        && if phosphorus {
+            oxo == 1
+        } else {
+            matches!(oxo, 1 | 2)
+        }
+        && single + oxo == neighbors.len())
+    .then_some(policy.standard_valence + 2 * oxo)
 }
 pub fn is_neutral_external_pi_ligand(mol: &Molecule, parent: usize, ligand: usize) -> bool {
     let atom = &mol.atoms[&ligand];

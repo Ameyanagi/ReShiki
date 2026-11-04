@@ -1,9 +1,7 @@
 //! Exact oxo reconstruction for retained parents with unresolved carbon H.
 use super::{
-    assembly_parts::HydroOperation,
     fusion::{
-        exocyclic::is_neutral_external_pi_ligand, model::ParentBondModel,
-        numbering::retained_template_parent_bond_model,
+        exocyclic::is_neutral_external_pi_ligand, numbering::retained_template_parent_bond_model,
     },
     graph_kernel::normalize_edge as pair,
     locants::retained_locant_sort_key,
@@ -12,20 +10,13 @@ use super::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Debug)]
-pub struct RetainedOxoHydrogenProof {
-    pub indicated_h: Vec<String>,
-    pub oxo_atom_ids: AtomSet,
-    pub model: ParentBondModel,
-    pub added_hydrogen: HydroOperation,
-}
 /// Only reconstruct a retained tautomer when oxo substitution explains every delta.
 pub fn prove_retained_oxo_carbon_hydrogen(
     mol: &Molecule,
     template: &RetainedGraphTemplate,
     locant_to_atom: &BTreeMap<String, usize>,
     declared_indicated_h: &[String],
-) -> Result<Option<RetainedOxoHydrogenProof>, String> {
+) -> Result<Option<Vec<String>>, String> {
     if (!template.default_indicated_h.is_empty() && declared_indicated_h.is_empty())
         || template.indicated_hydrogen_count() == 0
     {
@@ -132,8 +123,6 @@ pub fn prove_retained_oxo_carbon_hydrogen(
         };
     for assignment in &model.allowed_kekule_assignments {
         let mut consumed: BTreeMap<_, usize> = oxo_sites.iter().map(|&i| (i, 0)).collect();
-        let mut added_sites = AtomSet::new();
-        let mut consumed_bonds = AtomSet::new();
         let mut valid = true;
         for &(edge, expected) in &assignment.orders {
             let actual = observed[&edge];
@@ -149,34 +138,9 @@ pub fn prove_retained_oxo_carbon_hydrogen(
                 break;
             }
             *consumed.entry(suffix[0]).or_default() += 1;
-            added_sites.extend(
-                [edge.0, edge.1]
-                    .into_iter()
-                    .filter(|i| !oxo_sites.contains(i)),
-            );
-            if let Some(b) = mol.get_bond(edge.0, edge.1) {
-                consumed_bonds.insert(b.idx);
-            }
         }
         if valid && consumed.values().all(|&n| n == 1) {
-            let mut added_locants: Vec<_> = locant_to_atom
-                .iter()
-                .filter(|(_, i)| added_sites.contains(i))
-                .map(|(l, _)| l.clone())
-                .collect();
-            added_locants.sort_by_key(|l| retained_locant_sort_key(l));
-            return Ok(Some(RetainedOxoHydrogenProof {
-                indicated_h: indicated,
-                oxo_atom_ids: oxo_sites,
-                model,
-                added_hydrogen: HydroOperation {
-                    key: "added_hydrogen".into(),
-                    locants: added_locants.clone(),
-                    atom_ids: added_locants.iter().map(|l| locant_to_atom[l]).collect(),
-                    bond_ids: consumed_bonds.into_iter().collect(),
-                    operation_kind: "indicated_hydrogen".into(),
-                },
-            }));
+            return Ok(Some(indicated));
         }
     }
     Ok(None)
@@ -188,7 +152,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exact_oxo_proof_separates_intrinsic_and_added_hydrogen() {
+    fn exact_oxo_admission_preserves_intrinsic_sites_and_rejects_extra_reduction() {
         for (parent, oxo, nitrogen) in [
             ("1H-1,4-benzodiazepine", "5", "4"),
             ("1H-1,5-benzodiazepine", "4", "5"),
@@ -247,15 +211,14 @@ mod tests {
                     .standard_valence
                     .saturating_sub(loads[&idx]);
             }
-            let proof = prove_retained_oxo_carbon_hydrogen(&mol, template, &locants, &[])
+            let indicated = prove_retained_oxo_carbon_hydrogen(&mol, template, &locants, &[])
                 .unwrap()
                 .unwrap();
-            assert_eq!(proof.indicated_h, ["3"]);
-            assert_eq!(proof.added_hydrogen.locants, [nitrogen]);
-            assert_eq!(proof.added_hydrogen.atom_ids, [locants[nitrogen]]);
+            assert_eq!(indicated, ["3"]);
             assert_eq!(
-                proof.model.maximum_non_cumulative_double_bonds,
-                template.mancude_double_bonds.unwrap()
+                prove_retained_oxo_carbon_hydrogen(&mol, template, &locants, &["3".into()])
+                    .unwrap(),
+                Some(indicated)
             );
             assert!(
                 prove_retained_oxo_carbon_hydrogen(&mol, template, &locants, &["99".into()])

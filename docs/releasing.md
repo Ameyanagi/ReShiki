@@ -115,7 +115,8 @@ The [0.13.1 validation record](release-0.13.1-validation.md) tracks the current 
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
-3. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.13.1` for version `0.13.1`.
+3. In the release build, close Clean up, 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
+4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.13.1` for version `0.13.1`.
 
 ```sh
 git tag -a v0.13.1 -m "ReShiki 0.13.1"

@@ -241,7 +241,7 @@ async fn generated_fusion_hydrogens_preserve_formula_inchi_and_naming_outcomes()
         let name = |identity: &naming::Identity| -> Result<serde_json::Value, String> {
             let request = serde_json::json!({
                 "operation": "generate",
-                "protocol": 5,
+                "protocol": 6,
                 "profile": "openclatura 0.4.3 Rust port",
                 "smiles": identity.smiles,
                 "isotope_style": "iupac",

@@ -553,10 +553,10 @@ impl App {
             return Some(self.show_optimization_properties());
         }
         if matches!(message, Message::Escape) {
-            self.cancel_optimization();
-            self.status = "3D preview cancelled · Drawing unchanged".into();
-            self.error = false;
-            return Some(Task::none());
+            return Some(self.optimization_action(Action::Cancel));
+        }
+        if matches!(message, Message::ContextKey(key) if key == "Enter") {
+            return Some(self.optimization_action(Action::Apply));
         }
         let allowed = matches!(
             message,
@@ -577,7 +577,7 @@ impl App {
         if allowed {
             None
         } else {
-            self.status = "Apply or cancel the 3D preview to continue editing".into();
+            self.status = "3D preview · Enter to apply · Esc to cancel".into();
             Some(Task::none())
         }
     }
@@ -661,7 +661,7 @@ impl App {
             self.cancel_optimization();
             self.status = "3D preview cancelled · Drawing unchanged".into();
             self.error = false;
-            return Task::none();
+            return super::focus_drawing();
         }
         let Some(session) = &mut self.tab.optimization else {
             return Task::none();
@@ -799,9 +799,9 @@ impl App {
                 Phase::Paused
             };
             self.status = if result.converged {
-                "3D preview converged · Rotate, drag, then Apply or Cancel"
+                "3D preview converged · Enter to apply · Esc to cancel"
             } else {
-                "3D preview · Select atoms to pin or drag unpinned atoms"
+                "3D preview · Pin or drag atoms · Enter to apply · Esc to cancel"
             }
             .into();
             self.error = false;
@@ -837,7 +837,7 @@ impl App {
                 session.original = false;
                 session.phase = Phase::Applying;
                 self.status = "Checking the final 3D projection…".into();
-                return session.dispatch(Work::Apply);
+                return Task::batch([session.dispatch(Work::Apply), super::focus_drawing()]);
             }
             Action::Field(field) => {
                 session.abort();

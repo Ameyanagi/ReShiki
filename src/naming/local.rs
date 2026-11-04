@@ -242,12 +242,17 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     let smiles = reply.cxsmiles.ok_or_else(|| {
         Error::Rejected("The OPSIN Rust port returned no molecular structure".into())
     })?;
-    if smiles.contains('|') {
-        const MESSAGE: &str = "This name requires relative/racemic stereo, polymer or atom-label semantics unsupported by editable naming previews. No simplified structure was accepted";
+    let relative = generation
+        .then(|| relative_stereo_smiles(&smiles))
+        .flatten()
+        .map(str::to_owned);
+    let graph_smiles = relative.as_deref().unwrap_or(&smiles);
+    if graph_smiles.contains('|') {
+        const MESSAGE: &str = "ReShiki drawings cannot yet store relative configuration (rel, rac, or endo/exo/syn/anti on a chiral ring system), polymer or atom-label semantics. No simplified structure or single enantiomer was drawn";
         return Err(Error::Rejected(MESSAGE.into()));
     }
-    let mut canonical_smiles = canonical_smiles(&smiles).map_err(Error::Rejected)?;
-    let atom_count = crate::chemistry::smiles::parse(&smiles)
+    let mut canonical_smiles = canonical_smiles(graph_smiles).map_err(Error::Rejected)?;
+    let atom_count = crate::chemistry::smiles::parse(graph_smiles)
         .map_err(|error| Error::Worker(error.to_string()))?
         .graph
         .atoms
@@ -357,7 +362,7 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     let mut warnings = Vec::new();
     if let Some(signs) = signs {
         let descriptors = cip_descriptors(name);
-        let imported = crate::chemistry::smiles::read(&smiles)
+        let imported = crate::chemistry::smiles::read(relative.as_deref().unwrap_or(&smiles))
             .map_err(|error| Error::Rejected(error.to_string()))?;
         if descriptors.is_empty()
             || crate::chemistry::stereo::perception::has_unspecified_stereo(
@@ -376,7 +381,8 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     }
     // Stable sorting moves positive components to the front without changing
     // the parser's atom order (and therefore stereo) within each component.
-    let smiles = if smiles.contains('.') {
+    // Relative CX groups must retain the parser's atom indices.
+    let smiles = if relative.is_none() && smiles.contains('.') {
         let mut components = smiles
             .split('.')
             .map(|part| {
@@ -415,6 +421,15 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
         warnings,
         provenance: Provenance::OpsinRust,
     })
+}
+
+/// Check only the syntax of a single relative CX group in a generation reply.
+/// Reverse verification checks its parsed membership before accepting identity.
+pub(super) fn relative_stereo_smiles(smiles: &str) -> Option<&str> {
+    let (graph, group) = smiles.split_once(" |o")?;
+    let (number, atoms) = group.strip_suffix('|')?.split_once(':')?;
+    let digits = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
+    (digits(number) && atoms.split(',').all(digits)).then_some(graph)
 }
 
 fn cip_descriptors(name: &str) -> Vec<&str> {

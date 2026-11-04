@@ -134,12 +134,14 @@ pub enum NameReason {
     AtomOrder,
     AmineChalcogenide,
     PrincipalGroupTie,
+    LambdaParentHydrogen,
     IsotopePlacement,
     BoughtonIsotope,
     RadicalIon,
     AnionParent,
     Phane,
     RelativeRingStereo,
+    EndoExoStereo,
     UnknownConfiguration,
     AxialAlternative,
 }
@@ -209,11 +211,17 @@ impl NameReason {
             Self::RelativeRingStereo => {
                 "Uses cis/trans for an achiral cyclic compound; preferred IUPAC names use CIP r/s descriptors, while cis/trans is used in general nomenclature (P-93.5.1.1.2)."
             }
+            Self::EndoExoStereo => {
+                "Uses endo, exo, syn or anti for relative configuration in a bicyclic von Baeyer system; preferred IUPAC names use CIP descriptors, because endo/exo does not distinguish an enantiomer from its mirror image or the racemate (P-93.5.2.2.1)."
+            }
             Self::UnknownConfiguration => {
                 "Omits a descriptor for unknown configuration; preferred IUPAC names indicate unknown configuration with Ξ or ξ (P-91.2.1.2.1)."
             }
             Self::PrincipalGroupTie => {
                 "Equally senior principal groups, such as a chain and a ring carboxylic acid, were chosen by atom order; the preferred parent (P-44.1) has not been verified."
+            }
+            Self::LambdaParentHydrogen => {
+                "The indicated or added hydrogen of this λ heteroatom ring was not derived from the complete expanded-valence parent (P-25.7.1.1, λ-convention Lm-3.1–3.2), so its hydrogen descriptors may not be the preferred ones."
             }
             Self::IsotopePlacement => {
                 "The isotope descriptor reconstructs the exact structure, but its preferred placement and numbering under P-82.2 and P-82.6 have not been verified."

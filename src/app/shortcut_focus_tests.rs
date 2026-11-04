@@ -14,6 +14,8 @@ use iced::keyboard::{
 };
 use iced::{Event, Rectangle, Size};
 
+mod review_close;
+
 struct Ui {
     renderer: iced::Renderer,
     tree: Tree,
@@ -198,6 +200,70 @@ impl Ui {
                 self.event(app, Event::Mouse(event), mouse::Cursor::Available(point));
             apply(app, messages);
         }
+    }
+
+    async fn key(
+        &mut self,
+        app: &mut App,
+        key: Key,
+        code: Code,
+        modifiers: Modifiers,
+        text: Option<&str>,
+    ) {
+        let (_, messages) = self.event(
+            app,
+            press(key, code, modifiers, text),
+            mouse::Cursor::Unavailable,
+        );
+        for message in messages {
+            let task = app.update(message);
+            self.run_task(app, task).await;
+        }
+    }
+
+    async fn run_task(&mut self, app: &mut App, task: iced::Task<Message>) {
+        use iced::advanced::widget::operation::Outcome;
+        use iced::futures::StreamExt;
+
+        let mut tasks = std::collections::VecDeque::from([task]);
+        while let Some(task) = tasks.pop_front() {
+            let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+                continue;
+            };
+            while let Some(action) = stream.next().await {
+                match action {
+                    iced_runtime::Action::Output(message) => tasks.push_back(app.update(message)),
+                    iced_runtime::Action::Widget(operation) => {
+                        let mut current = Some(operation);
+                        while let Some(mut operation) = current.take() {
+                            self.inspect(app, operation.as_mut());
+                            if let Outcome::Chain(next) = operation.finish() {
+                                current = Some(next);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn assert_unfocused(&mut self, app: &App) {
+        #[derive(Default)]
+        struct Focus(Vec<Option<Id>>);
+        impl Operation for Focus {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+            fn focusable(&mut self, id: Option<&Id>, _: Rectangle, state: &mut dyn Focusable) {
+                if state.is_focused() {
+                    self.0.push(id.cloned());
+                }
+            }
+        }
+        let mut focus = Focus::default();
+        self.inspect(app, &mut focus);
+        assert!(focus.0.is_empty(), "controls still focused: {:?}", focus.0);
     }
 }
 
@@ -1672,8 +1738,6 @@ async fn command_palette_tab_cycles_the_filter_from_the_search_field() {
 /// Click the control with this accessibility id and run the widget
 /// operations its messages return, as the event loop does.
 async fn click_running_tasks(ui: &mut Ui, app: &mut App, id: &str) {
-    use iced::advanced::widget::operation::Outcome;
-    use iced::futures::StreamExt;
     let bounds = ui
         .semantics(app)
         .nodes
@@ -1691,21 +1755,8 @@ async fn click_running_tasks(ui: &mut Ui, app: &mut App, id: &str) {
         let cursor = mouse::Cursor::Available(bounds.center());
         let (_, messages) = ui.event(app, Event::Mouse(event), cursor);
         for message in messages {
-            let Some(mut stream) = iced_runtime::task::into_stream(app.update(message)) else {
-                continue;
-            };
-            while let Some(action) = stream.next().await {
-                let iced_runtime::Action::Widget(operation) = action else {
-                    continue;
-                };
-                let mut current = Some(operation);
-                while let Some(mut operation) = current.take() {
-                    ui.inspect(app, operation.as_mut());
-                    if let Outcome::Chain(next) = operation.finish() {
-                        current = Some(next);
-                    }
-                }
-            }
+            let task = app.update(message);
+            ui.run_task(app, task).await;
         }
     }
 }

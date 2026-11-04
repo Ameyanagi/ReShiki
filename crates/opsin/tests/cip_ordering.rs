@@ -315,3 +315,225 @@ fn invalid_arena_references_are_errors() {
         Err(CipOrderingError::InvalidGraph(_))
     ));
 }
+
+#[test]
+fn cyclopentadienide_ranks_below_neutral_cyclopentadienyl() {
+    // RDKit 2026.09.1 rdCIPLabeler.AssignCIPLabels gives S for all three.
+    // P-92.1.4.4: sphere II compares neutral C (6) with the Cp− duplicate (24/5).
+    for smiles in [
+        "O[C@H](C1=CC=CC1)C1=C[CH-]C=C1",
+        "O[C@H](C1=CCC=C1)C1=C[CH-]C=C1",
+        "O[C@H](C1=CC=CC1)[C-]1C=CC=C1",
+    ] {
+        check(
+            &graph(smiles, true),
+            2,
+            &[El(Element::H), Id(8), Id(3), El(Element::O)],
+        );
+    }
+}
+
+#[test]
+fn cyclopentadienide_resonance_forms_have_equal_priority() {
+    let graph = graph("C(F)(C1=C[CH-]C=C1)[C-]1C=CC=C1", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(0)).compare_ligands(AtomId(2), AtomId(7)),
+        Err(CipOrderingError::UnresolvedTie)
+    );
+}
+
+#[test]
+fn sodium_counterion_does_not_disable_cyclopentadienide_averaging() {
+    // The disconnected Na+ does not change P01's ligand priorities.
+    check(
+        &graph("[Na+].O[C@H](C1=CC=CC1)C1=C[CH-]C=C1", true),
+        3,
+        &[El(Element::H), Id(9), Id(4), El(Element::O)],
+    );
+}
+
+#[test]
+fn fluoropyrrolide_preserves_drawn_ordering() {
+    // X01: the hetero anions use origin/main's drawn-bond comparison.
+    // The first attachment has [N, C, C], above the second's [N, C].
+    check(
+        &graph("O[C@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1", true),
+        2,
+        &[El(Element::H), Id(9), Id(3), El(Element::O)],
+    );
+}
+
+#[test]
+fn pyrrolide_resonance_forms_preserve_drawn_ordering() {
+    // X03: as on origin/main, [N, C, C] outranks [N, C]. Hetero anions do
+    // not receive averaged duplicates that would make these ligands tie.
+    let graph = graph("FC(C1=CC=C[N-]1)[C-]1C=CC=N1", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(7)),
+        Ok(Ordering::Greater)
+    );
+}
+
+#[test]
+fn fused_indenide_preserves_drawn_kekule_ordering() {
+    let mut graph = Graph::default();
+    let fragment = build_fragment(&mut graph, "C[C@H](O)[C-]1C=Cc2ccccc21", "", "").unwrap();
+    opsin::fragment_tools::convert_spare_valencies_to_double_bonds(&mut graph, fragment).unwrap();
+    graph.make_hydrogens_explicit(fragment).unwrap();
+    check(&graph, 2, &[El(Element::H), Id(1), Id(4), El(Element::O)]);
+}
+
+#[test]
+fn neutral_azaquinone_preserves_exocyclic_oxygen_duplicates() {
+    // The decisive carbonyl branches are [O, O, N] versus [O, O, C].
+    // A ring C/N average must not replace the exocyclic C=O oxygen duplicate.
+    check(
+        &graph("O[C@H](C1=CC(=O)C=NC1=O)C1=CC(=O)C=CC1=O", true),
+        2,
+        &[El(Element::H), Id(11), Id(3), El(Element::O)],
+    );
+}
+
+#[test]
+fn cationic_pyrylium_preserves_drawn_multiple_bond_duplicates() {
+    // The drawn C=[O+] supplies [O, O, C], above the other ligand's [O, N, H].
+    check(
+        &graph("O[C@H](C1=[O+]C=CC=C1)C(N)OC", true),
+        2,
+        &[El(Element::H), Id(9), Id(3), El(Element::O)],
+    );
+}
+
+#[test]
+fn ammonium_diene_outranks_neutral_cyclopentadienyl() {
+    // W21: the saturated N+ retains its drawn neighbours, as on origin/main.
+    check(
+        &graph("O[C@H](C1=CC=CC1)C1=C[N+](C)(C)C=C1", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
+    );
+}
+
+#[test]
+fn ineligible_pyrylium_next_to_cyclopentadienide_preserves_drawn_ordering() {
+    // The O+ charge in the same component disables all averaging.
+    // Drawn neighbours at the attachment atoms give [O, C, C] > Cp− [C, C].
+    check(
+        &graph("O[C@H]([C-]1C=CC=C1)C1=CC=CC=[O+]1", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
+    );
+}
+
+#[test]
+fn ineligible_pyridinium_next_to_cyclopentadienide_preserves_drawn_ordering() {
+    // The NH+ charge in the same component likewise disables averaging.
+    // Its attachment sphere [N, C, C] outranks Cp−'s drawn [C, C].
+    check(
+        &graph("O[C@H]([C-]1C=CC=C1)C1=CC=CC=[NH+]1", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
+    );
+}
+
+#[test]
+fn neutral_azaquinone_alkene_endpoint_preserves_oxygen_duplicates() {
+    let graph = graph("FC=C(C1=CC(=O)C=NC1=O)C1=CC(=O)C=CC1=O", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(2))
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
+            .unwrap(),
+        vec![AtomId(11), AtomId(3)]
+    );
+}
+
+#[test]
+fn perchlorate_spectator_preserves_ligand_ordering() {
+    let graph = graph("[NH3+][C@H](C)CC.Cl(=O)(=O)(=O)[O-]", true);
+    // OPSIN's perchlorate representation must not impose a valence check on
+    // this ordinary methyl [H, H, H] versus ethyl [C, H, H] comparison.
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(3)),
+        Ok(Ordering::Less)
+    );
+}
+
+#[test]
+fn multiply_charged_ring_preserves_drawn_ordering() {
+    let graph = graph("O[C@H](C1CC1)[C-]1C=C[NH+]=C1", true);
+    // The extra positive charge excludes averaging: [C, C] < [C, C, H].
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(5), AtomId(2)),
+        Ok(Ordering::Less)
+    );
+}
+
+#[test]
+fn saturated_fused_anion_preserves_drawn_ordering_against_simple_cyclopentadienide() {
+    // M01: fusion disables averaging throughout the component. Origin/main's
+    // drawn-bond comparison places the fused ligand above the simple ring.
+    check(
+        &graph("O[C@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2", true),
+        2,
+        &[El(Element::H), Id(3), Id(8), El(Element::O)],
+    );
+}
+
+#[test]
+fn saturated_fused_anion_preserves_drawn_ordering_against_cyclopropyl() {
+    let graph = graph("O[C@H](C1CC1)[C-]1C=CC2=C1CCC2", true);
+    // Origin/main's drawn attachment neighbours give [C, C] < [C, C, H].
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(5), AtomId(2)),
+        Ok(Ordering::Less)
+    );
+}
+
+#[test]
+fn saturated_fused_anion_preserves_drawn_ordering_at_alkene_endpoint() {
+    // M03: the same origin/main ordering applies at the alkene endpoint.
+    let graph = graph("F/C=C(/[C-]1C=CC=C1)[C-]1C=CC2=C1CCC2", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(2))
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
+            .unwrap(),
+        vec![AtomId(3), AtomId(8)]
+    );
+}
+
+#[test]
+fn saturated_fused_anion_ranks_below_cyclopropyl_at_alkene_endpoint() {
+    let graph = graph("F/C=C(/C1CC1)[C-]1C=CC2=C1CCC2", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(2))
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(AtomId(1))
+            .unwrap(),
+        vec![AtomId(6), AtomId(3)]
+    );
+}
+
+#[test]
+fn ineligible_fused_indenide_disables_component_resonance_averaging() {
+    let mut graph = Graph::default();
+    let fragment =
+        build_fragment(&mut graph, "O[C@H]([C-]1C=CC=C1)[C-]1C=Cc2ccccc21", "", "").unwrap();
+    opsin::fragment_tools::convert_spare_valencies_to_double_bonds(&mut graph, fragment).unwrap();
+    graph.make_hydrogens_explicit(fragment).unwrap();
+    // origin/main's drawn-bond ordering: both attachment atoms expose [C, C].
+    // In the next sphere, the fused aromatic carbon has two actual C neighbours
+    // and a Kekule duplicate, so its [C, C, C] beats simple Cp− [C, C, H].
+    // Averaging only the eligible Cp− would instead make its extra 24/5 win.
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(2), AtomId(7)),
+        Ok(Ordering::Less)
+    );
+}
+
+#[test]
+fn stereocentre_inside_the_anion_ring_keeps_drawn_ordering() {
+    let graph = graph("F[P@]1(Cl)=CC=C[CH-]1", true);
+    assert_eq!(
+        CipSequenceRules::new(&graph, AtomId(1)).compare_ligands(AtomId(3), AtomId(6)),
+        Err(CipOrderingError::UnresolvedTie)
+    );
+}
