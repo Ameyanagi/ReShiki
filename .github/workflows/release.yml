@@ -828,6 +828,7 @@ jobs:
         env:
           REPOSITORY: ${{ inputs.pypi_repository }}
         run: |
+          set -euo pipefail
           if [[ $GITHUB_REF != refs/heads/main ]]; then
             echo "pypi_only publishes main's version; run it on main" >&2
             exit 1
