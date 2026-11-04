@@ -2778,6 +2778,11 @@ fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String
             format!("({sub_name})methanide")
         }
     };
+    // This shortcut fixes the parent at the ylide carbon. Another anionic
+    // centre in the substituent may belong to a senior parent (P-72.7(a)).
+    if sub_atoms.iter().map(|i| mol.atoms[i].charge).sum::<i32>() < 0 {
+        mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
+    }
     Ok(Some(format!("({prefix}){parent}")))
 }
 
@@ -3547,7 +3552,7 @@ mod tests {
             let mol = read_smiles(smiles).unwrap();
             let atoms = all_atoms(&mol);
             let groups = super::super::principal_groups::component_groups(&mol, &atoms);
-            let key = super::super::principal_groups::component_principal_key(&groups, false);
+            let key = super::super::principal_groups::component_principal_key(&mol, &groups, false);
             let result = structural_replacement_parent_result(&mol, &atoms).unwrap();
             assert_eq!(
                 blocking_suffix_defers_to_chain_parent(

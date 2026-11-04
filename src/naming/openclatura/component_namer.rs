@@ -188,7 +188,7 @@ fn component_pipeline(
         return Ok(ComponentResult::Shortcut(name));
     }
     let mut groups = component_groups(mol, component_atoms);
-    let mut key = component_principal_key(&groups, as_prefix);
+    let mut key = component_principal_key(mol, &groups, as_prefix);
     if let Some(result) = structural_parent(mol, component_atoms, &groups, key.as_deref())? {
         if projection.is_none() && component_atoms.len() == mol.atoms.len() {
             *mol.named_component_splits.borrow_mut() = result.component_splits;
@@ -234,13 +234,13 @@ fn component_pipeline(
     } else {
         let chains = find_all_carbon_paths(mol, &exclude)?;
         let rings = find_ring_systems(mol, &exclude)?;
-        select_principal_parent(mol, &chains, &rings, &principal)
+        select_principal_parent(mol, &chains, &rings, &principal, &groups)
             .ok_or("openclatura: no supported parent skeleton")?
     };
     let path = selection.primary_path();
     let parent = selection.atom_set();
     groups.retain(|g| parent.contains(&g.attachment_carbon));
-    key = component_principal_key(&groups, as_prefix);
+    key = component_principal_key(mol, &groups, as_prefix);
     super::identity_validation::validate_principal_charge_roles(&groups, key.as_deref())?;
     let (principal, prefix_groups) = partition_principal_and_prefix_groups(&groups, key.as_deref());
     let retained_match = resolve_retained_parent(mol, &selection);
@@ -572,7 +572,7 @@ mod tests {
         }
         for (smiles, name) in [
             ("c1ccc2[nH+]cccc2c1", "quinolin-1-ium"),
-            ("c1ccc2[n-]ncc2c1", "indazol-1-ide"),
+            ("c1ccc2[n-]ncc2c1", "1H-indazol-1-ide"),
             ("C1=Cc2ccccc2[NH2+]1", "1H-indol-1-ium"),
         ] {
             assert_eq!(
