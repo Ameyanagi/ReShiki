@@ -1681,7 +1681,13 @@ impl<'a> StereochemistryHandler<'a> {
             "beta" => -1,
             _ => return structure("OPSIN Bug: malformed alpha/beta stereochemistry value"),
         };
-        let new_parity = AtomParity::new(atom_references([previous, second, third, next]), parity);
+        // An agreeing alpha/beta keeps the centre's rel/rac group.
+        let new_parity = AtomParity {
+            stereo_group: previous_parity
+                .as_ref()
+                .map_or_else(StereoGroup::default, |old| old.stereo_group),
+            ..AtomParity::new(atom_references([previous, second, third, next]), parity)
+        };
         self.state.graph_mut().atom_mut(atom).parity = Some(new_parity.clone());
         if !self
             .not_explicitly_defined_stereo_centre_map
