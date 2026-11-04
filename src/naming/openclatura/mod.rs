@@ -19,6 +19,7 @@ mod chains;
 mod component_group_rules;
 mod component_modifiers;
 mod component_namer;
+mod endo_exo_stereo;
 mod formatting;
 mod functional_prefixes;
 mod fused_ion_templates;
@@ -270,6 +271,21 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
                 name: nest_enclosing_marks(&relative),
                 status: crate::naming::NameStatus::NotPreferred(
                     crate::naming::NameReason::RelativeRingStereo,
+                ),
+            });
+        }
+        mol.set_relative_ring_names(false);
+    }
+    if mol.has_endo_exo_alternative() {
+        mol.set_endo_exo_names(true);
+        mol.set_name_status(status);
+        if let Ok(relative) = component_namer::name_component(&mol, &components[0])
+            && relative != text
+        {
+            alternatives.push(crate::naming::AlternativeName {
+                name: nest_enclosing_marks(&relative),
+                status: crate::naming::NameStatus::NotPreferred(
+                    crate::naming::NameReason::EndoExoStereo,
                 ),
             });
         }
