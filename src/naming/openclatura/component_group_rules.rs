@@ -95,11 +95,18 @@ pub fn retarget_external_carbonyl_groups(
     exclude: &mut AtomSet,
     cyclic: &AtomSet,
 ) {
+    // The chain and ring spellings describe the same anionic suffix class.
+    // Both remain candidates until parent selection resolves their tie.
+    let selects_carboxylate = groups.iter().any(|g| {
+        g.is_principal_candidate && Some(g.key.as_str()) == principal_key && is_carboxylate_group(g)
+    });
     for g in groups {
         // Only an established prefix excludes an acid-anion carbon. Other
         // carboxylates must remain available as parent candidates.
         let prefix_carboxylate = principal_key.is_none() && is_carboxylate_group(g);
-        if Some(g.key.as_str()) == principal_key
+        if g.is_principal_candidate
+            && (Some(g.key.as_str()) == principal_key
+                || selects_carboxylate && is_carboxylate_group(g))
             || !(prefix_carboxylate
                 || g.resolved_rule
                     .as_ref()
@@ -194,7 +201,10 @@ pub fn principal_involved_atoms(
     let mut atoms = AtomSet::new();
     if let Some(key) = principal_key {
         for g in groups {
-            if g.key == key && parent_path.contains(&g.attachment_carbon) {
+            if g.is_principal_candidate
+                && g.key == key
+                && parent_path.contains(&g.attachment_carbon)
+            {
                 atoms.extend(&g.atoms_involved);
                 if matches!(
                     g.key.as_str(),
