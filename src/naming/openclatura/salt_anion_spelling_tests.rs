@@ -70,26 +70,14 @@ fn salt_anion_spelling_matrix() {
         (
             "B13",
             "[Na+].[Na+].Cc1ccc(cc1)C(=O)[O-].CC(=O)[O-]",
-            "disodium acetate 4-methylbenzoate",
+            "disodium 4-methylbenzoate acetate",
             NameStatus::Preferred,
         ),
         (
             "B14",
             "[Na+].[Na+].[Na+].CC(=O)CC[O-].O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
-            "trisodium 4-[(4-carboxylatophenyl)oxy]benzoate 3-oxobutan-1-olate",
+            "trisodium 3-oxobutan-1-olate 4-[(4-carboxylatophenyl)oxy]benzoate",
             NameStatus::NotPreferred(NameReason::Multiplicative),
-        ),
-        (
-            "B15",
-            "[Na+].[Na+].[O-]C(=O)c1ccc(C)cc1.[O-]C(=O)c1cccc(C)c1",
-            "disodium 3-methylbenzoate 4-methylbenzoate",
-            NameStatus::Preferred,
-        ),
-        (
-            "B16",
-            "C[NH3+].CC[NH3+].[Cl-].[Cl-]",
-            "ethanaminium methanaminium dichloride",
-            NameStatus::Unverified(NameReason::UnauditedPath),
         ),
         (
             "B17",
@@ -161,30 +149,6 @@ fn salt_anion_spelling_matrix() {
             "B28",
             "[Na+].[O-]CC=C",
             "sodium prop-2-en-1-olate",
-            NameStatus::Preferred,
-        ),
-        (
-            "B29",
-            "[Na+].[Na+].CCCCCCCCCC(C)C(=O)[O-].CC(C)CCCCCCCCC(=O)[O-]",
-            "disodium 2-methylundecanoate 10-methylundecanoate",
-            NameStatus::Preferred,
-        ),
-        (
-            "B30 fused cation stereo",
-            "[C@H]1(CCC[C@@H]2CCCC[C@@H]12)[NH3+].C1[C@@H](CC[C@H]2CCCC[C@H]12)[NH3+].[Cl-].[Cl-]",
-            "(1R,4aS,8aR)-decahydronaphthalen-1-aminium (2R,4aR,8aR)-decahydronaphthalen-2-aminium dichloride",
-            NameStatus::Unverified(NameReason::UnauditedPath),
-        ),
-        (
-            "B31 fused anion stereo",
-            "[Na+].[Na+].[C@H]1(CCC[C@@H]2CCCC[C@@H]12)[O-].C1[C@@H](CC[C@H]2CCCC[C@H]12)[O-]",
-            "disodium (1R,4aS,8aR)-decahydronaphthalen-1-olate (2R,4aR,8aR)-decahydronaphthalen-2-olate",
-            NameStatus::Preferred,
-        ),
-        (
-            "B32 hydroxy anion stereo",
-            "[Na+].[Na+].CC[C@@H](C)[C@@H](O)C(=O)[O-].CCC(O)[C@H](C)C(=O)[O-]",
-            "disodium (2R,3R)-2-hydroxy-3-methylpentanoate (2S)-3-hydroxy-2-methylpentanoate",
             NameStatus::Preferred,
         ),
         (

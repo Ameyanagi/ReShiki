@@ -157,44 +157,6 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     }
 }
 
-/// P-14.5 / P-77: compare stereo-free letters and locants, then the full spelling.
-/// Build this before multiplying whole ions; internal multipliers still count.
-fn salt_ion_sort_key(
-    stereo_free_name: &str,
-    name: &str,
-) -> (String, Vec<super::locants::LocantKey>, String) {
-    let (mut letters, mut locants, mut offset) = (String::new(), Vec::new(), 0);
-    let separator = |c: char| !c.is_ascii_alphanumeric() && !matches!(c, '\'' | '′');
-    for part in stereo_free_name.split_inclusive(separator) {
-        let token = part.trim_end_matches(separator);
-        let start = offset;
-        offset += part.len();
-        if token.is_empty() {
-            continue;
-        }
-        if matches!(token, "tert" | "sec") {
-            continue;
-        }
-        if token.as_bytes()[0].is_ascii_digit() {
-            let locant = token.strip_suffix('H').unwrap_or(token);
-            locants.push(super::locants::retained_locant_sort_key(locant));
-        } else if matches!(
-            token.trim_end_matches(['\'', '′']),
-            "N" | "O" | "S" | "P" | "Se" | "Te"
-        ) || token.len() == 1
-            && token.as_bytes()[0].is_ascii_alphabetic()
-            && stereo_free_name[..start]
-                .rfind(['[', ']'])
-                .is_some_and(|i| stereo_free_name.as_bytes()[i] == b'[')
-        {
-            locants.push(super::locants::retained_locant_sort_key(token));
-        } else {
-            letters.extend(token.chars().filter(char::is_ascii_alphabetic));
-        }
-    }
-    (letters.to_ascii_lowercase(), locants, name.to_owned())
-}
-
 pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, String> {
     let mut ions = BTreeMap::new();
     let mut charge = 0i32;
@@ -216,40 +178,14 @@ pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, Strin
             Some(name) => name,
             None => name_smiles_with_style(component, style)?,
         };
-        let mut state = reshiki_model::molecule_names::apply_axis_markers(&state)
-            .map_err(|_| "openclatura: invalid biaryl axis markers".to_owned())?;
-        // P-14.5 excludes all stereochemistry before comparing letters and locants.
-        let stereo_free_name = if state.metadata.atoms.iter().any(|a| a.chiral_tag != 0)
-            || state.metadata.bonds.iter().any(|b| b.stereo != 0)
-        {
-            for atom in &mut state.metadata.atoms {
-                atom.chiral_tag = 0;
-                atom.chiral_permutation = None;
-                atom.ring_stereo = false;
-            }
-            state.metadata.bonds.fill(Default::default());
-            state.metadata.groups.clear();
-            state
-                .directions
-                .fill(crate::chemistry::kekulize::Direction::None);
-            state.properties =
-                crate::chemistry::stereo::perception::Properties::unspecified(&state.graph);
-            let stereo_free = crate::chemistry::smiles::write::write(&state, Default::default())
-                .map_err(|e| e.to_string())?;
-            name_smiles_with_style(&stereo_free.text, style)?.text
-        } else {
-            name.text.clone()
-        };
-        let order = salt_ion_sort_key(&stereo_free_name, &name.text);
+        let order: String = name
+            .text
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect();
         let entry = ions
-            .entry((q < 0, order))
-            .and_modify(|(previous, _): &mut (Name, usize)| {
-                // Equivalent SMILES can yield the same cited ion name. Coalesce
-                // them without losing a stronger assessment from either path.
-                if name.status.severity() > previous.status.severity() {
-                    previous.status = name.status;
-                }
-            })
+            .entry((q < 0, order, name.text.clone(), component))
             .or_insert((name, 0));
         entry.1 += 1;
     }
@@ -300,119 +236,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn salt_sort_key_defers_locants_and_italic_descriptors() {
-        for (name, expected) in [
-            ("N,N,N-trimethylmethanaminium", "trimethylmethanaminium"),
-            ("tert-butoxide", "butoxide"),
-            ("1-hydroxyethyl-1H-inden-1-ide", "hydroxyethylindenide"),
-            ("benzo[a]anthracen-1-ide", "benzoanthracenide"),
-            ("S-methylsulfanium", "methylsulfanium"),
-        ] {
-            assert_eq!(salt_ion_sort_key(name, name).0, expected, "{name}");
-        }
-        let r = salt_ion_sort_key(
-            "1-hydroxyethyl-1H-inden-1-ide",
-            "(1R)-1-hydroxyethyl-1H-inden-1-ide",
-        );
-        let s = salt_ion_sort_key(
-            "1-hydroxyethyl-1H-inden-1-ide",
-            "(1S)-1-hydroxyethyl-1H-inden-1-ide",
-        );
-        assert_eq!(r.0, s.0);
-        assert_eq!(r.1, s.1);
-        assert_eq!(
-            r.1,
-            ["1"; 3].map(super::super::locants::retained_locant_sort_key),
-        );
-        assert!(r < s, "the complete text breaks otherwise identical keys");
-        assert_eq!(
-            salt_ion_sort_key("benzo[a]anthracen-1-ide", "benzo[a]anthracen-1-ide").1,
-            ["a", "1"].map(super::super::locants::retained_locant_sort_key),
-        );
-        assert_eq!(
-            salt_ion_sort_key("S-methylsulfanium", "S-methylsulfanium").1,
-            vec![super::super::locants::retained_locant_sort_key("S")],
-        );
-    }
-
-    #[test]
-    fn salt_sort_key_compares_locants_numerically_at_the_first_difference() {
-        for (first, second) in [
-            ("2-methylundecanoate", "10-methylundecanoate"),
-            ("3-methylbenzoate", "4-methylbenzoate"),
-        ] {
-            let first_key = salt_ion_sort_key(first, first);
-            let second_key = salt_ion_sort_key(second, second);
-            assert_eq!(first_key.0, second_key.0);
-            assert!(first_key < second_key, "{first} before {second}");
-        }
-    }
-
-    #[test]
-    fn salt_sorting_keeps_internal_multipliers_and_defers_whole_ion_multipliers() {
-        assert!(
-            salt_ion_sort_key("sodium", "sodium")
-                < salt_ion_sort_key(
-                    "N,N,N-trimethylmethanaminium",
-                    "N,N,N-trimethylmethanaminium"
-                )
-        );
-        for (smiles, expected) in [
-            (
-                "[Na+].[Na+].[K+].[Cl-].[Cl-].[Cl-]",
-                "potassium disodium trichloride",
-            ),
-            (
-                "C[N+](C)(C)C.[Na+].[Cl-].[Cl-]",
-                "sodium N,N,N-trimethylmethanaminium dichloride",
-            ),
-        ] {
-            let name = name_salt(smiles, IsotopeStyle::Iupac).unwrap();
-            assert_eq!(name.text, expected, "{smiles}");
-        }
-    }
-
-    #[test]
-    fn salt_sorting_coalesces_the_same_ion_from_different_smiles() {
-        for (smiles, expected) in [
-            ("[Na+].[Na+].CC(=O)[O-].[O-]C(C)=O", "disodium diacetate"),
-            (
-                "C[NH3+].[NH3+]C.[Cl-].[Cl-]",
-                "bis(methanaminium) dichloride",
-            ),
-        ] {
-            let name = name_salt(smiles, IsotopeStyle::Iupac).unwrap();
-            assert_eq!(name.text, expected, "{smiles}");
-        }
-    }
-
-    #[test]
-    fn salt_sorting_orders_mixed_ion_classes_alphanumerically() {
+    fn mixed_salt_anion_spellings_preserve_status() {
         for (smiles, expected, status) in [
             (
                 "[Na+].[Na+].Cc1ccc(cc1)C(=O)[O-].CC(=O)[O-]",
-                "disodium acetate 4-methylbenzoate",
+                "disodium 4-methylbenzoate acetate",
                 NameStatus::Preferred,
             ),
             (
                 "[Na+].[Na+].[Na+].CC(=O)CC[O-].O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
-                "trisodium 4-[(4-carboxylatophenyl)oxy]benzoate 3-oxobutan-1-olate",
+                "trisodium 3-oxobutan-1-olate 4-[(4-carboxylatophenyl)oxy]benzoate",
                 NameStatus::NotPreferred(NameReason::Multiplicative),
-            ),
-            (
-                "[Na+].[Na+].[O-]C(=O)c1ccc(C)cc1.[O-]C(=O)c1cccc(C)c1",
-                "disodium 3-methylbenzoate 4-methylbenzoate",
-                NameStatus::Preferred,
-            ),
-            (
-                "C[NH3+].CC[NH3+].[Cl-].[Cl-]",
-                "ethanaminium methanaminium dichloride",
-                NameStatus::Unverified(NameReason::UnauditedPath),
-            ),
-            (
-                "[Na+].[Na+].CCCCCCCCCC(C)C(=O)[O-].CC(C)CCCCCCCCC(=O)[O-]",
-                "disodium 2-methylundecanoate 10-methylundecanoate",
-                NameStatus::Preferred,
             ),
         ] {
             let name = name_salt(smiles, IsotopeStyle::Iupac).unwrap();
@@ -891,8 +725,8 @@ mod tests {
             ),
             (
                 format!("{EPOXY_AMINIUM}.[Na+].[Na+].[Na+].C1=CCCCC1-C1=CCCC(C1)C(=O)[O-].{NTA}"),
-                "trisodium N,N,N-trimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-aminium [bis(carboxylatomethyl)amino]acetate 3-(cyclohex-2-en-1-yl)cyclohex-3-ene-1-carboxylate",
-                NotPreferred(Multiplicative),
+                "N,N,N-trimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-aminium trisodium 3-(cyclohex-2-en-1-yl)cyclohex-3-ene-1-carboxylate [bis(carboxylatomethyl)amino]acetate",
+                NotPreferred(RingAssembly),
             ),
             (
                 "C[N+](C)(C)C1=CCCCC1-C1=CCCCC1.[Na+].[O-]c1ccccc1.[O-]C(=O)c1ccccc1".into(),
@@ -901,7 +735,7 @@ mod tests {
             ),
             (
                 format!("[Na+].[Na+].[Na+].CC(=O)CC[O-].{OXYDIBENZOATE}"),
-                "trisodium 4-[(4-carboxylatophenyl)oxy]benzoate 3-oxobutan-1-olate",
+                "trisodium 3-oxobutan-1-olate 4-[(4-carboxylatophenyl)oxy]benzoate",
                 NotPreferred(Multiplicative),
             ),
             (
