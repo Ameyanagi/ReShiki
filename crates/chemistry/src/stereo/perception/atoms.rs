@@ -29,7 +29,7 @@ impl Context {
             for &b in at(&self.neighbors, i)? {
                 work.spend(1)?;
                 let a = at(&self.state.graph.atoms, self.other(b, i)?)?;
-                if a.atomic_number == 1 && a.isotope == 0 {
+                if a.atomic_number == 1 && a.isotope <= 1 {
                     return Ok(false);
                 }
             }
@@ -76,7 +76,7 @@ impl Context {
             for &b in at(&self.neighbors, i)? {
                 work.spend(1)?;
                 let neighbor = at(&self.state.graph.atoms, self.other(b, i)?)?;
-                if neighbor.atomic_number == 1 && neighbor.isotope == 0 {
+                if neighbor.atomic_number == 1 && neighbor.isotope <= 1 {
                     return Ok(false);
                 }
             }

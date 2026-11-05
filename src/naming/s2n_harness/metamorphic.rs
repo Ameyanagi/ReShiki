@@ -39,6 +39,7 @@ const CURATED: &[&str] = &[
     "O=C(O)[C@H](O)[C@H](O)C(=O)O",
     "C[C@H](O)[C@@H](O)C",
     "C[C@H](O)[C@H](O)C",
+    "C[C@H](F)C([C@H](F)C)CCCC",
     "C[C@H]1CC[C@@H](C)CC1",
     "C[C@H]1C[C@H](C)C1",
     "C[C@H](O)[C@H](Cl)[C@H](O)C",
@@ -262,9 +263,9 @@ fn descriptor_groups_are_mirrored_and_nothing_else() {
 /// The mirror image (every `@`/`@@` and M/P axis marker swapped) is named
 /// with every R/S, M/P and Ra/Sa swapped, r/s and E/Z kept, and the same
 /// status. Achiral and meso inputs are their own mirror image. When only the
-/// R-before-S rule fixes the numbering (P-31.1.4.3.4), the enantiomer may be
-/// numbered the other way: the name may then differ in descriptors only, and
-/// mirroring it back must name the input.
+/// R-before-S rule fixes the numbering (P-14.4(j)) or parent (P-44.4.1.12.2),
+/// the enantiomer may use the other orientation or arm: the name may then
+/// differ in descriptors only, and mirroring it back must name the input.
 #[test]
 fn mirror_image_swaps_only_descriptors() {
     let mut parser = Measurements::default();

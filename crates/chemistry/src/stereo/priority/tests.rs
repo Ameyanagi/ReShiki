@@ -17,6 +17,24 @@ fn carbons(n: usize) -> Graph {
 }
 
 #[test]
+fn protium_and_retained_ordinary_hydrogen_have_equal_priorities() -> TestResult {
+    let state = crate::smiles::prepare("OC(C[1H])C")?.state;
+    let ranks = atom_priorities(&state.graph, &state.metadata).map_err(anyhow::Error::msg)?;
+    assert_eq!(ranks[2], ranks[4]);
+    let mut ordinary = state.graph.clone();
+    ordinary.atoms[3].isotope = 0;
+    assert_eq!(
+        atom_priorities(&ordinary, &state.metadata).map_err(anyhow::Error::msg)?,
+        ranks
+    );
+    let mut deuterated = state.graph;
+    deuterated.atoms[3].isotope = 2;
+    let ranks = atom_priorities(&deuterated, &state.metadata).map_err(anyhow::Error::msg)?;
+    assert_ne!(ranks[2], ranks[4]);
+    Ok(())
+}
+
+#[test]
 fn empty_graph_and_explicit_zero_maps_are_distinct() -> TestResult {
     let empty = carbons(0);
     assert!(

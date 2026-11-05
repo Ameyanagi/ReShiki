@@ -399,9 +399,11 @@ fn compare_nodes(a: &Node, b: &Node, rule: u8) -> Ordering {
     if order != Ordering::Equal || rule == 1 {
         return order;
     }
-    // Upstream ranks any specified isotope above unspecified isotope, even if
-    // its mass is below the element's most abundant naturally occurring isotope.
-    a.isotope.cmp(&b.isotope)
+    // Protium and unlabelled H have equal priority (P-92.3). Otherwise upstream
+    // ranks specified isotopes above unspecified ones, even at a lower mass.
+    let a_isotope = a.isotope.filter(|&mass| an != ad || mass != 1);
+    let b_isotope = b.isotope.filter(|&mass| bn != bd || mass != 1);
+    a_isotope.cmp(&b_isotope)
 }
 
 fn compare_lists(a: &[Node], b: &[Node], rule: u8) -> Ordering {

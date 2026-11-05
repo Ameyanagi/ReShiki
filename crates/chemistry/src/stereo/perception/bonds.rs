@@ -26,6 +26,15 @@ impl Context {
             }
             result.push((self.other(b, atom)?, dir));
         }
+        if let [(neighbor, _)] = result.as_slice()
+            && self.hydrogens(atom)? > 0
+        {
+            let neighbor = at(&self.state.graph.atoms, *neighbor)?;
+            // P-92.3: an explicit ¹H and implicit H cannot define E/Z.
+            if neighbor.atomic_number == 1 && neighbor.isotope <= 1 {
+                return Ok(Vec::new());
+            }
+        }
         if (require_direction && !seen)
             || (result.len() == 2
                 && at(&self.ranks, at(&result, 0)?.0)? == at(&self.ranks, at(&result, 1)?.0)?)

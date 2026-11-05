@@ -22,6 +22,7 @@ struct Site {
 /// centre. The final strict parser check refuses any unsupported stereo path.
 fn stripped_parent(source: &Molecule) -> Result<(Molecule, Vec<Site>), String> {
     let mut parent = Molecule::new();
+    parent.isotope_labels_stripped = true;
     let mut sites = Vec::new();
     for (&idx, atom) in &source.atoms {
         if atom.symbol == "H" {
@@ -412,6 +413,30 @@ pub(super) fn name_smiles(smiles: &str, style: IsotopeStyle) -> Result<Name, Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stripped_parents_keep_isotope_provenance_and_original_cip() {
+        for smiles in [
+            "[13CH3][C@H](F)C([C@H](F)C)CCCC",
+            "[2H][C@H](F)C([C@H](F)C)CCCC",
+        ] {
+            let source = graph_io::read_smiles(smiles).unwrap();
+            let (parent, _) = stripped_parent(&source).unwrap();
+            assert!(parent.atoms.values().all(|a| a.isotope.is_none()));
+            assert!(parent.isotope_labels_stripped);
+            assert_eq!(parent.accurate_cip, source.accurate_cip);
+            assert_eq!(parent.legacy_cip, source.legacy_cip);
+            for (idx, atom) in &parent.atoms {
+                assert_eq!(atom.stereo, source.atoms[idx].stereo);
+            }
+            assert!(parent.clone().isotope_labels_stripped);
+            assert!(
+                parent
+                    .subgraph(&parent.atoms.keys().copied().collect())
+                    .isotope_labels_stripped
+            );
+        }
+    }
 
     #[test]
     fn isotopic_names_reconstruct_exact_graphs() {

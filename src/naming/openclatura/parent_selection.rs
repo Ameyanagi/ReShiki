@@ -5,6 +5,7 @@ use super::{
     locants::{LocantKey, retained_locant_sort_key},
     molecule::{AtomSet, Molecule},
     namer::name_subgraph_with_upstream,
+    numbering::chain_orientations_before_stereo,
     perception::PerceivedGroup,
     ring_assembly::{RingAssembly, discover_ring_assemblies},
 };
@@ -58,6 +59,7 @@ struct ParentScore {
     attached_prefixes: i64,
     assembly_substituent_locants: Option<Vec<LocantKey>>,
     assembly_substituent_citation: Option<AssemblyCitation>,
+    exchanged_arm_stereo: i64,
     path_tiebreak: Vec<usize>,
 }
 
@@ -258,6 +260,7 @@ fn score(
         attached_prefixes: -attached,
         assembly_substituent_locants: None,
         assembly_substituent_citation: None,
+        exchanged_arm_stereo: 0,
         path_tiebreak: {
             let mut key: Vec<_> = path.iter().map(|idx| ranks[idx]).collect();
             key.sort();
@@ -273,7 +276,7 @@ pub fn select_principal_parent(
     principal_carbons: &[usize],
     groups: &[PerceivedGroup],
 ) -> Option<ParentSelection> {
-    parent_candidates(
+    let mut candidates = parent_candidates(
         mol,
         chains,
         ring_systems,
@@ -281,10 +284,223 @@ pub fn select_principal_parent(
         Some(groups),
         &AtomSet::new(),
         true,
-    )
-    .into_iter()
-    .min_by(|a, b| a.0.cmp(&b.0))
-    .map(|(_, selection)| selection)
+    );
+    prefer_single_centre_exchanged_arms(mol, &mut candidates, principal_carbons);
+    candidates
+        .into_iter()
+        .min_by(|a, b| a.0.cmp(&b.0))
+        .map(|(_, selection)| selection)
+}
+
+/// Exact rooted-tree constitution, including the corresponding parent and
+/// principal-group positions. Stereo marks the corresponding centre only.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct ArmTree {
+    symbol: String,
+    charge: i32,
+    aromatic: bool,
+    hydrogens: usize,
+    radicals: usize,
+    principal: bool,
+    path_position: Option<usize>,
+    centre: bool,
+    branches: Vec<(usize, bool, ArmTree)>,
+}
+
+fn arm_tree(
+    mol: &Molecule,
+    atom: usize,
+    upstream: usize,
+    path: &BTreeMap<usize, usize>,
+    principal: &AtomSet,
+    visited: &mut AtomSet,
+    centre: &mut Option<usize>,
+) -> Option<ArmTree> {
+    // Revisiting any atom proves a cycle or a second attachment to the stem.
+    if !visited.insert(atom) {
+        return None;
+    }
+    let a = &mol.atoms[&atom];
+    if a.has_stereo() {
+        if !matches!(a.stereo.as_deref(), Some("R" | "S")) || centre.is_some() {
+            return None;
+        }
+        *centre = Some(atom);
+    }
+    let mut branches = Vec::new();
+    for &neighbor in mol.get_neighbors(atom) {
+        if neighbor == upstream {
+            continue;
+        }
+        let bond = mol.get_bond(atom, neighbor)?;
+        if bond.stereo.is_some() {
+            return None;
+        }
+        branches.push((
+            bond.order,
+            bond.is_aromatic,
+            arm_tree(mol, neighbor, atom, path, principal, visited, centre)?,
+        ));
+    }
+    branches.sort();
+    Some(ArmTree {
+        symbol: a.symbol.clone(),
+        charge: a.charge,
+        aromatic: a.is_aromatic,
+        hydrogens: a.total_h_count,
+        radicals: a.radical_electrons,
+        principal: principal.contains(&atom),
+        path_position: path.get(&atom).copied(),
+        centre: a.has_stereo(),
+        branches,
+    })
+}
+
+/// Bounded P-44.4.1.12.2: one R/S centre in otherwise identical exchanged
+/// terminal arms. This does not implement like/unlike pairs or E/Z seniority.
+fn prefer_single_centre_exchanged_arms(
+    mol: &Molecule,
+    candidates: &mut [(ParentScore, ParentSelection)],
+    principal: &[usize],
+) {
+    // P-44.4.1.11 precedes stereo, including labels removed for isotope naming.
+    if mol.isotope_labels_stripped || mol.atoms.values().any(|a| a.isotope.is_some()) {
+        return;
+    }
+    let earlier_score = |score: &ParentScore| {
+        let mut score = score.clone();
+        score.path_tiebreak.clear();
+        score
+    };
+    let Some(best) = candidates.iter().map(|(s, _)| earlier_score(s)).min() else {
+        return;
+    };
+    let tied: Vec<_> = candidates
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (s, _))| (earlier_score(s) == best).then_some(i))
+        .collect();
+    // Resolve the entire tie set, rather than a conditional pairwise ordering.
+    if tied.iter().any(|&i| candidates[i].1.is_ring) {
+        return;
+    }
+    let unique: BTreeMap<_, _> = tied
+        .iter()
+        .map(|&i| (candidates[i].1.atom_set(), i))
+        .collect();
+    if unique.len() < 2 {
+        return;
+    }
+    let common = unique.keys().skip(1).fold(
+        unique.keys().next().cloned().unwrap_or_default(),
+        |common, atoms| common.intersection(atoms).copied().collect(),
+    );
+    let principal: AtomSet = principal.iter().copied().collect();
+    let mut reference = None;
+    let mut arms = AtomSet::new();
+    let mut centres = BTreeMap::new();
+    for &i in unique.values() {
+        let mut path = candidates[i].1.primary_path().to_vec();
+        if !path.first().is_some_and(|a| common.contains(a)) {
+            path.reverse();
+        }
+        let stem_len = path.iter().take_while(|a| common.contains(a)).count();
+        if stem_len == 0 || stem_len != common.len() || stem_len == path.len() {
+            return;
+        }
+        let stem = path[..stem_len].to_vec();
+        let junction = path[stem_len - 1];
+        let root = path[stem_len];
+        let positions = path[stem_len..]
+            .iter()
+            .enumerate()
+            .map(|(position, &atom)| (atom, position))
+            .collect();
+        let mut visited = common.clone();
+        let mut centre = None;
+        let Some(tree) = arm_tree(
+            mol,
+            root,
+            junction,
+            &positions,
+            &principal,
+            &mut visited,
+            &mut centre,
+        ) else {
+            return;
+        };
+        let Some(centre) = centre.filter(|a| positions.contains_key(a)) else {
+            return;
+        };
+        let Some(bond) = mol.get_bond(junction, root) else {
+            return;
+        };
+        if bond.stereo.is_some() {
+            return;
+        }
+        let constitution = (stem, bond.order, bond.is_aromatic, tree);
+        if reference.as_ref().is_some_and(|r| r != &constitution) {
+            return;
+        }
+        reference = Some(constitution);
+        arms.extend(visited.difference(&common));
+        centres.insert(candidates[i].1.atom_set(), centre);
+    }
+    // A common configured centre would introduce like/unlike comparisons.
+    if mol
+        .atoms
+        .values()
+        .any(|a| a.has_stereo() && !arms.contains(&a.idx))
+        || mol.bonds.values().any(|b| b.stereo.is_some())
+    {
+        return;
+    }
+    let has_descriptor = |descriptor| {
+        centres
+            .values()
+            .any(|a| mol.atoms[a].stereo.as_deref() == Some(descriptor))
+    };
+    if !has_descriptor("R") || !has_descriptor("S") {
+        return;
+    }
+    let mut reference_locants = None;
+    for (atoms, &i) in &unique {
+        let path = candidates[i].1.primary_path();
+        let mut substituents: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+        let named =
+            mol.candidate::<()>(|| {
+                for &atom in path {
+                    for &neighbor in mol.get_neighbors(atom) {
+                        if !atoms.contains(&neighbor) {
+                            substituents.entry(atom).or_default().push(
+                                name_subgraph_with_upstream(mol, neighbor, atoms, Some(atom))?,
+                            );
+                        }
+                    }
+                }
+                // Discard candidate naming status marks even when all prefixes name.
+                Ok(None)
+            });
+        if named.is_err() {
+            return;
+        }
+        let mut locants: Vec<_> =
+            chain_orientations_before_stereo(mol, path, &principal, &substituents)
+                .iter()
+                .filter_map(|path| path.iter().position(|a| *a == centres[atoms]))
+                .collect();
+        locants.sort();
+        locants.dedup();
+        if reference_locants.as_ref().is_some_and(|r| r != &locants) {
+            return;
+        }
+        reference_locants = Some(locants);
+    }
+    for i in tied {
+        let centre = centres[&candidates[i].1.atom_set()];
+        candidates[i].0.exchanged_arm_stereo =
+            -i64::from(mol.atoms[&centre].stereo.as_deref() == Some("R"));
+    }
 }
 
 /// Compare the cited anion with actual competing parents, using the same
@@ -802,6 +1018,157 @@ mod tests {
         graph_io::read_smiles,
     };
     use super::*;
+
+    fn chain_candidates(mol: &Molecule) -> Vec<(ParentScore, ParentSelection)> {
+        parent_candidates(
+            mol,
+            &find_all_carbon_paths(mol, &AtomSet::new()).unwrap(),
+            &[],
+            &[],
+            Some(&[]),
+            &AtomSet::new(),
+            true,
+        )
+    }
+
+    #[test]
+    fn exchanged_arm_choice_precedes_canonical_fallback_and_ignores_path_order() {
+        let mol = read_smiles("C[C@H](F)C([C@H](F)C)CCCC").unwrap();
+        let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
+        let mut expected = None;
+        for reverse_paths in [false, true] {
+            for reverse_candidates in [false, true] {
+                let mut paths = paths.clone();
+                if reverse_paths {
+                    paths.iter_mut().for_each(|p| p.reverse());
+                }
+                if reverse_candidates {
+                    paths.reverse();
+                }
+                let mut candidates =
+                    parent_candidates(&mol, &paths, &[], &[], Some(&[]), &AtomSet::new(), true);
+                // Deliberately give the S parent a better fallback key.
+                for (score, selection) in &mut candidates {
+                    let has_r = selection
+                        .primary_path()
+                        .iter()
+                        .any(|a| mol.atoms[a].stereo.as_deref() == Some("R"));
+                    score.path_tiebreak = vec![usize::from(has_r)];
+                }
+                prefer_single_centre_exchanged_arms(&mol, &mut candidates, &[]);
+                let (_, selected) = candidates.iter().min_by_key(|(s, _)| s).unwrap();
+                let descriptors: Vec<_> = selected
+                    .primary_path()
+                    .iter()
+                    .filter_map(|a| mol.atoms[a].stereo.as_deref())
+                    .collect();
+                assert_eq!(descriptors, ["R"]);
+                if let Some(expected) = &expected {
+                    assert_eq!(&selected.atom_set(), expected);
+                } else {
+                    expected = Some(selected.atom_set());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn exchanged_arm_rule_requires_single_corresponding_opposite_centres() {
+        for smiles in [
+            // One arm is unspecified; equally specified arms have no R/S tie.
+            "C[C@H](F)C(C(F)C)CCCC",
+            "C[C@H](F)C([C@@H](F)C)CCCC",
+            "C[C@@H](F)C([C@H](F)C)CCCC",
+            // Different constitution, and the same constitution with the
+            // specified centre at different positions in the two arms.
+            "C[C@H](F)C([C@H](Cl)C)CCCC",
+            "C[C@H](F)C(F)C([C@H](F)C(F)C)CCCC",
+            // Two centres per arm require the general like/unlike rule.
+            "C[C@H](F)[C@H](Cl)C([C@H](Cl)[C@@H](F)C)=C=C=CC",
+            // A shared configured centre also introduces descriptor pairs.
+            "C[C@H](F)C([C@H](F)C)[C@H](Cl)CCC",
+            // Bond descriptors are outside the bounded R/S rule.
+            "C[C@H](F)C([C@H](F)C)/C=C/CC",
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let mut candidates = chain_candidates(&mol);
+            prefer_single_centre_exchanged_arms(&mol, &mut candidates, &[]);
+            assert!(
+                candidates.iter().all(|(s, _)| s.exchanged_arm_stereo == 0),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn arm_constitution_proof_rejects_cycles() {
+        let mol = read_smiles("CC1CC1").unwrap();
+        assert!(
+            arm_tree(
+                &mol,
+                1,
+                0,
+                &BTreeMap::new(),
+                &AtomSet::new(),
+                &mut AtomSet::from([0]),
+                &mut None,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn isotope_labels_and_stripped_provenance_exclude_stereo_parent_choice() {
+        for smiles in [
+            "[13CH3][C@H](F)C([C@H](F)C)CCCC",
+            "C[C@H](F)C([C@H](F)C)CCCC",
+        ] {
+            let mut mol = read_smiles(smiles).unwrap();
+            if !mol.atoms.values().any(|a| a.isotope.is_some()) {
+                mol.isotope_labels_stripped = true;
+            }
+            assert_eq!(mol.atoms[&1].stereo.as_deref(), Some("S"));
+            assert_eq!(mol.atoms[&4].stereo.as_deref(), Some("R"));
+            let mut candidates = chain_candidates(&mol);
+            prefer_single_centre_exchanged_arms(&mol, &mut candidates, &[]);
+            assert!(candidates.iter().all(|(s, _)| s.exchanged_arm_stereo == 0));
+        }
+    }
+
+    #[test]
+    fn earlier_parent_criteria_and_the_complete_tie_set_limit_stereo_choice() {
+        let mol = read_smiles("C[C@H](F)C([C@H](F)C)CCCC").unwrap();
+        let mut candidates = chain_candidates(&mol);
+        let s_parent = candidates
+            .iter()
+            .position(|(_, selection)| {
+                selection.primary_path().len() == 7
+                    && selection
+                        .primary_path()
+                        .iter()
+                        .any(|a| mol.atoms[a].stereo.as_deref() == Some("S"))
+            })
+            .unwrap();
+        candidates[s_parent].0.principal_count = -1;
+        prefer_single_centre_exchanged_arms(&mol, &mut candidates, &[]);
+        assert!(candidates.iter().all(|(s, _)| s.exchanged_arm_stereo == 0));
+        assert_eq!(
+            candidates
+                .iter()
+                .min_by_key(|(s, _)| s)
+                .unwrap()
+                .1
+                .atom_set(),
+            candidates[s_parent].1.atom_set()
+        );
+
+        let mut candidates = chain_candidates(&mol);
+        let mut unrelated = candidates.iter().min_by_key(|(s, _)| s).unwrap().clone();
+        unrelated.1.paths = vec![vec![0]];
+        candidates.push(unrelated);
+        prefer_single_centre_exchanged_arms(&mol, &mut candidates, &[]);
+        assert!(candidates.iter().all(|(s, _)| s.exchanged_arm_stereo == 0));
+    }
 
     fn linked_skeletal_anions(symbol: &str, hydrogen_count: usize) -> Molecule {
         use super::super::molecule::{Atom, Bond};

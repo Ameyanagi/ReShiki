@@ -8,6 +8,88 @@ fn binol(wedges: &str) -> String {
 }
 
 #[test]
+fn protium_does_not_create_configuration() -> anyhow::Result<()> {
+    for text in [
+        "[1H][C@@H](C)O",
+        "O[C@H](C[1H])C",
+        "[1H]C/C(C)=C/F",
+        "[1H]/C=C/F",
+        r"[1H]/C=C\F",
+        "[1H]/C([H])=C/F",
+        "[1H]/C([1H])=C/F",
+    ] {
+        let state = super::read(text)?.prepared.state;
+        assert!(
+            state.metadata.atoms.iter().all(|a| a.chiral_tag == 0),
+            "{text}"
+        );
+        assert!(state.metadata.bonds.iter().all(|b| b.stereo == 0), "{text}");
+        let assigned = crate::stereo::cip::label::assign(&state, &Default::default())?;
+        assert!(assigned.labels.is_empty(), "{text}");
+        assert!(
+            assigned
+                .state
+                .properties
+                .atoms
+                .iter()
+                .all(|a| a.cip_code.is_none()),
+            "{text}"
+        );
+        assert!(
+            assigned
+                .state
+                .properties
+                .bond_codes
+                .iter()
+                .all(Option::is_none),
+            "{text}"
+        );
+        let output = super::write::write(&state, Default::default())?.text;
+        assert!(output.contains("[1H]"), "{text}: {output}");
+        assert!(!output.contains(['@', '/', '\\']), "{text}: {output}");
+    }
+    Ok(())
+}
+
+#[test]
+fn protium_preserves_genuine_configuration_on_round_trip() -> anyhow::Result<()> {
+    for (text, expected) in [
+        ("[1H][C@](F)(Cl)Br", "S"),
+        ("[1H][C@@](F)(Cl)Br", "R"),
+        ("[1H][C@]([2H])(F)Cl", "S"),
+        ("[1H][C@@]([2H])(F)Cl", "R"),
+        ("[1H]/C(F)=C(Cl)/Br", "Z"),
+        (r"[1H]/C(F)=C(Cl)\Br", "E"),
+        ("[1H]/C([2H])=C/F", "Z"),
+        (r"[1H]/C([2H])=C\F", "E"),
+    ] {
+        let state = super::read(text)?.prepared.state;
+        let output = super::write::write(&state, Default::default())?.text;
+        assert!(output.contains("[1H]"), "{text}: {output}");
+        for state in [state, super::read(&output)?.prepared.state] {
+            let assigned = crate::stereo::cip::label::assign(&state, &Default::default())?;
+            let codes = assigned
+                .state
+                .properties
+                .atoms
+                .iter()
+                .filter_map(|a| a.cip_code.as_deref())
+                .chain(
+                    assigned
+                        .state
+                        .properties
+                        .bond_codes
+                        .iter()
+                        .filter_map(|code| code.as_deref()),
+                )
+                .collect::<Vec<_>>();
+            assert_eq!(codes, [expected], "{text}: {output}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn stereoisomers_preserve_absolute_and_expand_relative_lactic_acid() -> anyhow::Result<()> {
     let absolute = "C[C@H](O)C(=O)O";
     let options = super::write::Options::default();

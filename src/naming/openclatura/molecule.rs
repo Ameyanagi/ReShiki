@@ -129,6 +129,8 @@ pub struct Molecule {
     pub substituted_symbols: AtomSet,
     pub stereogenic_atoms: AtomSet,
     pub stereogenic_bonds: AtomSet,
+    /// Isotope parent naming retains source CIP labels after removing labels.
+    pub(super) isotope_labels_stripped: bool,
     /// Functional centres whose capped fragments omit real substitution sites.
     pub projected_substitution_centers: AtomSet,
     /// A plan is valid only for this molecular graph and its chemical state.
@@ -155,6 +157,7 @@ impl Clone for Molecule {
             substituted_symbols: self.substituted_symbols.clone(),
             stereogenic_atoms: self.stereogenic_atoms.clone(),
             stereogenic_bonds: self.stereogenic_bonds.clone(),
+            isotope_labels_stripped: self.isotope_labels_stripped,
             projected_substitution_centers: self.projected_substitution_centers.clone(),
             fusion_plan_cache: RefCell::default(),
             third_component_plan_cache: RefCell::default(),
@@ -421,6 +424,7 @@ impl Molecule {
     ) -> Self {
         let mut fragment = Self::new();
         fragment.naming_budget = Rc::clone(&self.naming_budget);
+        fragment.isotope_labels_stripped = self.isotope_labels_stripped;
         fragment.projected_substitution_centers = self
             .projected_substitution_centers
             .intersection(atom_ids)
