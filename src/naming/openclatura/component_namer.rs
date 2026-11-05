@@ -556,29 +556,24 @@ fn render_component_and_parent(
     numbered: &[usize],
     locants: &BTreeMap<usize, String>,
 ) -> Result<(String, String), String> {
+    let fusion_parent = parts
+        .parent_hydride
+        .as_ref()
+        .map_or(parts.fusion_plan.is_some(), |parent| {
+            parent.is_fusion_parent()
+        });
+    if !fusion_parent {
+        super::ionic_naming::prepare_anion_parent(mol, parts, numbered, locants)?;
+    }
     let (name, parent) = super::assembler::assemble_name_with_parent(parts)?;
     let represented: AtomSet = parts
         .a_prefixes
         .iter()
         .flat_map(|prefix| prefix.charge_atom_ids.iter().copied())
         .collect();
-    let name = if parts
-        .parent_hydride
-        .as_ref()
-        .map_or(parts.fusion_plan.is_some(), |parent| {
-            parent.is_fusion_parent()
-        }) {
-        name
-    } else {
-        super::ionic_naming::apply_anionic_parent_names(
-            &name,
-            mol,
-            numbered,
-            locants,
-            parts.retained_name.as_deref(),
-            &represented,
-        )?
-    };
+    if !fusion_parent {
+        super::ionic_naming::validate_anionic_parent(mol, numbered, locants, parts, &represented)?;
+    }
     let name =
         super::ionic_naming::apply_cationic_imino_parent_prefixes(&name, mol, numbered, locants)?;
     let name = super::ionic_naming::apply_cationic_imino_names(&name, mol)?;

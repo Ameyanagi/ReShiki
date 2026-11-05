@@ -1,19 +1,41 @@
 //! Shared, dependency-free records for numbered retained parent graphs.
 use super::{assembly_parts::RetainedParentMetadata, molecule::AtomSet, rules::elements};
+use serde::Deserialize;
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+fn carbon_symbol() -> String {
+    "C".into()
+}
+fn aromatic() -> bool {
+    true
+}
+fn aromatic_bond_class() -> String {
+    "aromatic".into()
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct RetainedGraphAtomTemplate {
     pub locant: String,
+    #[serde(default = "carbon_symbol")]
     pub symbol: String,
+    #[serde(default)]
     pub charge: i32,
+    #[serde(default = "aromatic")]
     pub aromatic: bool,
+    #[serde(default)]
     pub fusion: bool,
+    #[serde(default)]
     pub default_h: bool,
+    #[serde(default)]
     pub saturated: bool,
+    #[serde(default)]
     pub pi_capacity: Option<usize>,
+    #[serde(default)]
     pub forced_single: bool,
+    #[serde(default)]
     pub indicated_h_site: bool,
+    #[serde(default)]
     pub required_stereo: bool,
 }
 impl RetainedGraphAtomTemplate {
@@ -26,9 +48,11 @@ impl RetainedGraphAtomTemplate {
         })
     }
 }
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct RetainedGraphBondTemplate {
     pub locants: (String, String),
+    #[serde(default = "aromatic_bond_class")]
     pub bond_class: String,
 }
 #[derive(Clone, Debug, Default)]

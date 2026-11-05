@@ -290,8 +290,8 @@ OC1=CC2CCCC2CCCCCC1	2,3,3a,6,7,8,9,10,11,11a-decahydro-1H-cyclopenta[10]annulen-
 CN1CCCC2C1C[NH2+]C2	1-methyl-2,3,4,4a,7,7a-hexahydro-6H-pyrrolo[3,4-b]pyridin-6-ium	unverified	hydro_prefix_locants
 CC[NH+]1CCc2c(cc[nH]c2=O)C1	2-ethyl-2,3,4,6-tetrahydropyrido[4,3-c]pyridin-2-ium-5-one	preferred	
 [N-]1[NH+]=CC=C2N=CC=C12	pyrrolo[3,2-c]pyridazin-1-ide-2-ium	preferred	
-[NH3+][C-]1C=CC2=C1N=NO2	cyclopenta[d][1,2,3]oxadiazol-4-ide-4-aminium	preferred	
-[NH2+](C)[C-]1C=CC2=C1N=NO2	N-methylcyclopenta[d][1,2,3]oxadiazol-4-ide-4-aminium	preferred	
+[NH3+][C-]1C=CC2=C1N=NO2	cyclopenta[d][1,2,3]oxadiazol-4-id-4-aminium	preferred	
+[NH2+](C)[C-]1C=CC2=C1N=NO2	N-methylcyclopenta[d][1,2,3]oxadiazol-4-id-4-aminium	preferred	
 [NH2+]1CCCC2C1C[NH2+]C2	hexahydro-1H,6H-pyrrolo[3,4-b]pyridin-1,6-diium	preferred	
 N1CCC(C)C2C1C[NH2+]C2	4-methylhexahydro-1H,6H-pyrrolo[3,4-b]pyridin-6-ium	preferred	
 [NH2+]1CCCC2C1CCNC2	decahydropyrido[4,3-b]pyridin-1-ium	preferred	

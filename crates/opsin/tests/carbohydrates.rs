@@ -864,9 +864,9 @@ fn precyclised_trivial_sugar_consumes_alpha_and_leaves_existing_topology() {
 }
 
 #[test]
-fn anomer_assignment_creates_absolute_parity_as_in_atom_set_atom_parity() {
+fn anomer_assignment_joins_the_reference_stereo_group() {
     let (mut state, mut arena, root, group, _) = glucose();
-    // The reference group is not propagated by the upstream alpha/beta helper.
+    // Upstream leaves the anomer absolute, so alpha-DL- named alpha-D plus beta-L.
     state
         .graph_mut()
         .atom_mut(AtomId(8))
@@ -886,6 +886,9 @@ fn anomer_assignment_creates_absolute_parity_as_in_atom_set_atom_parity() {
             .as_ref()
             .unwrap()
             .stereo_group,
-        opsin::graph::StereoGroup::default()
+        opsin::graph::StereoGroup {
+            kind: opsin::graph::StereoGroupType::Racemic,
+            number: 1,
+        }
     );
 }

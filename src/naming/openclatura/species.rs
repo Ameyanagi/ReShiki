@@ -86,13 +86,21 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
             "olate" | "thiolate" | "selenolate" | "tellurolate"
         )
     });
-    // P-72.7(b)-(d): competing -ide/-uide centres have unaudited priority.
-    let external_skeletal_anion = mol.atoms.iter().any(|(i, atom)| {
-        atom.charge < 0
-            && matches!(atom.symbol.as_str(), "C" | "N")
-            && !parent_atoms.contains(i)
-            && principal_atoms.is_none_or(|atoms| !atoms.contains(i))
-    });
+    // P-72.7(a) prefers the parent with more anionic centres; on a tie,
+    // (b)-(d) prefer -ide/-uide centres, which are not implemented.
+    let cited =
+        |i: &usize| parent_atoms.contains(i) || principal_atoms.is_some_and(|a| a.contains(i));
+    let centres = |outside: bool| {
+        mol.atoms
+            .iter()
+            .filter(|(i, atom)| {
+                atom.charge < 0
+                    && cited(i) != outside
+                    && (!outside || matches!(atom.symbol.as_str(), "C" | "N"))
+            })
+            .count()
+    };
+    let external_skeletal_anion = centres(true) > 0 && centres(true) >= centres(false);
     // P-72.6.1: an external C(=O)O- requires the prefix carboxylato.
     let external_carboxylate = mol.atoms.iter().any(|(&carbon, atom)| {
         atom.is_carbon()
@@ -211,7 +219,6 @@ mod tests {
     fn anion_parent_assessment_uses_the_cited_derivation() {
         for smiles in [
             "[n-]1nnnc1C(=O)O",
-            "[CH2-]CC#[N+][O-]",
             "[O-]C(=O)c1ccccc1Cc1cc[n-]c1",
             "[O-]C(=O)c1ccccc1[CH2-]",
             "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",

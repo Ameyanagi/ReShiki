@@ -1,6 +1,7 @@
 //! Graph-backed ionic spelling changes from upstream `ionic_naming.py`.
 use super::{
-    assembly_utils::{is_fully_enclosed, needs_hyphen},
+    assembly_parts::{AnionSuffix, AssemblyParts, SubstituentItem},
+    assembly_utils::{is_fully_enclosed, parse_locant},
     molecule::{AtomSet, Molecule},
     nomenclature::RULES,
 };
@@ -94,19 +95,151 @@ fn sites(
         .collect()
 }
 
-pub(super) fn apply_anionic_parent_names(
-    name: &str,
+/// Select the supported parent-anion operations before changing the neutral citation plan.
+pub(super) fn prepare_anion_parent(
+    mol: &Molecule,
+    parts: &mut AssemblyParts,
+    path: &[usize],
+    locants: &BTreeMap<usize, String>,
+) -> Result<(), String> {
+    let sites = sites(mol, path, locants)?;
+    let represented: AtomSet = parts
+        .a_prefixes
+        .iter()
+        .flat_map(|prefix| prefix.charge_atom_ids.iter().copied())
+        .collect();
+    let negative: Vec<_> = sites
+        .iter()
+        .filter(|site| site.charge == -1 && !represented.contains(&site.atom))
+        .collect();
+    if negative.is_empty() {
+        return Ok(());
+    }
+    let zwitterion = ring_nitrogen_zwitterion(mol, parts, path, &sites);
+    // Leave a second site uncited for validation, as the old per-site passes did.
+    let negative = if zwitterion {
+        negative.as_slice()
+    } else {
+        &negative[..1]
+    };
+    let (_, _, neutral_cites_locants) =
+        super::assembly_parent::format_principal_suffix(parts, "e")?;
+    // Benzene is otherwise recognised only during assembly.
+    super::assembly_parent::promote_benzene_retained_name(parts);
+    // Retained functional parents (phenol, benzoic acid) and contracted
+    // substituent stems (phenyl) have no anion spelling yet. Numbering does
+    // not yet give `ide` the lowest locant (P-31.1.4.2.4), so a substituted
+    // parent is cited only where its numbering fixes the anionic centre.
+    let hydro = |key: &str| parts.hydro_operations.iter().any(|op| op.key == key);
+    let retained_supported = parts.retained_name.as_deref().is_some_and(|name| {
+        !(name == "benzene" && parts.principal_group.is_some())
+            && !(parts.is_substituent
+                && super::retained_specs::retained_parent_spec(Some(name))
+                    .is_some_and(|spec| spec.substituent_stem.is_some()))
+            && (parts.substituents.is_empty()
+                || !parts.indicated_hydrogens.is_empty()
+                || negative.iter().all(|site| {
+                    site.locant == "1"
+                        || site.symbol != "C"
+                            && parts
+                                .parent_atom_symbols_by_locant
+                                .values()
+                                .filter(|symbol| **symbol == site.symbol)
+                                .count()
+                                == 1
+                }))
+            // P-72.2.2.1.1 names a hydro-mancude anion with added hydrogen
+            // (`pyridin-1(2H)-ide`), which is not composed yet.
+            && !(parts.indicated_hydrogens.is_empty() && hydro("additive_hydrogen"))
+            // A suffix with added hydrogen (`pyridin-1-id-2(1H)-one`) is cited
+            // only on the bare parent, as before; substituted or hydro forms
+            // need the added-hydrogen construction too.
+            && !(hydro("added_hydrogen")
+                && (!parts.substituents.is_empty() || hydro("additive_hydrogen")))
+    });
+    // A saturated substituent that cites its stem and attachment (`propan-2-yl`).
+    let saturated_attachment = parts.is_substituent
+        && !parts.is_acyl_substituent
+        && parts.attachment_order == 1
+        && parts.retained_name.is_none()
+        && parts.unsaturations.is_empty()
+        && parts.parent_length > 1
+        && (parts.attachment_locant != "1"
+            || super::assembly_parent::always_print_substituent_locant(parts));
+    let group = parts.principal_group.as_ref();
+    // Ketone hydrogen on a mancude ring (`pyridin-2(1H)-one`) needs added
+    // hydrogen once the ketone becomes oxo (P-72.2.2.1.1); keep the suffix.
+    let single_ketone = neutral_cites_locants
+        && parts.hydro_operations.is_empty()
+        && group.is_some_and(|group| group.key == "ketone" && group.locants.len() == 1);
+    let supported = |site: &&ChargeSite| {
+        zwitterion
+            || retained_supported
+            || parts.parent_length == 1
+                && site.symbol == "C"
+                && group.is_none()
+                && !parts.is_substituent
+            || single_ketone
+            || group.is_some_and(|group| match (group.key.as_str(), group.locants.len()) {
+                ("aldehyde", 1) => {
+                    site.symbol == "C" && !parts.is_ring && parts.unsaturations.is_empty()
+                }
+                ("ring_aldehyde", 1) => site.symbol == "C" && neutral_cites_locants,
+                ("nitrile", 1) => site.symbol == "C" && !parts.is_ring,
+                ("nitrile", 2) => {
+                    site.symbol == "C" && !parts.is_ring && parts.unsaturations.is_empty()
+                }
+                ("ring_nitrile", 1) => site.symbol == "C",
+                ("ketone" | "amine", 2) | ("aminium" | "iminium" | "diazonio", 1) => {
+                    neutral_cites_locants
+                }
+                _ => false,
+            })
+            || site.symbol == "C" && site.locant == parts.attachment_locant && saturated_attachment
+    };
+    if !negative.iter().all(supported) {
+        return Ok(());
+    }
+    let mut anion_locants: Vec<_> = negative.iter().map(|site| site.locant.clone()).collect();
+    anion_locants.sort_by_key(|locant| parse_locant(locant));
+    parts.anion_suffix = Some(AnionSuffix {
+        locants: anion_locants,
+        cite_locants: !(parts.parent_length == 1
+            || parts.retained_name.as_deref() == Some("benzene")
+                && parts.principal_group.is_none()
+                && parts.substituents.is_empty()
+                && !parts.is_substituent),
+    });
+    if single_ketone && let Some(group) = parts.principal_group.take() {
+        let mut prefix = SubstituentItem::new(
+            RULES
+                .functional_groups
+                .get(&group.key)
+                .and_then(|rule| rule.prefix.as_ref())
+                .map_or("oxo", String::as_str),
+            group.locants,
+        );
+        prefix.atom_ids = group.atom_ids;
+        prefix.bond_ids = group.bond_ids;
+        prefix.charge_atom_ids = group.charge_atom_ids;
+        parts.substituents.push(prefix);
+    }
+    Ok(())
+}
+
+/// Reject parent charges the assembled name does not cite.
+pub(super) fn validate_anionic_parent(
     mol: &Molecule,
     path: &[usize],
     locants: &BTreeMap<usize, String>,
-    retained: Option<&str>,
+    parts: &AssemblyParts,
     represented: &AtomSet,
-) -> Result<String, String> {
+) -> Result<(), String> {
     let sites = sites(mol, path, locants)?;
-    if retained.is_some() {
+    if parts.retained_name.is_some() {
         validate_retained_chalcogen_cation_pi_state(mol, path, &sites)?;
     }
-    // Upstream divergence: a parent charge must have an exact supported suffix or replacement operation.
+    // A parent charge must have an exact supported suffix or replacement operation.
     if let Some(site) = sites.iter().find(|site| {
         site.charge != -1
             && (site.charge != 1
@@ -120,42 +253,24 @@ pub(super) fn apply_anionic_parent_names(
             site.charge, site.symbol, site.atom
         ));
     }
-    let mut updated = ring_nitrogen_zwitterion_stack(name, mol, path, &sites);
     let mut covered = represented.clone();
-    if updated != name {
+    if let Some(anion) = &parts.anion_suffix {
         covered.extend(
-            sites
+            anion
+                .locants
                 .iter()
-                .filter(|s| s.symbol == "N" && s.charge == -1)
-                .map(|s| s.atom),
+                .filter_map(|locant| parts.parent_atom_ids_by_locant.get(locant).copied()),
         );
     }
-    // The wrapper selects negative sites only, retaining numbered-path order.
     for site in sites.iter().filter(|site| site.charge < 0) {
-        // A one-carbon parent takes the unlocanted methane -> methanide
-        // operation. Match only the terminal parent, leaving prefix names intact.
-        let methanide = if path.len() == 1 && site.symbol == "C" && site.locant == "1" {
-            updated
-                .strip_suffix("methane")
-                .map(|prefix| format!("{prefix}methanide"))
-        } else {
-            None
-        };
-        let next = methanide.unwrap_or_else(|| apply_parent_anion_rule(&updated, site, retained));
-        // P-72.2.2.1: the vowel of 'ide' elides a parent's final 'e', as in
-        // cyclohexan-1-ide-4-sulfonate.
-        let operation = format!("-{}-ide", site.locant);
-        let next = next.replacen(&format!("e{operation}"), &operation, 1);
-        // Upstream divergence: atom membership alone cannot credit an anion whose name never changes.
-        if next == updated && !covered.contains(&site.atom) {
+        if !covered.contains(&site.atom) {
             return Err(format!(
                 "openclatura: anionic {} parent atom {} has no supported charge citation",
                 site.symbol, site.atom
             ));
         }
-        updated = next;
     }
-    Ok(updated)
+    Ok(())
 }
 
 fn validate_retained_chalcogen_cation_pi_state(
@@ -212,72 +327,40 @@ fn validate_retained_chalcogen_cation_pi_state(
     Ok(())
 }
 
-fn locant_key(locant: &str) -> (usize, String) {
-    if !locant.is_empty() && locant.bytes().all(|b| b.is_ascii_digit()) {
-        (locant.parse().unwrap_or(999), String::new())
-    } else {
-        (999, locant.into())
-    }
-}
-
-fn sorted_locants(sites: &[&ChargeSite]) -> String {
-    let mut locants = sites.iter().map(|s| s.locant.as_str()).collect::<Vec<_>>();
-    locants.sort_by_key(|locant| locant_key(locant));
-    locants.join(",")
-}
-
-fn ring_nitrogen_zwitterion_stack(
-    name: &str,
+fn ring_nitrogen_zwitterion(
     mol: &Molecule,
+    parts: &AssemblyParts,
     path: &[usize],
     sites: &[ChargeSite],
-) -> String {
-    if !name.contains("-ium") || name.contains("-ide") {
-        return name.into();
+) -> bool {
+    if parts.principal_group.is_some()
+        || super::assembly_charge::parent_charge_suffix(parts).is_empty()
+    {
+        return false;
     }
     let parent: AtomSet = path.iter().copied().collect();
-    let bonds = mol
+    let bonds: Vec<_> = mol
         .bonds
         .values()
-        .filter(|b| parent.contains(&b.u) && parent.contains(&b.v))
-        .collect::<Vec<_>>();
-    if parent.len() < 3 || bonds.len() < parent.len() || !bonds.iter().any(|b| b.order > 1) {
-        return name.into();
+        .filter(|bond| parent.contains(&bond.u) && parent.contains(&bond.v))
+        .collect();
+    if parent.len() < 3 || bonds.len() < parent.len() || !bonds.iter().any(|bond| bond.order > 1) {
+        return false;
     }
-    let negative = sites
+    let negative: Vec<_> = sites.iter().filter(|site| site.charge < 0).collect();
+    let positive: Vec<_> = sites
         .iter()
-        .filter(|s| s.symbol == "N" && s.charge < 0)
-        .collect::<Vec<_>>();
-    let positive = sites
-        .iter()
-        .filter(|s| s.symbol == "N" && s.charge > 0)
-        .collect::<Vec<_>>();
-    if negative.is_empty() || positive.is_empty() {
-        return name.into();
-    }
-    let positive_text = sorted_locants(&positive);
-    let suffix = format!("-{positive_text}-ium");
-    // Upstream requires the first matching parent-ium marker to be terminal.
-    let first_parent_ium = name
-        .match_indices(&suffix)
-        .find(|(start, _)| word_boundary(name, start + suffix.len()))
-        .map(|(start, _)| start);
-    if first_parent_ium != name.len().checked_sub(suffix.len()) {
-        return name.into();
-    }
-    if !negative.iter().all(|a| {
-        positive
-            .iter()
-            .any(|b| adjacent_or_conjugated(mol, &parent, a.atom, b.atom))
-    }) {
-        return name.into();
-    }
-    let negative_text = sorted_locants(&negative);
-    name.replacen(
-        &suffix,
-        &format!("-{negative_text}-ide-{positive_text}-ium"),
-        1,
-    )
+        .filter(|site| site.symbol == "N" && site.charge > 0)
+        .collect();
+    // The old route rewrote a single unmultiplied `-N-ium` suffix only.
+    !negative.is_empty()
+        && positive.len() == 1
+        && negative.iter().all(|anion| {
+            anion.symbol == "N"
+                && positive
+                    .iter()
+                    .any(|cation| adjacent_or_conjugated(mol, &parent, anion.atom, cation.atom))
+        })
 }
 
 fn adjacent_or_conjugated(mol: &Molecule, parent: &AtomSet, anion: usize, cation: usize) -> bool {
@@ -309,18 +392,8 @@ fn adjacent_or_conjugated(mol: &Molecule, parent: &AtomSet, anion: usize, cation
     false
 }
 
-#[derive(Clone, Copy)]
-enum StemGrammar {
-    Simple,
-    Rich,
-    Ketone,
-}
-
 fn simple(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b",-[]^{}".contains(&b)
-}
-fn rich(b: u8) -> bool {
-    simple(b) || matches!(b, b'.' | b'\'')
 }
 fn word_boundary(text: &str, end: usize) -> bool {
     text.get(end..)
@@ -333,368 +406,6 @@ fn ascii_left_boundary(text: &str, start: usize) -> bool {
             .as_bytes()
             .get(start - 1)
             .is_none_or(|b| !b.is_ascii_alphanumeric())
-}
-fn digits_end(text: &str, start: usize) -> Option<usize> {
-    let count = text
-        .get(start..)?
-        .bytes()
-        .take_while(u8::is_ascii_digit)
-        .count();
-    (count > 0).then_some(start + count)
-}
-fn indicated_end(text: &str, start: usize) -> Option<usize> {
-    let end = digits_end(text, start)?;
-    text.get(end..)?.starts_with("H-").then_some(end + 2)
-}
-
-/// Walk the same ASCII parent-token grammar used by upstream's non-greedy
-/// regular expressions, including parenthesized numeric fused-ring locants.
-fn stem_ends(text: &str, start: usize, grammar: StemGrammar) -> Vec<usize> {
-    std::iter::successors(Some(start), |&cursor| {
-        let &b = text.as_bytes().get(cursor)?;
-        let allowed = match grammar {
-            StemGrammar::Simple => simple(b),
-            StemGrammar::Rich => rich(b),
-            StemGrammar::Ketone if cursor == start => {
-                b.is_ascii_alphanumeric() || b",[]^{}".contains(&b)
-            }
-            StemGrammar::Ketone => rich(b),
-        };
-        if allowed {
-            Some(cursor + 1)
-        } else if cursor > start && !matches!(grammar, StemGrammar::Simple) && b == b'(' {
-            let end = digits_end(text, cursor + 1)?;
-            if text.as_bytes().get(end) != Some(&b')') {
-                return None;
-            }
-            Some(end + 1)
-        } else {
-            None
-        }
-    })
-    .skip(1)
-    .collect()
-}
-
-// Match callbacks return the consumed suffix length and the replacement. The
-// scanner preserves Python re.sub's leftmost/non-greedy match and count order.
-fn rewrite_stem_suffix(
-    text: &str,
-    grammar: StemGrammar,
-    all: bool,
-    mut apply: impl FnMut(usize, &str, &str, &str) -> Option<(usize, String)>,
-) -> String {
-    let mut output = String::new();
-    let mut consumed = 0;
-    for (start, _) in text.char_indices() {
-        if start < consumed
-            || (matches!(grammar, StemGrammar::Ketone) && !ascii_left_boundary(text, start))
-        {
-            continue;
-        }
-        let indicated = if matches!(grammar, StemGrammar::Ketone) {
-            indicated_end(text, start)
-        } else {
-            None
-        };
-        let alternatives = indicated.into_iter().chain(std::iter::once(start));
-        let mut matched = None;
-        for stem_start in alternatives {
-            for end in stem_ends(text, stem_start, grammar) {
-                let (Some(stem), Some(tail), Some(prefix)) = (
-                    text.get(stem_start..end),
-                    text.get(end..),
-                    text.get(start..stem_start),
-                ) else {
-                    continue;
-                };
-                if let Some((length, replacement)) = apply(start, prefix, stem, tail) {
-                    matched = Some((end + length, replacement));
-                    break;
-                }
-            }
-            if matched.is_some() {
-                break;
-            }
-        }
-        if let Some((end, replacement)) = matched {
-            output.push_str(text.get(consumed..start).unwrap_or_default());
-            output.push_str(&replacement);
-            consumed = end;
-            if !all {
-                break;
-            }
-        }
-    }
-    output.push_str(text.get(consumed..).unwrap_or_default());
-    output
-}
-
-fn suffix_match(tail: &str, suffix: &str) -> bool {
-    tail.starts_with(suffix) && word_boundary(tail, suffix.len())
-}
-fn locanted_suffix<'a>(tail: &'a str, suffix: &str) -> Option<(&'a str, usize)> {
-    if !tail.starts_with('-') {
-        return None;
-    }
-    let end = digits_end(tail, 1)?;
-    let terminal = format!("-{suffix}");
-    if !tail.get(end..)?.starts_with(&terminal) || !word_boundary(tail, end + terminal.len()) {
-        return None;
-    }
-    Some((tail.get(1..end)?, end + terminal.len()))
-}
-
-fn explicit_implicit_cation_locant(stem: &str) -> String {
-    for (neutral, ionic) in &RULES.charges.retained_ionic_n_parents {
-        if let Some(prefix) = stem.strip_suffix(ionic) {
-            let neutral = neutral.strip_suffix('e').unwrap_or(neutral);
-            return format!("{prefix}{neutral}-1-ium");
-        }
-    }
-    stem.into()
-}
-
-fn accepts(key: &str, symbol: &str) -> bool {
-    RULES
-        .charges
-        .anion_suffix_placements
-        .iter()
-        .find(|rule| rule.get("key").and_then(serde_json::Value::as_str) == Some(key))
-        .and_then(|rule| rule.get("atom_symbols"))
-        .and_then(serde_json::Value::as_array)
-        .is_some_and(|symbols| {
-            symbols.iter().any(|s| {
-                s.as_str()
-                    .is_some_and(|allowed| allowed == "*" || allowed == symbol)
-            })
-        })
-}
-
-fn apply_suffix_rule(name: &str, site: &ChargeSite, key: &str) -> String {
-    let operation = format!("-{}-ide", site.locant);
-    if name.contains(&operation) || !accepts(key, &site.symbol) {
-        return name.into();
-    }
-    let locant = site.locant.as_str();
-    match key {
-        "ketone_to_oxo_ide" => rewrite_stem_suffix(
-            name,
-            StemGrammar::Ketone,
-            true,
-            |start, indicated, stem, tail| {
-                if !tail.starts_with('-') {
-                    return None;
-                }
-                let oxo_end = digits_end(tail, 1)?;
-                if !tail.get(oxo_end..)?.starts_with("-one") {
-                    return None;
-                }
-                let length = oxo_end + 4;
-                let oxo = tail.get(1..oxo_end)?;
-                // This pattern rejects letters after 'one', but permits digits.
-                if tail
-                    .get(length..)
-                    .and_then(|s| s.chars().next())
-                    .is_some_and(|c| c.is_ascii_alphabetic())
-                {
-                    return None;
-                }
-                let parent = explicit_implicit_cation_locant(stem);
-                let tail = format!("{indicated}{parent}-{locant}-ide");
-                let joint = if needs_hyphen(&format!("{oxo}-oxo"), &tail) {
-                    "-"
-                } else {
-                    ""
-                };
-                let separator = if start > 0
-                    && name
-                        .as_bytes()
-                        .get(start - 1)
-                        .is_some_and(|b| !b"- ".contains(b))
-                {
-                    "-"
-                } else {
-                    ""
-                };
-                Some((length, format!("{separator}{oxo}-oxo{joint}{tail}")))
-            },
-        ),
-        "aldehyde_to_ide_al" => {
-            rewrite_stem_suffix(name, StemGrammar::Simple, false, |_, _, stem, tail| {
-                (stem.len() >= 3 && stem.ends_with("an") && suffix_match(tail, "al"))
-                    .then(|| (2, format!("{stem}-{locant}-ide-1-al")))
-            })
-        }
-        "carbaldehyde_suffix_ide" => {
-            rewrite_stem_suffix(name, StemGrammar::Rich, false, |_, _, stem, tail| {
-                let (suffix_locant, length) = locanted_suffix(tail, "carbaldehyde")?;
-                Some((
-                    length,
-                    format!(
-                        "{}-{locant}-ide-{suffix_locant}-carbaldehyde",
-                        explicit_implicit_cation_locant(stem)
-                    ),
-                ))
-            })
-        }
-        "dinitrile_suffix_ide" => {
-            rewrite_stem_suffix(name, StemGrammar::Simple, false, |_, _, stem, tail| {
-                (stem.len() >= 4 && stem.ends_with("ane") && suffix_match(tail, "dinitrile"))
-                    .then(|| (9, format!("{stem}-{locant}-ide-1,3-dinitrile")))
-            })
-        }
-        "mononitrile_suffix_ide" => {
-            rewrite_stem_suffix(name, StemGrammar::Simple, false, |_, _, stem, tail| {
-                (stem.len() >= 4
-                    && ["ane", "ene", "yne"]
-                        .iter()
-                        .any(|ending| stem.ends_with(ending))
-                    && suffix_match(tail, "nitrile"))
-                .then(|| (7, format!("{stem}-{locant}-ide-1-nitrile")))
-            })
-        }
-        "locanted_carbonitrile_suffix_ide" => {
-            rewrite_stem_suffix(name, StemGrammar::Simple, false, |_, _, stem, tail| {
-                let (suffix_locant, length) = locanted_suffix(tail, "carbonitrile")?;
-                Some((
-                    length,
-                    format!("{stem}-{locant}-ide-{suffix_locant}-carbonitrile"),
-                ))
-            })
-        }
-        "terminal_carbonitrile_suffix_ide" => {
-            rewrite_stem_suffix(name, StemGrammar::Simple, false, |_, _, stem, tail| {
-                suffix_match(tail, "carbonitrile")
-                    .then(|| (12, format!("{stem}-{locant}-ide-carbonitrile")))
-            })
-        }
-        "terminal_characteristic_suffix_ide" => {
-            for suffix in ["dione", "diamine", "aminium", "iminium", "diazonium"] {
-                let Some(stem) = name.strip_suffix(&format!("-{suffix}")) else {
-                    continue;
-                };
-                let Some((parent, suffix_locants)) = stem.rsplit_once('-') else {
-                    continue;
-                };
-                if parent.is_empty()
-                    || suffix_locants.is_empty()
-                    || !suffix_locants
-                        .split(',')
-                        .all(|l| !l.is_empty() && l.bytes().all(|b| b.is_ascii_digit()))
-                {
-                    continue;
-                }
-                return format!("{parent}{operation}-{suffix_locants}-{suffix}");
-            }
-            name.into()
-        }
-        _ => name.into(),
-    }
-}
-
-fn apply_parent_anion_rule(name: &str, site: &ChargeSite, retained: Option<&str>) -> String {
-    let mut updated = name.to_owned();
-    // Keep the precise order of upstream's separate suffix-stack calls.
-    for key in [
-        "ketone_to_oxo_ide",
-        "aldehyde_to_ide_al",
-        "carbaldehyde_suffix_ide",
-        "dinitrile_suffix_ide",
-        "mononitrile_suffix_ide",
-        "locanted_carbonitrile_suffix_ide",
-        "terminal_carbonitrile_suffix_ide",
-        "terminal_characteristic_suffix_ide",
-    ] {
-        updated = apply_suffix_rule(&updated, site, key);
-    }
-    if site.symbol == "C" {
-        let target = format!("-{}-yl", site.locant);
-        updated = rewrite_stem_suffix(&updated, StemGrammar::Simple, false, |_, _, stem, tail| {
-            (stem.len() >= 3 && stem.ends_with("an") && suffix_match(tail, &target)).then(|| {
-                (
-                    target.len(),
-                    format!("{stem}-{}-ide{}", site.locant, target),
-                )
-            })
-        });
-    }
-    if updated != name {
-        return updated;
-    }
-    let Some(stem) = retained
-        .map(|s| s.strip_suffix('e').unwrap_or(s))
-        .filter(|s| !s.is_empty())
-    else {
-        return name.into();
-    };
-    replace_retained_stem_with_ide(name, stem, &site.locant)
-    // Unclassified terminal locant-ide suffixes are intentionally never added.
-}
-
-fn indicated_h_prefix_end(text: &str, start: usize) -> Option<usize> {
-    let mut cursor = start;
-    loop {
-        let end = digits_end(text, cursor)?;
-        if text.as_bytes().get(end) != Some(&b'H') {
-            return None;
-        }
-        match text.as_bytes().get(end + 1) {
-            Some(b',') => cursor = end + 2,
-            Some(b'-') => return Some(end + 2),
-            _ => return None,
-        }
-    }
-}
-
-fn replace_retained_stem_with_ide(name: &str, stem: &str, locant: &str) -> String {
-    let mut output = String::new();
-    let mut consumed = 0;
-    for (start, _) in name.char_indices() {
-        if start < consumed || !ascii_left_boundary(name, start) {
-            continue;
-        }
-        let indicated = indicated_h_prefix_end(name, start);
-        let mut matched = None;
-        for stem_start in indicated.into_iter().chain(std::iter::once(start)) {
-            if !name
-                .get(stem_start..)
-                .is_some_and(|tail| tail.starts_with(stem))
-            {
-                continue;
-            }
-            let stem_end = stem_start + stem.len();
-            let with_e = name.as_bytes().get(stem_end) == Some(&b'e');
-            for end in [stem_end + usize::from(with_e), stem_end] {
-                let tail = name.get(end..).unwrap_or_default();
-                let already_ide = if tail.starts_with('-') {
-                    digits_end(tail, 1)
-                        .and_then(|end| tail.get(end..))
-                        .is_some_and(|tail| tail.starts_with("-ide"))
-                } else {
-                    false
-                };
-                if already_ide {
-                    continue;
-                }
-                // P-14.7.1 keeps the mancude parent's indicated hydrogen
-                // when an ionic suffix denotes removal of that hydrogen.
-                let prefix = name.get(start..stem_start).unwrap_or_default();
-                matched = Some((end, format!("{prefix}{stem}-{locant}-ide")));
-                break;
-            }
-            if matched.is_some() {
-                break;
-            }
-        }
-        if let Some((end, replacement)) = matched {
-            output.push_str(name.get(consumed..start).unwrap_or_default());
-            output.push_str(&replacement);
-            consumed = end;
-        }
-    }
-    output.push_str(name.get(consumed..).unwrap_or_default());
-    output
 }
 
 fn nitrogen_has_carbon_double(mol: &Molecule, idx: usize) -> Option<usize> {
@@ -864,80 +575,28 @@ mod tests {
     use super::super::molecule::{Atom, Bond};
     use super::*;
 
-    fn one_anion(symbol: &str) -> Molecule {
-        let mut mol = Molecule::new();
-        let mut atom = Atom::new(0, symbol);
-        atom.charge = -1;
-        mol.add_atom(atom).unwrap();
-        mol
-    }
-
     #[test]
     fn retained_chalcogen_cations_need_a_proved_ring_pi_state() {
-        for symbol in ["S", "Se", "Te"] {
-            let mut mol = Molecule::new();
-            for (id, symbol) in [(0, symbol), (1, "C"), (2, "N"), (3, "C"), (4, "C")] {
-                let mut atom = Atom::new(id, symbol);
-                atom.charge = i32::from(id == 0);
-                mol.add_atom(atom).unwrap();
-            }
-            for (id, (u, v, order)) in [(0, 1, 2), (1, 2, 1), (2, 3, 2), (3, 4, 1), (4, 0, 1)]
-                .into_iter()
-                .enumerate()
-            {
-                mol.add_bond(Bond::new(id, u, v, order)).unwrap();
-            }
-            let path = [0, 1, 2, 3, 4];
-            let locants = path.iter().map(|&id| (id, (id + 1).to_string())).collect();
+        for (smiles, expected) in [
+            ("[SH+]1CNCC1", "1,3-thiazolidin-1-ium"),
+            ("[SeH+]1CNCC1", "1,3-selenazolidin-1-ium"),
+            ("[TeH+]1CNCC1", "1,3-tellurazolidin-1-ium"),
+        ] {
+            assert_eq!(super::super::name_smiles(smiles).unwrap().text, expected);
+        }
+        for smiles in [
+            "[S+]1=CN=CC1",
+            "[Se+]1=CN=CC1",
+            "[Te+]1=CN=CC1",
+            "CC1=NC=[S+]C1",
+        ] {
             assert!(
-                apply_anionic_parent_names(
-                    "1,3-thiazol-1-ium",
-                    &mol,
-                    &path,
-                    &locants,
-                    Some("1,3-thiazole"),
-                    &AtomSet::new(),
-                )
-                .unwrap_err()
-                .contains("chalcogen cation pi state")
-            );
-            mol.atoms.get_mut(&0).unwrap().is_aromatic = true;
-            assert!(
-                apply_anionic_parent_names(
-                    "1,3-thiazol-1-ium",
-                    &mol,
-                    &path,
-                    &locants,
-                    Some("1,3-thiazole"),
-                    &AtomSet::new(),
-                )
-                .is_ok()
-            );
-            mol.atoms.get_mut(&0).unwrap().is_aromatic = false;
-            mol.set_bond_order(0, 1).unwrap();
-            assert!(
-                apply_anionic_parent_names(
-                    "1,3-thiazolidin-1-ium",
-                    &mol,
-                    &path,
-                    &locants,
-                    Some("1,3-thiazolidine"),
-                    &AtomSet::new(),
-                )
-                .is_ok()
+                super::super::name_smiles(smiles)
+                    .unwrap_err()
+                    .contains("chalcogen cation pi state"),
+                "{smiles}",
             );
         }
-        assert!(
-            super::super::name_smiles("CC1=NC=[S+]C1")
-                .unwrap_err()
-                .contains("chalcogen cation pi state")
-        );
-        assert_eq!(
-            super::super::name_smiles("C[S+](C)[CH-]C")
-                .map(|name| name.text)
-                .as_deref(),
-            Ok("1-(dimethylsulfaniumyl)ethan-1-ide")
-        );
     }
 
     #[test]
@@ -979,159 +638,6 @@ mod tests {
             assert!(
                 validate_heteroatom_oxo_charge_states(&mol).is_ok(),
                 "{smiles}"
-            );
-        }
-    }
-
-    #[test]
-    fn upstream_anion_suffix_order_and_retained_spelling() {
-        let mol = one_anion("C");
-        for (name, retained, locant, expected) in [
-            ("cyclohexan-2-one", None, "4", "2-oxocyclohexan-4-ide"),
-            ("butanal", None, "2", "butan-2-ide-1-al"),
-            ("propanedinitrile", None, "2", "propan-2-ide-1,3-dinitrile"),
-            ("but-3-ynenitrile", None, "2", "but-3-yn-2-ide-1-nitrile"),
-            (
-                "cyclopentane-1-carbonitrile",
-                None,
-                "2",
-                "cyclopentan-2-ide-1-carbonitrile",
-            ),
-            (
-                "cyclopentanecarbonitrile",
-                None,
-                "2",
-                "cyclopentan-2-ide-carbonitrile",
-            ),
-            (
-                "cyclopentane-1-carbaldehyde",
-                None,
-                "2",
-                "cyclopentan-2-ide-1-carbaldehyde",
-            ),
-            (
-                "2-cyanopyrrolidin-3-aminium",
-                None,
-                "1",
-                "2-cyanopyrrolidin-1-ide-3-aminium",
-            ),
-            (
-                "5-(ammoniomethyl)imidazolidine-2,4-dione",
-                Some("imidazolidine"),
-                "1",
-                "5-(ammoniomethyl)imidazolidin-1-ide-2,4-dione",
-            ),
-            ("1H-pyrrole", Some("pyrrole"), "1", "1H-pyrrol-1-ide"),
-        ] {
-            let actual = apply_anionic_parent_names(
-                name,
-                &mol,
-                &[0],
-                &BTreeMap::from([(0, locant.into())]),
-                retained,
-                &AtomSet::new(),
-            )
-            .unwrap();
-            assert_eq!(actual, expected, "{name}");
-        }
-        // The carbon `-ide-…-yl` rewrite still applies; its e-elision
-        // (P-72.6.3) is pinned in tests/fixtures/naming/iupac-audit-cases.tsv.
-        let substituent = apply_anionic_parent_names(
-            "1,3-dinitrilopropan-2-yl",
-            &mol,
-            &[0],
-            &BTreeMap::from([(0, "2".into())]),
-            None,
-            &AtomSet::new(),
-        )
-        .unwrap();
-        assert!(
-            substituent.starts_with("1,3-dinitrilopropan-2-id") && substituent.ends_with("-2-yl"),
-            "{substituent}"
-        );
-        assert!(
-            apply_anionic_parent_names(
-                "butane",
-                &mol,
-                &[0],
-                &BTreeMap::from([(0, "2".into())]),
-                None,
-                &AtomSet::new()
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn retained_anion_parent_keeps_indicated_hydrogen() {
-        for (name, stem, locant, expected) in [
-            (
-                "2-methyl-1H-pyrrole",
-                "pyrrol",
-                "1",
-                "2-methyl-1H-pyrrol-1-ide",
-            ),
-            (
-                "hexahydro-1H,6H-pyrrolo[3,4-b]pyridine",
-                "pyrrolo[3,4-b]pyridin",
-                "1",
-                "hexahydro-1H,6H-pyrrolo[3,4-b]pyridin-1-ide",
-            ),
-            ("1H-pyrrol-1-ide", "pyrrol", "1", "1H-pyrrol-1-ide"),
-        ] {
-            assert_eq!(
-                replace_retained_stem_with_ide(name, stem, locant),
-                expected,
-                "{name}"
-            );
-        }
-    }
-
-    #[test]
-    fn substituted_methane_parent_uses_methanide() {
-        use super::super::graph_io::read_smiles;
-        for (smiles, name, expected) in [
-            (
-                "Oc1ccccc1[CH2-]",
-                "(2-hydroxyphenyl)methane",
-                "(2-hydroxyphenyl)methanide",
-            ),
-            (
-                "Oc1ccc(cc1)[CH2-]",
-                "(4-hydroxyphenyl)methane",
-                "(4-hydroxyphenyl)methanide",
-            ),
-        ] {
-            let mol = read_smiles(smiles).unwrap();
-            let carbon = mol
-                .atoms
-                .values()
-                .find(|atom| atom.is_carbon() && atom.charge == -1)
-                .unwrap()
-                .idx;
-            assert_eq!(
-                apply_anionic_parent_names(
-                    name,
-                    &mol,
-                    &[carbon],
-                    &BTreeMap::from([(carbon, "1".into())]),
-                    None,
-                    &AtomSet::new(),
-                )
-                .unwrap(),
-                expected,
-                "{smiles}"
-            );
-            assert!(
-                apply_anionic_parent_names(
-                    &format!("({name})ethane"),
-                    &mol,
-                    &[carbon],
-                    &BTreeMap::from([(carbon, "1".into())]),
-                    None,
-                    &AtomSet::new(),
-                )
-                .is_err()
             );
         }
     }
@@ -1218,64 +724,6 @@ mod tests {
             .map(|name| name.text)
             .as_deref(),
             Ok("1-[(1-imino-1-phenylmethyl){[(1S)-6-methyl-2-azabicyclo[4.3.1]decan-8-yl]methylidene}ammonio]ethan-1-iminium"),
-        );
-    }
-
-    #[test]
-    fn nitrogen_zwitterion_stack_uses_the_ring_graph() {
-        let mut mol = Molecule::new();
-        for (idx, charge) in [-1, 1, 0, -1, 1, 0].into_iter().enumerate() {
-            let mut atom = Atom::new(
-                idx,
-                if matches!(idx, 0 | 1 | 3 | 4) {
-                    "N"
-                } else {
-                    "C"
-                },
-            );
-            atom.charge = charge;
-            mol.add_atom(atom).unwrap();
-        }
-        for (idx, (u, v, order)) in [
-            (0, 1, 2),
-            (1, 2, 1),
-            (2, 3, 2),
-            (3, 4, 1),
-            (4, 5, 2),
-            (5, 0, 1),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            mol.add_bond(Bond::new(idx + 1, u, v, order)).unwrap();
-        }
-        let path = [0, 1, 2, 3, 4, 5];
-        let locants = path
-            .iter()
-            .map(|&idx| (idx, (idx + 1).to_string()))
-            .collect();
-        assert_eq!(
-            apply_anionic_parent_names(
-                "1,2,4,5-tetrazacyclohexa-1,3,5-trien-2,5-ium",
-                &mol,
-                &path,
-                &locants,
-                None,
-                &AtomSet::new(),
-            )
-            .unwrap(),
-            "1,2,4,5-tetrazacyclohexa-1,3,5-trien-1,4-ide-2,5-ium"
-        );
-        assert!(
-            apply_anionic_parent_names(
-                "1,2,4,5-tetrazacyclohexa-1,3,5-trien-2,5-ium-3-ol",
-                &mol,
-                &path,
-                &locants,
-                None,
-                &AtomSet::new(),
-            )
-            .is_err()
         );
     }
 }

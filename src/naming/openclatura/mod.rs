@@ -60,10 +60,14 @@ mod rules;
 mod small_ring_stereo;
 mod special_cases;
 mod species;
+mod spelling;
 mod spiro_subgraph;
 mod subgraph_tools;
 mod unknown_stereo;
 mod von_baeyer;
+
+#[cfg(test)]
+mod anion_spelling_tests;
 
 /// The naming profile on the worker wire and in generated-name warnings.
 pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
@@ -336,7 +340,7 @@ fn assess_derivation(mol: &molecule::Molecule, derivation: &component_namer::Der
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::LinearPhane,
         ));
-    } else if has_ring_assembly(mol) {
+    } else if has_ring_assembly(mol) || has_anionic_ring_assembly(mol) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::RingAssembly,
         ));
@@ -714,6 +718,30 @@ fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
         .any(|&junction| !mol.ring_assembly_is_named(junction))
 }
 
+/// Removing or adding a hydron does not change the parent hydride, so a
+/// pyrrolide joined to a pyrrole still has a ring assembly parent (P-28,
+/// P-72.2.2.1, P-73.1).
+fn has_anionic_ring_assembly(mol: &molecule::Molecule) -> bool {
+    if mol.atoms.values().all(|atom| atom.charge != -1) {
+        return false;
+    }
+    let mut neutral = mol.clone();
+    for atom in neutral.atoms.values_mut() {
+        if atom.charge == -1 {
+            atom.charge = 0;
+            atom.total_h_count += 1;
+            atom.explicit_h_count += 1;
+        } else if atom.charge == 1 && atom.total_h_count > 0 {
+            atom.charge = 0;
+            atom.total_h_count -= 1;
+            atom.explicit_h_count = atom.explicit_h_count.saturating_sub(1);
+        }
+    }
+    ring_assembly::assembly_junctions(&neutral)
+        .iter()
+        .any(|&junction| !mol.ring_assembly_is_named(junction))
+}
+
 /// Count nonbonding electrons on the main-group elements that can carry
 /// tetrahedral tags. Attached hydrogens also consume bonding electrons:
 /// a three-neighbour Si–H centre has four bonds and no lone pair.
@@ -887,6 +915,11 @@ mod tests {
             ),
             ("CCB(O)O", "ethylboronic acid", NameStatus::Preferred),
             (
+                "C1C=Cc2cc3sccc3n12",
+                "5H-pyrrolo[1,2-a]thieno[2,3-d]pyrrole",
+                NameStatus::NotPreferred(NameReason::UnregisteredRetainedComponent),
+            ),
+            (
                 "C[SH2]C",
                 "dimethyl-lambda4-sulfane",
                 NameStatus::Unverified(NameReason::UnauditedPath),
@@ -1013,13 +1046,8 @@ mod tests {
                 NameStatus::Unverified(NameReason::UnauditedParent),
             ),
             (
-                "[CH2-]CC#[N+][O-]",
-                "propan-3-ide-1-nitrile oxide",
-                NameStatus::Unverified(NameReason::AnionParent),
-            ),
-            (
                 "[O-]C(=O)c1ccccc1Cc1cc[n-]c1",
-                "2-[(1H-pyrrol-1-ide-3-yl)methyl]benzoate",
+                "2-[(1H-pyrrol-1-id-3-yl)methyl]benzoate",
                 NameStatus::Unverified(NameReason::AnionParent),
             ),
             (
@@ -2128,8 +2156,8 @@ mod tests {
     #[test]
     fn fusion_unregistered_retained_components_keep_names_and_report_departures() {
         use crate::naming::{NameReason, NameStatus};
-        // P-25.3.2.4 requires the retained components in Table 2.8. Until
-        // those components are registered, preserve the generated alternatives.
+        // P-25.2.2.2/3 retained components are outside Table 2.8. Until
+        // they are registered, preserve the generated alternatives.
         for (smiles, expected) in [
             (
                 "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2",
@@ -2138,26 +2166,6 @@ mod tests {
             (
                 "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1S2",
                 "8H-[1,4]benzothiazino[3,2-j]phenanthridine",
-            ),
-            (
-                "c1ccc2c(c1)Cc1c(ccc3ccccc13)S2",
-                "12H-naphtho[2,1-b][1]benzothiopyran",
-            ),
-            (
-                "c1ccc2c(c1)Cc1cc3ccccc3cc1S2",
-                "12H-naphtho[2,3-b][1]benzothiopyran",
-            ),
-            (
-                "c1ccc2c(c1)Cc1ccc3ccccc3c1S2",
-                "7H-naphtho[1,2-b][1]benzothiopyran",
-            ),
-            (
-                "c1ccc2cc3c(cc2c1)Cc1cc2ccccc2cc1S3",
-                "13H-dinaphtho[2,3-b:2',3'-e]thiopyran",
-            ),
-            (
-                "c1ccc2c(c1)Cc1c(ccc3ccccc13)O2",
-                "12H-naphtho[2,1-b][1]benzopyran",
             ),
             (
                 "c1ccc2cc3c(cc2c1)Nc1cc2ccccc2cc1O3",

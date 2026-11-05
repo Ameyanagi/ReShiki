@@ -1,8 +1,7 @@
 //! Checked-in fusion policy, search limits, and intrinsic ring shapes.
 use serde::Deserialize;
-use serde_json::Value;
 use std::sync::LazyLock;
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct FusionRuleConfig {
     pub planner_tier: String,
     pub minimum_ring_size: usize,
@@ -10,6 +9,7 @@ pub struct FusionRuleConfig {
     pub support: FusionSupportConfig,
 }
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FusionSupportConfig {
     pub cover_kinds: Vec<String>,
     pub join_kinds: Vec<String>,
@@ -19,9 +19,11 @@ pub struct FusionSupportConfig {
     pub charged_parents: bool,
     pub nonstandard_valence: bool,
     pub interior_atoms: bool,
+    #[serde(deserialize_with = "Option::deserialize")]
     pub maximum_indicated_hydrogens: Option<usize>,
 }
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FusionSearchLimits {
     pub minimum_ring_size: usize,
     pub maximum_ring_size: usize,
@@ -38,6 +40,7 @@ pub struct FusionSearchLimits {
     pub maximum_name_candidates: usize,
 }
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RingShapeSpec {
     pub ring_size: usize,
     #[serde(rename = "id")]
@@ -49,6 +52,7 @@ pub struct RingShapeSpec {
     pub distortion_rank: usize,
     #[serde(default = "cartesian")]
     pub coordinate_system: String,
+    #[serde(default)]
     pub directed_entry_port: Option<usize>,
     #[serde(default)]
     pub opposite_ports: Vec<usize>,
@@ -67,32 +71,137 @@ pub struct FusionNomenclatureConfig {
     pub ring_shapes: Vec<RingShapeSpec>,
     pub annulene_ring_sizes: Vec<usize>,
 }
-pub fn annulene_ring_sizes_from_data(data: &Value) -> Result<Vec<usize>, String> {
-    let p = &data["annulene_series"];
-    if p.is_null() {
-        return Ok(Vec::new());
-    }
-    let min = p["minimum_ring_size"]
-        .as_u64()
-        .ok_or("missing annulene minimum")? as usize;
-    let max = p["maximum_ring_size"]
-        .as_u64()
-        .ok_or("missing annulene maximum")? as usize;
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct FusionComponentData {
+    schema_version: usize,
+    pub registry_version: String,
+    graph_source: String,
+    pub retained_component_status: RetainedComponentStatusData,
+    rules: FusionRuleData,
+    search_limits: FusionSearchLimits,
+    annulene_series: AnnuleneSeries,
+    ring_shapes: Vec<RingShapeSpec>,
+    pub retained_component_generators: Vec<RetainedComponentGenerator>,
+    pub generated_components: Vec<GeneratedComponent>,
+    pub systematic_component_generators: Vec<SystematicComponentGenerator>,
+    pub components: Vec<FusionComponentRow>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FusionRuleData {
+    planner_tier: String,
+    support: FusionSupportConfig,
+    eligibility_gate: FusionEligibilityGate,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FusionEligibilityGate {
+    minimum_ring_size: usize,
+    minimum_ring_count: usize,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AnnuleneSeries {
+    minimum_ring_size: usize,
+    maximum_ring_size: usize,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RetainedComponentStatusData {
+    #[serde(rename = "rule")]
+    _rule: String,
+    pub components: Vec<RetainedComponentStatus>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RetainedComponentStatus {
+    pub template_name: String,
+    pub horizontal_ring_count: usize,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct GeneratedComponent {
+    pub key: String,
+    pub generator: String,
+    pub ring_size: usize,
+    pub bond_class: String,
+    pub pin_component: bool,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RetainedComponentGenerator {
+    pub family: String,
+    pub allow_as_parent: bool,
+    pub allow_as_peri_parent: bool,
+    pub allow_as_attached: bool,
+    #[serde(rename = "rule")]
+    _rule: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct SystematicComponentGenerator {
+    pub generator: String,
+    pub allow_as_parent: bool,
+    pub allow_as_attached: bool,
+    #[serde(rename = "rule")]
+    _rule: String,
+}
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct FusionComponentRow {
+    pub key: String,
+    #[serde(default)]
+    pub parent_name: Option<String>,
+    #[serde(default)]
+    pub attached_prefix: Option<String>,
+    #[serde(default)]
+    pub preferred_fusion_prefix: Option<String>,
+    #[serde(default)]
+    pub template_names: Option<Vec<String>>,
+    pub allow_as_parent: bool,
+    pub allow_as_attached: bool,
+    #[serde(default)]
+    pub allow_as_peri_parent: bool,
+    #[serde(default)]
+    pub accepted_general_prefixes: Vec<String>,
+    #[serde(default)]
+    pub horizontal_ring_count: Option<usize>,
+    #[serde(default = "basic")]
+    pub multiplicative_prefix_style: String,
+    #[serde(default)]
+    pub omit_attached_locants: bool,
+    #[serde(default)]
+    pub omit_ortho_peri_attached_locants: bool,
+    #[serde(rename = "rule")]
+    pub _rule: String,
+}
+fn basic() -> String {
+    "basic".into()
+}
+pub(super) fn annulene_ring_sizes_from_data(
+    data: &FusionComponentData,
+) -> Result<Vec<usize>, String> {
+    let p = &data.annulene_series;
+    let min = p.minimum_ring_size;
+    let max = p.maximum_ring_size;
     if min < 7 || min > max {
         return Err("invalid annulene interval".into());
     }
     Ok((min..=max).collect())
 }
-pub fn fusion_nomenclature_config_from_data(
-    data: &Value,
+fn fusion_nomenclature_config_from_data(
+    data: &FusionComponentData,
 ) -> Result<FusionNomenclatureConfig, String> {
-    if data["schema_version"] != 1 {
+    if data.schema_version != 1 {
         return Err("unsupported fusion schema".into());
     }
-    let mut rules = data["rules"].clone();
-    rules["minimum_ring_size"] = rules["eligibility_gate"]["minimum_ring_size"].clone();
-    rules["minimum_ring_count"] = rules["eligibility_gate"]["minimum_ring_count"].clone();
-    let rules: FusionRuleConfig = serde_json::from_value(rules).map_err(|e| e.to_string())?;
+    let rules = FusionRuleConfig {
+        planner_tier: data.rules.planner_tier.clone(),
+        minimum_ring_size: data.rules.eligibility_gate.minimum_ring_size,
+        minimum_ring_count: data.rules.eligibility_gate.minimum_ring_count,
+        support: data.rules.support.clone(),
+    };
     if rules.support.cover_kinds != ["tree"]
         || rules.support.join_kinds != ["ortho", "ortho_peri", "higher_order"]
     {
@@ -101,13 +210,11 @@ pub fn fusion_nomenclature_config_from_data(
     if rules.planner_tier.is_empty() {
         return Err("fusion planner tier must be named".into());
     }
-    let search: FusionSearchLimits =
-        serde_json::from_value(data["search_limits"].clone()).map_err(|e| e.to_string())?;
+    let search = data.search_limits.clone();
     if search.minimum_ring_size > search.maximum_ring_size || search.mancude_states == 0 {
         return Err("invalid fusion ring limits".into());
     }
-    let ring_shapes: Vec<RingShapeSpec> =
-        serde_json::from_value(data["ring_shapes"].clone()).map_err(|e| e.to_string())?;
+    let ring_shapes = data.ring_shapes.clone();
     if ring_shapes.iter().any(|s| {
         s.horizontal_axis_class.is_empty()
             || !(3..=8).contains(&s.ring_size)
@@ -118,8 +225,8 @@ pub fn fusion_nomenclature_config_from_data(
         return Err("invalid intrinsic ring shape".into());
     }
     Ok(FusionNomenclatureConfig {
-        registry_version: data["registry_version"].as_str().unwrap_or_default().into(),
-        graph_source: data["graph_source"].as_str().unwrap_or_default().into(),
+        registry_version: data.registry_version.clone(),
+        graph_source: data.graph_source.clone(),
         rules,
         search,
         ring_shapes,
@@ -127,10 +234,13 @@ pub fn fusion_nomenclature_config_from_data(
     })
 }
 #[allow(clippy::expect_used)]
+pub(super) static FUSION_DATA: LazyLock<FusionComponentData> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../data/fusion_components.json"))
+        .expect("checked-in fusion policy JSON")
+});
+#[allow(clippy::expect_used)]
 static CONFIG: LazyLock<FusionNomenclatureConfig> = LazyLock::new(|| {
-    let v: Value = serde_json::from_str(include_str!("../data/fusion_components.json"))
-        .expect("checked-in fusion policy JSON");
-    fusion_nomenclature_config_from_data(&v).expect("checked-in fusion policy")
+    fusion_nomenclature_config_from_data(&FUSION_DATA).expect("checked-in fusion policy")
 });
 pub fn fusion_nomenclature_config() -> &'static FusionNomenclatureConfig {
     &CONFIG

@@ -1,8 +1,9 @@
 //! Parent stems, unsaturation and principal/substituent tails.
 use super::{
     assembly_charge::{
-        append_charge_suffixes_to_terminal, has_ionic_retained_parent, has_retained_like_parent,
-        inferred_ionic_retained_parent, parent_charge_suffix,
+        append_charge_suffixes_to_terminal, has_ionic_retained_parent, has_parent_anion_suffix,
+        has_retained_like_parent, inferred_ionic_retained_parent, parent_anion_cites_locants,
+        parent_charge_suffix,
     },
     assembly_parts::AssemblyParts,
     assembly_prefixes::substituent_sort_key,
@@ -11,6 +12,7 @@ use super::{
     nomenclature::RULES,
     principal_suffixes::render_principal_suffix,
     rules::{bonds, elision, multipliers, stems},
+    spelling,
 };
 
 fn functional_ring_parent(name: &str, key: &str) -> Option<String> {
@@ -489,14 +491,6 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
         .as_ref()
         .filter(|parent| parent.is_fusion_parent())
     {
-        if parts.is_substituent
-            && let Some(stem) = parent
-                .hydride_metadata
-                .as_ref()
-                .and_then(|metadata| metadata.derivative_stem.as_ref())
-        {
-            return Ok((stem.clone(), String::new()));
-        }
         let name = parent
             .base_name()
             .ok_or("openclatura: fusion parent has no audited spelling")?;
@@ -514,6 +508,7 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
         );
     }
     if has_ionic_retained_parent(parts)
+        && !has_parent_anion_suffix(parts)
         && let Some(name) = parts
             .retained_name
             .as_ref()
@@ -522,10 +517,20 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
         return Ok((name.clone(), String::new()));
     }
     if let Some(name) = inferred_ionic_retained_parent(parts) {
+        if has_parent_anion_suffix(parts)
+            && let Some((neutral, _)) = RULES
+                .charges
+                .retained_ionic_n_parents
+                .iter()
+                .find(|(_, ionic)| **ionic == name)
+        {
+            return Ok(split_parent_terminal(neutral));
+        }
         return Ok((name, String::new()));
     }
     if let Some(name) = &parts.retained_name {
         if parts.is_substituent
+            && !has_parent_anion_suffix(parts)
             && let Some(spec) = super::retained_specs::retained_parent_spec(Some(name))
             && let Some(stem) = spec.substituent_stem
         {
@@ -820,6 +825,44 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
             cites_locants,
         };
     }
+    if has_parent_anion_suffix(parts) {
+        // Charged derivatives start from the full hydride, including methane's
+        // `an` and the `e` that a multiplied anion suffix may retain.
+        let (stem, unsaturation, unsaturation_cites_locants) = if has_retained_like_parent(parts) {
+            (stem.to_owned(), String::new(), false)
+        } else if parts.unsaturations.is_empty() {
+            (stem.to_owned(), "an".into(), false)
+        } else {
+            format_unsaturations(parts, stem, false)
+        };
+        let cite_attachment = parts.parent_length > 1
+            && (parent_anion_cites_locants(parts)
+                || parts.attachment_locant != "1"
+                || !parts.unsaturations.is_empty()
+                || always_print_substituent_locant(parts));
+        let attachment = if cite_attachment {
+            format!(
+                "-{}-{suffix}",
+                parts.stereochemical_locant(&parts.attachment_locant)
+            )
+        } else {
+            suffix
+        };
+        // The caller has already resolved this same parent successfully.
+        let hydride_terminal =
+            parent_stem_and_terminal(parts).map_or(String::new(), |(_, terminal)| terminal);
+        let charged_terminal = spelling::join(&hydride_terminal, &parent_charge_suffix(parts));
+        return ParentTail {
+            stem,
+            unsaturation,
+            terminal: spelling::join(&charged_terminal, &attachment),
+            cites_locants: unsaturation_cites_locants
+                || cite_attachment
+                || parent_anion_cites_locants(parts)
+                || !super::assembly_charge::positive_parent_n_charges(parts).is_empty(),
+            ..Default::default()
+        };
+    }
     let always = parts.spiro_prefix_composition || always_print_substituent_locant(parts);
     let two = !parts.is_ring
         && parts.parent_length == 2
@@ -989,7 +1032,14 @@ pub fn format_principal_suffix(
     if parts.elide_principal_group_locants {
         omit = true;
     }
-    let cites_locants = group.suffix_with_locant && !locs.is_empty() && !omit;
+    let anion_cites_locants = parent_anion_cites_locants(parts);
+    if anion_cites_locants {
+        // Once the anion position is cited, preserve the functional suffix
+        // locants too, including al and nitrile's normally implicit locants.
+        omit = false;
+    }
+    let cites_locants =
+        (group.suffix_with_locant || anion_cites_locants) && !locs.is_empty() && !omit;
     Ok((
         terminal,
         if cites_locants {
@@ -1055,22 +1105,27 @@ pub(super) fn format_parent_tail(
     } else {
         (stem.to_owned(), String::new(), false)
     };
-    let (mut terminal, mut suffix, suffix_cites_locants) = if parts.retained_absorbs_principal_group
-    {
-        (terminal.to_owned(), String::new(), false)
-    } else {
-        format_principal_suffix(parts, terminal)?
-    };
+    let (mut suffix_terminal, mut suffix, suffix_cites_locants) =
+        if parts.retained_absorbs_principal_group {
+            (terminal.to_owned(), String::new(), false)
+        } else {
+            format_principal_suffix(parts, terminal)?
+        };
     let charge = parent_charge_suffix(parts);
     let charge_cites_locants = !charge.is_empty();
-    if !charge.is_empty() {
-        terminal.clear();
+    if has_parent_anion_suffix(parts) {
+        let charged_terminal = spelling::join(terminal, &charge);
+        suffix_terminal = spelling::join(&charged_terminal, &suffix);
+        // Keep the principal suffix separate for added-hydrogen placement.
+        suffix_terminal.truncate(suffix_terminal.len() - suffix.len());
+    } else if !charge.is_empty() {
+        suffix_terminal.clear();
         suffix = format!("{charge}{suffix}");
     }
     Ok(ParentTail {
         stem,
         unsaturation: unsat,
-        terminal,
+        terminal: suffix_terminal,
         suffix,
         cites_locants: unsaturation_cites_locants || suffix_cites_locants || charge_cites_locants,
     })
@@ -1092,6 +1147,105 @@ fn assembly_suffix_stem(parts: &AssemblyParts, elide: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rendered_parent(parts: &AssemblyParts) -> String {
+        let (stem, terminal) = parent_stem_and_terminal(parts).unwrap();
+        let tail = if parts.is_substituent {
+            format_substituent_tail(parts, &stem)
+        } else {
+            format_parent_tail(parts, &stem, &terminal).unwrap()
+        };
+        format!(
+            "{}{}{}{}",
+            tail.stem, tail.unsaturation, tail.terminal, tail.suffix
+        )
+    }
+
+    #[test]
+    fn anion_composition_preserves_the_full_hydride_until_each_join() {
+        use super::super::assembly_parts::{AnionSuffix, PrincipalGroupItem};
+        let mut parts = AssemblyParts::new(6);
+        parts.is_ring = true;
+        parts.retained_name = Some("piperazine".into());
+        parts.anion_suffix = Some(AnionSuffix {
+            locants: vec!["1".into(), "4".into()],
+            cite_locants: true,
+        });
+        assert_eq!(rendered_parent(&parts), "piperazine-1,4-diide");
+        parts.principal_group = Some(PrincipalGroupItem::new("amine", vec!["2".into()]));
+        assert_eq!(rendered_parent(&parts), "piperazine-1,4-diid-2-amine");
+
+        let mut parts = AssemblyParts::new(4);
+        parts.anion_suffix = Some(AnionSuffix {
+            locants: vec!["2".into()],
+            cite_locants: true,
+        });
+        parts.principal_group = Some(PrincipalGroupItem::new("aldehyde", vec!["1".into()]));
+        assert_eq!(rendered_parent(&parts), "butan-2-id-1-al");
+        parts.elide_principal_group_locants = true;
+        assert_eq!(rendered_parent(&parts), "butan-2-id-1-al");
+    }
+
+    #[test]
+    fn anion_substituents_keep_full_hydrides_and_elide_before_attachment() {
+        use super::super::assembly_parts::AnionSuffix;
+        let mut parts = AssemblyParts::new(3);
+        parts.is_substituent = true;
+        parts.attachment_locant = "2".into();
+        parts.anion_suffix = Some(AnionSuffix {
+            locants: vec!["2".into()],
+            cite_locants: true,
+        });
+        assert_eq!(rendered_parent(&parts), "propan-2-id-2-yl");
+
+        parts.parent_length = 1;
+        parts.attachment_locant = "1".into();
+        parts.anion_suffix = Some(AnionSuffix {
+            locants: vec!["1".into()],
+            cite_locants: false,
+        });
+        assert_eq!(rendered_parent(&parts), "methanidyl");
+
+        parts.parent_length = 6;
+        parts.is_ring = true;
+        parts.retained_name = Some("benzene".into());
+        assert_eq!(rendered_parent(&parts), "benzenidyl");
+    }
+
+    #[test]
+    fn anion_charge_stacks_keep_route_order_and_cation_only_spelling() {
+        use super::super::assembly_parts::{AnionSuffix, ParentChargeItem};
+        let mut parts = AssemblyParts::new(5);
+        parts.is_ring = true;
+        parts.retained_name = Some("pyrazole".into());
+        parts.parent_charges = vec![ParentChargeItem {
+            locant: "2".into(),
+            symbol: "N".into(),
+            charge: 1,
+            ..Default::default()
+        }];
+        parts.anion_suffix = Some(AnionSuffix {
+            locants: vec!["1".into()],
+            cite_locants: true,
+        });
+        assert_eq!(rendered_parent(&parts), "pyrazol-1-ide-2-ium");
+
+        parts.parent_length = 6;
+        parts.retained_name = Some("piperidine".into());
+        parts.parent_charges[0].locant = "1".into();
+        parts.anion_suffix.as_mut().unwrap().locants = vec!["4".into()];
+        assert_eq!(rendered_parent(&parts), "piperidin-1-ium-4-ide");
+
+        parts.anion_suffix = None;
+        parts.retained_name = Some("piperazine".into());
+        parts.parent_charges.push(ParentChargeItem {
+            locant: "4".into(),
+            symbol: "N".into(),
+            charge: 1,
+            ..Default::default()
+        });
+        assert_eq!(rendered_parent(&parts), "piperazin-1,4-diium");
+    }
 
     #[test]
     fn spiro_composition_keeps_attachment_and_parent_unsaturation_locants() {

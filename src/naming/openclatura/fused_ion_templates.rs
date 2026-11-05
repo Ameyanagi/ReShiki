@@ -1,24 +1,25 @@
 //! Graph-bound retained fused ion operations from the upstream spelling registry.
 use super::{assembly_parts::AssemblyParts, molecule::AtomSet};
-use serde::Deserialize;
+use serde::{Deserialize, de::IgnoredAny};
 use std::sync::LazyLock;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct FusedIonTemplate {
     base_parent_name: String,
-    #[serde(default)]
     base_parent_aliases: Vec<String>,
     allowed_charge_operation: String,
-    #[serde(default)]
     allowed_locants: Vec<String>,
     suffix_or_prefix_form: String,
     opsin_grammar_name: String,
-    #[serde(default)]
     production_ready: bool,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct FusedIonTemplateRegistry {
+    #[serde(rename = "source")]
+    _source: IgnoredAny,
     templates: Vec<FusedIonTemplate>,
 }
 impl FusedIonTemplateRegistry {

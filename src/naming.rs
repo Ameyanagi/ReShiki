@@ -193,7 +193,7 @@ impl NameReason {
                 "Uses isoxazole or isothiazole as a fusion parent component, as in cyclopenta[c]isoxazole or benzo[d]isothiazole; preferred IUPAC names use [1,2]oxazole and [1,2]thiazole, or a benzo name such as 1,2-benzothiazole (P-25.3.2.1.2, P-25.2.2.4)."
             }
             Self::UnregisteredRetainedComponent => {
-                "Uses a junior fusion parent because a senior retained basic component is not registered, as in 12H-naphtho[2,1-b][1]benzothiopyran rather than 12H-benzo[a]thioxanthene (P-25.3.2.4; P-25.2.1, Table 2.8)."
+                "Uses a junior fusion parent although a senior retained component is present, as in 12H-naphtho[2,1-b][1]benzothiopyran rather than 12H-benzo[a]thioxanthene, or 5H-pyrrolo[1,2-a]thieno[2,3-d]pyrrole rather than 5H-thieno[2,3-b]pyrrolizine (P-25.3.2.4; P-25.2.1, Table 2.8)."
             }
             Self::HigherOrderFusion => {
                 "Cites an isolated benzo ring as a separate higher-order component, as in [1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazole; preferred IUPAC names treat the benzo ring and an ortho-fused heteromonocycle as one benzoheterocycle component, as in [1,3]thiazolo[5,4-e][1,3]benzoxazole (P-25.3.5, P-25.2.2.4; FR-3.5)."
