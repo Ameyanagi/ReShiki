@@ -110,6 +110,61 @@ fn names_match_intended_stereoisomer_sets() {
             "O[C@H]1[C@@H](C)CCCC1 |r|",
             None,
         ),
+        // A ring cis/trans descriptor keeps the rel/rac group of the centre
+        // an earlier R*/RS descriptor configured. CLI: cis is (1R,2S),
+        // trans (1R,2R), cis acid (1S,2R).
+        (
+            "(1R*)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "rel-(1R)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "rac-(1R)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "(1RS)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "(1R*)-trans-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@H](C)CCCC1 |r|",
+            None,
+        ),
+        (
+            "rac-(1S)-cis-2-phenylcyclopropane-1-carboxylic acid",
+            "OC(=O)[C@H]1C[C@H]1c1ccccc1 |r|",
+            None,
+        ),
+        (
+            "(1R)-cis-2-methylcyclohexan-1-ol",
+            "O[C@H]1[C@@H](C)CCCC1",
+            None,
+        ),
+        // An agreeing 5alpha keeps C5 in the rel group.
+        (
+            "rel-(5R,8R,9S,10S,13R,14S,17R,20R)-5alpha-cholestane",
+            "CC(C)CCC[C@@H](C)[C@H]1CC[C@H]2[C@@H]3CC[C@H]4CCCC[C@]4(C)[C@H]3CC[C@]12C |r|",
+            None,
+        ),
+        // The anomer joins the DL group: alpha-D plus alpha-L, not beta-L.
+        (
+            "alpha-DL-glucopyranose",
+            "OC[C@H]1O[C@H](O)[C@H](O)[C@@H](O)[C@@H]1O |r|",
+            None,
+        ),
+        (
+            "beta-DL-glucopyranose",
+            "OC[C@H]1O[C@@H](O)[C@H](O)[C@@H](O)[C@@H]1O |r|",
+            None,
+        ),
         // #934: leading rel-/rac- does not reach nested descriptor sets.
         (
             "rel-(2R)-2-[(1R,2S,3R,4S)-3-methylbicyclo[2.2.1]heptan-2-yl]propan-1-ol",
