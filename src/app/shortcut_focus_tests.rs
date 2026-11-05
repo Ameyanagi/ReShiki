@@ -1505,6 +1505,7 @@ async fn optimization_chord_stays_in_real_focused_fields_and_routes_after_blur()
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
 async fn join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur() {
+    use reshiki::atom_labels::refresh::Refresh;
     use reshiki::document::Document;
 
     for panel in ["numeric", "sidebar labels"] {
@@ -1517,6 +1518,10 @@ async fn join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur(
                 "../../tests/fixtures/coordination/co-en3-before.rsk"
             ))
             .unwrap();
+            // Seed derived labels as after a native load's background refresh settles.
+            Refresh::calculate(&app.tab.doc, &Refresh::default())
+                .unwrap()
+                .apply(&mut app.tab.doc);
             if typed {
                 app.tab.doc = reshiki::atom_text::apply(
                     &app.tab.doc,
@@ -1806,19 +1811,26 @@ async fn command_palette_unavailable_row_click_keeps_typing_in_the_search_field(
     let _ = app.update(Message::Commands(Action::Query("bring bond".into())));
     let field = ui.input(&app, "command-palette-search").0;
     ui.click(&mut app, field.center());
-    let first = app.commands.current().expect("a result").clone();
+    let unavailable = app
+        .commands
+        .ranked()
+        .into_iter()
+        .find(|command| command.name == "Bring bond forward")
+        .expect("Bring bond forward is a result")
+        .clone();
     assert!(
-        app.command_unavailable(&first).is_some(),
+        app.command_unavailable(&unavailable).is_some(),
         "an empty drawing has no bond to bring forward"
     );
     let index = app
         .commands
         .catalog()
         .iter()
-        .position(|c| c.name == first.name)
+        .position(|c| c.name == unavailable.name)
         .expect("a catalog row");
     click_running_tasks(&mut ui, &mut app, &format!("command-palette-row-{index}")).await;
     assert!(app.commands.open, "the palette stays open");
+    assert_eq!(app.commands.current().unwrap().name, unavailable.name);
     let (_, messages) = ui.event(
         &app,
         press(
@@ -1870,8 +1882,10 @@ async fn command_palette_rows_are_named_buttons() {
     let all = format!("All, {} results", app.commands.ranked().len());
     assert_eq!(chips.first().map(|chip| chip.1), Some(all.as_str()));
     assert!(chips.len() > 1, "{chips:?}");
+    // A single hit reads "1 result".
     assert!(chips.iter().all(|(role, name)| {
-        *role == reshiki::accessibility::Role::ToggleButton && name.ends_with(" results")
+        *role == reshiki::accessibility::Role::ToggleButton
+            && (name.ends_with(" results") || name.ends_with(", 1 result"))
     }));
     // Ids follow commands, not positions: a narrower search keeps Benzene's id.
     let benzene = rows[0].id.clone();
@@ -1930,6 +1944,8 @@ async fn context_row_rotation_field_applies_a_typed_angle() {
     app.tab.history = super::History::default();
     app.tab.busy = false;
     app.sync_numeric_transforms();
+    assert!(app.keyboard_drawing_active());
+    assert_eq!(app.tab.keyboard_drawing.marker_point(&app.tab.doc), None);
     let drawing = app.tab.doc.clone();
     let mut expected = drawing.clone();
     let ids = expected.expand_abbreviation_selection(&app.tab.selected);
@@ -1940,6 +1956,7 @@ async fn context_row_rotation_field_applies_a_typed_angle() {
     );
     assert_eq!(ui.input_value(&app, "arrange-rotation"), "0");
     let bounds = ui.input(&app, "arrange-rotation").0;
+    assert!(bounds.width > 0., "{bounds:?}");
     assert!(ui.viewport.contains(bounds.center()), "{bounds:?}");
     ui.click(&mut app, bounds.center());
     assert!(ui.input(&app, "arrange-rotation").1);
