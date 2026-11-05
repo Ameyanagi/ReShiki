@@ -24404,6 +24404,7 @@
         "1"
       ],
       "template": {
+        "charge_policy": "deprotonated_indicated_h",
         "atoms": [
           {
             "locant": "1",
@@ -31767,6 +31768,7 @@
         "9"
       ],
       "template": {
+        "charge_policy": "deprotonated_indicated_h",
         "atoms": [
           {
             "locant": "1"

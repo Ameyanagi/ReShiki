@@ -175,7 +175,7 @@ impl NameReason {
                 "Uses an acylamino prefix instead of the preferred acid-derived amido form (P-66.1.1.4.3), or a guanidino prefix substituted on its outer nitrogens or with an E/Z descriptor, such as 3-methylguanidino; preferred IUPAC names cite carbamimidoyl inside an amino prefix, as in (N-methylcarbamimidoyl)amino (P-66.4.1.2.1.3)."
             }
             Self::CationPrefix => {
-                "Uses the ammonio prefix; whether the azaniumyl form (P-73.6) is required here has not been verified."
+                "Uses the accepted ammonio/iminio alternative for a substituted cationic nitrogen prefix because the preferred N,N-dimethylmethanaminiumyl-type form is not generated yet (P-73.6 and the 2020 corrections to P-74.1.3)."
             }
             Self::FunctionalClass => {
                 "Uses a functional-class form such as a hydrazone, a chiral sulfoxide, a mixed chalcogen peroxide or a phosphane oxide with halide or alkoxy ligands; preferred IUPAC names use substitutive or acid-derived forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane, [(phenylselanyl)tellanyl]benzene or dimethylphosphinic fluoride (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2, P-68.3.2.3.1)."

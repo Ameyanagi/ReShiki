@@ -17,7 +17,11 @@ pub fn render_principal_suffix(rule: &FunctionalGroupRule, count: usize) -> Stri
         .enumerate()
         .map(|(i, w)| {
             if positions.contains(&i) {
-                multipliers::suffix(count, w)
+                if w == "aminium" {
+                    format!("{}({w})", multipliers::complex_(count))
+                } else {
+                    multipliers::suffix(count, w)
+                }
             } else {
                 w.into()
             }
@@ -40,6 +44,9 @@ mod tests {
             ("ketone", 4, "tetrone"),
             ("alcohol", 4, "tetrol"),
             ("amine", 4, "tetramine"),
+            ("aminium", 1, "aminium"),
+            ("aminium", 2, "bis(aminium)"),
+            ("aminium", 3, "tris(aminium)"),
             ("ring_carboxylic_acid", 4, "tetracarboxylic acid"),
         ] {
             let rule = RULES.functional_groups.get(key).unwrap();

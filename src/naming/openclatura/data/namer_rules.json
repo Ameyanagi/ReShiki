@@ -306,7 +306,7 @@
       "azetidine": "azetidinium",
       "aziridine": "aziridinium",
       "pyrrolidine": "pyrrolidinium",
-      "piperidine": "piperidinium"
+      "piperidine": "piperidin-1-ium"
     }
   },
   "saturated_n_ring_ionic_parents": {
@@ -315,7 +315,7 @@
       "3": "aziridinium",
       "4": "azetidinium",
       "5": "pyrrolidinium",
-      "6": "piperidinium"
+      "6": "piperidin-1-ium"
     }
   },
   "parent_charge_suffixes": {
@@ -358,8 +358,8 @@
       "O:-:single": "oxido",
       "O:+:single": "oxidaniumyl",
       "O:+:double": "oxidaniumylidene",
-      "N:+:single": "ammonio",
-      "N:+:double": "iminio",
+      "N:+:single": "azaniumyl",
+      "N:+:double": "azaniumylidene",
       "N:+:triple": "azaniumylidyne",
       "N:-:double": "azanidylidene",
       "N:-:single": "azanidyl",
@@ -1777,7 +1777,7 @@
       },
       "aminium": {
         "role": "principal",
-        "prefix": "ammonio",
+        "prefix": "azaniumyl",
         "suffix": "aminium",
         "multi_suffix": {
           "multiplier_positions": [
@@ -1816,7 +1816,7 @@
       },
       "iminium": {
         "role": "principal",
-        "prefix": "iminio",
+        "prefix": "azaniumylidene",
         "suffix": "iminium",
         "multi_suffix": {
           "multiplier_positions": [

@@ -138,6 +138,14 @@ pub(super) fn prepare_anion_parent(
                     .is_some_and(|spec| spec.substituent_stem.is_some()))
             && (parts.substituents.is_empty()
                 || !parts.indicated_hydrogens.is_empty()
+                // The retained parent can carry its indicated H in the
+                // hydride citation itself, including at a substituted anion
+                // site with no hydrogen left on the observed atom.
+                || parts.retained_parent_metadata.as_ref().is_some_and(|metadata| {
+                    negative
+                        .iter()
+                        .all(|site| metadata.default_indicated_h.contains(&site.locant))
+                })
                 || negative.iter().all(|site| {
                     site.locant == "1"
                         || site.symbol != "C"
@@ -392,9 +400,6 @@ fn adjacent_or_conjugated(mol: &Molecule, parent: &AtomSet, anion: usize, cation
     false
 }
 
-fn simple(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b",-[]^{}".contains(&b)
-}
 fn word_boundary(text: &str, end: usize) -> bool {
     text.get(end..)
         .and_then(|s| s.chars().next())
@@ -491,83 +496,47 @@ pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<S
         .iter()
         .filter(|(_, a)| a.symbol == "N" && a.charge > 0)
         .find_map(|(&idx, _)| nitrogen_has_carbon_double(mol, idx).map(|carbon| (idx, carbon)));
-    let Some((nitrogen, carbon)) = first else {
+    let Some(_) = first else {
         return Ok(name.into());
-    };
-    let has_two_hetero = mol
-        .get_neighbors(carbon)
-        .iter()
-        .filter(|&&n| {
-            n != nitrogen
-                && mol
-                    .atoms
-                    .get(&n)
-                    .is_some_and(|a| matches!(a.symbol.as_str(), "N" | "O" | "S"))
-        })
-        .count()
-        >= 2;
-    let updated = if has_two_hetero {
-        normalize_methylideneammonio(name, mol)
-    } else {
-        name.into()
     };
     if mol.atoms.iter().any(|(&idx, a)| {
         a.symbol == "N" && a.charge == 0 && nitrogen_has_carbon_double(mol, idx).is_some()
     }) {
-        return Ok(updated);
+        return Ok(name.into());
     }
-    Ok(updated
+    Ok(name
         .replace("(imino)methyl", "(iminio)methyl")
         .replace("iminomethyl", "iminiomethyl"))
 }
 
-fn normalize_methylideneammonio(name: &str, mol: &Molecule) -> String {
-    let mut output = String::new();
-    let mut consumed = 0;
-    for (start, _) in name.match_indices("(((") {
-        if start < consumed {
-            continue;
-        }
-        let left_start = start + 3;
-        let Some(tail) = name.get(left_start..) else {
-            continue;
-        };
-        let left_len = tail
-            .bytes()
-            .take_while(|&b| simple(b) || b == b'\'')
-            .count();
-        if left_len == 0 {
-            continue;
-        }
-        let left_end = left_start + left_len;
-        if !name.get(left_end..).is_some_and(|t| t.starts_with(")(")) {
-            continue;
-        }
-        let right_start = left_end + 2;
-        let Some(tail) = name.get(right_start..) else {
-            continue;
-        };
-        let right_len = tail
-            .bytes()
-            .take_while(|&b| simple(b) || b == b'\'')
-            .count();
-        if right_len == 0 {
-            continue;
-        }
-        let right_end = right_start + right_len;
-        let suffix = ")methylidene)ammonio)";
-        if !name.get(right_end..).is_some_and(|t| t.starts_with(suffix)) {
-            continue;
-        }
-        let left = name.get(left_start..left_end).unwrap_or_default();
-        let right = name.get(right_start..right_end).unwrap_or_default();
-        output.push_str(name.get(consumed..start).unwrap_or_default());
-        mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
-        output.push_str(&format!("(N-(({left})({right})methylidene)ammonio)"));
-        consumed = right_end + suffix.len();
+/// The accepted ammonio fallback cites its methylidene ligand on N while the
+/// ligand and its attachment graph are still available to the renderer.
+pub(super) fn cationic_methylidene_fallback(
+    mol: &Molecule,
+    nitrogen: usize,
+    roots: &[usize],
+    names: &[String],
+) -> Option<String> {
+    let ([carbon], [ligand]) = (roots, names) else {
+        return None;
+    };
+    if mol.atoms[&nitrogen].charge != 1
+        || !mol.atoms[carbon].is_carbon()
+        || mol.bond_order(nitrogen, *carbon) != 2
+        || mol
+            .get_neighbors(*carbon)
+            .iter()
+            .filter(|&&n| n != nitrogen && matches!(mol.atoms[&n].symbol.as_str(), "N" | "O" | "S"))
+            .count()
+            < 2
+    {
+        return None;
     }
-    output.push_str(name.get(consumed..).unwrap_or_default());
-    output
+    mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
+    Some(format!(
+        "(N-({})ammonio)",
+        super::formatting::strip_outer_parentheses(ligand)
+    ))
 }
 
 #[cfg(test)]
@@ -643,7 +612,7 @@ mod tests {
     }
 
     #[test]
-    fn cationic_imino_rewrites_are_graph_gated() {
+    fn cationic_imino_spelling_uses_the_ligand_graph() {
         let mut mol = Molecule::new();
         for (idx, symbol, charge) in [(0, "N", 1), (1, "C", 0), (2, "N", 0), (3, "O", 0)] {
             let mut atom = Atom::new(idx, symbol);
@@ -654,9 +623,10 @@ mod tests {
             mol.add_bond(Bond::new(idx, u, v, order)).unwrap();
         }
         assert_eq!(
-            apply_cationic_imino_names("2-(((amino)(methoxy)methylidene)ammonio)acetate", &mol)
-                .unwrap(),
-            "2-(N-((amino)(methoxy)methylidene)ammonio)acetate"
+            cationic_methylidene_fallback(
+                &mol, 0, &[1], &["((amino)(methoxy)methylidene)".into()],
+            ).as_deref(),
+            Some("(N-((amino)(methoxy)methylidene)ammonio)")
         );
         assert_eq!(
             mol.name_status(),
