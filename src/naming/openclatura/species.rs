@@ -180,30 +180,22 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     }
 }
 
-/// P-14.5 / P-77: compare letters, then locants, then the full spelling.
+/// P-14.5 / P-77: compare stereo-free letters and locants, then the full spelling.
 /// Build this before multiplying whole ions; internal multipliers still count.
-fn salt_ion_sort_key(name: &str) -> (String, Vec<super::locants::LocantKey>, String) {
+fn salt_ion_sort_key(
+    stereo_free_name: &str,
+    name: &str,
+) -> (String, Vec<super::locants::LocantKey>, String) {
     let (mut letters, mut locants, mut offset) = (String::new(), Vec::new(), 0);
     let separator = |c: char| !c.is_ascii_alphanumeric() && !matches!(c, '\'' | '′');
-    for part in name.split_inclusive(separator) {
+    for part in stereo_free_name.split_inclusive(separator) {
         let token = part.trim_end_matches(separator);
-        let (start, end) = (offset, offset + token.len());
+        let start = offset;
         offset += part.len();
         if token.is_empty() {
             continue;
         }
-        let descriptor = name[..start].ends_with(['(', ','])
-            && name[end..]
-                .split_once(')')
-                .is_some_and(|(s, tail)| !s.contains('(') && tail.starts_with('-'));
-        // P-14.5: stereodescriptors, with their locants, take no part in the order.
-        if matches!(token, "tert" | "sec" | "cis" | "trans")
-            || descriptor
-                && matches!(
-                    token.trim_start_matches(|c: char| c.is_ascii_digit()),
-                    "R" | "S" | "E" | "Z" | "r" | "s"
-                )
-        {
+        if matches!(token, "tert" | "sec") {
             continue;
         }
         if token.as_bytes()[0].is_ascii_digit() {
@@ -214,9 +206,9 @@ fn salt_ion_sort_key(name: &str) -> (String, Vec<super::locants::LocantKey>, Str
             "N" | "O" | "S" | "P" | "Se" | "Te"
         ) || token.len() == 1
             && token.as_bytes()[0].is_ascii_alphabetic()
-            && name[..start]
+            && stereo_free_name[..start]
                 .rfind(['[', ']'])
-                .is_some_and(|i| name.as_bytes()[i] == b'[')
+                .is_some_and(|i| stereo_free_name.as_bytes()[i] == b'[')
         {
             locants.push(super::locants::retained_locant_sort_key(token));
         } else {
@@ -247,7 +239,31 @@ pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, Strin
             Some(name) => name,
             None => name_smiles_with_style(component, style)?,
         };
-        let order = salt_ion_sort_key(&name.text);
+        let mut state = reshiki_model::molecule_names::apply_axis_markers(&state)
+            .map_err(|_| "openclatura: invalid biaryl axis markers".to_owned())?;
+        // P-14.5 excludes all stereochemistry before comparing letters and locants.
+        let stereo_free_name = if state.metadata.atoms.iter().any(|a| a.chiral_tag != 0)
+            || state.metadata.bonds.iter().any(|b| b.stereo != 0)
+        {
+            for atom in &mut state.metadata.atoms {
+                atom.chiral_tag = 0;
+                atom.chiral_permutation = None;
+                atom.ring_stereo = false;
+            }
+            state.metadata.bonds.fill(Default::default());
+            state.metadata.groups.clear();
+            state
+                .directions
+                .fill(crate::chemistry::kekulize::Direction::None);
+            state.properties =
+                crate::chemistry::stereo::perception::Properties::unspecified(&state.graph);
+            let stereo_free = crate::chemistry::smiles::write::write(&state, Default::default())
+                .map_err(|e| e.to_string())?;
+            name_smiles_with_style(&stereo_free.text, style)?.text
+        } else {
+            name.text.clone()
+        };
+        let order = salt_ion_sort_key(&stereo_free_name, &name.text);
         let entry = ions
             .entry((q < 0, order))
             .and_modify(|(previous, _): &mut (Name, usize)| {
@@ -311,32 +327,33 @@ mod tests {
         for (name, expected) in [
             ("N,N,N-trimethylmethanaminium", "trimethylmethanaminium"),
             ("tert-butoxide", "butoxide"),
-            ("(1S)-1-hydroxyethyl-1H-inden-1-ide", "hydroxyethylindenide"),
+            ("1-hydroxyethyl-1H-inden-1-ide", "hydroxyethylindenide"),
             ("benzo[a]anthracen-1-ide", "benzoanthracenide"),
             ("S-methylsulfanium", "methylsulfanium"),
         ] {
-            assert_eq!(salt_ion_sort_key(name).0, expected, "{name}");
+            assert_eq!(salt_ion_sort_key(name, name).0, expected, "{name}");
         }
-        let r = salt_ion_sort_key("(1R)-1-hydroxyethyl-1H-inden-1-ide");
-        let s = salt_ion_sort_key("(1S)-1-hydroxyethyl-1H-inden-1-ide");
+        let r = salt_ion_sort_key(
+            "1-hydroxyethyl-1H-inden-1-ide",
+            "(1R)-1-hydroxyethyl-1H-inden-1-ide",
+        );
+        let s = salt_ion_sort_key(
+            "1-hydroxyethyl-1H-inden-1-ide",
+            "(1S)-1-hydroxyethyl-1H-inden-1-ide",
+        );
         assert_eq!(r.0, s.0);
         assert_eq!(r.1, s.1);
         assert_eq!(
             r.1,
             ["1"; 3].map(super::super::locants::retained_locant_sort_key),
         );
-        assert!(
-            salt_ion_sort_key("(2R,3R)-2-hydroxy-3-methylpentanoate")
-                < salt_ion_sort_key("(2S)-3-hydroxy-2-methylpentanoate"),
-            "stereodescriptor locants do not enter the locant comparison"
-        );
         assert!(r < s, "the complete text breaks otherwise identical keys");
         assert_eq!(
-            salt_ion_sort_key("benzo[a]anthracen-1-ide").1,
+            salt_ion_sort_key("benzo[a]anthracen-1-ide", "benzo[a]anthracen-1-ide").1,
             ["a", "1"].map(super::super::locants::retained_locant_sort_key),
         );
         assert_eq!(
-            salt_ion_sort_key("S-methylsulfanium").1,
+            salt_ion_sort_key("S-methylsulfanium", "S-methylsulfanium").1,
             vec![super::super::locants::retained_locant_sort_key("S")],
         );
     }
@@ -347,8 +364,8 @@ mod tests {
             ("2-methylundecanoate", "10-methylundecanoate"),
             ("3-methylbenzoate", "4-methylbenzoate"),
         ] {
-            let first_key = salt_ion_sort_key(first);
-            let second_key = salt_ion_sort_key(second);
+            let first_key = salt_ion_sort_key(first, first);
+            let second_key = salt_ion_sort_key(second, second);
             assert_eq!(first_key.0, second_key.0);
             assert!(first_key < second_key, "{first} before {second}");
         }
@@ -356,7 +373,13 @@ mod tests {
 
     #[test]
     fn salt_sorting_keeps_internal_multipliers_and_defers_whole_ion_multipliers() {
-        assert!(salt_ion_sort_key("sodium") < salt_ion_sort_key("N,N,N-trimethylmethanaminium"));
+        assert!(
+            salt_ion_sort_key("sodium", "sodium")
+                < salt_ion_sort_key(
+                    "N,N,N-trimethylmethanaminium",
+                    "N,N,N-trimethylmethanaminium"
+                )
+        );
         for (smiles, expected) in [
             (
                 "[Na+].[Na+].[K+].[Cl-].[Cl-].[Cl-]",
