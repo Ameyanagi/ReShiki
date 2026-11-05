@@ -530,6 +530,9 @@ pub fn collect_component_prefix_substituents(
         let mut bond_atoms = atoms.clone();
         bond_atoms.insert(group.attachment_carbon);
         let mut item = SubstituentItem::new(name, vec![]);
+        // Cyano is a simple characteristic prefix even when its parent
+        // locant is omitted and another substituent is cited beside it.
+        item.outer_parentheses_optional = matches!(group.key.as_str(), "nitrile" | "ring_nitrile");
         item.bond_ids = bond_ids_within(mol, &bond_atoms);
         item.charge_atom_ids = atoms
             .iter()
@@ -586,7 +589,7 @@ mod tests {
             ),
             (
                 "[O-]C(=O)c1ccccc1CC(=O)[O-]",
-                "(2-carboxylatophenyl)acetate",
+                "2-(carboxylatomethyl)benzoate",
             ),
             (
                 "O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
@@ -598,8 +601,7 @@ mod tests {
                 "5-azaniumyl-2-(carboxymethyl)benzoate",
             ),
         ] {
-            // Keep the public input boundary's atom order while this PR leaves
-            // equal-principal-group parent choices deliberately unchanged.
+            // Exercise the same canonical input boundary as the CLI.
             let canonical = crate::naming::canonical_smiles(smiles).unwrap();
             assert_eq!(name_smiles(&canonical).unwrap().text, expected, "{smiles}");
         }

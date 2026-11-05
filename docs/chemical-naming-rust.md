@@ -325,7 +325,9 @@ no mark. Reasons for a name that is not the PIN:
 | `ring_assembly`                   | `2-(pyridin-2-yl)pyridine`, `cyclopropylcyclopropane`, `4-phenylphenol`                         | `2,2'-bipyridine`, `1,1'-bi(cyclopropane)`, `[1,1'-biphenyl]-4-ol`                           |
 | `von_baeyer_fusion_fallback`      | `17-azapentacyclo[10.7.1.1^{3,6}.0^{10,21}.0^{16,20}]henicosa-...-decaene`                      | `7H-indeno[7',1':5,6,7]cycloocta[1,2,3-de]quinoline`                                         |
 
-Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
+Reasons for an unverified name: `ionic_suffix_order` (the order of skeletal
+`-ide` and characteristic `-aminium` is unsettled between P-70.3.3.2.2 and
+P-74.1.2; for example, `1-cyanopropan-1-id-3-aminium`), `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `fusion_multiparent` (a base fusion component cited
 with two identical attached components, which may need a multiparent name
 under P-25.3.7.1), `hydro_prefix_locants` (locanted hydro prefixes for a
