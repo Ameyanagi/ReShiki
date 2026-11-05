@@ -1,6 +1,1 @@
 smiles	pubchem_name	reason
-C[C@H]1CC[C@@H](C)CC1	1,4-dimethylcyclohexane	issue #961: PubChem name omits the cis stereochemistry of the fixture's 1,4-methyl substituents
-CC(C)(C)[C@H]1CC[C@@H](O)CC1	4-tert-butylcyclohexan-1-ol	issue #961: PubChem name omits the cis stereochemistry between the fixture's tert-butyl and hydroxy groups
-C1CC[C@@H]2CCCC[C@H]2C1	1,2,3,4,4a,5,6,7,8,8a-decahydronaphthalene	issue #961: PubChem name omits both specified decalin ring-junction stereocentres
-C1CC[C@H]2CCCC[C@H]2C1	1,2,3,4,4a,5,6,7,8,8a-decahydronaphthalene	issue #961: PubChem name omits both specified decalin ring-junction stereocentres
-CCOC(=O)/C(=C/C1=CC=CC=C1)/N=C/C=C/C	ethyl (Z)-2-[[(E)-but-2-enylidene]amino]-3-phenylprop-2-enoate	issue #961: PubChem name omits the imine E/Z descriptor; OPSIN yields Z at C=N where the fixture specifies E, while both C=C geometries agree
