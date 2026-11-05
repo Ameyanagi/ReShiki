@@ -24,6 +24,14 @@ pub(super) fn parent_hydrogen_candidates(
         super::numbering::indicated_hydrogen_candidate_atoms(mol, locants)
             .into_iter()
             .collect();
+    if locants.keys().any(|id| mol.atoms[id].charge > 0) {
+        // P-74.1.1: cite the neutral parent's N-H before audited deprotonation.
+        candidates.extend(
+            locants
+                .keys()
+                .filter(|id| mol.atoms[id].symbol == "N" && mol.atoms[id].charge == -1),
+        );
+    }
     if ast.plan_kind == "benzoheterocycle" {
         // P-58.2.4 applies prefix substitution after parent hydrogen selection.
         // A neutral N with two single ring bonds retains its N-H role when
