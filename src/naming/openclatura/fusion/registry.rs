@@ -574,18 +574,26 @@ impl FusionComponentRegistry {
             return false;
         };
         let faces: Vec<_> = plan.numbering.selected_face_model.faces.iter().collect();
+        // A Table 2.8 component is senior whether or not the planner could use
+        // it, as for pyrrolizine in 5H-thieno[2,3-b]pyrrolizine (issue #969).
+        // Benzopyran rows are benzo names, which P-25.3.5 cites differently
+        // (6H-dibenzo[b,d]pyran).
+        let table_28 = TABLE_28
+            .iter()
+            .filter(|row| row.pin_eligible && !row.name.contains("benzo"))
+            .filter_map(|row| row.template(&self.template_by_name));
         let candidates: Vec<_> = self
             .retained_component_status
             .iter()
             .filter(|s| {
-                // A complete retained parent is not a bypassed fusion component.
-                s.rings.len() < faces.len()
-                    && component_spec_seniority_key(s) < parent_key
-                    && !self
-                        .components
-                        .iter()
-                        .any(|c| c.template_names.contains(&s.template.name))
+                !self
+                    .components
+                    .iter()
+                    .any(|c| c.template_names.contains(&s.template.name))
             })
+            .chain(table_28)
+            // A complete retained parent is not a bypassed fusion component.
+            .filter(|s| s.rings.len() < faces.len() && component_spec_seniority_key(s) < parent_key)
             .collect();
         let sizes = candidates.iter().map(|s| s.rings.len()).collect();
         for indices in connected_face_subsets(&faces, &sizes) {

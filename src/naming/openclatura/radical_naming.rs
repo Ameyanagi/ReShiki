@@ -315,13 +315,17 @@ fn carbon_diyl(mol: &Molecule) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::naming::NameStatus;
+    use crate::naming::{NameReason, NameStatus};
 
     fn roundtrip(smiles: &str, expected: &str) -> Result<(), String> {
         let mol = super::super::graph_io::read_smiles(smiles)?;
         let name = name_radical(&mol)?.ok_or("Expected radical name")?;
         assert_eq!(name.text, expected, "{smiles}");
-        assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        assert_eq!(
+            name.status,
+            NameStatus::Unverified(NameReason::UnauditedPath),
+            "{smiles}"
+        );
         let parsed = opsin::Parser::new()
             .map_err(|error| error.to_string())?
             .parse(

@@ -260,32 +260,72 @@ async fn independent_decoder_canary_catches_connectivity_stereo_isotope_charge_a
 async fn native_species_generation_verifies_the_complete_identity_and_status() {
     use crate::naming::NameReason;
     for (smiles, name, status) in [
-        ("[Na+]", "sodium(1+)", NameStatus::Preferred),
-        ("[Ca+2]", "calcium(2+)", NameStatus::Preferred),
-        ("[Fe+2]", "iron(2+)", NameStatus::Preferred),
+        (
+            "[Na+]",
+            "sodium(1+)",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "[Ca+2]",
+            "calcium(2+)",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "[Fe+2]",
+            "iron(2+)",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
         ("CC(=O)[O-].[Na+]", "sodium acetate", NameStatus::Preferred),
         (
             "C[NH3+].[Cl-]",
             "methanaminium chloride",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::UnauditedPath),
         ),
         (
             "[Ca+2].[Cl-].[Cl-]",
             "calcium dichloride",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::UnauditedPath),
         ),
         (
             "[Na+].[Na+].O=S(=O)([O-])[O-]",
             "disodium sulfate",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::UnauditedPath),
         ),
-        ("[CH3]", "methyl", NameStatus::Preferred),
-        ("C[CH]C", "propan-2-yl", NameStatus::Preferred),
-        ("[CH2]", "methylidene", NameStatus::Preferred),
-        ("[CH2][CH2]", "ethane-1,2-diyl", NameStatus::Preferred),
-        ("[OH]", "hydroxyl", NameStatus::Preferred),
-        ("C[O]", "methoxyl", NameStatus::Preferred),
-        ("C[NH]", "methanaminyl", NameStatus::Preferred),
+        (
+            "[CH3]",
+            "methyl",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "C[CH]C",
+            "propan-2-yl",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "[CH2]",
+            "methylidene",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "[CH2][CH2]",
+            "ethane-1,2-diyl",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "[OH]",
+            "hydroxyl",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "C[O]",
+            "methoxyl",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "C[NH]",
+            "methanaminyl",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
         (
             "[CH+]1[CH]C=CC=C1",
             "benzene radical cation",
@@ -307,7 +347,11 @@ async fn native_species_generation_verifies_the_complete_identity_and_status() {
             NameStatus::NotPreferred(NameReason::RadicalIon),
         ),
     ] {
-        let record = generate_name(
+        let expected = crate::naming::canonical_smiles(smiles).unwrap();
+        let request = generate_request(&expected).unwrap();
+        let reply = worker::respond(&request).unwrap();
+        let candidate = parse_response(&reply, &expected).unwrap();
+        let record = reconstruct(
             &Identity {
                 smiles: smiles.into(),
                 naming_smiles: None,
@@ -315,7 +359,9 @@ async fn native_species_generation_verifies_the_complete_identity_and_status() {
                 write_unknown_stereo: false,
                 warnings: vec![],
             },
-            Cancel::default(),
+            expected,
+            candidate,
+            &Cancel::default(),
         )
         .await
         .unwrap_or_else(|e| panic!("{smiles}: {e}"));

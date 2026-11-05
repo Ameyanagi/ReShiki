@@ -12,7 +12,11 @@ async fn whole_drawing_and_all_ion_selection_generate_the_same_salt() {
     assert_eq!(whole.smiles, selected.smiles);
     let record = generate_name(&selected, Cancel::default()).await.unwrap();
     assert_eq!(record.title, "sodium chloride");
-    assert_eq!(record.name_status, Some(NameStatus::Preferred));
+    // Monatomic anion names are not an audited path.
+    assert_eq!(
+        record.name_status,
+        Some(NameStatus::Unverified(NameReason::UnauditedPath))
+    );
     doc.atom_mut(chloride).unwrap().charge = 0;
     assert!(
         document_identity(&doc)

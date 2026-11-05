@@ -1444,6 +1444,14 @@ fn is_complete_acyl_end(m: &Molecule, center: usize, double: usize, linkage: usi
     edges.len() >= component.len() || edges.iter().any(|b| b.order > 1)
 }
 
+/// Characteristic groups named with an anionic suffix or prefix (P-72.2.2).
+pub(super) fn is_anionic_group_key(key: &str) -> bool {
+    matches!(
+        key,
+        "olate" | "thiolate" | "aminide" | "carboxylate" | "ring_carboxylate" | "sulfonate"
+    )
+}
+
 fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
     let mut groups = Vec::new();
     let mut seen = BTreeSet::new();
@@ -2774,12 +2782,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     // A cation in the same covalent component as an anionic group is a prefix.
     let anions: AtomSet = groups
         .iter()
-        .filter(|g| {
-            matches!(
-                g.key.as_str(),
-                "olate" | "thiolate" | "aminide" | "carboxylate" | "ring_carboxylate" | "sulfonate"
-            )
-        })
+        .filter(|g| is_anionic_group_key(&g.key))
         .map(|g| g.attachment_carbon)
         .collect();
     if !anions.is_empty() {
@@ -2920,7 +2923,13 @@ mod tests {
         ] {
             let name = super::super::name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let status = match smiles {
+                "CP(=O)(O)C" | "CP(=O)(O)O" => {
+                    NameStatus::Unverified(crate::naming::NameReason::UnauditedPath)
+                }
+                _ => NameStatus::Preferred,
+            };
+            assert_eq!(name.status, status, "{smiles}");
             for candidate in std::iter::once(name.text.as_str()).chain(
                 name.alternatives
                     .iter()

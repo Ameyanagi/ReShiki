@@ -191,6 +191,44 @@ fn graph_spiro_side(
         mol.set_name_status(status);
         return plan_graph_spiro_side(mol, side_atoms, junction, required_core, true);
     }
+    // P-24.3: identical components take a spirobi name, which is not
+    // generated. Compare the two ring systems through the junction as
+    // skeletons, ignoring substituents, elements (P-24.3.4 replacement) and
+    // the junction positions (P-24.3.3); equal sizes withhold certification.
+    let all: AtomSet = mol.atoms.keys().copied().collect();
+    let ring_bonds: BTreeSet<_> = biconnected_edge_components(mol, &all)
+        .into_iter()
+        .filter(|block| block.len() > 1)
+        .flatten()
+        .collect();
+    let mut ring_system = AtomSet::from([junction]);
+    let mut pending = vec![junction];
+    while let Some(atom) = pending.pop() {
+        for &next in mol.get_neighbors(atom) {
+            if ring_bonds.contains(&super::graph_kernel::normalize_edge(atom, next))
+                && ring_system.insert(next)
+            {
+                pending.push(next);
+            }
+        }
+    }
+    let size = |inside: bool| {
+        let atoms: AtomSet = ring_system
+            .iter()
+            .copied()
+            .filter(|&a| a == junction || side_atoms.contains(&a) == inside)
+            .collect();
+        let bonds = ring_bonds
+            .iter()
+            .filter(|(u, v)| atoms.contains(u) && atoms.contains(v))
+            .count();
+        (atoms.len(), bonds)
+    };
+    if result.is_some() && size(true) == size(false) {
+        mol.mark_name(crate::naming::NameStatus::Unverified(
+            crate::naming::NameReason::UnauditedParent,
+        ));
+    }
     Ok(result)
 }
 pub fn plan_substituted_fusion_spiro_side(

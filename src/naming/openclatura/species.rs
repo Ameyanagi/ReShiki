@@ -1,5 +1,5 @@
 //! Binary salt names and monatomic metal cations, outside the organic parent engine.
-use super::{Name, molecule::Molecule, name_smiles_with_style};
+use super::{Name, component_namer::Derivation, molecule::Molecule, name_smiles_with_style};
 use crate::naming::{IsotopeStyle, NameReason, NameStatus};
 use std::collections::BTreeMap;
 
@@ -45,7 +45,11 @@ pub(super) fn monatomic_cation(smiles: &str, in_salt: bool) -> Result<Option<Nam
         } else {
             format!("{name}({}+)", atom.charge)
         },
-        status: NameStatus::Preferred,
+        status: if in_salt {
+            NameStatus::Preferred
+        } else {
+            NameStatus::Unverified(NameReason::UnauditedPath)
+        },
         alternatives: vec![],
         omitted_stereo: vec![],
         omitted_units: 0,
@@ -53,65 +57,72 @@ pub(super) fn monatomic_cation(smiles: &str, in_salt: bool) -> Result<Option<Nam
     }))
 }
 
-/// Assess each anion before a salt can inherit its preference status.
-pub(super) fn assess_anion_parent(mol: &Molecule, text: &str) {
-    // P-73.6: azaniumyl, not ammonio, is the preferred cation prefix, as on a
-    // zwitterion whose skeletal anion is the parent.
-    if text.contains("ammonio")
-        && mol
-            .atoms
-            .values()
-            .any(|atom| atom.charge < 0 && matches!(atom.symbol.as_str(), "C" | "N"))
-    {
-        mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
+/// P-72.7: assess the anionic parent actually cited by the component pipeline.
+pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
+    let Derivation::Plan {
+        parent_atoms,
+        principal_group,
+        ..
+    } = derivation
+    else {
         return;
-    }
+    };
     // Carbon-free anions take retained or additive names, not a P-72.7 parent.
     if mol.atoms.values().all(|atom| atom.symbol != "C")
         || mol.atoms.values().map(|atom| atom.charge).sum::<i32>() >= 0
     {
         return;
     }
-    // Only the outer parent citation proves an anionic parent: an ionic
-    // suffix inside a bracketed substituent does not name the parent.
-    let mut depth = 0usize;
-    let parent: String = text
-        .chars()
-        .filter(|ch| match ch {
-            '(' | '[' | '{' => {
-                depth += 1;
-                false
-            }
-            ')' | ']' | '}' => {
-                depth = depth.saturating_sub(1);
-                false
-            }
-            _ => depth == 0,
-        })
-        .collect();
-    // The last suffix names the parent. A neutral suffix after -ide, as in
-    // 1H-indol-1-ide-3-carboxylic acid, is not preferred: the senior anion
-    // takes the suffix and COOH becomes carboxy (P-41, P-65.1.2.2.3).
-    let last = parent
-        .rsplit(|c: char| !c.is_ascii_alphabetic())
-        .find(|word| !word.is_empty())
-        .unwrap_or_default();
-    let anionic_parent = last.ends_with("ate")
-        || last.ends_with("ite")
-        || last.ends_with("ide")
-            && ![
-                "amide",
-                "imide",
-                "hydrazide",
-                "oxide",
-                "sulfide",
-                "selenide",
-                "telluride",
-            ]
+    let principal_atoms = principal_group.as_ref().map(|(_, atoms)| atoms);
+    // P-70.2 / P-74.2: only an anionic suffix group cites the charge; a
+    // charge-separated or deprotonated neutral class, as in acetamide for
+    // acetylazanide, does not. With no characteristic group, the parent cites -ide.
+    let anionic_parent = principal_group.as_ref().map_or_else(
+        || parent_atoms.iter().any(|i| mol.atoms[i].charge < 0),
+        |(key, atoms)| {
+            super::perception::is_anionic_group_key(key)
+                && atoms.iter().map(|i| mol.atoms[i].charge).sum::<i32>() < 0
+        },
+    );
+    let hydroxy_anion = principal_group.as_ref().is_some_and(|(key, _)| {
+        matches!(
+            key.as_str(),
+            "olate" | "thiolate" | "selenolate" | "tellurolate"
+        )
+    });
+    // P-72.7(a) prefers the parent with more anionic centres; on a tie,
+    // (b)-(d) prefer -ide/-uide centres, which are not implemented.
+    let cited =
+        |i: &usize| parent_atoms.contains(i) || principal_atoms.is_some_and(|a| a.contains(i));
+    let centres = |outside: bool, skeletal: bool| {
+        mol.atoms
             .iter()
-            .any(|neutral| last.ends_with(neutral));
-    // P-72.6.1: the preferred prefix for -C(=O)O- is carboxylato.
-    if last.ends_with("olate") || !anionic_parent || text.contains("oxidocarbonyl") {
+            .filter(|(i, atom)| {
+                atom.charge < 0
+                    && cited(i) != outside
+                    && (!skeletal || matches!(atom.symbol.as_str(), "C" | "N"))
+            })
+            .count()
+    };
+    let external_skeletal_anion =
+        centres(true, true) > 0 && centres(true, false) >= centres(false, false);
+    // P-72.6.1: an external C(=O)O- requires the prefix carboxylato.
+    let external_carboxylate = mol.atoms.iter().any(|(&carbon, atom)| {
+        atom.is_carbon()
+            && mol.get_neighbors(carbon).iter().any(|&oxo| {
+                mol.atoms[&oxo].symbol == "O"
+                    && mol.bond_order(carbon, oxo) == 2
+                    && mol.get_neighbors(carbon).iter().any(|&oxygen| {
+                        mol.atoms[&oxygen].symbol == "O"
+                            && mol.atoms[&oxygen].charge < 0
+                            && mol.bond_order(carbon, oxygen) == 1
+                            && principal_atoms.is_none_or(|atoms| {
+                                ![carbon, oxo, oxygen].iter().all(|i| atoms.contains(i))
+                            })
+                    })
+            })
+    });
+    if !anionic_parent || hydroxy_anion || external_skeletal_anion || external_carboxylate {
         mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
     }
 }
@@ -194,43 +205,50 @@ pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, Strin
 mod tests {
     use super::*;
 
+    fn assess_component(smiles: &str) -> NameStatus {
+        let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let name =
+            super::super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
+                .unwrap();
+        assert!(
+            matches!(&name.derivation, Derivation::Plan { .. }),
+            "{smiles}"
+        );
+        assess_anion_parent(&mol, &name.derivation);
+        mol.certify();
+        mol.name_status()
+    }
+
     #[test]
-    fn charged_substituents_do_not_certify_a_neutral_outer_parent() {
-        for (smiles, text) in [
-            (
-                "Oc1ccccc1-c1[n-]ccc1C",
-                "2-(3-methyl-1H-pyrrol-1-id-2-yl)phenol",
-            ),
-            ("Oc1ccccc1[CH2-]", "2-methanidylphenol"),
-            ("OCCc1cc[n-]c1", "2-(1H-pyrrol-1-id-3-yl)ethan-1-ol"),
-            (
-                "OC(=O)c1ccccc1-c1[n-]ccc1",
-                "2-(1H-pyrrol-1-id-2-yl)benzoic acid",
-            ),
+    fn anion_parent_assessment_uses_the_cited_derivation() {
+        for smiles in [
+            "[n-]1nnnc1C(=O)O",
+            "[O-]C(=O)c1ccccc1Cc1cc[n-]c1",
+            "[O-]C(=O)c1ccccc1[CH2-]",
+            "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
+            "C[O-]",
+            "[O-]c1ccccc1",
         ] {
-            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
-            assess_anion_parent(&mol, text);
             assert_eq!(
-                mol.name_status(),
+                assess_component(smiles),
                 NameStatus::Unverified(NameReason::AnionParent),
-                "{text}"
+                "{smiles}"
             );
         }
     }
 
     #[test]
-    fn outer_anionic_suffix_citations_keep_preferred_status() {
-        for (smiles, text) in [
-            ("O=C([O-])c1cc[n-]c1", "1H-pyrrol-1-ide-3-carboxylate"),
-            ("Oc1ccccc1[CH2-]", "(2-hydroxyphenyl)methanide"),
-            (
-                "[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
-                "2-[(2-oxidophenyl)methyl]benzoate",
-            ),
+    fn chosen_anionic_parents_keep_preferred_status() {
+        for smiles in [
+            "O=C([O-])c1cc[n-]c1",
+            "Oc1ccccc1[CH2-]",
+            "[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
+            "Oc1ccccc1-c1[n-]ccc1C",
+            "OCCc1cc[n-]c1",
+            "OC(=O)c1ccccc1-c1[n-]ccc1",
         ] {
-            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
-            assess_anion_parent(&mol, text);
-            assert_eq!(mol.name_status(), NameStatus::Preferred, "{text}");
+            assert_eq!(assess_component(smiles), NameStatus::Preferred, "{smiles}");
         }
     }
 
@@ -245,7 +263,7 @@ mod tests {
             (
                 "C[S+](C)[CH-]c1ccc([N+](=O)[O-])cc1",
                 "(dimethylsulfaniumyl)4-nitrophenylmethanide",
-                NameStatus::Preferred,
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
         ] {
             let name = super::super::name_smiles(smiles).unwrap();
@@ -394,7 +412,7 @@ mod tests {
             (
                 "[NH3+]CC1[N-]C(=O)NC1=O",
                 "5-(ammoniomethyl)imidazolidin-1-ide-2,4-dione",
-                NameStatus::Unverified(NameReason::AnionParent),
+                NameStatus::Unverified(NameReason::CationPrefix),
             ),
             ("CC(=O)[O-]", "acetate", NameStatus::Preferred),
             (
@@ -456,44 +474,93 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_anion_and_cation_names_keep_preferred_status() {
-        for (smiles, expected) in [
-            ("CC(=O)[O-]", "acetate"),
-            ("O=S(=O)([O-])[O-]", "sulfate"),
-            ("[Cl-]", "chloride"),
-            ("[N-]=[N+]=[N-]", "azide"),
-            ("[O-]N=O", "nitrite"),
-            ("C[NH3+]", "methanaminium"),
-            ("CC(=O)O", "acetic acid"),
+    fn organic_ions_and_unaudited_inorganic_names_keep_their_status() {
+        for (smiles, expected, status) in [
+            ("CC(=O)[O-]", "acetate", NameStatus::Preferred),
+            (
+                "O=S(=O)([O-])[O-]",
+                "sulfate",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[Cl-]",
+                "chloride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[N-]=[N+]=[N-]",
+                "azide",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[O-]N=O",
+                "nitrite",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            ("C[NH3+]", "methanaminium", NameStatus::Preferred),
+            ("CC(=O)O", "acetic acid", NameStatus::Preferred),
         ] {
             let name = super::super::name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
         }
     }
 
     #[test]
     fn balanced_salts_roundtrip_as_complete_graphs() {
         let parser = opsin::Parser::new().unwrap();
-        for (smiles, expected) in [
-            ("CC(=O)[O-].[Na+]", "sodium acetate"),
-            ("C[NH3+].[Cl-]", "methanaminium chloride"),
-            ("[Na+].[Na+].O=S(=O)([O-])[O-]", "disodium sulfate"),
-            ("[Na+].[K+].O=S(=O)([O-])[O-]", "potassium sodium sulfate"),
-            ("[Ca+2].[Cl-].[Cl-]", "calcium dichloride"),
-            ("[Ca+2].CC(=O)[O-].CC(=O)[O-]", "calcium diacetate"),
+        for (smiles, expected, status) in [
+            ("CC(=O)[O-].[Na+]", "sodium acetate", NameStatus::Preferred),
+            (
+                "C[NH3+].[Cl-]",
+                "methanaminium chloride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[Na+].[Na+].O=S(=O)([O-])[O-]",
+                "disodium sulfate",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[Na+].[K+].O=S(=O)([O-])[O-]",
+                "potassium sodium sulfate",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[Ca+2].[Cl-].[Cl-]",
+                "calcium dichloride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[Ca+2].CC(=O)[O-].CC(=O)[O-]",
+                "calcium diacetate",
+                NameStatus::Preferred,
+            ),
             (
                 "C[NH3+].C[NH3+].O=S(=O)([O-])[O-]",
                 "bis(methanaminium) sulfate",
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
-            ("[Fe+2]", "iron(2+)"),
-            ("[Na+]", "sodium(1+)"),
-            ("[Ca+2]", "calcium(2+)"),
+            (
+                "[Fe+2]",
+                "iron(2+)",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[Na+]",
+                "sodium(1+)",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[Ca+2]",
+                "calcium(2+)",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
         ] {
             let name =
                 super::super::name_smiles(smiles).unwrap_or_else(|e| panic!("{smiles}: {e}"));
             assert_eq!(name.text, expected);
-            assert_eq!(name.status, NameStatus::Preferred);
+            assert_eq!(name.status, status, "{smiles}");
             let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
@@ -515,7 +582,9 @@ mod tests {
     /// (benzenolate, not phenoxide); the statuses are what this test checks.
     #[test]
     fn salt_status_is_the_strongest_ion_downgrade() {
-        use NameReason::{AnionParent, BridgedFusedParent, Multiplicative, RingAssembly};
+        use NameReason::{
+            AnionParent, BridgedFusedParent, Multiplicative, RingAssembly, UnauditedParent,
+        };
         use NameStatus::{NotPreferred, Preferred, Unverified};
         const NTA: &str = "O=C([O-])CN(CC(=O)[O-])CC(=O)[O-]";
         const OXYDIBENZOATE: &str = "O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]";
@@ -592,7 +661,7 @@ mod tests {
             (
                 format!("{NONANYL_AMINIUM}.[O-]C(=O)c1ccccc1"),
                 "N,N,N-trimethyl-1-(tricyclo[3.3.1.0^{3,7}]nonan-2-yl)methanaminium benzoate",
-                Preferred,
+                Unverified(UnauditedParent),
             ),
             (
                 format!("{EPOXY_AMINIUM}.[O-]c1ccccc1"),
@@ -621,6 +690,29 @@ mod tests {
             assert_eq!(
                 (name.text.as_str(), name.status),
                 (expected, status),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn salt_inherits_the_strongest_ion_status() {
+        let name = super::super::name_smiles("[Na+].[Na+].[Cl-].C[O-]").unwrap();
+        assert_eq!(name.text, "disodium chloride methanolate");
+        assert_eq!(name.status, NameStatus::Unverified(NameReason::AnionParent));
+    }
+
+    #[test]
+    fn monatomic_cations_are_certified_only_in_salts() {
+        for smiles in ["[Na+]", "[Fe+2]", "[Ca+2]"] {
+            assert_eq!(
+                monatomic_cation(smiles, false).unwrap().unwrap().status,
+                NameStatus::Unverified(NameReason::UnauditedPath),
+                "{smiles}"
+            );
+            assert_eq!(
+                monatomic_cation(smiles, true).unwrap().unwrap().status,
+                NameStatus::Preferred,
                 "{smiles}"
             );
         }

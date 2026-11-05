@@ -5,6 +5,7 @@ use super::{
     molecule::{AtomSet, Molecule},
     nomenclature::RULES,
 };
+use crate::naming::{NameReason, NameStatus};
 use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Clone)]
@@ -506,7 +507,7 @@ pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<S
         .count()
         >= 2;
     let updated = if has_two_hetero {
-        normalize_methylideneammonio(name)
+        normalize_methylideneammonio(name, mol)
     } else {
         name.into()
     };
@@ -520,7 +521,7 @@ pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<S
         .replace("iminomethyl", "iminiomethyl"))
 }
 
-fn normalize_methylideneammonio(name: &str) -> String {
+fn normalize_methylideneammonio(name: &str, mol: &Molecule) -> String {
     let mut output = String::new();
     let mut consumed = 0;
     for (start, _) in name.match_indices("(((") {
@@ -561,6 +562,7 @@ fn normalize_methylideneammonio(name: &str) -> String {
         let left = name.get(left_start..left_end).unwrap_or_default();
         let right = name.get(right_start..right_end).unwrap_or_default();
         output.push_str(name.get(consumed..start).unwrap_or_default());
+        mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
         output.push_str(&format!("(N-(({left})({right})methylidene)ammonio)"));
         consumed = right_end + suffix.len();
     }
@@ -655,6 +657,10 @@ mod tests {
             apply_cationic_imino_names("2-(((amino)(methoxy)methylidene)ammonio)acetate", &mol)
                 .unwrap(),
             "2-(N-((amino)(methoxy)methylidene)ammonio)acetate"
+        );
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::Unverified(NameReason::CationPrefix)
         );
         assert_eq!(
             apply_cationic_imino_names("3-(iminomethylamino)butanoate", &mol).unwrap(),

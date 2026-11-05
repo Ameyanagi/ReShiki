@@ -143,6 +143,8 @@ pub struct AssemblyParts {
     pub is_spiro_component: bool,
     pub is_spiro_side_projection: bool,
     pub spiro_prefix_composition: bool,
+    /// The renderer cited locants on hydro prefixes of a fully hydrogenated parent.
+    pub locanted_total_hydrogenation: bool,
 }
 impl Default for AssemblyParts {
     fn default() -> Self {
@@ -216,6 +218,7 @@ impl AssemblyParts {
             is_spiro_component: false,
             is_spiro_side_projection: false,
             spiro_prefix_composition: false,
+            locanted_total_hydrogenation: false,
         }
     }
 

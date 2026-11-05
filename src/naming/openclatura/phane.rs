@@ -1,6 +1,6 @@
 //! Cyclic phanes with disjoint monocyclic mancude amplificants (PhI-2/PhI-3).
 use super::{
-    graph_kernel::{adjacency_from_edges, connected_components, normalize_edge},
+    graph_kernel::{Edge, adjacency_from_edges, connected_components, normalize_edge},
     molecule::{AtomSet, Molecule},
     rules::multipliers,
 };
@@ -15,7 +15,7 @@ struct Amplificant {
 
 /// P-52.2.5.3, P-51.3.2: a linear phane has at least four whole
 /// ring systems and seven skeletal nodes along a ring-to-ring path.
-pub(super) fn has_linear_skeleton(mol: &Molecule) -> bool {
+pub(super) fn has_linear_skeleton(mol: &Molecule, splits: &BTreeSet<Edge>) -> bool {
     let systems = super::ring_assembly::cyclic_units(mol);
     let rings: AtomSet = systems.iter().filter_map(|s| s.first().copied()).collect();
     let mut collapsed: BTreeMap<_, _> = mol
@@ -32,7 +32,6 @@ pub(super) fn has_linear_skeleton(mol: &Molecule) -> bool {
         }
     }
     let nodes = collapsed.values().copied().collect();
-    let splits = mol.named_component_splits.borrow();
     let edges = mol
         .bonds
         .values()

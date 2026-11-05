@@ -5,13 +5,31 @@ use super::assembly_parts::{AssemblyParts, ParentChargeItem, SubstituentItem};
 use super::molecule::{AtomSet, Molecule, bond_ids_within};
 use super::numbering::{NumberingTopology, ProvenHydrogenLocants, choose_parent_numbering};
 use super::parent_selection::ParentSelection;
-use super::ring_parent::RingParent;
+use super::ring_parent::{ParentHydrideKind, RingParent};
 use crate::naming::{NameReason, NameStatus};
 
 /// Assess only a parent that has entered a successfully rendered name.
 /// Fusion and wrapper plans are also cached and tried speculatively, so their
 /// construction and numbering routines must not mutate the name assessment.
 pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts) {
+    // Retained-name exceptions are vetoed separately below.
+    let audited = match parts.parent_hydride.as_ref().map(|parent| parent.kind) {
+        Some(ParentHydrideKind::SkeletalReplacementFusion) => false,
+        Some(_) => true,
+        None => {
+            parts.retained_name.is_some()
+                || parts.fusion_plan.is_some()
+                || parts.is_bicycle
+                || parts.is_spiro
+                || if parts.is_polycycle {
+                    !super::ring_renderer::is_von_baeyer_descriptor(
+                        parts.polycycle_descriptor.as_deref(),
+                    )
+                } else {
+                    parts.a_prefixes.is_empty()
+                }
+        }
+    };
     if super::additive::has_atom_order_sensitive_bridge_hydrogen(parts) {
         mol.mark_name(NameStatus::Unverified(NameReason::AtomOrder));
     }
@@ -34,12 +52,21 @@ pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts)
     if let Some(name) = &parts.retained_name {
         mark_retained_parent_status(mol, name);
     }
+    if parts.locanted_total_hydrogenation {
+        mol.mark_name(NameStatus::Unverified(NameReason::HydroPrefixLocants));
+    }
+    if !audited {
+        mol.mark_name(NameStatus::Unverified(NameReason::UnauditedParent));
+    }
 }
 
 fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
     if let Some(assembly) = &parent.assembly {
         mol.record_ring_assembly(&assembly.junction_bond_ids);
         mark_retained_parent_status(mol, &assembly.unit_name);
+        if !assembly.units_audited {
+            mol.mark_name(NameStatus::Unverified(NameReason::UnauditedParent));
+        }
     }
     if let Some(name) = parent.base_name() {
         mark_retained_parent_status(mol, name);
@@ -83,6 +110,21 @@ fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionPa
         )
     {
         mol.mark_name(NameStatus::Unverified(NameReason::OpsinFusionLayout));
+    }
+    // P-25.3.7.1: two identical senior components ortho-fused to a central
+    // one take a multiparent name, so a base repeated twice more is unchecked.
+    let repeats_base = plan.ast.component_occurrences.iter().any(|base| {
+        plan.ast.parent_occurrences.contains(&base.occurrence_id)
+            && plan
+                .ast
+                .component_occurrences
+                .iter()
+                .filter(|other| other.spec_key == base.spec_key)
+                .count()
+                >= 3
+    });
+    if repeats_base {
+        mol.mark_name(NameStatus::Unverified(NameReason::FusionMultiparent));
     }
 }
 
@@ -688,8 +730,14 @@ mod tests {
     #[test]
     fn selected_retained_templates_keep_their_preference_status() {
         for (name, expected) in [
-            ("[1,3]thiazolo[5,4-b]pyridine", NameStatus::Preferred),
-            ("[1,2]oxazolo[5,4-b]pyridine", NameStatus::Preferred),
+            (
+                "[1,3]thiazolo[5,4-b]pyridine",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "[1,2]oxazolo[5,4-b]pyridine",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
             (
                 "porphyrin",
                 NameStatus::Unverified(NameReason::UnauditedParent),
@@ -702,7 +750,10 @@ mod tests {
                 "gonane",
                 NameStatus::Unverified(NameReason::UnauditedParent),
             ),
-            ("naphthalene", NameStatus::Preferred),
+            (
+                "naphthalene",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
         ] {
             let mol = Molecule::new();
             let mut parts = AssemblyParts::new(1);
@@ -718,7 +769,10 @@ mod tests {
         let mol = read_smiles("c1ccc2c(c1)Nc1c(ccc3ccccc13)S2").unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
-        assert_eq!(mol.name_status(), NameStatus::Preferred);
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::Unverified(NameReason::UnauditedPath)
+        );
         let mut parts = AssemblyParts::new(1);
         parts.fusion_plan = Some(plan);
         mark_rendered_parent_status(&mol, &parts);
@@ -744,12 +798,95 @@ mod tests {
             plan.ast.opsin_citation_order = opsin_citation_order;
             let mut parts = AssemblyParts::new(1);
             parts.fusion_plan = Some(plan);
-            assert_eq!(mol.name_status(), NameStatus::Preferred);
+            assert_eq!(
+                mol.name_status(),
+                NameStatus::Unverified(NameReason::UnauditedPath)
+            );
             mark_rendered_parent_status(&mol, &parts);
             assert_eq!(
                 mol.name_status(),
                 NameStatus::Unverified(NameReason::OpsinFusionLayout)
             );
+        }
+    }
+
+    #[test]
+    fn repeated_base_fusion_status_is_deferred_until_rendering() {
+        use super::super::{fusion::planner::plan_fusion_parent, graph_io::read_smiles};
+        let mol = read_smiles("o1ccc2oc3ccoc3c12").unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
+        assert_eq!(plan.rendered_base_name, "difuro[3,2-b:2',3'-d]furan");
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::Unverified(NameReason::UnauditedPath)
+        );
+        let mut parts = AssemblyParts::new(atoms.len());
+        parts.fusion_plan = Some(plan);
+        mark_rendered_parent_status(&mol, &parts);
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::Unverified(NameReason::FusionMultiparent)
+        );
+    }
+
+    #[test]
+    fn complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls() {
+        for (smiles, text, status) in [
+            (
+                "O1CCC2CCCCC2C1",
+                "3,4,4a,5,6,7,8,8a-octahydro-1H-2-benzopyran",
+                NameStatus::Unverified(NameReason::HydroPrefixLocants),
+            ),
+            (
+                "C1CCC2CCCCC2C1",
+                "decahydronaphthalene",
+                NameStatus::Preferred,
+            ),
+            (
+                "O=C1CCOc2ccccc12",
+                "2,3-dihydro-4H-1-benzopyran-4-one",
+                NameStatus::Preferred,
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, text, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn rendered_units_veto_unaudited_parent_choices() {
+        for (smiles, text, status) in [
+            (
+                "C1CC2C3CCC1C2C3",
+                "tricyclo[4.3.0.0^{3,9}]nonane",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "C1CCCCCOCCCCC1",
+                "1-oxacyclododecane",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "C1CC2CCC1C2",
+                "bicyclo[2.2.1]heptane",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1CCC2(CC1)CCCC2",
+                "spiro[4.5]decane",
+                NameStatus::Preferred,
+            ),
+            (
+                "C1CCC2(CC1)OCCO2",
+                "1,4-dioxaspiro[4.5]decane",
+                NameStatus::Preferred,
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, text, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
         }
     }
 

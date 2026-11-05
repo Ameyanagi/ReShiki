@@ -10,7 +10,7 @@ use super::chains::{canonical_ranks, get_cyclic_atoms};
 use super::formatting::{
     format_center_ligands_by, format_multiplier, oxy_prefix_from_branch, strip_outer_parentheses,
 };
-use super::graph_kernel::{Edge, normalize_edge};
+use super::graph_kernel::{Edge, biconnected_edge_components, normalize_edge};
 use super::molecule::{Atom, AtomSet, Bond, Molecule, component_atoms_until_blocked};
 use super::namer::name_subgraph_with_upstream;
 use super::nomenclature::RULES;
@@ -1267,7 +1267,7 @@ fn central_ligand_name(
 fn simple_central_parent_hydride_name(
     mol: &Molecule,
     atoms: &AtomSet,
-) -> Result<Option<String>, String> {
+) -> Result<Option<StructuralParentName>, String> {
     let centers: Vec<_> = atoms
         .iter()
         .copied()
@@ -1411,10 +1411,40 @@ fn simple_central_parent_hydride_name(
         }
         mol.mark_name(NameStatus::NotPreferred(NameReason::HydrideParent));
     }
-    Ok(Some(if !prefix.is_empty() && !lambda.is_empty() {
+    // P-63.2.5: (methyltellanyl)methane, not dimethyltellane; λ4/λ6 hydrides
+    // and onium cations keep the hydride name (P-68.4.3.1, P-73.1.1).
+    if matches!(a.symbol.as_str(), "S" | "Se" | "Te")
+        && !onium
+        && lambda.is_empty()
+        && mol
+            .get_neighbors(c)
+            .iter()
+            .any(|n| mol.atoms[n].is_carbon())
+    {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::HydrideParent));
+    }
+    // P-44.1.2 and P-68.3.2.3.1: senior hydrides with organyl ligands,
+    // including a terminal chalcogen suffix on P, As or Sb. The charge-separated
+    // P+-O- representation (and its analogues) has the same ligand role as P=O.
+    let certified = matches!(
+        a.symbol.as_str(),
+        "B" | "Si" | "Ge" | "Sn" | "Pb" | "P" | "As" | "Sb" | "Bi"
+    ) && mol.get_neighbors(c).iter().all(|&n| {
+        mol.bond_order(c, n) == 1 && mol.atoms[&n].is_carbon()
+            || (mol.bond_order(c, n) == 2
+                || oxide && mol.bond_order(c, n) == 1 && mol.atoms[&n].charge == -1)
+                && matches!(a.symbol.as_str(), "P" | "As" | "Sb")
+                && is_chalcogen(n)
+                && mol.degree(n) == 1
+    });
+    let name = if !prefix.is_empty() && !lambda.is_empty() {
         format!("{prefix}-{parent}")
     } else {
         format!("{prefix}{parent}")
+    };
+    Ok(Some(StructuralParentName {
+        certified,
+        ..StructuralParentName::ordinary(name)
     }))
 }
 
@@ -1597,6 +1627,25 @@ fn oxoacid_ester_name(
     atoms: &AtomSet,
 ) -> Result<Option<StructuralParentName>, String> {
     let status = mol.name_status();
+    let cyclic_bonds: BTreeSet<_> = biconnected_edge_components(mol, atoms)
+        .into_iter()
+        .filter(|block| block.len() > 1)
+        .flatten()
+        .collect();
+    let groups = perceive_groups(mol);
+    // P-67.1.3.2 / P-67.1.3.3: acid-derived groups form anhydrides, not esters;
+    // a principal group inside the ligand takes the suffix instead (P-67.1.4.1.3).
+    let alcohol_derived = |root: usize, ligand: &AtomSet| {
+        mol.atoms[&root].is_carbon()
+            && mol.get_neighbors(root).iter().all(|&n| {
+                mol.bond_order(root, n) == 1
+                    || mol.atoms[&n].is_carbon()
+                    || cyclic_bonds.contains(&normalize_edge(root, n))
+            })
+            && !groups
+                .iter()
+                .any(|g| g.is_principal_candidate && g.atom_ids().is_subset(ligand))
+    };
     let mut matches = Vec::new();
     for role in oxo_roles(mol, atoms) {
         mol.set_name_status(status);
@@ -1652,6 +1701,7 @@ fn oxoacid_ester_name(
                 require_stereo_free_core(mol, &acid)?;
                 matches.push((
                     StructuralParentName {
+                        certified: alcohol_derived(roots[0], &modifier_atoms),
                         component_splits: BTreeSet::from([normalize_edge(distal, roots[0])]),
                         ..StructuralParentName::ordinary(format!("{modifier} {suffix}"))
                     },
@@ -1677,6 +1727,7 @@ fn oxoacid_ester_name(
         let mut covered = AtomSet::new();
         let mut names = Vec::new();
         let mut component_splits = BTreeSet::new();
+        let mut certified = true;
         let mut valid = true;
         for ligand in esters {
             let Some(root) = ligand.attachment else {
@@ -1694,6 +1745,7 @@ fn oxoacid_ester_name(
                 break;
             }
             names.push(name);
+            certified &= alcohol_derived(root, &ligand_atoms);
             component_splits.insert(normalize_edge(ligand.oxygen, root));
             covered.extend(ligand_atoms);
         }
@@ -1714,6 +1766,7 @@ fn oxoacid_ester_name(
         };
         matches.push((
             StructuralParentName {
+                certified,
                 component_splits,
                 ..StructuralParentName::ordinary(format!(
                     "{} {suffix}",
@@ -1861,7 +1914,10 @@ fn organophosphorus_acid_name(
     }))
 }
 
-fn organoboronic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
+fn organoboronic_acid_name(
+    mol: &Molecule,
+    atoms: &AtomSet,
+) -> Result<Option<StructuralParentName>, String> {
     let centers: Vec<_> = atoms
         .iter()
         .copied()
@@ -1896,6 +1952,7 @@ fn organoboronic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
     if !matches!((hydroxy.len(), roots.len()), (2, 1) | (1, 2)) {
         return Ok(None);
     }
+    let certified = hydroxy.iter().all(|i| mol.atoms[i].total_h_count == 1);
     let acid: AtomSet = std::iter::once(c).chain(hydroxy).collect();
     require_stereo_free_core(mol, &acid)?;
     let mut names = Vec::new();
@@ -1906,15 +1963,19 @@ fn organoboronic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
         }
         names.push(name);
     }
-    Ok(Some(format!(
-        "{}{} acid",
-        center_ligands(&names),
-        if names.len() == 1 {
-            "boronic"
-        } else {
-            "borinic"
-        }
-    )))
+    Ok(Some(StructuralParentName {
+        // P-68.1.4.1: the non-carbon ligands are hydroxy groups.
+        certified,
+        ..StructuralParentName::ordinary(format!(
+            "{}{} acid",
+            center_ligands(&names),
+            if names.len() == 1 {
+                "boronic"
+            } else {
+                "borinic"
+            }
+        ))
+    }))
 }
 
 fn connected_branches(mol: &Molecule, atoms: &AtomSet) -> Vec<AtomSet> {
@@ -2309,6 +2370,17 @@ fn homonuclear_chain_parent_name(
         {
             return Ok(None);
         }
+        mol.mark_name(NameStatus::NotPreferred(NameReason::HydrideParent));
+    }
+    if symbol == "O"
+        && chain.len() == 2
+        && chain.iter().any(|&i| {
+            mol.get_neighbors(i)
+                .iter()
+                .any(|n| !chain_set.contains(n) && mol.atoms[n].is_carbon())
+        })
+    {
+        // P-63.3.1 prefers a peroxy prefix for organyl-substituted dioxidanes.
         mol.mark_name(NameStatus::NotPreferred(NameReason::HydrideParent));
     }
     Ok(Some(name))
@@ -2841,8 +2913,9 @@ fn nitrogen_chalcogenide_name(
     let reduced_atoms: AtomSet = atoms.iter().copied().filter(|i| *i != ch).collect();
     let mut reduced = mol.subgraph(&reduced_atoms);
     reduced.set_atom_charge(n, 0)?;
-    let parent = super::component_namer::name_component(&reduced, &reduced_atoms)?;
-    if parent.is_empty() {
+    let parent =
+        super::component_namer::name_component_with_citation(&reduced, &reduced_atoms, None, None)?;
+    if parent.text.is_empty() {
         return Ok(None);
     }
     let Some(class) = section("chalcogenide_class_names")[&mol.atoms[&ch].symbol].as_str() else {
@@ -2850,11 +2923,11 @@ fn nitrogen_chalcogenide_name(
     };
     mol.mark_name(NameStatus::Unverified(NameReason::AmineChalcogenide));
     Ok(Some(StructuralParentName {
-        component_splits: reduced.named_component_splits.into_inner(),
+        component_splits: parent.derivation.component_splits().clone(),
         ..StructuralParentName::ordinary(if imine {
-            format!("{parent} N-{class}")
+            format!("{} N-{class}", parent.text)
         } else {
-            format!("{parent} {class}")
+            format!("{} {class}", parent.text)
         })
     }))
 }
@@ -3044,68 +3117,82 @@ pub(super) fn try_name_anhydride_component(
     groups: &[PerceivedGroup],
     principal_key: Option<&str>,
 ) -> Result<Option<StructuralParentName>, String> {
-    mol.candidate(|| anhydride_component_name(mol, groups, principal_key))
-}
-
-fn anhydride_component_name(
-    mol: &Molecule,
-    groups: &[PerceivedGroup],
-    principal_key: Option<&str>,
-) -> Result<Option<StructuralParentName>, String> {
-    let status = mol.name_status();
-    for group in groups {
-        mol.set_name_status(status);
-        if Some(group.key.as_str()) != principal_key
-            || !group
+    // The caller supplies component-scoped groups. Count all anhydride types,
+    // including those with a different principal key (P-65.7.6).
+    let anhydride_count = groups
+        .iter()
+        .filter(|group| {
+            group
                 .resolved_rule
                 .as_ref()
-                .is_some_and(|r| r.has_capability("anhydride"))
-        {
-            continue;
-        }
-        let Some(descriptor) = group.descriptor.as_ref() else {
-            continue;
-        };
-        if descriptor.centers.len() != 2 || descriptor.linker_paths.is_empty() {
-            continue;
-        }
-        let path = &descriptor.linker_paths[0];
-        if !(3..=4).contains(&path.len()) {
-            continue;
-        }
-        let bridge: AtomSet = path[1..path.len() - 1].iter().copied().collect();
-        if bridge.is_empty() {
-            continue;
-        }
-        let left = anhydride_half_name(mol, descriptor.centers[0], &bridge)?;
-        let right = anhydride_half_name(mol, descriptor.centers[1], &bridge)?;
-        // Anhydride names cite acid names (P-65.7.1). A half named for another
-        // principal group, such as a nitrile, would read as a separate compound.
-        if !left.ends_with("ic") || !right.ends_with("ic") {
-            continue;
-        }
-        let Some(class) = anhydride_class_name(mol, path) else {
-            continue;
-        };
-        require_stereo_free_core(mol, &bridge)?;
-        let name = if left == right {
-            format!("{left} {class}")
-        } else {
-            let mut halves = [(left.clone(), left), (right.clone(), right)];
-            if path.len() == 4 && mol.atoms[&path[1]].symbol != mol.atoms[&path[2]].symbol {
-                halves[0].1 = format!("{}-{}", mol.atoms[&path[1]].symbol, halves[0].1);
-                halves[1].1 = format!("{}-{}", mol.atoms[&path[2]].symbol, halves[1].1);
+                .is_some_and(|rule| rule.has_capability("anhydride"))
+        })
+        .count();
+    for group in groups {
+        let result = mol.candidate(|| {
+            if Some(group.key.as_str()) != principal_key
+                || !group
+                    .resolved_rule
+                    .as_ref()
+                    .is_some_and(|r| r.has_capability("anhydride"))
+            {
+                return Ok(None);
             }
-            halves.sort_by(|a, b| a.0.cmp(&b.0));
-            format!("{} {} {class}", halves[0].1, halves[1].1)
-        };
-        return Ok(Some(StructuralParentName {
-            component_splits: path
-                .windows(2)
-                .map(|w| normalize_edge(w[0], w[1]))
-                .collect(),
-            ..StructuralParentName::ordinary(name)
-        }));
+            let Some(descriptor) = group.descriptor.as_ref() else {
+                return Ok(None);
+            };
+            if descriptor.centers.len() != 2 || descriptor.linker_paths.is_empty() {
+                return Ok(None);
+            }
+            let path = &descriptor.linker_paths[0];
+            if !(3..=4).contains(&path.len()) {
+                return Ok(None);
+            }
+            let bridge: AtomSet = path[1..path.len() - 1].iter().copied().collect();
+            if bridge.is_empty() {
+                return Ok(None);
+            }
+            let left = anhydride_half_name(mol, descriptor.centers[0], &bridge)?;
+            let right = anhydride_half_name(mol, descriptor.centers[1], &bridge)?;
+            // Anhydride names cite acid names (P-65.7.1). A half named for another
+            // principal group, such as a nitrile, would read as a separate compound.
+            if !left.ends_with("ic") || !right.ends_with("ic") {
+                return Ok(None);
+            }
+            let Some(class) = anhydride_class_name(mol, path) else {
+                return Ok(None);
+            };
+            require_stereo_free_core(mol, &bridge)?;
+            // P-65.7.1–P-65.7.4: O bridges, or chalcogen/peroxy bridges between
+            // graph-equivalent acid halves.
+            let ranks = canonical_ranks(mol, None);
+            let certified = anhydride_count == 1
+                && bridge.is_disjoint(&get_cyclic_atoms(mol, &AtomSet::new()))
+                && (path.len() == 3 && mol.atoms[&path[1]].symbol == "O"
+                    || ranks[&descriptor.centers[0]] == ranks[&descriptor.centers[1]]);
+            let name = if left == right {
+                format!("{left} {class}")
+            } else {
+                let mut halves = [(left.clone(), left), (right.clone(), right)];
+                if path.len() == 4 && mol.atoms[&path[1]].symbol != mol.atoms[&path[2]].symbol {
+                    halves[0].1 = format!("{}-{}", mol.atoms[&path[1]].symbol, halves[0].1);
+                    halves[1].1 = format!("{}-{}", mol.atoms[&path[2]].symbol, halves[1].1);
+                }
+                halves.sort_by(|a, b| a.0.cmp(&b.0));
+                format!("{} {} {class}", halves[0].1, halves[1].1)
+            };
+            Ok(Some(StructuralParentName {
+                certified,
+                component_splits: path
+                    .windows(2)
+                    .map(|w| normalize_edge(w[0], w[1]))
+                    .collect(),
+                ..StructuralParentName::ordinary(name)
+            }))
+        })?;
+        if result.is_some() {
+            return Ok(result);
+        }
     }
     Ok(None)
 }
@@ -3113,6 +3200,7 @@ fn anhydride_component_name(
 #[derive(Clone, Debug)]
 pub(super) struct StructuralParentName {
     pub(super) name: String,
+    pub(super) certified: bool,
     /// Boundaries between the components of this functional-class name.
     pub(super) component_splits: BTreeSet<Edge>,
     /// Only the homonuclear-chain route supplies the chain audit plan used by
@@ -3121,9 +3209,10 @@ pub(super) struct StructuralParentName {
 }
 
 impl StructuralParentName {
-    fn ordinary(name: String) -> Self {
+    pub(super) fn ordinary(name: String) -> Self {
         Self {
             name,
+            certified: false,
             component_splits: BTreeSet::new(),
             is_chain: false,
         }
@@ -3219,7 +3308,7 @@ pub(super) fn structural_replacement_parent_result(
         return Ok(Some(name));
     }
     if let Some(name) = mol.candidate(|| organoboronic_acid_name(mol, atoms))? {
-        return Ok(Some(StructuralParentName::ordinary(name)));
+        return Ok(Some(name));
     }
     if let Some(name) = mol.candidate(|| sulfoxide_parent_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
@@ -3230,9 +3319,7 @@ pub(super) fn structural_replacement_parent_result(
             ..StructuralParentName::ordinary(name)
         }));
     }
-    Ok(mol
-        .candidate(|| simple_central_parent_hydride_name(mol, atoms))?
-        .map(StructuralParentName::ordinary))
+    mol.candidate(|| simple_central_parent_hydride_name(mol, atoms))
 }
 
 #[cfg(test)]
@@ -3275,7 +3362,9 @@ mod tests {
 
     #[test]
     fn functional_class_splits_follow_only_selected_component_names() {
-        use super::super::{component_namer::name_component, phane::has_linear_skeleton};
+        use super::super::{
+            component_namer::name_component_with_citation, phane::has_linear_skeleton,
+        };
         let mol = read_smiles("O=C(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1").unwrap();
         let atoms = all_atoms(&mol);
         let expected = "bis(4-phenoxyphenyl) carbonate";
@@ -3283,7 +3372,8 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(trial.name, expected);
-        assert!(has_linear_skeleton(&mol));
+        assert!(has_linear_skeleton(&mol, &BTreeSet::new()));
+        assert!(!has_linear_skeleton(&mol, &trial.component_splits));
 
         for (smiles, expected, split_count) in [
             (
@@ -3316,9 +3406,13 @@ mod tests {
             let atoms = all_atoms(&mol);
             for fail in [false, true] {
                 let discarded: Result<Option<()>, String> = mol.candidate(|| {
-                    assert_eq!(name_component(&mol, &atoms)?, expected);
-                    assert_eq!(mol.named_component_splits.borrow().len(), split_count);
-                    assert!(!has_linear_skeleton(&mol));
+                    let name = name_component_with_citation(&mol, &atoms, None, None)?;
+                    assert_eq!(name.text, expected);
+                    assert_eq!(name.derivation.component_splits().len(), split_count);
+                    assert!(!has_linear_skeleton(
+                        &mol,
+                        name.derivation.component_splits()
+                    ));
                     if fail {
                         Err("discarded functional-class name".into())
                     } else {
@@ -3326,16 +3420,24 @@ mod tests {
                     }
                 });
                 assert_eq!(discarded.is_err(), fail);
-                assert!(mol.named_component_splits.borrow().is_empty());
-                assert!(has_linear_skeleton(&mol));
+                assert!(has_linear_skeleton(&mol, &BTreeSet::new()));
             }
 
             let fragment = mol.subgraph(&atoms);
-            assert_eq!(name_component(&fragment, &atoms).unwrap(), expected);
-            assert!(has_linear_skeleton(&mol));
-            assert_eq!(name_component(&mol, &atoms).unwrap(), expected);
-            assert!(!has_linear_skeleton(&mol));
-            assert!(mol.clone().named_component_splits.borrow().is_empty());
+            let fragment_name =
+                name_component_with_citation(&fragment, &atoms, None, None).unwrap();
+            assert_eq!(fragment_name.text, expected);
+            let name = name_component_with_citation(&mol, &atoms, None, None).unwrap();
+            assert_eq!(name.text, expected);
+            assert_eq!(
+                name.derivation.component_splits(),
+                fragment_name.derivation.component_splits()
+            );
+            assert!(!has_linear_skeleton(
+                &mol,
+                name.derivation.component_splits()
+            ));
+            assert!(has_linear_skeleton(&mol.clone(), &BTreeSet::new()));
         }
     }
 
@@ -3368,6 +3470,48 @@ mod tests {
             Some("methyl dihydrogen phosphate")
         );
         assert_eq!(special("CB(O)O").as_deref(), Some("methylboronic acid"));
+    }
+
+    #[test]
+    fn shortcut_certificates_require_audited_ligands() {
+        for (smiles, expected, certified) in [
+            ("CP(C)(C)=O", "trimethyl-lambda5-phosphanone", true),
+            ("C[P+](C)(C)[O-]", "trimethyl-lambda5-phosphanone", true),
+            ("C[As+](C)(C)[O-]", "trimethyl-lambda5-arsanone", true),
+            ("C[Sb+](C)(C)[O-]", "trimethyl-lambda5-stibanone", true),
+            ("CP(C)(C)=S", "trimethyl-lambda5-phosphanethione", true),
+            ("CP(C)(C)=[Se]", "trimethyl-lambda5-phosphaneselone", true),
+            ("CP(C)(C)=[Te]", "trimethyl-lambda5-phosphanetellone", true),
+            ("CC[Sn](CC)(CC)CC", "tetraethylstannane", true),
+            ("CP(C)Cl", "chlorodimethylphosphane", false),
+            ("COP(C)C", "methoxydimethylphosphane", false),
+            ("C[Al](C)C", "trimethylalumane", false),
+            ("CCB(O)O", "ethylboronic acid", true),
+            ("CCO[N+](=O)[O-]", "ethyl nitrate", true),
+            (
+                "CN(C)C(=O)OP(=O)(O)O",
+                "dimethylcarbamoyl dihydrogen phosphate",
+                false,
+            ),
+            (
+                "CC(=S)OP(=O)(OC)OC",
+                "ethanethioyl dimethyl phosphate",
+                false,
+            ),
+            (
+                "CC(=N)OP(=O)(OC)OC",
+                "1-iminoethyl dimethyl phosphate",
+                false,
+            ),
+            ("NN", "hydrazine", false),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let result = structural_replacement_parent_result(&mol, &all_atoms(&mol))
+                .unwrap()
+                .unwrap();
+            assert_eq!(result.name, expected, "{smiles}");
+            assert_eq!(result.certified, certified, "{smiles}");
+        }
     }
 
     #[test]
@@ -3521,7 +3665,11 @@ mod tests {
                     .as_deref(),
                 Some(expected)
             );
-            assert_eq!(mol.name_status(), NameStatus::Preferred, "{smiles}");
+            assert_eq!(
+                mol.name_status(),
+                NameStatus::Unverified(NameReason::UnauditedPath),
+                "{smiles}"
+            );
         }
         assert_eq!(special("NN").as_deref(), Some("hydrazine"));
         assert_eq!(
@@ -3542,6 +3690,52 @@ mod tests {
             let actual =
                 super::super::component_namer::name_component(&mol, &all_atoms(&mol)).unwrap();
             assert_eq!(actual, expected, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn anhydride_certificate_counts_linkages_within_the_component() {
+        use super::super::principal_groups::{component_groups, component_principal_key};
+
+        let mut mol = Molecule::new();
+        let mut cases = Vec::new();
+        for (smiles, expected, certified) in [
+            ("CC(=O)OC(C)=O", "acetic anhydride", true),
+            (
+                "CC(=O)OC(=O)CCC(=O)OC(C)=O",
+                "4-(acetyloxy)-4-oxobutanoic acetic anhydride",
+                false,
+            ),
+        ] {
+            let fragment = read_smiles(smiles).unwrap();
+            let atom_offset = mol.atoms.keys().max().map_or(0, |idx| idx + 1);
+            let bond_offset = mol.bonds.keys().max().map_or(0, |idx| idx + 1);
+            let mut atoms = AtomSet::new();
+            for mut atom in fragment.atoms.into_values() {
+                atom.idx += atom_offset;
+                atoms.insert(atom.idx);
+                mol.add_atom(atom).unwrap();
+            }
+            for mut bond in fragment.bonds.into_values() {
+                bond.idx += bond_offset;
+                bond.u += atom_offset;
+                bond.v += atom_offset;
+                mol.add_bond(bond).unwrap();
+            }
+            cases.push((atoms, expected, certified));
+        }
+        assert_eq!(
+            super::super::graph_io::get_connected_components(&mol).len(),
+            2
+        );
+        for (atoms, expected, certified) in cases {
+            let groups = component_groups(&mol, &atoms);
+            let key = component_principal_key(&mol, &groups, false);
+            let result = try_name_anhydride_component(&mol, &groups, key.as_deref())
+                .unwrap()
+                .unwrap();
+            assert_eq!(result.name, expected);
+            assert_eq!(result.certified, certified, "{expected}");
         }
     }
 
