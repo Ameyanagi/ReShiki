@@ -156,6 +156,7 @@ pub enum NameReason {
     BoughtonIsotope,
     RadicalIon,
     AnionParent,
+    IonicSuffixOrder,
     Phane,
     RelativeRingStereo,
     EndoExoStereo,
@@ -266,6 +267,9 @@ impl NameReason {
             }
             Self::RadicalIon => {
                 "Uses the descriptive ‘radical cation’ or ‘radical anion’ form (RC-85.1); preferred systematic radical-ion names use the cumulative ionic and radical suffixes of P-75 (including the cation suffixes in P-73)."
+            }
+            Self::IonicSuffixOrder => {
+                "The suffix order of a skeletal -ide with a characteristic cationic suffix such as -aminium is not settled: P-70.3.3.2.2 places cumulative suffixes before functional suffixes, whereas P-74.1.2 places cationic suffixes before anionic suffixes."
             }
             Self::AnionParent => {
                 "The anionic parent, suffix or retained-name choice for this anion has not been verified (P-72.7, P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."

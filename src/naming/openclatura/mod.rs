@@ -70,6 +70,8 @@ mod unknown_stereo;
 mod von_baeyer;
 
 #[cfg(test)]
+mod anion_parent_tests;
+#[cfg(test)]
 mod anion_spelling_tests;
 #[cfg(test)]
 mod ion_spelling_tests;
@@ -961,8 +963,8 @@ mod tests {
             ),
             (
                 "[O-]C(=O)c1cc(C(=O)[O-])ccc1Cc1cc(S(=O)(=O)[O-])[n-]c1",
-                "4-[(5-sulfonato-1H-pyrrol-1-id-3-yl)methyl]benzene-1,3-dicarboxylate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "4-{[2,4-bis(carboxylato)phenyl]methyl}-1H-pyrrol-1-ide-2-sulfonate",
+                NameStatus::Preferred,
             ),
             (
                 "C1C=Cc2cc3sccc3n12",
@@ -1002,8 +1004,8 @@ mod tests {
             ("C[O-]", "methoxide", NameStatus::Preferred),
             (
                 "[Na+].c1ccc2[n-]cc(C(=O)O)c2c1",
-                "sodium 1H-indol-1-ide-3-carboxylic acid",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 3-carboxy-1H-indol-1-ide",
+                NameStatus::Preferred,
             ),
             (
                 "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
@@ -1093,13 +1095,13 @@ mod tests {
             ),
             (
                 "[O-]C(=O)c1ccccc1Cc1cc[n-]c1",
-                "2-[(1H-pyrrol-1-id-3-yl)methyl]benzoate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "3-[(2-carboxylatophenyl)methyl]-1H-pyrrol-1-ide",
+                NameStatus::Preferred,
             ),
             (
                 "[O-]C(=O)c1ccccc1[CH2-]",
-                "2-methanidylbenzoate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "(2-carboxylatophenyl)methanide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].[Na+].[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
@@ -2566,7 +2568,6 @@ mod tests {
         for smiles in [
             "C1CC12CC23CC34CC4",
             "S123(CC1)(CC2)CC3",
-            "[c-]1ccccc1-c1ccccc1",
             "C1CCC2(CC1)CCCC2.C",
         ] {
             assert!(name_smiles(smiles).is_err(), "{smiles}");

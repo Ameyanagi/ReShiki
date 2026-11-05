@@ -30,6 +30,16 @@ pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts)
                 }
         }
     };
+    // Fused ketone anions retain their suffix-based hydrogen derivation.
+    // Prefix-based hydrogen composition is outside this anion-parent audit.
+    if parts.fusion_plan.is_some()
+        && parts.parent_charges.iter().any(|site| site.charge < 0)
+        && super::perception::perceive_groups(mol).iter().any(|group| {
+            group.key == "ketone" && parts.parent_atom_ids.contains(&group.attachment_carbon)
+        })
+    {
+        mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
+    }
     if super::additive::has_atom_order_sensitive_bridge_hydrogen(parts) {
         mol.mark_name(NameStatus::Unverified(NameReason::AtomOrder));
     }
@@ -409,6 +419,7 @@ pub fn build_parent_assembly_plan_with_parent(
         mol,
         &selection.paths,
         &principal,
+        root,
         &names,
         locant_maps,
         selection.is_ring,
