@@ -85,8 +85,9 @@ locants (P-14.3.3 and P-14.3.4.6). This changes frozen spellings such as
 `2-phenylacetic acid`, `2-phenylacetonitrile` and `2-cyclopentylacetic acid`.
 Amido prefixes retain locants when the real nitrogen supplies another
 substitution site, including prefixes assembled through a temporary acid.
-These locant changes cost six fast text-parity matches; the structure and
-parity round-trip ratchets are 424/434, with zero wrong structures. Frozen upstream
+These locant changes cost six fast text-parity matches; the structure round-trip
+ratchet is 424/434 and parity is 421/431 after excluding annotated bad goldens,
+with zero wrong structures. Frozen upstream
 names remain unchanged in the corpus. Changed port expectations, including
 `aminoacetic acid` in `rules_cases.tsv`, are checked by OPSIN round trip.
 
@@ -95,8 +96,8 @@ names remain unchanged in the corpus. Changed port expectations, including
 | Check     | What it does                                                                                                                                                                                                                                                                                                                       |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | structure | SMILES → namer → OPSIN → structure; compare canonical isomeric SMILES (stereo, charge, isotopes).                                                                                                                                                                                                                                  |
-| name      | PubChem name → OPSIN → structure S → namer → OPSIN → compare with S. A PubChem name OPSIN rejects is counted as input unparseable and left out of the rate.                                                                                                                                                                        |
-| parity    | Namer text equals openclatura 0.4.3's text exactly. This is the Phase 2 port target.                                                                                                                                                                                                                                               |
+| name      | PubChem name → OPSIN → compare with the fixture's canonical isomeric SMILES, then namer → OPSIN → compare again. A mismatch is wrong unless listed in `name_known_failures.tsv`; a PubChem name OPSIN rejects is input unparseable. Both exclusions stay out of the rate.                                                          |
+| parity    | Namer text equals openclatura 0.4.3's text exactly. Bakeoff goldens are eligible only when `openclatura_status` is `correct`; other statuses count as missing goldens. This is the Phase 2 port target.                                                                                                                            |
 | generated | Structure round trip on a seeded, deduplicated set of molecules built from fragments: chains with branches and unsaturation, monocycles and heteroaromatics, ring assemblies, spiro, bicyclo/tricyclo, fused aromatics, functional groups, E/Z and R/S, and ring + linker + group combinations. Every generated SMILES must parse. |
 
 Every molecule gets one class: **correct** (OPSIN rebuilds the same structure),
@@ -104,6 +105,15 @@ Every molecule gets one class: **correct** (OPSIN rebuilds the same structure),
 **declined** (namer refused, or the input is outside naming's identity rules),
 or **unparseable** (namer produced text that the OPSIN port rejects). The report
 lists every wrong and unparseable case and the top decline reasons.
+
+The report also lists known PubChem-name/fixture mismatches with their expected
+and actual SMILES. Its per-category and total `known_failure` column counts
+these separately, like `input_unparseable`, outside `total` and `correct`.
+`name_known_failures.tsv` keys each entry by fixture SMILES and PubChem name,
+with an `issue #N:` diagnosis. Both runs check every entry, including random
+rows the fast run does not sample: it must exist in the bakeoff corpus, its
+name must still parse, and the parse must still differ from the fixture; a
+listed name that now matches fails with a request to remove the entry.
 
 ## Fixtures
 
@@ -114,6 +124,7 @@ lists every wrong and unparseable case and the top decline reasons.
 | `rules_cases.tsv`                |   94 | Cases of the removed rules namer, its name (empty: declined) and the port's name; checked by `s2n_rules_cases`.                                                                                                  |
 | `baseline.tsv`                   |  107 | Fast-subset correct counts per check and category; `parity_text` rows hold exact text matches.                                                                                                                   |
 | `status-snapshot.tsv`            |  909 | Name, status and reason of every fast-subset fixture and generated row; see [Status snapshot](#status-snapshot).                                                                                                 |
+| `name_known_failures.tsv`        |    5 | PubChem-name/fixture identity mismatches, keyed by SMILES and PubChem name, with an issue-prefixed diagnosis; excluded from the name check's rate.                                                               |
 | `metamorphic_known_failures.tsv` |    9 | Open metamorphic-relation failures; see [Metamorphic tests](#metamorphic-tests).                                                                                                                                 |
 
 openclatura-derived data is MIT; see `licenses/openclatura/`.
@@ -121,6 +132,10 @@ openclatura-derived data is MIT; see `licenses/openclatura/`.
 The fast subset is all 203 curated rows, every 10th random PubChem row, every
 5th openclatura row per category, and the first 500 generated molecules (934
 structures). The full run uses all fixture rows and 3,000 generated molecules.
+
+After the ground-truth checks, the fast name baseline is 243/243, with 4 known
+failures and 6 input-unparseable rows excluded. Exact parity is 380/431; the
+baseline still has 107 rows and the unchanged status snapshot has 909 rows.
 
 ## Final numbers (openclatura port, 2026-10-31)
 

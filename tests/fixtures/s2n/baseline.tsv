@@ -31,15 +31,15 @@ name	drug	19	19
 name	heterocycle	25	25
 name	mr_assembly	10	10
 name	mr_bridged	14	14
-name	mr_fused	20	20
+name	mr_fused	18	18
 name	mr_macro_other	7	7
 name	mr_spiro	7	7
 name	natural_product	17	17
 name	pubchem_random	49	49
 name	ring_ON_ester_amide	10	10
-name	stereo	14	14
+name	stereo	12	12
 name	suffix_on_ring	20	20
-name	total	247	247
+name	total	243	243
 parity	alcohol_amine	13	13
 parity	alkenyl_benzyl	10	10
 parity	chain_ring_prefix	12	12
@@ -51,8 +51,8 @@ parity	heterocycle	25	25
 parity	integration	16	16
 parity	mr_assembly	10	10
 parity	mr_bridged	14	14
-parity	mr_fused	20	20
-parity	mr_macro_other	7	7
+parity	mr_fused	18	18
+parity	mr_macro_other	6	6
 parity	mr_spiro	7	7
 parity	natural_product	19	19
 parity	pubchem_random	49	50
@@ -61,7 +61,7 @@ parity	roundtrip	77	77
 parity	stereo	16	16
 parity	suffix_on_ring	20	20
 parity	unit	43	52
-parity	total	424	434
+parity	total	421	431
 structure	alcohol_amine	13	13
 structure	alkenyl_benzyl	10	10
 structure	chain_ring_prefix	12	12
@@ -95,8 +95,8 @@ parity_text	heterocycle	24	25
 parity_text	integration	16	16
 parity_text	mr_assembly	3	10
 parity_text	mr_bridged	14	14
-parity_text	mr_fused	18	20
-parity_text	mr_macro_other	5	7
+parity_text	mr_fused	18	18
+parity_text	mr_macro_other	5	6
 parity_text	mr_spiro	7	7
 parity_text	natural_product	16	19
 parity_text	pubchem_random	35	50
@@ -105,4 +105,4 @@ parity_text	roundtrip	73	77
 parity_text	stereo	14	16
 parity_text	suffix_on_ring	20	20
 parity_text	unit	46	52
-parity_text	total	380	434
+parity_text	total	380	431
