@@ -1359,6 +1359,17 @@ impl<'a> StereochemistryHandler<'a> {
         let b_refs = self.ring_atom_references(b, a, paths, fragment_atoms, by_cip, false)?;
         let a_refs = atom_references(a_refs);
         let b_refs = atom_references(b_refs);
+        // A centre configured by an earlier descriptor keeps its rel/rac group,
+        // and its ring partner joins it: (1R*)-cis-2-methylcyclohexan-1-ol.
+        let stereo_group = [a, b]
+            .into_iter()
+            .find_map(|atom| self.graph().atom(atom).parity.as_ref())
+            .map_or_else(StereoGroup::default, |parity| parity.stereo_group);
+        let new_parity = |atom_refs, parity| AtomParity {
+            atom_refs,
+            parity,
+            stereo_group,
+        };
         let mut enantiomer = false;
         if let Some(parity) = &self.graph().atom(a).parity {
             if !check_equivalency_of_atom_refs_and_parity(
@@ -1389,14 +1400,14 @@ impl<'a> StereochemistryHandler<'a> {
         match value {
             "cis" => {
                 self.state.graph_mut().atom_mut(a).parity =
-                    Some(AtomParity::new(a_refs, if enantiomer { -1 } else { 1 }));
+                    Some(new_parity(a_refs, if enantiomer { -1 } else { 1 }));
                 self.state.graph_mut().atom_mut(b).parity =
-                    Some(AtomParity::new(b_refs, if enantiomer { 1 } else { -1 }))
+                    Some(new_parity(b_refs, if enantiomer { 1 } else { -1 }))
             }
             "trans" => {
                 let parity = if enantiomer { -1 } else { 1 };
-                self.state.graph_mut().atom_mut(a).parity = Some(AtomParity::new(a_refs, parity));
-                self.state.graph_mut().atom_mut(b).parity = Some(AtomParity::new(b_refs, parity))
+                self.state.graph_mut().atom_mut(a).parity = Some(new_parity(a_refs, parity));
+                self.state.graph_mut().atom_mut(b).parity = Some(new_parity(b_refs, parity))
             }
             _ => {} // Upstream grammar guarantees a lowercase cis/trans value.
         }
@@ -1670,7 +1681,13 @@ impl<'a> StereochemistryHandler<'a> {
             "beta" => -1,
             _ => return structure("OPSIN Bug: malformed alpha/beta stereochemistry value"),
         };
-        let new_parity = AtomParity::new(atom_references([previous, second, third, next]), parity);
+        // An agreeing alpha/beta keeps the centre's rel/rac group.
+        let new_parity = AtomParity {
+            stereo_group: previous_parity
+                .as_ref()
+                .map_or_else(StereoGroup::default, |old| old.stereo_group),
+            ..AtomParity::new(atom_references([previous, second, third, next]), parity)
+        };
         self.state.graph_mut().atom_mut(atom).parity = Some(new_parity.clone());
         if !self
             .not_explicitly_defined_stereo_centre_map
