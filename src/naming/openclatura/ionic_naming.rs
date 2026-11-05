@@ -1,9 +1,8 @@
 //! Graph-backed ionic spelling changes from upstream `ionic_naming.py`.
 use super::{
-    assembly_parts::{AnionSuffix, AssemblyParts, SubstituentItem},
+    assembly_parts::{AnionSuffix, AssemblyParts},
     assembly_utils::{is_fully_enclosed, parse_locant},
     molecule::{AtomSet, Molecule},
-    nomenclature::RULES,
 };
 use crate::naming::{NameReason, NameStatus};
 use std::collections::{BTreeMap, VecDeque};
@@ -116,46 +115,21 @@ pub(super) fn prepare_anion_parent(
         return Ok(());
     }
     let zwitterion = ring_nitrogen_zwitterion(mol, parts, path, &sites);
-    // Leave a second site uncited for validation, as the old per-site passes did.
-    let negative = if zwitterion {
-        negative.as_slice()
-    } else {
-        &negative[..1]
-    };
-    let (_, _, neutral_cites_locants) =
-        super::assembly_parent::format_principal_suffix(parts, "e")?;
+    // Multiple anionic skeletal centres can share the suffix. Keep the old
+    // boundary for parents that also carry a cationic centre: the renderer
+    // still cites `ide` before `ium` (P-74.1.1 puts `ium` first).
+    if negative.len() > 1 && sites.iter().any(|site| site.charge > 0) {
+        return Ok(());
+    }
     // Benzene is otherwise recognised only during assembly.
     super::assembly_parent::promote_retained_hydride_name(parts);
-    // Retained functional parents (phenol, benzoic acid) and contracted
-    // substituent stems (phenyl) have no anion spelling yet. Numbering does
-    // not yet give `ide` the lowest locant (P-31.1.4.2.4), so a substituted
-    // parent is cited only where its numbering fixes the anionic centre.
+    // Contracted substituent stems (phenyl) have no anion spelling yet.
+    // Parent numbering already assigns skeletal anions their low locants.
     let hydro = |key: &str| parts.hydro_operations.iter().any(|op| op.key == key);
     let retained_supported = parts.retained_name.as_deref().is_some_and(|name| {
-        !(name == "benzene" && parts.principal_group.is_some())
-            && !(parts.is_substituent
+        !(parts.is_substituent
                 && super::retained_specs::retained_parent_spec(Some(name))
                     .is_some_and(|spec| spec.substituent_stem.is_some()))
-            && (parts.substituents.is_empty()
-                || !parts.indicated_hydrogens.is_empty()
-                // The retained parent can carry its indicated H in the
-                // hydride citation itself, including at a substituted anion
-                // site with no hydrogen left on the observed atom.
-                || parts.retained_parent_metadata.as_ref().is_some_and(|metadata| {
-                    negative
-                        .iter()
-                        .all(|site| metadata.default_indicated_h.contains(&site.locant))
-                })
-                || negative.iter().all(|site| {
-                    site.locant == "1"
-                        || site.symbol != "C"
-                            && parts
-                                .parent_atom_symbols_by_locant
-                                .values()
-                                .filter(|symbol| **symbol == site.symbol)
-                                .count()
-                                == 1
-                }))
             // P-72.2.2.1.1 names a hydro-mancude anion with added hydrogen
             // (`pyridin-1(2H)-ide`), which is not composed yet.
             && !(parts.indicated_hydrogens.is_empty() && hydro("additive_hydrogen"))
@@ -174,35 +148,10 @@ pub(super) fn prepare_anion_parent(
         && parts.parent_length > 1
         && (parts.attachment_locant != "1"
             || super::assembly_parent::always_print_substituent_locant(parts));
-    let group = parts.principal_group.as_ref();
-    // Ketone hydrogen on a mancude ring (`pyridin-2(1H)-one`) needs added
-    // hydrogen once the ketone becomes oxo (P-72.2.2.1.1); keep the suffix.
-    let single_ketone = neutral_cites_locants
-        && parts.hydro_operations.is_empty()
-        && group.is_some_and(|group| group.key == "ketone" && group.locants.len() == 1);
     let supported = |site: &&ChargeSite| {
         zwitterion
             || retained_supported
-            || parts.parent_length == 1
-                && site.symbol == "C"
-                && group.is_none()
-                && !parts.is_substituent
-            || single_ketone
-            || group.is_some_and(|group| match (group.key.as_str(), group.locants.len()) {
-                ("aldehyde", 1) => {
-                    site.symbol == "C" && !parts.is_ring && parts.unsaturations.is_empty()
-                }
-                ("ring_aldehyde", 1) => site.symbol == "C" && neutral_cites_locants,
-                ("nitrile", 1) => site.symbol == "C" && !parts.is_ring,
-                ("nitrile", 2) => {
-                    site.symbol == "C" && !parts.is_ring && parts.unsaturations.is_empty()
-                }
-                ("ring_nitrile", 1) => site.symbol == "C",
-                ("ketone" | "amine", 2) | ("aminium" | "iminium" | "diazonio", 1) => {
-                    neutral_cites_locants
-                }
-                _ => false,
-            })
+            || parts.retained_name.is_none() && site.symbol == "C" && !parts.is_substituent
             || site.symbol == "C" && site.locant == parts.attachment_locant && saturated_attachment
     };
     if !negative.iter().all(supported) {
@@ -210,28 +159,20 @@ pub(super) fn prepare_anion_parent(
     }
     let mut anion_locants: Vec<_> = negative.iter().map(|site| site.locant.clone()).collect();
     anion_locants.sort_by_key(|locant| parse_locant(locant));
+    // P-14.3.4.2: the sole skeletal suffix follows the same locant-omission
+    // rule as a neutral suffix; any other charge or suffix still needs locants.
+    let omit_locants = parts.parent_length == 1
+        || anion_locants == ["1"]
+            && parts.principal_group.is_none()
+            && !parts.is_substituent
+            && !parts.is_ring_assembly()
+            && !parts.isotope_explicit_locants
+            && sites.len() == 1
+            && super::assembly_parent::sole_group_redundant(parts);
     parts.anion_suffix = Some(AnionSuffix {
         locants: anion_locants,
-        cite_locants: !(parts.parent_length == 1
-            || parts.retained_name.as_deref() == Some("benzene")
-                && parts.principal_group.is_none()
-                && parts.substituents.is_empty()
-                && !parts.is_substituent),
+        cite_locants: !omit_locants,
     });
-    if single_ketone && let Some(group) = parts.principal_group.take() {
-        let mut prefix = SubstituentItem::new(
-            RULES
-                .functional_groups
-                .get(&group.key)
-                .and_then(|rule| rule.prefix.as_ref())
-                .map_or("oxo", String::as_str),
-            group.locants,
-        );
-        prefix.atom_ids = group.atom_ids;
-        prefix.bond_ids = group.bond_ids;
-        prefix.charge_atom_ids = group.charge_atom_ids;
-        parts.substituents.push(prefix);
-    }
     Ok(())
 }
 

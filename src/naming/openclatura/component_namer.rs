@@ -16,7 +16,8 @@ use super::{
     },
     parent_selection::select_principal_parent,
     principal_groups::{
-        add_component_principal_group, component_groups, component_principal_key,
+        add_component_principal_group, candidate_principal_attachments, component_groups,
+        component_principal_key, demote_neutral_suffixes_for_skeletal_anion,
         partition_principal_and_prefix_groups,
     },
     special_cases::{
@@ -267,6 +268,9 @@ fn component_pipeline(
             return Err("openclatura: principal group attachment is not unique".into());
         }
     }
+    if principal_atom.is_none() {
+        demote_neutral_suffixes_for_skeletal_anion(mol, component_atoms, &mut groups);
+    }
     let mut key = component_principal_key(mol, &groups, as_prefix);
     if principal_atom.is_none()
         && let Some(result) = structural_parent(mol, component_atoms, &groups, key.as_deref())?
@@ -286,6 +290,12 @@ fn component_pipeline(
     if let Some(selected) = groups
         .iter()
         .find(|g| Some(g.key.as_str()) == key.as_deref())
+        && selected
+            .atom_ids()
+            .iter()
+            .map(|id| mol.atoms[id].charge)
+            .sum::<i32>()
+            >= 0
         && groups.iter().any(|g| {
             g.is_principal_candidate && g.key != selected.key && seniority(g) == seniority(selected)
         })
@@ -305,7 +315,7 @@ fn component_pipeline(
     let cyclic = get_cyclic_atoms(mol, &AtomSet::new());
     retarget_external_carbonyl_groups(mol, &mut groups, key.as_deref(), &mut exclude, &cyclic);
     retarget_external_carbonyl_groups(mol, &mut prefix_only_groups, None, &mut exclude, &cyclic);
-    let (principal, _) = partition_principal_and_prefix_groups(&groups, key.as_deref());
+    let principal = candidate_principal_attachments(mol, &groups, key.as_deref());
     exclude_nonparent_group_atoms(mol, &groups, &mut exclude, &cyclic);
     exclude_nonparent_group_atoms(mol, &prefix_only_groups, &mut exclude, &cyclic);
     let selection = if let Some(projection) = &projection {

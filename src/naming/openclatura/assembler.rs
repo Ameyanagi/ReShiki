@@ -602,7 +602,15 @@ pub(super) fn assemble_name_with_parent(
         name.clone()
     } else {
         let (stem, terminal) = parent_stem_and_terminal(parts)?;
-        let parent_terminal = terminal.clone();
+        let parent_terminal = if spiro_sides.is_empty() {
+            terminal.clone()
+        } else {
+            // A spiro bracket cites the component hydride, even when the
+            // assembled parent receives an outer substituent suffix.
+            let mut component = parts.clone();
+            component.is_substituent = false;
+            parent_stem_and_terminal(&component)?.1
+        };
         let stem = format!("{a_prefix}{stem}");
         let tail = if parts.is_substituent {
             format_substituent_tail(parts, &stem)
@@ -665,6 +673,68 @@ mod tests {
         nomenclature::{rule_from_value, section},
     };
     use super::*;
+
+    #[test]
+    fn retained_names_preserve_fusion_and_spiro_components() {
+        for (smiles, expected) in [
+            ("O1C=CC2=CC=CC2=C1", "cyclopenta[c]pyran"),
+            ("S1C=CC2=CC=CC2=C1", "cyclopenta[c]thiopyran"),
+            ("O1C=CC2=CC=CC=C2C1", "1H-2-benzopyran"),
+            // Spelling regressions only: these spiro names are not yet the
+            // PINs (assembled-parent hydrogen, #980), so their status is not asserted.
+            (
+                "C1COc2ccccc2C12CCCC2",
+                "3,4-dihydrospiro[2H-1-benzopyran-4,1'-cyclopentane]",
+            ),
+            (
+                "O=C(O)Cc1ccc2c(c1)CC=CC21CCNCC1",
+                "(5,8-dihydrospiro[naphthalene-5,4'-piperidine]-2-yl)acetic acid",
+            ),
+            (
+                "C1OC2(CCCC2)c2ccccc21",
+                "1,3-dihydrospiro[[2]benzofuran-1,1'-cyclopentane]",
+            ),
+            (
+                "C1CCC2(CC1)CCc1ccccc1O2",
+                "3,4-dihydrospiro[[1]benzopyran-2,1'-cyclohexane]",
+            ),
+            (
+                "c1ccc2c(c1)COC21CCNCC1",
+                "1,3-dihydrospiro[[2]benzofuran-1,4'-piperidine]",
+            ),
+            (
+                "C1Oc2ccccc2C12CCCC2",
+                "2,3-dihydrospiro[[1]benzofuran-3,1'-cyclopentane]",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            if !expected.contains("spiro") {
+                assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            }
+        }
+    }
+
+    #[test]
+    fn standalone_pyrans_cite_indicated_hydrogen_after_substitution() {
+        for (smiles, expected) in [
+            ("O1CC=CC=C1", "2H-pyran"),
+            ("S1CC=CC=C1", "2H-thiopyran"),
+            ("CC1OC=CC=C1", "2-methyl-2H-pyran"),
+            ("CC1(C)OC=CC=C1", "2,2-dimethyl-2H-pyran"),
+            ("O=C1C=CC=CO1", "2H-pyran-2-one"),
+            ("OC1C=CC=CO1", "2H-pyran-2-ol"),
+            ("[Se]1CC=CC=C1", "2H-selenopyran"),
+            ("[Te]1CC=CC=C1", "2H-telluropyran"),
+            ("C1=C[Se]C=CC1", "4H-selenopyran"),
+            ("C1=C[Te]C=CC1", "4H-telluropyran"),
+            ("CC1(C)C=COC=C1", "4,4-dimethyl-4H-pyran"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        }
+    }
 
     #[test]
     fn stereo_locant_omission_preserves_configurations() {

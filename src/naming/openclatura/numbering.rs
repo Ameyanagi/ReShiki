@@ -24,6 +24,8 @@ impl NumberingTopology {
 
 #[derive(Clone, Debug)]
 pub struct NumberingPreference {
+    pub free_valence: Vec<usize>,
+    pub skeletal_anions: Vec<usize>,
     pub principal: Vec<usize>,
     pub hetero_by_priority: Vec<Vec<usize>>,
     pub indicated_hydrogen: Vec<usize>,
@@ -37,6 +39,8 @@ pub struct NumberingPreference {
 
 #[derive(Clone, Copy)]
 enum NumberingCriterion {
+    FreeValence,
+    SkeletalAnions,
     Principal,
     HeteroByPriority,
     IndicatedHydrogen,
@@ -54,7 +58,7 @@ enum NumberingCriterion {
     reason = "The immutable checked-in registry supplies arrays of known criterion names."
 )]
 fn numbering_criteria(parent_kind: &str) -> Vec<NumberingCriterion> {
-    super::nomenclature::section("numbering_criteria")[parent_kind]
+    let mut criteria: Vec<_> = super::nomenclature::section("numbering_criteria")[parent_kind]
         .as_array()
         .expect("numbering criteria")
         .iter()
@@ -72,7 +76,18 @@ fn numbering_criteria(parent_kind: &str) -> Vec<NumberingCriterion> {
                 name => panic!("unknown numbering criterion {name}"),
             },
         )
-        .collect()
+        .collect();
+    // P-72.6.3: substituent free valences precede anionic centres, which
+    // precede characteristic suffixes (P-72.5.3, P-74.1.1). Fixed heteroatom
+    // and indicated-hydrogen numbering keeps its existing priority.
+    if let Some(principal) = criteria
+        .iter()
+        .position(|criterion| matches!(criterion, NumberingCriterion::Principal))
+    {
+        criteria.insert(principal, NumberingCriterion::SkeletalAnions);
+        criteria.insert(principal, NumberingCriterion::FreeValence);
+    }
+    criteria
 }
 
 static CHAIN_CRITERIA: LazyLock<Vec<NumberingCriterion>> =
@@ -97,6 +112,8 @@ impl Criterion<'_> {
 impl NumberingPreference {
     fn criterion(&self, criterion: NumberingCriterion) -> Criterion<'_> {
         match criterion {
+            NumberingCriterion::FreeValence => Criterion::Flat(&self.free_valence),
+            NumberingCriterion::SkeletalAnions => Criterion::Flat(&self.skeletal_anions),
             NumberingCriterion::Principal => Criterion::Flat(&self.principal),
             NumberingCriterion::HeteroByPriority => Criterion::Nested(&self.hetero_by_priority),
             NumberingCriterion::IndicatedHydrogen => Criterion::Flat(&self.indicated_hydrogen),
@@ -139,6 +156,7 @@ fn number_parent(
     mol: &Molecule,
     candidate_paths: &[Vec<usize>],
     principal_carbons: &AtomSet,
+    root: Option<usize>,
     substituent_mapping: &BTreeMap<usize, Vec<String>>,
     is_ring: bool,
     fixed_start: bool,
@@ -170,6 +188,7 @@ fn number_parent(
         mol,
         first,
         principal_carbons,
+        root,
         substituent_mapping,
         retained_name,
         topology,
@@ -179,6 +198,7 @@ fn number_parent(
             mol,
             candidate,
             principal_carbons,
+            root,
             substituent_mapping,
             retained_name,
             topology,
@@ -198,6 +218,7 @@ pub fn choose_parent_numbering(
     mol: &Molecule,
     candidate_paths: &[Vec<usize>],
     principal_atoms: &AtomSet,
+    root: Option<usize>,
     substituent_mapping: &BTreeMap<usize, Vec<String>>,
     locant_maps: &[BTreeMap<usize, String>],
     is_ring: bool,
@@ -213,12 +234,25 @@ pub fn choose_parent_numbering(
             Vec<LocantKey>,
             Vec<LocantKey>,
             Vec<LocantKey>,
+            Vec<LocantKey>,
+            Vec<LocantKey>,
             Vec<(String, LocantKey)>,
             Vec<(LocantKey, usize)>,
             Vec<usize>,
         );
         let evaluate = |map: &BTreeMap<usize, String>| -> MapScore {
             let value = |idx: &usize| retained_locant_sort_key(&map[idx]);
+            let free_valence = root
+                .iter()
+                .filter(|idx| map.contains_key(idx))
+                .map(value)
+                .collect();
+            let mut skeletal_anions: Vec<_> = map
+                .keys()
+                .filter(|idx| mol.atoms.get(idx).is_some_and(|atom| atom.charge < 0))
+                .map(value)
+                .collect();
+            skeletal_anions.sort();
             let mut principal: Vec<_> = principal_atoms
                 .iter()
                 .filter(|idx| map.contains_key(idx))
@@ -319,6 +353,8 @@ pub fn choose_parent_numbering(
             (
                 hetero,
                 indicated,
+                free_valence,
+                skeletal_anions,
                 principal,
                 hydro,
                 subst,
@@ -337,6 +373,7 @@ pub fn choose_parent_numbering(
         mol,
         candidate_paths,
         principal_atoms,
+        root,
         substituent_mapping,
         is_ring,
         fixed_start,
@@ -356,10 +393,20 @@ fn numbering_preference(
     mol: &Molecule,
     path: &[usize],
     principal: &AtomSet,
+    root: Option<usize>,
     substituents: &BTreeMap<usize, Vec<String>>,
     retained_name: Option<&str>,
     topology: NumberingTopology,
 ) -> NumberingPreference {
+    let free_valence = get_atom_locants(path, &root.into_iter().collect());
+    let skeletal_anions = get_atom_locants(
+        path,
+        &path
+            .iter()
+            .filter(|idx| mol.atoms.get(idx).is_some_and(|atom| atom.charge < 0))
+            .copied()
+            .collect(),
+    );
     let principal = get_atom_locants(path, principal);
     let hetero_by_priority = heteroatom_locants_by_priority(mol, path, !topology.has_fixed_paths());
     let indicated_hydrogen = get_atom_locants(
@@ -393,6 +440,8 @@ fn numbering_preference(
     let substituent_citation = substituent_citation_locants(path, substituents);
     let stereochemistry = stereochemistry_preference(mol, path, true);
     NumberingPreference {
+        free_valence,
+        skeletal_anions,
         principal,
         hetero_by_priority,
         indicated_hydrogen,
@@ -586,6 +635,7 @@ mod tests {
             &mol,
             &[other.clone(), preferred.clone()],
             &AtomSet::new(),
+            None,
             &substituents,
             true,
             true,
@@ -606,6 +656,7 @@ mod tests {
             &mol,
             &[],
             &AtomSet::new(),
+            None,
             &substituents,
             &maps,
             true,
@@ -632,6 +683,7 @@ mod tests {
                 &mol,
                 &[path],
                 &principal,
+                None,
                 &BTreeMap::new(),
                 false,
                 false,
@@ -650,6 +702,7 @@ mod tests {
             &mol,
             &paths,
             &AtomSet::from([4]),
+            None,
             &BTreeMap::new(),
             false,
             false,
@@ -662,6 +715,211 @@ mod tests {
             vec![4]
         );
     }
+
+    #[test]
+    fn skeletal_anions_precede_characteristic_suffix_locants() {
+        for (smiles, path, principal, expected, is_ring) in [
+            (
+                "CC(C)[CH-]C(=O)C(C)C",
+                vec![0, 1, 3, 4, 6, 8],
+                AtomSet::from([4]),
+                vec![0, 1, 3, 4, 6, 8],
+                false,
+            ),
+            (
+                "[NH3+]CC[CH-]C#N",
+                vec![1, 2, 3],
+                AtomSet::from([1]),
+                vec![3, 2, 1],
+                false,
+            ),
+            (
+                "[C-]#CCCC(=O)[O-]",
+                vec![0, 1, 2, 3, 4],
+                AtomSet::from([4]),
+                vec![0, 1, 2, 3, 4],
+                false,
+            ),
+            (
+                "[CH-]1CCC(CC1)S(=O)(=O)[O-]",
+                vec![0, 1, 2, 3, 4, 5],
+                AtomSet::from([3]),
+                vec![0, 1, 2, 3, 4, 5],
+                true,
+            ),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let (numbered, _) = choose_parent_numbering(
+                &mol,
+                &[path],
+                &principal,
+                None,
+                &BTreeMap::new(),
+                &[],
+                is_ring,
+                None,
+                false,
+                NumberingTopology::default(),
+                None,
+            );
+            assert_eq!(numbered, expected, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn skeletal_anions_precede_unsaturation_and_prefixes() {
+        for (smiles, path, substituents, expected) in [
+            (
+                "OC1=CC(=O)C=C[CH-]1",
+                vec![1, 2, 3, 5, 6, 7],
+                BTreeMap::from([(1, vec!["hydroxy".into()]), (3, vec!["oxo".into()])]),
+                vec![7, 1, 2, 3, 5, 6],
+            ),
+            (
+                "O=C1C=CC=C[CH-]1",
+                vec![1, 2, 3, 4, 5, 6],
+                BTreeMap::from([(1, vec!["oxo".into()])]),
+                vec![6, 5, 4, 3, 2, 1],
+            ),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let (numbered, _) = choose_parent_numbering(
+                &mol,
+                &[path],
+                &AtomSet::new(),
+                None,
+                &substituents,
+                &[],
+                true,
+                None,
+                false,
+                NumberingTopology::default(),
+                None,
+            );
+            assert_eq!(numbered, expected, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn retained_maps_assign_skeletal_anions_low_locants_before_suffixes() {
+        let mol = read_smiles("[CH-]1CCC(=O)CC1").unwrap();
+        let paths = [vec![3, 2, 1, 0, 6, 5], vec![0, 1, 2, 3, 5, 6]];
+        let maps: Vec<BTreeMap<_, _>> = paths
+            .iter()
+            .map(|path| {
+                path.iter()
+                    .enumerate()
+                    .map(|(i, &atom)| (atom, (i + 1).to_string()))
+                    .collect()
+            })
+            .collect();
+        let (numbered, map) = choose_parent_numbering(
+            &mol,
+            &[],
+            &AtomSet::from([3]),
+            None,
+            &BTreeMap::new(),
+            &maps,
+            true,
+            None,
+            false,
+            NumberingTopology::default(),
+            None,
+        );
+        assert_eq!(numbered, paths[1]);
+        assert_eq!(map, Some(maps[1].clone()));
+    }
+
+    #[test]
+    fn free_valence_precedes_skeletal_anions_in_both_numbering_paths() {
+        for (smiles, root, rooted, anionic, is_ring, retained) in [
+            ("CC[CH2-]", 0, vec![0, 1, 2], vec![2, 1, 0], false, None),
+            (
+                "Cc1c[c-]c[nH]1",
+                1,
+                vec![5, 1, 2, 3, 4],
+                vec![5, 4, 3, 2, 1],
+                true,
+                Some("pyrrole"),
+            ),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let paths = [anionic.clone(), rooted.clone()];
+            let maps: Vec<BTreeMap<_, _>> = paths
+                .iter()
+                .map(|path| {
+                    path.iter()
+                        .enumerate()
+                        .map(|(i, &atom)| (atom, (i + 1).to_string()))
+                        .collect()
+                })
+                .collect();
+            for locant_maps in [&[][..], maps.as_slice()] {
+                for (free_valence, principal, expected) in [
+                    (Some(root), AtomSet::new(), &rooted),
+                    (None, AtomSet::from([root]), &anionic),
+                ] {
+                    let (numbered, _) = choose_parent_numbering(
+                        &mol,
+                        &paths,
+                        &principal,
+                        free_valence,
+                        &BTreeMap::new(),
+                        locant_maps,
+                        is_ring,
+                        retained,
+                        false,
+                        NumberingTopology::default(),
+                        None,
+                    );
+                    assert_eq!(&numbered, expected, "{smiles}: root {free_valence:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn skeletal_anions_respect_fixed_heteroatom_numbering() {
+        let mol = read_smiles("N1CCC[CH-]C1").unwrap();
+        let preferred = vec![0, 5, 4, 3, 2, 1];
+        let ordinary = number_parent(
+            &mol,
+            &[vec![0, 1, 2, 3, 4, 5]],
+            &AtomSet::new(),
+            None,
+            &BTreeMap::new(),
+            true,
+            false,
+            None,
+            NumberingTopology::default(),
+        );
+        assert_eq!(ordinary, preferred);
+        let maps: Vec<BTreeMap<_, _>> = [vec![4, 5, 0, 1, 2, 3], preferred.clone()]
+            .iter()
+            .map(|path| {
+                path.iter()
+                    .enumerate()
+                    .map(|(i, &atom)| (atom, (i + 1).to_string()))
+                    .collect()
+            })
+            .collect();
+        let (numbered, map) = choose_parent_numbering(
+            &mol,
+            &[],
+            &AtomSet::new(),
+            None,
+            &BTreeMap::new(),
+            &maps,
+            true,
+            None,
+            false,
+            NumberingTopology::default(),
+            None,
+        );
+        assert_eq!(numbered, preferred);
+        assert_eq!(map, Some(maps[1].clone()));
+    }
+
     #[test]
     fn hw_numbering_prioritizes_senior_heteroatom_then_all_hetero_locants() {
         let mol = read_smiles("s1cnnc1").unwrap();
@@ -670,6 +928,7 @@ mod tests {
             &mol,
             &rings[0].paths,
             &AtomSet::new(),
+            None,
             &BTreeMap::new(),
             true,
             false,
@@ -695,6 +954,7 @@ mod tests {
             &mol,
             &[path],
             &AtomSet::new(),
+            None,
             &subs,
             false,
             false,
@@ -713,6 +973,7 @@ mod tests {
             &mol,
             &system.paths,
             &AtomSet::new(),
+            None,
             &BTreeMap::new(),
             &[],
             true,

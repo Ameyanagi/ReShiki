@@ -129,44 +129,21 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
         super::assembly_parts::RetainedAnionName::Required { .. }
             | super::assembly_parts::RetainedAnionName::SubstitutedAlkyl
     );
-    // P-72.7(a) prefers the parent with more anionic centres; on a tie,
-    // (b)-(d) prefer -ide/-uide centres, which are not implemented.
-    let cited =
-        |i: &usize| parent_atoms.contains(i) || principal_atoms.is_some_and(|a| a.contains(i));
-    let centres = |outside: bool, skeletal: bool| {
-        mol.atoms
-            .iter()
-            .filter(|(i, atom)| {
-                anionic_centre(i)
-                    && cited(i) != outside
-                    && (!skeletal || matches!(atom.symbol.as_str(), "C" | "N"))
-            })
-            .count()
-    };
-    let external_skeletal_anion =
-        centres(true, true) > 0 && centres(true, false) >= centres(false, false);
-    // The external carboxylate is spelled by P-72.6.1. Parent preference is
-    // still unresolved when P-72.7(a) cannot decide without (b)-(e).
-    let external_carboxylate = mol.atoms.iter().any(|(&carbon, atom)| {
-        atom.is_carbon()
-            && mol.get_neighbors(carbon).iter().any(|&oxo| {
-                mol.atoms[&oxo].symbol == "O"
-                    && mol.bond_order(carbon, oxo) == 2
-                    && mol.get_neighbors(carbon).iter().any(|&oxygen| {
-                        mol.atoms[&oxygen].symbol == "O"
-                            && mol.atoms[&oxygen].charge < 0
-                            && mol.bond_order(carbon, oxygen) == 1
-                            && principal_atoms.is_none_or(|atoms| {
-                                ![carbon, oxo, oxygen].iter().all(|i| atoms.contains(i))
-                            })
-                    })
-            })
+    let external_centre = mol.atoms.keys().any(|i| {
+        anionic_centre(i)
+            && !parent_atoms.contains(i)
+            && principal_atoms.is_none_or(|atoms| !atoms.contains(i))
     });
-    if !anionic_parent
-        || unresolved_alkoxide
-        || external_skeletal_anion
-        || external_carboxylate && centres(true, false) >= centres(false, false)
+    let unresolved_parent = external_centre
+        && !super::parent_selection::anion_parent_is_senior(mol, parent_atoms, principal_atoms);
+    if parent_atoms.iter().any(anionic_centre)
+        && principal_group
+            .as_ref()
+            .is_some_and(|(key, _)| matches!(key.as_str(), "aminium" | "iminium" | "diazonio"))
     {
+        mol.mark_name(NameStatus::Unverified(NameReason::IonicSuffixOrder));
+    }
+    if !anionic_parent || unresolved_alkoxide || unresolved_parent {
         let status = NameStatus::Unverified(NameReason::AnionParent);
         // The unresolved principal anion spelling remains the reason when a
         // separately staged cationic prefix also needs verification.
@@ -297,13 +274,7 @@ mod tests {
 
     #[test]
     fn anion_parent_assessment_uses_the_cited_derivation() {
-        for smiles in [
-            "[n-]1nnnc1C(=O)O",
-            "[O-]C(=O)c1ccccc1Cc1cc[n-]c1",
-            "[O-]C(=O)c1ccccc1[CH2-]",
-            "C[N+](C)(C)CC[O-]",
-            "[NH3+]CC([NH3+])C[O-]",
-        ] {
+        for smiles in ["C[N+](C)(C)CC[O-]", "[NH3+]CC([NH3+])C[O-]"] {
             assert_eq!(
                 assess_component(smiles),
                 NameStatus::Unverified(NameReason::AnionParent),
@@ -331,6 +302,9 @@ mod tests {
     #[test]
     fn chosen_anionic_parents_keep_preferred_status() {
         for smiles in [
+            "[n-]1nnnc1C(=O)O",
+            "[O-]C(=O)c1ccccc1Cc1cc[n-]c1",
+            "[O-]C(=O)c1ccccc1[CH2-]",
             "O=C([O-])c1cc[n-]c1",
             "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
             "C[O-]",
@@ -340,10 +314,28 @@ mod tests {
             "Oc1ccccc1-c1[n-]ccc1C",
             "OCCc1cc[n-]c1",
             "OC(=O)c1ccccc1-c1[n-]ccc1",
-            "[NH3+][C-]1C=CC2=C1N=NO2",
         ] {
             assert_eq!(assess_component(smiles), NameStatus::Preferred, "{smiles}");
         }
+    }
+
+    #[test]
+    fn skeletal_anion_with_characteristic_cation_has_unsettled_suffix_order() {
+        for smiles in ["[NH3+]CC[CH-]C#N", "[NH3+][C-]1C=CC2=C1N=NO2"] {
+            assert_eq!(
+                assess_component(smiles),
+                NameStatus::Unverified(NameReason::IonicSuffixOrder),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn tied_external_anionic_parents_remain_unverified() {
+        assert_eq!(
+            assess_component("[n-]1ccc(c1)CCc1cc[n-]c1"),
+            NameStatus::Unverified(NameReason::AnionParent),
+        );
     }
 
     #[test]
@@ -400,12 +392,7 @@ mod tests {
 
     #[test]
     fn unsupported_anionic_parent_examples_still_decline() {
-        for smiles in [
-            "[Na+].Oc1ccccc1-[n-]1cccc1",
-            "[Na+].Oc1ccccc1-n1cccc1",
-            "[Na+].Oc1ccccc1[C-]1C=CC=C1",
-            "[Na+].OCC[CH2-]",
-        ] {
+        for smiles in ["[Na+].Oc1ccccc1-[n-]1cccc1", "[Na+].Oc1ccccc1-n1cccc1"] {
             assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
         }
     }
@@ -414,6 +401,16 @@ mod tests {
     fn anionic_parents_precede_neutral_groups_and_roundtrip_complete_salts() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected, status) in [
+            (
+                "[Na+].Oc1ccccc1[C-]1C=CC=C1",
+                "sodium 1-(2-hydroxyphenyl)cyclopenta-2,4-dien-1-ide",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].OCC[CH2-]",
+                "sodium 3-hydroxypropan-1-ide",
+                NameStatus::Preferred,
+            ),
             (
                 "[Na+].Oc1ccccc1-c1[n-]ccc1C",
                 "sodium 2-(2-hydroxyphenyl)-3-methyl-1H-pyrrol-1-ide",
@@ -512,23 +509,23 @@ mod tests {
             ),
             (
                 "[Na+].[n-]1nnnc1C(=O)O",
-                "sodium 1H-tetrazol-1-ide-5-carboxylic acid",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 5-carboxy-1H-tetrazol-1-ide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].c1ccc2[n-]cc(C(=O)O)c2c1",
-                "sodium 1H-indol-1-ide-3-carboxylic acid",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 3-carboxy-1H-indol-1-ide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].OC(=O)c1nc[n-]c1",
-                "sodium 1H-imidazol-1-ide-4-carboxylic acid",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 4-carboxy-1H-imidazol-1-ide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].[n-]1ncc(C(=O)O)c1",
-                "sodium 1H-pyrazol-1-ide-4-carboxylic acid",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 4-carboxy-1H-pyrazol-1-ide",
+                NameStatus::Preferred,
             ),
             (
                 "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
@@ -537,8 +534,8 @@ mod tests {
             ),
             (
                 "[NH3+]CC1[N-]C(=O)NC1=O",
-                "5-(azaniumylmethyl)imidazolidin-1-ide-2,4-dione",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "5-(azaniumylmethyl)-2,4-dioxoimidazolidin-1-ide",
+                NameStatus::Preferred,
             ),
             ("CC(=O)[O-]", "acetate", NameStatus::Preferred),
             (
