@@ -1095,8 +1095,10 @@ impl App {
             super::object_toolbar::GROUP_WIDTH,
             super::object_toolbar::COMPACT_WIDTH,
         ));
-        let summary = if keyboard {
-            self.keyboard_context_summary()
+        // The summary `selection_tool_options` shows: the keyboard target's
+        // while its marker is shown, otherwise the selection's.
+        let summary = if keyboard && let Some(summary) = self.keyboard_context_summary() {
+            Some(summary)
         } else {
             (select && !self.tab.selected.is_empty()).then(|| self.selection_summary())
         };
