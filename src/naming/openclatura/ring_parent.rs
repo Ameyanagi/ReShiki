@@ -271,7 +271,10 @@ impl RingParent {
             return plan.numbering.string_input_locant_maps();
         }
         if let Some(plan) = &self.fusion_wrapper_plan {
-            return vec![plan.atom_to_locant()];
+            return std::iter::once(plan.as_ref())
+                .chain(&plan.numbering_variants)
+                .map(BridgedFusionWrapperPlan::atom_to_locant)
+                .collect();
         }
         self.retained_locant_maps.clone()
     }

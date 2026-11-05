@@ -331,7 +331,7 @@ Oc1ccc2ncncc2c1	quinazolin-6-ol	preferred
 Oc1ccc2c(c1)[nH]c1ccccc12	9H-carbazol-2-ol	preferred	
 CC1CC2=CC=CC3=C2C1=CC=C3	1-methyl-1,2-dihydroacenaphthylene	preferred	
 c1oc2ncccc2c1O[N+](=O)[O-]	furo[2,3-b]pyridin-3-yl nitrate	preferred	
-C12C(C=C(C3=CC=CC=C13)O2)=O	1,4-epoxynaphthalen-3(4H)-one	unverified	atom_order
+C12C(C=C(C3=CC=CC=C13)O2)=O	1,4-epoxynaphthalen-2(1H)-one	unverified	atom_order
 O=C(NCc1ccccc1)Nc1ccc(C2=CSC3=NCCN23)cc1	N-benzyl-N'-[4-(5,6-dihydroimidazo[2,1-b][1,3]thiazol-3-yl)phenyl]urea	preferred	
 O=c1c2ccccc2nc2n1CC=C2	pyrrolo[2,1-b]quinazolin-9(1H)-one	preferred	
 CCCl	chloroethane	preferred	

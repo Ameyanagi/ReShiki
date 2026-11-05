@@ -10,7 +10,9 @@ use super::super::{
         MatchOptions, match_retained_graph_templates_with_options, retained_parent_metadata,
     },
     retained_graph_model::RetainedGraphTemplateMatch,
-    retained_name_policy::{retained_parent_name_policy, retained_parent_output_name},
+    retained_name_policy::{
+        RetainedHydrogenationPolicy, retained_parent_name_policy, retained_parent_output_name,
+    },
     ring_parent::RingParent,
     rules::{multipliers, stems},
 };
@@ -57,6 +59,7 @@ pub struct WrapperParentPlan {
     pub bond_models: Vec<ParentBondModel>,
     pub selected_locant_map: Option<LocantMap>,
     pub selected_bond_model: Option<ParentBondModel>,
+    pub hydrogenation: Option<RetainedHydrogenationPolicy>,
 }
 impl WrapperParentPlan {
     pub fn kind(&self) -> WrapperParentKind {
@@ -139,6 +142,7 @@ impl WrapperParentPlan {
             bond_models: vec![model.clone()],
             selected_locant_map: Some(entries),
             selected_bond_model: Some(model),
+            hydrogenation: self.hydrogenation.clone(),
         };
         selected.validate()?;
         Ok(selected)
@@ -192,6 +196,9 @@ pub struct BridgedFusionWrapperPlan {
     pub search_states: usize,
     pub bridge_unsaturation_operations: Vec<UnsaturationOperation>,
     pub saturated_bridge_precursor: Option<NondetachableBridgeOperation>,
+    /// Equivalent bridge and hydro locants leave suffix/prefix numbering open.
+    /// Each alternative retains its aligned graph proof and bond model.
+    pub numbering_variants: Vec<BridgedFusionWrapperPlan>,
 }
 impl BridgedFusionWrapperPlan {
     pub fn atom_to_locant(&self) -> LocantMap {
@@ -443,7 +450,6 @@ pub fn plan_bridged_fusion_wrapper_with_options(
                         parent_atoms.len(),
                         &operations,
                         &derivative_state,
-                        map_index,
                         &rendered_name,
                     );
                     let plan = BridgedFusionWrapperPlan {
@@ -456,9 +462,10 @@ pub fn plan_bridged_fusion_wrapper_with_options(
                         search_states: visited_states,
                         bridge_unsaturation_operations: bridge_unsaturation,
                         saturated_bridge_precursor: precursor,
+                        numbering_variants: Vec::new(),
                     };
                     plan.validate()?;
-                    candidates.push((rank, plan));
+                    candidates.push((rank, map_index, plan));
                 }
             }
             if !candidates.is_empty() {
@@ -466,22 +473,34 @@ pub fn plan_bridged_fusion_wrapper_with_options(
             }
         }
         if !candidates.is_empty() {
-            candidates.sort_by(|a, b| a.0.cmp(&b.0));
+            candidates.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
             let best = candidates[0].0.clone();
             let mut tied: Vec<_> = candidates
                 .into_iter()
-                .take_while(|(rank, _)| *rank == best)
-                .map(|(_, plan)| plan)
+                .take_while(|(rank, _, _)| *rank == best)
+                .map(|(_, map_index, plan)| (map_index, plan))
                 .collect();
             if tied.len() > 1 {
                 let ranks = canonical_ranks(mol, None);
-                tied.sort_by_key(|plan| {
+                tied.sort_by_key(|(map_index, plan)| {
                     let mut locants: Vec<_> = plan.atom_to_locant().into_iter().collect();
                     locants.sort_by_key(|(_, l)| locant_key(l));
-                    locants.iter().map(|(a, _)| ranks[a]).collect::<Vec<_>>()
+                    (
+                        *map_index,
+                        locants.iter().map(|(a, _)| ranks[a]).collect::<Vec<_>>(),
+                    )
                 });
             }
-            let selected = tied.into_iter().next();
+            let mut tied = tied.into_iter().map(|(_, plan)| plan);
+            let selected = tied.next().map(|mut plan| {
+                // P-31.1.4.2.4: after bridge and hydro locants tie, the
+                // characteristic suffix and detachable prefixes decide.
+                let mut maps = BTreeSet::from([plan.atom_to_locant()]);
+                plan.numbering_variants = tied
+                    .filter(|variant| maps.insert(variant.atom_to_locant()))
+                    .collect();
+                plan
+            });
             // Upstream divergence: the wrapper's retained-like citation renders
             // its parent hydride, hydro operations and bridge unsaturation, but
             // has no grammar for additional multiple bonds inside the parent.
@@ -515,7 +534,6 @@ fn wrapper_rank(
     parent_len: usize,
     operations: &[NondetachableBridgeOperation],
     state: &ParentDerivativeState,
-    map_index: usize,
     rendered: &str,
 ) -> ComparisonKey {
     let mut all_endpoints: Vec<_> = operations
@@ -546,7 +564,6 @@ fn wrapper_rank(
                 .map(|l| key_locant(l)),
         ),
         ComparisonKey::tuple(operations.iter().map(|o| o.prefix.clone().into())),
-        map_index.into(),
         rendered.into(),
     ])
 }
@@ -959,6 +976,8 @@ fn retained_wrapper_parent(
         bond_models,
         selected_locant_map: None,
         selected_bond_model: None,
+        hydrogenation: retained_parent_name_policy(&first.template.name)
+            .and_then(|policy| policy.hydrogenation.clone()),
     };
     parent.validate()?;
     Ok(Some(parent))
@@ -983,6 +1002,7 @@ fn systematic_fusion_parent(
         bond_models,
         selected_locant_map: None,
         selected_bond_model: None,
+        hydrogenation: None,
     };
     parent.validate()?;
     Ok(Some(parent))
@@ -1351,6 +1371,10 @@ fn render_bridge_name(
     operations: &[NondetachableBridgeOperation],
     unsaturation: &[UnsaturationOperation],
 ) -> String {
+    let parent_name = parent.hydrogenation.as_ref().map_or_else(
+        || parent.name().to_owned(),
+        RetainedHydrogenationPolicy::parent_name,
+    );
     let mut name = String::new();
     if !unsaturation.is_empty() {
         let locants: Vec<_> = unsaturation
@@ -1377,12 +1401,15 @@ fn render_bridge_name(
                 operation.endpoint_locants.0, operation.endpoint_locants.1
             ));
         }
-        if index + 1 < operations.len() || needs_hyphen(&prefix, parent.name()) {
+        if index + 1 < operations.len() || needs_hyphen(&prefix, &parent_name) {
             name.push('-');
         }
     }
-    name.push_str(parent.name());
-    name
+    name.push_str(&parent_name);
+    parent.hydrogenation.as_ref().map_or_else(
+        || name.clone(),
+        |hydrogenation| hydrogenation.render_with_parent(&name),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1567,6 +1594,80 @@ fn audit_bridge_plan(
 mod tests {
     use super::super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn equivalent_bridge_numberings_keep_their_aligned_parent_proofs() {
+        let mol = read_smiles("Nc1ccc2c(c1)C1CCC2O1").unwrap();
+        let atoms = super::super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new());
+        let amine = mol.atoms.values().find(|atom| atom.symbol == "N").unwrap();
+        let attachment = mol.get_neighbors(amine.idx)[0];
+        let plan = plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().unwrap();
+        let mut suffix_locants = BTreeSet::new();
+        for variant in std::iter::once(&plan).chain(&plan.numbering_variants) {
+            assert_eq!(
+                variant.rendered_name,
+                "1,2,3,4-tetrahydro-1,4-epoxynaphthalene"
+            );
+            suffix_locants.insert(variant.atom_to_locant()[&attachment].clone());
+            assert!(
+                audit_bridge_plan(
+                    &mol,
+                    &atoms,
+                    variant.parent.atom_ids(),
+                    &variant.parent.locant_maps()[0],
+                    &variant.bridges,
+                    variant.parent.selected_bond_model.as_ref().unwrap(),
+                    &variant.derivative_state,
+                    &variant.bridge_unsaturation_operations,
+                    variant.saturated_bridge_precursor.as_ref(),
+                    variant.parent.fusion_plan(),
+                    variant.parent.fusion_plan().is_none(),
+                )
+                .unwrap()
+                .is_some()
+            );
+        }
+        assert_eq!(suffix_locants, BTreeSet::from(["6".into(), "7".into()]));
+    }
+
+    #[test]
+    fn bridge_suffix_numbering_precedes_prefixes_and_is_input_order_independent() {
+        use super::super::super::name_smiles;
+        use crate::naming::{NameReason, NameStatus, verify_identity};
+
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            (
+                "Nc1cc(C)c2c(c1)C1CCC2O1",
+                "8-methyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-amine",
+            ),
+            (
+                "C12CC=C(C3=CC=CC=C13)O2",
+                "1,2-dihydro-1,4-epoxynaphthalene",
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::Unverified(NameReason::BridgedFusedParent)
+            );
+            let parsed = parser.parse(expected, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{expected}: {}",
+                parsed.message
+            );
+            let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            verify_identity(smiles, &reconstructed).unwrap();
+            assert_eq!(
+                name_smiles(&reconstructed).unwrap().text,
+                expected,
+                "{reconstructed}"
+            );
+        }
+    }
 
     #[test]
     fn external_pi_wrappers_keep_required_added_hydrogen() {

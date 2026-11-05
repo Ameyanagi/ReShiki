@@ -5,6 +5,7 @@ use super::{
         format_parent_tail, format_substituent_tail, parent_stem_and_terminal,
         promote_acyl_substituent_name, promote_benzene_retained_name,
         promote_retained_functional_parent, promote_retained_substituent_name,
+        select_retained_anion_name,
     },
     assembly_parts::{AssemblyParts, HydroOperation},
     assembly_prefixes::{format_replacement_prefixes, format_substituent_prefixes},
@@ -580,6 +581,7 @@ pub(super) fn assemble_name_with_parent(
     promote_acyl_substituent_name(parts);
     promote_retained_substituent_name(parts);
     promote_benzene_retained_name(parts);
+    select_retained_anion_name(parts);
     promote_retained_functional_parent(parts)?;
     let spiro_sides = super::assembly_spiro::split_spiro_substituents(parts)?;
     parts.spiro_prefix_composition = !spiro_sides.is_empty();

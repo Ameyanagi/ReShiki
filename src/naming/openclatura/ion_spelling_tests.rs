@@ -29,8 +29,8 @@ fn ion_spelling_matrix() {
         (
             "A4",
             "[NH3+]CCc1ccccc1[O-]",
-            "2-(2-azaniumylethyl)benzen-1-olate",
-            NameStatus::Unverified(NameReason::AnionParent),
+            "2-(2-azaniumylethyl)phenoxide",
+            NameStatus::Preferred,
         ),
         (
             "A5",
@@ -48,7 +48,7 @@ fn ion_spelling_matrix() {
             "A7",
             "C[N+](C)(C)CC[O-]",
             "2-(trimethylammonio)ethan-1-olate",
-            NameStatus::Unverified(NameReason::CationPrefix),
+            NameStatus::Unverified(NameReason::AnionParent),
         ),
         (
             "A8",

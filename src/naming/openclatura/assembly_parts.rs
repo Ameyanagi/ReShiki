@@ -65,6 +65,17 @@ pub struct AnionSuffix {
     pub cite_locants: bool,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum RetainedAnionName {
+    #[default]
+    NotApplicable,
+    Required {
+        name: String,
+        absorbed_substituent: Option<usize>,
+    },
+    Applied(String),
+    SubstitutedAlkyl,
+}
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HydroOperation {
     pub key: String,
     pub locants: Vec<String>,
@@ -100,6 +111,7 @@ pub struct AssemblyParts {
     pub principal_citation_mode: Option<String>,
     pub retained_name: Option<String>,
     pub retained_absorbs_principal_group: bool,
+    pub retained_anion_name: RetainedAnionName,
     pub retained_substituent_name: Option<String>,
     pub retained_parent_metadata: Option<RetainedParentMetadata>,
     pub fusion_plan: Option<super::fusion::model::FusionParentPlan>,
@@ -176,6 +188,7 @@ impl AssemblyParts {
             principal_citation_mode: None,
             retained_name: None,
             retained_absorbs_principal_group: false,
+            retained_anion_name: RetainedAnionName::NotApplicable,
             retained_substituent_name: None,
             retained_parent_metadata: None,
             fusion_plan: None,
