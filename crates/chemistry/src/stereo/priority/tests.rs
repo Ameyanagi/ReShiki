@@ -17,16 +17,12 @@ fn carbons(n: usize) -> Graph {
 }
 
 #[test]
-fn protium_and_retained_ordinary_hydrogen_have_equal_priorities() -> TestResult {
+fn protium_ranks_like_implicit_hydrogen() -> TestResult {
+    // CH₂–¹H ties with CH₃ (P-92.3); D still ranks higher. A retained
+    // unlabelled explicit H keeps its legacy (RDKit-compatible) ranking.
     let state = crate::smiles::prepare("OC(C[1H])C")?.state;
     let ranks = atom_priorities(&state.graph, &state.metadata).map_err(anyhow::Error::msg)?;
     assert_eq!(ranks[2], ranks[4]);
-    let mut ordinary = state.graph.clone();
-    ordinary.atoms[3].isotope = 0;
-    assert_eq!(
-        atom_priorities(&ordinary, &state.metadata).map_err(anyhow::Error::msg)?,
-        ranks
-    );
     let mut deuterated = state.graph;
     deuterated.atoms[3].isotope = 2;
     let ranks = atom_priorities(&deuterated, &state.metadata).map_err(anyhow::Error::msg)?;

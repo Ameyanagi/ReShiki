@@ -210,11 +210,12 @@ fn refine(
                     _ => return Err("Invalid CIP bond type".into()),
                 }
             };
-            // Keep the isotope atom in the structure, but give it the same
-            // refinement contribution as an implicit H (e.g. CH₂–¹H = CH₃).
+            // Keep a ¹H atom in the structure, but give it the refinement
+            // contribution of an implicit H (CH₂–¹H = CH₃). Unlabelled explicit
+            // H keeps its legacy ranking.
             let neighbor = at(&graph.atoms, other)?;
             if neighbor.atomic_number == 1
-                && neighbor.isotope <= 1
+                && neighbor.isotope == 1
                 && neighbor.charge == 0
                 && *at(&degree, other)? == 1
                 && bond.order == 1
