@@ -36,6 +36,7 @@ pub(super) fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Resul
 pub(super) enum Derivation {
     Plan {
         parent_atoms: AtomSet,
+        parent_locants: BTreeMap<usize, String>,
         principal_group: Option<(String, AtomSet)>,
         retained_anion_name: super::assembly_parts::RetainedAnionName,
         component_splits: BTreeSet<Edge>,
@@ -95,6 +96,7 @@ pub(super) fn name_component_with_citation(
                     .map_or_else(AtomSet::new, |(_, atoms)| atoms.clone()),
                 derivation: Derivation::Plan {
                     parent_atoms,
+                    parent_locants: plan.locant_map,
                     principal_group,
                     retained_anion_name: plan.parts.retained_anion_name,
                     component_splits,
@@ -144,10 +146,11 @@ pub(super) fn name_component_with_atom_locants(
             )?;
             Ok(IsotopeParentName {
                 text,
-                locants: plan.locant_map,
+                locants: plan.locant_map.clone(),
                 rendered_parent,
                 derivation: Derivation::Plan {
                     parent_atoms,
+                    parent_locants: plan.locant_map,
                     principal_group: plan.parts.principal_group.map(|g| (g.key, g.atom_ids)),
                     retained_anion_name: plan.parts.retained_anion_name,
                     component_splits,

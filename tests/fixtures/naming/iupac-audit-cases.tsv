@@ -614,3 +614,30 @@ Oc1ccc2c(c1)C1CCC2O1	1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-ol	unverified	P-14
 [O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1	5-(2-carboxylatophenyl)-1H-pyrrol-1-ide-3-carboxylate	preferred	P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601; P-72.7(a) https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
 [O-]C(=O)c1ccccc1CC(=O)[O-]	(2-carboxylatophenyl)acetate	unverified	P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601; P-72.7(a) https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
 [O-]C(=O)c1ccccc1CC(=O)O	2-(carboxymethyl)benzoate	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #942	pass
+
+# Amine and imine oxides (issue #944)
+[O-][n+]1ccccc1	pyridine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+]1([O-])CCCCC1	1-methylpiperidine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+](C)(C)[O-]	N,N-dimethylmethanamine N-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+CC[N+](CC)([O-])CC	N,N-diethylethanamine N-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ccc(C)cc1	4-methylpyridine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][N+]1(C)CCCC1	1-methylpyrrolidine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C1CC[N+]2([O-])CCC1CC2	1-azabicyclo[3.2.2]nonane 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C=[N+](C)[O-]	N-methylmethanimine N-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102; P-74.2.2.1.9 https://iupac.qmul.ac.uk/BlueBook/P7.html#7402020109	issue #944	pass
+C=[N+](Cl)[O-]	N-chloromethanimine N-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102; P-74.2.2.1.9 https://iupac.qmul.ac.uk/BlueBook/P7.html#7402020109	issue #944	pass
+C[N+]1([O-])CCOCC1	4-methylmorpholine 4-oxide	unverified	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ccncc1	pyrazine 1-oxide	unverified	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[S-][n+]1ccccc1	pyridine 1-sulfide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ccccc1C(=O)O	1-oxidopyridin-1-ium-2-carboxylic acid	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+CC(=O)N1CC[N+](C)([O-])CC1	1-(4-methyl-4-oxidopiperazin-4-ium-1-yl)ethan-1-one	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ccc(N)cc1	1-oxidopyridin-1-ium-4-amine	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][NH2+]CC	N-oxidoethanaminium	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[NH+](C)[O-]	N-methyl-N-oxidomethanaminium	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ncccc1	1-oxidopyridazin-1-ium	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+]1([O-])CC[N+](C)([O-])CC1	1,4-dimethyl-1,4-dioxidopiperazine-1,4-diium	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[Se-][n+]1ccccc1	pyridine 1-selenide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[Te-][n+]1ccccc1	pyridine 1-telluride	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+CC[N+](C)(C)[S-]	N,N-dimethylethanamine N-sulfide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+](C)([O-])CC(=O)[O-]	[dimethyl(oxido)ammonio]acetate	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C=[N+]([O-])CC(=O)[O-]	[methylidene(oxido)ammonio]acetate	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+]([O-])(C)Cc1ccc(C(=O)[O-])cc1	4-{[dimethyl(oxido)ammonio]methyl}benzoate	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass

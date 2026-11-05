@@ -19,6 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Record departures only after promotions and final text selection have run.
 pub(super) fn mark_assembled_name(mol: &super::molecule::Molecule, parts: &AssemblyParts) {
+    super::amine_oxides::assess_zwitterion(mol, parts);
     if let Some(group) = &parts.principal_group {
         let rule = group
             .resolved_rule

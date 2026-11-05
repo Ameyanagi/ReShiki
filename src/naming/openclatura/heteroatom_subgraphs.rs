@@ -836,6 +836,7 @@ fn name_nitrogen(
     if order == 2 && atom.charge <= 0 && names.len() > 1 {
         mol.set_name_status(status);
     }
+    super::amine_oxides::assess_cationic_prefix(mol, start);
     if order == 1
         && atom.charge > 0
         && let Some(prefix) =

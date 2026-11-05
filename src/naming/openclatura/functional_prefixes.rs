@@ -386,6 +386,7 @@ pub fn prefix_from_group(
             })
             .collect();
         if group.key == "iminium" {
+            super::amine_oxides::assess_cationic_prefix(context.mol, n);
             if context.mol.get_neighbors(n).iter().all(|&neighbor| {
                 neighbor == group.attachment_carbon || context.mol.atoms[&neighbor].symbol == "H"
             }) {
@@ -462,6 +463,9 @@ pub fn prefix_from_group(
                 })
             })
         {
+            if let Some(n) = amide_nitrogen(context.mol, group) {
+                super::amine_oxides::assess_cationic_prefix(context.mol, n);
+            }
             context
                 .mol
                 .mark_name(NameStatus::Unverified(NameReason::CationPrefix));
