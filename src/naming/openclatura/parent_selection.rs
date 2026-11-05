@@ -41,6 +41,9 @@ type AssemblyCitation = (Vec<LocantKey>, Vec<((String, String), LocantKey)>);
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ParentScore {
     anionic_centres: i64,
+    skeletal_anionic_centres: i64,
+    uide_centres: i64,
+    anionic_elements: [i64; 19],
     contains_principal: i64,
     principal_count: i64,
     senior_elements: Vec<usize>,
@@ -58,6 +61,19 @@ struct ParentScore {
     path_tiebreak: Vec<usize>,
 }
 
+impl ParentScore {
+    fn principal_preference(&self) -> (i64, i64, i64, [i64; 19], i64, i64) {
+        (
+            self.anionic_centres,
+            self.skeletal_anionic_centres,
+            self.uide_centres,
+            self.anionic_elements,
+            self.contains_principal,
+            self.principal_count,
+        )
+    }
+}
+
 struct ParentGroups<'a> {
     principal: &'a [usize],
     // Prefix parents must stay rooted at their attachment, not at an anion.
@@ -66,7 +82,7 @@ struct ParentGroups<'a> {
 
 /// P-72.7(a): skeletal anions and anionic suffixes each contribute their
 /// negatively charged atoms once, even when perceived groups overlap.
-fn anionic_centre_count(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) -> usize {
+fn anionic_centres(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) -> AtomSet {
     parent
         .iter()
         .copied()
@@ -83,8 +99,12 @@ fn anionic_centre_count(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGro
                 .flat_map(|g| g.atoms_involved.iter().copied()),
         )
         .filter(|i| mol.atoms[i].charge < 0)
-        .collect::<AtomSet>()
-        .len()
+        .collect()
+}
+
+#[cfg(test)]
+fn anionic_centre_count(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) -> usize {
+    anionic_centres(mol, parent, groups).len()
 }
 
 fn score(
@@ -180,10 +200,41 @@ fn score(
             split_acyl += 1;
         }
     }
+    // P-72.7(a)-(d), before characteristic suffix and parent seniority.
+    // Characteristic anions contribute to (a), but only skeletal atoms to (b)/(c).
+    let centres = groups
+        .anionic
+        .map_or_else(AtomSet::new, |g| anionic_centres(mol, &atoms, g));
+    let skeletal: Vec<_> = centres.intersection(&atoms).copied().collect();
+    let uide_count = skeletal
+        .iter()
+        .filter(|&&id| {
+            let atom = &mol.atoms[&id];
+            let bonding = mol
+                .get_neighbors(id)
+                .iter()
+                .map(|&n| mol.bond_order(id, n))
+                .sum::<usize>()
+                + atom.total_h_count;
+            super::rules::elements::get(&atom.symbol)
+                .is_some_and(|element| bonding == element.standard_valence + 1)
+        })
+        .count();
+    let elements = [
+        "N", "P", "As", "Sb", "Bi", "Si", "Ge", "Sn", "Pb", "B", "Al", "Ga", "In", "Tl", "O", "S",
+        "Se", "Te", "C",
+    ];
+    let anionic_elements = elements.map(|symbol| {
+        -(centres
+            .iter()
+            .filter(|id| mol.atoms[id].symbol == symbol)
+            .count() as i64)
+    });
     ParentScore {
-        anionic_centres: -groups
-            .anionic
-            .map_or(0, |g| anionic_centre_count(mol, &atoms, g) as i64),
+        anionic_centres: -(centres.len() as i64),
+        skeletal_anionic_centres: -(skeletal.len() as i64),
+        uide_centres: -(uide_count as i64),
+        anionic_elements,
         contains_principal: -i64::from(principal_count > 0),
         principal_count: -principal_count,
         senior_elements,
@@ -234,6 +285,64 @@ pub fn select_principal_parent(
     .into_iter()
     .min_by(|a, b| a.0.cmp(&b.0))
     .map(|(_, selection)| selection)
+}
+
+/// Compare the cited anion with actual competing parents, using the same
+/// P-72.7 score as selection. Atom-order tie-breaks cannot certify a PIN.
+pub(super) fn anion_parent_is_senior(
+    mol: &Molecule,
+    parent: &AtomSet,
+    principal_atoms: Option<&AtomSet>,
+) -> bool {
+    use super::{chains, component_group_rules, principal_groups};
+    let all_atoms = mol.atoms.keys().copied().collect();
+    let mut groups = principal_groups::component_groups(mol, &all_atoms);
+    principal_groups::demote_neutral_suffixes_for_skeletal_anion(mol, &all_atoms, &mut groups);
+    let key = principal_groups::component_principal_key(mol, &groups, false);
+    let cyclic = chains::get_cyclic_atoms(mol, &AtomSet::new());
+    let mut excluded = AtomSet::new();
+    component_group_rules::retarget_external_carbonyl_groups(
+        mol,
+        &mut groups,
+        key.as_deref(),
+        &mut excluded,
+        &cyclic,
+    );
+    let principal = principal_groups::candidate_principal_attachments(mol, &groups, key.as_deref());
+    component_group_rules::exclude_nonparent_group_atoms(mol, &groups, &mut excluded, &cyclic);
+    let (Ok(paths), Ok(rings)) = (
+        chains::find_all_carbon_paths(mol, &excluded),
+        chains::find_ring_systems(mol, &excluded),
+    ) else {
+        return false;
+    };
+    let candidates = parent_candidates(
+        mol,
+        &paths,
+        &rings,
+        &principal,
+        Some(&groups),
+        &excluded,
+        false,
+    );
+    let Some(cited_score) = candidates
+        .iter()
+        .filter(|(_, selection)| selection.atom_set() == *parent)
+        .map(|(score, _)| score)
+        .min()
+    else {
+        return false;
+    };
+    let cited_centres: AtomSet = parent
+        .iter()
+        .chain(principal_atoms.into_iter().flatten())
+        .copied()
+        .filter(|id| mol.atoms[id].charge < 0)
+        .collect();
+    candidates.iter().all(|(score, selection)| {
+        let centres = anionic_centres(mol, &selection.atom_set(), &groups);
+        selection.atom_set() == *parent || centres.is_subset(&cited_centres) || cited_score < score
+    })
 }
 
 pub fn select_principal_parent_with_excluded(
@@ -561,7 +670,7 @@ fn prefer_ring_or_chain_class(
 ) {
     let Some(principal) = candidates
         .iter()
-        .map(|(s, _)| (s.anionic_centres, s.contains_principal, s.principal_count))
+        .map(|(s, _)| s.principal_preference())
         .min()
     else {
         return;
@@ -581,21 +690,17 @@ fn prefer_ring_or_chain_class(
     };
     let ring = candidates
         .iter()
-        .filter(|(s, p)| {
-            p.is_ring && (s.anionic_centres, s.contains_principal, s.principal_count) == principal
-        })
+        .filter(|(s, p)| p.is_ring && s.principal_preference() == principal)
         .map(|(_, p)| senior(p))
         .min();
     let chain = candidates
         .iter()
-        .filter(|(s, p)| {
-            !p.is_ring && (s.anionic_centres, s.contains_principal, s.principal_count) == principal
-        })
+        .filter(|(s, p)| !p.is_ring && s.principal_preference() == principal)
         .map(|(_, p)| senior(p))
         .min();
     if let (Some(ring), Some(chain)) = (ring, chain) {
         candidates.retain(|(s, p)| {
-            (s.anionic_centres, s.contains_principal, s.principal_count) != principal
+            s.principal_preference() != principal
                 || if ring <= chain { p.is_ring } else { !p.is_ring }
         });
     }
@@ -651,13 +756,7 @@ fn prefer_spiro_backbone_components(
         .collect();
     let Some(best_principal) = candidates
         .iter()
-        .map(|(score, _)| {
-            (
-                score.anionic_centres,
-                score.contains_principal,
-                score.principal_count,
-            )
-        })
+        .map(|(score, _)| score.principal_preference())
         .min()
     else {
         return;
@@ -666,13 +765,7 @@ fn prefer_spiro_backbone_components(
     let keys: BTreeMap<Vec<usize>, BackboneKey> = candidates
         .iter()
         .filter_map(|(score, selection)| {
-            if !selection.is_ring
-                || (
-                    score.anionic_centres,
-                    score.contains_principal,
-                    score.principal_count,
-                ) != best_principal
-            {
+            if !selection.is_ring || score.principal_preference() != best_principal {
                 return None;
             }
             let path = selection.primary_path();
@@ -709,6 +802,77 @@ mod tests {
         graph_io::read_smiles,
     };
     use super::*;
+
+    fn linked_skeletal_anions(symbol: &str, hydrogen_count: usize) -> Molecule {
+        use super::super::molecule::{Atom, Bond};
+
+        let mut mol = Molecule::default();
+        for (idx, symbol, charge, total_h_count) in [
+            (0, "P", -1, 1),
+            (1, "C", 0, 2),
+            (2, "C", 0, 2),
+            (3, symbol, -1, hydrogen_count),
+        ] {
+            let mut atom = Atom::new(idx, symbol);
+            atom.charge = charge;
+            atom.total_h_count = total_h_count;
+            mol.add_atom(atom).unwrap();
+        }
+        for idx in 0..3 {
+            mol.add_bond(Bond::new(idx, idx, idx + 1, 1)).unwrap();
+        }
+        mol
+    }
+
+    #[test]
+    fn uide_centres_precede_senior_anionic_elements() {
+        // P-72.7(c): (2-phosphanidylethyl)arsanuide. Score the two
+        // mononuclear parents directly because their public naming support
+        // is independent of this parent-preference comparator.
+        let mol = linked_skeletal_anions("As", 3);
+        let ranks = mol.atoms.keys().map(|&id| (id, id)).collect();
+        let groups = ParentGroups {
+            principal: &[],
+            anionic: Some(&[]),
+        };
+        let phosphanide = score(&mol, &[0], false, 0, None, &groups, &ranks);
+        let arsanuide = score(&mol, &[3], false, 0, None, &groups, &ranks);
+        assert_eq!(phosphanide.anionic_centres, arsanuide.anionic_centres);
+        assert_eq!(
+            phosphanide.skeletal_anionic_centres,
+            arsanuide.skeletal_anionic_centres
+        );
+        assert_eq!(phosphanide.uide_centres, 0);
+        assert_eq!(arsanuide.uide_centres, -1);
+        assert!(phosphanide.anionic_elements < arsanuide.anionic_elements);
+        assert!(arsanuide < phosphanide);
+    }
+
+    #[test]
+    fn senior_anionic_elements_precede_characteristic_suffixes() {
+        // P-72.7(d): (2-silanidylethyl)phosphanide. Give the competing
+        // silanide a characteristic attachment to verify that (d) decides
+        // before the ordinary principal-group criteria in (e).
+        let mol = linked_skeletal_anions("Si", 2);
+        let ranks = mol.atoms.keys().map(|&id| (id, id)).collect();
+        let groups = ParentGroups {
+            principal: &[3],
+            anionic: Some(&[]),
+        };
+        let phosphanide = score(&mol, &[0], false, 0, None, &groups, &ranks);
+        let silanide = score(&mol, &[3], false, 0, None, &groups, &ranks);
+        assert_eq!(phosphanide.anionic_centres, silanide.anionic_centres);
+        assert_eq!(
+            phosphanide.skeletal_anionic_centres,
+            silanide.skeletal_anionic_centres
+        );
+        assert_eq!(phosphanide.uide_centres, silanide.uide_centres);
+        assert_eq!(phosphanide.uide_centres, 0);
+        assert!(phosphanide.contains_principal > silanide.contains_principal);
+        assert!(phosphanide.anionic_elements < silanide.anionic_elements);
+        assert!(phosphanide < silanide);
+    }
+
     #[test]
     fn anionic_centres_precede_neutral_principal_groups() {
         for smiles in [

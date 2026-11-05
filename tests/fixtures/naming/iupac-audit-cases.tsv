@@ -17,7 +17,7 @@ Oc1ccccc1-c1[n-]ccc1C	2-(2-hydroxyphenyl)-3-methyl-1H-pyrrol-1-ide	preferred	P-7
 OC(=O)c1ccccc1-c1[n-]ccc1	2-(2-carboxyphenyl)-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
 OCCc1cc[n-]c1	3-(2-hydroxyethyl)-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
 [O-]CCC(=O)[O-]	3-oxidopropanoate	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	PR #931	pass
-O=C(O)c1cc[n-]c1	1H-pyrrol-1-ide-3-carboxylic acid	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	issue #942	known-failure
+O=C(O)c1cc[n-]c1	3-carboxy-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	issue #942	pass
 [O-]c1ccccc1Cc1ccccc1C(=O)[O-]	2-[(2-oxidophenyl)methyl]benzoate	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	PR #931	pass
 [n-]1cccc1	1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
 [Na+].Cc1cc[n-]c1	sodium 3-methyl-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
@@ -27,15 +27,15 @@ O=C(O)c1cc[n-]c1	1H-pyrrol-1-ide-3-carboxylic acid	preferred	P-72.7 https://iupa
 [Na+].Oc1cccc(-c2[n-]ccc2)c1	sodium 2-(3-hydroxyphenyl)-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
 [Na+].NCc1cc[n-]c1	sodium 3-(aminomethyl)-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
 [Na+].CC(=O)c1cc[n-]c1	sodium 3-acetyl-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
-[Na+].OC(=O)c1nc[n-]c1	sodium 1H-imidazol-1-ide-4-carboxylic acid	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	issue #942	known-failure
+[Na+].OC(=O)c1nc[n-]c1	sodium 4-carboxy-1H-imidazol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	issue #942	pass
 [Na+].CC(=O)c1nc[n-]c1	sodium 4-acetyl-1H-imidazol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
 [Na+].c1ccc2[n-]c(-c3ccc(O)cc3)cc2c1	sodium 2-(4-hydroxyphenyl)-1H-indol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
-[Na+].c1ccc2[n-]cc(C(=O)O)c2c1	sodium 1H-indol-1-ide-3-carboxylic acid	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	issue #942	known-failure
+[Na+].c1ccc2[n-]cc(C(=O)O)c2c1	sodium 3-carboxy-1H-indol-1-ide	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	issue #942	pass
 [Na+].[n-]1nnnc1-c1ccc(O)cc1	sodium 5-(4-hydroxyphenyl)-1H-tetrazol-1-ide	preferred	P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#14030404; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-58.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#58020101; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201	PR #931	pass
-[Na+].[n-]1nnnc1C(=O)O	sodium 1H-tetrazol-1-ide-5-carboxylic acid	preferred	P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#14030404; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-58.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#58020101; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201	issue #942	known-failure
-[Na+].[n-]1nnnc1N	sodium 1H-tetrazol-1-id-5-amine	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	issue #942	known-failure
+[Na+].[n-]1nnnc1C(=O)O	sodium 5-carboxy-1H-tetrazol-1-ide	preferred	P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#14030404; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-58.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#58020101; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	issue #942	pass
+[Na+].[n-]1nnnc1N	sodium 5-amino-1H-tetrazol-1-ide	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	issue #942	pass
 [Na+].[N-]1CC=CC1	sodium 2,5-dihydro-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
-[Na+].[Na+].[O-]c1ccccc1Cc1cc[n-]c1	disodium 3-[(2-oxidophenyl)methyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	known-failure
+[Na+].[Na+].[O-]c1ccccc1Cc1cc[n-]c1	disodium 3-[(2-oxidophenyl)methyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
 [Na+].C[C@H](O)c1cc[n-]c1	sodium 3-[(1S)-1-hydroxyethyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-91.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#910201; P-92 https://iupac.qmul.ac.uk/BlueBook/P9.html#92	PR #931	pass
 [Na+].C[C@@H](O)c1cc[n-]c1	sodium 3-[(1R)-1-hydroxyethyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-91.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#910201; P-92 https://iupac.qmul.ac.uk/BlueBook/P9.html#92	PR #931	pass
 [Na+].C[C@H](O)[C@H](O)c1cc[n-]c1	sodium 3-[(1R,2S)-1,2-dihydroxypropyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-91.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#910201; P-92 https://iupac.qmul.ac.uk/BlueBook/P9.html#92	PR #931	pass
@@ -43,14 +43,14 @@ O=C(O)c1cc[n-]c1	1H-pyrrol-1-ide-3-carboxylic acid	preferred	P-72.7 https://iupa
 [Na+].Oc1ccc(/C=C/c2cc[n-]c2)cc1	sodium 3-[(1E)-2-(4-hydroxyphenyl)ethenyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-91.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#910201; P-92 https://iupac.qmul.ac.uk/BlueBook/P9.html#92	PR #931	pass
 [Na+].Oc1ccc(/C=C\c2cc[n-]c2)cc1	sodium 3-[(1Z)-2-(4-hydroxyphenyl)ethenyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-91.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#910201; P-92 https://iupac.qmul.ac.uk/BlueBook/P9.html#92	PR #931	pass
 Cc1ccc[n-]1	2-methyl-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
-[NH3+]CC1[N-]C(=O)NC1=O	5-(azaniumylmethyl)imidazolidin-1-ide-2,4-dione	preferred	P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201; P-73.6 https://iupac.qmul.ac.uk/BlueBook/P7.html#7306	issue #942	known-failure
+[NH3+]CC1[N-]C(=O)NC1=O	5-(azaniumylmethyl)-2,4-dioxoimidazolidin-1-ide	preferred	P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201; P-73.6 https://iupac.qmul.ac.uk/BlueBook/P7.html#7306; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	issue #942	pass
 [Na+].CC(=O)c1c[n-]c2ccccc12	sodium 3-acetyl-1H-indol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
-[Na+].O=C(O)c1cc[n-]c1	sodium 1H-pyrrol-1-ide-3-carboxylic acid	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	issue #942	known-failure
+[Na+].O=C(O)c1cc[n-]c1	sodium 3-carboxy-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	issue #942	pass
 [O-]c1cc2ccccc2cc1C(=O)[O-]	3-oxidonaphthalene-2-carboxylate	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	PR #931	pass
 Cc1cc[n-]c1	3-methyl-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
-[O-]C(=O)c1ccccc1Cc1cc[n-]c1	3-[(2-carboxylatophenyl)methyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	known-failure
-[O-]C(=O)c1ccccc1[CH2-]	(2-carboxylatophenyl)methanide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	known-failure
-[O-]c1ccccc1Cc1cc[n-]c1	3-[(2-oxidophenyl)methyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	known-failure
+[O-]C(=O)c1ccccc1Cc1cc[n-]c1	3-[(2-carboxylatophenyl)methyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
+[O-]C(=O)c1ccccc1[CH2-]	(2-carboxylatophenyl)methanide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
+[O-]c1ccccc1Cc1cc[n-]c1	3-[(2-oxidophenyl)methyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
 [O-]C(=O)c1cc[n-]c1	1H-pyrrol-1-ide-3-carboxylate	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	PR #931	pass
 # P-72.6.3: elide the anion suffix e before the substituent attachment.
 [O-]C(=O)c1cc(C(=O)[O-])ccc1Cc1cc[n-]c1	4-[(1H-pyrrol-1-id-3-yl)methyl]benzene-1,3-dicarboxylate	preferred	P-72.6.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720603	issue #948	pass
@@ -59,7 +59,7 @@ C[S+](C)[CH-]c1cc([O-])cc([O-])c1	(dimethylsulfaniumyl)3,5-dioxidophenylmethanid
 C[S+](C)[CH-]c1c([O-])c([N+](C)(C)C)cc([O-])c1[N+](C)(C)C	(dimethylsulfaniumyl)2,5-dioxido-3,6-bis(trimethylammonio)phenylmethanide	unverified	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-74.0 https://iupac.qmul.ac.uk/BlueBook/P7.html#7400	PR #931	pass
 C[S+](C)[CH-]c1c([O-])c([N+](C)(C)C)cc([O-])c1	(dimethylsulfaniumyl)2,5-dioxido-3-(trimethylammonio)phenylmethanide	unverified	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	PR #931	pass
 C[S+](C)[CH-]c1cc([O-])ccc1[N+](C)(C)C	(dimethylsulfaniumyl)5-oxido-2-(trimethylammonio)phenylmethanide	unverified	P-73.6 https://iupac.qmul.ac.uk/BlueBook/P7.html#7306	PR #931	pass
-[O-]C(=O)c1ccccc1CC(=O)[O-]	2-(carboxylatomethyl)benzoate	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601	issue #942	known-failure
+[O-]C(=O)c1ccccc1CC(=O)[O-]	2-(carboxylatomethyl)benzoate	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601	issue #942	pass
 [O-]C(=O)c1ccccc1Cc1ccccc1C(=O)[O-]	2-[(2-carboxylatophenyl)methyl]benzoate	not_preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	PR #931	pass
 # ring-suffix-check (audit of PR #917)
 O[C@H]1[C@H](C)CCCC1	(1R,2R)-2-methylcyclohexan-1-ol	preferred	P-14.3.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#P-14.3.3; P-92.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#P-92.6	PR #917	pass
@@ -516,11 +516,11 @@ O=S1(=O)CCCC1	1lambda^6-thiolane-1,1-dione	preferred	P-64.4.2 https://iupac.qmul
 ON1CCCC1O	pyrrolidine-1,2-diol	preferred	P-63.1.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#630103	PR #935	pass
 C=C1N=c2ccccc2=N1	2-methylidene-2H-1,3-benzimidazole	preferred	P-25.7.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#2507010301	PR #935	pass
 # cp-anion-cip-check (audit of PR #933)
-O[C@H](C1=CC=CC1)C1=C[CH-]C=C1	3-[(S)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
-O[C@@H](C1=CC=CC1)C1=C[CH-]C=C1	3-[(R)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
-O[C@H](C1=CCC=C1)C1=C[CH-]C=C1	3-[(S)-(cyclopenta-1,4-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
-F/C=C(\C1=CC=CC1)C1=C[CH-]C=C1	3-[(1Z)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
-F/C=C(/C1=CC=CC1)C1=C[CH-]C=C1	3-[(1E)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
+O[C@H](C1=CC=CC1)C1=C[CH-]C=C1	3-[(S)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	pass
+O[C@@H](C1=CC=CC1)C1=C[CH-]C=C1	3-[(R)-(cyclopenta-1,3-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	pass
+O[C@H](C1=CCC=C1)C1=C[CH-]C=C1	3-[(S)-(cyclopenta-1,4-dien-1-yl)(hydroxy)methyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	pass
+F/C=C(\C1=CC=CC1)C1=C[CH-]C=C1	3-[(1Z)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	pass
+F/C=C(/C1=CC=CC1)C1=C[CH-]C=C1	3-[(1E)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]cyclopenta-2,4-dien-1-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	pass
 O[C@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1	2-[(S)-(4-fluoro-1H-pyrrol-1-id-2-yl)(hydroxy)methyl]-2H-pyrrol-2-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
 O[C@@H](C1=CC(F)=C[N-]1)[C-]1C=CC=N1	2-[(R)-(4-fluoro-1H-pyrrol-1-id-2-yl)(hydroxy)methyl]-2H-pyrrol-2-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
 O[C@H]([C-]1C=CC=C1)[C-]1C=CC2=C1CCC2	2-[(R)-(cyclopenta-2,4-dien-1-id-1-yl)(hydroxy)methyl]bicyclo[3.3.0]octa-1(5),3-dien-2-ide	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
@@ -541,13 +541,13 @@ F/C=C(/C1=CC=CC1)C1=C[NH2+]C=C1	3-[(1Z)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroeth
 F/C=C(\C1=CC=CC1)C1=C[NH2+]C=C1	3-[(1E)-1-(cyclopenta-1,3-dien-1-yl)-2-fluoroethenyl]-1H-pyrrol-1-ium	preferred	P-92.1.4.4 https://iupac.qmul.ac.uk/BlueBook/P9.html#92010404; P-92.1.6 https://iupac.qmul.ac.uk/BlueBook/P9.html#920106	PR #933	known-failure
 # spelling-anion-check (quality review P3: anions composed from parts)
 [c-]1ccccc1	benzenide	preferred	P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201	quality review P3	pass
-CC[CH-]C=O	butan-2-id-1-al	unverified	P-16.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#160701; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	quality review P3	pass
-N#CC1CCC[CH-]1	cyclopentan-2-ide-1-carbonitrile	unverified	P-14.3.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140303	quality review P3	pass
+CC[CH-]C=O	1-oxobutan-2-ide	preferred	P-16.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#160701; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	quality review P3; issue #942	pass
+N#CC1CCC[CH-]1	2-cyanocyclopentan-1-ide	preferred	P-14.3.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140303; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41	quality review P3; issue #942	pass
 [N-]1CCC(C)CC1	4-methylpiperidin-1-ide	preferred	P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201	quality review P3	pass
 Oc1ccccc1C1C[N-]CCO1	2-(2-hydroxyphenyl)morpholin-4-ide	preferred	P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201	quality review P3	pass
 [n-]1cccc1Cc1ccc[nH]1	2-[(1H-pyrrol-2-yl)methyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	quality review P3	pass
 [n-]1cccc1-c1ccc[nH]1	2-(1H-pyrrol-2-yl)-1H-pyrrol-1-ide	not_preferred	P-28 https://iupac.qmul.ac.uk/BlueBook/P2.html#28; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201	quality review P3	pass
-OC1=CC(=O)C=C[CH-]1	2-hydroxy-4-oxocyclohexa-2,5-dien-1-ide	preferred	P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	known-failure
+OC1=CC(=O)C=C[CH-]1	2-hydroxy-4-oxocyclohexa-2,5-dien-1-ide	preferred	P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
 # table-2-8-check (audit of PR #964)
 c1ccc2c(c1)Cc1ccc3ccccc3c1O2	7H-benzo[c]xanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
 c1ccc2cc3c(cc2c1)Cc1ccccc1O3	12H-benzo[b]xanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
@@ -612,8 +612,26 @@ Nc1ccc2c(c1)C1CCC2O1	1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-amine	unverified	P
 CN(C)c1ccc2c(c1)C1CCC2O1	N,N-dimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-amine	unverified	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-31.1.4.2.4 https://iupac.qmul.ac.uk/BlueBook/P3.html#3101040204	issue #966	pass
 Oc1ccc2c(c1)C1CCC2O1	1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-ol	unverified	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-31.1.4.2.4 https://iupac.qmul.ac.uk/BlueBook/P3.html#3101040204	issue #966	pass
 [O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1	5-(2-carboxylatophenyl)-1H-pyrrol-1-ide-3-carboxylate	preferred	P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601; P-72.7(a) https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
-[O-]C(=O)c1ccccc1CC(=O)[O-]	(2-carboxylatophenyl)acetate	unverified	P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601; P-72.7(a) https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
+[O-]C(=O)c1ccccc1CC(=O)[O-]	2-(carboxylatomethyl)benzoate	preferred	P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601; P-72.7(e) https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
 [O-]C(=O)c1ccccc1CC(=O)O	2-(carboxymethyl)benzoate	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #942	pass
+
+# anion-parent-choice (issue #942)
+[O-]C(=O)c1cc(C(=O)[O-])ccc1Cc1c[c-]c[nH]1	4-[(1H-pyrrol-4-id-2-yl)methyl]benzene-1,3-dicarboxylate	preferred	P-72.6.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720603	issue #942	pass
+CCc1c[c-]c[nH]1	5-ethyl-1H-pyrrol-3-ide	preferred	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
+[NH3+]CCc1c[c-]c[nH]1	5-(2-azaniumylethyl)-1H-pyrrol-3-ide	preferred	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
+[O-]C(=O)c1ccccc1[C-](C#N)C#N	(2-carboxylatophenyl)dicyanomethanide	preferred	P-72.7(b) https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41; P-66.5.1.1.4 https://iupac.qmul.ac.uk/BlueBook/P6a.html#6605010104	issue #942	pass
+[K+].Nc1nc[n-]c1	potassium 4-amino-1H-imidazol-1-ide	preferred	P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41; P-72.2.2.2.4 https://iupac.qmul.ac.uk/BlueBook/P7.html#7202020204; P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
+N#C[CH-]C#N	dicyanomethanide	preferred	P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41; P-72.2.2.2.4 https://iupac.qmul.ac.uk/BlueBook/P7.html#7202020204; P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
+[N-]1C(=O)NC(=O)C1	2,4-dioxoimidazolidin-1-ide	preferred	P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41; P-72.2.2.2.4 https://iupac.qmul.ac.uk/BlueBook/P7.html#7202020204; P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
+CC(C)[CH-]C(=O)C(C)C	2,5-dimethyl-4-oxohexan-3-ide	preferred	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
+O=C1C=CC=C[CH-]1	6-oxocyclohexa-2,4-dien-1-ide	preferred	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
+[NH3+]CC[CH-]C#N	1-cyanopropan-1-id-3-aminium	unverified	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101; P-70.3.3.2.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#7003030202; P-74.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#740102 (suffix order unverified)	issue #942	pass
+[N-]1CCC(O)CC1	4-hydroxypiperidin-1-ide	preferred	P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41; P-72.2.2.2.4 https://iupac.qmul.ac.uk/BlueBook/P7.html#7202020204; P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
+N#CCC[CH-]CC#N	1,4-dicyanobutan-2-ide	preferred	P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41; P-66.5.1.1.4 https://iupac.qmul.ac.uk/BlueBook/P6a.html#6605010104; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
+O=C([O-])c1cc[n-]c1	1H-pyrrol-1-ide-3-carboxylate	preferred	P-41 https://iupac.qmul.ac.uk/BlueBook/P4.html#41; P-72.2.2.2.4 https://iupac.qmul.ac.uk/BlueBook/P7.html#7202020204; P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
+O=C1C=CC=C[N-]1	pyridin-1-id-2(1H)-one	unverified	P-72.2.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#7202020101; P-58.2.4 https://iupac.qmul.ac.uk/BlueBook/P5.html#580204 (added hydrogen out of scope; compatibility name is not the PIN)	issue #942	pass
+[C-]#CCCC(=O)[O-]	pent-1-yn-1-id-5-oate	preferred	P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
+[CH-]1CCC(CC1)S(=O)(=O)[O-]	cyclohexan-1-ide-4-sulfonate	preferred	P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
 
 # Amine and imine oxides (issue #944)
 [O-][n+]1ccccc1	pyridine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass

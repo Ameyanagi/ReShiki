@@ -1002,7 +1002,7 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
         cites_locants: cites_locants || attachment_cites_locants || charge_cites_locants,
     }
 }
-fn sole_group_redundant(parts: &AssemblyParts) -> bool {
+pub(super) fn sole_group_redundant(parts: &AssemblyParts) -> bool {
     if parts
         .substituents
         .iter()
@@ -1020,7 +1020,7 @@ fn sole_group_redundant(parts: &AssemblyParts) -> bool {
                     && !parts.spiro_prefix_composition
                     && parts.retained_name.is_none()));
     }
-    !parts.is_substituent && parts.parent_length == 2 && parts.parent_charges.is_empty()
+    !parts.is_substituent && parts.parent_length == 2
 }
 fn suffix_modifiers(parts: &AssemblyParts) -> String {
     let mut grouped = std::collections::BTreeMap::new();
@@ -1081,7 +1081,8 @@ pub fn format_principal_suffix(
         && !parts.is_ring_assembly()
         && !parts.isotope_explicit_locants
         && locs == ["1"]
-        && (!group.suffix_with_locant || sole_group_redundant(parts))
+        && (!group.suffix_with_locant
+            || (parts.is_ring || parts.parent_charges.is_empty()) && sole_group_redundant(parts))
     {
         omit = true;
     }
@@ -1253,18 +1254,20 @@ mod tests {
             cite_locants: true,
         });
         assert_eq!(rendered_parent(&parts), "piperazine-1,4-diide");
-        parts.principal_group = Some(PrincipalGroupItem::new("amine", vec!["2".into()]));
-        assert_eq!(rendered_parent(&parts), "piperazine-1,4-diid-2-amine");
+        // A cationic characteristic suffix remains after the skeletal anion;
+        // neutral amines and aldehydes have already become prefixes (P-41).
+        parts.principal_group = Some(PrincipalGroupItem::new("aminium", vec!["2".into()]));
+        assert_eq!(rendered_parent(&parts), "piperazine-1,4-diid-2-aminium");
 
-        let mut parts = AssemblyParts::new(4);
+        let mut parts = AssemblyParts::new(3);
         parts.anion_suffix = Some(AnionSuffix {
-            locants: vec!["2".into()],
+            locants: vec!["1".into()],
             cite_locants: true,
         });
-        parts.principal_group = Some(PrincipalGroupItem::new("aldehyde", vec!["1".into()]));
-        assert_eq!(rendered_parent(&parts), "butan-2-id-1-al");
+        parts.principal_group = Some(PrincipalGroupItem::new("aminium", vec!["3".into()]));
+        assert_eq!(rendered_parent(&parts), "propan-1-id-3-aminium");
         parts.elide_principal_group_locants = true;
-        assert_eq!(rendered_parent(&parts), "butan-2-id-1-al");
+        assert_eq!(rendered_parent(&parts), "propan-1-id-3-aminium");
     }
 
     #[test]
