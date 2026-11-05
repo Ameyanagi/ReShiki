@@ -609,6 +609,7 @@ fn bridging_hydride_keeps_configuration() -> anyhow::Result<()> {
         ("B[H-]/C=C/F", "B[H-]/C=C\\F"),
         ("C[C@H](F)[1H-]B", "C[C@@H](F)[1H-]B"),
         ("C[C@H](F)[H-]B", "C[C@@H](F)[H-]B"),
+        ("C[C@H](F)<-[1HH]", "C[C@@H](F)<-[1HH]"),
     ] {
         assert_ne!(
             super::stereoisomers(first)?,
@@ -616,5 +617,15 @@ fn bridging_hydride_keeps_configuration() -> anyhow::Result<()> {
             "{first}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn terminal_hydride_is_no_stereo_ligand() -> anyhow::Result<()> {
+    // Charge is no sequence-rule criterion: H⁻ and H tie (P-92.3).
+    assert_eq!(
+        super::stereoisomers("C[C@H](F)[H-]")?,
+        super::stereoisomers("C[C@@H](F)[H-]")?
+    );
     Ok(())
 }
