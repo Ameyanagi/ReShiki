@@ -266,6 +266,12 @@ fn amine_oxides_preserve_other_charge_and_retained_name_families() {
             NameStatus::Preferred,
         ),
         (
+            "formonitrile oxide",
+            "C#[N+][O-]",
+            "formonitrile oxide",
+            NameStatus::Preferred,
+        ),
+        (
             "nitrile sulfide",
             "CC#[N+][S-]",
             "ethanenitrile sulfide",
@@ -319,6 +325,38 @@ fn amine_oxide_nitrogen_stereocentres_remain_rejected() {
         assert!(
             error.contains("N and ring lone-pair stereocentres are not validated"),
             "{smiles}: {error}"
+        );
+    }
+}
+
+#[test]
+fn amine_oxide_unknown_stereo_does_not_certify_zwitterionic_alternatives() {
+    let smiles = "[O-][n+]1ccc([CH:900001](F)Cl)cc1";
+    let actual = name_smiles(smiles).unwrap();
+    assert_eq!(actual.text, "4-(chlorofluoromethyl)-1-oxidopyridin-1-ium");
+    assert_eq!(
+        actual.status,
+        NameStatus::NotPreferred(NameReason::UnknownConfiguration)
+    );
+    assert_eq!(actual.omitted_units, 1);
+    assert_eq!(actual.alternatives.len(), 1);
+    let explicit = &actual.alternatives[0];
+    assert_eq!(
+        explicit.name,
+        "4-[(Ξ)-chlorofluoromethyl]-1-oxidopyridin-1-ium"
+    );
+    assert_eq!(
+        explicit.status,
+        NameStatus::NotPreferred(NameReason::AmineOxideZwitterion)
+    );
+    for text in [&actual.text, &explicit.name] {
+        let request = crate::naming::local::parse_request(text).unwrap();
+        let reply = crate::naming::worker::respond(&request).unwrap();
+        let parsed = crate::naming::local::parse_result(text, &reply).unwrap();
+        assert_eq!(
+            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(smiles).unwrap(),
+            "{text}"
         );
     }
 }

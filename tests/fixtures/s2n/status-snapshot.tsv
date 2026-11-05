@@ -403,7 +403,7 @@ C[Te](=O)O	methanetellurinic acid	preferred
 CS(=O)(=O)N	methanesulfonamide	preferred	
 C[Te](=O)NN	methanetellurinohydrazide	preferred	
 CS(=O)(=O)OO	methanesulfonoperoxoic acid	preferred	
-C#CC[N+](C)([O-])C(C)Cc1ccc(C)cc1	N-methyl-N-[1-(4-methylphenyl)propan-2-yl]-N-oxidoprop-2-yn-1-aminium	preferred	
+C#CC[N+](C)([O-])C(C)Cc1ccc(C)cc1	N-methyl-N-[1-(4-methylphenyl)propan-2-yl]prop-2-yn-1-amine N-oxide	preferred	
 CC#[N+][O-]	acetonitrile oxide	preferred	
 COOC	1,2-dimethyldioxidane	not_preferred	hydride_parent
 CSOC	methoxy(methyl)sulfane	not_preferred	hydride_parent
