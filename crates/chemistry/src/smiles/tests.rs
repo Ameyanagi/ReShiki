@@ -77,6 +77,9 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
 
 #[test]
 fn stereoisomers_deduplicate_meso_and_refresh_ring_relationships() -> anyhow::Result<()> {
+    // Atom maps are not identity: a mapped meso input needs no group either.
+    let mapped = super::read("[CH3:1][C@H:2]([OH:3])[C@H:4]([OH:5])[CH3:6] |r|")?;
+    assert!(mapped.prepared.state.metadata.groups.is_empty());
     for molecule in ["O[C@H]1CC[C@@H](O)CC1", "C[C@H](O)[C@H](O)C"] {
         let absolute = super::read(molecule)?;
         let relative = super::read(&format!("{molecule} |r|"))?;

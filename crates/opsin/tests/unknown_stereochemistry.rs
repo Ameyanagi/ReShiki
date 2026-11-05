@@ -291,29 +291,15 @@ fn amino_acid_dl_controls_keep_default_absolute_and_racemic_stereo() {
 }
 
 #[test]
-fn amino_acid_xi_stays_unknown_under_global_stereochemistry() {
+fn amino_acid_xi_rejects_global_rac_or_rel() {
+    // ξ is an unknown configuration; rac/rel would claim a racemate or relative pair.
     let parser = Parser::new().unwrap();
     for qualifier in ["rac", "rel"] {
         for spelling in ["xi", "ξ"] {
-            for (parent, smiles) in [
-                ("alanine", "NC(C)C(=O)O"),
-                ("N-acetylalanine", "CC(=O)NC(C)C(=O)O"),
-            ] {
+            for parent in ["alanine", "N-acetylalanine"] {
                 let name = format!("({qualifier})-({spelling})-{parent}");
-                let structure = parsed(&parser, &name);
-                assert_eq!(
-                    canonical(&structure.semantic_cxsmiles().unwrap()),
-                    canonical(smiles),
-                    "{name}"
-                );
-                assert!(
-                    structure
-                        .graph
-                        .atoms
-                        .iter()
-                        .all(|atom| atom.parity.is_none()),
-                    "{name}"
-                );
+                let result = parser.parse(&name, &ParseOptions::strict());
+                assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
             }
         }
     }

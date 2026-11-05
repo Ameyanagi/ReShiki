@@ -350,9 +350,15 @@ fn relative_stereo(state: &mut State) -> Result<()> {
         .iter()
         .any(|group| matches!(group.kind, 1 | 2))
     {
-        let mut inverse = state.clone();
+        // Atom maps are not molecular identity.
+        let mut unmapped = state.clone();
+        for atom in &mut unmapped.metadata.atoms {
+            atom.map_number = 0;
+            atom.map_present = false;
+        }
+        let mut inverse = unmapped.clone();
         super::invert_tetrahedral(&mut inverse, &atoms.iter().copied().collect());
-        if super::canonical_smiles(state)? == super::canonical_smiles(&inverse)? {
+        if super::canonical_smiles(&unmapped)? == super::canonical_smiles(&inverse)? {
             return Ok(());
         }
     }

@@ -1469,7 +1469,8 @@ impl<'a> ComponentProcessor<'a> {
                         return false;
                     }
                     match arena[other].attribute(TYPE_ATR) {
-                        Some(DLSTEREOCHEMISTRY_TYPE_VAL) => true,
+                        // ξ is an unknown configuration, not a racemate or relative pair.
+                        Some(DLSTEREOCHEMISTRY_TYPE_VAL | RAC_TYPE_VAL | REL_TYPE_VAL) => true,
                         Some(R_OR_S_TYPE_VAL) => {
                             arena[other].attribute(LOCANT_ATR).is_none_or(|locant| {
                                 graph.atom_by_locant(fragment, locant) == Some(alpha)
