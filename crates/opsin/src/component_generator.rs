@@ -119,26 +119,6 @@ impl<'a> ComponentGenerator<'a> {
             self.process_suffix_prefixes(sub)?;
             self.process_lambda_convention(sub)?;
         }
-        // Component processing consumes D/L prefixes, so preserve the mixed-
-        // scope refusal before those prefixes can disappear from the tree.
-        let stereo = self.arena.descendants_named(parse, STEREOCHEMISTRY_EL);
-        let global_scopes: Vec<_> = stereo
-            .iter()
-            .filter(|&&id| {
-                matches!(
-                    self.attr(id, TYPE_ATR).as_str(),
-                    RAC_TYPE_VAL | REL_TYPE_VAL
-                )
-            })
-            .map(|&id| self.arena.molecule_branch(id))
-            .collect();
-        if stereo.iter().any(|&id| {
-            self.attr_is(id, TYPE_ATR, DLSTEREOCHEMISTRY_TYPE_VAL)
-                && self.attr_is(id, VALUE_ATR, "dl")
-                && global_scopes.contains(&self.arena.molecule_branch(id))
-        }) {
-            return err("mixed relative/racemic scope");
-        }
         let groups = self.arena.descendants_named(parse, GROUP_EL);
         let mut brackets = Vec::new();
         self.find_and_structure_brackets(&subs, &mut brackets)?;

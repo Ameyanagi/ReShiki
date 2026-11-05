@@ -1,4 +1,6 @@
+use opsin::graph::StereoGroupType;
 use opsin::{ParseOptions, Parser, Status, WarningKind};
+use reshiki_chemistry::smiles::stereoisomers;
 
 #[test]
 fn xi_case_survives_tokenization_in_both_directions() {
@@ -188,6 +190,88 @@ fn wrong_xi_case_fails_or_warns_and_preserves_other_stereochemistry() {
             expected.structure.unwrap().semantic_cxsmiles().unwrap(),
             "{name}"
         );
+    }
+}
+
+#[test]
+fn ignored_xi_preserves_the_complete_global_stereo_group() {
+    let parser = Parser::new().unwrap();
+    let warn = ParseOptions {
+        warn_rather_than_fail_on_uninterpretable_stereochemistry: true,
+        ..ParseOptions::strict()
+    };
+    for (qualifier, kind) in [
+        ("rac", StereoGroupType::Racemic),
+        ("rel", StereoGroupType::Relative),
+    ] {
+        for prefix in [qualifier.to_string(), format!("({qualifier})")] {
+            let name = format!("{prefix}-(5alpha,20ξ)-cholestane");
+            let strict = parser.parse(&name, &ParseOptions::strict());
+            assert_eq!(strict.status, Status::Failure, "{name}: {}", strict.message);
+            assert!(strict.structure.is_none(), "{name}");
+            assert!(
+                strict.message.contains("Lowercase xi"),
+                "{name}: {}",
+                strict.message
+            );
+
+            let result = parser.parse(&name, &warn);
+            assert_eq!(result.status, Status::Warning, "{name}: {}", result.message);
+            assert_eq!(result.warnings.len(), 1, "{name}");
+            assert_eq!(
+                result.warnings[0].kind,
+                WarningKind::StereochemistryIgnored,
+                "{name}"
+            );
+            let structure = result.structure.unwrap();
+            let groups: Vec<_> = structure
+                .graph
+                .atoms
+                .iter()
+                .filter(|atom| atom.active)
+                .filter_map(|atom| atom.parity.as_ref().map(|parity| parity.stereo_group))
+                .collect();
+            assert_eq!(groups.len(), 8, "{name}");
+            assert_eq!(groups[0].kind, kind, "{name}");
+            assert!(
+                groups.iter().all(|group| *group == groups[0]),
+                "{name}: {groups:?}"
+            );
+            let c20 = structure
+                .graph
+                .atom_by_locant(structure.fragment, "20")
+                .unwrap();
+            assert_eq!(
+                structure
+                    .graph
+                    .atom(c20)
+                    .parity
+                    .as_ref()
+                    .unwrap()
+                    .stereo_group,
+                groups[0],
+                "{name}"
+            );
+
+            let expected = parser.parse(
+                &format!("{prefix}-(5alpha)-cholestane"),
+                &ParseOptions::strict(),
+            );
+            assert_eq!(expected.status, Status::Success, "{}", expected.message);
+            let expected = expected.structure.unwrap().semantic_cxsmiles().unwrap();
+            let written = structure.semantic_cxsmiles().unwrap();
+            assert_eq!(written, expected, "{name}");
+            let isomers = stereoisomers(&written).unwrap();
+            assert_eq!(isomers.len(), 2, "{name}");
+            assert_eq!(
+                isomers,
+                stereoisomers(
+                    "CC(C)CCC[C@@H](C)[C@H]1CC[C@H]2[C@@H]3CC[C@H]4CCCC[C@]4(C)[C@H]3CC[C@]12C |r|"
+                )
+                .unwrap(),
+                "{name}"
+            );
+        }
     }
 }
 

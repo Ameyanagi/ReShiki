@@ -1421,6 +1421,11 @@ impl<'a> ComponentProcessor<'a> {
                 }
                 _ => continue,
             }
+            if value == "dl" {
+                // An apparent ester can still split into independent salt
+                // components; retain DL on its owner until scope is resolved.
+                arena[sub_or_root].set_attribute(CONSUMEDDLSTEREOCHEMISTRY_ATR, "dl");
+            }
             arena.detach(stereo);
         }
         Ok(())

@@ -351,7 +351,12 @@ impl<'a> StereochemistryHandler<'a> {
             if !global_scopes.insert(scope)
                 || elements.iter().any(|&id| {
                     self.arena.molecule_branch(id) == scope
-                        && matches!(self.attr(id, STEREOGROUP_ATR).as_str(), "Rel" | "Rac")
+                        && (matches!(self.attr(id, STEREOGROUP_ATR).as_str(), "Rel" | "Rac")
+                            || self.attr(id, TYPE_ATR) == DLSTEREOCHEMISTRY_TYPE_VAL
+                                && self.attr(id, VALUE_ATR) == "dl")
+                })
+                || self.arena.descendants(scope).iter().any(|&id| {
+                    self.arena[id].attribute(CONSUMEDDLSTEREOCHEMISTRY_ATR) == Some("dl")
                 })
                 || self.molecule_stereo_atoms(global)?.iter().any(|&atom| {
                     self.graph()
@@ -839,14 +844,14 @@ impl<'a> StereochemistryHandler<'a> {
         let mut undefined = Vec::new();
         let mut defined = Vec::new();
         for &atom in &atoms {
-            if explicitly_unknown.contains(&atom) {
-                continue;
-            }
+            // Xi validation may restore an inherited parity in warning mode,
+            // so its recovery snapshot must include the whole-molecule group.
             if self.graph().atom(atom).parity.is_some() {
                 defined.push(atom)
-            } else if self
-                .not_explicitly_defined_stereo_centre_map
-                .contains_key(&atom)
+            } else if !explicitly_unknown.contains(&atom)
+                && self
+                    .not_explicitly_defined_stereo_centre_map
+                    .contains_key(&atom)
             {
                 undefined.push(atom)
             }

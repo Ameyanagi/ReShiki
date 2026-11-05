@@ -769,6 +769,10 @@ fn whole_name_and_independent_relative_or_racemic_scopes_are_refused() {
         "rac-DL-alanine",
         "rel-alpha-DL-glucopyranose",
         "rac-alpha-DL-glucopyranose",
+        "rel-DL-glycero-tetrulose",
+        "rac-DL-glycero-tetrulose",
+        "rel-DL-2-aminopropanoic acid",
+        "rac-DL-2-aminopropanoic acid",
     ] {
         let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
         assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
@@ -972,6 +976,81 @@ fn disconnected_salt_components_keep_independent_groups_and_group_ids() {
         let expected = "C[C@H](O)C[NH3+].C[C@@H](O)C(=O)[O-] |&1:1,&2:6|";
         assert_eq!(
             reshiki_chemistry::smiles::stereoisomers(&written).unwrap(),
+            reshiki_chemistry::smiles::stereoisomers(expected).unwrap(),
+            "{name}: {written}"
+        );
+    }
+}
+
+#[test]
+fn dl_scope_follows_resolved_salt_components() {
+    use std::collections::BTreeSet;
+    for (prefix, kind) in [
+        ("rel", StereoGroupType::Relative),
+        ("rac", StereoGroupType::Racemic),
+    ] {
+        let name = format!("{prefix}-(2R)-alaninium DL-alaninate");
+        let structure = parse_name(&name);
+        let centres: Vec<_> = structure
+            .graph
+            .atoms
+            .iter()
+            .filter(|atom| atom.active && atom.parity.is_some())
+            .collect();
+        assert_eq!(centres.len(), 2, "{name}");
+        let mut groups = BTreeSet::new();
+        let mut components = Vec::new();
+        for centre in centres {
+            let mut pending = vec![centre.id];
+            let mut component = BTreeSet::new();
+            while let Some(atom) = pending.pop() {
+                if component.insert(atom) {
+                    pending.extend(structure.graph.neighbours(atom));
+                }
+            }
+            let charge: i32 = component
+                .iter()
+                .map(|&atom| structure.graph.atom(atom).charge)
+                .sum();
+            assert!(matches!(charge, -1 | 1), "{name}: charge {charge}");
+            let group = centre.parity.as_ref().unwrap().stereo_group;
+            assert_eq!(
+                group.kind,
+                if charge == 1 {
+                    kind
+                } else {
+                    StereoGroupType::Racemic
+                },
+                "{name}"
+            );
+            assert!(groups.insert(group), "{name}: shared group {group:?}");
+            assert_eq!(
+                component
+                    .iter()
+                    .filter(|&&atom| structure.graph.atom(atom).parity.is_some())
+                    .count(),
+                1,
+                "{name}"
+            );
+            components.push(component);
+        }
+        assert!(components[0].is_disjoint(&components[1]), "{name}");
+        assert_eq!(
+            components.iter().map(BTreeSet::len).sum::<usize>(),
+            structure
+                .graph
+                .atoms
+                .iter()
+                .filter(|atom| atom.active)
+                .count(),
+            "{name}"
+        );
+        let written = structure.semantic_cxsmiles().unwrap();
+        let actual = reshiki_chemistry::smiles::stereoisomers(&written).unwrap();
+        let expected = "C[C@H]([NH3+])C(=O)O.C[C@H](N)C(=O)[O-] |o1:1,&1:7|";
+        assert_eq!(actual.len(), 4, "{name}: {written}");
+        assert_eq!(
+            actual,
             reshiki_chemistry::smiles::stereoisomers(expected).unwrap(),
             "{name}: {written}"
         );
