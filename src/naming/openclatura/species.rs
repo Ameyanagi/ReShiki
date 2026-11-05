@@ -74,11 +74,15 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
         return;
     }
     let principal_atoms = principal_group.as_ref().map(|(_, atoms)| atoms);
-    // P-70.2 / P-74.2: a charge-separated neutral group is not an anionic
-    // suffix. With no characteristic group, the parent cites -ide.
-    let anionic_parent = principal_atoms.map_or_else(
+    // P-70.2 / P-74.2: only an anionic suffix group cites the charge; a
+    // charge-separated or deprotonated neutral class, as in acetamide for
+    // acetylazanide, does not. With no characteristic group, the parent cites -ide.
+    let anionic_parent = principal_group.as_ref().map_or_else(
         || parent_atoms.iter().any(|i| mol.atoms[i].charge < 0),
-        |atoms| atoms.iter().map(|i| mol.atoms[i].charge).sum::<i32>() < 0,
+        |(key, atoms)| {
+            super::perception::is_anionic_group_key(key)
+                && atoms.iter().map(|i| mol.atoms[i].charge).sum::<i32>() < 0
+        },
     );
     let hydroxy_anion = principal_group.as_ref().is_some_and(|(key, _)| {
         matches!(

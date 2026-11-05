@@ -444,7 +444,8 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
 }
 
 /// P-51.4.1 / P-15.4.3.2: four heterounits on an acyclic path require
-/// skeletal replacement, including in substituents. Each skeletal heteroatom
+/// skeletal replacement, including in substituents (with imine N or
+/// oxo-substituted P in the chain, P-51.4.1.1). Each skeletal heteroatom
 /// counts as a unit, which can only overcount heterounits such as -SiH2-O-SiH2-;
 /// terminal B, Al, Ga, In, Tl, Si, Ge, Sn, Pb, P, As, Sb and Bi count too (P-51.4.1.4). Only the cited
 /// principal group's atoms are excluded.
@@ -489,10 +490,6 @@ fn requires_skeletal_replacement(
                             | "Sb"
                             | "Bi"
                     ))
-                && mol
-                    .get_neighbors(atom.idx)
-                    .iter()
-                    .all(|&n| mol.bond_order(atom.idx, n) == 1)
         })
         .map(|atom| atom.idx)
         .collect();
@@ -787,6 +784,7 @@ mod tests {
             ("CO[SiH2]OCCOCC(=O)O", true),
             ("COCCOCCOC[SiH3]", true),
             ("COCCOCCOC[PH2]", true),
+            ("COCCOCC=NCCOCC(=O)O", true),
             ("COCOCOCC(=O)NC", false),
             ("COCOCOCC(=O)NCC(=O)O", true),
             ("CC(=O)NCC(=O)NCC(=O)NCC(=O)NCC(=O)O", true),
@@ -929,6 +927,16 @@ mod tests {
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             ("CCB(O)O", "ethylboronic acid", NameStatus::Preferred),
+            (
+                "CC(=O)[NH-]",
+                "acetamide",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
+            (
+                "c1ccccc1C1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12",
+                "3'-phenylspiro[indene-1,1'-indene]",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
             (
                 "COP(=O)(OC)OCC(=O)O",
                 "2-hydroxy-2-oxoethyl dimethyl phosphate",

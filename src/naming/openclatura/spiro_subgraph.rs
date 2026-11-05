@@ -192,8 +192,25 @@ fn graph_spiro_side(
         return plan_graph_spiro_side(mol, side_atoms, junction, required_core, true);
     }
     // P-24.3: identical components take a spirobi name, which is not generated.
-    // Compare the components as parent hydrides: substituents do not count.
-    let cyclic = super::chains::get_cyclic_atoms(mol, &AtomSet::new());
+    // Compare the components as parent hydrides: substituents, including
+    // rings joined by a non-ring bond, do not count.
+    let all: AtomSet = mol.atoms.keys().copied().collect();
+    let ring_bonds: BTreeSet<_> = biconnected_edge_components(mol, &all)
+        .into_iter()
+        .filter(|block| block.len() > 1)
+        .flatten()
+        .collect();
+    let mut cyclic = AtomSet::from([junction]);
+    let mut pending = vec![junction];
+    while let Some(atom) = pending.pop() {
+        for &next in mol.get_neighbors(atom) {
+            if ring_bonds.contains(&super::graph_kernel::normalize_edge(atom, next))
+                && cyclic.insert(next)
+            {
+                pending.push(next);
+            }
+        }
+    }
     let mut skeleton = mol.subgraph(&cyclic);
     for atom in skeleton.atoms.values_mut() {
         atom.total_h_count = 0;
