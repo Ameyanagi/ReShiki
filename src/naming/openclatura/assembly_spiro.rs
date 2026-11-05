@@ -690,6 +690,10 @@ fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
         .iter()
         .map(|(l, d)| (prime(l), d.clone()))
         .collect();
+    parts.endo_exo_descriptors = std::mem::take(&mut parts.endo_exo_descriptors)
+        .into_iter()
+        .map(|(l, d)| (prime(&l), d))
+        .collect();
     parts.attachment_locant = prime(&parts.attachment_locant);
     for q in &mut parts.parent_charges {
         q.locant = prime(&q.locant);
@@ -930,6 +934,10 @@ fn hoist_side_substituent_prefixes(
         parts
             .substituents
             .extend(side.side_substituents.iter().cloned());
+        for (locant, &descriptor) in &other.endo_exo_descriptors {
+            let locant = format!("{}{}", locant.trim_end_matches('\''), side.side_prime);
+            parts.endo_exo_descriptors.insert(locant, descriptor);
+        }
         side.side_prefixes = side_replacement_prefixes(other)
             .into_iter()
             .map(|s| s.replace('\'', &side.side_prime))

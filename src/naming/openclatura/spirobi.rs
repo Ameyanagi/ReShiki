@@ -17,6 +17,12 @@ use std::collections::{BTreeMap, BTreeSet};
 type Locants = BTreeMap<usize, String>;
 type LocantKey = (u8, usize, String);
 
+fn prime_locant(locant: &str) -> String {
+    // P-14.3.1: primes precede a fusion letter, e.g. 3'a.
+    let digits = locant.bytes().take_while(u8::is_ascii_digit).count();
+    format!("{}'{}", &locant[..digits], &locant[digits..])
+}
+
 #[derive(PartialEq, Eq)]
 enum Component {
     VonBaeyer(String),
@@ -264,6 +270,46 @@ fn project(
     Some(projected)
 }
 
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
+struct UnsaturationRank {
+    compound_count: usize,
+    primary: Vec<LocantKey>,
+    all: Vec<LocantKey>,
+}
+
+fn unsaturation_ranks(mol: &Molecule, maps: [&Locants; 2]) -> [UnsaturationRank; 2] {
+    let mut ranks: [UnsaturationRank; 2] = Default::default();
+    for map in maps {
+        for bond in mol
+            .bonds
+            .values()
+            .filter(|b| b.order > 1 && map.contains_key(&b.u) && map.contains_key(&b.v))
+        {
+            let (mut a, mut b) = (parse_locant(&map[&bond.u]), parse_locant(&map[&bond.v]));
+            if a > b {
+                std::mem::swap(&mut a, &mut b);
+            }
+            // P-31.1.4.2: count compound locants, compare primary locants,
+            // then all cited locants, including the parenthesized endpoints.
+            let compound = b.1 != a.1 + 1;
+            // P-31.1.4.3: multiple bonds together, then double bonds alone.
+            for rank in ranks.iter_mut().take(if bond.order == 2 { 2 } else { 1 }) {
+                rank.compound_count += usize::from(compound);
+                rank.primary.push(a.clone());
+                rank.all.push(a.clone());
+                if compound {
+                    rank.all.push(b.clone());
+                }
+            }
+        }
+    }
+    for rank in &mut ranks {
+        rank.primary.sort();
+        rank.all.sort();
+    }
+    ranks
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct Rank {
     junctions: Vec<LocantKey>,
@@ -272,8 +318,8 @@ struct Rank {
     hydrogen: Vec<LocantKey>,
     suffix: Vec<LocantKey>,
     hydro: Vec<LocantKey>,
-    unsaturation: Vec<LocantKey>,
-    double: Vec<LocantKey>,
+    unsaturation: UnsaturationRank,
+    double: UnsaturationRank,
     substituents: Vec<LocantKey>,
     citation: Vec<Vec<LocantKey>>,
 }
@@ -282,7 +328,12 @@ fn keys(locants: impl IntoIterator<Item = String>) -> Vec<LocantKey> {
     keys.sort();
     keys
 }
-fn rank(parts: &AssemblyParts, junctions: &[String], hydrogen: &Hydrogen) -> Rank {
+fn rank(
+    parts: &AssemblyParts,
+    junctions: &[String],
+    hydrogen: &Hydrogen,
+    [unsaturation, double]: [UnsaturationRank; 2],
+) -> Rank {
     let mut replacements: BTreeMap<_, Vec<String>> = BTreeMap::new();
     for item in &parts.a_prefixes {
         replacements
@@ -311,14 +362,8 @@ fn rank(parts: &AssemblyParts, junctions: &[String], hydrogen: &Hydrogen) -> Ran
         hydrogen: keys(hydrogen.indicated.clone()),
         suffix: keys(parts.principal_group.iter().flat_map(|s| s.locants.clone())),
         hydro: keys(hydrogen.hydro.clone()),
-        unsaturation: keys(parts.unsaturations.iter().flat_map(|u| u.locants.clone())),
-        double: keys(
-            parts
-                .unsaturations
-                .iter()
-                .filter(|u| u.bond_key == "double")
-                .flat_map(|u| u.locants.clone()),
-        ),
+        unsaturation,
+        double,
         substituents: keys(parts.substituents.iter().flat_map(|s| s.locants.clone())),
         citation: substituents.into_values().map(keys).collect(),
     }
@@ -385,6 +430,7 @@ pub(super) fn compose(
             })
             || !c.principal_suffix_modifiers.is_empty()
             || !c.stereo_features.is_empty()
+            || !c.endo_exo_descriptors.is_empty()
             || !c.front_modifiers.is_empty()
             || !c.relative_stereo_prefixes.is_empty()
             || c.parent_atom_ids.iter().any(|id| {
@@ -426,7 +472,7 @@ pub(super) fn compose(
             for second_map in &second.parent_numbering_maps {
                 let primed: Locants = second_map
                     .iter()
-                    .map(|(&id, l)| (id, format!("{l}'")))
+                    .map(|(&id, l)| (id, prime_locant(l)))
                     .collect();
                 let junctions = [first_map[&junction].clone(), primed[&junction].clone()];
                 let (Some(mut projected), Some(mut second_parts)) = (
@@ -498,7 +544,12 @@ pub(super) fn compose(
                     }
                     principal.bond_ids = super::molecule::bond_ids_within(mol, &principal.atom_ids);
                 }
-                let score = rank(&projected, &junctions, &hydrogen);
+                let unsaturation = if von_baeyer {
+                    unsaturation_ranks(mol, [first_map, &primed])
+                } else {
+                    Default::default()
+                };
+                let score = rank(&projected, &junctions, &hydrogen, unsaturation);
                 if best.as_ref().is_none_or(|(old, _, _, _)| score < *old) {
                     best = Some((score, projected, junctions, hydrogen));
                 }

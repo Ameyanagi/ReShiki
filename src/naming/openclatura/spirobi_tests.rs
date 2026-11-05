@@ -103,6 +103,40 @@ const MATRIX: &[Case] = &[
         "2'H,3H-2,3'-spirobi[[1]benzothiophene]",
         NameStatus::Preferred,
     ),
+    (
+        "unsaturation-compound-count",
+        // P-31.1.4.2(1): 1-ene / 5-fluoro beats 1(6)-ene / 3-fluoro.
+        "C12(C3=CCC1C(F)C3)C1CCC2CC1",
+        "5-fluoro-7,7'-spirobi[bicyclo[2.2.1]heptan]-1-ene",
+        NameStatus::Preferred,
+    ),
+    (
+        "unsaturation-parenthesized-locants",
+        // P-31.1.4.2(3): [1,5] beats [1,6] after compound count and primary ties.
+        "C12(CC3C=C1C(F)3)CC1CC2C1",
+        "6-fluoro-2,2'-spirobi[bicyclo[2.1.1]hexan]-1(5)-ene",
+        NameStatus::Preferred,
+    ),
+    (
+        "unsaturation-multiple-before-double",
+        // P-31.1.4.3(2): multiple-bond set [2,5] beats [3,6], despite ene 5 > 3.
+        "C12(C3C#CCC=CCC1CC3)C1CCCCCCC2CC1",
+        "11,11'-spirobi[bicyclo[6.2.1]undecan]-5-en-2-yne",
+        NameStatus::Preferred,
+    ),
+    (
+        "unsaturation-double-before-substituent",
+        // P-31.1.4.3(3): [2,5] ties; ene 2 beats ene 5, despite fluoro 7 > 1.
+        "C12(C3C=CCC#CC1(F)CC3)C1CCCCCC2CC1",
+        "7-fluoro-10,10'-spirobi[bicyclo[5.2.1]decan]-2-en-5-yne",
+        NameStatus::Preferred,
+    ),
+    (
+        "fusion-letter-hydro",
+        "C1=CC2(C3=CC=CCC13)C=CC1=CC=CCC12",
+        "3a,4,7',7'a-tetrahydro-1,1'-spirobi[indene]",
+        UNVERIFIED,
+    ),
 ];
 
 const CONTROLS: &[Case] = &[
@@ -297,10 +331,9 @@ fn relabel(source: &Molecule, order: &[usize], reverse_bonds: bool) -> Molecule 
 
 #[test]
 fn spirobi_atom_ids_do_not_choose_component_priming() {
-    for &(row, smiles, expected, status) in MATRIX
-        .iter()
-        .filter(|case| ["D1", "D3", "D4", "D10"].contains(&case.0))
-    {
+    for &(row, smiles, expected, status) in MATRIX.iter().filter(|case| {
+        ["D1", "D3", "D4", "D10"].contains(&case.0) || case.0.starts_with("unsaturation-")
+    }) {
         let source = graph_io::read_smiles(smiles).unwrap();
         let ids: Vec<_> = source.atoms.keys().copied().collect();
         let mut reversed = ids.clone();
