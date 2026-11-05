@@ -715,7 +715,7 @@ mod tests {
     #[test]
     fn unregistered_retained_fusion_status_is_deferred_until_rendering() {
         use super::super::{fusion::planner::plan_fusion_parent, graph_io::read_smiles};
-        let mol = read_smiles("c1ccc2c(c1)Cc1c(ccc3ccccc13)S2").unwrap();
+        let mol = read_smiles("c1ccc2c(c1)Nc1c(ccc3ccccc13)S2").unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
         assert_eq!(mol.name_status(), NameStatus::Preferred);

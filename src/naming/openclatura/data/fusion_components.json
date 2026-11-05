@@ -5,6 +5,7 @@
   "retained_component_status": {
     "rule": "P-25.3.2.4; P-25.2.1 Table 2.8; P-25.2.2.2-3; FR-2.2.3",
     "components": [
+      {"template_name": "1H-perimidine", "horizontal_ring_count": 2},
       {"template_name": "xanthene", "horizontal_ring_count": 3},
       {"template_name": "9H-thioxanthene", "horizontal_ring_count": 3},
       {"template_name": "9H-selenoxanthene", "horizontal_ring_count": 3},

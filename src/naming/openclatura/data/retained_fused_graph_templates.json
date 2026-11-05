@@ -11520,7 +11520,7 @@
       "name": "2H-1-benzopyran",
       "pin": true,
       "priority": 35,
-      "attached_prefix": "chromeno",
+      "attached_prefix": "[1]benzopyrano",
       "default_indicated_h": [
         "2"
       ],
@@ -11691,7 +11691,7 @@
       "name": "4H-1-benzopyran",
       "pin": true,
       "priority": 36,
-      "attached_prefix": "chromeno",
+      "attached_prefix": "[1]benzopyrano",
       "default_indicated_h": [
         "4"
       ],
@@ -13200,7 +13200,7 @@
       "name": "1H-2-benzopyran",
       "pin": true,
       "priority": 40,
-      "attached_prefix": "isochromeno",
+      "attached_prefix": "[2]benzopyrano",
       "default_indicated_h": [
         "1"
       ],
@@ -13371,7 +13371,7 @@
       "name": "2H-1-benzothiopyran",
       "pin": true,
       "priority": 40,
-      "attached_prefix": "thiochromeno",
+      "attached_prefix": "[1]benzothiopyrano",
       "default_indicated_h": [
         "2"
       ],
@@ -13542,7 +13542,7 @@
       "name": "3H-2-benzopyran",
       "pin": true,
       "priority": 40,
-      "attached_prefix": "isochromeno",
+      "attached_prefix": "[2]benzopyrano",
       "default_indicated_h": [
         "3"
       ],
@@ -13713,7 +13713,7 @@
       "name": "4H-1-benzothiopyran",
       "pin": true,
       "priority": 40,
-      "attached_prefix": "thiochromeno",
+      "attached_prefix": "[1]benzothiopyrano",
       "default_indicated_h": [
         "4"
       ],
@@ -16131,7 +16131,7 @@
       "name": "4H-1-benzoselenopyran",
       "pin": true,
       "priority": 54,
-      "attached_prefix": "selenochromeno",
+      "attached_prefix": "[1]benzoselenopyrano",
       "default_indicated_h": [
         "4"
       ],

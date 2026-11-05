@@ -33,6 +33,54 @@ pub struct RegisteredFusionComponent {
     pub omit_ortho_peri_attached_locants: bool,
 }
 type GeneratedRingMatch = (RegisteredFusionComponent, Vec<(String, usize)>);
+
+/// One row of Blue Book P-25.2.1 Table 2.8 (data/bluebook/p25_retained.tsv).
+struct Table28Row {
+    name: &'static str,
+    pin_name: &'static str,
+    fusion_prefix: &'static str,
+    pin_eligible: bool,
+}
+impl Table28Row {
+    fn parent_name(&self) -> &'static str {
+        self.pin_name
+            .split_once("H-")
+            .map_or(self.pin_name, |(_, name)| name)
+    }
+    fn template<'a>(
+        &self,
+        templates: &'a BTreeMap<String, FusionComponentSpec>,
+    ) -> Option<&'a FusionComponentSpec> {
+        [self.pin_name, self.name, self.parent_name()]
+            .into_iter()
+            .find_map(|name| templates.get(name))
+    }
+}
+#[allow(clippy::panic, reason = "Immutable checked-in Table 2.8 transcription")]
+static TABLE_28: LazyLock<Vec<Table28Row>> = LazyLock::new(|| {
+    include_str!("../data/bluebook/p25_retained.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .skip(1)
+        .map(|line| match line.split('\t').collect::<Vec<_>>()[..] {
+            [
+                _,
+                name,
+                pin_name,
+                _,
+                fusion_prefix,
+                eligible @ ("yes" | "no"),
+                _,
+            ] => Table28Row {
+                name,
+                pin_name,
+                fusion_prefix,
+                pin_eligible: eligible == "yes",
+            },
+            _ => panic!("malformed checked-in Table 2.8 row: {line}"),
+        })
+        .collect()
+});
 impl RegisteredFusionComponent {
     pub fn spec_for_template(&self, name: &str) -> Result<FusionComponentSpec, String> {
         if name.is_empty() || name == self.spec.template.name {
@@ -374,6 +422,41 @@ impl FusionComponentRegistry {
                     ..Default::default()
                 })?;
             }
+        }
+        // Table 2.8 also admits non-benzo and larger retained components. Keep
+        // P-25.3.5's existing benzo-component parent policy by registering last.
+        for row in TABLE_28.iter().filter(|row| row.pin_eligible) {
+            let Some(spec) = row.template(&registry.template_by_name) else {
+                continue;
+            };
+            let name = &spec.template.name;
+            if registry
+                .components
+                .iter()
+                .any(|c| c.template_names.contains(name))
+            {
+                continue;
+            }
+            let horizontal_ring_count = registry
+                .retained_component_status
+                .iter()
+                .find(|s| s.template.name == *name)
+                .map_or(spec.rings.len(), |s| s.horizontal_ring_count);
+            let parent = row.parent_name();
+            let parent = parent.split_once('-').map_or_else(
+                || parent.to_owned(),
+                |(locants, stem)| format!("[{locants}]{stem}"),
+            );
+            registry.register(&FusionComponentRow {
+                key: name.clone(),
+                parent_name: Some(parent),
+                attached_prefix: Some(row.fusion_prefix.into()),
+                allow_as_parent: true,
+                allow_as_attached: true,
+                horizontal_ring_count: Some(horizontal_ring_count),
+                multiplicative_prefix_style: "basic".into(),
+                ..Default::default()
+            })?;
         }
         for p in &data.systematic_component_generators {
             if p.generator != "hantzsch_widman_monocycle" {
@@ -1533,8 +1616,101 @@ mod tests {
         );
     }
     #[test]
+    fn table_28_pin_names_templates_and_whole_system_components() {
+        let registry = fusion_component_registry();
+        let parser = opsin::Parser::new().unwrap();
+        let mut checked = 0;
+        let mut templates = 0;
+        let mut components = 0;
+        let mut errors = Vec::new();
+        for row in TABLE_28.iter().filter(|row| row.pin_eligible) {
+            checked += 1;
+            if row.template(&registry.template_by_name).is_some() {
+                templates += 1;
+            } else {
+                assert!(
+                    [
+                        "2H-1-benzoselenopyran",
+                        "2H-1-benzotelluropyran",
+                        "1H-2-benzothiopyran",
+                        "1H-2-benzoselenopyran",
+                        "1H-2-benzotelluropyran",
+                    ]
+                    .contains(&row.pin_name),
+                    "missing Table 2.8 template: {}",
+                    row.pin_name
+                );
+            }
+            let parsed = parser.parse(row.pin_name, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{}: {}",
+                row.pin_name,
+                parsed.message
+            );
+            assert!(
+                parsed.warnings.is_empty(),
+                "{}: {:?}",
+                row.pin_name,
+                parsed.warnings
+            );
+            let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            let named = super::super::super::name_smiles(&smiles).unwrap();
+            if named.text != row.pin_name || named.status != crate::naming::NameStatus::Preferred {
+                errors.push(format!(
+                    "{}: named {} ({:?})",
+                    row.pin_name, named.text, named.status
+                ));
+            }
+            let mol = read_smiles(&smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
+            let model = typed_face_model(&mol, &bounded);
+            let mut matches = registry.match_face_model(&mol, &model).unwrap();
+            // P-25.3.5 components without standalone templates are assembled
+            // from the same face matches used by the fusion planner.
+            let mut benzo = Vec::new();
+            for a in &matches {
+                for b in &matches {
+                    benzo.extend(registry.benzoheterocycle_matches(a, b).unwrap());
+                }
+            }
+            matches.extend(benzo);
+            let found = matches.iter().any(|m| {
+                let spec = registry.spec_for_match(m).unwrap();
+                m.covered_face_ids.len() == model.faces.len()
+                    && m.local_to_input_atom
+                        .iter()
+                        .map(|(_, a)| *a)
+                        .collect::<AtomSet>()
+                        == atoms
+                    && spec.attached_prefix == row.fusion_prefix
+                    && spec.pin_component
+                    && spec.usable_as_attached
+                    && (row.name.ends_with("pyran") || spec.usable_as_parent)
+            });
+            if found {
+                components += 1;
+            } else {
+                errors.push(format!(
+                    "{}: no whole-system component with prefix {}",
+                    row.pin_name, row.fusion_prefix
+                ));
+            }
+        }
+        eprintln!(
+            "Table 2.8: {checked} PIN rows checked, {templates} templates, {components} whole-system components"
+        );
+        assert!(errors.is_empty(), "{}", errors.join("\n"));
+        assert_eq!(
+            (TABLE_28.len(), checked, templates, components),
+            (55, 47, 42, 47)
+        );
+    }
+    #[test]
     fn unregistered_retained_status_requires_exact_faces_and_template_identity() {
-        let mut mol = read_smiles("c1ccc2c(c1)Cc1c(ccc3ccccc13)S2").unwrap();
+        let mut mol = read_smiles("c1ccc2c(c1)Nc1c(ccc3ccccc13)S2").unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let mut plan = super::super::planner::plan_fusion_parent(&mol, &atoms)
             .unwrap()
@@ -1580,26 +1756,26 @@ mod tests {
         wrong_rings
             .retained_component_status
             .iter_mut()
-            .find(|s| s.template.name == "9H-thioxanthene")
+            .find(|s| s.template.name == "10H-phenothiazine")
             .unwrap()
             .rings[0][0] = "9".into();
         assert!(!wrong_rings.has_senior_unregistered_retained_component(&mol, &plan));
 
         // Display names do not register a retained template.
-        registry.components[0].spec.parent_name = "9H-thioxanthene".into();
+        registry.components[0].spec.parent_name = "10H-phenothiazine".into();
         assert!(registry.has_senior_unregistered_retained_component(&mol, &plan));
         registry.components[0]
             .template_names
-            .push("9H-thioxanthene".into());
+            .push("10H-phenothiazine".into());
         assert!(!registry.has_senior_unregistered_retained_component(&mol, &plan));
     }
     #[test]
     fn unregistered_retained_status_requires_a_strictly_senior_proper_component() {
         let registry = fusion_component_registry();
         for (smiles, parent, expected) in [
-            ("c1ccc2c(c1)Cc1c(ccc3ccccc13)O2", "pyran", true),
+            ("c1ccc2c(c1)Nc1c(ccc3ccccc13)O2", "pyran", true),
             ("c1ccc2c(c1)Cc1cc3ncccc3cc1O2", "quinoline", false),
-            ("c1ccc2c(c1)Cc1ccccc1O2", "pyran", false),
+            ("c1ccc2c(c1)Nc1ccccc1O2", "pyran", false),
         ] {
             let mol = read_smiles(smiles).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
@@ -1619,7 +1795,8 @@ mod tests {
             if expected {
                 let mut equal = registry.clone();
                 let index = equal.by_key[parent];
-                equal.components[index].spec = registry.template_spec("xanthene").unwrap().clone();
+                equal.components[index].spec =
+                    registry.template_spec("10H-phenoxazine").unwrap().clone();
                 equal.components[index].spec.horizontal_ring_count = 3;
                 assert!(!equal.has_senior_unregistered_retained_component(&mol, &plan));
             }
