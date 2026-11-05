@@ -2,9 +2,114 @@
 // Upstream commit b91b610af5ab07560fedb20730d7aef46bb2bca0, MIT.
 // No Java executable or external oracle is used by these tests.
 use opsin::{
-    graph::Graph,
+    ParseOptions, Parser, Status,
+    graph::{AtomId, Graph},
     smiles::{build_fragment, write_semantic_cxsmiles},
 };
+
+#[test]
+fn unspecified_imine_stays_unspecified_beside_configured_alkenes() {
+    let parser = Parser::new().unwrap();
+    for (name, expected) in [
+        (
+            "ethyl (Z)-2-[[(E)-but-2-enylidene]amino]-3-phenylprop-2-enoate",
+            r"C(\C=C\C)=NC(\C(=O)OCC)=C/C1=CC=CC=C1",
+        ),
+        (
+            "ethyl (2Z)-2-{[(1E,2E)-but-2-en-1-ylidene]amino}-3-phenylprop-2-enoate",
+            r"C(\C=C\C)=N/C(/C(=O)OCC)=C\C1=CC=CC=C1",
+        ),
+        (
+            "ethyl (2Z)-2-(ethylideneamino)-3-phenylprop-2-enoate",
+            r"C(C)=N\C(\C(=O)OCC)=C/C1=CC=CC=C1",
+        ),
+    ] {
+        let result = parser.parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+        assert_eq!(
+            result.structure.unwrap().semantic_cxsmiles().unwrap(),
+            expected,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn writer_does_not_mark_unspecified_conjugated_double_bonds() {
+    for (input, expected) in [
+        (r"C/C=C/C=NC(=C/C)/C", r"C\C=C\C=NC(=C/C)/C"),
+        (r"C/C=C/C=CC(=C/C)/C", r"C\C=C\C=CC(=C/C)/C"),
+    ] {
+        let mut graph = Graph::default();
+        let fragment = build_fragment(&mut graph, input, "", "none").unwrap();
+        graph.make_hydrogens_explicit(fragment).unwrap();
+        let actual = write_semantic_cxsmiles(&graph, fragment).unwrap();
+        assert_eq!(actual, expected, "{input}");
+        let mut roundtrip = Graph::default();
+        build_fragment(&mut roundtrip, &actual, "", "none").unwrap();
+        assert_eq!(
+            roundtrip
+                .bonds
+                .iter()
+                .filter(|bond| bond.stereo.is_some())
+                .count(),
+            2,
+            "{input}"
+        );
+    }
+}
+
+#[test]
+fn writer_can_drop_primary_references_and_multiple_redundant_marks() {
+    for (input, (from, to)) in [
+        // The N-C reference mark must be replaced by the other mark on C-C.
+        (r"C/C=C/C=N/C(=C/C)C", (3, 4)),
+        // Both ends of the central alkene have two marked single bonds.
+        (
+            r"C(/C(/F)=C/F)(\C(\Cl)=C/Cl)=C(/C(/Br)=C/Br)\C(\I)=C/I",
+            (0, 9),
+        ),
+    ] {
+        let mut graph = Graph::default();
+        let fragment = build_fragment(&mut graph, input, "", "none").unwrap();
+        graph.make_hydrogens_explicit(fragment).unwrap();
+        let central = graph.bond_between(AtomId(from), AtomId(to)).unwrap();
+        graph.bond_mut(central).stereo = None;
+        let actual = write_semantic_cxsmiles(&graph, fragment).unwrap();
+        let mut roundtrip = Graph::default();
+        build_fragment(&mut roundtrip, &actual, "", "none").unwrap();
+        // These acyclic fixtures retain heavy-atom order. A different outer
+        // reference flips Cis/Trans, but must preserve the same configuration.
+        for bond in graph.bonds.iter().filter(|bond| bond.order == 2) {
+            let written = roundtrip.bond_between(bond.from, bond.to).unwrap();
+            let written = &roundtrip.bond(written).stereo;
+            if let Some(expected) = &bond.stereo {
+                let written = written.as_ref().expect("specified bond retains stereo");
+                assert_eq!(written.atom_refs[1..3], expected.atom_refs[1..3]);
+                let flipped = (written.atom_refs[0] != expected.atom_refs[0])
+                    ^ (written.atom_refs[3] != expected.atom_refs[3]);
+                assert_eq!(written.value == expected.value, !flipped, "{actual}");
+            } else {
+                assert!(written.is_none(), "{actual}");
+            }
+        }
+    }
+}
+
+#[test]
+fn writer_keeps_required_marks_when_none_is_redundant() {
+    // Every end atom has one heavy neighbour, so leaving C=N unspecified would
+    // need an explicit [H] to carry a mark; the writer keeps today's output.
+    let mut graph = Graph::default();
+    let fragment = build_fragment(&mut graph, "C/C=C/C=N/C=C/C", "", "none").unwrap();
+    graph.make_hydrogens_explicit(fragment).unwrap();
+    let central = graph.bond_between(AtomId(3), AtomId(4)).unwrap();
+    graph.bond_mut(central).stereo = None;
+    assert_eq!(
+        write_semantic_cxsmiles(&graph, fragment).unwrap(),
+        r"C\C=C\C=N\C=C\C"
+    );
+}
 
 #[test]
 fn upstream_writer_examples() {
