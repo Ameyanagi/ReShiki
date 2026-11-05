@@ -65,6 +65,14 @@ pub(super) fn name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Name>, Stri
     let mut result = None;
     let _attempt: Result<Option<()>, String> = mol.candidate(|| {
         let parent = name_component_with_citation(&reduced, &reduced_atoms, None, None)?;
+        // Leave alternatives to the source route's complete naming pass.
+        if reduced.has_relative_ring_alternative()
+            || reduced.has_endo_exo_alternative()
+            || reduced.has_higher_order_fusion_alternative()
+            || reduced.has_benzo_fusion_alternative()
+        {
+            return Ok(None);
+        }
         let Derivation::Plan {
             parent_atoms,
             parent_locants,
@@ -103,10 +111,11 @@ pub(super) fn name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Name>, Stri
             _ => return Ok(None),
         };
         super::assess_derivation(&reduced, &parent.derivation);
-        let status = if reduced.name_status() == NameStatus::Preferred && unambiguous {
-            reduced.name_status()
-        } else {
-            NameStatus::Unverified(NameReason::AmineChalcogenide)
+        let status = match reduced.name_status() {
+            NameStatus::Preferred if !unambiguous => {
+                NameStatus::Unverified(NameReason::AmineChalcogenide)
+            }
+            status => status,
         };
         let class = super::nomenclature::section("chalcogenide_class_names")
             [&mol.atoms[&ch].symbol]

@@ -186,6 +186,75 @@ fn amine_oxide_zwitterionic_fallbacks_are_not_preferred() {
 }
 
 #[test]
+fn amine_oxide_functional_class_keeps_neutral_assessment() {
+    for case in [
+        (
+            "linear phane",
+            "C[N+](C)([O-])c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
+            "N,N-dimethyl-4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)aniline N-oxide",
+            NameStatus::NotPreferred(NameReason::LinearPhane),
+        ),
+        (
+            "unaudited parent",
+            "C[N+]1([O-])CCOCCOCCOCCOCCOCC1",
+            "16-methyl-1,4,7,10,13-pentaoxa-16-azacyclooctadecane 16-oxide",
+            NameStatus::Unverified(NameReason::UnauditedParent),
+        ),
+    ] {
+        assert_case(case);
+    }
+}
+
+#[test]
+fn amine_oxide_keeps_source_stereo_alternatives() {
+    for (smiles, primary, expected, reason) in [
+        (
+            "C[N+](C)([O-])CC[C@H]1C[C@@H]2CC[C@H]1C2",
+            "2-[(1S,2R,4R)-bicyclo[2.2.1]heptan-2-yl]-N,N-dimethyl-N-oxidoethan-1-aminium",
+            "2-(bicyclo[2.2.1]heptan-2-exo-yl)-N,N-dimethyl-N-oxidoethan-1-aminium",
+            NameReason::EndoExoStereo,
+        ),
+        (
+            "C[N+](C)([O-])[C@H]1C[C@@H](C)C1",
+            "(1s,3s)-N,N,3-trimethyl-N-oxidocyclobutan-1-aminium",
+            "cis-N,N,3-trimethyl-N-oxidocyclobutan-1-aminium",
+            NameReason::RelativeRingStereo,
+        ),
+    ] {
+        let mol = super::graph_io::read_smiles(smiles).unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        assert!(super::amine_oxides::name(&mol, &atoms).unwrap().is_none());
+        assert!(!mol.has_endo_exo_alternative());
+        assert!(!mol.has_relative_ring_alternative());
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::Unverified(NameReason::UnauditedPath)
+        );
+
+        let actual = name(smiles).unwrap();
+        assert_eq!(actual.text, primary, "{smiles}");
+        assert_eq!(
+            actual.status,
+            NameStatus::NotPreferred(NameReason::AmineOxideZwitterion)
+        );
+        assert_eq!(actual.alternatives.len(), 1);
+        let alternative = &actual.alternatives[0];
+        assert_eq!(alternative.name, expected, "{smiles}");
+        assert_eq!(alternative.status, NameStatus::NotPreferred(reason));
+        for (text, status) in [
+            (&actual.text, actual.status),
+            (&alternative.name, alternative.status),
+        ] {
+            let request = crate::naming::local::verification_request(text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::verification_result(text, &reply).unwrap();
+            crate::naming::reverse::verify_alternative_identity(smiles, &parsed.smiles, status)
+                .unwrap_or_else(|error| panic!("{text}: {error}"));
+        }
+    }
+}
+
+#[test]
 fn amine_oxide_neutral_candidates_restore_source_status() {
     // A detached neutral result has its own assessment. Neither a successful
     // neutral proof nor a declined parent choice may certify the source graph.
@@ -494,4 +563,72 @@ fn amine_oxide_functional_class_names_preserve_remote_carbon_stereo() {
         "Opposite carbon configurations need distinct names"
     );
     assert_ne!(identities[0], identities[1]);
+}
+
+#[test]
+fn amine_oxide_keeps_source_carbon_stereo_when_neutral_priorities_reverse() {
+    for (smiles, neutral, descriptor, neutral_descriptor) in [
+        (
+            "C[N+](C)([O-])[C@H](F)N1CCCCC1",
+            "CN(C)[C@H](F)N1CCCCC1",
+            "R",
+            "S",
+        ),
+        (
+            "C[N+](C)([O-])[C@@H](F)N1CCCCC1",
+            "CN(C)[C@@H](F)N1CCCCC1",
+            "S",
+            "R",
+        ),
+    ] {
+        // Removing oxygen reverses the priority of the two nitrogen branches.
+        for (input, expected) in [(smiles, descriptor), (neutral, neutral_descriptor)] {
+            let mol = super::graph_io::read_smiles(input).unwrap();
+            let centre = mol
+                .atoms
+                .values()
+                .find(|atom| atom.is_carbon() && atom.has_stereo())
+                .unwrap();
+            assert_eq!(centre.stereo.as_deref(), Some(expected), "{input}");
+        }
+        let actual = name(smiles).unwrap();
+        assert_eq!(
+            actual.text,
+            format!("(1{descriptor})-1-fluoro-N,N-dimethyl-1-(piperidin-1-yl)methanamine N-oxide")
+        );
+        assert_eq!(actual.status, NameStatus::Preferred);
+        let request = crate::naming::local::parse_request(&actual.text).unwrap();
+        let reply = crate::naming::worker::respond(&request).unwrap();
+        let parsed = crate::naming::local::parse_result(&actual.text, &reply).unwrap();
+        assert_eq!(
+            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(smiles).unwrap(),
+            "{}",
+            actual.text
+        );
+    }
+}
+
+#[test]
+fn amine_oxide_nitrones_keep_opposite_double_bond_stereo() {
+    for (smiles, descriptor) in [("C/C=[N+](/C)[O-]", "Z"), ("C/C=[N+](\\C)[O-]", "E")] {
+        let mol = super::graph_io::read_smiles(smiles).unwrap();
+        let bond = mol.bonds.values().find(|bond| bond.order == 2).unwrap();
+        assert_eq!(bond.stereo.as_deref(), Some(descriptor), "{smiles}");
+        let actual = name(smiles).unwrap();
+        assert_eq!(
+            actual.text,
+            format!("(1{descriptor})-N-methylethanimine N-oxide")
+        );
+        assert_eq!(actual.status, NameStatus::Preferred);
+        let request = crate::naming::local::parse_request(&actual.text).unwrap();
+        let reply = crate::naming::worker::respond(&request).unwrap();
+        let parsed = crate::naming::local::parse_result(&actual.text, &reply).unwrap();
+        assert_eq!(
+            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(smiles).unwrap(),
+            "{}",
+            actual.text
+        );
+    }
 }
