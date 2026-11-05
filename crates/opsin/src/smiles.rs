@@ -918,6 +918,52 @@ impl<'a> Writer<'a> {
                 pending.push_front(bond);
             }
         }
+        for &central in &self.bond_order {
+            let bond = self.graph.bond(central);
+            if bond.order != 2 || bond.stereo.is_some() {
+                continue;
+            }
+            let marked = [bond.from, bond.to].map(|atom| {
+                self.graph
+                    .atom(atom)
+                    .bonds
+                    .iter()
+                    .copied()
+                    .filter(|bond| {
+                        self.graph.bond(*bond).order == 1 && self.directions[bond.0].is_some()
+                    })
+                    .collect::<Vec<_>>()
+            });
+            if marked.iter().any(Vec::is_empty) {
+                continue;
+            }
+            // Avoid specifying this bond through redundant neighbouring slashes.
+            // A slash can serve stereo at either endpoint: each such endpoint
+            // must retain another marked single bond after the whole side is cleared.
+            for side in &marked {
+                if side.iter().all(|bond| {
+                    let bond = self.graph.bond(*bond);
+                    [bond.from, bond.to].into_iter().all(|atom| {
+                        let bonds = &self.graph.atom(atom).bonds;
+                        !bonds
+                            .iter()
+                            .any(|bond| self.graph.bond(*bond).stereo.is_some())
+                            || bonds.iter().any(|other| {
+                                !side.contains(other)
+                                    && self.graph.bond(*other).order == 1
+                                    && self.directions[other.0].is_some()
+                            })
+                    })
+                }) {
+                    for bond in side {
+                        self.directions[bond.0] = None;
+                    }
+                    break;
+                }
+            }
+            // If neither side can be cleared safely, keep the slashes, as in
+            // conjugated chains with no redundant marks.
+        }
         Ok(())
     }
 
