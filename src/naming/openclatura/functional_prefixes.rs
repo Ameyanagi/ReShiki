@@ -1,14 +1,11 @@
 //! Characteristic groups cited as prefixes, in upstream registry order.
 use super::{
-    assembly_parts::SubstituentItem,
+    assembly_parts::{RenderedSubstituentName, SubstituentItem},
     assembly_prefixes::substituent_sort_key,
     component_group_rules::{amide_nitrogen, ester_or_peroxy_single_oxygen, is_carboxylate_group},
-    formatting::{
-        format_center_ligands_by, format_multiplier, oxy_prefix_from_branch,
-        strip_outer_parentheses,
-    },
+    formatting::{format_center_ligands_by, format_multiplier, strip_outer_parentheses},
     molecule::{AtomSet, Molecule, bond_ids_within},
-    namer::name_subgraph_with_upstream,
+    namer::{name_subgraph_rendered, name_subgraph_with_upstream},
     nomenclature::RULES,
     perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
@@ -28,15 +25,18 @@ fn chalcogen_term(element: &str, field: &str) -> Result<&'static str, String> {
         .ok_or_else(|| format!("openclatura: {element} {field} not ported"))
 }
 
-fn element_ligand(branch: &str, element: &str) -> Result<String, String> {
+fn element_ligand(branch: RenderedSubstituentName, element: &str) -> Result<String, String> {
     // Upstream divergence: amidooxy contractions change the attachment of N-acyl aminooxy ligands.
-    let plain = strip_outer_parentheses(branch);
+    let plain = strip_outer_parentheses(&branch.text);
     if plain.ends_with("amido") && !super::formatting::is_complex_prefix(&plain) {
         return Err("openclatura: amido chalcogen-ligand attachment is not supported".into());
     }
+    if element == "O" {
+        return Ok(branch.into_oxy_prefix());
+    }
     Ok(super::formatting::format_element_substituent(
         "",
-        branch,
+        &branch.text,
         chalcogen_term(element, "substituent_suffix")?,
         false,
     ))
@@ -80,10 +80,16 @@ fn descriptor_ester_prefix(
     }
     let mut blocked = context.sub_exclude.clone();
     blocked.insert(terminal.atom);
-    let branch = name_subgraph_with_upstream(context.mol, root, &blocked, Some(terminal.atom))?;
-    let mut ligand = element_ligand(&branch, &terminal.element)?;
+    let branch = name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom))?;
+    let mut ligand = element_ligand(branch, &terminal.element)?;
     for linker in linkers[..linkers.len() - 1].iter().rev() {
-        ligand = element_ligand(&ligand, &linker.element)?;
+        ligand = element_ligand(
+            RenderedSubstituentName {
+                text: ligand,
+                ..Default::default()
+            },
+            &linker.element,
+        )?;
     }
     let base = if d.family == "central_acid" {
         central_linkage_prefix(group).unwrap_or("")
@@ -137,7 +143,7 @@ fn central_chalcogen_linkage_prefix(
             let mut blocked = context.sub_exclude.clone();
             blocked.insert(terminal.atom);
             element_ligand(
-                &name_subgraph_with_upstream(context.mol, root, &blocked, Some(terminal.atom))?,
+                name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom))?,
                 &terminal.element,
             )?
         } else {
@@ -151,7 +157,13 @@ fn central_chalcogen_linkage_prefix(
     }
     Ok(format!(
         "({}{base})",
-        element_ligand(&terminal_text, &bridge[0].element)?
+        element_ligand(
+            RenderedSubstituentName {
+                text: terminal_text,
+                ..Default::default()
+            },
+            &bridge[0].element
+        )?
     ))
 }
 
@@ -274,14 +286,14 @@ pub fn ester_prefix_from_group(
     };
     let mut blocked = exclude.clone();
     blocked.insert(oxygen);
-    let branch = name_subgraph_with_upstream(mol, root, &blocked, Some(oxygen))?;
+    let branch = name_subgraph_rendered(mol, root, &blocked, Some(oxygen))?;
     if RULES.prefixes.peroxy_ester_groups.contains(&group.key) {
         return Ok(format!(
             "({}peroxycarbonyl)",
-            format_multiplier(&strip_outer_parentheses(&branch), 1, false)
+            format_multiplier(&strip_outer_parentheses(&branch.text), 1, false)
         ));
     }
-    Ok(format!("({}{suffix})", oxy_prefix_from_branch(&branch)))
+    Ok(format!("({}{suffix})", branch.into_oxy_prefix()))
 }
 
 pub fn amide_prefix_from_group(
@@ -545,7 +557,7 @@ mod tests {
     fn acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key() {
         for (smiles, derivative, expected) in [
             ("CC(=O)[O-]", "anion", "carboxylato"),
-            ("COC(=O)c1ccccc1", "ester", "(methyloxycarbonyl)"),
+            ("COC(=O)c1ccccc1", "ester", "(methoxycarbonyl)"),
         ] {
             let mol = super::super::graph_io::read_smiles(smiles).unwrap();
             let group = super::super::perception::perceive_groups(&mol)
@@ -581,7 +593,7 @@ mod tests {
             ),
             (
                 "O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
-                "4-[(4-carboxylatophenyl)oxy]benzoate",
+                "4-(4-carboxylatophenoxy)benzoate",
             ),
             ("[O-]C(=O)c1ccccc1CC(=O)O", "2-(carboxymethyl)benzoate"),
             (
