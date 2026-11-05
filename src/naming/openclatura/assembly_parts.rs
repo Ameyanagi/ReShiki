@@ -59,6 +59,11 @@ pub struct ParentChargeItem {
     pub charge: i32,
     pub atom_id: Option<usize>,
 }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AnionSuffix {
+    pub locants: Vec<String>,
+    pub cite_locants: bool,
+}
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HydroOperation {
     pub key: String,
@@ -115,6 +120,7 @@ pub struct AssemblyParts {
     pub indicated_hydrogens: Vec<String>,
     pub hydro_operations: Vec<HydroOperation>,
     pub parent_charges: Vec<ParentChargeItem>,
+    pub anion_suffix: Option<AnionSuffix>,
     pub parent_atom_ids: AtomSet,
     pub parent_bond_ids: AtomSet,
     pub stereogenic_atom_ids: AtomSet,
@@ -188,6 +194,7 @@ impl AssemblyParts {
             indicated_hydrogens: vec![],
             hydro_operations: vec![],
             parent_charges: vec![],
+            anion_suffix: None,
             parent_atom_ids: AtomSet::new(),
             parent_bond_ids: AtomSet::new(),
             stereogenic_atom_ids: AtomSet::new(),

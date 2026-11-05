@@ -4,6 +4,7 @@ use super::{
     assembly_utils::parse_locant,
     nomenclature::RULES,
     rules::multipliers,
+    spelling,
 };
 use std::collections::BTreeSet;
 pub fn positive_parent_n_charges(parts: &AssemblyParts) -> Vec<&ParentChargeItem> {
@@ -87,7 +88,9 @@ pub fn parent_charge_suffix(parts: &AssemblyParts) -> String {
     if let Some(suffix) = fusion_parent_charge_suffix(parts) {
         return suffix;
     }
-    if has_ionic_retained_parent(parts) || inferred_ionic_retained_parent(parts).is_some() {
+    let ionic_retained =
+        has_ionic_retained_parent(parts) || inferred_ionic_retained_parent(parts).is_some();
+    if ionic_retained && parts.anion_suffix.is_none() {
         return String::new();
     }
     let represented = single_charged_replacement_locants(parts);
@@ -102,23 +105,53 @@ pub fn parent_charge_suffix(parts: &AssemblyParts) -> String {
         .map(|c| c.locant.clone())
         .collect();
     locs.sort_by_key(|l| parse_locant(l));
-    if locs.is_empty() {
-        return String::new();
-    }
     let suffix = RULES
         .charges
         .parent_charge_suffixes
         .get("N:+")
         .map_or("ium", |r| r.suffix.as_str());
-    format!(
-        "-{}-{}{suffix}",
-        locs.join(","),
-        if locs.len() > 1 {
-            multipliers::basic(locs.len())
-        } else {
-            String::new()
-        }
-    )
+    let cation = if locs.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "-{}-{}{suffix}",
+            locs.join(","),
+            if locs.len() > 1 {
+                multipliers::basic(locs.len())
+            } else {
+                String::new()
+            }
+        )
+    };
+    let anion = parts.anion_suffix.as_ref().map_or_else(String::new, |op| {
+        spelling::anion_suffix(if op.cite_locants { &op.locants } else { &[] })
+    });
+    // This increment preserves each route's charge order and does not elide
+    // between charge suffixes. Ionic retained parents already carried ium.
+    if ionic_retained {
+        format!("{cation}{anion}")
+    } else {
+        format!("{anion}{cation}")
+    }
+}
+
+pub fn has_parent_anion_suffix(parts: &AssemblyParts) -> bool {
+    parts.anion_suffix.is_some()
+        || fusion_plan(parts).is_some_and(|plan| {
+            plan.audit.confirmed()
+                && plan
+                    .charge_operations
+                    .iter()
+                    .any(|operation| operation.observed_charge == -1)
+        })
+}
+
+pub fn parent_anion_cites_locants(parts: &AssemblyParts) -> bool {
+    parts
+        .anion_suffix
+        .as_ref()
+        .is_some_and(|operation| operation.cite_locants)
+        || parts.anion_suffix.is_none() && has_parent_anion_suffix(parts)
 }
 
 fn fusion_parent_charge_suffix(parts: &AssemblyParts) -> Option<String> {
@@ -277,5 +310,12 @@ pub fn prepare_fusion_charge_assembly(parts: &mut AssemblyParts) -> Result<(), S
 pub fn append_charge_suffixes_to_terminal(parts: &AssemblyParts, terminal: &str) -> (String, bool) {
     let charge = parent_charge_suffix(parts);
     let cites_locants = !charge.is_empty();
-    (format!("{charge}{terminal}"), cites_locants)
+    (
+        if has_parent_anion_suffix(parts) {
+            spelling::join(&charge, terminal)
+        } else {
+            format!("{charge}{terminal}")
+        },
+        cites_locants,
+    )
 }

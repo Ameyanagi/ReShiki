@@ -406,8 +406,20 @@ pub(super) fn name_subgraph_rendered(
     }
     add_parent_features(mol, &mut parts, &plan.numbered_path, &plan.locant_map)?;
     apply_redundant_locant_elision(&mut parts);
-    let raw = super::assembler::assemble_name_raw(&mut parts)?;
     let carbanion = simple_rooted_carbanion(mol, &parts, &plan.numbered_path, &plan.locant_map);
+    let fusion_parent = parts
+        .parent_hydride
+        .as_ref()
+        .is_some_and(|parent| parent.is_fusion_parent());
+    if !fusion_parent && carbanion.is_none() {
+        super::ionic_naming::prepare_anion_parent(
+            mol,
+            &mut parts,
+            &plan.numbered_path,
+            &plan.locant_map,
+        )?;
+    }
+    let raw = super::assembler::assemble_name_raw(&mut parts)?;
     let mut represented: AtomSet = parts
         .a_prefixes
         .iter()
@@ -423,22 +435,15 @@ pub(super) fn name_subgraph_rendered(
     }
     let raw = carbanion.unwrap_or(raw);
     let text = finalize_subgraph_name(raw, &parts);
-    let text = if parts
-        .parent_hydride
-        .as_ref()
-        .is_some_and(|p| p.is_fusion_parent())
-    {
-        text
-    } else {
-        super::ionic_naming::apply_anionic_parent_names(
-            &text,
+    if !fusion_parent {
+        super::ionic_naming::validate_anionic_parent(
             mol,
             &plan.numbered_path,
             &plan.locant_map,
-            parts.retained_name.as_deref(),
+            &parts,
             &represented,
-        )?
-    };
+        )?;
+    }
     let text = super::ionic_naming::apply_cationic_imino_parent_prefixes(
         &text,
         mol,
