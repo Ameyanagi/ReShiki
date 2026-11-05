@@ -1429,6 +1429,18 @@ mod tests {
                 "3,3-dimethyl-1H-indene-1,2(3H)-dione",
             ),
             ("O=C1CC(=O)c2ccccc21", "1H-indene-1,3(2H)-dione"),
+            (
+                "O=C1CC(=O)c2ccc(Cl)cc21",
+                "5-chloro-1H-indene-1,3(2H)-dione",
+            ),
+            (
+                "O=C1CC(=O)c2c1ccc1ccccc21",
+                "1H-cyclopenta[a]naphthalene-1,3(2H)-dione",
+            ),
+            (
+                "C1C(=O)c2c(C1=O)c1ccccc1cc2",
+                "1H-cyclopenta[a]naphthalene-1,3(2H)-dione",
+            ),
             ("O=C1Cc2ccccc2C1", "1,3-dihydro-2H-inden-2-one"),
             ("O=C1Nc2ccccc2C1=O", "1H-indole-2,3-dione"),
             ("O=C1CC(=O)C(=O)c2ccccc12", "naphthalene-1,2,4(3H)-trione"),
