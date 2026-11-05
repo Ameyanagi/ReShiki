@@ -27,6 +27,7 @@ struct NamingBudget {
     benzoheterocycle_names: Cell<bool>,
     higher_order_fusion_alternative: Cell<bool>,
     benzo_fusion_alternative: Cell<bool>,
+    acid_prefix_mode: Cell<bool>,
 }
 
 impl Default for NamingBudget {
@@ -44,6 +45,7 @@ impl Default for NamingBudget {
             benzoheterocycle_names: Cell::new(true),
             higher_order_fusion_alternative: Cell::new(false),
             benzo_fusion_alternative: Cell::new(false),
+            acid_prefix_mode: Cell::new(false),
         }
     }
 }
@@ -53,6 +55,17 @@ pub(super) struct NamingDepth<'a>(&'a NamingBudget);
 impl Drop for NamingDepth<'_> {
     fn drop(&mut self) {
         self.0.depth.set(self.0.depth.get() - 1);
+    }
+}
+
+pub(super) struct AcidPrefixScope<'a> {
+    active: &'a Cell<bool>,
+    previous: bool,
+}
+
+impl Drop for AcidPrefixScope<'_> {
+    fn drop(&mut self) {
+        self.active.set(self.previous);
     }
 }
 
@@ -166,6 +179,19 @@ impl Clone for Molecule {
 impl Molecule {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Keep acid prefixes through carbon and heteroatom branch recursion,
+    /// restoring the enclosing component's naming mode when the branch ends.
+    pub(super) fn enter_acid_prefix_scope(&self) -> AcidPrefixScope<'_> {
+        AcidPrefixScope {
+            active: &self.naming_budget.acid_prefix_mode,
+            previous: self.naming_budget.acid_prefix_mode.replace(true),
+        }
+    }
+
+    pub(super) fn uses_acid_prefixes(&self) -> bool {
+        self.naming_budget.acid_prefix_mode.get()
     }
 
     pub(super) fn mark_name(&self, status: NameStatus) {

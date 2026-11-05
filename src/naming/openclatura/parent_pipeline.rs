@@ -360,7 +360,6 @@ pub fn build_parent_assembly_plan_with_parent(
             );
         }
     }
-    let principal: AtomSet = principal_carbons.iter().copied().collect();
     let names = substituents
         .iter()
         .map(|(&idx, items)| (idx, items.iter().map(|item| item.name.clone()).collect()))
@@ -394,7 +393,7 @@ pub fn build_parent_assembly_plan_with_parent(
     let (numbered_path, selected_map) = choose_parent_numbering(
         mol,
         &selection.paths,
-        &principal,
+        principal_carbons,
         &names,
         locant_maps,
         selection.is_ring,

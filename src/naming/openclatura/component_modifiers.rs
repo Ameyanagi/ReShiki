@@ -233,7 +233,7 @@ pub fn add_component_n_substituents(
                 let mut blocked = exclude.clone();
                 blocked.insert(n);
                 let status = mol.name_status();
-                let mut rendered = name_subgraph_rendered(mol, root, &blocked, Some(n))?;
+                let mut rendered = name_subgraph_rendered(mol, root, &blocked, Some(n), false)?;
                 if mol.get_bond(n, root).is_some_and(|b| b.order == 2)
                     && mol.atoms[&root].symbol == "N"
                     && mol

@@ -1,7 +1,168 @@
 //! Functional-group atom roles and preprocessing of parent candidates.
 use super::molecule::{AtomSet, Molecule};
 use super::nomenclature::RULES;
+use super::parent_selection::{ParentSelection, select_principal_parent};
 use super::perception::{LigandRole, PerceivedGroup};
+
+pub struct ExternalCarboxylicParent {
+    pub groups: Vec<PerceivedGroup>,
+    pub key: String,
+    pub selection: ParentSelection,
+}
+
+/// P-65.1.2.2.1: compare chains with the carboxy carbons outside the parent,
+/// retaining this mode only when the chosen chain carries more than two groups.
+pub fn external_chain_carboxylic_parent(
+    mol: &Molecule,
+    groups: &[PerceivedGroup],
+    key: Option<&str>,
+    base_exclude: &AtomSet,
+    cyclic: &AtomSet,
+) -> Result<Option<ExternalCarboxylicParent>, String> {
+    let carboxylic: Vec<_> = groups
+        .iter()
+        .enumerate()
+        .filter_map(|(index, group)| {
+            let d = group.descriptor.as_ref()?;
+            (d.family == "acyl"
+                && d.centers.len() == 1
+                && d.ligands.len() == 2
+                && d.ligands.iter().all(|l| l.element == "O")
+                && matches!(d.derivative.as_str(), "acid" | "anion" | "ester"))
+            .then_some((index, group, d))
+        })
+        .collect();
+    let Some((_, _, descriptor)) = carboxylic
+        .iter()
+        .find(|(_, g, _)| Some(g.key.as_str()) == key)
+    else {
+        return Ok(None);
+    };
+    let derivative = descriptor.derivative.as_str();
+    if carboxylic.len() <= 2
+        || carboxylic
+            .iter()
+            .any(|(_, _, d)| d.derivative != derivative)
+    {
+        return Ok(None);
+    }
+    if derivative == "ester" {
+        let centers: AtomSet = carboxylic
+            .iter()
+            .flat_map(|(_, _, d)| &d.centers)
+            .copied()
+            .collect();
+        let linkers: AtomSet = carboxylic
+            .iter()
+            .flat_map(|(_, _, d)| &d.ligands)
+            .filter(|l| l.role == LigandRole::CarbonLink)
+            .map(|l| l.atom)
+            .collect();
+        let mut reference = None;
+        for (_, _, descriptor) in &carboxylic {
+            let Some(ligand) = descriptor
+                .ligands
+                .iter()
+                .find(|l| l.role == LigandRole::CarbonLink)
+            else {
+                return Ok(None);
+            };
+            let Some(root) = ligand.attachment_atom else {
+                return Ok(None);
+            };
+            let side =
+                super::subgraph_tools::subgraph_component(mol, root, &AtomSet::from([ligand.atom]));
+            if !side.is_disjoint(&centers) || !side.is_disjoint(&linkers) {
+                return Ok(None);
+            }
+            if let Some((left, left_root)) = &reference {
+                if !super::identical_multiplicative_branches(
+                    mol,
+                    left,
+                    &side,
+                    &AtomSet::new(),
+                    &AtomSet::new(),
+                    *left_root,
+                    root,
+                ) {
+                    return Ok(None);
+                }
+            } else {
+                reference = Some((side, root));
+            }
+        }
+    }
+
+    let external_key = if derivative == "acid" {
+        "ring_carboxylic_acid"
+    } else {
+        "ring_carboxylate"
+    };
+    let mut remapped = groups.to_vec();
+    let mut exclude = base_exclude.clone();
+    for (index, group, descriptor) in carboxylic {
+        let center = descriptor.centers[0];
+        if cyclic.contains(&center) {
+            continue;
+        }
+        let neighbors: Vec<_> = mol
+            .get_neighbors(center)
+            .iter()
+            .copied()
+            .filter(|n| mol.atoms[n].is_carbon() && !group.atoms_involved.contains(n))
+            .collect();
+        let [attachment] = neighbors.as_slice() else {
+            return Ok(None);
+        };
+        let Some(mut rule) = RULES.functional_groups.get(external_key).cloned() else {
+            return Ok(None);
+        };
+        if !group
+            .resolved_rule
+            .as_ref()
+            .is_some_and(|r| r.has_capability("front_modifier"))
+        {
+            rule.families.remove("front_modifier");
+            rule.capabilities.remove("front_modifier");
+        }
+        let remapped = &mut remapped[index];
+        remapped.key = external_key.into();
+        remapped.resolved_rule = Some(rule);
+        remapped.attachment_carbon = *attachment;
+        remapped.atoms_involved.insert(center);
+        if let Some(descriptor) = &mut remapped.descriptor {
+            descriptor.is_external = true;
+            descriptor.attachment_atom = Some(*attachment);
+        }
+        exclude.insert(center);
+    }
+    retarget_external_carbonyl_groups(mol, &mut remapped, Some(external_key), &mut exclude, cyclic);
+    exclude_nonparent_group_atoms(mol, &remapped, &mut exclude, cyclic);
+    let (principal, _) = super::principal_groups::partition_principal_and_prefix_groups(
+        &remapped,
+        Some(external_key),
+    );
+    let chains = super::chains::find_all_carbon_paths(mol, &exclude)?;
+    let rings = super::chains::find_ring_systems(mol, &exclude)?;
+    let Some(selection) = select_principal_parent(mol, &chains, &rings, &principal, &remapped)
+    else {
+        return Ok(None);
+    };
+    if selection.is_ring
+        || principal
+            .iter()
+            .filter(|atom| selection.primary_path().contains(atom))
+            .count()
+            <= 2
+    {
+        return Ok(None);
+    }
+    Ok(Some(ExternalCarboxylicParent {
+        groups: remapped,
+        key: external_key.into(),
+        selection,
+    }))
+}
 
 /// The registry's ring-carboxylate key also represents neutral esters, so the
 /// descriptor, rather than that key alone, establishes an acid anion prefix.
@@ -208,4 +369,100 @@ pub fn principal_involved_atoms(
         }
     }
     atoms
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn external_parent(smiles: &str) -> Option<ExternalCarboxylicParent> {
+        let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+        let groups = super::super::principal_groups::component_groups(
+            &mol,
+            &mol.atoms.keys().copied().collect(),
+        );
+        let key = super::super::principal_groups::component_principal_key(&mol, &groups, false);
+        let cyclic = super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new());
+        external_chain_carboxylic_parent(&mol, &groups, key.as_deref(), &AtomSet::new(), &cyclic)
+            .unwrap()
+    }
+
+    #[test]
+    fn external_carboxylic_chains_count_repeated_attachments_before_length() {
+        for (smiles, length, count) in [
+            ("OC(=O)C(C(=O)O)C(=O)O", 1, 3),
+            ("OC(=O)C(C)(C(=O)O)C(=O)O", 2, 3),
+            ("OC(=O)C(C(=O)O)C(C(=O)O)C(=O)O", 2, 4),
+            ("OC(=O)C(C(=O)O)CCC(=O)O", 3, 3),
+            ("OC(=O)C(C(=O)O)C(CCCCC)CC(=O)O", 3, 3),
+        ] {
+            let candidate = external_parent(smiles).unwrap();
+            let path = candidate.selection.primary_path();
+            assert_eq!(path.len(), length, "{smiles}");
+            assert_eq!(
+                candidate
+                    .groups
+                    .iter()
+                    .filter(|g| g.key == candidate.key && path.contains(&g.attachment_carbon))
+                    .count(),
+                count,
+                "{smiles}"
+            );
+            assert!(
+                candidate
+                    .groups
+                    .iter()
+                    .filter(|g| g.key == candidate.key)
+                    .all(|g| {
+                        g.descriptor.as_ref().is_some_and(|d| {
+                            d.is_external && d.centers.iter().all(|c| !path.contains(c))
+                        })
+                    })
+            );
+        }
+    }
+
+    #[test]
+    fn external_carboxylic_chains_require_homogeneous_independent_ester_ligands() {
+        for smiles in [
+            "[O-]C(=O)CC(O)(CC(=O)[O-])C(=O)[O-]",
+            "CCOC(=O)CC(O)(CC(=O)OCC)C(=O)OCC",
+        ] {
+            let candidate = external_parent(smiles).unwrap();
+            assert_eq!(candidate.key, "ring_carboxylate", "{smiles}");
+            assert!(
+                candidate
+                    .groups
+                    .iter()
+                    .filter(|g| g.key == candidate.key)
+                    .all(|g| {
+                        g.resolved_rule
+                            .as_ref()
+                            .is_some_and(|r| r.has_capability("front_modifier"))
+                    })
+            );
+        }
+        for smiles in [
+            "CCOC(=O)CC(O)(CC(=O)O)C(=O)O",
+            "[O-]C(=O)CC(O)(CC(=O)O)C(=O)O",
+            "COC(=O)CC(O)(CC(=O)OCC)C(=O)OC",
+            "CCCOC(=O)CC(O)(CC(=O)OCCC)C(=O)OC(C)C",
+            "COC(=O)CC(CC(=O)OC)C(=O)OCCOC(=O)C",
+        ] {
+            assert!(external_parent(smiles).is_none(), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn external_carboxylic_chains_require_three_groups_on_one_principal_chain() {
+        for smiles in [
+            "OC(=O)CC(=O)O",
+            "OC(=O)CCC(=O)O",
+            "OC(=O)CC(CC(=O)O)CC(=O)O",
+            "O=C(O)c1cc(C(=O)O)cc(C(=O)O)c1",
+            "[O-]CCC(CC(=O)O)(CC(=O)O)C(=O)O",
+        ] {
+            assert!(external_parent(smiles).is_none(), "{smiles}");
+        }
+    }
 }

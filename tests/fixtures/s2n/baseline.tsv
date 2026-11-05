@@ -90,7 +90,7 @@ parity_text	chain_ring_prefix	9	12
 parity_text	data	11	13
 parity_text	drug	14	20
 parity_text	exploratory	1	1
-parity_text	fixtures	21	22
+parity_text	fixtures	20	22
 parity_text	heterocycle	24	25
 parity_text	integration	16	16
 parity_text	mr_assembly	3	10
@@ -98,11 +98,11 @@ parity_text	mr_bridged	14	14
 parity_text	mr_fused	18	18
 parity_text	mr_macro_other	5	6
 parity_text	mr_spiro	7	7
-parity_text	natural_product	16	19
-parity_text	pubchem_random	35	50
+parity_text	natural_product	15	19
+parity_text	pubchem_random	34	50
 parity_text	ring_ON_ester_amide	10	10
-parity_text	roundtrip	73	77
+parity_text	roundtrip	71	77
 parity_text	stereo	14	16
-parity_text	suffix_on_ring	20	20
+parity_text	suffix_on_ring	18	20
 parity_text	unit	47	52
-parity_text	total	381	431
+parity_text	total	374	431

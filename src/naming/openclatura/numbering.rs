@@ -138,7 +138,7 @@ impl NumberingPreference {
 fn number_parent(
     mol: &Molecule,
     candidate_paths: &[Vec<usize>],
-    principal_carbons: &AtomSet,
+    principal_carbons: &[usize],
     substituent_mapping: &BTreeMap<usize, Vec<String>>,
     is_ring: bool,
     fixed_start: bool,
@@ -197,7 +197,7 @@ pub type ProvenHydrogenLocants = BTreeMap<Vec<(usize, String)>, (Vec<String>, Ve
 pub fn choose_parent_numbering(
     mol: &Molecule,
     candidate_paths: &[Vec<usize>],
-    principal_atoms: &AtomSet,
+    principal_atoms: &[usize],
     substituent_mapping: &BTreeMap<usize, Vec<String>>,
     locant_maps: &[BTreeMap<usize, String>],
     is_ring: bool,
@@ -355,12 +355,18 @@ pub fn choose_parent_numbering(
 fn numbering_preference(
     mol: &Molecule,
     path: &[usize],
-    principal: &AtomSet,
+    principal: &[usize],
     substituents: &BTreeMap<usize, Vec<String>>,
     retained_name: Option<&str>,
     topology: NumberingTopology,
 ) -> NumberingPreference {
-    let principal = get_atom_locants(path, principal);
+    // A parent atom can carry several external principal groups.
+    let mut principal: Vec<_> = principal
+        .iter()
+        .filter_map(|atom| path.iter().position(|candidate| candidate == atom))
+        .map(|position| position + 1)
+        .collect();
+    principal.sort_unstable();
     let hetero_by_priority = heteroatom_locants_by_priority(mol, path, !topology.has_fixed_paths());
     let indicated_hydrogen = get_atom_locants(
         path,
@@ -585,7 +591,7 @@ mod tests {
         let numbered = number_parent(
             &mol,
             &[other.clone(), preferred.clone()],
-            &AtomSet::new(),
+            &[],
             &substituents,
             true,
             true,
@@ -605,7 +611,7 @@ mod tests {
         let (numbered, map) = choose_parent_numbering(
             &mol,
             &[],
-            &AtomSet::new(),
+            &[],
             &substituents,
             &maps,
             true,
@@ -622,9 +628,9 @@ mod tests {
     #[test]
     fn double_bonds_take_low_locants_only_after_multiple_bonds_tie() {
         for (smiles, principal, expected) in [
-            ("C#CCC=C", AtomSet::new(), vec![4, 3, 2, 1, 0]),
-            ("C#CCC=C", AtomSet::from([0]), vec![0, 1, 2, 3, 4]),
-            ("C#CCC=CC", AtomSet::new(), vec![0, 1, 2, 3, 4, 5]),
+            ("C#CCC=C", vec![], vec![4, 3, 2, 1, 0]),
+            ("C#CCC=C", vec![0], vec![0, 1, 2, 3, 4]),
+            ("C#CCC=CC", vec![], vec![0, 1, 2, 3, 4, 5]),
         ] {
             let mol = read_smiles(smiles).unwrap();
             let path: Vec<_> = (0..mol.atoms.len()).collect();
@@ -643,13 +649,31 @@ mod tests {
     }
 
     #[test]
+    fn repeated_principal_groups_choose_the_lowest_locant_sequence() {
+        let mol = read_smiles("CC").unwrap();
+        for path in [vec![0, 1], vec![1, 0]] {
+            let numbered = number_parent(
+                &mol,
+                &[path],
+                &[0, 1, 1],
+                &BTreeMap::new(),
+                false,
+                false,
+                None,
+                NumberingTopology::default(),
+            );
+            assert_eq!(numbered, [1, 0]);
+        }
+    }
+
+    #[test]
     fn principal_group_numbering_precedes_unsaturation() {
         let mol = read_smiles("C=CCCCO").unwrap();
         let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
         let numbered = number_parent(
             &mol,
             &paths,
-            &AtomSet::from([4]),
+            &[4],
             &BTreeMap::new(),
             false,
             false,
@@ -669,7 +693,7 @@ mod tests {
         let numbered = number_parent(
             &mol,
             &rings[0].paths,
-            &AtomSet::new(),
+            &[],
             &BTreeMap::new(),
             true,
             false,
@@ -694,7 +718,7 @@ mod tests {
         let numbered = number_parent(
             &mol,
             &[path],
-            &AtomSet::new(),
+            &[],
             &subs,
             false,
             false,
@@ -712,7 +736,7 @@ mod tests {
         let (path, map) = choose_parent_numbering(
             &mol,
             &system.paths,
-            &AtomSet::new(),
+            &[],
             &BTreeMap::new(),
             &[],
             true,
