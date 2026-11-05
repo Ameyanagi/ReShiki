@@ -10,6 +10,8 @@ static ASCII_XI_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:\A|[^A-Za-z0-9'])([1-9][0-9]*(?:'*[a-gA-C]?|[a-gA-C]'+))?\z")
         .expect("ASCII xi descriptor prefix")
 });
+static UNLOCANTED_XI_PREFIX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(^|[^A-Za-z0-9'])(xi|xI)-").expect("Unlocanted xi prefix"));
 
 // The pinned grammar accepts cage descriptors as prefixes, while the suffix
 // spelling shares its locant with both the descriptor and suffix.
@@ -191,9 +193,9 @@ pub fn preprocess(name: &str) -> Result<String, ParsingError> {
         replaced.push(ch);
         i += 1;
     }
-    Ok(normalize_cage_descriptors(&normalize_representation(
-        &replaced,
-    )?))
+    let normalized = normalize_representation(&replaced)?;
+    let normalized = UNLOCANTED_XI_PREFIX.replace_all(&normalized, "$1($2)-");
+    Ok(normalize_cage_descriptors(&normalized))
 }
 
 fn superscript_digit_to_digit(ch: char) -> Option<char> {

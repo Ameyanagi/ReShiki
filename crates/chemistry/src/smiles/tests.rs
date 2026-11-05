@@ -39,7 +39,7 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
         "C[C@@H](O)[C@@H](F)Cl".into(),
     ]
     .into();
-    for extension in ["o1:1,&1:3", "o1:1,o2:3", "&1:1,&2:3", "r,o1:1,a:3"] {
+    for extension in ["o1:1,&1:3", "o1:1,o2:3", "&1:1,&2:3", "r,o1:1", "r,&1:1"] {
         assert_eq!(
             super::stereoisomers(&format!("{molecule} |{extension}|"))?,
             expected,
@@ -47,16 +47,30 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
         );
     }
     let paired = ["C[C@H](O)[C@H](F)Cl".into(), "C[C@@H](O)[C@@H](F)Cl".into()].into();
-    for extension in ["o1:1,3", "&1:1,3", "r", "o1:1,3,r", "r,a:1,3"] {
+    for extension in ["o1:1,3", "&1:1,3", "r", "o1:1,3,r"] {
         assert_eq!(
             super::stereoisomers(&format!("{molecule} |{extension}|"))?,
             paired,
             "{extension}"
         );
     }
+    for extension in ["a:1,&1:3", "r,a:1,&1:3", "r,a:1,o1:3", "r,a:1"] {
+        assert_eq!(
+            super::stereoisomers(&format!("{molecule} |{extension}|"))?,
+            ["C[C@H](O)[C@H](F)Cl".into(), "C[C@H](O)[C@@H](F)Cl".into(),].into(),
+            "{extension}"
+        );
+    }
+    for extension in ["a:3,o1:1", "r,o1:1,a:3", "r,&1:1,a:3"] {
+        assert_eq!(
+            super::stereoisomers(&format!("{molecule} |{extension}|"))?,
+            ["C[C@H](O)[C@H](F)Cl".into(), "C[C@@H](O)[C@H](F)Cl".into(),].into(),
+            "{extension}"
+        );
+    }
     assert_eq!(
-        super::stereoisomers(&format!("{molecule} |a:1,&1:3|"))?,
-        ["C[C@H](O)[C@H](F)Cl".into(), "C[C@H](O)[C@@H](F)Cl".into(),].into()
+        super::stereoisomers(&format!("{molecule} |r,a:1,3|"))?,
+        super::stereoisomers(molecule)?
     );
     Ok(())
 }
@@ -66,6 +80,10 @@ fn stereoisomers_deduplicate_meso_and_refresh_ring_relationships() -> anyhow::Re
     let molecule = "O[C@H]1CC[C@@H](O)CC1";
     let expected = super::stereoisomers(molecule)?;
     assert_eq!(expected.len(), 1);
+    let imported = super::read(&format!("{molecule} |r|"))?;
+    assert_eq!(imported.prepared.state.metadata.groups.len(), 1);
+    assert_eq!(imported.prepared.state.metadata.groups[0].kind, 1);
+    assert_eq!(imported.prepared.state.metadata.groups[0].atoms, [1, 4]);
     assert_eq!(super::stereoisomers(&format!("{molecule} |r|"))?, expected);
     let mut independent = expected;
     independent.extend(super::stereoisomers("O[C@H]1CC[C@H](O)CC1")?);
@@ -79,18 +97,31 @@ fn stereoisomers_deduplicate_meso_and_refresh_ring_relationships() -> anyhow::Re
 
 #[test]
 fn stereoisomers_use_group_indices_after_explicit_hydrogen_removal() -> anyhow::Result<()> {
-    let molecule = "[H][C@](C)(O)C(=O)O |o1:1|";
-    let imported = super::read(molecule)?;
-    assert_eq!(imported.prepared.state.graph.atoms.len(), 6);
-    assert_eq!(imported.prepared.state.metadata.groups[0].atoms, [0]);
-    assert!(matches!(
-        imported.prepared.state.metadata.atoms[0].chiral_tag,
-        1 | 2
-    ));
-    assert_eq!(
-        super::stereoisomers(molecule)?,
-        ["C[C@H](O)C(=O)O".into(), "C[C@@H](O)C(=O)O".into()].into()
-    );
+    for (extension, kind) in [
+        ("o1:1", 1),
+        ("&1:1", 2),
+        ("r", 1),
+        ("r,o1:1", 1),
+        ("r,&1:1", 2),
+        ("r,a:1", 0),
+    ] {
+        let molecule = format!("[H][C@](C)(O)C(=O)O |{extension}|");
+        let imported = super::read(&molecule)?;
+        assert_eq!(imported.prepared.state.graph.atoms.len(), 6);
+        assert_eq!(imported.prepared.state.metadata.groups.len(), 1);
+        assert_eq!(imported.prepared.state.metadata.groups[0].kind, kind);
+        assert_eq!(imported.prepared.state.metadata.groups[0].atoms, [0]);
+        assert!(matches!(
+            imported.prepared.state.metadata.atoms[0].chiral_tag,
+            1 | 2
+        ));
+        let expected = if kind == 0 {
+            super::stereoisomers("[H][C@](C)(O)C(=O)O")?
+        } else {
+            ["C[C@H](O)C(=O)O".into(), "C[C@@H](O)C(=O)O".into()].into()
+        };
+        assert_eq!(super::stereoisomers(&molecule)?, expected, "{extension}");
+    }
     Ok(())
 }
 
@@ -100,10 +131,12 @@ fn stereoisomers_preserve_double_bond_stereo_across_group_inversions() -> anyhow
     let mut expected = super::stereoisomers(molecule)?;
     expected.extend(super::stereoisomers("C[C@@H](O)/C=C/F")?);
     assert_eq!(expected.len(), 2);
-    assert_eq!(
-        super::stereoisomers(&format!("{molecule} |o1:1|"))?,
-        expected
-    );
+    for extension in ["o1:1", "r"] {
+        assert_eq!(
+            super::stereoisomers(&format!("{molecule} |{extension}|"))?,
+            expected
+        );
+    }
     for text in expected {
         assert!(text.contains('/') || text.contains('\\'));
         let state = super::read(&text)?.prepared.state;
@@ -114,16 +147,20 @@ fn stereoisomers_preserve_double_bond_stereo_across_group_inversions() -> anyhow
 }
 
 #[test]
-fn relative_cx_marker_is_exact_and_does_not_change_import_output() -> anyhow::Result<()> {
+fn relative_cx_marker_is_exact_and_normalized_into_import_output() -> anyhow::Result<()> {
     let molecule = "C[C@H](O)C(=O)O";
     let absolute = super::read(molecule)?;
     let relative = super::read(&format!("{molecule} |r|"))?;
     assert!(!absolute.relative);
     assert!(relative.relative);
-    assert_eq!(
+    assert_ne!(
         serde_json::to_value(&absolute)?,
         serde_json::to_value(&relative)?
     );
+    assert!(absolute.prepared.state.metadata.groups.is_empty());
+    assert_eq!(relative.prepared.state.metadata.groups.len(), 1);
+    assert_eq!(relative.prepared.state.metadata.groups[0].kind, 1);
+    assert_eq!(relative.prepared.state.metadata.groups[0].atoms, [1]);
     for extension in ["rb:", "rr", "r1", "r:", "xr"] {
         let imported = super::read(&format!("{molecule} |{extension}|"))?;
         assert!(!imported.relative, "{extension}");
@@ -133,6 +170,126 @@ fn relative_cx_marker_is_exact_and_does_not_change_import_output() -> anyhow::Re
         );
     }
     assert!(super::read(&format!("{molecule} |rb:0:0|")).is_err());
+    Ok(())
+}
+
+#[test]
+fn relative_cx_groups_keep_configurations_and_explicit_groups() -> anyhow::Result<()> {
+    for (molecule, inverse, atoms) in [
+        ("C[C@H](O)C(=O)O", "C[C@@H](O)C(=O)O", vec![1]),
+        ("C[C@@H](O)C(=O)O", "C[C@H](O)C(=O)O", vec![1]),
+        ("C[C@H](O)[C@@H](C)Cl", "C[C@@H](O)[C@H](C)Cl", vec![1, 3]),
+    ] {
+        let absolute = super::read(molecule)?;
+        let relative = super::read(&format!("{molecule} |r|"))?;
+        let state = &relative.prepared.state;
+        assert_eq!(state.metadata.groups.len(), 1, "{molecule}");
+        assert_eq!(state.metadata.groups[0].kind, 1, "{molecule}");
+        assert_eq!(state.metadata.groups[0].atoms, atoms, "{molecule}");
+        assert_eq!(
+            serde_json::to_value(&state.metadata.atoms)?,
+            serde_json::to_value(&absolute.prepared.state.metadata.atoms)?,
+            "{molecule}"
+        );
+        let mut expected = super::stereoisomers(molecule)?;
+        expected.extend(super::stereoisomers(inverse)?);
+        assert_eq!(expected.len(), 2);
+        assert_eq!(
+            super::stereoisomers(&format!("{molecule} |r|"))?,
+            expected,
+            "{molecule}"
+        );
+    }
+    let molecule = "C[C@H](O)[C@H](F)Cl";
+    for extension in ["a:1,3", "o1:1,3", "&1:1,3", "o1:1,a:3", "&1:1,a:3"] {
+        let explicit = super::read(&format!("{molecule} |{extension}|"))?;
+        let relative = super::read(&format!("{molecule} |r,{extension}|"))?;
+        assert_eq!(
+            serde_json::to_value(&relative.prepared.state)?,
+            serde_json::to_value(&explicit.prepared.state)?,
+            "{extension}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn relative_cx_adds_one_group_without_inverting_explicit_absolute_centres() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)[C@H](F)[C@H](Br)Cl";
+    let imported = super::read(&format!("{molecule} |r,o1:1,a:3|"))?;
+    let groups = &imported.prepared.state.metadata.groups;
+    assert_eq!(groups.len(), 3);
+    assert_eq!((groups[0].kind, groups[0].atoms.as_slice()), (1, &[1][..]));
+    assert_eq!((groups[1].kind, groups[1].atoms.as_slice()), (0, &[3][..]));
+    assert_eq!((groups[2].kind, groups[2].atoms.as_slice()), (1, &[5][..]));
+    assert_eq!(
+        super::stereoisomers(&format!("{molecule} |r,o1:1,a:3|"))?,
+        [
+            "C[C@H](O)[C@H](F)[C@H](Cl)Br".into(),
+            "C[C@@H](O)[C@H](F)[C@H](Cl)Br".into(),
+            "C[C@H](O)[C@H](F)[C@@H](Cl)Br".into(),
+            "C[C@@H](O)[C@H](F)[C@@H](Cl)Br".into(),
+        ]
+        .into()
+    );
+    Ok(())
+}
+
+#[test]
+fn relative_cx_without_configured_tetrahedral_centres_is_unchanged() -> anyhow::Result<()> {
+    for molecule in ["CC(O)C(=O)O", "CCO", "C/C=C/C", "C[C@H](C)O"] {
+        let absolute = super::read(molecule)?;
+        let relative = super::read(&format!("{molecule} |r|"))?;
+        assert!(relative.relative);
+        assert!(relative.prepared.state.metadata.groups.is_empty());
+        assert_eq!(
+            serde_json::to_value(relative)?,
+            serde_json::to_value(absolute)?,
+            "{molecule}"
+        );
+        assert_eq!(
+            super::stereoisomers(&format!("{molecule} |r|"))?,
+            super::stereoisomers(molecule)?,
+            "{molecule}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn reaction_relative_cx_refuses_configured_centres_and_keeps_controls() -> anyhow::Result<()> {
+    for molecule in [
+        "C[C@H](O)C(=O)O",
+        "C[C@@H](O)C(=O)O",
+        "C[C@H](O)[C@@H](C)Cl",
+        "[H][C@](C)(O)C(=O)O",
+        "O[C@H]1CC[C@@H](O)CC1",
+    ] {
+        let parsed = super::parse(molecule)?;
+        assert!(
+            matches!(
+                super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo]),
+                Err(Error::Unsupported(
+                    "reaction stereochemistry or radical count"
+                ))
+            ),
+            "{molecule}"
+        );
+    }
+    for molecule in ["CC(O)C(=O)O", "CCO", "C/C=C/C", "[H]C(O)(C)C(=O)O"] {
+        let absolute = super::reaction_part(super::parse(molecule)?, Vec::new())?;
+        let relative = super::reaction_part(
+            super::parse(molecule)?,
+            vec![crate::cx::Event::RelativeStereo],
+        )?;
+        assert!(relative.relative);
+        assert!(relative.prepared.state.metadata.groups.is_empty());
+        assert_eq!(
+            serde_json::to_value(relative)?,
+            serde_json::to_value(absolute)?,
+            "{molecule}"
+        );
+    }
     Ok(())
 }
 

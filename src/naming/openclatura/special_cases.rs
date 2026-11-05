@@ -8,7 +8,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{canonical_ranks, get_cyclic_atoms};
 use super::formatting::{
-    format_center_ligands_by, format_multiplier, oxy_prefix_from_branch, strip_outer_parentheses,
+    format_center_ligands_by, format_multiplier, is_complex_prefix, needs_complex_multiplier,
+    oxy_prefix_from_branch, strip_outer_parentheses,
 };
 use super::graph_kernel::{Edge, biconnected_edge_components, normalize_edge};
 use super::molecule::{Atom, AtomSet, Bond, Molecule, component_atoms_until_blocked};
@@ -689,13 +690,36 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
             && let (Some(left), Some(right)) = (left_bond, right_bond)
             && left.stereo == right.stereo
         {
-            return Ok(Some(
-                if let Some(stereo) = left.stereo.as_deref().filter(|s| matches!(*s, "E" | "Z")) {
-                    format!("1,2-bis(({stereo})-{})hydrazine", ylidenes[0])
-                } else {
-                    format!("1,2-bis({})hydrazine", ylidenes[0])
-                },
-            ));
+            let ylidene = strip_outer_parentheses(&branch_name(
+                mol,
+                atoms,
+                sides[0].carbon,
+                &set([sides[0].nitrogen]),
+                sides[0].nitrogen,
+            )?);
+            mol.set_name_status(status);
+            let stereo = left.stereo.as_deref().filter(|s| matches!(*s, "E" | "Z"));
+            // The side preflight excludes all stereo except this outward C=N
+            // descriptor, which is cited at the hydrazine attachment locants.
+            let ylidene = if stereo.is_some() {
+                ylidene
+                    .split_once(")-")
+                    .map_or(ylidene.as_str(), |(_, name)| name)
+            } else {
+                &ylidene
+            };
+            let complex = needs_complex_multiplier(ylidene);
+            let multiplier = if complex { "bis" } else { "di" };
+            let prefix = if complex || is_complex_prefix(ylidene) {
+                format!("{multiplier}({ylidene})")
+            } else {
+                format!("{multiplier}{ylidene}")
+            };
+            return Ok(Some(if let Some(stereo) = stereo {
+                format!("(1{stereo},2{stereo})-{prefix}hydrazine")
+            } else {
+                format!("{prefix}hydrazine")
+            }));
         }
         let parent_side =
             usize::from((sides[1].atoms.len(), &parents[1]) > (sides[0].atoms.len(), &parents[0]));
@@ -3544,6 +3568,7 @@ mod tests {
             "C/C=C/C=NN=C",
             "CCC/C=N/N=C/C",
             "C/C=N/N=CCC",
+            "C/C=N/N=C\\C",
         ] {
             assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
         }
@@ -3592,8 +3617,8 @@ mod tests {
     #[test]
     fn azine_shortcut_uses_symmetric_carbonyl_and_ring_side_roles() {
         for (smiles, expected) in [
-            ("C=N-N=C", "1,2-bis(methylidene)hydrazine"),
-            ("CC(C)=NN=C(C)C", "1,2-bis(propan-2-ylidene)hydrazine"),
+            ("C=N-N=C", "dimethylidenehydrazine"),
+            ("CC(C)=NN=C(C)C", "di(propan-2-ylidene)hydrazine"),
             ("CCC(C)=NN=CC", "butan-2-one ethan-1-ylidenehydrazone"),
             ("c1ccccc1C=NN=C", "benzaldehyde methylidenehydrazone"),
             (

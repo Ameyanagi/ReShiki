@@ -1,5 +1,324 @@
 use opsin::{ParseOptions, Parser, Status, WarningKind};
 
+fn canonical(smiles: &str) -> String {
+    let imported = reshiki_chemistry::smiles::read(smiles).unwrap();
+    reshiki_chemistry::smiles::write::write(&imported.prepared.state, Default::default())
+        .unwrap()
+        .text
+}
+
+fn parsed(parser: &Parser, name: &str) -> opsin::Structure {
+    let result = parser.parse(name, &ParseOptions::strict());
+    assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+    result.structure.unwrap()
+}
+
+#[test]
+fn coupled_pseudoasymmetric_xi_has_no_configured_centres() {
+    let parser = Parser::new().unwrap();
+    for (name, smiles) in [
+        ("(1ξ,4ξ)-cyclohexane-1,4-diol", "OC1CCC(O)CC1"),
+        ("(1xi,4xi)-cyclohexane-1,4-diol", "OC1CCC(O)CC1"),
+        ("(4ξ,1ξ)-cyclohexane-1,4-diol", "OC1CCC(O)CC1"),
+        ("(1ξ,4ξ)-cyclohexane-1,4-diamine", "NC1CCC(N)CC1"),
+        ("(2xi)-butan-2-ol", "CC(CC)O"),
+    ] {
+        let structure = parsed(&parser, name);
+        assert_eq!(
+            canonical(&structure.semantic_cxsmiles().unwrap()),
+            canonical(smiles),
+            "{name}"
+        );
+        assert!(
+            structure
+                .graph
+                .atoms
+                .iter()
+                .all(|atom| atom.parity.is_none()),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn coupled_xi_rejects_nonstereogenic_wrong_case_and_mixed_descriptors() {
+    let parser = Parser::new().unwrap();
+    for name in [
+        "(1ξ)-cyclohexan-1-ol",
+        "(1xi)-cyclohexan-1-ol",
+        "(1xi,2xi)-ethane-1,2-diol",
+        "(1Ξ,4Ξ)-cyclohexane-1,4-diol",
+        "(2ξ)-2-aminopropanoic acid",
+        "(1s,4ξ)-cyclohexane-1,4-diol",
+        "(1ξ,4s)-cyclohexane-1,4-diol",
+        "(1s,4xi)-cyclohexane-1,4-diol",
+        "(1xi,4s)-cyclohexane-1,4-diol",
+    ] {
+        let result = parser.parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+        assert!(result.structure.is_none(), "{name}");
+    }
+}
+
+#[test]
+fn coupled_lowercase_rs_controls_keep_their_distinct_configurations() {
+    let parser = Parser::new().unwrap();
+    let mut identities = Vec::new();
+    for (name, label) in [
+        ("(1s,4s)-cyclohexane-1,4-diol", "s"),
+        ("(1r,4r)-cyclohexane-1,4-diol", "r"),
+    ] {
+        let structure = parsed(&parser, name);
+        for locant in ["1", "4"] {
+            let atom = structure
+                .graph
+                .atom_by_locant(structure.fragment, locant)
+                .unwrap();
+            let parity = structure.graph.atom(atom).parity.as_ref().unwrap();
+            assert_eq!(
+                parity.stereo_group.kind,
+                opsin::graph::StereoGroupType::Absolute,
+                "{name}"
+            );
+        }
+        let smiles = structure.semantic_cxsmiles().unwrap();
+        let native = reshiki_chemistry::smiles::read(&smiles).unwrap();
+        let labels = reshiki_chemistry::stereo::cip::label::assign(
+            &native.prepared.state,
+            &Default::default(),
+        )
+        .unwrap();
+        let labels: Vec<_> = labels
+            .state
+            .properties
+            .atoms
+            .iter()
+            .filter_map(|atom| atom.cip_code.as_deref())
+            .collect();
+        assert_eq!(labels, [label, label], "{name}");
+        identities.push(canonical(&smiles));
+    }
+    assert_ne!(identities[0], identities[1]);
+}
+
+#[test]
+fn amino_acid_xi_removes_only_the_components_inherited_alpha_configuration() {
+    let parser = Parser::new().unwrap();
+    for (name, smiles) in [
+        ("ξ-alanine", "CC(N)C(=O)O"),
+        ("xi-alanine", "CC(N)C(=O)O"),
+        ("(ξ)-alanine", "CC(N)C(=O)O"),
+        ("(xi)-alanine", "CC(N)C(=O)O"),
+        ("ξ-proline", "N1C(CCC1)C(=O)O"),
+        ("ξ-phenylalanine", "NC(Cc1ccccc1)C(=O)O"),
+        ("N-acetyl-ξ-alanine", "CC(=O)NC(C)C(=O)O"),
+        ("(xi)-N-acetylalanine", "CC(=O)NC(C)C(=O)O"),
+        ("ξ-N-acetylalanine", "CC(=O)NC(C)C(=O)O"),
+        ("methyl ξ-alaninate", "COC(=O)C(C)N"),
+    ] {
+        let structure = parsed(&parser, name);
+        assert_eq!(
+            canonical(&structure.semantic_cxsmiles().unwrap()),
+            canonical(smiles),
+            "{name}"
+        );
+        assert!(
+            structure
+                .graph
+                .atoms
+                .iter()
+                .all(|atom| atom.parity.is_none()),
+            "{name}"
+        );
+        let alpha = structure
+            .graph
+            .atoms
+            .iter()
+            .find(|atom| atom.properties.unknown_amino_acid_stereo)
+            .unwrap();
+        assert!(
+            alpha.locants.iter().any(|locant| locant == "alpha"),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn amino_acid_xi_is_scoped_to_the_named_peptide_residue() {
+    let parser = Parser::new().unwrap();
+    for (name, smiles, first_unknown) in [
+        ("ξ-alanyl-L-alanine", "NC(C)C(=O)N[C@@H](C)C(=O)O", true),
+        ("(xi)-alanyl-L-alanine", "NC(C)C(=O)N[C@@H](C)C(=O)O", true),
+        ("L-alanyl-ξ-alanine", "N[C@@H](C)C(=O)NC(C)C(=O)O", false),
+    ] {
+        let structure = parsed(&parser, name);
+        assert_eq!(
+            canonical(&structure.semantic_cxsmiles().unwrap()),
+            canonical(smiles),
+            "{name}"
+        );
+        let unknown: Vec<_> = structure
+            .graph
+            .atoms
+            .iter()
+            .filter(|atom| atom.properties.unknown_amino_acid_stereo)
+            .collect();
+        assert_eq!(unknown.len(), 1, "{name}");
+        assert!(unknown[0].parity.is_none(), "{name}");
+        let nitrogen = structure
+            .graph
+            .neighbours(unknown[0].id)
+            .into_iter()
+            .find(|&atom| structure.graph.atom(atom).element == opsin::graph::Element::N)
+            .unwrap();
+        let n_carbons = structure
+            .graph
+            .neighbours(nitrogen)
+            .into_iter()
+            .filter(|&atom| structure.graph.atom(atom).element == opsin::graph::Element::C)
+            .count();
+        assert_eq!(n_carbons, if first_unknown { 1 } else { 2 }, "{name}");
+        let parities: Vec<_> = structure
+            .graph
+            .atoms
+            .iter()
+            .filter_map(|atom| atom.parity.as_ref())
+            .collect();
+        assert_eq!(parities.len(), 1, "{name}");
+        assert_eq!(
+            parities[0].stereo_group.kind,
+            opsin::graph::StereoGroupType::Absolute,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn amino_acid_xi_rejects_unsupported_inherited_stereo_and_explicit_conflicts() {
+    let parser = Parser::new().unwrap();
+    for name in [
+        "ξ-threonine",
+        "xi-threonine",
+        "(ξ)-threonine",
+        "(xi)-threonine",
+        "(3R)-xi-threonine",
+        "ξ-isoleucine",
+        "ξ-alloisoleucine",
+        "ξ-allothreonine",
+        "ξ-glycine",
+        "ξ-cystine",
+        "ξ-cystathionine",
+        "ξ-lanthionine",
+        "(xi)-L-alanine",
+        "L-(xi)-alanine",
+        "D-(xi)-alanine",
+        "DL-(xi)-alanine",
+        "(2R)-(xi)-alanine",
+        "(R)-(xi)-alanine",
+        "(R)-(xi)-alanyl-L-alanine",
+        "L-alanyl-(R)-(xi)-alanine",
+        "(2R)-(xi)-alanyl-L-alanine",
+        "L-alanyl-(xi)-(2R)-alanine",
+        "(xi)-N-acetyl-L-alanine",
+    ] {
+        let result = parser.parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+        assert!(result.structure.is_none(), "{name}");
+        if matches!(
+            name,
+            "(xi)-L-alanine"
+                | "(2R)-(xi)-alanine"
+                | "(R)-(xi)-alanyl-L-alanine"
+                | "L-alanyl-(R)-(xi)-alanine"
+        ) {
+            assert!(
+                result.message.contains("conflicts"),
+                "{name}: {}",
+                result.message
+            );
+        }
+    }
+}
+
+#[test]
+fn amino_acid_dl_controls_keep_default_absolute_and_racemic_stereo() {
+    let parser = Parser::new().unwrap();
+    for (name, smiles, kind) in [
+        (
+            "alanine",
+            "N[C@@H](C)C(=O)O",
+            opsin::graph::StereoGroupType::Absolute,
+        ),
+        (
+            "L-alanine",
+            "N[C@@H](C)C(=O)O",
+            opsin::graph::StereoGroupType::Absolute,
+        ),
+        (
+            "D-alanine",
+            "N[C@H](C)C(=O)O",
+            opsin::graph::StereoGroupType::Absolute,
+        ),
+        (
+            "DL-alanine",
+            "N[C@@H](C)C(=O)O |r|",
+            opsin::graph::StereoGroupType::Racemic,
+        ),
+    ] {
+        let structure = parsed(&parser, name);
+        assert_eq!(
+            canonical(&structure.semantic_cxsmiles().unwrap()),
+            canonical(smiles),
+            "{name}"
+        );
+        let parities: Vec<_> = structure
+            .graph
+            .atoms
+            .iter()
+            .filter_map(|atom| atom.parity.as_ref())
+            .collect();
+        assert_eq!(parities.len(), 1, "{name}");
+        assert_eq!(parities[0].stereo_group.kind, kind, "{name}");
+        assert!(
+            structure
+                .graph
+                .atoms
+                .iter()
+                .all(|atom| !atom.properties.unknown_amino_acid_stereo),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn amino_acid_xi_stays_unknown_under_global_stereochemistry() {
+    let parser = Parser::new().unwrap();
+    for qualifier in ["rac", "rel"] {
+        for spelling in ["xi", "ξ"] {
+            for (parent, smiles) in [
+                ("alanine", "NC(C)C(=O)O"),
+                ("N-acetylalanine", "CC(=O)NC(C)C(=O)O"),
+            ] {
+                let name = format!("({qualifier})-({spelling})-{parent}");
+                let structure = parsed(&parser, &name);
+                assert_eq!(
+                    canonical(&structure.semantic_cxsmiles().unwrap()),
+                    canonical(smiles),
+                    "{name}"
+                );
+                assert!(
+                    structure
+                        .graph
+                        .atoms
+                        .iter()
+                        .all(|atom| atom.parity.is_none()),
+                    "{name}"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn xi_case_survives_tokenization_in_both_directions() {
     let parser = Parser::new().unwrap();

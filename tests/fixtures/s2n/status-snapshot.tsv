@@ -210,7 +210,7 @@ CCOC(=O)C1=C(NC2=C(C1C3=C(C(=CC=C3)OC)OC)C(=O)CC(C2)C4=CC=C(C=C4)OC)C	ethyl 4-(2
 CCCN(CC#C)C(=O)NC(C)C1=CC(=CC=C1)N2CCCC2=O	N-{1-[3-(2-oxopyrrolidin-1-yl)phenyl]ethyl}-N'-(prop-2-yn-1-yl)-N'-propylurea	preferred	
 C1CCN(CC1)CC2=C(C=CC(=C2)NC(=O)C3=CC=C(C=C3)[N+](=O)[O-])O.Cl		declined	Salt naming requires charged components without zwitterions or radicals; neutral components and mixtures are unsupported
 CN1CCC(CC1)N2CCC(CC2)NC(=O)C(=O)NC3=CC(=CC=C3)N4C=CC=N4	N-(1'-methyl[1,4'-bipiperidin]-4-yl)-N'-[3-(1H-pyrazol-1-yl)phenyl]ethanediamide	not_preferred	unretained_parent
-C[C@H](C(=O)NC1=CC=C(C=C1)SC)OC(=O)CN(C)S(=O)(=O)C2=CC=C(C=C2)Cl	(2R)-1-{[4-(methylsulfanyl)phenyl]amino}-1-oxopropan-2-yl 2-(4-chloro-N-methylbenzene-1-sulfonamido)acetate	preferred	
+C[C@H](C(=O)NC1=CC=C(C=C1)SC)OC(=O)CN(C)S(=O)(=O)C2=CC=C(C=C2)Cl	(2R)-1-{[4-(methylsulfanyl)phenyl]amino}-1-oxopropan-2-yl (4-chloro-N-methylbenzene-1-sulfonamido)acetate	preferred	
 CCOC1=C(C=CC(=C1)CN(CC(=O)NC(=O)NCC(C)C)C2CC2)OC(F)F	2-[cyclopropyl({4-[(difluoromethyl)oxy]-3-ethoxyphenyl}methyl)amino]-N-[(2-methylpropyl)carbamoyl]acetamide	preferred	
 COC(=O)CC1=C(SC2=C1C(=O)NC(=N2)CNC3=CC=C(C=C3)Br)C(=O)OC	methyl 2-{[(4-bromophenyl)amino]methyl}-5-(2-methoxy-2-oxoethyl)-4-oxo-3,4-dihydrothieno[2,3-d]pyrimidine-6-carboxylate	preferred	
 COC1=C(C=CC(=C1)NC(=O)C2=CC3=C(C=C2)C(=O)O[C@@H](C3)C4=CC=CC=C4)NS(=O)(=O)C	(3S)-N-(4-methanesulfonamido-3-methoxyphenyl)-1-oxo-3-phenyl-3,4-dihydro-1H-2-benzopyran-6-carboxamide	preferred	
@@ -695,7 +695,7 @@ CCBr	bromoethane	preferred
 CC(C)CCCOCC	1-ethoxy-4-methylpentane	preferred	
 CC(C)C(CC)CC(C)C(CC)C(CC)C/C=C\CC(C)C(C)C	(5Z)-8,9,12-triethyl-2,3,10,13-tetramethyltetradec-5-ene	preferred	
 CC(CC)CCC(C)C(CC)C[C@@H](O)C(=O)O	(2R)-4-ethyl-2-hydroxy-5,8-dimethyldecanoic acid	preferred	
-COC(=O)Cc1ccc2[nH]ccc2c1	methyl 2-(1H-indol-5-yl)acetate	preferred	
+COC(=O)Cc1ccc2[nH]ccc2c1	methyl (1H-indol-5-yl)acetate	preferred	
 CC(CC)CC(CC)CC	3-ethyl-5-methylheptane	preferred	
 CC(CC)C(CC)CC=CCC(C)C(C)CC(CC)C	4-ethyl-3,9,10,12-tetramethyltetradec-6-ene	preferred	
 CC(CC)CC(C)CC#CCC(C)C(C)C(CC)CCCC	12-ethyl-3,5,10,11-tetramethylhexadec-7-yne	preferred	

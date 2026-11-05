@@ -56,12 +56,11 @@ type Result<T> = std::result::Result<T, Error>;
 /// The stereoisomers a structure denotes, as canonical isomeric SMILES.
 /// Ungrouped and absolute centres stay fixed; each OR (`o`) or AND (`&`)
 /// group is the given configuration or its full inversion, independently of
-/// the other groups. A molecule-level `r` makes the absolute (ABS) group
-/// relative: every other tetrahedral centre, including `a` members, forms one
-/// more such group. OR and AND groups expand alike.
+/// the other groups. Import converts a molecule-level `r` into one OR group
+/// over tetrahedral centres outside explicit `a`, `o` and `&` groups.
+/// OR and AND groups expand alike.
 pub fn stereoisomers(text: &str) -> Result<BTreeSet<String>> {
-    let imported = read(text)?;
-    let mut state = imported.prepared.state;
+    let mut state = read(text)?.prepared.state;
     let atoms = &state.metadata.atoms;
     let tetrahedral = |atom: &usize| {
         atoms
@@ -75,14 +74,6 @@ pub fn stereoisomers(text: &str) -> Result<BTreeSet<String>> {
         .filter(|group| matches!(group.kind, 1 | 2))
         .map(|group| group.atoms.iter().copied().filter(tetrahedral).collect())
         .collect();
-    if imported.relative {
-        let grouped: HashSet<_> = units.iter().flatten().copied().collect();
-        units.push(
-            (0..atoms.len())
-                .filter(|atom| !grouped.contains(atom) && tetrahedral(atom))
-                .collect(),
-        );
-    }
     units.retain(|unit| !unit.is_empty());
     state.metadata.groups.clear();
     (0..1usize << units.len())

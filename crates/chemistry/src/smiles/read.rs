@@ -5,7 +5,7 @@ use super::{Error, Parsed, Prepared, Result, parse_inner, prepare};
 use crate::{
     cx,
     kekulize::Direction,
-    ranking::StereoGroup,
+    ranking::{Metadata, StereoGroup},
     stereo::{self, Point3, wedging::Conformer},
 };
 use serde::Serialize;
@@ -18,7 +18,7 @@ pub struct Imported {
     pub name: Option<String>,
     /// SMILES directions specified odd-cumulene E/Z that preparation discarded.
     pub dropped_cumulene_ez: bool,
-    /// Molecule-level CX relative stereochemistry (`r`).
+    /// Original molecule-level CX `r` marker, normalized into stereo groups.
     #[serde(skip)]
     pub relative: bool,
     /// Reaction CX attachment markers affect wedge selection before drawing.
@@ -325,8 +325,33 @@ fn int_property(
     value
 }
 
+fn relative_stereo(metadata: &mut Metadata) {
+    // Explicit enhanced stereo labels take precedence over molecule-level r.
+    let grouped: HashSet<_> = metadata
+        .groups
+        .iter()
+        .flat_map(|group| group.atoms.iter().copied())
+        .collect();
+    let atoms: Vec<_> = metadata
+        .atoms
+        .iter()
+        .enumerate()
+        .filter_map(|(atom, meta)| {
+            (matches!(meta.chiral_tag, 1 | 2) && !grouped.contains(&atom)).then_some(atom)
+        })
+        .collect();
+    if !atoms.is_empty() {
+        metadata.groups.push(StereoGroup {
+            kind: 1,
+            atoms,
+            ..StereoGroup::default()
+        });
+    }
+}
+
 /// Reactions apply CX annotations after bare parsing and keep explicit H.
 /// They sanitize without the default molecule import's stereo perception.
+/// Configured molecule-level `r` is refused with other enhanced stereo groups.
 pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
     use crate::{
         sanitize,
@@ -347,7 +372,10 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     if let Some(error) = annotations.context.property_errors.iter().flatten().next() {
         return Err(Error::Unsupported(error));
     }
-    let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
+    let mut clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
+    if annotations.relative {
+        relative_stereo(&mut clean.metadata);
+    }
     if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || clean.metadata.atoms.iter().enumerate().any(|(i, a)| {
             !stereo::allene::supported(&clean.graph, i, a.chiral_tag, a.chiral_permutation)
@@ -534,7 +562,10 @@ pub fn read(text: &str) -> Result<Imported> {
         conf,
         stereo::CoordinateBounds::NativeImport,
     )?;
-    let (prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
+    let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
+    if annotations.relative {
+        relative_stereo(&mut prepared.state.metadata);
+    }
     let mut dropped_cumulene_ez = false;
     for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {
         let [(a, _), (b, _)] = chain.ends;
