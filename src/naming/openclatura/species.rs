@@ -62,11 +62,16 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     let Derivation::Plan {
         parent_atoms,
         principal_group,
+        retained_anion_name,
         ..
     } = derivation
     else {
         return;
     };
+    let anionic_principal = principal_group.as_ref().is_some_and(|(key, atoms)| {
+        super::perception::is_anionic_group_key(key)
+            && atoms.iter().map(|i| mol.atoms[i].charge).sum::<i32>() < 0
+    });
     // Carbon-free anions take retained or additive names, not a P-72.7 parent.
     if mol.atoms.values().all(|atom| atom.symbol != "C")
         || !mol.atoms.values().any(|atom| atom.charge < 0)
@@ -112,20 +117,18 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     // acetylazanide, does not. With no characteristic group, the parent cites -ide.
     let anionic_parent = principal_group.as_ref().map_or_else(
         || parent_atoms.iter().any(anionic_centre),
-        |(key, atoms)| {
-            (super::perception::is_anionic_group_key(key)
-                && atoms.iter().map(|i| mol.atoms[i].charge).sum::<i32>() < 0)
+        |(key, _)| {
+            anionic_principal
                 // A cationic characteristic suffix can accompany skeletal -ide.
                 || (matches!(key.as_str(), "aminium" | "iminium" | "diazonio")
                     && parent_atoms.iter().any(anionic_centre))
         },
     );
-    let hydroxy_anion = principal_group.as_ref().is_some_and(|(key, _)| {
-        matches!(
-            key.as_str(),
-            "olate" | "thiolate" | "selenolate" | "tellurolate"
-        )
-    });
+    let unresolved_alkoxide = matches!(
+        retained_anion_name,
+        super::assembly_parts::RetainedAnionName::Required { .. }
+            | super::assembly_parts::RetainedAnionName::SubstitutedAlkyl
+    );
     // P-72.7(a) prefers the parent with more anionic centres; on a tie,
     // (b)-(d) prefer -ide/-uide centres, which are not implemented.
     let cited =
@@ -142,7 +145,8 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     };
     let external_skeletal_anion =
         centres(true, true) > 0 && centres(true, false) >= centres(false, false);
-    // P-72.6.1: an external C(=O)O- requires the prefix carboxylato.
+    // The external carboxylate is spelled by P-72.6.1. Parent preference is
+    // still unresolved when P-72.7(a) cannot decide without (b)-(e).
     let external_carboxylate = mol.atoms.iter().any(|(&carbon, atom)| {
         atom.is_carbon()
             && mol.get_neighbors(carbon).iter().any(|&oxo| {
@@ -158,8 +162,21 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
                     })
             })
     });
-    if !anionic_parent || hydroxy_anion || external_skeletal_anion || external_carboxylate {
-        mol.mark_name(NameStatus::Unverified(NameReason::AnionParent));
+    if !anionic_parent
+        || unresolved_alkoxide
+        || external_skeletal_anion
+        || external_carboxylate && centres(true, false) >= centres(false, false)
+    {
+        let status = NameStatus::Unverified(NameReason::AnionParent);
+        // The unresolved principal anion spelling remains the reason when a
+        // separately staged cationic prefix also needs verification.
+        if unresolved_alkoxide
+            && mol.name_status() == NameStatus::Unverified(NameReason::CationPrefix)
+        {
+            mol.set_name_status(status);
+        } else {
+            mol.mark_name(status);
+        }
     }
 }
 
@@ -241,6 +258,26 @@ pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, Strin
 mod tests {
     use super::*;
 
+    #[test]
+    fn mixed_salt_anion_spellings_preserve_status() {
+        for (smiles, expected, status) in [
+            (
+                "[Na+].[Na+].Cc1ccc(cc1)C(=O)[O-].CC(=O)[O-]",
+                "disodium 4-methylbenzoate acetate",
+                NameStatus::Preferred,
+            ),
+            (
+                "[Na+].[Na+].[Na+].CC(=O)CC[O-].O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
+                "trisodium 3-oxobutan-1-olate 4-[(4-carboxylatophenyl)oxy]benzoate",
+                NameStatus::NotPreferred(NameReason::Multiplicative),
+            ),
+        ] {
+            let name = name_salt(smiles, IsotopeStyle::Iupac).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
+        }
+    }
+
     fn assess_component(smiles: &str) -> NameStatus {
         let mol = super::super::graph_io::read_smiles(smiles).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
@@ -264,10 +301,6 @@ mod tests {
             "[n-]1nnnc1C(=O)O",
             "[O-]C(=O)c1ccccc1Cc1cc[n-]c1",
             "[O-]C(=O)c1ccccc1[CH2-]",
-            "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
-            "C[O-]",
-            "[O-]c1ccccc1",
-            "[NH3+]CCc1ccccc1[O-]",
             "C[N+](C)(C)CC[O-]",
             "[NH3+]CC([NH3+])C[O-]",
         ] {
@@ -299,6 +332,9 @@ mod tests {
     fn chosen_anionic_parents_keep_preferred_status() {
         for smiles in [
             "O=C([O-])c1cc[n-]c1",
+            "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
+            "C[O-]",
+            "[O-]c1ccccc1",
             "Oc1ccccc1[CH2-]",
             "[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
             "Oc1ccccc1-c1[n-]ccc1C",
@@ -308,6 +344,38 @@ mod tests {
         ] {
             assert_eq!(assess_component(smiles), NameStatus::Preferred, "{smiles}");
         }
+    }
+
+    #[test]
+    fn retained_anion_assessment_requires_application_evidence() {
+        use super::super::assembly_parts::RetainedAnionName;
+
+        let mol = super::super::graph_io::read_smiles("C[O-]").unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let mut component =
+            super::super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
+                .unwrap();
+        let Derivation::Plan {
+            retained_anion_name,
+            ..
+        } = &mut component.derivation
+        else {
+            panic!("expected an assembled retained anion parent");
+        };
+        assert_eq!(
+            retained_anion_name,
+            &RetainedAnionName::Applied("methoxide".into())
+        );
+        // The same displayed text cannot certify a selected but unapplied name.
+        *retained_anion_name = RetainedAnionName::Required {
+            name: "methoxide".into(),
+            absorbed_substituent: None,
+        };
+        assess_anion_parent(&mol, &component.derivation);
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::Unverified(NameReason::AnionParent)
+        );
     }
 
     #[test]
@@ -384,8 +452,8 @@ mod tests {
             ),
             (
                 "[Na+].OC(=O)c1ccccc1Cc1ccccc1[O-]",
-                "sodium 2-[(2-carboxyphenyl)methyl]benzen-1-olate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 2-[(2-carboxyphenyl)methyl]phenoxide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].OC(=O)c1ccccc1Cc1ccccc1C(=O)[O-]",
@@ -404,23 +472,23 @@ mod tests {
             ),
             (
                 "[Na+].Oc1ccccc1Cc1ccccc1[O-]",
-                "sodium 2-[(2-hydroxyphenyl)methyl]benzen-1-olate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 2-[(2-hydroxyphenyl)methyl]phenoxide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].NC(=O)c1ccccc1Cc1ccccc1[O-]",
-                "sodium 2-[(2-carbamoylphenyl)methyl]benzen-1-olate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 2-[(2-carbamoylphenyl)methyl]phenoxide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].O=Cc1ccccc1Cc1ccccc1[O-]",
-                "sodium 2-[(2-formylphenyl)methyl]benzen-1-olate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 2-[(2-formylphenyl)methyl]phenoxide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].CC(=O)c1ccccc1Cc1ccccc1[O-]",
-                "sodium 2-[(2-acetylphenyl)methyl]benzen-1-olate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "sodium 2-[(2-acetylphenyl)methyl]phenoxide",
+                NameStatus::Preferred,
             ),
             (
                 "[Na+].[Na+].[O-]c1ccccc1Cc1ccccc1C(=O)[O-]",
@@ -464,8 +532,8 @@ mod tests {
             ),
             (
                 "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
-                "5-[2-(oxidocarbonyl)phenyl]-1H-pyrrol-1-ide-3-carboxylate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "5-(2-carboxylatophenyl)-1H-pyrrol-1-ide-3-carboxylate",
+                NameStatus::Preferred,
             ),
             (
                 "[NH3+]CC1[N-]C(=O)NC1=O",
@@ -504,10 +572,10 @@ mod tests {
     }
 
     #[test]
-    fn hydroxy_anion_parent_preference_is_unverified() {
+    fn retained_alkoxide_parent_is_preferred() {
         let name = super::super::name_smiles("C[O-]").unwrap();
-        assert_eq!(name.text, "methanolate");
-        assert_eq!(name.status, NameStatus::Unverified(NameReason::AnionParent));
+        assert_eq!(name.text, "methoxide");
+        assert_eq!(name.status, NameStatus::Preferred);
     }
 
     #[test]
@@ -518,10 +586,10 @@ mod tests {
     }
 
     #[test]
-    fn salt_inherits_hydroxy_anion_parent_uncertainty() {
+    fn salt_inherits_retained_alkoxide_parent_preference() {
         let name = super::super::name_smiles("[Na+].C[O-]").unwrap();
-        assert_eq!(name.text, "sodium methanolate");
-        assert_eq!(name.status, NameStatus::Unverified(NameReason::AnionParent));
+        assert_eq!(name.text, "sodium methoxide");
+        assert_eq!(name.status, NameStatus::Preferred);
     }
 
     #[test]
@@ -636,13 +704,10 @@ mod tests {
     /// A salt takes its strongest ion assessment (Preferred < Unverified <
     /// NotPreferred; ties keep the first ion's reason in citation order), so a
     /// known departure is never masked by an unchecked ion (P-77.1.1, P-77.2.1).
-    /// Texts are the current output, including spellings that are not PINs
-    /// (benzenolate, not phenoxide); the statuses are what this test checks.
+    /// Retained anion spellings and salt order must preserve stronger departures.
     #[test]
     fn salt_status_is_the_strongest_ion_downgrade() {
-        use NameReason::{
-            AnionParent, BridgedFusedParent, Multiplicative, RingAssembly, UnauditedParent,
-        };
+        use NameReason::{BridgedFusedParent, Multiplicative, RingAssembly, UnauditedParent};
         use NameStatus::{NotPreferred, Preferred, Unverified};
         const NTA: &str = "O=C([O-])CN(CC(=O)[O-])CC(=O)[O-]";
         const OXYDIBENZOATE: &str = "O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]";
@@ -653,37 +718,37 @@ mod tests {
         for (smiles, expected, status) in [
             (
                 format!("[Na+].[Na+].[Na+].[Na+].[O-]c1ccccc1.{NTA}"),
-                "tetrasodium benzenolate [bis(2-oxido-2-oxoethyl)amino]acetate",
+                "tetrasodium [bis(carboxylatomethyl)amino]acetate phenoxide",
                 NotPreferred(Multiplicative),
             ),
             (
                 format!("{NTA}.[O-]c1ccccc1.[Na+].[Na+].[Na+].[Na+]"),
-                "tetrasodium benzenolate [bis(2-oxido-2-oxoethyl)amino]acetate",
+                "tetrasodium [bis(carboxylatomethyl)amino]acetate phenoxide",
                 NotPreferred(Multiplicative),
             ),
             (
                 format!("{EPOXY_AMINIUM}.[Na+].[Na+].[Na+].C1=CCCCC1-C1=CCCC(C1)C(=O)[O-].{NTA}"),
-                "N,N,N-trimethyl-1,4-epoxy-1,2,3,4-tetrahydronaphthalen-7-aminium trisodium 3-(cyclohex-2-en-1-yl)cyclohex-3-ene-1-carboxylate [bis(2-oxido-2-oxoethyl)amino]acetate",
+                "N,N,N-trimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-aminium trisodium 3-(cyclohex-2-en-1-yl)cyclohex-3-ene-1-carboxylate [bis(carboxylatomethyl)amino]acetate",
                 NotPreferred(RingAssembly),
             ),
             (
                 "C[N+](C)(C)C1=CCCCC1-C1=CCCCC1.[Na+].[O-]c1ccccc1.[O-]C(=O)c1ccccc1".into(),
-                "6-(cyclohex-1-en-1-yl)-N,N,N-trimethylcyclohex-1-en-1-aminium sodium benzenolate benzoate",
+                "6-(cyclohex-1-en-1-yl)-N,N,N-trimethylcyclohex-1-en-1-aminium sodium benzoate phenoxide",
                 NotPreferred(RingAssembly),
             ),
             (
                 format!("[Na+].[Na+].[Na+].CC(=O)CC[O-].{OXYDIBENZOATE}"),
-                "trisodium 3-oxobutan-1-olate 4-{[4-(oxidocarbonyl)phenyl]oxy}benzoate",
+                "trisodium 3-oxobutan-1-olate 4-[(4-carboxylatophenyl)oxy]benzoate",
                 NotPreferred(Multiplicative),
             ),
             (
                 format!("[K+].[S-]c1ccccc1.[K+].[K+].[K+].{NTA}"),
-                "tetrapotassium benzenethiolate [bis(2-oxido-2-oxoethyl)amino]acetate",
+                "tetrapotassium benzenethiolate [bis(carboxylatomethyl)amino]acetate",
                 NotPreferred(Multiplicative),
             ),
             (
                 format!("{EPOXY_AMINIUM}.{EPOXY_AMINIUM}.{OXYDIBENZOATE}"),
-                "bis(N,N,N-trimethyl-1,4-epoxy-1,2,3,4-tetrahydronaphthalen-7-aminium) 4-{[4-(oxidocarbonyl)phenyl]oxy}benzoate",
+                "bis(N,N,N-trimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-aminium) 4-[(4-carboxylatophenyl)oxy]benzoate",
                 NotPreferred(Multiplicative),
             ),
             (
@@ -691,24 +756,20 @@ mod tests {
                 "sodium benzoate",
                 Preferred,
             ),
-            (
-                "[Na+].[O-]c1ccccc1".into(),
-                "sodium benzenolate",
-                Unverified(AnionParent),
-            ),
+            ("[Na+].[O-]c1ccccc1".into(), "sodium phenoxide", Preferred),
             (
                 "[Na+].[O-]c1ccccc1.[Na+].[O-]C(=O)c1ccccc1".into(),
-                "disodium benzenolate benzoate",
-                Unverified(AnionParent),
+                "disodium benzoate phenoxide",
+                Preferred,
             ),
             (
                 format!("[Na+].[Na+].{OXYDIBENZOATE}"),
-                "disodium 4-{[4-(oxidocarbonyl)phenyl]oxy}benzoate",
+                "disodium 4-[(4-carboxylatophenyl)oxy]benzoate",
                 NotPreferred(Multiplicative),
             ),
             (
                 format!("[O-]c1ccccc1.[O-]c1ccccc1.{BIS_AMINIUM}"),
-                "N,N,N-trimethyl-1-{4-[(trimethylammonio)methyl]phenyl}methanaminium dibenzenolate",
+                "N,N,N-trimethyl-1-{4-[(trimethylammonio)methyl]phenyl}methanaminium diphenoxide",
                 NotPreferred(Multiplicative),
             ),
             (
@@ -723,22 +784,18 @@ mod tests {
             ),
             (
                 format!("{EPOXY_AMINIUM}.[O-]c1ccccc1"),
-                "N,N,N-trimethyl-1,4-epoxy-1,2,3,4-tetrahydronaphthalen-7-aminium benzenolate",
+                "N,N,N-trimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-aminium phenoxide",
                 Unverified(BridgedFusedParent),
             ),
             (
                 format!("{NONANYL_AMINIUM}.{NONANYL_AMINIUM}.{OXYDIBENZOATE}"),
-                "bis[N,N,N-trimethyl-1-(tricyclo[3.3.1.0^{3,7}]nonan-2-yl)methanaminium] 4-{[4-(oxidocarbonyl)phenyl]oxy}benzoate",
+                "bis[N,N,N-trimethyl-1-(tricyclo[3.3.1.0^{3,7}]nonan-2-yl)methanaminium] 4-[(4-carboxylatophenyl)oxy]benzoate",
                 NotPreferred(Multiplicative),
             ),
-            (
-                "[O-]c1ccccc1".into(),
-                "benzenolate",
-                Unverified(AnionParent),
-            ),
+            ("[O-]c1ccccc1".into(), "phenoxide", Preferred),
             (
                 NTA.into(),
-                "[bis(2-oxido-2-oxoethyl)amino]acetate",
+                "[bis(carboxylatomethyl)amino]acetate",
                 NotPreferred(Multiplicative),
             ),
             ("CC(=O)O".into(), "acetic acid", Preferred),
@@ -756,8 +813,11 @@ mod tests {
     #[test]
     fn salt_inherits_the_strongest_ion_status() {
         let name = super::super::name_smiles("[Na+].[Na+].[Cl-].C[O-]").unwrap();
-        assert_eq!(name.text, "disodium chloride methanolate");
-        assert_eq!(name.status, NameStatus::Unverified(NameReason::AnionParent));
+        assert_eq!(name.text, "disodium chloride methoxide");
+        assert_eq!(
+            name.status,
+            NameStatus::Unverified(NameReason::UnauditedPath)
+        );
     }
 
     #[test]

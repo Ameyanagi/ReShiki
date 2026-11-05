@@ -73,6 +73,10 @@ pub fn suffix(count: usize, suffix: &str) -> String {
     if count <= 1 {
         return suffix.into();
     }
+    // P-72.2.2.2.2: these compound anionic suffixes take bis/tris, etc.
+    if matches!(suffix, "olate" | "thiolate" | "selenolate" | "tellurolate") {
+        return format!("{}({suffix})", complex_(count));
+    }
     let mut multiplier = basic(count);
     if suffix.starts_with(['a', 'o']) && multiplier.ends_with('a') {
         multiplier.pop();

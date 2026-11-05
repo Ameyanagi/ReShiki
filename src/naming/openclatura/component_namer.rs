@@ -37,6 +37,7 @@ pub(super) enum Derivation {
     Plan {
         parent_atoms: AtomSet,
         principal_group: Option<(String, AtomSet)>,
+        retained_anion_name: super::assembly_parts::RetainedAnionName,
         component_splits: BTreeSet<Edge>,
     },
     Shortcut {
@@ -95,6 +96,7 @@ pub(super) fn name_component_with_citation(
                 derivation: Derivation::Plan {
                     parent_atoms,
                     principal_group,
+                    retained_anion_name: plan.parts.retained_anion_name,
                     component_splits,
                 },
             })
@@ -147,6 +149,7 @@ pub(super) fn name_component_with_atom_locants(
                 derivation: Derivation::Plan {
                     parent_atoms,
                     principal_group: plan.parts.principal_group.map(|g| (g.key, g.atom_ids)),
+                    retained_anion_name: plan.parts.retained_anion_name,
                     component_splits,
                 },
             })

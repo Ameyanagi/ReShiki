@@ -268,6 +268,20 @@ pub fn build_parent_assembly_plan_with_parent(
                 plan.numbering_variants.clone()
             }
         });
+    let wrapper_variants: Vec<_> = parent
+        .as_ref()
+        .and_then(|parent| parent.fusion_wrapper_plan.as_ref())
+        .filter(|plan| !plan.numbering_variants.is_empty())
+        .map_or_else(Vec::new, |plan| {
+            std::iter::once(plan.as_ref())
+                .chain(&plan.numbering_variants)
+                .map(|variant| {
+                    let mut variant = variant.clone();
+                    variant.numbering_variants.clear();
+                    variant
+                })
+                .collect()
+        });
     let fusion_maps = if variants.is_empty() {
         parent
             .as_ref()
@@ -424,6 +438,13 @@ pub fn build_parent_assembly_plan_with_parent(
             )?;
         }
         parent = Some(selected);
+    }
+    if !wrapper_variants.is_empty() {
+        let selected = wrapper_variants
+            .into_iter()
+            .find(|plan| plan.atom_to_locant() == locant_map)
+            .ok_or("openclatura: bridged fusion assembly numbering is not audited")?;
+        parent = Some(RingParent::from_fusion_wrapper(selected)?);
     }
     let mut parts = build_parent_parts(
         mol,

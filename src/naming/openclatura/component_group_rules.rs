@@ -3,6 +3,26 @@ use super::molecule::{AtomSet, Molecule};
 use super::nomenclature::RULES;
 use super::perception::{LigandRole, PerceivedGroup};
 
+/// The registry's ring-carboxylate key also represents neutral esters, so the
+/// descriptor, rather than that key alone, establishes an acid anion prefix.
+pub fn is_carboxylate_group(g: &PerceivedGroup) -> bool {
+    g.descriptor.as_ref().is_some_and(|d| {
+        d.family == "acyl"
+            && d.derivative == "anion"
+            && d.ligands.len() == 2
+            && d.ligands.iter().all(|l| l.element == "O")
+    })
+}
+
+pub fn is_carboxylic_acid_group(g: &PerceivedGroup) -> bool {
+    g.descriptor.as_ref().is_some_and(|d| {
+        d.family == "acyl"
+            && d.derivative == "acid"
+            && d.ligands.len() == 2
+            && d.ligands.iter().all(|l| l.element == "O")
+    })
+}
+
 pub fn bridge_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     g.atoms_involved
         .iter()
@@ -76,11 +96,14 @@ pub fn retarget_external_carbonyl_groups(
     cyclic: &AtomSet,
 ) {
     for g in groups {
+        // Only an established prefix excludes an acid-anion carbon. Other
+        // carboxylates must remain available as parent candidates.
+        let prefix_carboxylate = principal_key.is_none() && is_carboxylate_group(g);
         if Some(g.key.as_str()) == principal_key
-            || !g
-                .resolved_rule
-                .as_ref()
-                .is_some_and(|r| r.has_capability("chain_external_carbonyl"))
+            || !(prefix_carboxylate
+                || g.resolved_rule
+                    .as_ref()
+                    .is_some_and(|r| r.has_capability("chain_external_carbonyl")))
         {
             continue;
         }

@@ -2,6 +2,16 @@
   "bluebook_rule": "P-25 retained parent output policy: preferred output names are distinct from accepted retained aliases.",
   "parents": [
     {
+      "template_name": "1,2,3,4-tetrahydronaphthalene",
+      "preferred_name": "1,2,3,4-tetrahydronaphthalene",
+      "hydrogenation": {
+        "base_parent": "naphthalene",
+        "hydro_locants": ["1", "2", "3", "4"],
+        "indicated_hydrogen_locants": []
+      },
+      "reason": "P-31.1.4.2.4 cites hydro prefixes before the complete parent, including nondetachable bridge prefixes."
+    },
+    {
       "template_name": "1H-indole",
       "preferred_name": "1H-indole",
       "preferred_contexts": ["all"],

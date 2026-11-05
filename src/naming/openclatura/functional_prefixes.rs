@@ -2,7 +2,7 @@
 use super::{
     assembly_parts::SubstituentItem,
     assembly_prefixes::substituent_sort_key,
-    component_group_rules::{amide_nitrogen, ester_or_peroxy_single_oxygen},
+    component_group_rules::{amide_nitrogen, ester_or_peroxy_single_oxygen, is_carboxylate_group},
     formatting::{
         format_center_ligands_by, format_multiplier, oxy_prefix_from_branch,
         strip_outer_parentheses,
@@ -330,6 +330,11 @@ pub fn prefix_from_group(
         return Ok(String::new());
     };
     let families = &rule.families;
+    // P-72.6.1: an acid anion cited as a prefix remains carboxylato. The
+    // ester-like registry family is shared with neutral carboxylate esters.
+    if is_carboxylate_group(group) {
+        return Ok("carboxylato".into());
+    }
     if RULES.functional_groups.get(&group.key).is_none()
         && let Some(d) = &group.descriptor
         && d.family == "central_acid"
@@ -532,6 +537,61 @@ pub fn collect_component_prefix_substituents(
 #[cfg(test)]
 mod tests {
     use super::super::name_smiles;
+
+    #[test]
+    fn acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key() {
+        for (smiles, derivative, expected) in [
+            ("CC(=O)[O-]", "anion", "carboxylato"),
+            ("COC(=O)c1ccccc1", "ester", "(methyloxycarbonyl)"),
+        ] {
+            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+            let group = super::super::perception::perceive_groups(&mol)
+                .into_iter()
+                .find(|g| {
+                    g.descriptor
+                        .as_ref()
+                        .is_some_and(|d| d.family == "acyl" && d.derivative == derivative)
+                })
+                .unwrap();
+            let context = super::PrefixContext {
+                mol: &mol,
+                parent_path: &[group.attachment_carbon],
+                sub_exclude: &super::AtomSet::from([group.attachment_carbon]),
+            };
+            assert_eq!(
+                super::prefix_from_group(&context, &group).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn external_acid_groups_are_cited_before_recursive_parent_assembly() {
+        for (smiles, expected) in [
+            (
+                "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
+                "5-(2-carboxylatophenyl)-1H-pyrrol-1-ide-3-carboxylate",
+            ),
+            (
+                "[O-]C(=O)c1ccccc1CC(=O)[O-]",
+                "(2-carboxylatophenyl)acetate",
+            ),
+            (
+                "O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
+                "4-[(4-carboxylatophenyl)oxy]benzoate",
+            ),
+            ("[O-]C(=O)c1ccccc1CC(=O)O", "2-(carboxymethyl)benzoate"),
+            (
+                "[O-]C(=O)c1cc([NH3+])ccc1CC(=O)O",
+                "5-azaniumyl-2-(carboxymethyl)benzoate",
+            ),
+        ] {
+            // Keep the public input boundary's atom order while this PR leaves
+            // equal-principal-group parent choices deliberately unchanged.
+            let canonical = crate::naming::canonical_smiles(smiles).unwrap();
+            assert_eq!(name_smiles(&canonical).unwrap().text, expected, "{smiles}");
+        }
+    }
 
     #[test]
     fn unsubstituted_aminium_prefix_uses_azaniumyl() {

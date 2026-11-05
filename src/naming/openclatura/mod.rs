@@ -70,6 +70,8 @@ mod von_baeyer;
 mod anion_spelling_tests;
 #[cfg(test)]
 mod ion_spelling_tests;
+#[cfg(test)]
+mod salt_anion_spelling_tests;
 
 /// The naming profile on the worker wire and in generated-name warnings.
 pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
@@ -994,11 +996,7 @@ mod tests {
                 "sodium chloride",
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
-            (
-                "C[O-]",
-                "methanolate",
-                NameStatus::Unverified(NameReason::AnionParent),
-            ),
+            ("C[O-]", "methoxide", NameStatus::Preferred),
             (
                 "[Na+].c1ccc2[n-]cc(C(=O)O)c2c1",
                 "sodium 1H-indol-1-ide-3-carboxylic acid",
@@ -1006,8 +1004,8 @@ mod tests {
             ),
             (
                 "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
-                "5-[2-(oxidocarbonyl)phenyl]-1H-pyrrol-1-ide-3-carboxylate",
-                NameStatus::Unverified(NameReason::AnionParent),
+                "5-(2-carboxylatophenyl)-1H-pyrrol-1-ide-3-carboxylate",
+                NameStatus::Preferred,
             ),
             (
                 "c1ccc(Oc2ccccc2)cc1",
@@ -1120,11 +1118,7 @@ mod tests {
                 "2-hydroxyethan-1-aminium",
                 NameStatus::Preferred,
             ),
-            (
-                "[O-]c1ccccc1",
-                "benzenolate",
-                NameStatus::Unverified(NameReason::AnionParent),
-            ),
+            ("[O-]c1ccccc1", "phenoxide", NameStatus::Preferred),
         ] {
             let name = name_smiles(smiles).unwrap_or_else(|error| panic!("{smiles}: {error}"));
             assert_eq!(name.text, expected_name, "{smiles}");

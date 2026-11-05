@@ -2,7 +2,10 @@
 use super::assembly_parts::{AssemblyParts, RenderedSubstituentName, SubstituentItem};
 use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{find_all_carbon_paths, find_ring_systems, get_cyclic_atoms};
-use super::component_group_rules::amide_nitrogen;
+use super::component_group_rules::{
+    amide_nitrogen, is_carboxylate_group, is_carboxylic_acid_group,
+    retarget_external_carbonyl_groups,
+};
 use super::component_namer::{name_component, name_component_with_citation};
 use super::formatting::{
     format_center_ligands_by, is_complex_prefix, is_composite_prefix, strip_outer_parentheses,
@@ -130,6 +133,22 @@ fn direct_subgraph_prefix(
         if !group.atoms_involved.contains(&start) || !group.atoms_involved.is_subset(component) {
             continue;
         }
+        if is_carboxylate_group(&group)
+            && group
+                .descriptor
+                .as_ref()
+                .is_some_and(|d| d.centers.contains(&start))
+        {
+            return super::functional_prefixes::prefix_from_group(
+                &super::functional_prefixes::PrefixContext {
+                    mol,
+                    parent_path: &[],
+                    sub_exclude: &AtomSet::new(),
+                },
+                &group,
+            )
+            .map(Some);
+        }
         if matches!(
             group.key.as_str(),
             "hydrazide" | "ring_hydrazide" | "amidine" | "ring_amidine"
@@ -182,11 +201,17 @@ fn collect_subgraph_substituents(
     mol: &Molecule,
     parent_path: &[usize],
     perceived: &[PerceivedGroup],
+    acid_prefixes: &[PerceivedGroup],
     exclude: &AtomSet,
 ) -> Result<BTreeMap<usize, Vec<SubstituentItem>>, String> {
     let parent: AtomSet = parent_path.iter().copied().collect();
-    let mut handled = AtomSet::new();
-    let mut mapping: BTreeMap<usize, Vec<SubstituentItem>> = BTreeMap::new();
+    let (mut mapping, mut handled) =
+        super::functional_prefixes::collect_component_prefix_substituents(
+            mol,
+            acid_prefixes,
+            parent_path,
+            exclude,
+        )?;
     for group in perceived {
         if !group.atoms_involved.is_disjoint(exclude)
             || !parent.contains(&group.attachment_carbon)
@@ -346,14 +371,46 @@ pub(super) fn name_subgraph_rendered(
         .copied()
         .filter(|n| !component.contains(n))
         .collect();
-    let selection = select_subgraph_parent(mol, start, &component, &sub_exclude)?;
+    let perceived = perceive_groups(mol);
+    let principal_key = super::principal_groups::component_principal_key(mol, &perceived, false);
+    let anionic_parent = principal_key.as_deref().map_or_else(
+        || mol.atoms.values().map(|atom| atom.charge).sum::<i32>() < 0,
+        |key| {
+            super::perception::is_anionic_group_key(key)
+                && perceived.iter().any(|g| {
+                    g.key == key
+                        && g.atom_ids()
+                            .iter()
+                            .map(|i| mol.atoms[i].charge)
+                            .sum::<i32>()
+                            < 0
+                })
+        },
+    );
+    let mut acid_prefixes: Vec<_> = perceived
+        .iter()
+        .filter(|g| {
+            g.atom_ids().is_subset(&component)
+                && (is_carboxylate_group(g) || anionic_parent && is_carboxylic_acid_group(g))
+        })
+        .cloned()
+        .collect();
+    // Acid groups cited as prefixes contribute their carbon to the prefix,
+    // not to the attachment-rooted substituent parent (carboxymethyl).
+    let mut parent_exclude = sub_exclude.clone();
+    retarget_external_carbonyl_groups(mol, &mut acid_prefixes, None, &mut parent_exclude, &cyclic);
+    let selection = select_subgraph_parent(mol, start, &component, &parent_exclude)?;
     let retained = resolve_retained_parent(mol, &selection);
     let (mut retained_name, mut maps) = retained
         .map(|r| (Some(r.name), r.locant_maps))
         .unwrap_or_default();
-    let perceived = perceive_groups(mol);
-    let mapping =
-        collect_subgraph_substituents(mol, selection.primary_path(), &perceived, &sub_exclude)?;
+    let mapping = collect_subgraph_substituents(
+        mol,
+        selection.primary_path(),
+        &perceived,
+        &acid_prefixes,
+        &sub_exclude,
+    )?;
     let retained_fused = super::retained_fused_production::production_retained_fused_parent(
         mol,
         selection.primary_path(),
@@ -756,6 +813,7 @@ mod tests {
             ("CCc1ccccc1", 1, "benzyl"),
             ("CC#N", 1, "cyano"),
             ("CC(=O)O", 1, "carboxy"),
+            ("CC(=O)[O-]", 1, "carboxylato"),
             ("CC(=O)N(C)C", 1, "(dimethylcarbamoyl)"),
             ("NC=S", 1, "(methanethioyl)"),
             ("NC(=O)CCC(=O)O", 1, "(4-hydroxy-1,4-dioxobutyl)"),

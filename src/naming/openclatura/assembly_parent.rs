@@ -5,7 +5,7 @@ use super::{
         has_retained_like_parent, inferred_ionic_retained_parent, parent_anion_cites_locants,
         parent_charge_suffix,
     },
-    assembly_parts::AssemblyParts,
+    assembly_parts::{AssemblyParts, RetainedAnionName},
     assembly_prefixes::substituent_sort_key,
     assembly_utils::parse_locant,
     formatting::{is_complex_prefix, phenylamino_spelling, strip_outer_parentheses},
@@ -21,6 +21,7 @@ fn functional_ring_parent(name: &str, key: &str) -> Option<String> {
     }
     let base = match key {
         "alcohol" => "phenol",
+        "olate" => "phenoxide",
         "amine" => "aniline",
         "aminium" => "anilinium",
         "ring_aldehyde" => "benzaldehyde",
@@ -73,6 +74,10 @@ fn retained_chain_name(length: usize, key: &str, count: usize) -> Option<String>
     let name = match (length, key, count) {
         (1, "carboxylic_acid", 1) => "formic acid",
         (2, "carboxylic_acid", 1) => "acetic acid",
+        (1, "olate", 1) => "methoxide",
+        (2, "olate", 1) => "ethoxide",
+        (3, "olate", 1) => "propoxide",
+        (4, "olate", 1) => "butoxide",
         (1, "amide", 1) => "formamide",
         (2, "amide", 1) => "acetamide",
         (1, "hydrazide", 1) => "formohydrazide",
@@ -193,11 +198,85 @@ pub fn promote_benzene_retained_name(parts: &mut AssemblyParts) {
         parts.substituents.clear();
     }
 }
+/// Select the retained anion parent before promotion so a missed application
+/// remains visible to the derivation assessor.
+pub fn select_retained_anion_name(parts: &mut AssemblyParts) {
+    let Some(group) = parts.principal_group.as_ref() else {
+        return;
+    };
+    if parts.is_substituent || parts.retained_absorbs_principal_group {
+        return;
+    }
+    if group.key == "olate" {
+        // P-63.8.3: partial polyol salts keep the systematic -olate suffix.
+        if group.locants.len() != 1 || parts.substituents.iter().any(|s| s.name == "hydroxy") {
+            return;
+        }
+        let mut absorbed = None;
+        let retained = if parts.is_ring {
+            (group.locants == ["1"])
+                .then(|| {
+                    functional_ring_parent(parts.retained_name.as_deref().unwrap_or(""), &group.key)
+                })
+                .flatten()
+        } else if parts.unsaturations.is_empty()
+            && parts.a_prefixes.is_empty()
+            && parts.parent_charges.is_empty()
+        {
+            if parts.parent_length == 3
+                && group.locants == ["2"]
+                && let Some(index) = parts
+                    .substituents
+                    .iter()
+                    .position(|s| s.name == "methyl" && s.locants == ["2"])
+            {
+                if parts.substituents.len() != 1 {
+                    parts.retained_anion_name = RetainedAnionName::SubstitutedAlkyl;
+                    return;
+                }
+                absorbed = Some(index);
+                Some("tert-butoxide".into())
+            } else if group.locants == ["1"] {
+                let name = retained_chain_name(parts.parent_length, &group.key, 1);
+                if name.is_some() && !parts.substituents.is_empty() {
+                    parts.retained_anion_name = RetainedAnionName::SubstitutedAlkyl;
+                    return;
+                }
+                name
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some(name) = retained {
+            parts.retained_anion_name = RetainedAnionName::Required {
+                name,
+                absorbed_substituent: absorbed,
+            };
+        }
+    }
+}
 pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(), String> {
     let Some(group) = parts.principal_group.as_ref() else {
         return Ok(());
     };
     if parts.is_substituent || parts.retained_absorbs_principal_group {
+        return Ok(());
+    }
+    if group.key == "olate" {
+        if let RetainedAnionName::Required {
+            name,
+            absorbed_substituent,
+        } = &parts.retained_anion_name
+        {
+            parts.retained_name = Some(name.clone());
+            parts.retained_absorbs_principal_group = true;
+            if let Some(index) = absorbed_substituent {
+                parts.substituents.remove(*index);
+            }
+            parts.retained_anion_name = RetainedAnionName::Applied(name.clone());
+        }
         return Ok(());
     }
     let mut retained = if group.locants == ["1"] {

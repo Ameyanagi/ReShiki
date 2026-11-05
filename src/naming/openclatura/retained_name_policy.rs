@@ -41,7 +41,7 @@ impl RetainedHydrogenationPolicy {
             indicated_hydrogen_locants: moved,
         }
     }
-    pub fn render(&self) -> String {
+    pub(super) fn parent_name(&self) -> String {
         let mut parent = self.base_parent.as_str();
         if let Some((prefix, rest)) = parent.split_once('-')
             && prefix
@@ -50,7 +50,7 @@ impl RetainedHydrogenationPolicy {
         {
             parent = rest;
         }
-        let cited = if self.indicated_hydrogen_locants.is_empty() {
+        if self.indicated_hydrogen_locants.is_empty() {
             parent.to_owned()
         } else {
             format!(
@@ -61,12 +61,22 @@ impl RetainedHydrogenationPolicy {
                     .collect::<Vec<_>>()
                     .join(",")
             )
-        };
+        }
+    }
+    pub(super) fn render_with_parent(&self, parent: &str) -> String {
         format!(
-            "{}-{}-{cited}",
+            "{}-{}{}{parent}",
             self.hydro_locants.join(","),
-            format_multiplier("hydro", self.hydro_locants.len(), false)
+            format_multiplier("hydro", self.hydro_locants.len(), false),
+            if parent.starts_with(|c: char| c.is_ascii_digit()) {
+                "-"
+            } else {
+                ""
+            },
         )
+    }
+    pub fn render(&self) -> String {
+        self.render_with_parent(&self.parent_name())
     }
 }
 #[derive(Clone, Deserialize)]
