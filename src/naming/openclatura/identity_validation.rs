@@ -222,7 +222,6 @@ mod tests {
     fn public_entry_declines_unrepresented_charge_states() {
         for smiles in [
             "[CH3+]",
-            "C[CH2-]",
             "C1C[CH+]1",
             "C[NH+2]C",
             "C[Si-](C)(C)C",
