@@ -10,7 +10,7 @@ use super::{
     },
     molecule::{AtomSet, Molecule},
     nomenclature::RULES,
-    rules::{elements, multipliers, stems},
+    rules::{bonds, elements, elision, multipliers, stems},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -513,11 +513,23 @@ pub(super) fn compose(
     if !projected.unsaturations.is_empty() {
         let (_, unsaturation, _) =
             super::assembly_parent::format_unsaturations(&projected, "", false);
-        let count = projected
+        // P-31.1.5.2.1: elision follows citation order, not bond insertion order.
+        let elide = projected
             .unsaturations
-            .first()
-            .map_or(0, |u| u.locants.len());
-        if count == 1 && unit.ends_with('e') {
+            .iter()
+            .min_by_key(|u| {
+                RULES
+                    .assembly
+                    .unsaturation_order
+                    .get(&u.bond_key)
+                    .copied()
+                    .unwrap_or(99)
+            })
+            .is_some_and(|u| {
+                let infix = bonds::unsaturation_infix(&u.bond_key, u.locants.len().max(1));
+                elision::is_vowel_start(infix.strip_prefix('a').unwrap_or(&infix))
+            });
+        if elide && unit.ends_with('e') {
             unit.pop();
         }
         ending = format!("{unsaturation}e");

@@ -330,3 +330,28 @@ fn spirobi_atom_ids_do_not_choose_component_priming() {
         }
     }
 }
+
+#[test]
+fn spirobi_mixed_unsaturation_elides_in_citation_order() {
+    let parser = opsin::Parser::new().unwrap();
+    for expected in [
+        "2,2'-spirobi[bicyclo[5.2.1]decane]-5,5'-dien-3-yne",
+        "2,2'-spirobi[bicyclo[5.2.1]decan]-3-en-5,5'-diyne",
+    ] {
+        let parsed = parser.parse(expected, &opsin::ParseOptions::strict());
+        assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
+        let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+        let source = graph_io::read_smiles(&smiles).unwrap();
+        let ids: Vec<_> = source.atoms.keys().copied().collect();
+        for reverse in [false, true] {
+            let molecule = relabel(&source, &ids, reverse);
+            let atoms = molecule.atoms.keys().copied().collect();
+            let actual =
+                component_namer::name_component_with_citation(&molecule, &atoms, None, None)
+                    .unwrap();
+            super::assess_derivation(&molecule, &actual.derivation);
+            assert_eq!(actual.text, expected, "reverse bonds: {reverse}");
+            assert_eq!(molecule.name_status(), NameStatus::Preferred);
+        }
+    }
+}
