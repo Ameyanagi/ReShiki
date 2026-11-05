@@ -626,8 +626,8 @@ OC(=O)COCC(C)(C)C	(2,2-dimethylpropoxy)acetic acid	preferred	P-63.2.2.2 https://
 OC(=O)CO[C@@H](C)c1ccccc1	[(1S)-1-phenylethoxy]acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
 OC(=O)COCCCCCO	[(5-hydroxypentyl)oxy]acetic acid	preferred	P-63.2.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020201	issue #975	pass
 OC(=O)COC1CC1	(cyclopropyloxy)acetic acid	preferred	P-63.2.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020201	issue #975	pass
-[O-]C(=O)c1ccc(Oc2ccc(C([O-])=O)cc2)cc1	4-(4-carboxylatophenoxy)benzoate	not_preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
-Clc1ccc(Oc2cccc(Oc3ccc(Cl)cc3)c2)cc1	1,3-bis(4-chlorophenoxy)benzene	not_preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+[O-]C(=O)c1ccc(Oc2ccc(C([O-])=O)cc2)cc1	4-(4-carboxylatophenoxy)benzoate	not_preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	issue #975	pass
+Clc1ccc(Oc2cccc(Oc3ccc(Cl)cc3)c2)cc1	1,3-bis(4-chlorophenoxy)benzene	not_preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	issue #975	pass
 OC(=O)COCCOCCCl	[2-(2-chloroethoxy)ethoxy]acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
 c1ccccc1Oc1ccc(Oc2ccc(O)cc2)cc1	4-(4-phenoxyphenoxy)phenol	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
 OCCOc1ccc(Cl)cc1	2-(4-chlorophenoxy)ethan-1-ol	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass

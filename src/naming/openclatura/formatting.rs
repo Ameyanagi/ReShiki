@@ -165,11 +165,7 @@ pub fn oxy_prefix_from_branch(branch: &str) -> String {
     {
         return name.clone();
     }
-    if is_complex_prefix(&branch) {
-        format!("(({branch})oxy)")
-    } else {
-        format!("({branch}oxy)")
-    }
+    format_element_substituent("", &branch, "oxy", false)
 }
 pub fn format_element_substituent(
     stereo_prefix: &str,
@@ -205,5 +201,19 @@ pub fn format_element_substituent(
         format!("({stereo_prefix}({branch}){suffix})")
     } else {
         format!("({stereo_prefix}{branch}{suffix})")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn oxy_prefix_keeps_parent_hydride_acyl_enclosed() {
+        // P-16.5.1.4: (methanethioyl)oxy, as in (cyclohexanecarbonyl)sulfanyl (P-57.4).
+        assert_eq!(
+            super::oxy_prefix_from_branch("(methanethioyl)"),
+            "((methanethioyl)oxy)"
+        );
+        assert_eq!(super::oxy_prefix_from_branch("pentyl"), "(pentyloxy)");
+        assert_eq!(super::oxy_prefix_from_branch("ethyl"), "ethoxy");
     }
 }
