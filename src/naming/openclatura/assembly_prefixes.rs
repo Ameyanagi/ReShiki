@@ -110,7 +110,7 @@ fn substituent_locant_string(
     {
         return String::new();
     }
-    if parts.isotope_explicit_locants {
+    if parts.isotope_explicit_locants || super::assembly_charge::parent_anion_cites_locants(parts) {
         return locs.join(",");
     }
     if parts.parent_length == 2
@@ -274,6 +274,7 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> (String, bool) {
             }
         } else if loc.is_empty()
             && grouped.len() > 1
+            && !optional
             && !is_fully_enclosed(&used)
             && !["fluoro", "chloro", "bromo", "iodo"].contains(&name)
         {

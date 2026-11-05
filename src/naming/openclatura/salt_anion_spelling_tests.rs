@@ -2,7 +2,8 @@ use crate::naming::{NameReason, NameStatus};
 
 #[test]
 fn salt_anion_spelling_matrix() {
-    // PR B only: PR A's cationic prefix and PR C's parent choice stay staged.
+    // Retained ion spelling and salt ordering share the public naming pipeline
+    // with the P-72.7 parent-choice rules.
     let parser = opsin::Parser::new().unwrap();
     let mut failures = Vec::new();
     for (row, smiles, expected, status) in [
@@ -135,8 +136,8 @@ fn salt_anion_spelling_matrix() {
         (
             "B24",
             "[O-]C(=O)c1ccccc1CC(=O)[O-]",
-            "(2-carboxylatophenyl)acetate",
-            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+            "2-(carboxylatomethyl)benzoate",
+            NameStatus::Preferred,
         ),
         (
             "B25",
