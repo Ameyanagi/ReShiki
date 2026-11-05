@@ -7,7 +7,7 @@ use super::formatting::{
     strip_outer_parentheses,
 };
 use super::molecule::{AtomSet, Molecule};
-use super::namer::{capped_acid_name, name_subgraph_with_upstream};
+use super::namer::{capped_acid_name, name_subgraph_rendered, name_subgraph_with_upstream};
 use super::nomenclature::section;
 use super::rules::{elements, multipliers};
 use super::subgraph_tools::subgraph_component;
@@ -598,17 +598,17 @@ fn name_oxygen(
             "hydroperoxy".into()
         });
     }
-    let b = name_subgraph_with_upstream(mol, next, &with_atoms(exclude, [start]), Some(start))?;
+    let b = name_subgraph_rendered(mol, next, &with_atoms(exclude, [start]), Some(start))?;
     // Upstream's sulfonic-acid-to-sulfonamido conversion preserves the O-N-S
     // linkage when the named nitrogen bears the proved sulfonyl group.
     // Upstream divergence: other amidooxy contractions change a carbon-acyl aminooxy ligand's parsed connectivity.
-    if strip_outer_parentheses(&b).ends_with("amido")
-        && !is_complex_prefix(&strip_outer_parentheses(&b))
+    if strip_outer_parentheses(&b.text).ends_with("amido")
+        && !is_complex_prefix(&strip_outer_parentheses(&b.text))
         && !is_sulfonamido_oxygen_ligand(mol, start, next)
     {
         return Err("openclatura: amidooxy attachment not supported".into());
     }
-    Ok(oxy_prefix_from_branch(&b))
+    Ok(b.into_oxy_prefix())
 }
 
 fn name_nitrogen(
