@@ -1751,8 +1751,8 @@ mod tests {
     #[test]
     fn fusion_unregistered_retained_components_keep_names_and_report_departures() {
         use crate::naming::{NameReason, NameStatus};
-        // P-25.3.2.4 requires the retained components in Table 2.8. Until
-        // those components are registered, preserve the generated alternatives.
+        // P-25.2.2.2/3 retained components are outside Table 2.8. Until
+        // they are registered, preserve the generated alternatives.
         for (smiles, expected) in [
             (
                 "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2",
@@ -1761,26 +1761,6 @@ mod tests {
             (
                 "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1S2",
                 "8H-[1,4]benzothiazino[3,2-j]phenanthridine",
-            ),
-            (
-                "c1ccc2c(c1)Cc1c(ccc3ccccc13)S2",
-                "12H-naphtho[2,1-b][1]benzothiopyran",
-            ),
-            (
-                "c1ccc2c(c1)Cc1cc3ccccc3cc1S2",
-                "12H-naphtho[2,3-b][1]benzothiopyran",
-            ),
-            (
-                "c1ccc2c(c1)Cc1ccc3ccccc3c1S2",
-                "7H-naphtho[1,2-b][1]benzothiopyran",
-            ),
-            (
-                "c1ccc2cc3c(cc2c1)Cc1cc2ccccc2cc1S3",
-                "13H-dinaphtho[2,3-b:2',3'-e]thiopyran",
-            ),
-            (
-                "c1ccc2c(c1)Cc1c(ccc3ccccc13)O2",
-                "12H-naphtho[2,1-b][1]benzopyran",
             ),
             (
                 "c1ccc2cc3c(cc2c1)Nc1cc2ccccc2cc1O3",

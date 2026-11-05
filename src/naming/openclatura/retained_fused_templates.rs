@@ -3,14 +3,13 @@ use super::{
     assembly_parts::RetainedParentMetadata,
     locants::retained_locant_sort_key as parse_locant,
     molecule::{AtomSet, Molecule},
-    nomenclature::section,
     retained_graph_model::{
         RetainedGraphAtomTemplate, RetainedGraphBondTemplate, RetainedGraphTemplate,
         RetainedGraphTemplateMatch,
     },
     rules::{elements, multipliers},
 };
-use serde_json::{Value, json};
+use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::LazyLock,
@@ -31,57 +30,131 @@ pub(super) struct TopologyKey {
     pub degrees: BTreeMap<usize, usize>,
     pub edge_degrees: BTreeMap<(usize, usize), usize>,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RetainedGraphData {
+    #[serde(rename = "bluebook_rule")]
+    _bluebook_rule: String,
+    pub parents: Vec<RetainedGraphRow>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HydrocarbonGraphData {
+    #[serde(rename = "bluebook_rule")]
+    _bluebook_rule: String,
+    #[serde(rename = "source")]
+    _source: String,
+    parents: Vec<RetainedGraphRow>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MacrocycleGraphData {
+    #[serde(rename = "source")]
+    _source: String,
+    parents: Vec<RetainedGraphRow>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RetainedGraphRow {
+    pub name: String,
+    pub pin: bool,
+    pub priority: i64,
+    #[serde(default)]
+    pub attached_prefix: Option<String>,
+    #[serde(default)]
+    pub indicated_hydrogen_name: Option<String>,
+    #[serde(default)]
+    default_indicated_h: Option<Vec<String>>,
+    pub template: RetainedGraphTemplateData,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RetainedGraphTemplateData {
+    pub atoms: Vec<RetainedGraphAtomTemplate>,
+    pub bonds: Vec<RetainedGraphBondTemplate>,
+    locants: Vec<String>,
+    pub rings: Vec<Vec<String>>,
+    fusion_atoms: Vec<String>,
+    pub peripheral_atoms: Vec<String>,
+    pub interior_atoms: Vec<String>,
+    default_indicated_h: Vec<String>,
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub mancude_double_bonds: Option<usize>,
+    pub enabled: bool,
+    derivative_production_enabled: bool,
+    #[serde(default)]
+    family: Option<String>,
+    #[serde(default = "neutral_kekule_equivalent")]
+    aromatic_equivalence_policy: String,
+    #[serde(default)]
+    charge_policy: Option<String>,
+    #[serde(default)]
+    enforce_mancude_double_bonds: Option<bool>,
+    #[serde(default)]
+    implied_stereo: bool,
+    #[serde(default)]
+    indicated_hydrogen_count: Option<usize>,
+    #[serde(default)]
+    pre_descriptor_selection: bool,
+}
+fn neutral_kekule_equivalent() -> String {
+    "neutral_kekule_equivalent".into()
+}
+impl RetainedGraphTemplateData {
+    fn set_family_defaults(&mut self, family: &str) {
+        self.family.get_or_insert_with(|| family.into());
+        self.charge_policy.get_or_insert_with(|| "exact".into());
+        if family == "macrocycle" {
+            self.enforce_mancude_double_bonds.get_or_insert(true);
+        }
+    }
+}
 #[allow(
     clippy::expect_used,
     reason = "Immutable checked-in retained graph registry"
 )]
-pub(super) static GRAPH_DATA: LazyLock<Value> = LazyLock::new(|| {
+pub(super) static GRAPH_DATA: LazyLock<RetainedGraphData> = LazyLock::new(|| {
     serde_json::from_str(include_str!("data/retained_fused_graph_templates.json"))
-        .expect("retained graph table")
+        .expect("checked-in retained graph table")
 });
 #[allow(
     clippy::expect_used,
-    reason = "Immutable checked-in retained graph registry"
+    reason = "Immutable checked-in retained hydrocarbon graph registry"
 )]
-static ALL_TEMPLATES: LazyLock<Vec<RetainedGraphTemplate>> = LazyLock::new(|| {
-    let mut templates: Vec<_> = GRAPH_DATA["parents"]
-        .as_array()
-        .expect("retained graph rows")
+static HYDROCARBON_DATA: LazyLock<HydrocarbonGraphData> = LazyLock::new(|| {
+    let mut data: HydrocarbonGraphData = serde_json::from_str(include_str!(
+        "data/retained_fused_hydrocarbon_templates.json"
+    ))
+    .expect("checked-in retained hydrocarbon graph table");
+    for row in &mut data.parents {
+        row.template.set_family_defaults("fused");
+    }
+    data
+});
+#[allow(
+    clippy::expect_used,
+    reason = "Immutable checked-in retained macrocycle graph registry"
+)]
+static MACROCYCLE_DATA: LazyLock<MacrocycleGraphData> = LazyLock::new(|| {
+    let mut data: MacrocycleGraphData =
+        serde_json::from_str(include_str!("data/retained_macrocycle_templates.json"))
+            .expect("checked-in retained macrocycle graph table");
+    for row in &mut data.parents {
+        row.template.set_family_defaults("macrocycle");
+    }
+    data
+});
+pub(super) fn retained_graph_template_rows() -> impl Iterator<Item = &'static RetainedGraphRow> {
+    GRAPH_DATA
+        .parents
         .iter()
+        .chain(&HYDROCARBON_DATA.parents)
+        .chain(&MACROCYCLE_DATA.parents)
+}
+static ALL_TEMPLATES: LazyLock<Vec<RetainedGraphTemplate>> = LazyLock::new(|| {
+    let mut templates: Vec<_> = retained_graph_template_rows()
         .map(retained_graph_template_from_data)
         .collect();
-    for (data, family) in [
-        (
-            include_str!("data/retained_fused_hydrocarbon_templates.json"),
-            "fused",
-        ),
-        (
-            include_str!("data/retained_macrocycle_templates.json"),
-            "macrocycle",
-        ),
-    ] {
-        let data: Value = serde_json::from_str(data).expect("retained additional graph data");
-        for row in data["parents"]
-            .as_array()
-            .expect("retained additional graph rows")
-        {
-            let mut row = row.clone();
-            if let Some(t) = row["template"].as_object_mut() {
-                t.entry("family").or_insert(json!(family));
-                t.entry("charge_policy").or_insert(json!("exact"));
-                if family == "macrocycle" {
-                    t.entry("enforce_mancude_double_bonds")
-                        .or_insert(json!(true));
-                }
-            }
-            templates.push(retained_graph_template_from_data(&row));
-        }
-    }
-    if let Some(rows) = section("retained_fused_polycycle_specs").as_array() {
-        for row in rows.iter().filter(|r| r["template"].is_object()) {
-            templates.push(retained_graph_template_from_data(row));
-        }
-    }
     for (family, minimum, maximum) in [("acenes", 4, 9), ("polyaphenes", 5, 10)] {
         for count in minimum..=maximum {
             let generated = generated_series_template(family, count);
@@ -92,13 +165,34 @@ static ALL_TEMPLATES: LazyLock<Vec<RetainedGraphTemplate>> = LazyLock::new(|| {
     }
     templates
 });
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LocalizedPiData {
+    #[serde(rename = "source")]
+    _source: LocalizedPiSource,
+    parents: BTreeMap<String, Vec<LocalizedPiBond>>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LocalizedPiSource {
+    #[serde(rename = "basis")]
+    _basis: String,
+    #[serde(rename = "note")]
+    _note: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LocalizedPiBond {
+    locants: (String, String),
+    order: usize,
+}
 #[allow(
     clippy::expect_used,
     reason = "Immutable checked-in retained localized pi states"
 )]
-static LOCALIZED_PI: LazyLock<Value> = LazyLock::new(|| {
+static LOCALIZED_PI: LazyLock<LocalizedPiData> = LazyLock::new(|| {
     serde_json::from_str(include_str!("data/retained_fused_localized_pi.json"))
-        .expect("retained localized pi states")
+        .expect("checked-in retained localized pi states")
 });
 static ENABLED_TEMPLATES: LazyLock<Vec<RetainedGraphTemplate>> = LazyLock::new(|| {
     ALL_TEMPLATES
@@ -131,124 +225,40 @@ pub fn retained_parent_metadata(name: &str) -> Option<RetainedParentMetadata> {
         .or_else(|| ALL_TEMPLATES.iter().find(|t| t.output_name() == name))
         .map(RetainedGraphTemplate::metadata)
 }
-fn strings(v: &Value) -> Vec<String> {
-    v.as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_owned)
-        .collect()
-}
-fn string(v: &Value, default: &str) -> String {
-    v.as_str().unwrap_or(default).into()
-}
-fn boolean(v: &Value, default: bool) -> bool {
-    v.as_bool().unwrap_or(default)
-}
-fn retained_graph_template_from_data(row: &Value) -> RetainedGraphTemplate {
-    let original = &row["template"];
-    let mut data = original["base_template"]
-        .as_str()
-        .and_then(|name| GRAPH_DATA["base_templates"][name].as_object())
-        .cloned()
-        .unwrap_or_default();
-    if let Some(fields) = original.as_object() {
-        data.extend(fields.clone());
-    }
-    let mut data = Value::Object(data);
-    let locants = strings(data.get("locants").unwrap_or(&row["locants"]));
-    if !data["atoms"].as_array().is_some_and(|v| !v.is_empty()) {
-        let hetero: BTreeMap<_, _> = data["heteroatoms"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|a| {
-                Some((
-                    a["locant"].as_str()?.to_owned(),
-                    a["symbol"].as_str()?.to_owned(),
-                ))
-            })
-            .collect();
-        let overrides: BTreeMap<_, _> = data["atom_overrides"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|a| Some((a["locant"].as_str()?.to_owned(), a.clone())))
-            .collect();
-        let fusions = strings(&data["fusion_atoms"]);
-        let h = strings(&data["default_indicated_h"]);
-        data["atoms"]=Value::Array(locants.iter().map(|l| {
-            let mut a=json!({"locant":l,"symbol":hetero.get(l).map_or("C",String::as_str),"fusion":fusions.contains(l),"default_h":h.contains(l)});
-            if let Some(over)=overrides.get(l).and_then(Value::as_object) && let Some(map)=a.as_object_mut(){map.extend(over.clone());}
-            a
-        }).collect());
-    }
-    let atoms: Vec<_> = data["atoms"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|a| RetainedGraphAtomTemplate {
-            locant: string(&a["locant"], ""),
-            symbol: string(&a["symbol"], "C"),
-            charge: a["charge"].as_i64().unwrap_or(0) as i32,
-            aromatic: boolean(&a["aromatic"], true),
-            fusion: boolean(&a["fusion"], false),
-            default_h: boolean(&a["default_h"], false),
-            saturated: boolean(&a["saturated"], false),
-            pi_capacity: a["pi_capacity"].as_u64().map(|n| n as usize),
-            forced_single: boolean(&a["forced_single"], false),
-            indicated_h_site: boolean(&a["indicated_h_site"], false),
-            required_stereo: boolean(&a["required_stereo"], false),
-        })
-        .collect();
+fn retained_graph_template_from_data(row: &RetainedGraphRow) -> RetainedGraphTemplate {
+    let data = &row.template;
     RetainedGraphTemplate {
-        name: string(&row["name"], ""),
-        priority: row
-            .get("priority")
-            .unwrap_or(&data["priority"])
-            .as_i64()
-            .unwrap_or(1000),
-        default_indicated_h: strings(
-            row.get("default_indicated_h")
-                .unwrap_or(&data["default_indicated_h"]),
-        ),
-        bonds: data["bonds"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|b| RetainedGraphBondTemplate {
-                locants: (string(&b["locants"][0], ""), string(&b["locants"][1], "")),
-                bond_class: string(&b["bond_class"], "aromatic"),
+        name: row.name.clone(),
+        priority: row.priority,
+        default_indicated_h: row
+            .default_indicated_h
+            .as_ref()
+            .unwrap_or(&data.default_indicated_h)
+            .clone(),
+        locants: data.locants.clone(),
+        atoms: data.atoms.clone(),
+        bonds: data.bonds.clone(),
+        fusion_atoms: data.fusion_atoms.clone(),
+        family: data.family.as_deref().unwrap_or("fused").into(),
+        aromatic_equivalence_policy: data.aromatic_equivalence_policy.clone(),
+        charge_policy: data
+            .charge_policy
+            .as_deref()
+            .unwrap_or_else(|| {
+                if data.atoms.iter().all(|a| a.symbol == "C") {
+                    "exact"
+                } else {
+                    "charge_layer"
+                }
             })
-            .collect(),
-        fusion_atoms: strings(&data["fusion_atoms"]),
-        locants,
-        family: string(&data["family"], "fused"),
-        aromatic_equivalence_policy: string(
-            &data["aromatic_equivalence_policy"],
-            "neutral_kekule_equivalent",
-        ),
-        charge_policy: string(
-            &data["charge_policy"],
-            if atoms.iter().all(|a| a.symbol == "C") {
-                "exact"
-            } else {
-                "charge_layer"
-            },
-        ),
-        enforce_mancude_double_bonds: boolean(&data["enforce_mancude_double_bonds"], false),
-        enabled: boolean(
-            data.get("enabled").unwrap_or(&row["template_enabled"]),
-            false,
-        ),
-        derivative_production_enabled: boolean(&data["derivative_production_enabled"], false),
-        implied_stereo: boolean(&data["implied_stereo"], false),
-        mancude_double_bonds: data["mancude_double_bonds"].as_u64().map(|n| n as usize),
-        indicated_hydrogen_count_override: data["indicated_hydrogen_count"]
-            .as_u64()
-            .map(|n| n as usize),
-        pre_descriptor_selection: boolean(&data["pre_descriptor_selection"], false),
-        atoms,
+            .into(),
+        enforce_mancude_double_bonds: data.enforce_mancude_double_bonds.unwrap_or(false),
+        enabled: data.enabled,
+        derivative_production_enabled: data.derivative_production_enabled,
+        implied_stereo: data.implied_stereo,
+        mancude_double_bonds: data.mancude_double_bonds,
+        indicated_hydrogen_count_override: data.indicated_hydrogen_count,
+        pre_descriptor_selection: data.pre_descriptor_selection,
     }
 }
 pub(super) fn molecule_graph_topology_key(mol: &Molecule, atoms: &AtomSet) -> TopologyKey {
@@ -586,7 +596,7 @@ pub(super) fn match_retained_graph_template_maps_with_options(
     // Upstream divergence: hydrogenating a localized retained parent can make
     // its remaining 4n pi cycle ambiguous again. Hydro locants identify the
     // saturated sites, but do not select either alternating state of that cycle.
-    if LOCALIZED_PI["parents"][&t.name].is_array()
+    if LOCALIZED_PI.parents.contains_key(&t.name)
         && atoms.iter().any(|&a| is_saturated_site(mol, a, atoms))
         && has_localized_alternating_4n_cycle(mol, atoms)
     {
@@ -702,23 +712,17 @@ pub(super) fn match_retained_graph_template_maps_with_options(
     // pi state of a retained citation. Keep its fixed inter-ring/alternating
     // bonds while allowing ordinary Kekule alternatives in aromatic subgraphs.
     // Hydro locants instead identify the reduced parent state, checked above.
-    if let Some(reference) = LOCALIZED_PI["parents"][&t.name]
-        .as_array()
+    if let Some(reference) = LOCALIZED_PI
+        .parents
+        .get(&t.name)
         .filter(|_| !atoms.iter().any(|&a| is_saturated_site(mol, a, atoms)))
     {
         assignments.retain(|assignment| {
             reference.iter().all(|bond| {
-                let (Some(left), Some(right), Some(expected)) = (
-                    bond["locants"][0].as_str(),
-                    bond["locants"][1].as_str(),
-                    bond["order"].as_u64(),
-                ) else {
-                    return false;
-                };
-                let u = assignment[index[left]];
-                let v = assignment[index[right]];
+                let u = assignment[index[bond.locants.0.as_str()]];
+                let v = assignment[index[bond.locants.1.as_str()]];
                 mol.get_bond(u, v)
-                    .is_some_and(|actual| actual.order == expected as usize)
+                    .is_some_and(|actual| actual.order == bond.order)
             })
         });
     }
@@ -936,21 +940,51 @@ fn collect_assignments(
     }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetainedSeriesData {
+    #[serde(rename = "bluebook_rule")]
+    _bluebook_rule: String,
+    acenes: RetainedSeries,
+    polyaphenes: RetainedSeries,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetainedSeries {
+    member_overrides: BTreeMap<usize, RetainedSeriesMember>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetainedSeriesMember {
+    priority: i64,
+    #[serde(default = "default_true")]
+    enabled: bool,
+    #[serde(default = "default_true")]
+    derivative_production_enabled: bool,
+}
+fn default_true() -> bool {
+    true
+}
 #[allow(
     clippy::expect_used,
     reason = "Immutable checked-in retained series data"
 )]
 fn generated_series_template(family: &str, count: usize) -> RetainedGraphTemplate {
-    static SERIES: LazyLock<Value> = LazyLock::new(|| {
+    static SERIES: LazyLock<RetainedSeriesData> = LazyLock::new(|| {
         serde_json::from_str(include_str!("data/retained_fused_series.json"))
-            .expect("retained fused series")
+            .expect("checked-in retained fused series")
     });
     let (locants, edges) = if family == "acenes" {
         higher_acene_locant_graph(count)
     } else {
         polyaphene_locant_graph(count)
     };
-    let overrides = &SERIES[family]["member_overrides"][count.to_string()];
+    let series = if family == "acenes" {
+        &SERIES.acenes
+    } else {
+        &SERIES.polyaphenes
+    };
+    let overrides = series.member_overrides.get(&count);
     let name = format!(
         "{}{}",
         multipliers::basic(count),
@@ -963,7 +997,7 @@ fn generated_series_template(family: &str, count: usize) -> RetainedGraphTemplat
         .collect();
     RetainedGraphTemplate {
         name,
-        priority: overrides["priority"].as_i64().unwrap_or(1000),
+        priority: overrides.map_or(1000, |member| member.priority),
         atoms: locants
             .iter()
             .map(|l| RetainedGraphAtomTemplate {
@@ -986,8 +1020,9 @@ fn generated_series_template(family: &str, count: usize) -> RetainedGraphTemplat
         family: "fused".into(),
         aromatic_equivalence_policy: "neutral_kekule_equivalent".into(),
         charge_policy: "exact".into(),
-        enabled: boolean(&overrides["enabled"], true),
-        derivative_production_enabled: boolean(&overrides["derivative_production_enabled"], true),
+        enabled: overrides.is_none_or(|member| member.enabled),
+        derivative_production_enabled: overrides
+            .is_none_or(|member| member.derivative_production_enabled),
         mancude_double_bonds: Some(2 * count + 1),
         pre_descriptor_selection: true,
         ..Default::default()

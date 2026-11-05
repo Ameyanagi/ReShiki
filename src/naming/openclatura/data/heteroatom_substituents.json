@@ -3,34 +3,20 @@
     "B": {
       "unsubstituted_prefixes": {
         "0": "boryl"
-      },
-      "ligand_prefixes": {
-        "0": "boryl"
       }
     },
     "N": {
       "unsubstituted_prefixes": {
-        "0": "amino"
-      },
-      "ligand_prefixes": {
         "0": "amino"
       }
     },
     "O": {
       "unsubstituted_prefixes": {
         "0": "hydroxy"
-      },
-      "ligand_prefixes": {
-        "0": "oxy"
-      },
-      "ligand_join_mode": "drop_yl"
+      }
     },
     "P": {
       "unsubstituted_prefixes": {
-        "0": "phosphanyl",
-        "1": "phosphoryl"
-      },
-      "ligand_prefixes": {
         "0": "phosphanyl",
         "1": "phosphoryl"
       },
@@ -43,20 +29,10 @@
         "0": "sulfanyl",
         "1": "sulfinyl",
         "2": "sulfonyl"
-      },
-      "ligand_prefixes": {
-        "0": "sulfanyl",
-        "1": "sulfinyl",
-        "2": "sulfonyl"
       }
     },
     "Se": {
       "unsubstituted_prefixes": {
-        "0": "selanyl",
-        "1": "seleninyl",
-        "2": "selenonyl"
-      },
-      "ligand_prefixes": {
         "0": "selanyl",
         "1": "seleninyl",
         "2": "selenonyl"
@@ -67,27 +43,15 @@
         "0": "tellanyl",
         "1": "tellurinyl",
         "2": "telluronyl"
-      },
-      "ligand_prefixes": {
-        "0": "tellanyl",
-        "1": "tellurinyl",
-        "2": "telluronyl"
       }
     },
     "Si": {
       "unsubstituted_prefixes": {
         "0": "silyl"
-      },
-      "ligand_prefixes": {
-        "0": "silyl"
       }
     },
     "As": {
       "unsubstituted_prefixes": {
-        "0": "arsanyl",
-        "1": "arsoryl"
-      },
-      "ligand_prefixes": {
         "0": "arsanyl",
         "1": "arsoryl"
       },
@@ -97,10 +61,6 @@
     },
     "Sb": {
       "unsubstituted_prefixes": {
-        "0": "stibanyl",
-        "1": "stiboryl"
-      },
-      "ligand_prefixes": {
         "0": "stibanyl",
         "1": "stiboryl"
       },

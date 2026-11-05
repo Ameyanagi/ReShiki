@@ -9,7 +9,7 @@
 use crate::ParsingError;
 use crate::build_state::BuildState;
 use crate::graph::Element as ChemEl;
-use crate::graph::{AtomId, AtomParity, FragmentId, Graph, StereoReference};
+use crate::graph::{AtomId, AtomParity, FragmentId, Graph, StereoGroupType, StereoReference};
 use crate::parse_tree::{Arena, NodeId};
 use crate::xml_declarations::*;
 
@@ -687,6 +687,10 @@ pub fn apply_anomer_stereochemistry_if_present(
                 .parity
                 .as_ref()
                 .ok_or_else(|| error("OPSIN bug: Anomeric reference atom has no parity"))?;
+            // Absolute D/L groups keep upstream's default; rel/rac groups carry over.
+            let stereo_group = Some(reference_parity.stereo_group)
+                .filter(|group| group.kind != StereoGroupType::Absolute)
+                .unwrap_or_default();
             let flip = check_equivalency_of_atom_refs4_and_parity(
                 &references,
                 1,
@@ -698,7 +702,12 @@ pub fn apply_anomer_stereochemistry_if_present(
                 (true, "alpha") | (false, "beta") => 1,
                 _ => -1,
             };
-            graph.atom_mut(anomeric_atom).parity = Some(AtomParity::new(references, parity));
+            // The anomeric centre joins a racemic D/L group, so alpha-DL- is
+            // alpha-D plus alpha-L.
+            graph.atom_mut(anomeric_atom).parity = Some(AtomParity {
+                stereo_group,
+                ..AtomParity::new(references, parity)
+            });
             arena.detach(alpha_or_beta_locant);
         }
         "alpha,beta" | "beta,alpha" => {

@@ -199,11 +199,11 @@ c1sc2cc3nccnc3cc2c1	thieno[2,3-g]quinoxaline	preferred	FR-3.5 https://iupac.qmul
 # fusion-multi-check (audit of PR #932)
 c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2	8H-quinolino[3,4-b]phenoxazine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
 c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1S2	8H-quinolino[3,4-b]phenothiazine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
-c1ccc2c(c1)Cc1c(ccc3ccccc13)S2	12H-benzo[a]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
-c1ccc2c(c1)Cc1cc3ccccc3cc1S2	12H-benzo[b]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
-c1ccc2c(c1)Cc1ccc3ccccc3c1S2	7H-benzo[c]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
-c1ccc2cc3c(cc2c1)Cc1cc2ccccc2cc1S3	13H-dibenzo[b,i]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
-c1ccc2c(c1)Cc1c(ccc3ccccc13)O2	12H-benzo[a]xanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
+c1ccc2c(c1)Cc1c(ccc3ccccc13)S2	12H-benzo[a]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
+c1ccc2c(c1)Cc1cc3ccccc3cc1S2	12H-benzo[b]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
+c1ccc2c(c1)Cc1ccc3ccccc3c1S2	7H-benzo[c]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
+c1ccc2cc3c(cc2c1)Cc1cc2ccccc2cc1S3	13H-dibenzo[b,i]thioxanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
+c1ccc2c(c1)Cc1c(ccc3ccccc13)O2	12H-benzo[a]xanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
 c1ccc2cc3c(cc2c1)Nc1cc2ccccc2cc1O3	13H-dibenzo[b,i]phenoxazine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	known-failure
 c1ccc2ncccc2c1	quinoline	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
 c1ccc2[nH]ccc2c1	1H-indole	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
@@ -549,3 +549,23 @@ Oc1ccccc1C1C[N-]CCO1	2-(2-hydroxyphenyl)morpholin-4-ide	preferred	P-72.2.2.1 htt
 [n-]1cccc1Cc1ccc[nH]1	2-[(1H-pyrrol-2-yl)methyl]-1H-pyrrol-1-ide	preferred	P-72.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7207; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701	quality review P3	pass
 [n-]1cccc1-c1ccc[nH]1	2-(1H-pyrrol-2-yl)-1H-pyrrol-1-ide	not_preferred	P-28 https://iupac.qmul.ac.uk/BlueBook/P2.html#28; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201	quality review P3	pass
 OC1=CC(=O)C=C[CH-]1	2-hydroxy-4-oxocyclohexa-2,5-dien-1-ide	preferred	P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	known-failure
+# table-2-8-check (audit of PR #964)
+c1ccc2c(c1)Cc1ccc3ccccc3c1O2	7H-benzo[c]xanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1ccc2cc3c(cc2c1)Cc1ccccc1O3	12H-benzo[b]xanthene	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1ccc2cc3cccnc3nc2c1	benzo[b][1,8]naphthyridine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1ccc2nc3ncncc3nc2c1	benzo[g]pteridine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1cn2cnc3[nH]cnc3c2n1	3H-imidazo[2,1-i]purine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1cc2cc3occc3n2cc1	furo[2,3-b]indolizine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+C1C=Cc2cc3sccc3n12	5H-thieno[2,3-b]pyrrolizine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	issue #969	known-failure
+c1cnc2nc3ncccc3cc2c1	pyrido[2,3-b][1,8]naphthyridine	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1ccc2c(c1)Cc1ccccc1O2	9H-xanthene	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+O=c1c2ccccc2oc2ccccc12	9H-xanthen-9-one	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201; P-58.2.3.1.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030101	PR #964	pass
+c1ccc2c(c1)Cc1cc3ncccc3cc1O2	11H-[1]benzopyrano[2,3-g]quinoline	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1ccc2c(c1)ccn1cccc12	pyrrolo[2,1-a]isoquinoline	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+C1CCN2CCc3ccccc3C2C1	1,3,4,6,7,11b-hexahydro-2H-pyrido[2,1-a]isoquinoline	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1ccc2cc3nc[nH]c3nc2c1	3H-imidazo[4,5-b]quinoline	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1cc2cc3ccncc3cc2cn1	pyrido[4,3-g]isoquinoline	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1cc2nc3ccccc3nc2cn1	pyrido[3,4-b]quinoxaline	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+n1cnc2[nH]c3ccccc3c2c1	9H-pyrimido[4,5-b]indole	preferred	P-25.3.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass
+c1ccc2c(c1)C=CC[Se]2	2H-1-benzoselenopyran	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201; P-25.2.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25020204	PR #964	pass
+C1=Nc2cccc3cccc(N1)c23	1H-perimidine	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #964	pass

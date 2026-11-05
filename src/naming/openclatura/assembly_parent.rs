@@ -491,15 +491,6 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
         .as_ref()
         .filter(|parent| parent.is_fusion_parent())
     {
-        if parts.is_substituent
-            && !has_parent_anion_suffix(parts)
-            && let Some(stem) = parent
-                .hydride_metadata
-                .as_ref()
-                .and_then(|metadata| metadata.derivative_stem.as_ref())
-        {
-            return Ok((stem.clone(), String::new()));
-        }
         let name = parent
             .base_name()
             .ok_or("openclatura: fusion parent has no audited spelling")?;

@@ -2,11 +2,11 @@
 use super::super::{
     locants::{LocantKey, retained_locant_sort_key as locant_key},
     molecule::{AtomSet, Molecule},
-    nomenclature::section,
     retained_fused_templates::{
-        TopologyKey, match_retained_graph_template_maps_with_options,
+        RetainedGraphRow, TopologyKey, match_retained_graph_template_maps_with_options,
         match_retained_graph_template_topology_maps, molecule_graph_topology_key,
-        retained_graph_template_topology_key, retained_graph_templates,
+        retained_graph_template_rows, retained_graph_template_topology_key,
+        retained_graph_templates,
     },
     retained_graph_model::{
         RetainedGraphAtomTemplate, RetainedGraphBondTemplate, RetainedGraphTemplate,
@@ -14,8 +14,12 @@ use super::super::{
     retained_name_policy::retained_parent_name_policy,
     rules::{retained, stems},
 };
-use super::{config::annulene_ring_sizes_from_data, model::*, rules::component_spec_seniority_key};
-use serde_json::{Value, json};
+use super::{
+    config::{FUSION_DATA, FusionComponentData, FusionComponentRow, annulene_ring_sizes_from_data},
+    model::*,
+    rules::component_spec_seniority_key,
+};
+use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::LazyLock,
@@ -29,6 +33,54 @@ pub struct RegisteredFusionComponent {
     pub omit_ortho_peri_attached_locants: bool,
 }
 type GeneratedRingMatch = (RegisteredFusionComponent, Vec<(String, usize)>);
+
+/// One row of Blue Book P-25.2.1 Table 2.8 (data/bluebook/p25_retained.tsv).
+struct Table28Row {
+    name: &'static str,
+    pin_name: &'static str,
+    fusion_prefix: &'static str,
+    pin_eligible: bool,
+}
+impl Table28Row {
+    fn parent_name(&self) -> &'static str {
+        self.pin_name
+            .split_once("H-")
+            .map_or(self.pin_name, |(_, name)| name)
+    }
+    fn template<'a>(
+        &self,
+        templates: &'a BTreeMap<String, FusionComponentSpec>,
+    ) -> Option<&'a FusionComponentSpec> {
+        [self.pin_name, self.name, self.parent_name()]
+            .into_iter()
+            .find_map(|name| templates.get(name))
+    }
+}
+#[allow(clippy::panic, reason = "Immutable checked-in Table 2.8 transcription")]
+static TABLE_28: LazyLock<Vec<Table28Row>> = LazyLock::new(|| {
+    include_str!("../data/bluebook/p25_retained.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .skip(1)
+        .map(|line| match line.split('\t').collect::<Vec<_>>()[..] {
+            [
+                _,
+                name,
+                pin_name,
+                _,
+                fusion_prefix,
+                eligible @ ("yes" | "no"),
+                _,
+            ] => Table28Row {
+                name,
+                pin_name,
+                fusion_prefix,
+                pin_eligible: eligible == "yes",
+            },
+            _ => panic!("malformed checked-in Table 2.8 row: {line}"),
+        })
+        .collect()
+});
 impl RegisteredFusionComponent {
     pub fn spec_for_template(&self, name: &str) -> Result<FusionComponentSpec, String> {
         if name.is_empty() || name == self.spec.template.name {
@@ -56,32 +108,14 @@ pub struct FusionComponentRegistry {
     generated_hw_policy: Option<GeneratedHWPolicy>,
     retained_component_status: Vec<FusionComponentSpec>,
 }
-fn strings(v: &Value) -> Vec<String> {
-    v.as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_owned)
-        .collect()
-}
-fn txt(row: &Value, key: &str) -> String {
-    row[key].as_str().unwrap_or_default().to_owned()
-}
-fn metadata(template: RetainedGraphTemplate, row: &Value) -> FusionComponentSpec {
-    let t = &row["template"];
-    let rings = t["rings"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(strings)
-        .collect();
+fn metadata(template: RetainedGraphTemplate, row: &RetainedGraphRow) -> FusionComponentSpec {
     FusionComponentSpec {
         parent_name: template.output_name(),
-        attached_prefix: txt(row, "attached_prefix"),
-        rings,
-        peripheral_order: strings(&t["peripheral_atoms"]),
-        interior_atoms: strings(&t["interior_atoms"]),
-        pin_component: row["pin"].as_bool().unwrap_or(false),
+        attached_prefix: row.attached_prefix.clone().unwrap_or_default(),
+        rings: row.template.rings.clone(),
+        peripheral_order: row.template.peripheral_atoms.clone(),
+        interior_atoms: row.template.interior_atoms.clone(),
+        pin_component: row.pin,
         template,
         ..Default::default()
     }
@@ -190,34 +224,37 @@ fn monocycle(name: &str, symbols: &[String], bond_class: &str, pin: bool) -> Fus
         ..Default::default()
     }
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FusionComponentConstructionData {
+    #[serde(rename = "schema_version")]
+    _schema_version: usize,
+    source: String,
+    version: String,
+    components: BTreeMap<String, FusionComponentConstructionRow>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FusionComponentConstructionRow {
+    atom_locants: Vec<String>,
+    directed_bond_locants: Vec<(String, String)>,
+}
 #[allow(clippy::expect_used)]
 static CONSTRUCTION_ORDERS: LazyLock<BTreeMap<String, FusionComponentConstructionOrder>> =
     LazyLock::new(|| {
-        let d: Value =
+        let data: FusionComponentConstructionData =
             serde_json::from_str(include_str!("../data/fusion_component_construction.json"))
                 .expect("checked-in construction JSON");
-        d["components"]
-            .as_object()
+        data.components
             .into_iter()
-            .flatten()
             .map(|(key, row)| {
                 (
-                    key.clone(),
+                    key,
                     FusionComponentConstructionOrder {
-                        atom_locants: strings(&row["atom_locants"]),
-                        directed_bond_locants: row["directed_bond_locants"]
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .map(|e| {
-                                (
-                                    e[0].as_str().unwrap_or_default().into(),
-                                    e[1].as_str().unwrap_or_default().into(),
-                                )
-                            })
-                            .collect(),
-                        source: txt(&d, "source"),
-                        version: txt(&d, "version"),
+                        atom_locants: row.atom_locants,
+                        directed_bond_locants: row.directed_bond_locants,
+                        source: data.source.clone(),
+                        version: data.version.clone(),
                     },
                 )
             })
@@ -252,31 +289,12 @@ impl FusionComponentRegistry {
         }
         Ok(spec)
     }
-    pub fn from_data(data: &Value) -> Result<Self, String> {
-        if data["schema_version"] != 1 {
-            return Err("unsupported fusion component schema".into());
-        }
-        let mut rows = BTreeMap::<String, Value>::new();
-        for raw in [
-            include_str!("../data/retained_fused_graph_templates.json"),
-            include_str!("../data/retained_fused_hydrocarbon_templates.json"),
-            include_str!("../data/retained_macrocycle_templates.json"),
-        ] {
-            let d: Value = serde_json::from_str(raw).map_err(|e| e.to_string())?;
-            for row in d["parents"].as_array().into_iter().flatten() {
-                rows.insert(txt(row, "name"), row.clone());
-            }
-        }
-        for row in section("retained_fused_polycycle_specs")
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|r| r["template"].is_object())
-        {
-            rows.entry(txt(row, "name")).or_insert_with(|| row.clone());
-        }
+    fn from_data(data: &FusionComponentData) -> Result<Self, String> {
+        let rows: BTreeMap<_, _> = retained_graph_template_rows()
+            .map(|row| (&row.name, row))
+            .collect();
         let mut registry = Self {
-            version: txt(data, "registry_version"),
+            version: data.registry_version.clone(),
             components: Vec::new(),
             by_key: BTreeMap::new(),
             template_by_name: BTreeMap::new(),
@@ -291,21 +309,14 @@ impl FusionComponentRegistry {
                     .insert(t.name.clone(), metadata(t.clone(), row));
             }
         }
-        for row in data["retained_component_status"]["components"]
-            .as_array()
-            .into_iter()
-            .flatten()
-        {
-            let name = txt(row, "template_name");
+        for row in &data.retained_component_status.components {
+            let name = &row.template_name;
             let mut spec = registry
                 .template_by_name
-                .get(&name)
+                .get(name)
                 .cloned()
                 .ok_or_else(|| format!("unknown retained status template {name}"))?;
-            spec.horizontal_ring_count = row["horizontal_ring_count"]
-                .as_u64()
-                .ok_or_else(|| format!("missing horizontal ring count for {name}"))?
-                as usize;
+            spec.horizontal_ring_count = row.horizontal_ring_count;
             registry.retained_component_status.push(spec);
         }
         // P-22.2.1, Table 2.2: the Se/Te analogues retain pyran numbering
@@ -322,23 +333,18 @@ impl FusionComponentRegistry {
             registry.template_by_name.insert(name.into(), spec);
         }
         let mut existing_sizes = BTreeSet::new();
-        for row in data["generated_components"]
-            .as_array()
-            .into_iter()
-            .flatten()
-        {
-            let size = row["ring_size"].as_u64().unwrap_or(0) as usize;
-            if txt(row, "generator") != "monocyclic_carbocycle" || size < 3 {
+        for row in &data.generated_components {
+            let size = row.ring_size;
+            if row.generator != "monocyclic_carbocycle" || size < 3 {
                 return Err("unsupported fusion generator".into());
             }
-            let name = txt(row, "key");
             let s = monocycle(
-                &name,
+                &row.key,
                 &vec!["C".into(); size],
-                &txt(row, "bond_class"),
-                row["pin_component"].as_bool().unwrap_or(true),
+                &row.bond_class,
+                row.pin_component,
             );
-            registry.template_by_name.insert(name, s);
+            registry.template_by_name.insert(row.key.clone(), s);
             existing_sizes.insert(size);
         }
         let annulenes: Vec<_> = annulene_ring_sizes_from_data(data)?
@@ -352,20 +358,25 @@ impl FusionComponentRegistry {
                 monocycle(&name, &vec!["C".into(); size], "mancude", true),
             );
         }
-        for row in data["components"].as_array().into_iter().flatten() {
+        for row in &data.components {
             registry.register(row)?;
         }
         for size in annulenes {
             let name = format!("[{size}]annulene");
             let stem = stems::stem_for(size);
-            registry.register(&json!({"key":name,"parent_name":name,"attached_prefix":format!("cyclo{stem}a"),"allow_as_parent":true,"allow_as_attached":true,"omit_attached_locants":true}))?;
+            registry.register(&FusionComponentRow {
+                key: name.clone(),
+                parent_name: Some(name),
+                attached_prefix: Some(format!("cyclo{stem}a")),
+                allow_as_parent: true,
+                allow_as_attached: true,
+                omit_attached_locants: true,
+                multiplicative_prefix_style: "basic".into(),
+                ..Default::default()
+            })?;
         }
-        for policy in data["retained_component_generators"]
-            .as_array()
-            .into_iter()
-            .flatten()
-        {
-            if txt(policy, "family") != "benzoheterocycle" {
+        for policy in &data.retained_component_generators {
+            if policy.family != "benzoheterocycle" {
                 return Err("unsupported retained fusion family".into());
             }
             // The source registry iterates retained templates in their insertion order.
@@ -399,46 +410,74 @@ impl FusionComponentRegistry {
                 // Only FR-2.2.8 benzo components inherit the deferred-parent
                 // policy; otherwise a junior explicit component can win before
                 // the intrinsic seniority comparison sees the retained parent.
-                let allow_as_parent = is_trivial_benzo_name(&parent)
-                    || policy["allow_as_parent"].as_bool().unwrap_or(false);
-                registry.register(&json!({
-                    "key": name,
-                    "parent_name": parent,
-                    "allow_as_parent": allow_as_parent,
-                    "allow_as_peri_parent": policy["allow_as_peri_parent"],
-                    "allow_as_attached": policy["allow_as_attached"],
-                    "horizontal_ring_count": ring_count,
-                }))?;
+                let allow_as_parent = is_trivial_benzo_name(&parent) || policy.allow_as_parent;
+                registry.register(&FusionComponentRow {
+                    key: name.clone(),
+                    parent_name: Some(parent),
+                    allow_as_parent,
+                    allow_as_peri_parent: policy.allow_as_peri_parent,
+                    allow_as_attached: policy.allow_as_attached,
+                    horizontal_ring_count: Some(ring_count),
+                    multiplicative_prefix_style: "basic".into(),
+                    ..Default::default()
+                })?;
             }
         }
-        for p in data["systematic_component_generators"]
-            .as_array()
-            .into_iter()
-            .flatten()
-        {
-            if txt(p, "generator") != "hantzsch_widman_monocycle" {
+        // Table 2.8 also admits non-benzo and larger retained components. Keep
+        // P-25.3.5's existing benzo-component parent policy by registering last.
+        for row in TABLE_28.iter().filter(|row| row.pin_eligible) {
+            let Some(spec) = row.template(&registry.template_by_name) else {
+                continue;
+            };
+            let name = &spec.template.name;
+            if registry
+                .components
+                .iter()
+                .any(|c| c.template_names.contains(name))
+            {
+                continue;
+            }
+            let horizontal_ring_count = registry
+                .retained_component_status
+                .iter()
+                .find(|s| s.template.name == *name)
+                .map_or(spec.rings.len(), |s| s.horizontal_ring_count);
+            let parent = row.parent_name();
+            let parent = parent.split_once('-').map_or_else(
+                || parent.to_owned(),
+                |(locants, stem)| format!("[{locants}]{stem}"),
+            );
+            registry.register(&FusionComponentRow {
+                key: name.clone(),
+                parent_name: Some(parent),
+                attached_prefix: Some(row.fusion_prefix.into()),
+                allow_as_parent: true,
+                allow_as_attached: true,
+                horizontal_ring_count: Some(horizontal_ring_count),
+                multiplicative_prefix_style: "basic".into(),
+                ..Default::default()
+            })?;
+        }
+        for p in &data.systematic_component_generators {
+            if p.generator != "hantzsch_widman_monocycle" {
                 return Err("unsupported HW generator".into());
             }
             registry.generated_hw_policy = Some(GeneratedHWPolicy {
-                usable_as_parent: p["allow_as_parent"].as_bool().unwrap_or(false),
-                usable_as_attached: p["allow_as_attached"].as_bool().unwrap_or(false),
+                usable_as_parent: p.allow_as_parent,
+                usable_as_attached: p.allow_as_attached,
             });
         }
         Ok(registry)
     }
-    pub fn register(&mut self, row: &Value) -> Result<FusionComponentSpec, String> {
-        let key = txt(row, "key");
+    fn register(&mut self, row: &FusionComponentRow) -> Result<FusionComponentSpec, String> {
+        let key = row.key.clone();
         if key.is_empty() || self.by_key.contains_key(&key) {
             return Err(format!("duplicate or empty fusion key {key}"));
         }
-        if !row["seniority_override"].is_null() {
-            return Err("seniority_override is not chemical".into());
-        }
-        let names = if row["template_names"].is_array() {
-            strings(&row["template_names"])
-        } else {
-            vec![key.clone()]
-        };
+        let names = row
+            .template_names
+            .clone()
+            .unwrap_or_else(|| vec![key.clone()]);
         let mut templates = Vec::new();
         let construction = &*CONSTRUCTION_ORDERS;
         for name in &names {
@@ -456,30 +495,24 @@ impl FusionComponentRegistry {
                     .ok_or_else(|| format!("unknown fusion template {name}"))?,
             );
             s.key = key.clone();
-            s.parent_name = row["parent_name"]
-                .as_str()
-                .map(str::to_owned)
-                .unwrap_or(s.parent_name);
-            s.attached_prefix = row["preferred_fusion_prefix"]
-                .as_str()
-                .or_else(|| row["attached_prefix"].as_str())
-                .map(str::to_owned)
+            s.parent_name = row.parent_name.clone().unwrap_or(s.parent_name);
+            s.attached_prefix = row
+                .preferred_fusion_prefix
+                .as_ref()
+                .or(row.attached_prefix.as_ref())
+                .cloned()
                 .unwrap_or(s.attached_prefix);
-            s.usable_as_parent = row["allow_as_parent"].as_bool().unwrap_or(false);
-            s.usable_as_attached = row["allow_as_attached"].as_bool().unwrap_or(false);
-            s.usable_as_peri_parent = row["allow_as_peri_parent"].as_bool().unwrap_or(false);
+            s.usable_as_parent = row.allow_as_parent;
+            s.usable_as_attached = row.allow_as_attached;
+            s.usable_as_peri_parent = row.allow_as_peri_parent;
             s.benzoheterocycle_component =
                 is_benzoheterocycle(&s) && !is_trivial_benzo_name(&s.parent_name);
-            s.accepted_general_prefixes = strings(&row["accepted_general_prefixes"]);
-            s.horizontal_ring_count = row["horizontal_ring_count"]
-                .as_u64()
-                .map(|n| n as usize)
+            s.accepted_general_prefixes = row.accepted_general_prefixes.clone();
+            s.horizontal_ring_count = row
+                .horizontal_ring_count
                 .or_else(|| (s.rings.len() == 1).then_some(1))
                 .ok_or_else(|| format!("missing horizontal ring count for {name}"))?;
-            s.multiplicative_prefix_style = row["multiplicative_prefix_style"]
-                .as_str()
-                .unwrap_or("basic")
-                .into();
+            s.multiplicative_prefix_style = row.multiplicative_prefix_style.clone();
             s.construction_order = construction.get(name).cloned();
             if s.construction_order
                 .as_ref()
@@ -510,10 +543,8 @@ impl FusionComponentRegistry {
             spec: spec.clone(),
             template_names: names,
             templates,
-            omit_attached_locants: row["omit_attached_locants"].as_bool().unwrap_or(false),
-            omit_ortho_peri_attached_locants: row["omit_ortho_peri_attached_locants"]
-                .as_bool()
-                .unwrap_or(false),
+            omit_attached_locants: row.omit_attached_locants,
+            omit_ortho_peri_attached_locants: row.omit_ortho_peri_attached_locants,
         });
         self.by_key.insert(key, index);
         Ok(spec)
@@ -1308,10 +1339,8 @@ fn connected_face_subsets(faces: &[&Face], sizes: &BTreeSet<usize>) -> Vec<Vec<u
 }
 #[allow(clippy::expect_used)]
 static REGISTRY: LazyLock<FusionComponentRegistry> = LazyLock::new(|| {
-    let d: Value = serde_json::from_str(include_str!("../data/fusion_components.json"))
-        .expect("checked-in fusion registry");
-    let registry =
-        FusionComponentRegistry::from_data(&d).expect("valid checked-in fusion component policy");
+    let registry = FusionComponentRegistry::from_data(&FUSION_DATA)
+        .expect("valid checked-in fusion component policy");
     let config = super::config::fusion_nomenclature_config();
     assert_eq!(
         registry.version, config.registry_version,
@@ -1587,8 +1616,101 @@ mod tests {
         );
     }
     #[test]
+    fn table_28_pin_names_templates_and_whole_system_components() {
+        let registry = fusion_component_registry();
+        let parser = opsin::Parser::new().unwrap();
+        let mut checked = 0;
+        let mut templates = 0;
+        let mut components = 0;
+        let mut errors = Vec::new();
+        for row in TABLE_28.iter().filter(|row| row.pin_eligible) {
+            checked += 1;
+            if row.template(&registry.template_by_name).is_some() {
+                templates += 1;
+            } else {
+                assert!(
+                    [
+                        "2H-1-benzoselenopyran",
+                        "2H-1-benzotelluropyran",
+                        "1H-2-benzothiopyran",
+                        "1H-2-benzoselenopyran",
+                        "1H-2-benzotelluropyran",
+                    ]
+                    .contains(&row.pin_name),
+                    "missing Table 2.8 template: {}",
+                    row.pin_name
+                );
+            }
+            let parsed = parser.parse(row.pin_name, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{}: {}",
+                row.pin_name,
+                parsed.message
+            );
+            assert!(
+                parsed.warnings.is_empty(),
+                "{}: {:?}",
+                row.pin_name,
+                parsed.warnings
+            );
+            let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            let named = super::super::super::name_smiles(&smiles).unwrap();
+            if named.text != row.pin_name || named.status != crate::naming::NameStatus::Preferred {
+                errors.push(format!(
+                    "{}: named {} ({:?})",
+                    row.pin_name, named.text, named.status
+                ));
+            }
+            let mol = read_smiles(&smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
+            let model = typed_face_model(&mol, &bounded);
+            let mut matches = registry.match_face_model(&mol, &model).unwrap();
+            // P-25.3.5 components without standalone templates are assembled
+            // from the same face matches used by the fusion planner.
+            let mut benzo = Vec::new();
+            for a in &matches {
+                for b in &matches {
+                    benzo.extend(registry.benzoheterocycle_matches(a, b).unwrap());
+                }
+            }
+            matches.extend(benzo);
+            let found = matches.iter().any(|m| {
+                let spec = registry.spec_for_match(m).unwrap();
+                m.covered_face_ids.len() == model.faces.len()
+                    && m.local_to_input_atom
+                        .iter()
+                        .map(|(_, a)| *a)
+                        .collect::<AtomSet>()
+                        == atoms
+                    && spec.attached_prefix == row.fusion_prefix
+                    && spec.pin_component
+                    && spec.usable_as_attached
+                    && (row.name.ends_with("pyran") || spec.usable_as_parent)
+            });
+            if found {
+                components += 1;
+            } else {
+                errors.push(format!(
+                    "{}: no whole-system component with prefix {}",
+                    row.pin_name, row.fusion_prefix
+                ));
+            }
+        }
+        eprintln!(
+            "Table 2.8: {checked} PIN rows checked, {templates} templates, {components} whole-system components"
+        );
+        assert!(errors.is_empty(), "{}", errors.join("\n"));
+        assert_eq!(
+            (TABLE_28.len(), checked, templates, components),
+            (55, 47, 42, 47)
+        );
+    }
+    #[test]
     fn unregistered_retained_status_requires_exact_faces_and_template_identity() {
-        let mut mol = read_smiles("c1ccc2c(c1)Cc1c(ccc3ccccc13)S2").unwrap();
+        let mut mol = read_smiles("c1ccc2c(c1)Nc1c(ccc3ccccc13)S2").unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let mut plan = super::super::planner::plan_fusion_parent(&mol, &atoms)
             .unwrap()
@@ -1634,26 +1756,26 @@ mod tests {
         wrong_rings
             .retained_component_status
             .iter_mut()
-            .find(|s| s.template.name == "9H-thioxanthene")
+            .find(|s| s.template.name == "10H-phenothiazine")
             .unwrap()
             .rings[0][0] = "9".into();
         assert!(!wrong_rings.has_senior_unregistered_retained_component(&mol, &plan));
 
         // Display names do not register a retained template.
-        registry.components[0].spec.parent_name = "9H-thioxanthene".into();
+        registry.components[0].spec.parent_name = "10H-phenothiazine".into();
         assert!(registry.has_senior_unregistered_retained_component(&mol, &plan));
         registry.components[0]
             .template_names
-            .push("9H-thioxanthene".into());
+            .push("10H-phenothiazine".into());
         assert!(!registry.has_senior_unregistered_retained_component(&mol, &plan));
     }
     #[test]
     fn unregistered_retained_status_requires_a_strictly_senior_proper_component() {
         let registry = fusion_component_registry();
         for (smiles, parent, expected) in [
-            ("c1ccc2c(c1)Cc1c(ccc3ccccc13)O2", "pyran", true),
+            ("c1ccc2c(c1)Nc1c(ccc3ccccc13)O2", "pyran", true),
             ("c1ccc2c(c1)Cc1cc3ncccc3cc1O2", "quinoline", false),
-            ("c1ccc2c(c1)Cc1ccccc1O2", "pyran", false),
+            ("c1ccc2c(c1)Nc1ccccc1O2", "pyran", false),
         ] {
             let mol = read_smiles(smiles).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
@@ -1673,7 +1795,8 @@ mod tests {
             if expected {
                 let mut equal = registry.clone();
                 let index = equal.by_key[parent];
-                equal.components[index].spec = registry.template_spec("xanthene").unwrap().clone();
+                equal.components[index].spec =
+                    registry.template_spec("10H-phenoxazine").unwrap().clone();
                 equal.components[index].spec.horizontal_ring_count = 3;
                 assert!(!equal.has_senior_unregistered_retained_component(&mol, &plan));
             }

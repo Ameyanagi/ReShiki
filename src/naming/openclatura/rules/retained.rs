@@ -2,10 +2,10 @@
 use super::super::{
     molecule::{AtomSet, Molecule},
     nomenclature::section,
+    retained_fused_templates::{GRAPH_DATA, RetainedGraphRow},
 };
 use super::{elements, elision, multipliers};
 use serde::Deserialize;
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
@@ -36,14 +36,6 @@ pub struct MonocycleSpec {
 )]
 static SPECS: LazyLock<Vec<MonocycleSpec>> = LazyLock::new(|| {
     serde_json::from_value(section("retained_monocycle_specs").clone()).expect("monocycle specs")
-});
-#[allow(
-    clippy::expect_used,
-    reason = "Retained graph templates are immutable checked-in JSON data."
-)]
-static GRAPH_PARENTS: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../data/retained_fused_graph_templates.json"))
-        .expect("retained graph data")
 });
 
 fn monocycle_spec_for_name(name: &str) -> Option<MonocycleSpec> {
@@ -320,27 +312,21 @@ fn match_monocycle_templates(mol: &Molecule, path: &[usize], doubles: usize) -> 
         return None;
     }
     let ring: AtomSet = path.iter().copied().collect();
-    let mut rows: Vec<&Value> = GRAPH_PARENTS["parents"]
-        .as_array()?
+    let mut rows: Vec<&RetainedGraphRow> = GRAPH_DATA
+        .parents
         .iter()
         .filter(|row| {
-            let t = &row["template"];
-            t["enabled"].as_bool().unwrap_or(true)
-                && t["atoms"].as_array().is_some_and(|a| a.len() == path.len())
-                && t["bonds"].as_array().is_some_and(|b| b.len() == path.len())
-                && t["mancude_double_bonds"].as_u64().unwrap_or(0) as usize == doubles
+            let t = &row.template;
+            t.enabled
+                && t.atoms.len() == path.len()
+                && t.bonds.len() == path.len()
+                && t.mancude_double_bonds.unwrap_or(0) == doubles
         })
         .collect();
-    rows.sort_by_key(|row| {
-        (
-            row["priority"].as_i64().unwrap_or(0),
-            row["name"].as_str().unwrap_or(""),
-        )
-    });
+    rows.sort_by_key(|row| (row.priority, &row.name));
     for row in rows {
-        let t = &row["template"];
-        let atoms = t["atoms"].as_array()?;
-        if atoms.iter().all(|a| a["aromatic"].as_bool() == Some(false))
+        let atoms = &row.template.atoms;
+        if atoms.iter().all(|atom| !atom.aromatic)
             && path
                 .iter()
                 .any(|&idx| !is_saturated_ring_site(mol, idx, &ring))
@@ -348,29 +334,18 @@ fn match_monocycle_templates(mol: &Molecule, path: &[usize], doubles: usize) -> 
             continue;
         }
         let mut numbered: Vec<_> = atoms.iter().collect();
-        numbered.sort_by_key(|atom| {
-            atom["locant"]
-                .as_str()
-                .unwrap_or("")
-                .parse::<usize>()
-                .unwrap_or(usize::MAX)
-        });
-        let symbols: Vec<&str> = numbered
-            .iter()
-            .map(|a| a["symbol"].as_str().unwrap_or("C"))
-            .collect();
+        numbered.sort_by_key(|atom| atom.locant.parse::<usize>().unwrap_or(usize::MAX));
         if (0..path.len()).any(|offset| {
             [1_i64, -1].into_iter().any(|step| {
                 (0..path.len()).all(|i| {
                     let p =
                         (offset as i64 + step * i as i64).rem_euclid(path.len() as i64) as usize;
-                    mol.atoms[&path[p]].symbol == symbols[i]
-                        && (!numbered[i]["saturated"].as_bool().unwrap_or(false)
-                            || is_saturated_ring_site(mol, path[p], &ring))
+                    mol.atoms[&path[p]].symbol == numbered[i].symbol
+                        && (!numbered[i].saturated || is_saturated_ring_site(mol, path[p], &ring))
                 })
             })
         }) {
-            return row["name"].as_str().map(str::to_owned);
+            return Some(row.name.clone());
         }
     }
     None
@@ -739,18 +714,17 @@ pub fn cites_indicated_hydrogen(mol: &Molecule, path: &[usize], name: Option<&st
             .sum();
         return spec.double_bonds > 0 && spec.size > 2 * spec.double_bonds + fixed;
     }
-    GRAPH_PARENTS["parents"].as_array().is_some_and(|rows| {
-        rows.iter().any(|row| {
-            row["indicated_hydrogen_name"].as_str().is_some_and(|key| {
-                key == name
-                    || super::super::retained_name_policy::retained_parent_name_policy(key)
-                        .is_some_and(|policy| {
-                            // Output spelling does not change whether the
-                            // retained parent derives its hydrogen citation.
-                            policy.preferred_name == name
-                                || policy.context_names.values().any(|value| value == name)
-                        })
-            })
+    GRAPH_DATA.parents.iter().any(|row| {
+        row.indicated_hydrogen_name.as_deref().is_some_and(|key| {
+            key == name
+                || super::super::retained_name_policy::retained_parent_name_policy(key).is_some_and(
+                    |policy| {
+                        // Output spelling does not change whether the
+                        // retained parent derives its hydrogen citation.
+                        policy.preferred_name == name
+                            || policy.context_names.values().any(|value| value == name)
+                    },
+                )
         })
     })
 }

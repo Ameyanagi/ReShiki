@@ -3111,17 +3111,14 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_alphabetical_scope_keeps_unverified_fusion_name() -> Result<(), String> {
+    fn naphthyridine_parent_simplifies_alphabetized_fusion_name() -> Result<(), String> {
         let smiles = "S1CC=C2C1=NC=1N2C=2C(=C3C1N=C1C=CC=CC1=C3)N=CC2";
         let name = crate::naming::openclatura::name_smiles(smiles)?;
         assert_eq!(
             name.text,
-            "2H-thieno[2'',3'':4',5']imidazo[1',2':1,2]pyrrolo[2',3':5,6]pyrido[3,4-b]quinoline"
+            "2H-benzo[b]pyrrolo[2,3-f]thieno[2',3':4,5]imidazo[1,2-h][1,7]naphthyridine"
         );
-        assert_eq!(
-            name.status,
-            crate::naming::NameStatus::Unverified(crate::naming::NameReason::OpsinFusionLayout)
-        );
+        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
         assert_strict_fusion_name_identity(smiles, &name)
     }
 

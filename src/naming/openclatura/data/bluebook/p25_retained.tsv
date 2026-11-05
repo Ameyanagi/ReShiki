@@ -1,0 +1,62 @@
+# Blue Book P-25.2.1 Table 2.8: retained names of heterocyclic parent ring components, transcribed from
+# https://iupac.qmul.ac.uk/BlueBook/P2.html#250201 . table_group is the table's numbered group (descending seniority
+# between groups as printed; not a total order, see P-25.3.2.4 and P-25.8.1). pin_name is the PIN with the indicated
+# hydrogen the table states. fusion_prefix is the preferred prefix (P-25.3.2.2.2: final e -> o, or append o;
+# heteroatom locants in square brackets, P-25.3.1.3). chromene-type names are not PINs (their PINs are the
+# benzopyran rows; P-25.3.2.4(a) gives [1]benzopyrano[2,3-c]pyrrole as the PIN beside chromeno[2,3-c]pyrrole).
+table_group	name	pin_name	rule	fusion_prefix	pin_eligible	link
+1	phenazine	phenazine	P-25.2.1	phenazino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	1,7-phenanthroline	1,7-phenanthroline	P-25.2.1	[1,7]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	1,8-phenanthroline	1,8-phenanthroline	P-25.2.1	[1,8]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	1,9-phenanthroline	1,9-phenanthroline	P-25.2.1	[1,9]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	1,10-phenanthroline	1,10-phenanthroline	P-25.2.1	[1,10]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	2,7-phenanthroline	2,7-phenanthroline	P-25.2.1	[2,7]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	2,8-phenanthroline	2,8-phenanthroline	P-25.2.1	[2,8]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	2,9-phenanthroline	2,9-phenanthroline	P-25.2.1	[2,9]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	3,7-phenanthroline	3,7-phenanthroline	P-25.2.1	[3,7]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	3,8-phenanthroline	3,8-phenanthroline	P-25.2.1	[3,8]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+2	4,7-phenanthroline	4,7-phenanthroline	P-25.2.1	[4,7]phenanthrolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+3	perimidine	1H-perimidine	P-25.2.1	perimidino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+4	acridine	acridine	P-25.2.1	acridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+5	phenanthridine	phenanthridine	P-25.2.1	phenanthridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+6	carbazole	9H-carbazole	P-25.2.1	carbazolo	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+7	pteridine	pteridine	P-25.2.1	pteridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+8	cinnoline	cinnoline	P-25.2.1	cinnolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+9	quinazoline	quinazoline	P-25.2.1	quinazolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+10	quinoxaline	quinoxaline	P-25.2.1	quinoxalino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+11	1,5-naphthyridine	1,5-naphthyridine	P-25.2.1	[1,5]naphthyridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+11	1,6-naphthyridine	1,6-naphthyridine	P-25.2.1	[1,6]naphthyridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+11	1,7-naphthyridine	1,7-naphthyridine	P-25.2.1	[1,7]naphthyridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+11	1,8-naphthyridine	1,8-naphthyridine	P-25.2.1	[1,8]naphthyridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+11	2,6-naphthyridine	2,6-naphthyridine	P-25.2.1	[2,6]naphthyridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+11	2,7-naphthyridine	2,7-naphthyridine	P-25.2.1	[2,7]naphthyridino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+12	phthalazine	phthalazine	P-25.2.1	phthalazino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+13	quinoline	quinoline	P-25.2.1	quinolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+14	isoquinoline	isoquinoline	P-25.2.1	isoquinolino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+15	quinolizine	4H-quinolizine	P-25.2.1	quinolizino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+16	purine	7H-purine	P-25.2.1	purino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+17	indazole	1H-indazole	P-25.2.1	indazolo	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+18	indole	1H-indole	P-25.2.1	indolo	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+19	isoindole	2H-isoindole	P-25.2.1	isoindolo	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+20	indolizine	indolizine	P-25.2.1	indolizino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+21	pyrrolizine	1H-pyrrolizine	P-25.2.1	pyrrolizino	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+22	xanthene	9H-xanthene	P-25.2.1	xantheno	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+22	thioxanthene	9H-thioxanthene	P-25.2.1	thioxantheno	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+22	selenoxanthene	9H-selenoxanthene	P-25.2.1	selenoxantheno	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+22	telluroxanthene	9H-telluroxanthene	P-25.2.1	telluroxantheno	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+23	chromene		P-25.2.1		no	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+23	1-benzopyran	2H-1-benzopyran	P-25.2.1	[1]benzopyrano	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+23	thiochromene		P-25.2.1		no	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+23	1-benzothiopyran	2H-1-benzothiopyran	P-25.2.1	[1]benzothiopyrano	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+23	selenochromene		P-25.2.1		no	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+23	1-benzoselenopyran	2H-1-benzoselenopyran	P-25.2.1	[1]benzoselenopyrano	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+23	tellurochromene		P-25.2.1		no	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+23	1-benzotelluropyran	2H-1-benzotelluropyran	P-25.2.1	[1]benzotelluropyrano	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+24	isochromene		P-25.2.1		no	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+24	2-benzopyran	1H-2-benzopyran	P-25.2.1	[2]benzopyrano	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+24	isothiochromene		P-25.2.1		no	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+24	2-benzothiopyran	1H-2-benzothiopyran	P-25.2.1	[2]benzothiopyrano	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+24	isoselenochromene		P-25.2.1		no	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+24	2-benzoselenopyran	1H-2-benzoselenopyran	P-25.2.1	[2]benzoselenopyrano	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+24	isotellurochromene		P-25.2.1		no	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
+24	2-benzotelluropyran	1H-2-benzotelluropyran	P-25.2.1	[2]benzotelluropyrano	yes	https://iupac.qmul.ac.uk/BlueBook/P2.html#250201
