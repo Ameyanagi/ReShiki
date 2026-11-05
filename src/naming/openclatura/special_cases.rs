@@ -1632,14 +1632,19 @@ fn oxoacid_ester_name(
         .filter(|block| block.len() > 1)
         .flatten()
         .collect();
-    // P-67.1.3.2 / P-67.1.3.3: acid-derived groups form anhydrides, not esters.
-    let alcohol_derived = |root: usize| {
+    let groups = perceive_groups(mol);
+    // P-67.1.3.2 / P-67.1.3.3: acid-derived groups form anhydrides, not esters;
+    // a principal group inside the ligand takes the suffix instead (P-67.1.4.1.3).
+    let alcohol_derived = |root: usize, ligand: &AtomSet| {
         mol.atoms[&root].is_carbon()
             && mol.get_neighbors(root).iter().all(|&n| {
                 mol.bond_order(root, n) == 1
                     || mol.atoms[&n].is_carbon()
                     || cyclic_bonds.contains(&normalize_edge(root, n))
             })
+            && !groups
+                .iter()
+                .any(|g| g.is_principal_candidate && g.atom_ids().is_subset(ligand))
     };
     let mut matches = Vec::new();
     for role in oxo_roles(mol, atoms) {
@@ -1696,7 +1701,7 @@ fn oxoacid_ester_name(
                 require_stereo_free_core(mol, &acid)?;
                 matches.push((
                     StructuralParentName {
-                        certified: alcohol_derived(roots[0]),
+                        certified: alcohol_derived(roots[0], &modifier_atoms),
                         component_splits: BTreeSet::from([normalize_edge(distal, roots[0])]),
                         ..StructuralParentName::ordinary(format!("{modifier} {suffix}"))
                     },
@@ -1740,7 +1745,7 @@ fn oxoacid_ester_name(
                 break;
             }
             names.push(name);
-            certified &= alcohol_derived(root);
+            certified &= alcohol_derived(root, &ligand_atoms);
             component_splits.insert(normalize_edge(ligand.oxygen, root));
             covered.extend(ligand_atoms);
         }

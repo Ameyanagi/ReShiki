@@ -90,17 +90,18 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     // (b)-(d) prefer -ide/-uide centres, which are not implemented.
     let cited =
         |i: &usize| parent_atoms.contains(i) || principal_atoms.is_some_and(|a| a.contains(i));
-    let centres = |outside: bool| {
+    let centres = |outside: bool, skeletal: bool| {
         mol.atoms
             .iter()
             .filter(|(i, atom)| {
                 atom.charge < 0
                     && cited(i) != outside
-                    && (!outside || matches!(atom.symbol.as_str(), "C" | "N"))
+                    && (!skeletal || matches!(atom.symbol.as_str(), "C" | "N"))
             })
             .count()
     };
-    let external_skeletal_anion = centres(true) > 0 && centres(true) >= centres(false);
+    let external_skeletal_anion =
+        centres(true, true) > 0 && centres(true, false) >= centres(false, false);
     // P-72.6.1: an external C(=O)O- requires the prefix carboxylato.
     let external_carboxylate = mol.atoms.iter().any(|(&carbon, atom)| {
         atom.is_carbon()

@@ -446,7 +446,7 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
 /// P-51.4.1 / P-15.4.3.2: four heterounits on an acyclic path require
 /// skeletal replacement, including in substituents. Each skeletal heteroatom
 /// counts as a unit, which can only overcount heterounits such as -SiH2-O-SiH2-;
-/// terminal B, Al, Si, Ge, Sn and Pb count too (P-51.4.1.4). Only the cited
+/// terminal B, Al, Ga, In, Tl, Si, Ge, Sn, Pb, P, As, Sb and Bi count too (P-51.4.1.4). Only the cited
 /// principal group's atoms are excluded.
 fn requires_skeletal_replacement(
     mol: &molecule::Molecule,
@@ -474,7 +474,21 @@ fn requires_skeletal_replacement(
                     .filter(|n| mol.atoms[n].symbol != "H")
                     .count()
                     >= 2
-                    || matches!(atom.symbol.as_str(), "B" | "Al" | "Si" | "Ge" | "Sn" | "Pb"))
+                    || matches!(
+                        atom.symbol.as_str(),
+                        "B" | "Al"
+                            | "Ga"
+                            | "In"
+                            | "Tl"
+                            | "Si"
+                            | "Ge"
+                            | "Sn"
+                            | "Pb"
+                            | "P"
+                            | "As"
+                            | "Sb"
+                            | "Bi"
+                    ))
                 && mol
                     .get_neighbors(atom.idx)
                     .iter()
@@ -772,6 +786,7 @@ mod tests {
             ("CNNOOC", true),
             ("CO[SiH2]OCCOCC(=O)O", true),
             ("COCCOCCOC[SiH3]", true),
+            ("COCCOCCOC[PH2]", true),
             ("COCOCOCC(=O)NC", false),
             ("COCOCOCC(=O)NCC(=O)O", true),
             ("CC(=O)NCC(=O)NCC(=O)NCC(=O)NCC(=O)O", true),
@@ -914,6 +929,21 @@ mod tests {
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             ("CCB(O)O", "ethylboronic acid", NameStatus::Preferred),
+            (
+                "COP(=O)(OC)OCC(=O)O",
+                "2-hydroxy-2-oxoethyl dimethyl phosphate",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "CC1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12",
+                "3'-methylspiro[indene-1,1'-indene]",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "[O-]C(=O)c1cc(C(=O)[O-])ccc1Cc1cc(S(=O)(=O)[O-])[n-]c1",
+                "4-[(5-sulfonato-1H-pyrrol-1-id-3-yl)methyl]benzene-1,3-dicarboxylate",
+                NameStatus::Unverified(NameReason::AnionParent),
+            ),
             (
                 "C1C=Cc2cc3sccc3n12",
                 "5H-pyrrolo[1,2-a]thieno[2,3-d]pyrrole",

@@ -192,8 +192,13 @@ fn graph_spiro_side(
         return plan_graph_spiro_side(mol, side_atoms, junction, required_core, true);
     }
     // P-24.3: identical components take a spirobi name, which is not generated.
+    // Compare the components as parent hydrides: substituents do not count.
     let cyclic = super::chains::get_cyclic_atoms(mol, &AtomSet::new());
-    let ranks = super::chains::canonical_ranks(&mol.subgraph(&cyclic), None);
+    let mut skeleton = mol.subgraph(&cyclic);
+    for atom in skeleton.atoms.values_mut() {
+        atom.total_h_count = 0;
+    }
+    let ranks = super::chains::canonical_ranks(&skeleton, None);
     let side_ranks = |inside: bool| {
         let mut ranks: Vec<_> = mol
             .get_neighbors(junction)
