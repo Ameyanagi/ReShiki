@@ -438,7 +438,7 @@ pub(super) fn name_subgraph_rendered(
     let plan = build_parent_assembly_plan(
         mol,
         &selection,
-        &[start],
+        &[],
         Some(start),
         upstream,
         &mapping,
@@ -466,7 +466,8 @@ pub(super) fn name_subgraph_rendered(
     }
     add_parent_features(mol, &mut parts, &plan.numbered_path, &plan.locant_map)?;
     apply_redundant_locant_elision(&mut parts);
-    let carbanion = simple_rooted_carbanion(mol, &parts, &plan.numbered_path, &plan.locant_map);
+    let carbanion =
+        simple_rooted_carbanion(mol, &parts, &plan.numbered_path, &plan.locant_map, start);
     let fusion_parent = parts
         .parent_hydride
         .as_ref()
@@ -524,6 +525,7 @@ fn simple_rooted_carbanion(
     parts: &AssemblyParts,
     path: &[usize],
     locants: &BTreeMap<usize, String>,
+    root: usize,
 ) -> Option<String> {
     if !parts.substituents.is_empty()
         || parts.principal_group.is_some()
@@ -533,7 +535,7 @@ fn simple_rooted_carbanion(
         return None;
     }
     let charged: Vec<_> = path.iter().filter(|n| mol.atoms[n].charge == -1).collect();
-    if charged.len() != 1 || locants[charged[0]] != "1" {
+    if charged.len() != 1 || *charged[0] != root || locants[charged[0]] != "1" {
         return None;
     }
     if path
@@ -776,7 +778,7 @@ pub(super) fn capped_acid_name(
 
 #[cfg(test)]
 mod tests {
-    use super::name_subgraph_with_upstream;
+    use super::{AssemblyParts, BTreeMap, name_subgraph_with_upstream, simple_rooted_carbanion};
     use crate::naming::openclatura::{graph_io::read_smiles, molecule::AtomSet};
 
     #[test]
@@ -817,6 +819,22 @@ mod tests {
             .unwrap()
             .join()
             .unwrap();
+    }
+
+    #[test]
+    fn simple_carbanion_requires_charge_on_the_attachment_atom() {
+        let mol = read_smiles("CC[CH2-]").unwrap();
+        let parts = AssemblyParts::default();
+        let path = [2, 1, 0];
+        let locants = BTreeMap::from([(2, "1".into()), (1, "2".into()), (0, "3".into())]);
+        assert_eq!(
+            simple_rooted_carbanion(&mol, &parts, &path, &locants, 0),
+            None
+        );
+        assert_eq!(
+            simple_rooted_carbanion(&mol, &parts, &path, &locants, 2).as_deref(),
+            Some("ethylmethanidyl")
+        );
     }
 
     #[test]

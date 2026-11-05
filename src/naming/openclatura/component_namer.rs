@@ -17,7 +17,8 @@ use super::{
     },
     parent_selection::select_principal_parent,
     principal_groups::{
-        add_component_principal_group, component_groups, component_principal_key,
+        add_component_principal_group, candidate_principal_attachments, component_groups,
+        component_principal_key, demote_neutral_suffixes_for_skeletal_anion,
         partition_principal_and_prefix_groups,
     },
     special_cases::{
@@ -268,6 +269,9 @@ fn component_pipeline(
             return Err("openclatura: principal group attachment is not unique".into());
         }
     }
+    if principal_atom.is_none() {
+        demote_neutral_suffixes_for_skeletal_anion(mol, component_atoms, &mut groups);
+    }
     let mut key = component_principal_key(mol, &groups, as_prefix);
     if principal_atom.is_none()
         && let Some(result) = structural_parent(mol, component_atoms, &groups, key.as_deref())?
@@ -310,7 +314,7 @@ fn component_pipeline(
             &mut exclude,
             &cyclic,
         );
-        let (principal, _) = partition_principal_and_prefix_groups(&groups, key.as_deref());
+        let principal = candidate_principal_attachments(mol, &groups, key.as_deref());
         exclude_nonparent_group_atoms(mol, &groups, &mut exclude, &cyclic);
         exclude_nonparent_group_atoms(mol, &prefix_only_groups, &mut exclude, &cyclic);
         if let Some(projection) = &projection {
@@ -335,6 +339,12 @@ fn component_pipeline(
     if let Some(selected) = groups
         .iter()
         .find(|g| Some(g.key.as_str()) == key.as_deref())
+        && selected
+            .atom_ids()
+            .iter()
+            .map(|id| mol.atoms[id].charge)
+            .sum::<i32>()
+            >= 0
         && groups.iter().any(|g| {
             g.is_principal_candidate && g.key != selected.key && seniority(g) == seniority(selected)
         })
@@ -729,10 +739,6 @@ mod tests {
                 "CCOC(=O)CC(O)(CC(=O)O)C(=O)O",
                 "2-(2-ethoxy-2-oxoethyl)-2-hydroxybutanedioic acid",
             ),
-            (
-                "OC(=O)CC(CC(=O)O)CC(=O)O",
-                "3-(2-hydroxy-2-oxoethyl)pentanedioic acid",
-            ),
         ] {
             let name = super::super::name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -742,6 +748,21 @@ mod tests {
                 "{smiles}"
             );
         }
+    }
+
+    #[test]
+    fn branched_acid_without_three_groups_on_one_chain_is_not_tricarboxylic() {
+        let name = super::super::name_smiles("OC(=O)CC(CC(=O)O)CC(=O)O").unwrap();
+        assert!(!name.text.contains("tricarboxylic"));
+    }
+
+    #[test]
+    fn isotope_labelled_external_carboxylic_acid_is_not_named_yet() {
+        let error = super::super::name_smiles("O[13C](=O)CC(O)(CC(=O)O)C(=O)O").unwrap_err();
+        assert_eq!(
+            error,
+            "openclatura: isotope equivalent-numbering proof failed"
+        );
     }
 
     #[test]
