@@ -124,7 +124,7 @@ listed name that now matches fails with a request to remove the entry.
 | `rules_cases.tsv`                |   94 | Cases of the removed rules namer, its name (empty: declined) and the port's name; checked by `s2n_rules_cases`.                                                                                                  |
 | `baseline.tsv`                   |  107 | Fast-subset correct counts per check and category; `parity_text` rows hold exact text matches.                                                                                                                   |
 | `status-snapshot.tsv`            |  909 | Name, status and reason of every fast-subset fixture and generated row; see [Status snapshot](#status-snapshot).                                                                                                 |
-| `name_known_failures.tsv`        |    5 | PubChem-name/fixture identity mismatches, keyed by SMILES and PubChem name, with an issue-prefixed diagnosis; excluded from the name check's rate.                                                               |
+| `name_known_failures.tsv`        |    0 | PubChem-name/fixture identity mismatches, keyed by SMILES and PubChem name, with an issue-prefixed diagnosis; excluded from the name check's rate.                                                               |
 | `metamorphic_known_failures.tsv` |    9 | Open metamorphic-relation failures; see [Metamorphic tests](#metamorphic-tests).                                                                                                                                 |
 
 openclatura-derived data is MIT; see `licenses/openclatura/`.
@@ -133,9 +133,13 @@ The fast subset is all 203 curated rows, every 10th random PubChem row, every
 5th openclatura row per category, and the first 500 generated molecules (934
 structures). The full run uses all fixture rows and 3,000 generated molecules.
 
-After the ground-truth checks, the fast name baseline is 243/243, with 4 known
-failures and 6 input-unparseable rows excluded. Exact parity is 380/431; the
-baseline still has 107 rows and the unchanged status snapshot has 909 rows.
+After the ground-truth checks, the fast name baseline is 247/247, with 6
+input-unparseable rows excluded. Exact parity is 380/431; the baseline still has
+107 rows and the unchanged status snapshot has 909 rows. Five bakeoff rows whose
+PubChem names omit stereo the fixture SMILES defines (#961) carry stereo-complete
+names instead: cis-1,4-dimethylcyclohexane, cis-4-tert-butylcyclohexan-1-ol,
+trans- and cis-1,2,3,4,4a,5,6,7,8,8a-decahydronaphthalene, and the imine row's
+(1E,2E)-but-2-enylidene.
 
 ## Final numbers (openclatura port, 2026-10-31)
 
