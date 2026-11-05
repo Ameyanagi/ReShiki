@@ -186,15 +186,12 @@ fn graph_spiro_side(
     let mut render = |parts: &mut AssemblyParts| {
         render_component_parent(&side_mol, parts, &plan.numbered_path, &plan.locant_map)
     };
-    let result = spiro_assembly_from_parts(parts, &junction_locant, Some(&mut render))?;
+    let mut result = spiro_assembly_from_parts(parts, &junction_locant, Some(&mut render))?;
     if result.is_none() && parts.principal_group.is_some() && !prefix_only {
         mol.set_name_status(status);
         return plan_graph_spiro_side(mol, side_atoms, junction, required_core, true);
     }
-    // P-24.3: identical components take a spirobi name, which is not
-    // generated. Compare the two ring systems through the junction as
-    // skeletons, ignoring substituents, elements (P-24.3.4 replacement) and
-    // the junction positions (P-24.3.3); equal sizes withhold certification.
+    // Keep the P-24.3 same-size veto until composition proves a spirobi parent.
     let all: AtomSet = mol.atoms.keys().copied().collect();
     let ring_bonds: BTreeSet<_> = biconnected_edge_components(mol, &all)
         .into_iter()
@@ -224,10 +221,8 @@ fn graph_spiro_side(
             .count();
         (atoms.len(), bonds)
     };
-    if result.is_some() && size(true) == size(false) {
-        mol.mark_name(crate::naming::NameStatus::Unverified(
-            crate::naming::NameReason::UnauditedParent,
-        ));
+    if let Some(side) = &mut result {
+        side.same_size_components = size(true) == size(false);
     }
     Ok(result)
 }

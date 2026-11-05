@@ -19,6 +19,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Record departures only after promotions and final text selection have run.
 pub(super) fn mark_assembled_name(mol: &super::molecule::Molecule, parts: &AssemblyParts) {
+    if parts.spiro_same_size_components {
+        mol.mark_name(NameStatus::Unverified(NameReason::UnauditedParent));
+    }
     if let Some(group) = &parts.principal_group {
         let rule = group
             .resolved_rule

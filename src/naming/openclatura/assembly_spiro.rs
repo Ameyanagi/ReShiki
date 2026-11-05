@@ -25,6 +25,7 @@ pub struct SpiroAssembly {
     pub side_prime: String,
     pub cited_first: bool,
     pub continuation: Option<Box<SpiroAssembly>>,
+    pub same_size_components: bool,
 }
 impl SpiroAssembly {
     pub fn new(side_locant: impl Into<String>, side_parent_name: impl Into<String>) -> Self {
@@ -1004,6 +1005,11 @@ pub fn split_spiro_substituents(parts: &mut AssemblyParts) -> Result<Vec<SpiroAs
     if sides.len() > 2 || (sides.len() > 1 && sides.iter().any(|s| s.continuation.is_some())) {
         return Err("openclatura: spiro assembly requires a graph-numbered path of at most three components".into());
     }
+    parts.spiro_same_size_components = sides.iter().any(|side| {
+        std::iter::once(side)
+            .chain(side.continuation.as_deref())
+            .any(|s| s.same_size_components)
+    });
     parts.substituents = normal;
     if !sides.is_empty() {
         let junctions = sides.iter().map(|s| s.parent_locant.clone()).collect();
@@ -1085,7 +1091,7 @@ fn locant_bracketed_component(name: &str) -> Option<String> {
         && !stem.contains("hydro"))
     .then(|| format!("[{locants}]{stem}"))
 }
-fn spiro_component(name: &str) -> String {
+pub(super) fn spiro_component(name: &str) -> String {
     locant_bracketed_component(name).unwrap_or_else(|| name.into())
 }
 fn side_name(name: &str) -> String {

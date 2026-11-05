@@ -62,6 +62,9 @@ mod special_cases;
 mod species;
 mod spelling;
 mod spiro_subgraph;
+mod spirobi;
+#[cfg(test)]
+mod spirobi_tests;
 mod subgraph_tools;
 mod unknown_stereo;
 mod von_baeyer;
@@ -933,8 +936,8 @@ mod tests {
             ("CCB(O)O", "ethylboronic acid", NameStatus::Preferred),
             (
                 "C12(CC3CCC1C3)C1CCC2CC1",
-                "spiro[bicyclo[2.2.1]heptane-7,2'-bicyclo[2.2.1]heptane]",
-                NameStatus::Unverified(NameReason::UnauditedParent),
+                "2,7'-spirobi[bicyclo[2.2.1]heptane]",
+                NameStatus::Preferred,
             ),
             (
                 "CC(=O)[NH-]",
@@ -943,8 +946,8 @@ mod tests {
             ),
             (
                 "c1ccccc1C1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12",
-                "3'-phenylspiro[indene-1,1'-indene]",
-                NameStatus::Unverified(NameReason::UnauditedParent),
+                "3-phenyl-1,1'-spirobi[indene]",
+                NameStatus::Preferred,
             ),
             (
                 "COP(=O)(OC)OCC(=O)O",
@@ -953,8 +956,8 @@ mod tests {
             ),
             (
                 "CC1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12",
-                "3'-methylspiro[indene-1,1'-indene]",
-                NameStatus::Unverified(NameReason::UnauditedParent),
+                "3-methyl-1,1'-spirobi[indene]",
+                NameStatus::Preferred,
             ),
             (
                 "[O-]C(=O)c1cc(C(=O)[O-])ccc1Cc1cc(S(=O)(=O)[O-])[n-]c1",
@@ -973,8 +976,8 @@ mod tests {
             ),
             (
                 "C1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12",
-                "spiro[indene-1,1'-indene]",
-                NameStatus::Unverified(NameReason::UnauditedParent),
+                "1,1'-spirobi[indene]",
+                NameStatus::Preferred,
             ),
             (
                 "CC(=O)OOC(C)=O",
