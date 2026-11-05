@@ -69,8 +69,41 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     };
     // Carbon-free anions take retained or additive names, not a P-72.7 parent.
     if mol.atoms.values().all(|atom| atom.symbol != "C")
-        || mol.atoms.values().map(|atom| atom.charge).sum::<i32>() >= 0
+        || !mol.atoms.values().any(|atom| atom.charge < 0)
     {
+        return;
+    }
+    // Nitro, N-oxide, azido, diazo and isocyano charges express neutral groups rather
+    // than anionic centres. A separate cation does not cancel a real centre.
+    let neutral_group_atoms: std::collections::BTreeSet<_> =
+        super::perception::perceive_groups(mol)
+            .into_iter()
+            .filter(|group| {
+                (matches!(
+                    group.key.as_str(),
+                    "nitro"
+                        | "azido"
+                        | "diazo"
+                        | "acid_azide"
+                        | "ring_acid_azide"
+                        | "isocyano"
+                        | "acid_isocyanide"
+                        | "ring_acid_isocyanide"
+                ) || group
+                    .descriptor
+                    .as_ref()
+                    .is_some_and(|descriptor| descriptor.derivative == "zwitterion"))
+                    && group
+                        .atoms_involved
+                        .iter()
+                        .map(|i| mol.atoms[i].charge)
+                        .sum::<i32>()
+                        == 0
+            })
+            .flat_map(|group| group.atoms_involved)
+            .collect();
+    let anionic_centre = |i: &usize| mol.atoms[i].charge < 0 && !neutral_group_atoms.contains(i);
+    if !mol.atoms.keys().any(anionic_centre) {
         return;
     }
     let principal_atoms = principal_group.as_ref().map(|(_, atoms)| atoms);
@@ -78,10 +111,13 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     // charge-separated or deprotonated neutral class, as in acetamide for
     // acetylazanide, does not. With no characteristic group, the parent cites -ide.
     let anionic_parent = principal_group.as_ref().map_or_else(
-        || parent_atoms.iter().any(|i| mol.atoms[i].charge < 0),
+        || parent_atoms.iter().any(anionic_centre),
         |(key, atoms)| {
-            super::perception::is_anionic_group_key(key)
-                && atoms.iter().map(|i| mol.atoms[i].charge).sum::<i32>() < 0
+            (super::perception::is_anionic_group_key(key)
+                && atoms.iter().map(|i| mol.atoms[i].charge).sum::<i32>() < 0)
+                // A cationic characteristic suffix can accompany skeletal -ide.
+                || (matches!(key.as_str(), "aminium" | "iminium" | "diazonio")
+                    && parent_atoms.iter().any(anionic_centre))
         },
     );
     let hydroxy_anion = principal_group.as_ref().is_some_and(|(key, _)| {
@@ -98,7 +134,7 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
         mol.atoms
             .iter()
             .filter(|(i, atom)| {
-                atom.charge < 0
+                anionic_centre(i)
                     && cited(i) != outside
                     && (!skeletal || matches!(atom.symbol.as_str(), "C" | "N"))
             })
@@ -215,6 +251,8 @@ mod tests {
             matches!(&name.derivation, Derivation::Plan { .. }),
             "{smiles}"
         );
+        // Isolate this assessor from marks made while deriving the name.
+        mol.set_name_status(NameStatus::Unverified(NameReason::UnauditedPath));
         assess_anion_parent(&mol, &name.derivation);
         mol.certify();
         mol.name_status()
@@ -229,12 +267,31 @@ mod tests {
             "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
             "C[O-]",
             "[O-]c1ccccc1",
+            "[NH3+]CCc1ccccc1[O-]",
+            "C[N+](C)(C)CC[O-]",
+            "[NH3+]CC([NH3+])C[O-]",
         ] {
             assert_eq!(
                 assess_component(smiles),
                 NameStatus::Unverified(NameReason::AnionParent),
                 "{smiles}"
             );
+        }
+    }
+
+    #[test]
+    fn neutral_charge_separated_groups_are_not_anionic_centres() {
+        for smiles in [
+            "[O-][N+](=O)c1ccccc1",
+            "C[N+](C)(C)[O-]",
+            "CN=[N+]=[N-]",
+            "C=[N+]=[N-]",
+            "CC#[N+][O-]",
+            "CC(=O)N=[N+]=[N-]",
+            "C[N+]#[C-]",
+            "CC(=O)[N+]#[C-]",
+        ] {
+            assert_eq!(assess_component(smiles), NameStatus::Preferred, "{smiles}");
         }
     }
 
@@ -247,6 +304,7 @@ mod tests {
             "Oc1ccccc1-c1[n-]ccc1C",
             "OCCc1cc[n-]c1",
             "OC(=O)c1ccccc1-c1[n-]ccc1",
+            "[NH3+][C-]1C=CC2=C1N=NO2",
         ] {
             assert_eq!(assess_component(smiles), NameStatus::Preferred, "{smiles}");
         }
@@ -411,8 +469,8 @@ mod tests {
             ),
             (
                 "[NH3+]CC1[N-]C(=O)NC1=O",
-                "5-(ammoniomethyl)imidazolidin-1-ide-2,4-dione",
-                NameStatus::Unverified(NameReason::CationPrefix),
+                "5-(azaniumylmethyl)imidazolidin-1-ide-2,4-dione",
+                NameStatus::Unverified(NameReason::AnionParent),
             ),
             ("CC(=O)[O-]", "acetate", NameStatus::Preferred),
             (

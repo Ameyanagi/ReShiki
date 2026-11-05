@@ -46,17 +46,17 @@ pub fn production_retained_fused_parent(
     attachment_atom: Option<usize>,
 ) -> Result<Option<ProductionRetainedFusedParent>, String> {
     let parent_atoms: AtomSet = parent_path.iter().copied().collect();
-    if component_atoms.iter().any(|a| mol.atoms[a].charge != 0)
-        || parent_atoms.iter().any(|a| {
-            mol.atoms[a].charge != 0
-                || mol.get_neighbors(*a).iter().any(|n| {
-                    parent_atoms.contains(n)
-                        && mol
-                            .get_bond(*a, *n)
-                            .is_none_or(|b| !matches!(b.order, 1 | 2))
-                })
+    if component_atoms.iter().any(|a| {
+        let atom = &mol.atoms[a];
+        atom.charge != 0 && (!parent_atoms.contains(a) || atom.symbol != "C" || atom.charge != -1)
+    }) || parent_atoms.iter().any(|a| {
+        mol.get_neighbors(*a).iter().any(|n| {
+            parent_atoms.contains(n)
+                && mol
+                    .get_bond(*a, *n)
+                    .is_none_or(|b| !matches!(b.order, 1 | 2))
         })
-    {
+    }) {
         return Ok(None);
     }
     if !GATE["allowed_principal_keys"]
@@ -237,6 +237,8 @@ fn eligible(
     for m in matches {
         if !listed("production_parent_names", &m.template.name)
             || !m.template.derivative_production_enabled
+            || (parent_atoms.iter().any(|a| mol.atoms[a].charge != 0)
+                && m.template.charge_policy != "deprotonated_indicated_h")
             || (principal_key == Some("ketone")
                 && !has_mancude_unsaturation(mol, parent_atoms, &m)
                 && !saturation_is_hydro_citable(mol, &m))

@@ -493,13 +493,34 @@ fn atom_matches(
     a: &RetainedGraphAtomTemplate,
     ring: &AtomSet,
     nonaromatic: bool,
-    charge: &str,
+    template: &RetainedGraphTemplate,
     fixed_hydrogenation: bool,
 ) -> bool {
     let atom = &mol.atoms[&idx];
+    let charge = template.charge_policy.as_str();
+    // P-72.2.2.1 removes a hydron from the indicated-H site of these
+    // explicitly admitted retained hydrides. Keep the neutral graph and its
+    // indicated-H locant; the anion operation supplies the charge suffix.
+    let deprotonated_indicated_h = charge == "deprotonated_indicated_h"
+        && template.default_indicated_h.contains(&a.locant)
+        && a.symbol == "C"
+        && a.charge == 0
+        && a.saturated
+        && !a.aromatic
+        && atom.charge == -1
+        && atom.radical_electrons == 0
+        && mol
+            .get_neighbors(idx)
+            .iter()
+            .map(|&neighbor| mol.bond_order(idx, neighbor))
+            .sum::<usize>()
+            + atom.total_h_count
+            == 3;
     if atom.symbol != a.symbol
-        || (charge == "exact" || (charge == "charge_layer" && a.charge != 0))
+        || (matches!(charge, "exact" | "deprotonated_indicated_h")
+            || (charge == "charge_layer" && a.charge != 0))
             && atom.charge != a.charge
+            && !deprotonated_indicated_h
     {
         return false;
     }
@@ -641,15 +662,7 @@ pub(super) fn match_retained_graph_template_maps_with_options(
                         .filter(|n| atoms.contains(n))
                         .count()
                         == neighbors[i].len()
-                        && atom_matches(
-                            mol,
-                            a,
-                            &by_locant[l],
-                            atoms,
-                            nonaromatic,
-                            &t.charge_policy,
-                            fixed,
-                        )
+                        && atom_matches(mol, a, &by_locant[l], atoms, nonaromatic, t, fixed)
                 })
                 .collect()
         })
@@ -1212,6 +1225,71 @@ mod tests {
                 crate::naming::verify_identity(smiles, &reconstructed)
                     .unwrap_or_else(|error| panic!("{smiles} -> {candidate}: {error}"));
             }
+        }
+    }
+
+    #[test]
+    fn indicated_h_carbanions_keep_the_retained_parent_and_locant() {
+        for (smiles, parent, locant) in [
+            ("[CH-]1C=Cc2ccccc21", "1H-indene", "1"),
+            ("[CH-]1c2ccccc2-c2ccccc21", "9H-fluorene", "9"),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let charged = *mol
+                .atoms
+                .iter()
+                .find(|(_, atom)| atom.charge == -1)
+                .unwrap()
+                .0;
+            let rows = matches(smiles, MatchOptions::default());
+            assert!(!rows.is_empty(), "{smiles}");
+            for row in rows {
+                assert_eq!(row.template.name, parent, "{smiles}");
+                assert_eq!(row.atom_to_locant[&charged], locant, "{smiles}");
+                assert_eq!(row.indicated_h, [locant], "{smiles}");
+            }
+        }
+        for (smiles, expected) in [
+            ("[CH-]1C=Cc2ccccc21", "1H-inden-1-ide"),
+            (
+                "C[C@H](O)[C-]1C=Cc2ccccc21",
+                "1-[(1S)-1-hydroxyethyl]-1H-inden-1-ide",
+            ),
+            (
+                "C[C@H](O)[C-]1c2ccccc2-c2ccccc21",
+                "9-[(1S)-1-hydroxyethyl]-9H-fluoren-9-ide",
+            ),
+            ("[CH-]1c2ccccc2-c2ccccc21", "9H-fluoren-9-ide"),
+            ("C1=Cc2ccccc2C1", "1H-indene"),
+            ("c1ccc2c(c1)Cc1ccccc1-2", "9H-fluorene"),
+        ] {
+            for input in [
+                smiles.to_owned(),
+                crate::naming::canonical_smiles(smiles).unwrap(),
+            ] {
+                let name = super::super::name_smiles(&input).unwrap();
+                assert_eq!(name.text, expected, "{smiles} via {input}");
+                assert_eq!(
+                    name.status,
+                    crate::naming::NameStatus::Preferred,
+                    "{smiles} via {input}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn indicated_h_carbanion_admission_does_not_relax_other_charge_states() {
+        for smiles in [
+            "[CH+]1C=Cc2ccccc21",
+            "[C-]1C=Cc2ccccc21",
+            "C1=[C-]Cc2ccccc21",
+            "[CH+]1c2ccccc2-c2ccccc21",
+        ] {
+            assert!(
+                matches(smiles, MatchOptions::default()).is_empty(),
+                "{smiles}"
+            );
         }
     }
 

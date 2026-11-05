@@ -22,6 +22,7 @@ fn functional_ring_parent(name: &str, key: &str) -> Option<String> {
     let base = match key {
         "alcohol" => "phenol",
         "amine" => "aniline",
+        "aminium" => "anilinium",
         "ring_aldehyde" => "benzaldehyde",
         "ring_carboxylic_acid" => "benzoic acid",
         "ring_amide" => "benzamide",
@@ -1119,8 +1120,9 @@ pub(super) fn format_parent_tail(
         // Keep the principal suffix separate for added-hydrogen placement.
         suffix_terminal.truncate(suffix_terminal.len() - suffix.len());
     } else if !charge.is_empty() {
-        suffix_terminal.clear();
         suffix = format!("{charge}{suffix}");
+        suffix_terminal = spelling::join(terminal, &suffix);
+        suffix_terminal.truncate(suffix_terminal.len() - suffix.len());
     }
     Ok(ParentTail {
         stem,
@@ -1244,7 +1246,62 @@ mod tests {
             charge: 1,
             ..Default::default()
         });
-        assert_eq!(rendered_parent(&parts), "piperazin-1,4-diium");
+        assert_eq!(rendered_parent(&parts), "piperazine-1,4-diium");
+    }
+
+    #[test]
+    fn cation_suffixes_keep_e_before_multipliers_and_elide_before_ium() {
+        use super::super::assembly_parts::ParentChargeItem;
+        for (parent, symbol, locants, expected) in [
+            ("piperazine", "N", vec!["1", "4"], "piperazine-1,4-diium"),
+            ("1,4-dioxane", "O", vec!["1", "4"], "1,4-dioxane-1,4-diium"),
+            ("piperidine", "N", vec!["1"], "piperidin-1-ium"),
+            ("morpholine", "N", vec!["4"], "morpholin-4-ium"),
+        ] {
+            let mut parts = AssemblyParts::new(6);
+            parts.is_ring = true;
+            parts.retained_name = Some(parent.into());
+            parts.parent_charges = locants
+                .into_iter()
+                .map(|locant| ParentChargeItem {
+                    locant: locant.into(),
+                    symbol: symbol.into(),
+                    charge: 1,
+                    ..Default::default()
+                })
+                .collect();
+            assert_eq!(rendered_parent(&parts), expected, "{parent}");
+        }
+    }
+
+    #[test]
+    fn anilinium_absorbs_one_aminium_group_and_keeps_substituent_locants() {
+        use super::super::assembly_parts::{PrincipalGroupItem, SubstituentItem};
+        let mut parts = AssemblyParts::new(6);
+        parts.is_ring = true;
+        parts.retained_name = Some("benzene".into());
+        parts.principal_group = Some(PrincipalGroupItem::new("aminium", vec!["1".into()]));
+        parts.substituents = vec![
+            SubstituentItem::new("methyl", vec!["N".into(), "N".into(), "N".into()]),
+            SubstituentItem::new("methyl", vec!["4".into()]),
+        ];
+        assert_eq!(
+            super::super::assembler::assemble_name_raw(&mut parts).unwrap(),
+            "N,N,N,4-tetramethylanilinium"
+        );
+
+        parts.substituents.clear();
+        parts.retained_name = Some("benzene".into());
+        parts.retained_absorbs_principal_group = false;
+        parts
+            .principal_group
+            .as_mut()
+            .unwrap()
+            .locants
+            .push("4".into());
+        promote_retained_functional_parent(&mut parts).unwrap();
+        assert!(!parts.retained_absorbs_principal_group);
+        assert_eq!(rendered_parent(&parts), "benzene-1,4-bis(aminium)");
     }
 
     #[test]

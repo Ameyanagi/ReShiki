@@ -181,6 +181,10 @@ pub fn format_amino_from_branches(
     cation: bool,
     anion: bool,
 ) -> String {
+    if cation {
+        // Substituted cationic nitrogen keeps the accepted ammonio/iminio alternative.
+        mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
+    }
     if double {
         let suffix = if cation { "iminio" } else { "imino" };
         if names.is_empty() {
@@ -208,8 +212,6 @@ pub fn format_amino_from_branches(
         return suffix.into();
     }
     if cation {
-        // P-73.6: whether azaniumyl is required here has not been verified.
-        mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
         if names.is_empty() {
             return "ammonio".into();
         }
@@ -636,6 +638,19 @@ fn name_nitrogen(
     }
     let roots = subgraph_neighbors(mol, start, exclude, upstream);
     let atom = &mol.atoms[&start];
+    if atom.charge == 1
+        && matches!(order, 1 | 2)
+        && mol
+            .get_neighbors(start)
+            .iter()
+            .all(|&n| Some(n) == upstream || mol.atoms[&n].symbol == "H")
+    {
+        return Ok(if order == 2 {
+            "azaniumylidene".into()
+        } else {
+            "azaniumyl".into()
+        });
+    }
     if order == 3
         && atom.charge == 1
         && roots.len() <= 1
@@ -654,9 +669,14 @@ fn name_nitrogen(
         return Ok(if order == 3 {
             "nitrilo".into()
         } else if order == 2 {
-            charged_prefix("N", atom.charge, 2)
-                .filter(|_| atom.charge != 0)
-                .unwrap_or_else(|| "imino".into())
+            if atom.charge > 0 {
+                mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
+                "iminio".into()
+            } else {
+                charged_prefix("N", atom.charge, 2)
+                    .filter(|_| atom.charge != 0)
+                    .unwrap_or_else(|| "imino".into())
+            }
         } else if atom.charge > 0 {
             mol.mark_name(NameStatus::Unverified(NameReason::CationPrefix));
             "ammonio".into()
@@ -746,7 +766,7 @@ fn name_nitrogen(
     }
     mol.set_name_status(status);
     let mut names = Vec::new();
-    for n in roots {
+    for &n in &roots {
         let oxygen = double_bonded_neighbors(mol, n, "O");
         let sulfur = double_bonded_neighbors(mol, n, "S");
         let b = if mol.atoms[&n].is_carbon() && oxygen.len() == 1 {
@@ -815,6 +835,13 @@ fn name_nitrogen(
     // The uncharged multiple-imino fallback does not cite its branch names.
     if order == 2 && atom.charge <= 0 && names.len() > 1 {
         mol.set_name_status(status);
+    }
+    if order == 1
+        && atom.charge > 0
+        && let Some(prefix) =
+            super::ionic_naming::cationic_methylidene_fallback(mol, start, &roots, &names)
+    {
+        return Ok(prefix);
     }
     Ok(format_amino_from_branches(
         mol,
@@ -1727,14 +1754,14 @@ mod tests {
     use crate::naming::{NameReason, NameStatus};
 
     #[test]
-    fn ammonio_prefixes_record_unverified_preference_when_emitted() -> Result<(), String> {
+    fn cationic_nitrogen_prefixes_distinguish_unsubstituted_nitrogen() -> Result<(), String> {
         for (smiles, start, upstream, expected, status) in [
             (
                 "CC[NH3+]",
                 2,
                 1,
-                "ammonio",
-                NameStatus::Unverified(NameReason::CationPrefix),
+                "azaniumyl",
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
                 "C[N+](C)(C)C",
@@ -1744,10 +1771,38 @@ mod tests {
                 NameStatus::Unverified(NameReason::CationPrefix),
             ),
             (
+                "C[NH2+]C",
+                1,
+                0,
+                "(methylammonio)",
+                NameStatus::Unverified(NameReason::CationPrefix),
+            ),
+            (
+                "C[NH+](C)C",
+                1,
+                0,
+                "(dimethylammonio)",
+                NameStatus::Unverified(NameReason::CationPrefix),
+            ),
+            (
+                "C=[N+](C)C",
+                1,
+                0,
+                "(dimethyliminio)",
+                NameStatus::Unverified(NameReason::CationPrefix),
+            ),
+            (
+                "C[NH2+]c1ccccc1",
+                1,
+                0,
+                "(phenylammonio)",
+                NameStatus::Unverified(NameReason::CationPrefix),
+            ),
+            (
                 "CC=[NH2+]",
                 2,
                 1,
-                "iminio",
+                "azaniumylidene",
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
         ] {

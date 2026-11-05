@@ -380,6 +380,16 @@ pub fn prefix_from_group(
                     && context.mol.atoms[r].symbol != "H"
             })
             .collect();
+        if group.key == "iminium" {
+            if context.mol.get_neighbors(n).iter().all(|&neighbor| {
+                neighbor == group.attachment_carbon || context.mol.atoms[&neighbor].symbol == "H"
+            }) {
+                return Ok("azaniumylidene".into());
+            }
+            context
+                .mol
+                .mark_name(NameStatus::Unverified(NameReason::CationPrefix));
+        }
         if roots.is_empty() {
             return Ok(base.into());
         }
@@ -439,10 +449,18 @@ pub fn prefix_from_group(
         return ester_prefix_from_group(context.mol, group, context.sub_exclude, "carbonyl");
     }
     Ok(if context.parent_path.contains(&group.attachment_carbon) {
-        if group.key == "aminium" {
+        if group.key == "aminium"
+            && !amide_nitrogen(context.mol, group).is_some_and(|n| {
+                context.mol.get_neighbors(n).iter().all(|&neighbor| {
+                    neighbor == group.attachment_carbon
+                        || context.mol.atoms[&neighbor].symbol == "H"
+                })
+            })
+        {
             context
                 .mol
                 .mark_name(NameStatus::Unverified(NameReason::CationPrefix));
+            return Ok("ammonio".into());
         }
         rule.prefix.clone().unwrap_or_default()
     } else {
@@ -516,7 +534,7 @@ mod tests {
     use super::super::name_smiles;
 
     #[test]
-    fn aminium_prefix_fallback_records_the_cation_prefix_choice() {
+    fn unsubstituted_aminium_prefix_uses_azaniumyl() {
         let mol = super::super::graph_io::read_smiles("C[NH3+]").unwrap();
         let group = super::super::perception::perceive_groups(&mol)
             .into_iter()
@@ -529,11 +547,11 @@ mod tests {
         };
         assert_eq!(
             super::prefix_from_group(&context, &group).unwrap(),
-            "ammonio"
+            "azaniumyl"
         );
         assert_eq!(
             mol.name_status(),
-            crate::naming::NameStatus::Unverified(crate::naming::NameReason::CationPrefix)
+            crate::naming::NameStatus::Unverified(crate::naming::NameReason::UnauditedPath)
         );
     }
 

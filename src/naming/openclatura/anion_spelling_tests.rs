@@ -89,7 +89,7 @@ fn anion_spelling_matrix() {
             "pyrrolo[3,2-c]pyridazin-1-ide-2-ium",
         ),
         (30, "C[S+](C)[CH-]C", "1-(dimethylsulfaniumyl)ethan-1-ide"),
-        (31, "[NH2+]1CC[NH2+]CC1", "piperazin-1,4-diium"),
+        (31, "[NH2+]1CC[NH2+]CC1", "piperazine-1,4-diium"),
         (33, "CC(C)[CH-]C(=O)C(C)C", "2,5-dimethyl-3-oxohexan-4-ide"),
         (34, "[NH2+]1CC(=O)[CH-]CC1", "3-oxopiperidin-1-ium-4-ide"),
         (
@@ -101,7 +101,7 @@ fn anion_spelling_matrix() {
         (
             37,
             "[N-]1CCC(CC1)C1CC[NH2+]CC1",
-            "4-(piperidinium-4-yl)piperidin-1-ide",
+            "4-(piperidin-1-ium-4-yl)piperidin-1-ide",
         ),
         (38, "[c-]1ccccc1", "benzenide"),
     ] {
@@ -183,7 +183,7 @@ fn retained_anion_parents_are_cited_only_where_numbering_fixes_the_centre() {
         ),
         (
             "[N-]1CCC(CC1)C1CC[NH2+]CC1",
-            "4-(piperidinium-4-yl)piperidin-1-ide",
+            "4-(piperidin-1-ium-4-yl)piperidin-1-ide",
             NameStatus::NotPreferred(NameReason::RingAssembly),
         ),
     ] {

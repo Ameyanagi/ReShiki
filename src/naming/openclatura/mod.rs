@@ -68,6 +68,8 @@ mod von_baeyer;
 
 #[cfg(test)]
 mod anion_spelling_tests;
+#[cfg(test)]
+mod ion_spelling_tests;
 
 /// The naming profile on the worker wire and in generated-name warnings.
 pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
