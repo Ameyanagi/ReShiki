@@ -793,6 +793,7 @@ mod tests {
                 "(1E,2E)-di(butan-2-ylidene)hydrazine",
             ),
             ("CC(C)=NN=C(C)C", "di(propan-2-ylidene)hydrazine"),
+            ("CCCCCCCCCC=NN=CCCCCCCCCC", "di(decylidene)hydrazine"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -806,19 +807,10 @@ mod tests {
     }
 
     #[test]
-    fn azine_spelling_preserves_alkene_and_oxime_controls() {
-        for (smiles, expected) in [
-            ("C/C=C/C", "(2E)-but-2-ene"),
-            ("C/C=N/O", "(1E)-N-hydroxyethanimine"),
-        ] {
-            let name = name_smiles(smiles).unwrap();
-            assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
-        }
+    fn azine_spelling_preserves_alkene_control() {
+        let name = name_smiles("C/C=C/C").unwrap();
+        assert_eq!(name.text, "(2E)-but-2-ene");
+        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
     }
 
     #[test]

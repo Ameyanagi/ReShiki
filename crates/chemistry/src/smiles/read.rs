@@ -5,8 +5,8 @@ use super::{Error, Parsed, Prepared, Result, parse_inner, prepare};
 use crate::{
     cx,
     kekulize::Direction,
-    ranking::{Metadata, StereoGroup},
-    stereo::{self, Point3, wedging::Conformer},
+    ranking::StereoGroup,
+    stereo::{self, Point3, perception::State, wedging::Conformer},
 };
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -325,7 +325,8 @@ fn int_property(
     value
 }
 
-fn relative_stereo(metadata: &mut Metadata) {
+fn relative_stereo(state: &mut State) -> Result<()> {
+    let metadata = &state.metadata;
     // Explicit enhanced stereo labels take precedence over molecule-level r.
     let grouped: HashSet<_> = metadata
         .groups
@@ -340,22 +341,36 @@ fn relative_stereo(metadata: &mut Metadata) {
             (matches!(meta.chiral_tag, 1 | 2) && !grouped.contains(&atom)).then_some(atom)
         })
         .collect();
-    if !atoms.is_empty() {
-        metadata.groups.push(StereoGroup {
-            kind: 1,
-            atoms,
-            ..StereoGroup::default()
-        });
+    if atoms.is_empty() {
+        return Ok(());
     }
+    // Equivalence of the drawn member need not survive independent group inversions.
+    if !metadata
+        .groups
+        .iter()
+        .any(|group| matches!(group.kind, 1 | 2))
+    {
+        let mut inverse = state.clone();
+        super::invert_tetrahedral(&mut inverse, &atoms.iter().copied().collect());
+        if super::canonical_smiles(state)? == super::canonical_smiles(&inverse)? {
+            return Ok(());
+        }
+    }
+    state.metadata.groups.push(StereoGroup {
+        kind: 2,
+        atoms,
+        ..StereoGroup::default()
+    });
+    Ok(())
 }
 
 /// Reactions apply CX annotations after bare parsing and keep explicit H.
 /// They sanitize without the default molecule import's stereo perception.
-/// Configured molecule-level `r` is refused with other enhanced stereo groups.
+/// Molecule-level `r` is normalized before refusing enhanced stereo groups.
 pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
     use crate::{
         sanitize,
-        stereo::perception::{Properties, RingCache, RingKind, State},
+        stereo::perception::{Properties, RingCache, RingKind},
     };
     let mut annotations = Annotations::new(&parsed);
     for event in events {
@@ -372,16 +387,12 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     if let Some(error) = annotations.context.property_errors.iter().flatten().next() {
         return Err(Error::Unsupported(error));
     }
-    let mut clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
-    if annotations.relative {
-        relative_stereo(&mut clean.metadata);
-    }
+    let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
     if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || clean.metadata.atoms.iter().enumerate().any(|(i, a)| {
             !stereo::allene::supported(&clean.graph, i, a.chiral_tag, a.chiral_permutation)
         })
         || clean.metadata.bonds.iter().any(|b| b.stereo > 7)
-        || !clean.metadata.groups.is_empty()
     {
         return Err(Error::Unsupported(
             "reaction stereochemistry or radical count",
@@ -426,7 +437,7 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
             entries
         })
         .collect();
-    Ok(Imported {
+    let mut imported = Imported {
         dropped_cumulene_ez: false,
         relative: annotations.relative,
         reaction_properties,
@@ -460,7 +471,16 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         },
         conformers: annotations.context.conformers,
         name: None,
-    })
+    };
+    if annotations.relative {
+        relative_stereo(&mut imported.prepared.state)?;
+    }
+    if !imported.prepared.state.metadata.groups.is_empty() {
+        return Err(Error::Unsupported(
+            "reaction stereochemistry or radical count",
+        ));
+    }
+    Ok(imported)
 }
 
 /// Read default SMILES/CXSMILES chemistry, retaining input conformers and name.
@@ -564,7 +584,7 @@ pub fn read(text: &str) -> Result<Imported> {
     )?;
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
     if annotations.relative {
-        relative_stereo(&mut prepared.state.metadata);
+        relative_stereo(&mut prepared.state)?;
     }
     let mut dropped_cumulene_ez = false;
     for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {

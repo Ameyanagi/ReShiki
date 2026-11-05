@@ -712,11 +712,11 @@ async fn relative_cxsmiles_refuses_absolute_identity_927_item_5() {
         "C[C@H](O)C(=O)O |r|",
         "C[C@@H](O)C(=O)O |r|",
         "C[C@H](O)[C@@H](C)Cl |r|",
+        "C[C@H](O)[C@@H](O)C |r|",
         "C[C@H](O)[C@@H](C)Cl |o1:1,3|",
         "C[C@H](O)[C@@H](C)Cl |&1:1,3|",
         "C[C@H](O)[C@H](F)Cl |r,o1:1,a:3|",
         "[H][C@](C)(O)C(=O)O |r|",
-        "O[C@H]1CC[C@@H](O)CC1 |r|",
     ] {
         let imported = reshiki_chemistry::smiles::read(smiles).unwrap();
         let error = super::canonical_state(&imported.prepared.state).unwrap_err();
@@ -732,6 +732,32 @@ async fn relative_cxsmiles_refuses_absolute_identity_927_item_5() {
             error.contains("Unsupported drawing stereochemistry"),
             "{smiles}: {error}"
         );
+    }
+}
+
+#[tokio::test]
+async fn relative_cxsmiles_preserves_inversion_invariant_configurations() {
+    for (smiles, expected) in [
+        ("O[C@H]1CC[C@@H](O)CC1", "(1s,4s)-cyclohexane-1,4-diol"),
+        ("C[C@H](O)[C@H](O)C", "(2R,3S)-butane-2,3-diol"),
+    ] {
+        for input in [smiles.to_owned(), format!("{smiles} |r|")] {
+            let response = crate::engine::LocalEngine::in_process()
+                .request(crate::engine::Request::import_smiles(&input))
+                .await
+                .unwrap();
+            let identity = super::document_identity(&response.document.unwrap()).unwrap();
+            super::verify_identity(smiles, &identity.smiles).unwrap();
+            let record = super::generate_name(&identity, super::Cancel::default())
+                .await
+                .unwrap();
+            assert_eq!(record.title, expected, "{input}");
+            assert_eq!(
+                record.name_status,
+                Some(super::NameStatus::Preferred),
+                "{input}"
+            );
+        }
     }
 }
 

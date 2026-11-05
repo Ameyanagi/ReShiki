@@ -19,7 +19,7 @@ use super::parent_selection::{ParentSelection, select_principal_parent_with_excl
 use super::perception::{PerceivedGroup, perceive_groups};
 use super::rules::stems;
 use super::subgraph_tools::{
-    add_indicated_hydrogens, add_parent_features, add_substituent, emit_bond_stereo,
+    add_indicated_hydrogens, add_parent_features, add_substituent, emit_bond_stereo_except,
     subgraph_component,
 };
 use std::collections::BTreeMap;
@@ -32,6 +32,18 @@ pub(super) fn name_subgraph_with_upstream(
     upstream_atom: Option<usize>,
 ) -> Result<String, String> {
     name_subgraph_rendered(mol, start_idx, exclude_atoms, upstream_atom).map(|n| n.text)
+}
+
+/// Name a branch whose attachment-bond descriptor is cited by the caller.
+pub(super) fn name_subgraph_without_attachment_stereo(
+    mol: &Molecule,
+    start: usize,
+    exclude: &AtomSet,
+    upstream: usize,
+) -> Result<String, String> {
+    let bond = mol.get_bond(start, upstream).map(|bond| bond.idx);
+    name_subgraph_rendered_except_stereo(mol, start, exclude, Some(upstream), bond)
+        .map(|name| name.text)
 }
 
 fn direct_amide_prefix(
@@ -336,6 +348,16 @@ pub(super) fn name_subgraph_rendered(
     exclude: &AtomSet,
     upstream: Option<usize>,
 ) -> Result<RenderedSubstituentName, String> {
+    name_subgraph_rendered_except_stereo(mol, start, exclude, upstream, None)
+}
+
+fn name_subgraph_rendered_except_stereo(
+    mol: &Molecule,
+    start: usize,
+    exclude: &AtomSet,
+    upstream: Option<usize>,
+    excluded_stereo_bond: Option<usize>,
+) -> Result<RenderedSubstituentName, String> {
     let _depth = mol.enter_naming()?;
     let atom = mol
         .atoms
@@ -446,12 +468,13 @@ pub(super) fn name_subgraph_rendered(
     if let Some(metadata) = retained_metadata {
         parts.retained_parent_metadata = Some(metadata);
     }
-    emit_bond_stereo(
+    emit_bond_stereo_except(
         mol,
         &mut parts,
         &plan.numbered_path,
         &plan.locant_map,
         upstream,
+        excluded_stereo_bond,
     );
     add_indicated_hydrogens(mol, &mut parts, &plan.numbered_path, &plan.locant_map)?;
     for (&idx, items) in &mapping {
@@ -775,7 +798,10 @@ pub(super) fn capped_acid_name(
 
 #[cfg(test)]
 mod tests {
-    use super::{AssemblyParts, BTreeMap, name_subgraph_with_upstream, simple_rooted_carbanion};
+    use super::{
+        AssemblyParts, BTreeMap, name_subgraph_with_upstream,
+        name_subgraph_without_attachment_stereo, simple_rooted_carbanion,
+    };
     use crate::naming::openclatura::{graph_io::read_smiles, molecule::AtomSet};
 
     #[test]
@@ -846,6 +872,22 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    #[test]
+    fn attachment_bond_stereo_can_be_cited_by_the_caller() {
+        for smiles in ["C/C=N/N=C/C", "C/C=N\\N=C/C"] {
+            let mol = read_smiles(smiles).unwrap();
+            let exclude = AtomSet::from([2]);
+            let stereo = mol.get_bond(1, 2).unwrap().stereo.as_deref().unwrap();
+            let complete = name_subgraph_with_upstream(&mol, 1, &exclude, Some(2)).unwrap();
+            assert!(complete.contains(stereo), "{smiles}: {complete}");
+            assert_eq!(
+                name_subgraph_without_attachment_stereo(&mol, 1, &exclude, 2).unwrap(),
+                "ethylidene",
+                "{smiles}"
+            );
+        }
     }
 
     #[test]

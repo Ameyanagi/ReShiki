@@ -9,11 +9,11 @@ use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{canonical_ranks, get_cyclic_atoms};
 use super::formatting::{
     format_center_ligands_by, format_multiplier, is_complex_prefix, needs_complex_multiplier,
-    oxy_prefix_from_branch, strip_outer_parentheses,
+    needs_simple_multiplier_parentheses, oxy_prefix_from_branch, strip_outer_parentheses,
 };
 use super::graph_kernel::{Edge, biconnected_edge_components, normalize_edge};
 use super::molecule::{Atom, AtomSet, Bond, Molecule, component_atoms_until_blocked};
-use super::namer::name_subgraph_with_upstream;
+use super::namer::{name_subgraph_with_upstream, name_subgraph_without_attachment_stereo};
 use super::nomenclature::RULES;
 use super::perception::{PerceivedGroup, perceive_groups};
 use super::rules::{elements, multipliers, retained, stems};
@@ -690,27 +690,33 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
             && let (Some(left), Some(right)) = (left_bond, right_bond)
             && left.stereo == right.stereo
         {
-            let ylidene = strip_outer_parentheses(&branch_name(
-                mol,
-                atoms,
-                sides[0].carbon,
-                &set([sides[0].nitrogen]),
-                sides[0].nitrogen,
-            )?);
-            mol.set_name_status(status);
+            let mut exclude = outside(mol, atoms);
+            exclude.insert(sides[0].nitrogen);
             let stereo = left.stereo.as_deref().filter(|s| matches!(*s, "E" | "Z"));
-            // The side preflight excludes all stereo except this outward C=N
-            // descriptor, which is cited at the hydrazine attachment locants.
+            // The hydrazine attachment locants cite the outward C=N stereo.
             let ylidene = if stereo.is_some() {
-                ylidene
-                    .split_once(")-")
-                    .map_or(ylidene.as_str(), |(_, name)| name)
+                name_subgraph_without_attachment_stereo(
+                    mol,
+                    sides[0].carbon,
+                    &exclude,
+                    sides[0].nitrogen,
+                )?
             } else {
-                &ylidene
+                name_subgraph_with_upstream(
+                    mol,
+                    sides[0].carbon,
+                    &exclude,
+                    Some(sides[0].nitrogen),
+                )?
             };
-            let complex = needs_complex_multiplier(ylidene);
+            let ylidene = strip_outer_parentheses(&ylidene);
+            mol.set_name_status(status);
+            let complex = needs_complex_multiplier(&ylidene);
             let multiplier = if complex { "bis" } else { "di" };
-            let prefix = if complex || is_complex_prefix(ylidene) {
+            let prefix = if complex
+                || is_complex_prefix(&ylidene)
+                || needs_simple_multiplier_parentheses(&ylidene)
+            {
                 format!("{multiplier}({ylidene})")
             } else {
                 format!("{multiplier}{ylidene}")

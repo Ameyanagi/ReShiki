@@ -648,3 +648,7 @@ C/C(/CC)=N\N=C(/C)\CC	(1E,2E)-di(butan-2-ylidene)hydrazine	unverified	P-68.3.1.2
 C[C@@H](O)C(=O)O |r|		refuse	P-93.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#93010201; CXSMILES r flag https://docs.chemaxon.com/latest/formats_chemaxon-extended-smiles-and-smarts-cxsmiles-and-cxsmarts.html	issue #927	pass
 C[C@H](O)[C@@H](C)Cl |r|		refuse	P-93.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#93010201; CXSMILES r flag https://docs.chemaxon.com/latest/formats_chemaxon-extended-smiles-and-smarts-cxsmiles-and-cxsmarts.html	issue #927	pass
 C[C@@H](CC)OC(=O)[C@H](F)Cl	(2S)-butan-2-yl (R)-chlorofluoroacetate	preferred	P-14.3.4.6 https://iupac.qmul.ac.uk/BlueBook/P1.html#14030406; P-65.6.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6506030301	issue #927	pass
+CCCCCCCCCC=NN=CCCCCCCCCC	di(decylidene)hydrazine	unverified	P-16.3.4(d) https://iupac.qmul.ac.uk/BlueBook/P1.html#160304; P-68.3.1.2.3.1 https://iupac.qmul.ac.uk/BlueBook/P6a.html#680301020301	issue #927	pass
+O[C@H]1CC[C@@H](O)CC1 |r|	(1s,4s)-cyclohexane-1,4-diol	preferred	P-93.5.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P9.html#9305010102	issue #927	pass
+C[C@H](O)[C@H](O)C |r|	(2R,3S)-butane-2,3-diol	preferred	P-91.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#91020101	issue #927	pass
+C[C@H](O)[C@@H](O)C |r|		refuse	P-93.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#93010201; CXSMILES r flag https://docs.chemaxon.com/latest/formats_chemaxon-extended-smiles-and-smarts-cxsmiles-and-cxsmarts.html	issue #927	pass

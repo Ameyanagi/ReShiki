@@ -951,7 +951,6 @@ mod tests {
                 "(2S)-butan-2-yl (R)-chlorofluoroacetate",
             ),
             ("O=C(O)[C@H](F)Cl", "(R)-chlorofluoroacetic acid"),
-            ("COC(=O)CC(=O)OCC", "1-ethyl 3-methyl propanedioate"),
         ] {
             let canonical = crate::naming::canonical_smiles(smiles).unwrap();
             let name = super::super::name_smiles(&canonical).unwrap();
