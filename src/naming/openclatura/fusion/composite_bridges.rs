@@ -1,17 +1,30 @@
 //! Finite, verified two-fragment heteroatom/carbon bridge constructions.
-use serde_json::Value;
+use serde::{Deserialize, de::IgnoredAny};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::LazyLock,
 };
 
 pub type ConstructionKey = (Vec<String>, Vec<usize>);
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct CompositeBridgeConstruction {
     pub heteroatom: String,
     pub hetero_prefix: String,
     pub carbon_prefix: String,
     pub carbon_bond_orders: Vec<usize>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CompositeBridgeData {
+    schema_version: u64,
+    #[serde(rename = "rule")]
+    _rule: IgnoredAny,
+    #[serde(rename = "verification")]
+    _verification: IgnoredAny,
+    localized_carbon_bridge_bond_orders: Vec<Vec<usize>>,
+    constructions: Vec<CompositeBridgeConstruction>,
 }
 impl CompositeBridgeConstruction {
     pub fn symbols(&self) -> Vec<String> {
@@ -29,30 +42,21 @@ impl CompositeBridgeConstruction {
     }
 }
 #[allow(clippy::expect_used)] // Immutable, checked-in table follows the shared table-loading convention.
-static DATA: LazyLock<Value> = LazyLock::new(|| {
+static DATA: LazyLock<CompositeBridgeData> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../data/fusion_composite_bridges.json"))
         .expect("validated composite bridge data")
 });
-#[allow(clippy::expect_used)] // These shapes and integer values belong to the checked-in table.
 pub fn localized_carbon_bridge_bond_orders() -> &'static BTreeSet<Vec<usize>> {
     static ORDERS: LazyLock<BTreeSet<Vec<usize>>> = LazyLock::new(|| {
-        DATA["localized_carbon_bridge_bond_orders"]
-            .as_array()
-            .expect("localized bridge rows")
+        DATA.localized_carbon_bridge_bond_orders
             .iter()
-            .map(|row| {
-                let orders: Vec<_> = row
-                    .as_array()
-                    .expect("localized bridge path")
-                    .iter()
-                    .map(|order| order.as_u64().expect("integer bridge bond") as usize)
-                    .collect();
+            .map(|orders| {
                 assert!(
                     !orders.is_empty()
                         && orders.contains(&2)
                         && orders.iter().all(|order| [1, 2].contains(order))
                 );
-                orders
+                orders.clone()
             })
             .collect()
     });
@@ -68,52 +72,37 @@ pub fn composite_bridge_constructions()
         });
     &CONSTRUCTIONS
 }
-pub fn composite_bridge_constructions_from_data(
-    data: &Value,
+fn composite_bridge_constructions_from_data(
+    data: &CompositeBridgeData,
 ) -> Result<BTreeMap<ConstructionKey, CompositeBridgeConstruction>, String> {
-    if data["schema_version"].as_u64() != Some(1) {
+    if data.schema_version != 1 {
         return Err("unsupported composite bridge construction schema version".into());
     }
-    let rows = data["constructions"]
-        .as_array()
-        .ok_or("composite bridge constructions must be a list")?;
     let mut indexed = BTreeMap::new();
-    for row in rows {
-        if !row.is_object() {
-            return Err("composite bridge construction must be a mapping".into());
+    for construction in &data.constructions {
+        for (field, value) in [
+            ("heteroatom", &construction.heteroatom),
+            ("hetero_prefix", &construction.hetero_prefix),
+            ("carbon_prefix", &construction.carbon_prefix),
+        ] {
+            if value.trim().is_empty() {
+                return Err(format!("composite bridge construction requires {field}"));
+            }
         }
-        let text = |field: &str| {
-            row[field]
-                .as_str()
-                .filter(|s| !s.trim().is_empty())
-                .map(str::to_owned)
-                .ok_or_else(|| format!("composite bridge construction requires {field}"))
-        };
-        let heteroatom = text("heteroatom")?;
-        if !["O", "S", "Se", "Te", "N", "P", "As", "Sb", "Bi"].contains(&heteroatom.as_str()) {
+        if !["O", "S", "Se", "Te", "N", "P", "As", "Sb", "Bi"]
+            .contains(&construction.heteroatom.as_str())
+        {
             return Err("composite bridge must start with a supported heteroatom fragment".into());
         }
-        let orders = row["carbon_bond_orders"]
-            .as_array()
-            .ok_or("composite carbon fragment requires single or double path bonds")?;
-        let carbon_bond_orders = orders
+        if !construction
+            .carbon_bond_orders
             .iter()
-            .map(|order| {
-                order
-                    .as_u64()
-                    .filter(|v| [1, 2].contains(v))
-                    .map(|value| value as usize)
-                    .ok_or("composite carbon fragment requires single or double path bonds")
-            })
-            .collect::<Result<_, _>>()?;
-        let construction = CompositeBridgeConstruction {
-            heteroatom,
-            hetero_prefix: text("hetero_prefix")?,
-            carbon_prefix: text("carbon_prefix")?,
-            carbon_bond_orders,
-        };
+            .all(|order| [1, 2].contains(order))
+        {
+            return Err("composite carbon fragment requires single or double path bonds".into());
+        }
         let key = (construction.symbols(), construction.internal_bond_orders());
-        if indexed.insert(key, construction).is_some() {
+        if indexed.insert(key, construction.clone()).is_some() {
             return Err("duplicate composite bridge construction graph".into());
         }
     }

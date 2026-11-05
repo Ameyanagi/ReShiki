@@ -6,9 +6,7 @@
       "name": "benz[a]anthracene",
       "pin": true,
       "priority": 361,
-      "aliases": [],
       "attached_prefix": "benz[a]anthraceno",
-      "derivative_stem": "benz[a]anthracen",
       "template": {
         "atoms": [
           {
@@ -288,9 +286,7 @@
       "name": "benzo[a]pyrene",
       "pin": true,
       "priority": 362,
-      "aliases": [],
       "attached_prefix": "benzo[a]pyreno",
-      "derivative_stem": "benzo[a]pyren",
       "template": {
         "atoms": [
           {
@@ -608,9 +604,7 @@
       "name": "benzo[b]fluoranthene",
       "pin": true,
       "priority": 363,
-      "aliases": [],
       "attached_prefix": "benzo[b]fluorantheno",
-      "derivative_stem": "benzo[b]fluoranthen",
       "template": {
         "atoms": [
           {
@@ -927,9 +921,7 @@
       "name": "benzo[k]fluoranthene",
       "pin": true,
       "priority": 364,
-      "aliases": [],
       "attached_prefix": "benzo[k]fluorantheno",
-      "derivative_stem": "benzo[k]fluoranthen",
       "template": {
         "atoms": [
           {
@@ -1246,9 +1238,7 @@
       "name": "indeno[1,2,3-cd]pyrene",
       "pin": true,
       "priority": 365,
-      "aliases": [],
       "attached_prefix": "indeno[1,2,3-cd]pyreno",
-      "derivative_stem": "indeno[1,2,3-cd]pyren",
       "template": {
         "atoms": [
           {
@@ -1603,9 +1593,7 @@
       "name": "benzo[ghi]perylene",
       "pin": true,
       "priority": 366,
-      "aliases": [],
       "attached_prefix": "benzo[ghi]peryleno",
-      "derivative_stem": "benzo[ghi]perylen",
       "template": {
         "atoms": [
           {
@@ -1961,9 +1949,7 @@
       "name": "tetraphenylene",
       "pin": true,
       "priority": 371,
-      "aliases": [],
       "attached_prefix": "tetraphenyleno",
-      "derivative_stem": "tetraphenylen",
       "template": {
         "atoms": [
           {
@@ -2327,9 +2313,7 @@
       "name": "rubicene",
       "pin": true,
       "priority": 372,
-      "aliases": [],
       "attached_prefix": "rubiceno",
-      "derivative_stem": "rubicen",
       "template": {
         "atoms": [
           {
@@ -2743,9 +2727,7 @@
       "name": "trinaphthylene",
       "pin": true,
       "priority": 373,
-      "aliases": [],
       "attached_prefix": "trinaphthyleno",
-      "derivative_stem": "trinaphthylen",
       "template": {
         "atoms": [
           {
@@ -3205,9 +3187,7 @@
       "name": "pyranthrene",
       "pin": true,
       "priority": 374,
-      "aliases": [],
       "attached_prefix": "pyranthreno",
-      "derivative_stem": "pyranthren",
       "template": {
         "atoms": [
           {
@@ -3683,9 +3663,7 @@
       "name": "ovalene",
       "pin": true,
       "priority": 375,
-      "aliases": [],
       "attached_prefix": "ovaleno",
-      "derivative_stem": "ovalen",
       "template": {
         "atoms": [
           {
@@ -4215,9 +4193,7 @@
       "name": "benzo[e]pyrene",
       "pin": true,
       "priority": 376,
-      "aliases": [],
       "attached_prefix": "benzo[e]pyreno",
-      "derivative_stem": "benzo[e]pyren",
       "template": {
         "atoms": [
           {
@@ -4535,9 +4511,7 @@
       "name": "benzo[j]fluoranthene",
       "pin": true,
       "priority": 377,
-      "aliases": [],
       "attached_prefix": "benzo[j]fluorantheno",
-      "derivative_stem": "benzo[j]fluoranthen",
       "template": {
         "atoms": [
           {
@@ -4854,9 +4828,7 @@
       "name": "cyclopenta[cd]pyrene",
       "pin": true,
       "priority": 378,
-      "aliases": [],
       "attached_prefix": "cyclopenta[cd]pyreno",
-      "derivative_stem": "cyclopenta[cd]pyren",
       "template": {
         "atoms": [
           {

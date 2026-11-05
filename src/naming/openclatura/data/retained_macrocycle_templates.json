@@ -3,13 +3,8 @@
   "parents": [
     {
       "name": "porphyrin",
-      "preferred_name": "porphyrin",
       "pin": true,
       "priority": 100,
-      "aliases": [
-        "porphine",
-        "21H,23H-porphine"
-      ],
       "template": {
         "atoms": [
           {
@@ -352,7 +347,6 @@
         ],
         "indicated_hydrogen_count": 2,
         "mancude_double_bonds": 11,
-        "numbering_policy": "retained_macrocycle_template",
         "aromatic_equivalence_policy": "neutral_kekule_equivalent",
         "enabled": true,
         "derivative_production_enabled": true,
@@ -361,10 +355,8 @@
     },
     {
       "name": "corrin",
-      "preferred_name": "corrin",
       "pin": true,
       "priority": 110,
-      "aliases": [],
       "template": {
         "atoms": [
           {
@@ -712,7 +704,6 @@
         ],
         "indicated_hydrogen_count": 1,
         "mancude_double_bonds": 6,
-        "numbering_policy": "retained_macrocycle_template",
         "aromatic_equivalence_policy": "exact",
         "enabled": true,
         "derivative_production_enabled": true,

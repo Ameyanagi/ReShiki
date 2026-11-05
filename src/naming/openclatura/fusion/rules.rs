@@ -1,7 +1,9 @@
 //! Pure fusion eligibility, component identity, and chemical seniority.
-use super::super::locants::{LocantKey, retained_locant_sort_key as locant_key};
+use super::super::{
+    locants::{LocantKey, retained_locant_sort_key as locant_key},
+    rules::elements::{self, Element},
+};
 use super::{config::fusion_nomenclature_config, model::*};
-use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::LazyLock,
@@ -43,36 +45,26 @@ impl ChemicalComponentSeniorityKey {
         ])
     }
 }
-#[allow(clippy::expect_used)]
-static ELEMENT_DATA: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../data/elements.json")).expect("checked-in element policy")
-});
-fn precedence(field: &str) -> Vec<String> {
-    let mut rows: Vec<_> = ELEMENT_DATA["elements"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|r| Some((r[field].as_u64()?, r["symbol"].as_str()?.to_owned())))
+fn precedence(priority: impl Fn(&Element) -> Option<u64>) -> Vec<String> {
+    let mut rows: Vec<_> = elements::ELEMENTS
+        .values()
+        .filter_map(|element| Some((priority(element)?, element.symbol.clone())))
         .collect();
     rows.sort();
     rows.into_iter().map(|(_, s)| s).collect()
 }
 pub fn earliest_special_heteroatom_precedence() -> &'static [String] {
     static PRECEDENCE: LazyLock<Vec<String>> =
-        LazyLock::new(|| precedence("fusion_special_priority"));
+        LazyLock::new(|| precedence(|element| element.fusion_special_priority));
     &PRECEDENCE
 }
 pub fn general_heteroatom_count_precedence() -> &'static [String] {
     static PRECEDENCE: LazyLock<Vec<String>> =
-        LazyLock::new(|| precedence("fusion_general_priority"));
+        LazyLock::new(|| precedence(|element| element.fusion_general_priority));
     &PRECEDENCE
 }
 pub fn fusion_supported(symbol: &str) -> bool {
-    ELEMENT_DATA["elements"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .any(|r| r["symbol"] == symbol && r["fusion_supported"] == true)
+    elements::get(symbol).is_some_and(|element| element.fusion_supported)
 }
 pub fn fusion_ring_size_gate(sizes: &[usize]) -> bool {
     let r = &fusion_nomenclature_config().rules;

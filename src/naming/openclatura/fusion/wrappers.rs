@@ -10,9 +10,7 @@ use super::super::{
         MatchOptions, match_retained_graph_templates_with_options, retained_parent_metadata,
     },
     retained_graph_model::RetainedGraphTemplateMatch,
-    retained_name_policy::{
-        render_retained_hydrogen_state, retained_parent_name_policy, retained_parent_output_name,
-    },
+    retained_name_policy::{retained_parent_name_policy, retained_parent_output_name},
     ring_parent::RingParent,
     rules::{multipliers, stems},
 };
@@ -922,13 +920,6 @@ fn retained_wrapper_parent(
     }
     let metadata = retained_parent_metadata(&first.template.name).map(|mut metadata| {
         metadata.default_indicated_h = first.indicated_h.clone();
-        if let Some(stem) = &metadata.derivative_stem {
-            metadata.derivative_stem = Some(render_retained_hydrogen_state(
-                stem,
-                &first.template.default_indicated_h,
-                Some(&first.indicated_h),
-            ));
-        }
         if first.indicated_h != first.template.default_indicated_h {
             let by_locant = first.template.atom_by_locant();
             let mut inherent: Vec<_> = metadata

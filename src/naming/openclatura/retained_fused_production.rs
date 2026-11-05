@@ -293,10 +293,10 @@ pub fn added_hydrogen_is_citable(mol: &Molecule, m: &RetainedGraphTemplateMatch)
 fn indicated_h_retained_name(name: &str) -> bool {
     // The source set combines explicit monocycle names with the declared
     // indicated_hydrogen_name column; no inference from an alias is needed.
-    GRAPH_DATA["parents"].as_array().is_some_and(|rows| {
-        rows.iter()
-            .any(|r| r["indicated_hydrogen_name"].as_str() == Some(name))
-    })
+    GRAPH_DATA
+        .parents
+        .iter()
+        .any(|row| row.indicated_hydrogen_name.as_deref() == Some(name))
 }
 fn has_mancude_unsaturation(
     mol: &Molecule,

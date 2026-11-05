@@ -1,881 +1,11 @@
 {
   "bluebook_rule": "P-25 retained fused parent templates. Rows are locant-keyed graph templates, not SMILES/SMARTS keys.",
-  "base_templates": {
-    "naphthalenoid_10": {
-      "locants": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "5",
-        "6",
-        "7",
-        "8",
-        "8a"
-      ],
-      "bonds": [
-        {
-          "locants": [
-            "1",
-            "2"
-          ]
-        },
-        {
-          "locants": [
-            "2",
-            "3"
-          ]
-        },
-        {
-          "locants": [
-            "3",
-            "4"
-          ]
-        },
-        {
-          "locants": [
-            "4",
-            "4a"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "8a"
-          ],
-          "bond_class": "fusion"
-        },
-        {
-          "locants": [
-            "8a",
-            "1"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "5"
-          ]
-        },
-        {
-          "locants": [
-            "5",
-            "6"
-          ]
-        },
-        {
-          "locants": [
-            "6",
-            "7"
-          ]
-        },
-        {
-          "locants": [
-            "7",
-            "8"
-          ]
-        },
-        {
-          "locants": [
-            "8",
-            "8a"
-          ]
-        }
-      ],
-      "rings": [
-        [
-          "1",
-          "2",
-          "3",
-          "4",
-          "4a",
-          "8a"
-        ],
-        [
-          "4a",
-          "5",
-          "6",
-          "7",
-          "8",
-          "8a"
-        ]
-      ],
-      "fusion_atoms": [
-        "4a",
-        "8a"
-      ],
-      "peripheral_atoms": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "5",
-        "6",
-        "7",
-        "8",
-        "8a"
-      ]
-    },
-    "linear_tricyclic_14": {
-      "locants": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "5",
-        "5a",
-        "6",
-        "7",
-        "8",
-        "9",
-        "9a",
-        "10",
-        "10a"
-      ],
-      "bonds": [
-        {
-          "locants": [
-            "1",
-            "2"
-          ]
-        },
-        {
-          "locants": [
-            "2",
-            "3"
-          ]
-        },
-        {
-          "locants": [
-            "3",
-            "4"
-          ]
-        },
-        {
-          "locants": [
-            "4",
-            "4a"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "5"
-          ]
-        },
-        {
-          "locants": [
-            "5",
-            "5a"
-          ]
-        },
-        {
-          "locants": [
-            "5a",
-            "6"
-          ]
-        },
-        {
-          "locants": [
-            "6",
-            "7"
-          ]
-        },
-        {
-          "locants": [
-            "7",
-            "8"
-          ]
-        },
-        {
-          "locants": [
-            "8",
-            "9"
-          ]
-        },
-        {
-          "locants": [
-            "9",
-            "9a"
-          ]
-        },
-        {
-          "locants": [
-            "5a",
-            "9a"
-          ],
-          "bond_class": "fusion"
-        },
-        {
-          "locants": [
-            "9a",
-            "10"
-          ]
-        },
-        {
-          "locants": [
-            "10",
-            "10a"
-          ]
-        },
-        {
-          "locants": [
-            "10a",
-            "1"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "10a"
-          ],
-          "bond_class": "fusion"
-        }
-      ],
-      "fusion_atoms": [
-        "4a",
-        "5a",
-        "9a",
-        "10a"
-      ],
-      "peripheral_atoms": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "5",
-        "5a",
-        "6",
-        "7",
-        "8",
-        "9",
-        "9a",
-        "10",
-        "10a"
-      ],
-      "mancude_double_bonds": 7
-    },
-    "phenanthrenoid_14": {
-      "locants": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "5",
-        "6",
-        "6a",
-        "7",
-        "8",
-        "9",
-        "10",
-        "10a",
-        "10b"
-      ],
-      "bonds": [
-        {
-          "locants": [
-            "1",
-            "2"
-          ]
-        },
-        {
-          "locants": [
-            "2",
-            "3"
-          ]
-        },
-        {
-          "locants": [
-            "3",
-            "4"
-          ]
-        },
-        {
-          "locants": [
-            "4",
-            "4a"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "5"
-          ]
-        },
-        {
-          "locants": [
-            "5",
-            "6"
-          ]
-        },
-        {
-          "locants": [
-            "6",
-            "6a"
-          ]
-        },
-        {
-          "locants": [
-            "6a",
-            "7"
-          ]
-        },
-        {
-          "locants": [
-            "7",
-            "8"
-          ]
-        },
-        {
-          "locants": [
-            "8",
-            "9"
-          ]
-        },
-        {
-          "locants": [
-            "9",
-            "10"
-          ]
-        },
-        {
-          "locants": [
-            "10",
-            "10a"
-          ]
-        },
-        {
-          "locants": [
-            "6a",
-            "10a"
-          ],
-          "bond_class": "fusion"
-        },
-        {
-          "locants": [
-            "10a",
-            "10b"
-          ]
-        },
-        {
-          "locants": [
-            "10b",
-            "1"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "10b"
-          ],
-          "bond_class": "fusion"
-        }
-      ],
-      "fusion_atoms": [
-        "4a",
-        "6a",
-        "10a",
-        "10b"
-      ],
-      "peripheral_atoms": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "5",
-        "6",
-        "6a",
-        "7",
-        "8",
-        "9",
-        "10",
-        "10a",
-        "10b"
-      ],
-      "mancude_double_bonds": 7
-    },
-    "acridinoid_14": {
-      "locants": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "10",
-        "10a",
-        "5",
-        "6",
-        "7",
-        "8",
-        "8a",
-        "9",
-        "9a"
-      ],
-      "bonds": [
-        {
-          "locants": [
-            "1",
-            "2"
-          ]
-        },
-        {
-          "locants": [
-            "2",
-            "3"
-          ]
-        },
-        {
-          "locants": [
-            "3",
-            "4"
-          ]
-        },
-        {
-          "locants": [
-            "4",
-            "4a"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "10"
-          ]
-        },
-        {
-          "locants": [
-            "10",
-            "10a"
-          ]
-        },
-        {
-          "locants": [
-            "10a",
-            "5"
-          ]
-        },
-        {
-          "locants": [
-            "5",
-            "6"
-          ]
-        },
-        {
-          "locants": [
-            "6",
-            "7"
-          ]
-        },
-        {
-          "locants": [
-            "7",
-            "8"
-          ]
-        },
-        {
-          "locants": [
-            "8",
-            "8a"
-          ]
-        },
-        {
-          "locants": [
-            "10a",
-            "8a"
-          ],
-          "bond_class": "fusion"
-        },
-        {
-          "locants": [
-            "8a",
-            "9"
-          ]
-        },
-        {
-          "locants": [
-            "9",
-            "9a"
-          ]
-        },
-        {
-          "locants": [
-            "9a",
-            "1"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "9a"
-          ],
-          "bond_class": "fusion"
-        }
-      ],
-      "fusion_atoms": [
-        "4a",
-        "10a",
-        "8a",
-        "9a"
-      ],
-      "peripheral_atoms": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "10",
-        "10a",
-        "5",
-        "6",
-        "7",
-        "8",
-        "8a",
-        "9",
-        "9a"
-      ],
-      "mancude_double_bonds": 7
-    },
-    "carbazoloid_13": {
-      "locants": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "4b",
-        "5",
-        "6",
-        "7",
-        "8",
-        "8a",
-        "9",
-        "9a"
-      ],
-      "bonds": [
-        {
-          "locants": [
-            "1",
-            "2"
-          ]
-        },
-        {
-          "locants": [
-            "2",
-            "3"
-          ]
-        },
-        {
-          "locants": [
-            "3",
-            "4"
-          ]
-        },
-        {
-          "locants": [
-            "4",
-            "4a"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "4b"
-          ],
-          "bond_class": "fusion"
-        },
-        {
-          "locants": [
-            "4b",
-            "5"
-          ]
-        },
-        {
-          "locants": [
-            "5",
-            "6"
-          ]
-        },
-        {
-          "locants": [
-            "6",
-            "7"
-          ]
-        },
-        {
-          "locants": [
-            "7",
-            "8"
-          ]
-        },
-        {
-          "locants": [
-            "8",
-            "8a"
-          ]
-        },
-        {
-          "locants": [
-            "4b",
-            "8a"
-          ],
-          "bond_class": "fusion"
-        },
-        {
-          "locants": [
-            "8a",
-            "9"
-          ]
-        },
-        {
-          "locants": [
-            "9",
-            "9a"
-          ]
-        },
-        {
-          "locants": [
-            "9a",
-            "1"
-          ]
-        },
-        {
-          "locants": [
-            "4a",
-            "9a"
-          ],
-          "bond_class": "fusion"
-        }
-      ],
-      "fusion_atoms": [
-        "4a",
-        "4b",
-        "8a",
-        "9a"
-      ],
-      "peripheral_atoms": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "4a",
-        "4b",
-        "5",
-        "6",
-        "7",
-        "8",
-        "8a",
-        "9",
-        "9a"
-      ],
-      "mancude_double_bonds": 6
-    },
-    "purinoid_9": {
-      "locants": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "9",
-        "8",
-        "7",
-        "5",
-        "6"
-      ],
-      "bonds": [
-        {
-          "locants": [
-            "1",
-            "2"
-          ]
-        },
-        {
-          "locants": [
-            "2",
-            "3"
-          ]
-        },
-        {
-          "locants": [
-            "3",
-            "4"
-          ]
-        },
-        {
-          "locants": [
-            "4",
-            "9"
-          ]
-        },
-        {
-          "locants": [
-            "9",
-            "8"
-          ]
-        },
-        {
-          "locants": [
-            "8",
-            "7"
-          ]
-        },
-        {
-          "locants": [
-            "7",
-            "5"
-          ]
-        },
-        {
-          "locants": [
-            "5",
-            "4"
-          ],
-          "bond_class": "fusion"
-        },
-        {
-          "locants": [
-            "5",
-            "6"
-          ]
-        },
-        {
-          "locants": [
-            "6",
-            "1"
-          ]
-        }
-      ],
-      "fusion_atoms": [
-        "4",
-        "5"
-      ],
-      "peripheral_atoms": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "9",
-        "8",
-        "7",
-        "5",
-        "6"
-      ],
-      "mancude_double_bonds": 4
-    },
-    "indazoloid_9": {
-      "locants": [
-        "1",
-        "2",
-        "3",
-        "3a",
-        "4",
-        "5",
-        "6",
-        "7",
-        "7a"
-      ],
-      "bonds": [
-        {
-          "locants": [
-            "1",
-            "2"
-          ]
-        },
-        {
-          "locants": [
-            "2",
-            "3"
-          ]
-        },
-        {
-          "locants": [
-            "3",
-            "3a"
-          ]
-        },
-        {
-          "locants": [
-            "3a",
-            "4"
-          ]
-        },
-        {
-          "locants": [
-            "4",
-            "5"
-          ]
-        },
-        {
-          "locants": [
-            "5",
-            "6"
-          ]
-        },
-        {
-          "locants": [
-            "6",
-            "7"
-          ]
-        },
-        {
-          "locants": [
-            "7",
-            "7a"
-          ]
-        },
-        {
-          "locants": [
-            "7a",
-            "1"
-          ]
-        },
-        {
-          "locants": [
-            "3a",
-            "7a"
-          ],
-          "bond_class": "fusion"
-        }
-      ],
-      "fusion_atoms": [
-        "3a",
-        "7a"
-      ],
-      "peripheral_atoms": [
-        "1",
-        "2",
-        "3",
-        "3a",
-        "4",
-        "5",
-        "6",
-        "7",
-        "7a"
-      ],
-      "mancude_double_bonds": 4
-    }
-  },
-  "pending_parents": [
-    {
-      "name": "pleiadene",
-      "pin": false,
-      "priority": 100,
-      "attached_prefix": "pleiadeno"
-    }
-  ],
   "parents": [
     {
       "name": "naphthalene",
       "pin": true,
       "priority": 1,
-      "aliases": [],
       "attached_prefix": "naphtho",
-      "derivative_stem": "naphthalen",
       "template": {
         "atoms": [
           {
@@ -1037,11 +167,7 @@
       "name": "1H-perimidine",
       "pin": true,
       "priority": 3,
-      "aliases": [
-        "perimidine"
-      ],
       "attached_prefix": "perimidino",
-      "derivative_stem": "1H-perimidin",
       "template": {
         "atoms": [
           {
@@ -1260,9 +386,7 @@
       "name": "phenazine",
       "pin": true,
       "priority": 4,
-      "aliases": [],
       "attached_prefix": "phenazino",
-      "derivative_stem": "phenazin",
       "template": {
         "atoms": [
           {
@@ -1489,9 +613,7 @@
       "name": "fluoranthene",
       "pin": true,
       "priority": 5,
-      "aliases": [],
       "attached_prefix": "fluorantheno",
-      "derivative_stem": "fluoranthen",
       "template": {
         "atoms": [
           {
@@ -1760,9 +882,7 @@
       "name": "phenanthridine",
       "pin": true,
       "priority": 5,
-      "aliases": [],
       "attached_prefix": "phenanthridino",
-      "derivative_stem": "phenanthridin",
       "template": {
         "atoms": [
           {
@@ -1989,9 +1109,7 @@
       "name": "1,10-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "1,10-phenanthrolino",
-      "derivative_stem": "1,10-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -2219,9 +1337,7 @@
       "name": "1,4-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "1,4-phenanthrolino",
-      "derivative_stem": "1,4-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -2450,9 +1566,7 @@
       "name": "1,5-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "1,5-phenanthrolino",
-      "derivative_stem": "1,5-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -2681,9 +1795,7 @@
       "name": "1,6-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "1,6-phenanthrolino",
-      "derivative_stem": "1,6-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -2912,9 +2024,7 @@
       "name": "1,7-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "1,7-phenanthrolino",
-      "derivative_stem": "1,7-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -3143,9 +2253,7 @@
       "name": "1,8-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "1,8-phenanthrolino",
-      "derivative_stem": "1,8-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -3374,9 +2482,7 @@
       "name": "1,9-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "1,9-phenanthrolino",
-      "derivative_stem": "1,9-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -3605,9 +2711,7 @@
       "name": "2,7-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "2,7-phenanthrolino",
-      "derivative_stem": "2,7-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -3836,9 +2940,7 @@
       "name": "2,8-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "2,8-phenanthrolino",
-      "derivative_stem": "2,8-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -4067,9 +3169,7 @@
       "name": "2,9-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "2,9-phenanthrolino",
-      "derivative_stem": "2,9-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -4298,9 +3398,7 @@
       "name": "3,5-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "3,5-phenanthrolino",
-      "derivative_stem": "3,5-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -4529,9 +3627,7 @@
       "name": "3,6-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "3,6-phenanthrolino",
-      "derivative_stem": "3,6-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -4760,9 +3856,7 @@
       "name": "3,7-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "3,7-phenanthrolino",
-      "derivative_stem": "3,7-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -4991,9 +4085,7 @@
       "name": "3,8-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "3,8-phenanthrolino",
-      "derivative_stem": "3,8-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -5222,9 +4314,7 @@
       "name": "4,5-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "4,5-phenanthrolino",
-      "derivative_stem": "4,5-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -5453,9 +4543,7 @@
       "name": "4,7-phenanthroline",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "4,7-phenanthrolino",
-      "derivative_stem": "4,7-phenanthrolin",
       "template": {
         "atoms": [
           {
@@ -5684,9 +4772,7 @@
       "name": "acridine",
       "pin": true,
       "priority": 6,
-      "aliases": [],
       "attached_prefix": "acridino",
-      "derivative_stem": "acridin",
       "template": {
         "atoms": [
           {
@@ -5912,9 +4998,7 @@
       "name": "pteridine",
       "pin": true,
       "priority": 7,
-      "aliases": [],
       "attached_prefix": "pteridino",
-      "derivative_stem": "pteridin",
       "template": {
         "atoms": [
           {
@@ -6080,9 +5164,7 @@
       "name": "cinnoline",
       "pin": true,
       "priority": 8,
-      "aliases": [],
       "attached_prefix": "cinnolino",
-      "derivative_stem": "cinnolin",
       "template": {
         "atoms": [
           {
@@ -6246,11 +5328,7 @@
       "name": "1H-phenalene",
       "pin": true,
       "priority": 9,
-      "aliases": [
-        "phenalene"
-      ],
       "attached_prefix": "phenaleno",
-      "derivative_stem": "1H-phenalen",
       "default_indicated_h": [
         "1"
       ],
@@ -6473,9 +5551,7 @@
       "name": "quinazoline",
       "pin": true,
       "priority": 9,
-      "aliases": [],
       "attached_prefix": "quinazolino",
-      "derivative_stem": "quinazolin",
       "template": {
         "atoms": [
           {
@@ -6639,9 +5715,7 @@
       "name": "azulene",
       "pin": true,
       "priority": 10,
-      "aliases": [],
       "attached_prefix": "azuleno",
-      "derivative_stem": "azulen",
       "template": {
         "atoms": [
           {
@@ -6803,9 +5877,7 @@
       "name": "quinoxaline",
       "pin": true,
       "priority": 10,
-      "aliases": [],
       "attached_prefix": "quinoxalino",
-      "derivative_stem": "quinoxalin",
       "template": {
         "atoms": [
           {
@@ -6969,9 +6041,7 @@
       "name": "1,5-naphthyridine",
       "pin": true,
       "priority": 11,
-      "aliases": [],
       "attached_prefix": "1,5-naphthyridino",
-      "derivative_stem": "1,5-naphthyridin",
       "template": {
         "atoms": [
           {
@@ -7135,9 +6205,7 @@
       "name": "1,6-naphthyridine",
       "pin": true,
       "priority": 11,
-      "aliases": [],
       "attached_prefix": "1,6-naphthyridino",
-      "derivative_stem": "1,6-naphthyridin",
       "template": {
         "atoms": [
           {
@@ -7301,9 +6369,7 @@
       "name": "1,7-naphthyridine",
       "pin": true,
       "priority": 11,
-      "aliases": [],
       "attached_prefix": "1,7-naphthyridino",
-      "derivative_stem": "1,7-naphthyridin",
       "template": {
         "atoms": [
           {
@@ -7467,9 +6533,7 @@
       "name": "1,8-naphthyridine",
       "pin": true,
       "priority": 11,
-      "aliases": [],
       "attached_prefix": "1,8-naphthyridino",
-      "derivative_stem": "1,8-naphthyridin",
       "template": {
         "atoms": [
           {
@@ -7633,9 +6697,7 @@
       "name": "2,6-naphthyridine",
       "pin": true,
       "priority": 11,
-      "aliases": [],
       "attached_prefix": "2,6-naphthyridino",
-      "derivative_stem": "2,6-naphthyridin",
       "template": {
         "atoms": [
           {
@@ -7799,9 +6861,7 @@
       "name": "2,7-naphthyridine",
       "pin": true,
       "priority": 11,
-      "aliases": [],
       "attached_prefix": "2,7-naphthyridino",
-      "derivative_stem": "2,7-naphthyridin",
       "template": {
         "atoms": [
           {
@@ -7965,9 +7025,7 @@
       "name": "acenaphthylene",
       "pin": true,
       "priority": 12,
-      "aliases": [],
       "attached_prefix": "acenaphthyleno",
-      "derivative_stem": "acenaphthylen",
       "template": {
         "atoms": [
           {
@@ -8171,9 +7229,7 @@
       "name": "phthalazine",
       "pin": true,
       "priority": 12,
-      "aliases": [],
       "attached_prefix": "phthalazino",
-      "derivative_stem": "phthalazin",
       "template": {
         "atoms": [
           {
@@ -8337,9 +7393,7 @@
       "name": "quinoline",
       "pin": true,
       "priority": 13,
-      "aliases": [],
       "attached_prefix": "quinolino",
-      "derivative_stem": "quinolin",
       "template": {
         "atoms": [
           {
@@ -8502,9 +7556,7 @@
       "name": "isoquinoline",
       "pin": true,
       "priority": 14,
-      "aliases": [],
       "attached_prefix": "isoquinolino",
-      "derivative_stem": "isoquinolin",
       "template": {
         "atoms": [
           {
@@ -8667,9 +7719,7 @@
       "name": "4H-quinolizine",
       "pin": true,
       "priority": 15,
-      "aliases": [],
       "attached_prefix": "quinolizino",
-      "derivative_stem": "4H-quinolizin",
       "default_indicated_h": [
         "4"
       ],
@@ -8840,9 +7890,7 @@
       "name": "2H-quinolizine",
       "pin": true,
       "priority": 16,
-      "aliases": [],
       "attached_prefix": "quinolizino",
-      "derivative_stem": "2H-quinolizin",
       "default_indicated_h": [
         "2"
       ],
@@ -9013,12 +8061,7 @@
       "name": "purine",
       "pin": true,
       "priority": 16,
-      "aliases": [
-        "7H-purine",
-        "9H-purine"
-      ],
       "attached_prefix": "purino",
-      "derivative_stem": "purin",
       "template": {
         "atoms": [
           {
@@ -9174,11 +8217,7 @@
       "name": "carbazole",
       "pin": true,
       "priority": 17,
-      "aliases": [
-        "9H-carbazole"
-      ],
       "attached_prefix": "carbazolo",
-      "derivative_stem": "carbazol",
       "template": {
         "atoms": [
           {
@@ -9395,12 +8434,7 @@
       "name": "indazole",
       "pin": true,
       "priority": 17,
-      "aliases": [
-        "1H-indazole",
-        "2H-indazole"
-      ],
       "attached_prefix": "indazolo",
-      "derivative_stem": "indazol",
       "template": {
         "atoms": [
           {
@@ -9554,11 +8588,7 @@
       "name": "xanthene",
       "pin": true,
       "priority": 17,
-      "aliases": [
-        "9H-xanthene"
-      ],
       "attached_prefix": "xantheno",
-      "derivative_stem": "xanthen",
       "default_indicated_h": [
         "9"
       ],
@@ -9793,11 +8823,7 @@
       "name": "9H-thioxanthene",
       "pin": true,
       "priority": 17,
-      "aliases": [
-        "thioxanthene"
-      ],
       "attached_prefix": "thioxantheno",
-      "derivative_stem": "thioxanthen",
       "default_indicated_h": [
         "9"
       ],
@@ -10032,11 +9058,7 @@
       "name": "9H-selenoxanthene",
       "pin": true,
       "priority": 17,
-      "aliases": [
-        "selenoxanthene"
-      ],
       "attached_prefix": "selenoxantheno",
-      "derivative_stem": "selenoxanthen",
       "default_indicated_h": [
         "9"
       ],
@@ -10271,11 +9293,7 @@
       "name": "9H-telluroxanthene",
       "pin": true,
       "priority": 17,
-      "aliases": [
-        "telluroxanthene"
-      ],
       "attached_prefix": "telluroxantheno",
-      "derivative_stem": "telluroxanthen",
       "default_indicated_h": [
         "9"
       ],
@@ -10510,11 +9528,7 @@
       "name": "1H-indole",
       "pin": true,
       "priority": 18,
-      "aliases": [
-        "indole"
-      ],
       "attached_prefix": "indolo",
-      "derivative_stem": "1H-indol",
       "template": {
         "atoms": [
           {
@@ -10667,9 +9681,7 @@
       "name": "1H-isoindole",
       "pin": true,
       "priority": 18,
-      "aliases": [],
       "attached_prefix": "isoindolo",
-      "derivative_stem": "isoindol",
       "default_indicated_h": [
         "1"
       ],
@@ -10828,9 +9840,7 @@
       "name": "3H-indole",
       "pin": true,
       "priority": 18,
-      "aliases": [],
       "attached_prefix": "indolo",
-      "derivative_stem": "3H-indol",
       "default_indicated_h": [
         "3"
       ],
@@ -10988,11 +9998,7 @@
       "name": "2H-isoindole",
       "pin": true,
       "priority": 19,
-      "aliases": [
-        "isoindole"
-      ],
       "attached_prefix": "isoindolo",
-      "derivative_stem": "2H-isoindol",
       "template": {
         "atoms": [
           {
@@ -11144,9 +10150,7 @@
       "name": "indolizine",
       "pin": true,
       "priority": 20,
-      "aliases": [],
       "attached_prefix": "indolizino",
-      "derivative_stem": "indolizin",
       "template": {
         "atoms": [
           {
@@ -11298,9 +10302,7 @@
       "name": "1H-pyrrolizine",
       "pin": true,
       "priority": 21,
-      "aliases": [],
       "attached_prefix": "pyrrolizino",
-      "derivative_stem": "1H-pyrrolizin",
       "default_indicated_h": [
         "1"
       ],
@@ -11448,12 +10450,7 @@
       "name": "1-benzofuran",
       "pin": true,
       "priority": 28,
-      "aliases": [
-        "benzofuran",
-        "benzo[b]furan"
-      ],
       "attached_prefix": "[1]benzofuro",
-      "derivative_stem": "1-benzofuran",
       "template": {
         "atoms": [
           {
@@ -11605,12 +10602,7 @@
       "name": "1-benzothiophene",
       "pin": true,
       "priority": 29,
-      "aliases": [
-        "benzothiophene",
-        "benzo[b]thiophene"
-      ],
       "attached_prefix": "[1]benzothieno",
-      "derivative_stem": "1-benzothiophen",
       "template": {
         "atoms": [
           {
@@ -11762,12 +10754,7 @@
       "name": "2-benzofuran",
       "pin": true,
       "priority": 30,
-      "aliases": [
-        "isobenzofuran",
-        "benzo[c]furan"
-      ],
       "attached_prefix": "isobenzofurano",
-      "derivative_stem": "2-benzofuran",
       "template": {
         "atoms": [
           {
@@ -11919,12 +10906,7 @@
       "name": "2-benzothiophene",
       "pin": true,
       "priority": 31,
-      "aliases": [
-        "isobenzothiophene",
-        "benzo[c]thiophene"
-      ],
       "attached_prefix": "[2]benzothieno",
-      "derivative_stem": "2-benzothiophen",
       "template": {
         "atoms": [
           {
@@ -12076,9 +11058,7 @@
       "name": "1H-benzotriazole",
       "pin": true,
       "priority": 32,
-      "aliases": [],
       "attached_prefix": "[1,2,3]benzotriazolo",
-      "derivative_stem": "1H-1,2,3-benzotriazol",
       "template": {
         "atoms": [
           {
@@ -12232,9 +11212,7 @@
       "name": "2,1,3-benzoxadiazole",
       "pin": true,
       "priority": 33,
-      "aliases": [],
       "attached_prefix": "[2,1,3]benzoxadiazolo",
-      "derivative_stem": "2,1,3-benzoxadiazol",
       "template": {
         "atoms": [
           {
@@ -12388,9 +11366,7 @@
       "name": "2,1,3-benzothiadiazole",
       "pin": true,
       "priority": 34,
-      "aliases": [],
       "attached_prefix": "[2,1,3]benzothiadiazolo",
-      "derivative_stem": "2,1,3-benzothiadiazol",
       "template": {
         "atoms": [
           {
@@ -12544,11 +11520,7 @@
       "name": "2H-1-benzopyran",
       "pin": true,
       "priority": 35,
-      "aliases": [
-        "2H-chromene"
-      ],
       "attached_prefix": "chromeno",
-      "derivative_stem": "2H-1-benzopyran",
       "default_indicated_h": [
         "2"
       ],
@@ -12719,11 +11691,7 @@
       "name": "4H-1-benzopyran",
       "pin": true,
       "priority": 36,
-      "aliases": [
-        "4H-chromene"
-      ],
       "attached_prefix": "chromeno",
-      "derivative_stem": "4H-1-benzopyran",
       "default_indicated_h": [
         "4"
       ],
@@ -12894,9 +11862,7 @@
       "name": "1,4-benzodioxine",
       "pin": true,
       "priority": 37,
-      "aliases": [],
       "attached_prefix": "[1,4]benzodioxino",
-      "derivative_stem": "1,4-benzodioxin",
       "template": {
         "atoms": [
           {
@@ -13062,9 +12028,7 @@
       "name": "dibenzofuran",
       "pin": true,
       "priority": 38,
-      "aliases": [],
       "attached_prefix": "dibenzofuro",
-      "derivative_stem": "dibenzofuran",
       "template": {
         "atoms": [
           {
@@ -13280,9 +12244,7 @@
       "name": "dibenzothiophene",
       "pin": true,
       "priority": 39,
-      "aliases": [],
       "attached_prefix": "dibenzothieno",
-      "derivative_stem": "dibenzothiophen",
       "template": {
         "atoms": [
           {
@@ -13499,9 +12461,7 @@
       "indicated_hydrogen_name": "1,3-benzodioxole",
       "pin": true,
       "priority": 40,
-      "aliases": [],
       "attached_prefix": "[1,3]benzodioxolo",
-      "derivative_stem": "1,3-benzodioxol",
       "default_indicated_h": [
         "2"
       ],
@@ -13662,9 +12622,7 @@
       "name": "1,4-benzoxazine",
       "pin": true,
       "priority": 40,
-      "aliases": [],
       "attached_prefix": "[1,4]benzoxazino",
-      "derivative_stem": "1,4-benzoxazin",
       "default_indicated_h": [
         "2"
       ],
@@ -13836,9 +12794,7 @@
       "name": "10H-phenothiazine",
       "pin": true,
       "priority": 40,
-      "aliases": [],
       "attached_prefix": "phenothiazino",
-      "derivative_stem": "10H-phenothiazin",
       "template": {
         "atoms": [
           {
@@ -14067,9 +13023,7 @@
       "name": "1H-1,5-benzodiazepine",
       "pin": true,
       "priority": 40,
-      "aliases": [],
       "attached_prefix": "[1,5]benzodiazepino",
-      "derivative_stem": "1,5-benzodiazepin",
       "template": {
         "atoms": [
           {
@@ -14246,12 +13200,7 @@
       "name": "1H-2-benzopyran",
       "pin": true,
       "priority": 40,
-      "aliases": [
-        "1H-isochromene",
-        "2H-isochromene"
-      ],
       "attached_prefix": "isochromeno",
-      "derivative_stem": "2-benzopyran",
       "default_indicated_h": [
         "1"
       ],
@@ -14422,11 +13371,7 @@
       "name": "2H-1-benzothiopyran",
       "pin": true,
       "priority": 40,
-      "aliases": [
-        "2H-thiochromene"
-      ],
       "attached_prefix": "thiochromeno",
-      "derivative_stem": "1-benzothiopyran",
       "default_indicated_h": [
         "2"
       ],
@@ -14597,11 +13542,7 @@
       "name": "3H-2-benzopyran",
       "pin": true,
       "priority": 40,
-      "aliases": [
-        "3H-isochromene"
-      ],
       "attached_prefix": "isochromeno",
-      "derivative_stem": "2-benzopyran",
       "default_indicated_h": [
         "3"
       ],
@@ -14772,11 +13713,7 @@
       "name": "4H-1-benzothiopyran",
       "pin": true,
       "priority": 40,
-      "aliases": [
-        "4H-thiochromene"
-      ],
       "attached_prefix": "thiochromeno",
-      "derivative_stem": "1-benzothiopyran",
       "default_indicated_h": [
         "4"
       ],
@@ -14947,9 +13884,7 @@
       "name": "10H-phenoxazine",
       "pin": true,
       "priority": 41,
-      "aliases": [],
       "attached_prefix": "phenoxazino",
-      "derivative_stem": "10H-phenoxazin",
       "template": {
         "atoms": [
           {
@@ -15178,9 +14113,7 @@
       "name": "7H-pyrrolo[2,3-d]pyrimidine",
       "pin": true,
       "priority": 42,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "7H-pyrrolo[2,3-d]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -15334,9 +14267,7 @@
       "name": "1H-pyrazolo[3,4-d]pyrimidine",
       "pin": true,
       "priority": 43,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1H-pyrazolo[3,4-d]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -15491,9 +14422,7 @@
       "name": "naphtho[2,3-b]furan",
       "pin": true,
       "priority": 44,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "naphtho[2,3-b]furan",
       "template": {
         "atoms": [
           {
@@ -15708,9 +14637,7 @@
       "name": "naphtho[1,2-b]thiophene",
       "pin": true,
       "priority": 45,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "naphtho[1,2-b]thiophen",
       "template": {
         "atoms": [
           {
@@ -15926,9 +14853,7 @@
       "name": "naphtho[2,3-d][1,3]oxazole",
       "pin": true,
       "priority": 46,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "naphtho[2,3-d][1,3]oxazol",
       "template": {
         "atoms": [
           {
@@ -16144,9 +15069,7 @@
       "name": "imidazo[1,2-a]pyridine",
       "pin": true,
       "priority": 47,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "imidazo[1,2-a]pyridin",
       "template": {
         "atoms": [
           {
@@ -16299,9 +15222,7 @@
       "name": "pyrazolo[1,5-a]pyrimidine",
       "pin": true,
       "priority": 48,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrazolo[1,5-a]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -16455,11 +15376,7 @@
       "name": "1H-pyrrolo[2,3-b]pyridine",
       "pin": true,
       "priority": 49,
-      "aliases": [
-        "7-azaindole"
-      ],
       "attached_prefix": null,
-      "derivative_stem": "1H-pyrrolo[2,3-b]pyridin",
       "template": {
         "atoms": [
           {
@@ -16612,9 +15529,7 @@
       "name": "thieno[2,3-b]pyridine",
       "pin": true,
       "priority": 50,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thieno[2,3-b]pyridin",
       "template": {
         "atoms": [
           {
@@ -16767,9 +15682,7 @@
       "name": "thieno[3,2-b]thiophene",
       "pin": true,
       "priority": 51,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thieno[3,2-b]thiophen",
       "template": {
         "atoms": [
           {
@@ -16911,9 +15824,7 @@
       "name": "furo[3,2-b]furan",
       "pin": true,
       "priority": 52,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "furo[3,2-b]furan",
       "template": {
         "atoms": [
           {
@@ -17055,9 +15966,7 @@
       "name": "pyrido[2,3-b]pyrazine",
       "pin": true,
       "priority": 53,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrido[2,3-b]pyrazin",
       "template": {
         "atoms": [
           {
@@ -17222,11 +16131,7 @@
       "name": "4H-1-benzoselenopyran",
       "pin": true,
       "priority": 54,
-      "aliases": [
-        "4H-selenochromene"
-      ],
       "attached_prefix": "selenochromeno",
-      "derivative_stem": "4H-1-benzoselenopyran",
       "default_indicated_h": [
         "4"
       ],
@@ -17397,9 +16302,7 @@
       "name": "1,2,3,4-tetrahydronaphthalene",
       "pin": true,
       "priority": 200,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,3,4-tetrahydronaphthalen",
       "default_indicated_h": [
         "1",
         "2",
@@ -17580,9 +16483,7 @@
       "name": "1,2,3,4-tetrazine",
       "pin": true,
       "priority": 201,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,3,4-tetrazin",
       "template": {
         "atoms": [
           {
@@ -17684,9 +16585,7 @@
       "name": "1,2,3,5-tetrazine",
       "pin": true,
       "priority": 202,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,3,5-tetrazin",
       "template": {
         "atoms": [
           {
@@ -17788,9 +16687,7 @@
       "name": "1,2,3-oxadiazole",
       "pin": true,
       "priority": 203,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,3-oxadiazol",
       "template": {
         "atoms": [
           {
@@ -17880,9 +16777,7 @@
       "name": "1,2,3-thiadiazole",
       "pin": true,
       "priority": 204,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,3-thiadiazol",
       "template": {
         "atoms": [
           {
@@ -17972,9 +16867,7 @@
       "name": "1,2,3-triazinane",
       "pin": true,
       "priority": 205,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,3-triazinan",
       "template": {
         "atoms": [
           {
@@ -18081,9 +16974,7 @@
       "name": "1,2,3-triazine",
       "pin": true,
       "priority": 206,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,3-triazin",
       "template": {
         "atoms": [
           {
@@ -18184,9 +17075,7 @@
       "name": "1,2,3-triazole",
       "pin": true,
       "priority": 207,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,3-triazol",
       "template": {
         "atoms": [
           {
@@ -18277,9 +17166,7 @@
       "name": "1,2,4,5-tetrazine",
       "pin": true,
       "priority": 208,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,4,5-tetrazin",
       "template": {
         "atoms": [
           {
@@ -18381,9 +17268,7 @@
       "name": "1,2,4-oxadiazole",
       "pin": true,
       "priority": 209,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,4-oxadiazol",
       "template": {
         "atoms": [
           {
@@ -18473,9 +17358,7 @@
       "name": "1,2,4-thiadiazole",
       "pin": true,
       "priority": 210,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,4-thiadiazol",
       "template": {
         "atoms": [
           {
@@ -18565,9 +17448,7 @@
       "name": "1,2,4-triazinane",
       "pin": true,
       "priority": 211,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,4-triazinan",
       "template": {
         "atoms": [
           {
@@ -18674,9 +17555,7 @@
       "name": "1,2,4-triazine",
       "pin": true,
       "priority": 212,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,4-triazin",
       "template": {
         "atoms": [
           {
@@ -18777,9 +17656,7 @@
       "name": "1,2,4-triazole",
       "pin": true,
       "priority": 213,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,4-triazol",
       "template": {
         "atoms": [
           {
@@ -18870,9 +17747,7 @@
       "name": "1,2,5-oxadiazole",
       "pin": true,
       "priority": 214,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,5-oxadiazol",
       "template": {
         "atoms": [
           {
@@ -18962,9 +17837,7 @@
       "name": "1,2,5-thiadiazole",
       "pin": true,
       "priority": 215,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2,5-thiadiazol",
       "template": {
         "atoms": [
           {
@@ -19054,9 +17927,7 @@
       "name": "1,2-benzothiazole",
       "pin": true,
       "priority": 216,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-benzothiazol",
       "template": {
         "atoms": [
           {
@@ -19209,9 +18080,7 @@
       "name": "1,2-benzoxazole",
       "pin": true,
       "priority": 217,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-benzoxazol",
       "template": {
         "atoms": [
           {
@@ -19364,9 +18233,7 @@
       "name": "1,2-diazinane",
       "pin": true,
       "priority": 218,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-diazinan",
       "template": {
         "atoms": [
           {
@@ -19472,9 +18339,7 @@
       "name": "1,2-dioxane",
       "pin": true,
       "priority": 219,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-dioxan",
       "template": {
         "atoms": [
           {
@@ -19580,9 +18445,7 @@
       "name": "1,2-dioxolane",
       "pin": true,
       "priority": 220,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-dioxolan",
       "template": {
         "atoms": [
           {
@@ -19675,9 +18538,7 @@
       "name": "1,2-dithiane",
       "pin": true,
       "priority": 221,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-dithian",
       "template": {
         "atoms": [
           {
@@ -19783,9 +18644,7 @@
       "name": "1,2-dithiolane",
       "pin": true,
       "priority": 222,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-dithiolan",
       "template": {
         "atoms": [
           {
@@ -19878,9 +18737,7 @@
       "name": "1,2-oxathiane",
       "pin": true,
       "priority": 223,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-oxathian",
       "template": {
         "atoms": [
           {
@@ -19986,9 +18843,7 @@
       "name": "1,2-oxathiolane",
       "pin": true,
       "priority": 224,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-oxathiolan",
       "template": {
         "atoms": [
           {
@@ -20081,9 +18936,7 @@
       "name": "1,2-oxazinane",
       "pin": true,
       "priority": 225,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-oxazinan",
       "template": {
         "atoms": [
           {
@@ -20189,9 +19042,7 @@
       "name": "1,2-oxazole",
       "pin": true,
       "priority": 226,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-oxazol",
       "template": {
         "atoms": [
           {
@@ -20280,9 +19131,7 @@
       "name": "1,2-oxazolidine",
       "pin": true,
       "priority": 227,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-oxazolidin",
       "template": {
         "atoms": [
           {
@@ -20375,9 +19224,7 @@
       "name": "1,2-thiazinane",
       "pin": true,
       "priority": 228,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-thiazinan",
       "template": {
         "atoms": [
           {
@@ -20483,9 +19330,7 @@
       "name": "1,2-thiazole",
       "pin": true,
       "priority": 229,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-thiazol",
       "template": {
         "atoms": [
           {
@@ -20574,9 +19419,7 @@
       "name": "1,2-thiazolidine",
       "pin": true,
       "priority": 230,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,2-thiazolidin",
       "template": {
         "atoms": [
           {
@@ -20669,9 +19512,7 @@
       "name": "1,3,4-oxadiazole",
       "pin": true,
       "priority": 231,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3,4-oxadiazol",
       "template": {
         "atoms": [
           {
@@ -20761,9 +19602,7 @@
       "name": "1,3,4-thiadiazole",
       "pin": true,
       "priority": 232,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3,4-thiadiazol",
       "template": {
         "atoms": [
           {
@@ -20853,9 +19692,7 @@
       "name": "1,3,5-triazinane",
       "pin": true,
       "priority": 233,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3,5-triazinan",
       "template": {
         "atoms": [
           {
@@ -20962,9 +19799,7 @@
       "name": "1,3,5-triazine",
       "pin": true,
       "priority": 234,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3,5-triazin",
       "template": {
         "atoms": [
           {
@@ -21065,9 +19900,7 @@
       "name": "1,3,5-trioxane",
       "pin": true,
       "priority": 235,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3,5-trioxan",
       "template": {
         "atoms": [
           {
@@ -21174,9 +20007,7 @@
       "name": "1,3,5-trithiane",
       "pin": true,
       "priority": 236,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3,5-trithian",
       "template": {
         "atoms": [
           {
@@ -21283,9 +20114,7 @@
       "name": "1,3-benzothiazole",
       "pin": true,
       "priority": 237,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-benzothiazol",
       "template": {
         "atoms": [
           {
@@ -21438,9 +20267,7 @@
       "name": "1,3-benzoxazole",
       "pin": true,
       "priority": 238,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-benzoxazol",
       "template": {
         "atoms": [
           {
@@ -21593,9 +20420,7 @@
       "name": "1,3-diazinane",
       "pin": true,
       "priority": 239,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-diazinan",
       "template": {
         "atoms": [
           {
@@ -21701,9 +20526,7 @@
       "name": "1,3-dioxane",
       "pin": true,
       "priority": 240,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-dioxan",
       "template": {
         "atoms": [
           {
@@ -21809,9 +20632,7 @@
       "name": "1,3-dioxolane",
       "pin": true,
       "priority": 241,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-dioxolan",
       "template": {
         "atoms": [
           {
@@ -21904,9 +20725,7 @@
       "name": "1,3-dithiane",
       "pin": true,
       "priority": 242,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-dithian",
       "template": {
         "atoms": [
           {
@@ -22012,9 +20831,7 @@
       "name": "1,3-dithiolane",
       "pin": true,
       "priority": 243,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-dithiolan",
       "template": {
         "atoms": [
           {
@@ -22107,9 +20924,7 @@
       "name": "1,3-oxathiane",
       "pin": true,
       "priority": 244,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-oxathian",
       "template": {
         "atoms": [
           {
@@ -22215,9 +21030,7 @@
       "name": "1,3-oxathiolane",
       "pin": true,
       "priority": 245,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-oxathiolan",
       "template": {
         "atoms": [
           {
@@ -22310,9 +21123,7 @@
       "name": "1,3-oxazinane",
       "pin": true,
       "priority": 246,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-oxazinan",
       "template": {
         "atoms": [
           {
@@ -22418,9 +21229,7 @@
       "name": "1,3-oxazole",
       "pin": true,
       "priority": 247,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-oxazol",
       "template": {
         "atoms": [
           {
@@ -22509,9 +21318,7 @@
       "name": "1,3-oxazolidine",
       "pin": true,
       "priority": 248,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-oxazolidin",
       "template": {
         "atoms": [
           {
@@ -22604,9 +21411,7 @@
       "name": "1,3-thiazinane",
       "pin": true,
       "priority": 249,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-thiazinan",
       "template": {
         "atoms": [
           {
@@ -22712,9 +21517,7 @@
       "name": "1,3-thiazole",
       "pin": true,
       "priority": 250,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-thiazol",
       "template": {
         "atoms": [
           {
@@ -22803,9 +21606,7 @@
       "name": "1,3-thiazolidine",
       "pin": true,
       "priority": 251,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-thiazolidin",
       "template": {
         "atoms": [
           {
@@ -22898,9 +21699,7 @@
       "name": "1,4-dioxane",
       "pin": true,
       "priority": 252,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,4-dioxan",
       "template": {
         "atoms": [
           {
@@ -23006,9 +21805,7 @@
       "name": "1,4-dithiane",
       "pin": true,
       "priority": 253,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,4-dithian",
       "template": {
         "atoms": [
           {
@@ -23114,9 +21911,7 @@
       "name": "1,4-oxathiane",
       "pin": true,
       "priority": 254,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,4-oxathian",
       "template": {
         "atoms": [
           {
@@ -23222,9 +22017,7 @@
       "name": "adamantane",
       "pin": true,
       "priority": 255,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "adamantan",
       "template": {
         "atoms": [
           {
@@ -23414,9 +22207,7 @@
       "name": "anthracene",
       "pin": true,
       "priority": 256,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "anthracen",
       "template": {
         "atoms": [
           {
@@ -23641,9 +22432,7 @@
       "name": "arsole",
       "pin": true,
       "priority": 257,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "arsol",
       "template": {
         "atoms": [
           {
@@ -23732,9 +22521,7 @@
       "name": "azetidine",
       "pin": true,
       "priority": 258,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "azetidin",
       "template": {
         "atoms": [
           {
@@ -23813,9 +22600,7 @@
       "name": "aziridine",
       "pin": true,
       "priority": 259,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "aziridin",
       "template": {
         "atoms": [
           {
@@ -23881,9 +22666,7 @@
       "name": "benzene",
       "pin": true,
       "priority": 260,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "benzen",
       "template": {
         "atoms": [
           {
@@ -23981,9 +22764,7 @@
       "name": "benzimidazole",
       "pin": true,
       "priority": 261,
-      "aliases": [],
       "attached_prefix": "[1,3]benzimidazolo",
-      "derivative_stem": "1,3-benzimidazol",
       "template": {
         "atoms": [
           {
@@ -24137,9 +22918,7 @@
       "name": "borinine",
       "pin": true,
       "priority": 264,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "borinin",
       "template": {
         "atoms": [
           {
@@ -24238,9 +23017,7 @@
       "name": "borole",
       "pin": true,
       "priority": 265,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "borol",
       "template": {
         "atoms": [
           {
@@ -24328,9 +23105,7 @@
       "name": "cubane",
       "pin": true,
       "priority": 266,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "cuban",
       "template": {
         "atoms": [
           {
@@ -24534,9 +23309,7 @@
       "name": "dibenz[a,h]anthracene",
       "pin": true,
       "priority": 267,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "dibenz[a,h]anthracen",
       "template": {
         "atoms": [
           {
@@ -24883,17 +23656,14 @@
         "mancude_double_bonds": 11,
         "enabled": true,
         "derivative_production_enabled": true,
-        "pre_descriptor_selection": true,
-        "derivative_audit_enabled": true
+        "pre_descriptor_selection": true
       }
     },
     {
       "name": "furan",
       "pin": true,
       "priority": 268,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "furan",
       "template": {
         "atoms": [
           {
@@ -24981,9 +23751,7 @@
       "name": "gonane",
       "pin": true,
       "priority": 269,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "gonan",
       "template": {
         "atoms": [
           {
@@ -25284,9 +24052,7 @@
       "name": "imidazole",
       "pin": true,
       "priority": 270,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "imidazol",
       "template": {
         "atoms": [
           {
@@ -25375,9 +24141,7 @@
       "name": "imidazolidine",
       "pin": true,
       "priority": 271,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "imidazolidin",
       "template": {
         "atoms": [
           {
@@ -25470,9 +24234,7 @@
       "name": "indane",
       "pin": true,
       "priority": 272,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "indan",
       "default_indicated_h": [
         "1",
         "2",
@@ -25637,11 +24399,7 @@
       "name": "1H-indene",
       "pin": true,
       "priority": 273,
-      "aliases": [
-        "indene"
-      ],
       "attached_prefix": "indeno",
-      "derivative_stem": "1H-inden",
       "default_indicated_h": [
         "1"
       ],
@@ -25798,9 +24556,7 @@
       "name": "indoline",
       "pin": true,
       "priority": 274,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "indolin",
       "default_indicated_h": [
         "2",
         "3"
@@ -25963,9 +24719,7 @@
       "name": "morpholine",
       "pin": true,
       "priority": 276,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "morpholin",
       "template": {
         "atoms": [
           {
@@ -26071,9 +24825,7 @@
       "name": "oxane",
       "pin": true,
       "priority": 277,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "oxan",
       "template": {
         "atoms": [
           {
@@ -26178,9 +24930,7 @@
       "name": "oxirane",
       "pin": true,
       "priority": 278,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "oxiran",
       "template": {
         "atoms": [
           {
@@ -26246,9 +24996,7 @@
       "name": "oxolane",
       "pin": true,
       "priority": 279,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "oxolan",
       "template": {
         "atoms": [
           {
@@ -26340,9 +25088,7 @@
       "name": "pentacene",
       "pin": true,
       "priority": 280,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pentacen",
       "template": {
         "atoms": [
           {
@@ -26687,17 +25433,14 @@
         "mancude_double_bonds": 11,
         "enabled": true,
         "derivative_production_enabled": true,
-        "pre_descriptor_selection": true,
-        "derivative_audit_enabled": true
+        "pre_descriptor_selection": true
       }
     },
     {
       "name": "pentazole",
       "pin": true,
       "priority": 281,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pentazol",
       "template": {
         "atoms": [
           {
@@ -26789,9 +25532,7 @@
       "name": "phenanthrene",
       "pin": true,
       "priority": 282,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "phenanthren",
       "template": {
         "atoms": [
           {
@@ -27017,9 +25758,7 @@
       "name": "phosphinine",
       "pin": true,
       "priority": 283,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "phosphinin",
       "template": {
         "atoms": [
           {
@@ -27118,9 +25857,7 @@
       "name": "phosphole",
       "pin": true,
       "priority": 284,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "phosphol",
       "template": {
         "atoms": [
           {
@@ -27209,9 +25946,7 @@
       "name": "piperazine",
       "pin": true,
       "priority": 285,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "piperazin",
       "template": {
         "atoms": [
           {
@@ -27317,9 +26052,7 @@
       "name": "piperidine",
       "pin": true,
       "priority": 286,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "piperidin",
       "template": {
         "atoms": [
           {
@@ -27424,9 +26157,7 @@
       "name": "pyran",
       "pin": true,
       "priority": 287,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyran",
       "default_indicated_h": [
         "2"
       ],
@@ -27533,9 +26264,7 @@
       "name": "pyrazine",
       "pin": true,
       "priority": 288,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrazin",
       "template": {
         "atoms": [
           {
@@ -27635,9 +26364,7 @@
       "name": "pyrazole",
       "pin": true,
       "priority": 289,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrazol",
       "template": {
         "atoms": [
           {
@@ -27726,9 +26453,7 @@
       "name": "pyrazolidine",
       "pin": true,
       "priority": 290,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrazolidin",
       "template": {
         "atoms": [
           {
@@ -27821,9 +26546,7 @@
       "name": "pyrene",
       "pin": true,
       "priority": 291,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyren",
       "template": {
         "atoms": [
           {
@@ -28092,9 +26815,7 @@
       "name": "pyridazine",
       "pin": true,
       "priority": 292,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyridazin",
       "template": {
         "atoms": [
           {
@@ -28194,9 +26915,7 @@
       "name": "pyridine",
       "pin": true,
       "priority": 293,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyridin",
       "template": {
         "atoms": [
           {
@@ -28295,9 +27014,7 @@
       "name": "pyrimidine",
       "pin": true,
       "priority": 294,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrimidin",
       "template": {
         "atoms": [
           {
@@ -28397,9 +27114,7 @@
       "name": "pyrrole",
       "pin": true,
       "priority": 295,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrrol",
       "template": {
         "atoms": [
           {
@@ -28487,9 +27202,7 @@
       "name": "pyrrolidine",
       "pin": true,
       "priority": 296,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrrolidin",
       "template": {
         "atoms": [
           {
@@ -28581,9 +27294,7 @@
       "name": "selenophene",
       "pin": true,
       "priority": 297,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "selenophen",
       "template": {
         "atoms": [
           {
@@ -28671,9 +27382,7 @@
       "name": "tellurophene",
       "pin": true,
       "priority": 298,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "tellurophen",
       "template": {
         "atoms": [
           {
@@ -28761,9 +27470,7 @@
       "name": "tetrazole",
       "pin": true,
       "priority": 299,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "tetrazol",
       "template": {
         "atoms": [
           {
@@ -28854,9 +27561,7 @@
       "name": "thiane",
       "pin": true,
       "priority": 300,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thian",
       "template": {
         "atoms": [
           {
@@ -28961,9 +27666,7 @@
       "name": "thiirane",
       "pin": true,
       "priority": 301,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thiiran",
       "template": {
         "atoms": [
           {
@@ -29029,9 +27732,7 @@
       "name": "thiolane",
       "pin": true,
       "priority": 302,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thiolan",
       "template": {
         "atoms": [
           {
@@ -29123,9 +27824,7 @@
       "name": "thiomorpholine",
       "pin": true,
       "priority": 303,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thiomorpholin",
       "template": {
         "atoms": [
           {
@@ -29231,9 +27930,7 @@
       "name": "thiophene",
       "pin": true,
       "priority": 304,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thiophen",
       "template": {
         "atoms": [
           {
@@ -29321,9 +28018,7 @@
       "name": "thiopyran",
       "pin": true,
       "priority": 305,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thiopyran",
       "default_indicated_h": [
         "2"
       ],
@@ -29430,9 +28125,7 @@
       "name": "thieno[2,3-d]pyrimidine",
       "pin": true,
       "priority": 320,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thieno[2,3-d]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -29586,9 +28279,7 @@
       "name": "[1,2,4]triazolo[1,5-a]pyrimidine",
       "pin": true,
       "priority": 322,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "[1,2,4]triazolo[1,5-a]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -29743,9 +28434,7 @@
       "name": "[1,2,4]triazolo[4,3-a]pyridine",
       "pin": true,
       "priority": 324,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "[1,2,4]triazolo[4,3-a]pyridin",
       "template": {
         "atoms": [
           {
@@ -29899,9 +28588,7 @@
       "name": "[1,2,4]triazolo[4,3-a]pyrazine",
       "pin": true,
       "priority": 325,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "[1,2,4]triazolo[4,3-a]pyrazin",
       "template": {
         "atoms": [
           {
@@ -30056,9 +28743,7 @@
       "name": "thieno[3,2-d]pyrimidine",
       "pin": true,
       "priority": 326,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thieno[3,2-d]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -30212,9 +28897,7 @@
       "name": "imidazo[1,2-a]pyrazine",
       "pin": true,
       "priority": 327,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "imidazo[1,2-a]pyrazin",
       "template": {
         "atoms": [
           {
@@ -30368,9 +29051,7 @@
       "name": "pyrazolo[1,5-a]pyridine",
       "pin": true,
       "priority": 328,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrazolo[1,5-a]pyridin",
       "template": {
         "atoms": [
           {
@@ -30523,9 +29204,7 @@
       "name": "4H-pyrido[1,2-a]pyrimidine",
       "pin": true,
       "priority": 329,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrido[1,2-a]pyrimidin",
       "default_indicated_h": [
         "4"
       ],
@@ -30697,9 +29376,7 @@
       "name": "imidazo[1,2-b]pyridazine",
       "pin": true,
       "priority": 330,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "imidazo[1,2-b]pyridazin",
       "template": {
         "atoms": [
           {
@@ -30853,9 +29530,7 @@
       "name": "pyrrolo[1,2-a]pyrazine",
       "pin": true,
       "priority": 331,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrrolo[1,2-a]pyrazin",
       "template": {
         "atoms": [
           {
@@ -31008,9 +29683,7 @@
       "name": "[1,2]oxazolo[5,4-b]pyridine",
       "pin": true,
       "priority": 332,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "[1,2]oxazolo[5,4-b]pyridin",
       "template": {
         "atoms": [
           {
@@ -31164,9 +29837,7 @@
       "name": "imidazo[1,2-a]pyrimidine",
       "pin": true,
       "priority": 333,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "imidazo[1,2-a]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -31320,9 +29991,7 @@
       "name": "furo[3,2-b]pyridine",
       "pin": true,
       "priority": 337,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "furo[3,2-b]pyridin",
       "template": {
         "atoms": [
           {
@@ -31475,9 +30144,7 @@
       "name": "furo[2,3-d]pyrimidine",
       "pin": true,
       "priority": 339,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "furo[2,3-d]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -31631,9 +30298,7 @@
       "name": "[1,3]thiazolo[5,4-b]pyridine",
       "pin": true,
       "priority": 340,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "[1,3]thiazolo[5,4-b]pyridin",
       "template": {
         "atoms": [
           {
@@ -31787,9 +30452,7 @@
       "name": "[1,3]thiazolo[4,5-d]pyrimidine",
       "pin": true,
       "priority": 341,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "[1,3]thiazolo[4,5-d]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -31944,9 +30607,7 @@
       "name": "imidazo[1,2-c]pyrimidine",
       "pin": true,
       "priority": 342,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "imidazo[1,2-c]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -32100,9 +30761,7 @@
       "name": "pyrido[3,4-b]pyrazine",
       "pin": true,
       "priority": 343,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrido[3,4-b]pyrazin",
       "template": {
         "atoms": [
           {
@@ -32267,9 +30926,7 @@
       "name": "furo[3,2-d]pyrimidine",
       "pin": true,
       "priority": 344,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "furo[3,2-d]pyrimidin",
       "template": {
         "atoms": [
           {
@@ -32423,9 +31080,7 @@
       "name": "9H-pyrido[3,4-b]indole",
       "pin": true,
       "priority": 346,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrido[3,4-b]indol",
       "template": {
         "atoms": [
           {
@@ -32642,9 +31297,7 @@
       "name": "1H-pyrrolo[3,2-b]pyridine",
       "pin": true,
       "priority": 347,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrrolo[3,2-b]pyridin",
       "template": {
         "atoms": [
           {
@@ -32797,9 +31450,7 @@
       "name": "1H-pyrazolo[4,3-c]pyridine",
       "pin": true,
       "priority": 348,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrazolo[4,3-c]pyridin",
       "template": {
         "atoms": [
           {
@@ -32953,9 +31604,7 @@
       "name": "5H-cyclopenta[b]pyridine",
       "pin": true,
       "priority": 349,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "cyclopenta[b]pyridin",
       "default_indicated_h": [
         "5"
       ],
@@ -33113,9 +31762,7 @@
       "name": "9H-fluorene",
       "pin": true,
       "priority": 350,
-      "aliases": [],
       "attached_prefix": "fluoreno",
-      "derivative_stem": "fluoren",
       "default_indicated_h": [
         "9"
       ],
@@ -33337,9 +31984,7 @@
       "name": "pentalene",
       "pin": true,
       "priority": 351,
-      "aliases": [],
       "attached_prefix": "pentaleno",
-      "derivative_stem": "pentalen",
       "template": {
         "atoms": [
           {
@@ -33477,9 +32122,7 @@
       "name": "heptalene",
       "pin": true,
       "priority": 352,
-      "aliases": [],
       "attached_prefix": "heptaleno",
-      "derivative_stem": "heptalen",
       "template": {
         "atoms": [
           {
@@ -33665,9 +32308,7 @@
       "name": "biphenylene",
       "pin": true,
       "priority": 353,
-      "aliases": [],
       "attached_prefix": "biphenyleno",
-      "derivative_stem": "biphenylen",
       "template": {
         "atoms": [
           {
@@ -33870,9 +32511,7 @@
       "name": "chrysene",
       "pin": true,
       "priority": 354,
-      "aliases": [],
       "attached_prefix": "chryseno",
-      "derivative_stem": "chrysen",
       "template": {
         "atoms": [
           {
@@ -34162,9 +32801,7 @@
       "name": "tetracene",
       "pin": true,
       "priority": 355,
-      "aliases": [],
       "attached_prefix": "tetraceno",
-      "derivative_stem": "tetracen",
       "template": {
         "atoms": [
           {
@@ -34446,17 +33083,14 @@
         "mancude_double_bonds": 9,
         "enabled": true,
         "derivative_production_enabled": true,
-        "pre_descriptor_selection": true,
-        "derivative_audit_enabled": true
+        "pre_descriptor_selection": true
       }
     },
     {
       "name": "triphenylene",
       "pin": true,
       "priority": 356,
-      "aliases": [],
       "attached_prefix": "triphenyleno",
-      "derivative_stem": "triphenylen",
       "template": {
         "atoms": [
           {
@@ -34747,9 +33381,7 @@
       "name": "perylene",
       "pin": true,
       "priority": 357,
-      "aliases": [],
       "attached_prefix": "peryleno",
-      "derivative_stem": "perylen",
       "template": {
         "atoms": [
           {
@@ -35083,9 +33715,7 @@
       "name": "picene",
       "pin": true,
       "priority": 358,
-      "aliases": [],
       "attached_prefix": "piceno",
-      "derivative_stem": "picen",
       "template": {
         "atoms": [
           {
@@ -35439,9 +34069,7 @@
       "name": "coronene",
       "pin": true,
       "priority": 359,
-      "aliases": [],
       "attached_prefix": "coroneno",
-      "derivative_stem": "coronen",
       "template": {
         "atoms": [
           {
@@ -35850,9 +34478,7 @@
       "name": "s-indacene",
       "pin": true,
       "priority": 360,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "s-indacen",
       "template": {
         "atoms": [
           {
@@ -36053,9 +34679,7 @@
       "name": "as-indacene",
       "pin": true,
       "priority": 361,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "as-indacen",
       "template": {
         "atoms": [
           {
@@ -36257,9 +34881,7 @@
       "name": "aceanthrylene",
       "pin": true,
       "priority": 362,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "aceanthrylen",
       "template": {
         "atoms": [
           {
@@ -36527,9 +35149,7 @@
       "name": "acephenanthrylene",
       "pin": true,
       "priority": 363,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "acephenanthrylen",
       "template": {
         "atoms": [
           {
@@ -36797,9 +35417,7 @@
       "name": "thianthrene",
       "pin": true,
       "priority": 364,
-      "aliases": [],
       "attached_prefix": "thianthreno",
-      "derivative_stem": "thianthren",
       "template": {
         "atoms": [
           {
@@ -37028,9 +35646,7 @@
       "name": "phenoxathiine",
       "pin": true,
       "priority": 365,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "phenoxathiin",
       "template": {
         "atoms": [
           {
@@ -37259,9 +35875,7 @@
       "name": "1H-benzo[7]annulene",
       "pin": true,
       "priority": 366,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "benzo[7]annulen",
       "default_indicated_h": [
         "1"
       ],
@@ -37442,9 +36056,7 @@
       "name": "5H-dibenzo[a,d][7]annulene",
       "pin": true,
       "priority": 367,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "dibenzo[a,d][7]annulen",
       "default_indicated_h": [
         "5"
       ],
@@ -37688,9 +36300,7 @@
       "name": "1H-1,4-benzodiazepine",
       "pin": true,
       "priority": 368,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,4-benzodiazepin",
       "template": {
         "atoms": [
           {
@@ -37867,9 +36477,7 @@
       "name": "2H-2,3-benzodiazepine",
       "pin": true,
       "priority": 369,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "2,3-benzodiazepin",
       "template": {
         "atoms": [
           {
@@ -38046,9 +36654,7 @@
       "name": "4H-1,4-benzothiazine",
       "pin": true,
       "priority": 371,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,4-benzothiazin",
       "template": {
         "atoms": [
           {
@@ -38214,9 +36820,7 @@
       "name": "4H-3,1-benzoxazine",
       "pin": true,
       "priority": 372,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "3,1-benzoxazin",
       "default_indicated_h": [
         "4"
       ],
@@ -38388,9 +36992,7 @@
       "name": "2H-1,3-benzoxazine",
       "pin": true,
       "priority": 373,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-benzoxazin",
       "default_indicated_h": [
         "2"
       ],
@@ -38562,9 +37164,7 @@
       "name": "4H-1,3-benzodioxine",
       "pin": true,
       "priority": 374,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "1,3-benzodioxin",
       "default_indicated_h": [
         "2",
         "4"
@@ -38741,9 +37341,7 @@
       "name": "1H-pyrrolo[2,3-b]indole",
       "pin": true,
       "priority": 376,
-      "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "pyrrolo[2,3-b]indol",
       "template": {
         "atoms": [
           {
