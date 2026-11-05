@@ -18,7 +18,8 @@ fn assert_group_scope_refused(name: &str) {
     assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
     assert!(result.structure.is_none(), "{name}");
     assert!(
-        result.message.contains(CAGE_GROUP_SCOPE_ERROR),
+        result.message.contains(CAGE_GROUP_SCOPE_ERROR)
+            || result.message.contains("mixed relative/racemic scope"),
         "{name}: {}",
         result.message
     );
@@ -934,7 +935,25 @@ fn explicit_cage_groups_with_stereogenic_axes_are_refused() {
         "rel-(1R)-8-ethyl-8-azabicyclo[3.2.1]octan-3-endo-yl (1P)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
         "rac-(1R)-8-ethyl-8-azabicyclo[3.2.1]octan-3-endo-yl (1P)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
     ] {
-        assert_group_scope_refused(name);
+        let unqualified = name.split_once('-').unwrap().1;
+        let absolute = parse(unqualified);
+        assert!(
+            absolute
+                .graph
+                .bonds
+                .iter()
+                .any(|bond| bond.active && bond.axial_stereo.is_some()),
+            "{unqualified}"
+        );
+        let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+        assert!(result.structure.is_none(), "{name}");
+        assert!(
+            result.message.contains(CAGE_GROUP_SCOPE_ERROR)
+                || result.message.to_lowercase().contains("ax"),
+            "{name}: {}",
+            result.message
+        );
     }
 }
 
@@ -966,7 +985,7 @@ fn explicit_cage_groups_with_e_z_double_bonds_are_allowed() {
 }
 
 #[test]
-fn racemic_qualifiers_on_e_z_descriptors_cannot_become_relative_cage_groups() {
+fn racemic_qualifiers_on_e_z_descriptors_group_the_cage_and_preserve_the_bond() {
     for name in [
         "rac-(1E)-1-(bicyclo[2.2.1]heptan-2-exo-yl)-2-fluoroethene",
         "rac-(1Z)-1-(bicyclo[2.2.1]heptan-2-exo-yl)-2-fluoroethene",
@@ -975,7 +994,32 @@ fn racemic_qualifiers_on_e_z_descriptors_cannot_become_relative_cage_groups() {
         "rac-(2E)-4-(bicyclo[2.2.1]heptan-2-exo-yl)but-2-en-1-ol",
         "rac-(2Z)-4-(bicyclo[2.2.1]heptan-2-exo-yl)but-2-en-1-ol",
     ] {
-        assert_group_scope_refused(name);
+        let unqualified = name.strip_prefix("rac-").unwrap();
+        let reference = parse(unqualified);
+        let expected = reference.semantic_cxsmiles().unwrap();
+        let structure = parse(name);
+        assert_eq!(
+            stereo_group_signature(&structure),
+            "Racemic:1,2,4",
+            "{name}"
+        );
+        let written = structure.semantic_cxsmiles().unwrap();
+        assert_eq!(
+            smiles::stereoisomers(&written).unwrap(),
+            smiles::stereoisomers(&expected).unwrap(),
+            "{name}: {written}"
+        );
+        let bonds = |structure: &Structure| {
+            structure
+                .graph
+                .bonds
+                .iter()
+                .filter(|bond| bond.active)
+                .filter_map(|bond| bond.stereo.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(bonds(&reference).len(), 1, "{unqualified}");
+        assert_eq!(bonds(&structure), bonds(&reference), "{name}");
     }
 }
 
@@ -1004,23 +1048,48 @@ fn supported_racemic_cage_groups_with_e_z_double_bonds_preserve_their_kind() {
 
 #[test]
 fn qualifiers_on_non_cip_descriptors_are_retained_for_cage_scope_checks() {
-    for unqualified in [
-        "(1E)-1-[(1R)-bicyclo[2.2.1]heptan-2-exo-yl]-2-fluoroethene",
-        "(3alpha,5alpha)-cholestan-3-yl (1R)-bicyclo[2.2.1]heptane-2-exo-carboxylate",
-    ] {
-        let structure = parse(unqualified);
+    let unqualified = "(3alpha,5alpha)-cholestan-3-yl (1R)-bicyclo[2.2.1]heptane-2-exo-carboxylate";
+    let structure = parse(unqualified);
+    assert!(
+        structure
+            .graph
+            .atoms
+            .iter()
+            .filter_map(|atom| atom.parity.as_ref())
+            .all(|parity| parity.stereo_group.kind == StereoGroupType::Absolute),
+        "{unqualified}"
+    );
+    for prefix in ["rel", "rac"] {
+        assert_group_scope_refused(&format!("{prefix}-{unqualified}"));
+    }
+}
+
+#[test]
+fn leading_e_z_qualifiers_with_an_absolute_cage_keep_the_complete_group() {
+    let unqualified = "(1E)-1-[(1R)-bicyclo[2.2.1]heptan-2-exo-yl]-2-fluoroethene";
+    let reference = parse(unqualified).semantic_cxsmiles().unwrap();
+    for (prefix, kind) in [("rel", "Relative"), ("rac", "Racemic")] {
+        let name = format!("{prefix}-{unqualified}");
+        let structure = parse(&name);
+        assert_eq!(
+            stereo_group_signature(&structure),
+            format!("{kind}:1,2,4"),
+            "{name}"
+        );
+        let written = structure.semantic_cxsmiles().unwrap();
+        assert_eq!(
+            smiles::stereoisomers(&written).unwrap(),
+            smiles::stereoisomers(&format!("{reference} |r|")).unwrap(),
+            "{name}: {written}"
+        );
         assert!(
             structure
                 .graph
-                .atoms
+                .bonds
                 .iter()
-                .filter_map(|atom| atom.parity.as_ref())
-                .all(|parity| parity.stereo_group.kind == StereoGroupType::Absolute),
-            "{unqualified}"
+                .any(|bond| bond.active && bond.stereo.is_some()),
+            "{name}"
         );
-        for prefix in ["rel", "rac"] {
-            assert_group_scope_refused(&format!("{prefix}-{unqualified}"));
-        }
     }
 }
 

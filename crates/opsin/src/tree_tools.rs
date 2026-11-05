@@ -113,6 +113,16 @@ impl Arena {
             .filter(|&id| self[id].name == name && self[id].attribute(attribute) == Some(value))
             .collect()
     }
+    /// The molecule-level word-rule branch, including all connected words.
+    pub fn molecule_branch(&self, mut id: NodeId) -> NodeId {
+        while let Some(parent) = self[id].parent {
+            if self[parent].name == "molecule" {
+                break;
+            }
+            id = parent;
+        }
+        id
+    }
     pub fn parent_word_rule(&self, id: NodeId) -> Option<NodeId> {
         let mut current = self[id].parent;
         while let Some(id) = current {

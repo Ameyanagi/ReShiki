@@ -654,3 +654,326 @@ fn redundant_predefined_atom_and_bond_stereo_are_removed() {
         .remove_redundant_stereo_centres(&[atom], &[]);
     assert!(state.graph().atom(atom).parity.is_none());
 }
+
+fn parse_name(name: &str) -> opsin::Structure {
+    let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
+    assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+    result.structure.unwrap()
+}
+
+fn assert_whole_name_group(
+    name: &str,
+    structure: &opsin::Structure,
+    kind: StereoGroupType,
+    configured: usize,
+    absolute: &str,
+) {
+    let groups: Vec<_> = structure
+        .graph
+        .atoms
+        .iter()
+        .filter(|atom| atom.active)
+        .filter_map(|atom| atom.parity.as_ref().map(|parity| parity.stereo_group))
+        .collect();
+    assert_eq!(groups.len(), configured, "{name}");
+    assert_eq!(groups[0].kind, kind, "{name}");
+    assert!(
+        groups.iter().all(|group| *group == groups[0]),
+        "{name}: {groups:?}"
+    );
+    let written = structure.semantic_cxsmiles().unwrap();
+    assert_eq!(
+        reshiki_chemistry::smiles::stereoisomers(&written).unwrap(),
+        reshiki_chemistry::smiles::stereoisomers(&format!("{absolute} |r|")).unwrap(),
+        "{name}: {written}"
+    );
+}
+
+#[test]
+fn whole_name_groups_leave_undefined_and_explicitly_unknown_centres_unconfigured() {
+    for (prefix, kind) in [
+        ("rel", StereoGroupType::Relative),
+        ("rac", StereoGroupType::Racemic),
+    ] {
+        for (unqualified, undefined) in [
+            ("(2R)-3-chlorobutan-2-ol", &["3"][..]),
+            ("(2R)-3,4-dichlorohexan-2-ol", &["3", "4"][..]),
+        ] {
+            let absolute = parse_name(unqualified).semantic_cxsmiles().unwrap();
+            let name = format!("{prefix}-{unqualified}");
+            let structure = parse_name(&name);
+            assert_whole_name_group(&name, &structure, kind, 1, &absolute);
+            for &locant in undefined {
+                let atom = structure
+                    .graph
+                    .atom_by_locant(structure.fragment, locant)
+                    .unwrap();
+                assert!(
+                    structure.graph.atom(atom).parity.is_none(),
+                    "{name}: {locant}"
+                );
+            }
+        }
+        let unqualified = "(5alpha,20xi)-cholestane";
+        let absolute = parse_name(unqualified).semantic_cxsmiles().unwrap();
+        let name = format!("{prefix}-{unqualified}");
+        let structure = parse_name(&name);
+        assert_whole_name_group(&name, &structure, kind, 7, &absolute);
+        let atom = structure
+            .graph
+            .atom_by_locant(structure.fragment, "20")
+            .unwrap();
+        assert!(structure.graph.atom(atom).parity.is_none(), "{name}");
+
+        for descriptor in ["2Xi", "2Ξ"] {
+            let unqualified = format!("({descriptor})-3-chlorobutan-2-ol");
+            let absolute = parse_name(&unqualified).semantic_cxsmiles().unwrap();
+            let name = format!("{prefix}-{unqualified}");
+            let result = Parser::new().unwrap().parse(&name, &ParseOptions::strict());
+            assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+            let structure = result.structure.unwrap();
+            for locant in ["2", "3"] {
+                let atom = structure
+                    .graph
+                    .atom_by_locant(structure.fragment, locant)
+                    .unwrap();
+                assert!(
+                    structure.graph.atom(atom).parity.is_none(),
+                    "{name}: {locant}"
+                );
+            }
+            assert_eq!(
+                reshiki_chemistry::smiles::stereoisomers(&structure.semantic_cxsmiles().unwrap())
+                    .unwrap(),
+                reshiki_chemistry::smiles::stereoisomers(&absolute).unwrap(),
+                "{name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn whole_name_and_independent_relative_or_racemic_scopes_are_refused() {
+    for name in [
+        "rel-(1R,2S)-2-[rac-(1S)-1-fluoroethyl]cyclohexan-1-ol",
+        "rel-(1R,2S)-2-[rel-(1S)-1-fluoroethyl]cyclohexan-1-ol",
+        "rel-(1R,2S)-2-[(1RS)-1-fluoroethyl]cyclohexan-1-ol",
+        "rac-(1R,2S)-2-[(1R*)-1-fluoroethyl]cyclohexan-1-ol",
+        "rel-(1R,2S)-2-[(1R*)-1-fluoroethyl]cyclohexan-1-ol",
+        "rel-(1R*,2S*)-2-methylcyclohexan-1-ol",
+        "rac-(1RS,2SR)-2-methylcyclohexan-1-ol",
+        "rel-(1R)-1-fluoroethyl DL-alaninate",
+        "rac-(1R)-1-fluoroethyl DL-alaninate",
+        "(rac)-(1R)-1-fluoroethyl DL-alaninate",
+        "rel-DL-alanine",
+        "rac-DL-alanine",
+        "rel-alpha-DL-glucopyranose",
+        "rac-alpha-DL-glucopyranose",
+    ] {
+        let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+        assert!(result.structure.is_none(), "{name}");
+        assert!(
+            result.message.contains("mixed relative/racemic scope"),
+            "{name}: {}",
+            result.message
+        );
+    }
+}
+
+#[test]
+fn local_relative_subset_keeps_the_absolute_ring_and_qualified_stereoparents_are_refused() {
+    let name = "(1R,2S)-2-[rel-(1S)-1-fluoroethyl]cyclohexan-1-ol";
+    let structure = parse_name(name);
+    let written = structure.semantic_cxsmiles().unwrap();
+    assert!(written.ends_with("|o1:1|"), "{name}: {written}");
+    assert_eq!(
+        reshiki_chemistry::smiles::stereoisomers(&written).unwrap(),
+        reshiki_chemistry::smiles::stereoisomers("O[C@H]1[C@@H]([C@@H](F)C)CCCC1 |o1:3|").unwrap()
+    );
+    let parities: Vec<_> = structure
+        .graph
+        .atoms
+        .iter()
+        .filter_map(|atom| atom.parity.as_ref())
+        .collect();
+    assert_eq!(
+        parities
+            .iter()
+            .filter(|parity| parity.stereo_group.kind == StereoGroupType::Relative)
+            .count(),
+        1
+    );
+    assert_eq!(
+        parities
+            .iter()
+            .filter(|parity| parity.stereo_group.kind == StereoGroupType::Absolute)
+            .count(),
+        2
+    );
+    parse_name("(1R)-1-[(3beta,5alpha)-androstan-3-yl]ethan-1-ol");
+    for prefix in ["rel", "rac"] {
+        let name = format!("(1R)-1-[{prefix}-(3beta,5alpha)-androstan-3-yl]ethan-1-ol");
+        let result = Parser::new().unwrap().parse(&name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+        assert!(result.structure.is_none(), "{name}");
+        assert!(
+            result.message.contains("stereoparent"),
+            "{name}: {}",
+            result.message
+        );
+    }
+}
+
+#[test]
+fn optical_rotation_before_a_leading_qualifier_keeps_the_warning_and_complete_group() {
+    for sign in ["+", "-"] {
+        for (prefix, kind) in [
+            ("rel", StereoGroupType::Relative),
+            ("rac", StereoGroupType::Racemic),
+        ] {
+            for (unqualified, count) in [("(5alpha)-androstane", 6), ("(2R)-butan-2-ol", 1)] {
+                let absolute = parse_name(unqualified).semantic_cxsmiles().unwrap();
+                let name = format!("({sign})-{prefix}-{unqualified}");
+                let result = Parser::new().unwrap().parse(&name, &ParseOptions::strict());
+                assert_eq!(result.status, Status::Warning, "{name}: {}", result.message);
+                assert!(
+                    result.warnings.iter().any(|warning| warning.kind
+                        == WarningKind::StereochemistryIgnored
+                        && warning.message.contains(&format!("({sign})"))),
+                    "{name}: {:?}",
+                    result.warnings
+                );
+                assert_whole_name_group(&name, &result.structure.unwrap(), kind, count, &absolute);
+            }
+        }
+    }
+}
+
+#[test]
+fn whole_name_qualifiers_preserve_e_z_bonds() {
+    for configuration in ["E", "Z"] {
+        let unqualified = format!("(2{configuration},4R)-hex-2-en-4-ol");
+        let absolute = parse_name(&unqualified);
+        let expected = absolute.semantic_cxsmiles().unwrap();
+        let bond_stereo: Vec<_> = absolute
+            .graph
+            .bonds
+            .iter()
+            .filter(|bond| bond.active)
+            .filter_map(|bond| bond.stereo.clone())
+            .collect();
+        assert_eq!(bond_stereo.len(), 1);
+        for (prefix, kind) in [
+            ("rel", StereoGroupType::Relative),
+            ("rac", StereoGroupType::Racemic),
+        ] {
+            let name = format!("{prefix}-{unqualified}");
+            let structure = parse_name(&name);
+            assert_whole_name_group(&name, &structure, kind, 1, &expected);
+            assert_eq!(
+                structure
+                    .graph
+                    .bonds
+                    .iter()
+                    .filter(|bond| bond.active)
+                    .filter_map(|bond| bond.stereo.clone())
+                    .collect::<Vec<_>>(),
+                bond_stereo,
+                "{name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn whole_name_qualifiers_refuse_axes_in_leading_and_later_ester_words() {
+    for unqualified in [
+        "(1P)-[1,1'-binaphthalene]-2,2'-diol",
+        "(1R)-1-fluoroethyl (1P)-2',5'-dimethoxy-6-nitro[1,1'-biphenyl]-2-carboxylate",
+    ] {
+        let absolute = parse_name(unqualified);
+        assert!(
+            absolute
+                .graph
+                .bonds
+                .iter()
+                .any(|bond| bond.active && bond.axial_stereo.is_some()),
+            "{unqualified}"
+        );
+        for prefix in ["rel", "rac"] {
+            let name = format!("{prefix}-{unqualified}");
+            let result = Parser::new().unwrap().parse(&name, &ParseOptions::strict());
+            assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+            assert!(result.structure.is_none(), "{name}");
+            assert!(
+                result.message.to_lowercase().contains("ax"),
+                "{name}: {}",
+                result.message
+            );
+        }
+    }
+}
+
+#[test]
+fn disconnected_salt_components_keep_independent_groups_and_group_ids() {
+    use std::collections::BTreeSet;
+    for (left, right) in [("rel", "rac"), ("rel", "rel"), ("rac", "rac")] {
+        let name =
+            format!("{left}-(2R)-2-hydroxypropan-1-aminium {right}-(2S)-2-hydroxypropanoate");
+        let structure = parse_name(&name);
+        let centres: Vec<_> = structure
+            .graph
+            .atoms
+            .iter()
+            .filter(|atom| atom.active && atom.parity.is_some())
+            .collect();
+        assert_eq!(centres.len(), 2, "{name}");
+        let mut groups = BTreeSet::new();
+        for centre in centres {
+            let mut pending = vec![centre.id];
+            let mut component = BTreeSet::new();
+            while let Some(atom) = pending.pop() {
+                if component.insert(atom) {
+                    pending.extend(structure.graph.neighbours(atom));
+                }
+            }
+            let has_nitrogen = component
+                .iter()
+                .any(|&atom| structure.graph.atom(atom).element == opsin::graph::Element::N);
+            let prefix = if has_nitrogen { left } else { right };
+            let group = centre.parity.as_ref().unwrap().stereo_group;
+            assert_eq!(
+                group.kind,
+                if prefix == "rel" {
+                    StereoGroupType::Relative
+                } else {
+                    StereoGroupType::Racemic
+                },
+                "{name}"
+            );
+            assert!(
+                groups.insert(group),
+                "{name}: disconnected components share {group:?}"
+            );
+        }
+        if left == right {
+            assert_eq!(
+                groups
+                    .iter()
+                    .map(|group| group.number)
+                    .collect::<BTreeSet<_>>()
+                    .len(),
+                2,
+                "{name}"
+            );
+        }
+        let written = structure.semantic_cxsmiles().unwrap();
+        let expected = "C[C@H](O)C[NH3+].C[C@@H](O)C(=O)[O-] |&1:1,&2:6|";
+        assert_eq!(
+            reshiki_chemistry::smiles::stereoisomers(&written).unwrap(),
+            reshiki_chemistry::smiles::stereoisomers(expected).unwrap(),
+            "{name}: {written}"
+        );
+    }
+}

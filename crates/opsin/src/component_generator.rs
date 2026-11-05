@@ -119,6 +119,26 @@ impl<'a> ComponentGenerator<'a> {
             self.process_suffix_prefixes(sub)?;
             self.process_lambda_convention(sub)?;
         }
+        // Component processing consumes D/L prefixes, so preserve the mixed-
+        // scope refusal before those prefixes can disappear from the tree.
+        let stereo = self.arena.descendants_named(parse, STEREOCHEMISTRY_EL);
+        let global_scopes: Vec<_> = stereo
+            .iter()
+            .filter(|&&id| {
+                matches!(
+                    self.attr(id, TYPE_ATR).as_str(),
+                    RAC_TYPE_VAL | REL_TYPE_VAL
+                )
+            })
+            .map(|&id| self.arena.molecule_branch(id))
+            .collect();
+        if stereo.iter().any(|&id| {
+            self.attr_is(id, TYPE_ATR, DLSTEREOCHEMISTRY_TYPE_VAL)
+                && self.attr_is(id, VALUE_ATR, "dl")
+                && global_scopes.contains(&self.arena.molecule_branch(id))
+        }) {
+            return err("mixed relative/racemic scope");
+        }
         let groups = self.arena.descendants_named(parse, GROUP_EL);
         let mut brackets = Vec::new();
         self.find_and_structure_brackets(&subs, &mut brackets)?;
@@ -820,11 +840,33 @@ impl<'a> ComponentGenerator<'a> {
                 "Rac"
             })
         }
-        if text.is_empty() || exclusive {
+        let qualified = group.is_some();
+        let mut previous = self.arena.previous_element(id, true);
+        while let Some(prefix) =
+            previous.filter(|&p| self.attr_is(p, TYPE_ATR, OPTICALROTATION_TYPE_VAL))
+        {
+            previous = self.arena.previous_element(prefix, true);
+        }
+        let global = qualified && previous.is_none();
+        if qualified && (text.is_empty() || exclusive) && !global {
+            let mut closed_brackets = 0;
+            while let Some(prefix) = previous {
+                match self.arena[prefix].name.as_str() {
+                    CLOSEBRACKET_EL => closed_brackets += 1,
+                    OPENBRACKET_EL if closed_brackets == 0 => {
+                        return err("Local relative/racemic qualifier scope is not supported");
+                    }
+                    OPENBRACKET_EL => closed_brackets -= 1,
+                    _ => {}
+                }
+                previous = self.arena.previous_element(prefix, true);
+            }
+        }
+        if text.is_empty() || exclusive || global {
             if let Some(kind) = group {
                 let n = self.token(
                     STEREOCHEMISTRY_EL,
-                    original,
+                    original.clone(),
                     &[(
                         TYPE_ATR,
                         if kind == "Rac" {
@@ -836,7 +878,10 @@ impl<'a> ComponentGenerator<'a> {
                 );
                 self.arena.insert_before(id, n)
             }
-            return Ok(());
+            if text.is_empty() || exclusive {
+                return Ok(());
+            }
+            group = None;
         }
         let pattern = rx(&format!("^{STEREO}$"));
         for descriptor in descriptors {
@@ -904,7 +949,7 @@ impl<'a> ComponentGenerator<'a> {
             } else if matches(symbol, "M|P|Ra|Sa|Sp|Rp") {
                 // Native extension: stereo groups hold atom parities only, so a
                 // racemic or relative axis cannot be represented.
-                if group.is_some() {
+                if qualified {
                     return err(format!(
                         "Racemic or relative axial stereochemistry is not supported: {original}"
                     ));

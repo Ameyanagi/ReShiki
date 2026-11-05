@@ -79,21 +79,18 @@ fn locanted_xi_reserves_its_centre_before_global_stereochemistry() {
             .graph
             .atom_by_locant(structure.fragment, "2")
             .unwrap();
-        let racemic = structure
+        let other_unknown = structure
             .graph
             .atom_by_locant(structure.fragment, "3")
             .unwrap();
         assert!(structure.graph.atom(unknown).parity.is_none(), "{name}");
+        assert!(
+            structure.graph.atom(other_unknown).parity.is_none(),
+            "{name}"
+        );
         assert_eq!(
-            structure
-                .graph
-                .atom(racemic)
-                .parity
-                .as_ref()
-                .unwrap()
-                .stereo_group
-                .kind,
-            opsin::graph::StereoGroupType::Racemic,
+            structure.semantic_cxsmiles().unwrap(),
+            "ClC(C(C)O)C",
             "{name}"
         );
     }

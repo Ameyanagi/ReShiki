@@ -335,8 +335,42 @@ impl<'a> StereochemistryHandler<'a> {
         }
     }
     pub fn apply_stereochemical_elements(&mut self, elements: &[NodeId]) -> Result {
-        // Descriptor-set prefixes, starred R/S and RS/SR have already been
-        // normalized to Rel/Rac attributes; standalone qualifiers keep a type.
+        let global: Vec<_> = elements
+            .iter()
+            .copied()
+            .filter(|&id| {
+                matches!(
+                    self.attr(id, TYPE_ATR).as_str(),
+                    RAC_TYPE_VAL | REL_TYPE_VAL
+                )
+            })
+            .collect();
+        let mut global_scopes = HashSet::new();
+        for &global in &global {
+            let scope = self.arena.molecule_branch(global);
+            if !global_scopes.insert(scope)
+                || elements.iter().any(|&id| {
+                    self.arena.molecule_branch(id) == scope
+                        && matches!(self.attr(id, STEREOGROUP_ATR).as_str(), "Rel" | "Rac")
+                })
+                || self.molecule_stereo_atoms(global)?.iter().any(|&atom| {
+                    self.graph()
+                        .atom(atom)
+                        .parity
+                        .as_ref()
+                        .is_some_and(|parity| {
+                            matches!(
+                                parity.stereo_group.kind,
+                                StereoGroupType::Relative | StereoGroupType::Racemic
+                            )
+                        })
+                })
+            {
+                return stereo("mixed relative/racemic scope");
+            }
+        }
+        // Local prefixes, starred R/S and RS/SR retain group attributes;
+        // whole-molecule qualifiers are deferred standalone elements.
         let mut requested_group_kinds = BTreeSet::new();
         for &id in elements {
             let element = &self.arena[id];
@@ -354,7 +388,6 @@ impl<'a> StereochemistryHandler<'a> {
         let mut locanted = Vec::new();
         let mut unlocanted = Vec::new();
         let mut carbohydrate = Vec::new();
-        let mut global = Vec::new();
         let mut pseudo = Vec::new();
         let mut cage = Vec::new();
         let mut unlocanted_unknown = Vec::new();
@@ -375,7 +408,7 @@ impl<'a> StereochemistryHandler<'a> {
             } else {
                 match self.attr(id, TYPE_ATR).as_str() {
                     CARBOHYDRATECONFIGURATIONPREFIX_TYPE_VAL => carbohydrate.push(id),
-                    RAC_TYPE_VAL | REL_TYPE_VAL => global.push(id),
+                    RAC_TYPE_VAL | REL_TYPE_VAL => {}
                     _ => unlocanted.push(id),
                 }
             }
@@ -418,26 +451,14 @@ impl<'a> StereochemistryHandler<'a> {
         }
         self.warning_or_error(result)?;
         self.apply_cage_stereo_groups()?;
-        if global.len() > 1 {
-            let message = "More than one global indicator of rac- or rel- was specified";
-            if self
-                .state
-                .options
-                .warn_rather_than_fail_on_uninterpretable_stereochemistry
-            {
-                self.state
-                    .add_warning(WarningKind::StereochemistryIgnored, message)
-            } else {
-                return structure(message);
-            }
-        }
-        for id in global {
+        // The case of Unicode xi depends on the complete stereochemical
+        // environment, including lowercase r/s descriptors. Reserve every
+        // unknown centre before a global qualifier considers inference.
+        for id in unlocanted_unknown {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
-        // The case of Unicode xi depends on the complete stereochemical
-        // environment, including lowercase r/s descriptors.
-        for id in unlocanted_unknown {
+        for id in global {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
@@ -787,43 +808,50 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(original != canonical(&graph)?)
     }
+    fn molecule_stereo_atoms(&self, id: NodeId) -> Result<BTreeSet<AtomId>> {
+        let mut atoms = BTreeSet::new();
+        for group in self
+            .arena
+            .descendants_named(self.arena.molecule_branch(id), GROUP_EL)
+        {
+            atoms.extend(&self.graph().fragment(self.fragment(group)?).atoms);
+        }
+        Ok(atoms)
+    }
     fn apply_global_rac_or_rel(&mut self, id: NodeId, kind: StereoGroupType) -> Result {
+        let atoms = self.molecule_stereo_atoms(id)?;
         // Stereo groups hold atom parities only; an absolute axis must not
         // silently stand in for a racemic or relative one.
         if self
             .graph()
             .bonds
             .iter()
-            .any(|bond| bond.active && bond.axial_stereo.is_some())
+            .any(|bond| bond.active && bond.axial_stereo.is_some() && atoms.contains(&bond.from))
         {
             return stereo("rac- or rel- axial stereochemistry is not currently interpretable");
         }
-        let mut word = self.arena[id].parent;
-        while word.is_some_and(|w| self.arena[w].name != WORD_EL) {
-            word = self.arena[word.unwrap()].parent
-        }
-        let Some(word) = word else { return Ok(()) };
-        let mut fragments = self.possible_fragments(id)?;
-        for w in self.arena.next_siblings_named(word, WORD_EL) {
-            for g in self.arena.descendants_named(w, GROUP_EL).into_iter().rev() {
-                fragments.push(self.fragment(g)?)
-            }
-        }
+        let explicitly_unknown: BTreeSet<_> = self
+            .unknown_stereo_centres
+            .iter()
+            .map(|centre| centre.atom)
+            .filter(|atom| atoms.contains(atom))
+            .collect();
         let mut undefined = Vec::new();
         let mut defined = Vec::new();
-        for f in fragments {
-            for &a in &self.graph().fragment(f).atoms {
-                if self.graph().atom(a).parity.is_some() {
-                    defined.push(a)
-                } else if self
-                    .not_explicitly_defined_stereo_centre_map
-                    .contains_key(&a)
-                {
-                    undefined.push(a)
-                }
+        for &atom in &atoms {
+            if explicitly_unknown.contains(&atom) {
+                continue;
+            }
+            if self.graph().atom(atom).parity.is_some() {
+                defined.push(atom)
+            } else if self
+                .not_explicitly_defined_stereo_centre_map
+                .contains_key(&atom)
+            {
+                undefined.push(atom)
             }
         }
-        if !undefined.is_empty() {
+        if defined.is_empty() && explicitly_unknown.is_empty() && !undefined.is_empty() {
             if undefined.len() > 1 {
                 self.state.add_warning(
                     WarningKind::StereochemistryIgnored,
@@ -843,12 +871,22 @@ impl<'a> StereochemistryHandler<'a> {
                 }
                 other => other?,
             }
-            self.set_stereo_group(atom, kind, 1);
+            defined.push(atom);
             self.not_explicitly_defined_stereo_centre_map.remove(&atom);
-        } else {
-            for atom in defined {
-                self.set_stereo_group(atom, kind, 1)
-            }
+        }
+        let number = self
+            .graph()
+            .atoms
+            .iter()
+            .filter(|atom| !atoms.contains(&atom.id))
+            .filter_map(|atom| atom.parity.as_ref())
+            .filter(|parity| parity.stereo_group.kind == kind)
+            .map(|parity| parity.stereo_group.number)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        for atom in defined {
+            self.set_stereo_group(atom, kind, number)
         }
         Ok(())
     }
@@ -1414,6 +1452,9 @@ impl<'a> StereochemistryHandler<'a> {
         Ok(())
     }
     fn assign_alpha_beta_xi_stereochem(&mut self, id: NodeId) -> Result {
+        if matches!(self.attr(id, STEREOGROUP_ATR).as_str(), "Rel" | "Rac") {
+            return stereo("Local relative/racemic stereoparent scope is not supported");
+        }
         let parent = self.parent(id)?;
         let substituent = if self.arena[parent].name == SUBSTITUENT_EL {
             self.arena
@@ -1989,4 +2030,48 @@ fn determine_periphery_bonds(graph: &Graph, fragment: FragmentId) -> Result<Vec<
         }
     }
     Ok(bonds)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn global_qualifiers_reject_groups_already_created_by_component_processing() {
+        for kind in [StereoGroupType::Relative, StereoGroupType::Racemic] {
+            let mut state = BuildState::new(crate::ParseOptions::strict());
+            let mut arena = Arena::default();
+            let molecule = arena.grouping(MOLECULE_EL);
+            let rule = arena.grouping(WORDRULE_EL);
+            arena.add_child(molecule, rule);
+            let word = arena.grouping(WORD_EL);
+            arena.add_child(rule, word);
+            let root = arena.grouping(ROOT_EL);
+            arena.add_child(word, root);
+            let qualifier = arena.token(STEREOCHEMISTRY_EL, "rel-");
+            arena[qualifier].add_attribute(TYPE_ATR, REL_TYPE_VAL);
+            arena.add_child(root, qualifier);
+            let group = arena.token(GROUP_EL, "lactic acid");
+            arena.add_child(root, group);
+            let fragment = state
+                .fragment_manager
+                .build_token_smiles("C[C@H](O)C(=O)O", &mut arena, group, NUMERIC_LABELS_VAL)
+                .unwrap();
+            arena[group].fragment = Some(fragment);
+            let atom = state.graph().fragment(fragment).atoms[1];
+            state
+                .graph_mut()
+                .atom_mut(atom)
+                .parity
+                .as_mut()
+                .unwrap()
+                .stereo_group = StereoGroup { kind, number: 1 };
+            let original = state.graph().atom(atom).parity.clone();
+            let error = StereochemistryHandler::new(&mut state, &mut arena, &[], &[])
+                .apply_stereochemical_elements(&[qualifier])
+                .unwrap_err();
+            assert_eq!(error.to_string(), "mixed relative/racemic scope");
+            assert_eq!(state.graph().atom(atom).parity, original);
+        }
+    }
 }

@@ -163,6 +163,29 @@ fn generation_verification_accepts_only_one_relative_cx_group() {
 }
 
 #[tokio::test]
+async fn actual_parser_rejects_relative_stereoparents_and_imports_absolute_control() {
+    for name in ["rel-(5alpha)-androstane", "rel-5alpha-androstane"] {
+        let error = resolve_name(name, Cancel::default()).await.unwrap_err();
+        assert!(matches!(error, Error::Rejected(_)), "{name}: {error}");
+        assert!(
+            error
+                .to_string()
+                .contains("cannot yet store relative configuration"),
+            "{name}: {error}"
+        );
+    }
+    let record = resolve_name("(5alpha)-androstane", Cancel::default())
+        .await
+        .unwrap();
+    super::super::verify_identity(
+        "C[C@@]12CCC[C@H]1[C@@H]1CC[C@H]3CCCC[C@]3(C)[C@H]1CC2",
+        &record.smiles,
+    )
+    .unwrap();
+    assert!(record.warnings.is_empty());
+}
+
+#[tokio::test]
 async fn actual_parser_rejects_relative_cages_and_imports_achiral_cages() {
     for name in [
         "bicyclo[2.2.1]heptan-2-exo-ol",

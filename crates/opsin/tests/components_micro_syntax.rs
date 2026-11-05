@@ -221,10 +221,10 @@ fn upstream_stereochemistry_bracket_cases() {
         (
             "rel-(1R,3S,4S,7R)",
             vec![
-                (Some("1"), "R", R_OR_S_TYPE_VAL, Some("Rel")),
-                (Some("3"), "S", R_OR_S_TYPE_VAL, Some("Rel")),
-                (Some("4"), "S", R_OR_S_TYPE_VAL, Some("Rel")),
-                (Some("7"), "R", R_OR_S_TYPE_VAL, Some("Rel")),
+                (Some("1"), "R", R_OR_S_TYPE_VAL, Some("Abs")),
+                (Some("3"), "S", R_OR_S_TYPE_VAL, Some("Abs")),
+                (Some("4"), "S", R_OR_S_TYPE_VAL, Some("Abs")),
+                (Some("7"), "R", R_OR_S_TYPE_VAL, Some("Abs")),
             ],
         ),
         (
@@ -238,7 +238,7 @@ fn upstream_stereochemistry_bracket_cases() {
         ),
         (
             "rac-(2R)",
-            vec![(Some("2"), "R", R_OR_S_TYPE_VAL, Some("Rac"))],
+            vec![(Some("2"), "R", R_OR_S_TYPE_VAL, Some("Abs"))],
         ),
         ("(RS)", vec![(None, "R", R_OR_S_TYPE_VAL, Some("Rac"))]),
         ("(rs)", vec![(None, "R", R_OR_S_TYPE_VAL, Some("Rac"))]),
@@ -267,7 +267,21 @@ fn upstream_stereochemistry_bracket_cases() {
         ComponentGenerator::new(&mut a, &mut ComponentGenerationContext::default())
             .process_stereochemistry(sub)
             .unwrap();
-        let children = &a[sub].children;
+        let mut children = a[sub].children.as_slice();
+        if input.starts_with("rel-") || input.starts_with("rac-") {
+            let qualifier = &a[children[0]];
+            assert_eq!(
+                qualifier.attribute(TYPE_ATR),
+                Some(if input.starts_with("rel-") {
+                    REL_TYPE_VAL
+                } else {
+                    RAC_TYPE_VAL
+                }),
+                "{input}"
+            );
+            assert_eq!(qualifier.attribute(STEREOGROUP_ATR), None, "{input}");
+            children = &children[1..];
+        }
         assert_eq!(children.len(), expected.len(), "{input}");
         for (&n, (loc, val, kind, group)) in children.iter().zip(expected) {
             assert_eq!(
@@ -283,6 +297,156 @@ fn upstream_stereochemistry_bracket_cases() {
         }
     }
 }
+#[test]
+fn qualified_descriptor_sets_follow_the_molecule_branch_start() {
+    for qualifier in ["rel", "rac"] {
+        for prefix in [None, Some(OPTICALROTATION_TYPE_VAL), Some(OPENBRACKET_EL)] {
+            let mut arena = Arena::default();
+            let molecule = arena.grouping(MOLECULE_EL);
+            let salt = arena.grouping(WORDRULE_EL);
+            arena.add_child(molecule, salt);
+            token(&mut arena, salt, GROUP_EL, "salt", &[]);
+            let rule = arena.grouping(WORDRULE_EL);
+            arena.add_child(molecule, rule);
+            let word = arena.grouping(WORD_EL);
+            arena.add_child(rule, word);
+            let sub = arena.grouping(SUBSTITUENT_EL);
+            arena.add_child(word, sub);
+            if let Some(prefix) = prefix {
+                if prefix == OPTICALROTATION_TYPE_VAL {
+                    token(
+                        &mut arena,
+                        sub,
+                        STEREOCHEMISTRY_EL,
+                        "(+)-",
+                        &[(TYPE_ATR, prefix)],
+                    );
+                } else {
+                    token(&mut arena, sub, OPENBRACKET_EL, "[", &[]);
+                }
+            }
+            token(
+                &mut arena,
+                sub,
+                STEREOCHEMISTRY_EL,
+                &format!("{qualifier}-(5alpha,3R)"),
+                &[(TYPE_ATR, STEREOCHEMISTRYBRACKET_TYPE_VAL)],
+            );
+            ComponentGenerator::new(&mut arena, &mut ComponentGenerationContext::default())
+                .process_stereochemistry(sub)
+                .unwrap();
+            let stereo = arena.children_named(sub, STEREOCHEMISTRY_EL);
+            let descriptors: Vec<_> = stereo
+                .iter()
+                .copied()
+                .filter(|&id| arena[id].attribute(LOCANT_ATR).is_some())
+                .collect();
+            let local = prefix == Some(OPENBRACKET_EL);
+            let group = if qualifier == "rel" { "Rel" } else { "Rac" };
+            assert_eq!(descriptors.len(), 2);
+            assert_eq!(
+                arena[descriptors[0]].attribute(STEREOGROUP_ATR),
+                local.then_some(group)
+            );
+            assert_eq!(
+                arena[descriptors[1]].attribute(STEREOGROUP_ATR),
+                Some(if local { group } else { "Abs" })
+            );
+            assert_eq!(
+                stereo
+                    .iter()
+                    .filter(|&&id| matches!(
+                        arena[id].attribute(TYPE_ATR),
+                        Some(REL_TYPE_VAL | RAC_TYPE_VAL)
+                    ))
+                    .count(),
+                usize::from(!local)
+            );
+        }
+    }
+}
+
+#[test]
+fn local_qualifier_only_tokens_do_not_gain_molecule_scope() {
+    for qualifier in ["rel-", "rac-", "(rel)", "(rac)"] {
+        let mut arena = Arena::default();
+        let sub = arena.grouping(SUBSTITUENT_EL);
+        token(&mut arena, sub, OPENBRACKET_EL, "[", &[]);
+        token(
+            &mut arena,
+            sub,
+            STEREOCHEMISTRY_EL,
+            qualifier,
+            &[(TYPE_ATR, STEREOCHEMISTRYBRACKET_TYPE_VAL)],
+        );
+        let error = ComponentGenerator::new(&mut arena, &mut ComponentGenerationContext::default())
+            .process_stereochemistry(sub)
+            .unwrap_err();
+        assert!(error.to_string().contains("Local relative/racemic"));
+    }
+}
+
+#[test]
+fn nonleading_qualifier_only_tokens_preserve_legacy_molecule_scope() {
+    for qualifier in ["rel-", "rac-", "(rel)", "(rac)"] {
+        for bracketed_prefix in [false, true] {
+            let mut arena = Arena::default();
+            let word = arena.grouping(WORD_EL);
+            let prefix = arena.grouping(SUBSTITUENT_EL);
+            arena.add_child(word, prefix);
+            if bracketed_prefix {
+                token(&mut arena, prefix, OPENBRACKET_EL, "[", &[]);
+            }
+            token(&mut arena, prefix, GROUP_EL, "prefix", &[]);
+            if bracketed_prefix {
+                token(&mut arena, prefix, CLOSEBRACKET_EL, "]", &[]);
+            }
+            let sub = arena.grouping(SUBSTITUENT_EL);
+            arena.add_child(word, sub);
+            token(
+                &mut arena,
+                sub,
+                STEREOCHEMISTRY_EL,
+                qualifier,
+                &[(TYPE_ATR, STEREOCHEMISTRYBRACKET_TYPE_VAL)],
+            );
+            ComponentGenerator::new(&mut arena, &mut ComponentGenerationContext::default())
+                .process_stereochemistry(sub)
+                .unwrap();
+            let stereo = arena.children_named(sub, STEREOCHEMISTRY_EL);
+            assert_eq!(stereo.len(), 1);
+            assert_eq!(
+                arena[stereo[0]].attribute(TYPE_ATR),
+                Some(if qualifier.contains("rel") {
+                    REL_TYPE_VAL
+                } else {
+                    RAC_TYPE_VAL
+                })
+            );
+        }
+    }
+}
+
+#[test]
+fn leading_qualifiers_preserve_starred_and_rs_descriptor_groups() {
+    let mut arena = Arena::default();
+    let sub = arena.grouping(SUBSTITUENT_EL);
+    token(
+        &mut arena,
+        sub,
+        STEREOCHEMISTRY_EL,
+        "rel-(1R*,2RS)",
+        &[(TYPE_ATR, STEREOCHEMISTRYBRACKET_TYPE_VAL)],
+    );
+    ComponentGenerator::new(&mut arena, &mut ComponentGenerationContext::default())
+        .process_stereochemistry(sub)
+        .unwrap();
+    let stereo = arena.children_named(sub, STEREOCHEMISTRY_EL);
+    assert_eq!(arena[stereo[0]].attribute(TYPE_ATR), Some(REL_TYPE_VAL));
+    assert_eq!(arena[stereo[1]].attribute(STEREOGROUP_ATR), Some("Rel"));
+    assert_eq!(arena[stereo[2]].attribute(STEREOGROUP_ATR), Some("Rac"));
+}
+
 #[test]
 fn pseudo_descriptors_preserve_case_without_reclassifying_isotope_spellings() {
     for (input, locant, value) in [

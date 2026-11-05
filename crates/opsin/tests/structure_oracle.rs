@@ -67,10 +67,23 @@ fn complete_upstream_structures_status_warnings_semantic_cxsmiles_and_graph() {
             "status":match result.status { Status::Success=>"SUCCESS",Status::Warning=>"WARNING",Status::Failure=>"FAILURE" },
             "message":result.message, "warnings":warnings, "cxsmiles":cxsmiles, "graph":graph,
         });
-        let subset = json!({
+        let mut subset = json!({
             "status":expected["status"], "message":expected["message"], "warnings":expected["warnings"],
             "cxsmiles":expected["cxsmiles"], "graph":expected["graph"],
         });
+        if name
+            == "(2R,4S,4aS)-rel-11-fluoro-2,4-dimethyl-8-(methylsulfinyl)-1,2,4,4a-tetrahydro-2′H,6H-spiro[1,4-oxazino[4,3-a][1,2]oxazolo[4,5-g]quinoline-5,5′-pyrimidine]-2′,4′,6′(1′H,3′H)-trione"
+        {
+            // #934 / P-93.1.2: group the three configured centres, leaving
+            // sulfur unspecified. Preserve every other frozen upstream field.
+            subset["cxsmiles"] = json!(
+                "FC=1C2=C(C=C3CC4(C(NC(NC4=O)=O)=O)[C@@H]4N(C13)C[C@H](O[C@H]4C)C)C(=NO2)S(=O)C |o1:16,20,22|"
+            );
+            subset["graph"]["atoms"][9]["parity"] = Value::Null;
+            for atom in [18, 20, 21] {
+                subset["graph"]["atoms"][atom]["parity"]["group_type"] = json!("Rel");
+            }
+        }
         let family_counts = families.entry(family.to_owned()).or_default();
         family_counts.1 += 1;
         count += 1;
@@ -79,7 +92,7 @@ fn complete_upstream_structures_status_warnings_semantic_cxsmiles_and_graph() {
             let row = json!({
                 "family": family, "input": name, "allow_radicals": options.allow_radicals,
                 "expected_status": expected["status"], "actual_status": actual["status"],
-                "expected_cxsmiles": expected["cxsmiles"], "actual_cxsmiles": actual["cxsmiles"],
+                "expected_cxsmiles": subset["cxsmiles"], "actual_cxsmiles": actual["cxsmiles"],
                 "expected_message": expected["message"], "actual_message": actual["message"],
                 "expected_warnings": expected["warnings"], "actual_warnings": actual["warnings"],
                 "difference": difference,
