@@ -1448,14 +1448,7 @@ fn is_complete_acyl_end(m: &Molecule, center: usize, double: usize, linkage: usi
 pub(super) fn is_anionic_group_key(key: &str) -> bool {
     matches!(
         key,
-        "olate"
-            | "thiolate"
-            | "selenolate"
-            | "tellurolate"
-            | "aminide"
-            | "carboxylate"
-            | "ring_carboxylate"
-            | "sulfonate"
+        "olate" | "thiolate" | "aminide" | "carboxylate" | "ring_carboxylate" | "sulfonate"
     )
 }
 

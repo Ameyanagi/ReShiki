@@ -928,6 +928,11 @@ mod tests {
             ),
             ("CCB(O)O", "ethylboronic acid", NameStatus::Preferred),
             (
+                "C12(CC3CCC1C3)C1CCC2CC1",
+                "spiro[bicyclo[2.2.1]heptane-7,2'-bicyclo[2.2.1]heptane]",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
                 "CC(=O)[NH-]",
                 "acetamide",
                 NameStatus::Unverified(NameReason::AnionParent),

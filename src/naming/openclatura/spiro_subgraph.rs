@@ -191,42 +191,40 @@ fn graph_spiro_side(
         mol.set_name_status(status);
         return plan_graph_spiro_side(mol, side_atoms, junction, required_core, true);
     }
-    // P-24.3: identical components take a spirobi name, which is not generated.
-    // Compare the components as parent hydrides: substituents, including
-    // rings joined by a non-ring bond, do not count.
+    // P-24.3: identical components take a spirobi name, which is not
+    // generated. Compare the two ring systems through the junction as
+    // skeletons, ignoring substituents, elements (P-24.3.4 replacement) and
+    // the junction positions (P-24.3.3); equal sizes withhold certification.
     let all: AtomSet = mol.atoms.keys().copied().collect();
     let ring_bonds: BTreeSet<_> = biconnected_edge_components(mol, &all)
         .into_iter()
         .filter(|block| block.len() > 1)
         .flatten()
         .collect();
-    let mut cyclic = AtomSet::from([junction]);
+    let mut ring_system = AtomSet::from([junction]);
     let mut pending = vec![junction];
     while let Some(atom) = pending.pop() {
         for &next in mol.get_neighbors(atom) {
             if ring_bonds.contains(&super::graph_kernel::normalize_edge(atom, next))
-                && cyclic.insert(next)
+                && ring_system.insert(next)
             {
                 pending.push(next);
             }
         }
     }
-    let mut skeleton = mol.subgraph(&cyclic);
-    for atom in skeleton.atoms.values_mut() {
-        atom.total_h_count = 0;
-    }
-    let ranks = super::chains::canonical_ranks(&skeleton, None);
-    let side_ranks = |inside: bool| {
-        let mut ranks: Vec<_> = mol
-            .get_neighbors(junction)
+    let size = |inside: bool| {
+        let atoms: AtomSet = ring_system
             .iter()
-            .filter(|n| cyclic.contains(n) && side_atoms.contains(n) == inside)
-            .map(|n| ranks[n])
+            .copied()
+            .filter(|&a| a == junction || side_atoms.contains(&a) == inside)
             .collect();
-        ranks.sort();
-        ranks
+        let bonds = ring_bonds
+            .iter()
+            .filter(|(u, v)| atoms.contains(u) && atoms.contains(v))
+            .count();
+        (atoms.len(), bonds)
     };
-    if result.is_some() && side_ranks(true) == side_ranks(false) {
+    if result.is_some() && size(true) == size(false) {
         mol.mark_name(crate::naming::NameStatus::Unverified(
             crate::naming::NameReason::UnauditedParent,
         ));
