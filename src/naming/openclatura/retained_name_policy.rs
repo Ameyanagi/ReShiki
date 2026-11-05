@@ -383,7 +383,7 @@ mod tests {
         for (smiles, expected) in [
             (
                 "CC1=CC(=CC=C1)OCCNC(=O)CN(C)C2CCC3=CC=CC=C23",
-                "2-[(indan-1-yl)(methyl)amino]-N-{2-[(3-methylphenyl)oxy]ethyl}acetamide",
+                "2-[(indan-1-yl)(methyl)amino]-N-[2-(3-methylphenoxy)ethyl]acetamide",
             ),
             (
                 "C=CCN1CC(C2=CC=CC=C21)CCCNC(=O)CCl",

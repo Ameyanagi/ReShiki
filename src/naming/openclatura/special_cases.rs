@@ -7,12 +7,10 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{canonical_ranks, get_cyclic_atoms};
-use super::formatting::{
-    format_center_ligands_by, format_multiplier, oxy_prefix_from_branch, strip_outer_parentheses,
-};
+use super::formatting::{format_center_ligands_by, format_multiplier, strip_outer_parentheses};
 use super::graph_kernel::{Edge, biconnected_edge_components, normalize_edge};
 use super::molecule::{Atom, AtomSet, Bond, Molecule, component_atoms_until_blocked};
-use super::namer::name_subgraph_with_upstream;
+use super::namer::{name_subgraph_rendered, name_subgraph_with_upstream};
 use super::nomenclature::RULES;
 use super::perception::{PerceivedGroup, perceive_groups};
 use super::rules::{elements, multipliers, retained, stems};
@@ -1260,7 +1258,9 @@ fn central_ligand_name(
     if alkyl.is_empty() {
         Ok(String::new())
     } else {
-        Ok(oxy_prefix_from_branch(&alkyl))
+        let mut exclude = outside(mol, atoms);
+        exclude.insert(neighbor);
+        Ok(name_subgraph_rendered(mol, roots[0], &exclude, Some(neighbor))?.into_oxy_prefix())
     }
 }
 

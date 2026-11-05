@@ -404,12 +404,12 @@ heteroatoms, charge and hydrogenation do, so `cyclohexylbenzene` and
 `4-phenylpyridine` stay substitutive (P-28.7, P-61.2.2). Assemblies of the same
 skeleton at different hydrogenation, whose PIN uses hydro prefixes or `ene`
 endings such as `1,2,3,4,5,6-hexahydro-2,2'-bipyridine` for
-`2-(piperidin-2-yl)pyridine` (P-31.1.7, P-54.3), have no mark.
+`2-(piperidin-2-yl)pyridine` (P-31.2.3.3.5.1, P-31.1.7, P-54.3), have no mark.
 
 Alkoxy prefixes use the retained contractions `methoxy`, `ethoxy`, `propoxy`,
-`butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2), not isopropoxy, sec-butoxy
-or isobutoxy: `[(propan-2-yl)oxy]benzene`, `[(butan-2-yl)oxy]benzene`
-(P-63.2.2.1.1), `(2-methylpropoxy)benzene`.
+`butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2). These are fully substitutable
+except `tert-butoxy`: `1-chloro-2-(4-chlorophenoxy)benzene`. Other groups are
+concatenated with `oxy`: `pentyloxy`, `cyclopropyloxy` (P-63.2.2.1.1).
 
 Amino prefixes use the retained `anilino` for C6H5-NH-, with full substitution
 (P-62.2.1.1.1), and `carbamimidoylamino` for guanidine as a prefix

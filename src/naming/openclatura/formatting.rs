@@ -1,5 +1,6 @@
 //! Name-fragment formatting helpers.
 use super::{
+    assembly_parts::AssemblyParts,
     assembly_utils::is_fully_enclosed,
     rules::{multipliers, stems},
 };
@@ -117,11 +118,36 @@ pub fn format_center_ligands_by<K: Ord>(names: &[String], sort_key: impl Fn(&str
     }
     rendered
 }
-pub fn substituted_alkoxy_prefix(branch: &str) -> Option<String> {
-    if !branch.contains("hydroxy") {
+pub fn substituted_alkoxy_prefix(branch: &str, parts: &AssemblyParts) -> Option<String> {
+    // P-63.2.2.2: the retained parent, not a suffix of a nested prefix, must
+    // be methyl, ethyl, propyl, butyl or phenyl. tert-Butoxy is not substitutable.
+    if parts.attachment_order != 1
+        || parts.attachment_locant != "1"
+        || parts.is_acyl_substituent
+        || parts.principal_group.is_some()
+        || parts.retained_substituent_name.is_some()
+        || !parts.a_prefixes.is_empty()
+        || !parts.parent_charges.is_empty()
+        || !parts.hydro_operations.is_empty()
+    {
         return None;
     }
-    let stem = stems::terminal_stem(branch)?;
+    let stem = if parts.is_ring {
+        (parts.retained_name.as_deref() == Some("benzene") && !parts.is_ring_assembly())
+            .then_some("phen")?
+    } else {
+        if parts.retained_name.is_some() || !parts.unsaturations.is_empty() {
+            return None;
+        }
+        match parts.parent_length {
+            1 => "meth",
+            2 => "eth",
+            3 => "prop",
+            4 => "but",
+            _ => return None,
+        }
+    };
+    let branch = strip_outer_parentheses(branch);
     let terminal = format!("{stem}yl");
     let prefix = branch.strip_suffix(&terminal)?;
     Some(if prefix.is_empty() {
@@ -138,9 +164,6 @@ pub fn oxy_prefix_from_branch(branch: &str) -> String {
         .get(&branch)
     {
         return name.clone();
-    }
-    if let Some(name) = substituted_alkoxy_prefix(&branch) {
-        return name;
     }
     if is_complex_prefix(&branch) {
         format!("(({branch})oxy)")
