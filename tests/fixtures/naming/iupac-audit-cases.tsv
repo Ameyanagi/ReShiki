@@ -644,7 +644,6 @@ C[C@H](F)C([C@H](F)C)C(=O)O	(3R)-3-fluoro-2-[(1S)-1-fluoroethyl]butanoic acid	pr
 C[C@H](O)C([C@H](O)C)CCCC	(2R,4S)-3-butylpentane-2,4-diol	preferred	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404	issue #946	pass
 [1H]CCO	(2-1H1)ethan-1-ol	unverified	P-82.0–P-82.2 https://iupac.qmul.ac.uk/BlueBook/P8.html#8200; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	issue #946	pass
 [1H]C([1H])=C=C=CC	(1,1-1H2)penta-1,2,3-triene	unverified	P-82.0–P-82.2 https://iupac.qmul.ac.uk/BlueBook/P8.html#8200; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	issue #946	pass
-[1H]OC	(O-1H1)methanol	unverified	P-82.0–P-82.2 https://iupac.qmul.ac.uk/BlueBook/P8.html#8200; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	issue #946	pass
 [2H]CCO	(2-2H1)ethan-1-ol	unverified	P-82.0–P-82.2 https://iupac.qmul.ac.uk/BlueBook/P8.html#8200; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	issue #946	pass
 [3H]CCO	(2-3H1)ethan-1-ol	unverified	P-82.0–P-82.2 https://iupac.qmul.ac.uk/BlueBook/P8.html#8200; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	issue #946	pass
 [1H][C@@H](C)O		refuse	P-82.0–P-82.2 https://iupac.qmul.ac.uk/BlueBook/P8.html#8200; P-92.3 https://iupac.qmul.ac.uk/BlueBook/P9.html#9203	issue #946	pass

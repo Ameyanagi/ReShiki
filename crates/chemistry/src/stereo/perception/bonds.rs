@@ -26,14 +26,12 @@ impl Context {
             }
             result.push((self.other(b, atom)?, dir));
         }
+        // P-92.3: an explicit terminal ¹H and an implicit H cannot define E/Z.
         if let [(neighbor, _)] = result.as_slice()
             && self.hydrogens(atom)? > 0
+            && self.terminal_hydrogen(*neighbor)?
         {
-            let neighbor = at(&self.state.graph.atoms, *neighbor)?;
-            // P-92.3: an explicit ¹H and implicit H cannot define E/Z.
-            if neighbor.atomic_number == 1 && neighbor.isotope <= 1 {
-                return Ok(Vec::new());
-            }
+            return Ok(Vec::new());
         }
         if (require_direction && !seen)
             || (result.len() == 2

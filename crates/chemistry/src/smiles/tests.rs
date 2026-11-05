@@ -601,3 +601,20 @@ fn allene_smiles_writes_exact_classes_and_rejects_unsupported_topologies() -> an
     );
     Ok(())
 }
+
+#[test]
+fn bridging_hydride_keeps_configuration() -> anyhow::Result<()> {
+    // A bridging H⁻ continues to B, so it is not the ligand an implicit H is.
+    for (first, second) in [
+        ("B[H-]/C=C/F", "B[H-]/C=C\\F"),
+        ("C[C@H](F)[1H-]B", "C[C@@H](F)[1H-]B"),
+        ("C[C@H](F)[H-]B", "C[C@@H](F)[H-]B"),
+    ] {
+        assert_ne!(
+            super::stereoisomers(first)?,
+            super::stereoisomers(second)?,
+            "{first}"
+        );
+    }
+    Ok(())
+}

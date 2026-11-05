@@ -1,5 +1,15 @@
 use super::*;
 impl Context {
+    /// A neutral, singly bonded H or ¹H: the same CIP ligand as an implicit H
+    /// (P-92.3). A bridging hydride is not.
+    pub(super) fn terminal_hydrogen(&self, atom: usize) -> Result<bool, String> {
+        let a = at(&self.state.graph.atoms, atom)?;
+        Ok(a.atomic_number == 1
+            && a.isotope <= 1
+            && a.charge == 0
+            && at(&self.neighbors, atom)?.len() == 1)
+    }
+
     // FindStereo.cpp::isAtomPotentialTetrahedralCenter (2026.03.6).
     pub(super) fn potential_tetrahedral(
         &mut self,
@@ -28,8 +38,7 @@ impl Context {
         if hs == 1 {
             for &b in at(&self.neighbors, i)? {
                 work.spend(1)?;
-                let a = at(&self.state.graph.atoms, self.other(b, i)?)?;
-                if a.atomic_number == 1 && a.isotope <= 1 {
+                if self.terminal_hydrogen(self.other(b, i)?)? {
                     return Ok(false);
                 }
             }
@@ -75,8 +84,7 @@ impl Context {
         if hs == 1 {
             for &b in at(&self.neighbors, i)? {
                 work.spend(1)?;
-                let neighbor = at(&self.state.graph.atoms, self.other(b, i)?)?;
-                if neighbor.atomic_number == 1 && neighbor.isotope <= 1 {
+                if self.terminal_hydrogen(self.other(b, i)?)? {
                     return Ok(false);
                 }
             }
