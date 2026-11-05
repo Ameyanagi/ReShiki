@@ -195,3 +195,33 @@ fn retained_anion_parents_are_cited_only_where_numbering_fixes_the_centre() {
         );
     }
 }
+
+#[test]
+fn ketone_anions_needing_added_hydrogen_are_not_claimed_preferred() {
+    use crate::naming::NameStatus;
+    // Oxo on a mancude ring anion needs added hydrogen (`pyridin-1(2H)-ide`,
+    // P-72.2.2.1.1, P-58.2.2), which is not composed yet.
+    for smiles in [
+        "[N-]1CC=CC(=O)C1",
+        "O=C1CC[N-]C=C1",
+        "O=C1CCC=C[N-]1",
+        "O=C1[N-]C=CC=C1C",
+    ] {
+        assert!(name(smiles).is_err(), "{smiles}");
+    }
+    for (smiles, expected) in [
+        ("O=C1C=CC=C[N-]1", "pyridin-1-id-2(1H)-one"),
+        ("O=C1C=C[N-]C=C1", "pyridin-1-id-4(1H)-one"),
+        ("O=c1cc[n-]cn1", "pyrimidin-1-id-4(1H)-one"),
+        ("O=c1ccc2ccccc2[n-]1", "quinolin-1-id-2(1H)-one"),
+        ("O=c1cc[n-]c2ccccc12", "quinolin-1-id-4(1H)-one"),
+    ] {
+        let actual = name(smiles).unwrap();
+        assert_eq!(actual.text, expected, "{smiles}");
+        assert!(
+            matches!(actual.status, NameStatus::Unverified(_)),
+            "{smiles}: {:?}",
+            actual.status
+        );
+    }
+}

@@ -129,6 +129,7 @@ pub(super) fn prepare_anion_parent(
     // substituent stems (phenyl) have no anion spelling yet. Numbering does
     // not yet give `ide` the lowest locant (P-31.1.4.2.4), so a substituted
     // parent is cited only where its numbering fixes the anionic centre.
+    let hydro = |key: &str| parts.hydro_operations.iter().any(|op| op.key == key);
     let retained_supported = parts.retained_name.as_deref().is_some_and(|name| {
         !(name == "benzene" && parts.principal_group.is_some())
             && !(parts.is_substituent
@@ -148,11 +149,12 @@ pub(super) fn prepare_anion_parent(
                 }))
             // P-72.2.2.1.1 names a hydro-mancude anion with added hydrogen
             // (`pyridin-1(2H)-ide`), which is not composed yet.
-            && !(parts.indicated_hydrogens.is_empty()
-                && parts
-                    .hydro_operations
-                    .iter()
-                    .any(|op| op.key == "additive_hydrogen"))
+            && !(parts.indicated_hydrogens.is_empty() && hydro("additive_hydrogen"))
+            // A suffix with added hydrogen (`pyridin-1-id-2(1H)-one`) is cited
+            // only on the bare parent, as before; substituted or hydro forms
+            // need the added-hydrogen construction too.
+            && !(hydro("added_hydrogen")
+                && (!parts.substituents.is_empty() || hydro("additive_hydrogen")))
     });
     // A saturated substituent that cites its stem and attachment (`propan-2-yl`).
     let saturated_attachment = parts.is_substituent
@@ -164,7 +166,10 @@ pub(super) fn prepare_anion_parent(
         && (parts.attachment_locant != "1"
             || super::assembly_parent::always_print_substituent_locant(parts));
     let group = parts.principal_group.as_ref();
+    // Ketone hydrogen on a mancude ring (`pyridin-2(1H)-one`) needs added
+    // hydrogen once the ketone becomes oxo (P-72.2.2.1.1); keep the suffix.
     let single_ketone = neutral_cites_locants
+        && parts.hydro_operations.is_empty()
         && group.is_some_and(|group| group.key == "ketone" && group.locants.len() == 1);
     let supported = |site: &&ChargeSite| {
         zwitterion
