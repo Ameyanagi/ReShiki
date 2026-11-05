@@ -170,7 +170,36 @@ fn absorbed_chain_branch(
     text.strip_suffix("amino")
         .map(|prefix| (format!("{prefix}{word}"), 0))
 }
-pub fn promote_benzene_retained_name(parts: &mut AssemblyParts) {
+pub fn promote_retained_hydride_name(parts: &mut AssemblyParts) {
+    // P-31.1.2.1 permits acetylene only for unmodified, neutral HC≡CH.
+    if !parts.is_ring
+        && !parts.is_substituent
+        && !parts.isotope_explicit_locants
+        && parts.parent_length == 2
+        && parts.principal_group.is_none()
+        && parts.substituents.is_empty()
+        && parts.a_prefixes.is_empty()
+        && parts.parent_charges.is_empty()
+        && parts
+            .parent_atom_symbols_by_locant
+            .values()
+            .all(|s| s == "C")
+        && parts.parent_atom_hydrogens_by_locant.len() == 2
+        && parts
+            .parent_atom_hydrogens_by_locant
+            .values()
+            .all(|&h| h == 1)
+        && parts
+            .parent_atom_isotopes_by_locant
+            .values()
+            .all(Option::is_none)
+        && let [bond] = parts.unsaturations.as_slice()
+        && bond.bond_key == "triple"
+        && bond.locants == ["1"]
+    {
+        parts.retained_name = Some("acetylene".into());
+        parts.unsaturations.clear();
+    }
     if parts.is_ring
         && !parts.is_bicycle
         && !parts.is_spiro
@@ -1228,6 +1257,30 @@ fn assembly_suffix_stem(parts: &AssemblyParts, elide: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn acetylene_is_reserved_for_the_unmodified_parent() {
+        for (smiles, expected) in [
+            ("C#C", "acetylene"),
+            ("[H]C#C[H]", "acetylene"),
+            ("ClC#C", "chloroethyne"),
+            ("C#Cc1ccccc1", "ethynylbenzene"),
+            ("C=C", "ethene"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+        }
+        for smiles in ["[13CH]#C", "[2H]C#C", "[C]#C"] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert!(!name.text.contains("acetylene"), "{smiles}: {}", name.text);
+        }
+        assert!(super::super::name_smiles("[C-]#C").is_err());
+    }
 
     fn rendered_parent(parts: &AssemblyParts) -> String {
         let (stem, terminal) = parent_stem_and_terminal(parts).unwrap();

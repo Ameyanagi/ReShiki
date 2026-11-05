@@ -26171,8 +26171,7 @@
           },
           {
             "locant": "2",
-            "aromatic": false,
-            "saturated": true
+            "aromatic": false
           },
           {
             "locant": "3"
@@ -28032,8 +28031,7 @@
           },
           {
             "locant": "2",
-            "aromatic": false,
-            "saturated": true
+            "aromatic": false
           },
           {
             "locant": "3"

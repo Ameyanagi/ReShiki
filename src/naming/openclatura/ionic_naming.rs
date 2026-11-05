@@ -125,7 +125,7 @@ pub(super) fn prepare_anion_parent(
     let (_, _, neutral_cites_locants) =
         super::assembly_parent::format_principal_suffix(parts, "e")?;
     // Benzene is otherwise recognised only during assembly.
-    super::assembly_parent::promote_benzene_retained_name(parts);
+    super::assembly_parent::promote_retained_hydride_name(parts);
     // Retained functional parents (phenol, benzoic acid) and contracted
     // substituent stems (phenyl) have no anion spelling yet. Numbering does
     // not yet give `ide` the lowest locant (P-31.1.4.2.4), so a substituted

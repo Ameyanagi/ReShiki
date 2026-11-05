@@ -427,7 +427,7 @@ OOCCNN	1-(2-hydroperoxyethyl)hydrazine	unverified	unaudited_path
 COc1ccc2c(c1)[nH]c1cc(F)ccc12	2-fluoro-7-methoxy-9H-carbazole	preferred	
 Cc1ccc(F)c2c1C1(CN2)CC1N	7'-fluoro-4'-methylspiro[cyclopropane-2,3'-(2,3-dihydro-1H-indole)]-1-amine	preferred	
 C=C	ethene	preferred	
-C#C	ethyne	preferred	
+C#C	acetylene	preferred	
 c1ccccc1-c2ccccc2	1,1'-biphenyl	preferred	
 C1CC2(C1)CC2	spiro[2.3]hexane	preferred	
 c1ccc2ccccc2c1	naphthalene	preferred	

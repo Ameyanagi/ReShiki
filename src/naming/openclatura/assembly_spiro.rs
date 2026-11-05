@@ -5,8 +5,15 @@ use super::{
     assembly_parts::{AssemblyParts, HydroOperation, SubstituentItem, UnsaturationItem},
     assembly_prefixes::format_replacement_prefixes,
     assembly_utils::parse_locant,
+    fusion::{
+        model::normalize_edge,
+        numbering::{
+            MANCUDE_SEARCH_BUDGET, maximum_matchings, retained_template_parent_bond_model,
+        },
+    },
     molecule::AtomSet,
     nomenclature::RULES,
+    retained_fused_templates::retained_graph_templates,
     retained_name_policy::retained_parent_name_policy,
     rules::{elements, elision, multipliers, retained::hw_name, stems},
 };
@@ -21,6 +28,7 @@ pub struct SpiroAssembly {
     pub side_suffixes: Vec<(String, String)>,
     pub side_stereo: Vec<(String, String)>,
     pub side_substituents: Vec<SubstituentItem>,
+    pub side_hydro_operations: Vec<HydroOperation>,
     pub side_parts: Option<Box<AssemblyParts>>,
     pub side_prime: String,
     pub cited_first: bool,
@@ -361,6 +369,14 @@ pub fn spiro_assembly_from_parts(
     mut render_parent: Option<ParentRenderer<'_>>,
 ) -> Result<Option<SpiroAssembly>, String> {
     let mut parts = parts.clone();
+    let junctions = parts
+        .substituents
+        .iter()
+        .filter_map(|substituent| substituent.spiro.as_deref())
+        .map(|side| side.parent_locant.clone())
+        .chain([junction_locant.into()])
+        .collect();
+    let composed_hydrogens = retire_parent_junction_hydrogen(&mut parts, &junctions)?;
     scope_spiro_oxo_hydrogens(&mut parts, &BTreeSet::from([junction_locant.into()]));
     project_locanted_hw_component(&mut parts);
     if render_parent.is_none()
@@ -421,6 +437,16 @@ pub fn spiro_assembly_from_parts(
         return Ok(None);
     }
     let mut local = parts.clone();
+    let composed_locants: BTreeSet<_> = composed_hydrogens
+        .iter()
+        .flat_map(|operation| operation.locants.iter())
+        .collect();
+    local
+        .hydro_operations
+        .retain(|operation| !composed_hydrogens.contains(operation));
+    local
+        .indicated_hydrogens
+        .retain(|locant| !composed_locants.contains(locant));
     if is_systematic_fusion(&local)
         && let Some(plan) = &mut local.fusion_plan
     {
@@ -524,6 +550,7 @@ pub fn spiro_assembly_from_parts(
         .map(|(l, d)| (prime_side_locant(l), d.clone()))
         .collect();
     result.side_substituents = substituents;
+    result.side_hydro_operations = composed_hydrogens;
     result.side_parts = Some(Box::new(parts));
     result.continuation = continuation;
     Ok(Some(result))
@@ -651,6 +678,13 @@ fn reprime_side(side: &SpiroAssembly, prime: &str) -> SpiroAssembly {
             .map(|l| format!("{}{prime}", l.trim_end_matches('\'')))
             .collect();
     }
+    for operation in &mut side.side_hydro_operations {
+        operation.locants = operation
+            .locants
+            .iter()
+            .map(|locant| format!("{}{prime}", locant.trim_end_matches('\'')))
+            .collect();
+    }
     side
 }
 fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
@@ -742,7 +776,47 @@ fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
         .map(|l| prime(l))
         .collect();
 }
-fn retire_parent_junction_hydrogen(parts: &mut AssemblyParts, junctions: &BTreeSet<String>) {
+fn retire_parent_junction_hydrogen(
+    parts: &mut AssemblyParts,
+    junctions: &BTreeSet<String>,
+) -> Result<Vec<HydroOperation>, String> {
+    let junction_atoms: AtomSet = junctions
+        .iter()
+        .filter_map(|locant| parts.parent_atom_ids_by_locant.get(locant).copied())
+        .collect();
+    let requires_composition = parts.hydro_operations.iter().any(|operation| {
+        operation.operation_kind == "additive_hydrogen"
+            && operation
+                .atom_ids
+                .iter()
+                .any(|atom| junction_atoms.contains(atom))
+    });
+    let mut model = if requires_composition {
+        parts
+            .parent_hydride
+            .as_ref()
+            .and_then(|parent| parent.bond_model())
+            .or(parts.parent_bond_model.as_ref())
+            .cloned()
+    } else {
+        None
+    };
+    if requires_composition
+        && model.is_none()
+        && let Some(name) = &parts.retained_name
+        && let Some(template) = retained_graph_templates(false)
+            .iter()
+            .find(|template| template.name == *name || template.output_name() == *name)
+    {
+        model = Some(retained_template_parent_bond_model(
+            template,
+            &parts.parent_atom_ids_by_locant,
+            parts
+                .retained_parent_metadata
+                .as_ref()
+                .map(|metadata| metadata.default_indicated_h.as_slice()),
+        )?);
+    }
     parts.hydro_operations.retain(|o| {
         o.operation_kind != "indicated_hydrogen"
             || o.key == "added_hydrogen"
@@ -769,7 +843,84 @@ fn retire_parent_junction_hydrogen(parts: &mut AssemblyParts, junctions: &BTreeS
     if let Some(parent) = &mut parts.parent_hydride {
         parent.parent_name = parent.base_name().map(respell);
     }
+    let Some(model) = model else {
+        return Ok(vec![]);
+    };
+    if model
+        .required_double_bonds
+        .iter()
+        .any(|(a, b)| junction_atoms.contains(a) || junction_atoms.contains(b))
+    {
+        return Ok(vec![]);
+    }
+    // P-24.3.2: make the assembled skeleton mancude, with no double
+    // bond at a spiro junction, before assigning its indicated hydrogen.
+    let eligible = model
+        .pi_eligible_edges
+        .iter()
+        .copied()
+        .filter(|(a, b)| !junction_atoms.contains(a) && !junction_atoms.contains(b))
+        .collect();
+    let matchings = maximum_matchings(&eligible, MANCUDE_SEARCH_BUDGET)?;
+    let observed: BTreeMap<_, _> = parts
+        .parent_bond_orders_by_locants
+        .iter()
+        .map(|((a, b), &order)| {
+            (
+                normalize_edge(
+                    parts.parent_atom_ids_by_locant[a],
+                    parts.parent_atom_ids_by_locant[b],
+                ),
+                order,
+            )
+        })
+        .collect();
+    if !matchings.iter().any(|matching| {
+        observed.iter().all(|(edge, &order)| {
+            order
+                == 1 + usize::from(
+                    matching.contains(edge) || model.required_double_bonds.contains(edge),
+                )
+        })
+    }) {
+        return Ok(vec![]);
+    }
+    let mut composed = vec![];
+    for operation in &mut parts.hydro_operations {
+        if operation.operation_kind != "additive_hydrogen" {
+            continue;
+        }
+        let sites: Vec<_> = operation
+            .locants
+            .iter()
+            .zip(&operation.atom_ids)
+            .filter(|(_, atom)| !junction_atoms.contains(atom))
+            .map(|(locant, &atom)| (locant.clone(), atom))
+            .collect();
+        operation.locants = sites.iter().map(|(locant, _)| locant.clone()).collect();
+        operation.atom_ids = sites.iter().map(|(_, atom)| *atom).collect();
+        operation.bond_ids.clear();
+        operation.key = "indicated_hydrogen".into();
+        operation.operation_kind = "indicated_hydrogen".into();
+        parts
+            .indicated_hydrogens
+            .extend(operation.locants.iter().cloned());
+        if !operation.locants.is_empty() {
+            composed.push(operation.clone());
+        }
+    }
+    parts
+        .hydro_operations
+        .retain(|operation| !operation.locants.is_empty());
+    if let Some(metadata) = &mut parts.retained_parent_metadata {
+        metadata.indicated_hydrogen_count += composed
+            .iter()
+            .map(|operation| operation.locants.len())
+            .sum::<usize>();
+    }
+    Ok(composed)
 }
+
 fn deduplicate_shared_replacements(parts: &mut AssemblyParts, side: &mut SpiroAssembly) {
     let Some(other) = &mut side.side_parts else {
         return;
@@ -1007,7 +1158,7 @@ pub fn split_spiro_substituents(parts: &mut AssemblyParts) -> Result<Vec<SpiroAs
     parts.substituents = normal;
     if !sides.is_empty() {
         let junctions = sides.iter().map(|s| s.parent_locant.clone()).collect();
-        retire_parent_junction_hydrogen(parts, &junctions);
+        retire_parent_junction_hydrogen(parts, &junctions)?;
         for side in &mut sides {
             side.side_parent_name =
                 drop_junction_indicated_hydrogen(&side.side_parent_name, &side.side_locant);
@@ -1039,6 +1190,20 @@ pub fn split_spiro_substituents(parts: &mut AssemblyParts) -> Result<Vec<SpiroAs
         .collect();
     for side in &sides {
         for side in std::iter::once(side).chain(side.continuation.as_deref()) {
+            for operation in &side.side_hydro_operations {
+                let mut operation = operation.clone();
+                if side.side_prime == "'" {
+                    operation.locants = operation
+                        .locants
+                        .iter()
+                        .map(|locant| prime_side_locant(locant))
+                        .collect();
+                }
+                if let Some(metadata) = &mut parts.retained_parent_metadata {
+                    metadata.indicated_hydrogen_count += operation.locants.len();
+                }
+                parts.hydro_operations.push(operation);
+            }
             let junction = format!("{}{}", side.side_locant, side.side_prime);
             for feature in &side.side_stereo {
                 if feature.0 != junction && !parts.stereo_features.contains(feature) {

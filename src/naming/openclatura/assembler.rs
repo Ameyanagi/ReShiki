@@ -3,8 +3,8 @@ use super::{
     assembly_charge::positive_parent_n_charges,
     assembly_parent::{
         format_parent_tail, format_substituent_tail, parent_stem_and_terminal,
-        promote_acyl_substituent_name, promote_benzene_retained_name,
-        promote_retained_functional_parent, promote_retained_substituent_name,
+        promote_acyl_substituent_name, promote_retained_functional_parent,
+        promote_retained_hydride_name, promote_retained_substituent_name,
         select_retained_anion_name,
     },
     assembly_parts::{AssemblyParts, HydroOperation},
@@ -580,7 +580,7 @@ pub(super) fn assemble_name_with_parent(
     }
     promote_acyl_substituent_name(parts);
     promote_retained_substituent_name(parts);
-    promote_benzene_retained_name(parts);
+    promote_retained_hydride_name(parts);
     select_retained_anion_name(parts);
     promote_retained_functional_parent(parts)?;
     let spiro_sides = super::assembly_spiro::split_spiro_substituents(parts)?;
@@ -602,15 +602,7 @@ pub(super) fn assemble_name_with_parent(
         name.clone()
     } else {
         let (stem, terminal) = parent_stem_and_terminal(parts)?;
-        let parent_terminal = if parts
-            .parent_hydride
-            .as_ref()
-            .is_some_and(|p| p.uses_fusion_plan())
-        {
-            terminal.clone()
-        } else {
-            "e".into()
-        };
+        let parent_terminal = terminal.clone();
         let stem = format!("{a_prefix}{stem}");
         let tail = if parts.is_substituent {
             format_substituent_tail(parts, &stem)
@@ -1032,7 +1024,7 @@ mod tests {
             ),
             (
                 "CC1=CC(=O)OC(=C1C(=O)NC2CC2)C",
-                "N-cyclopropyl-4,6-dimethyl-2-oxopyran-5-carboxamide",
+                "N-cyclopropyl-4,6-dimethyl-2-oxo-2H-pyran-5-carboxamide",
             ),
         ] {
             assert_eq!(
