@@ -102,12 +102,12 @@ O=C(c1ccccc1)c2ccccc2	diphenylmethanone	preferred	P-52.2.5.3 https://iupac.qmul.
 c1ccccc1OCOc2ccccc2	(phenoxymethoxy)benzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	PR #930	pass
 c1ccccc1Oc2cc(Oc3ccccc3)ccc2	1,3-diphenoxybenzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	issue #928	pass
 c1ccccc1Oc2ccccc2Oc3ccccc3	1,2-diphenoxybenzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	issue #928	pass
-Cc1ccc(Oc2ccc(Oc3ccc(C)cc3)cc2)cc1	1-methyl-4-({4-[(4-methylphenyl)oxy]phenyl}oxy)benzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	PR #930	pass
-Oc1ccc(Oc2ccc(Oc3ccc(CC4CCCCC4)cc3)cc2)cc1	4-[(4-{[4-(cyclohexylmethyl)phenyl]oxy}phenyl)oxy]phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
-Oc1ccc(Nc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	4-({4-[(4-phenoxyphenyl)oxy]phenyl}amino)phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
-Oc1ccc(Oc2ccc(Oc3ccc(OC4CCCC4)cc3)cc2)cc1	4-[(4-{[4-(cyclopentyloxy)phenyl]oxy}phenyl)oxy]phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
-Oc1ccc(Oc2ccc(Oc3ccc(OC4CC4)cc3)cc2)cc1	4-[(4-{[4-(cyclopropoxy)phenyl]oxy}phenyl)oxy]phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
-Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccncc4)cc3)cc2)cc1	4-{[4-({4-[(pyridin-4-yl)oxy]phenyl}oxy)phenyl]oxy}phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
+Cc1ccc(Oc2ccc(Oc3ccc(C)cc3)cc2)cc1	1-methyl-4-[4-(4-methylphenoxy)phenoxy]benzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	PR #930	pass
+Oc1ccc(Oc2ccc(Oc3ccc(CC4CCCCC4)cc3)cc2)cc1	4-{4-[4-(cyclohexylmethyl)phenoxy]phenoxy}phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
+Oc1ccc(Nc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	4-{[4-(4-phenoxyphenoxy)phenyl]amino}phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
+Oc1ccc(Oc2ccc(Oc3ccc(OC4CCCC4)cc3)cc2)cc1	4-{4-[4-(cyclopentyloxy)phenoxy]phenoxy}phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
+Oc1ccc(Oc2ccc(Oc3ccc(OC4CC4)cc3)cc2)cc1	4-{4-[4-(cyclopropyloxy)phenoxy]phenoxy}phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
+Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccncc4)cc3)cc2)cc1	4-(4-{4-[(pyridin-4-yl)oxy]phenoxy}phenoxy)phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
 c1ccccc1-c2ccc(-c3ccccc3)cc2	1^1,2^1:2^4,3^1-terphenyl	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
 c1ccccc1-c2cc(-c3ccccc3)ccc2	1^1,2^1:2^3,3^1-terphenyl	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
 c1ccccc1-c2ccccc2-c3ccccc3	1^1,2^1:2^2,3^1-terphenyl	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
@@ -116,11 +116,11 @@ c1ccccc1Sc2ccc(Sc3ccccc3)cc2	1,4-bis(phenylsulfanyl)benzene	not_preferred	P-51.3
 O=C(O)c1ccc(Cc2ccc(C(=O)O)cc2)cc1	4-[(4-carboxyphenyl)methyl]benzoic acid	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	PR #930	pass
 C[C@H](O)c1ccc(Oc2ccccc2)cc1	(1S)-1-(4-phenoxyphenyl)ethan-1-ol	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
 C[C@@H](O)c1ccc(Oc2ccccc2)cc1	(1R)-1-(4-phenoxyphenyl)ethan-1-ol	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
-CC[C@H](C)c1ccc(Oc2ccc(Oc3ccc([C@@H](C)CC)cc3)cc2)cc1	1-[(2S)-butan-2-yl]-4-{[4-({4-[(2S)-butan-2-yl]phenyl}oxy)phenyl]oxy}benzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	PR #930	pass
-CC[C@@H](C)c1ccc(Oc2ccc(Oc3ccc([C@H](C)CC)cc3)cc2)cc1	1-[(2R)-butan-2-yl]-4-{[4-({4-[(2R)-butan-2-yl]phenyl}oxy)phenyl]oxy}benzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	PR #930	pass
-Oc1ccc(/C=C/c2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	4-[(1E)-2-{4-[(4-phenoxyphenyl)oxy]phenyl}ethenyl]phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
-Oc1ccc(/C=C\c2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	4-[(1Z)-2-{4-[(4-phenoxyphenyl)oxy]phenyl}ethenyl]phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
-Oc1ccc(-c2ccc(OCCOc3ccc(-c4ccccc4)cc3)cc2)cc1	4'-({2-[([1,1'-biphenyl]-4-yl)oxy]ethyl}oxy)[1,1'-biphenyl]-4-ol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
+CC[C@H](C)c1ccc(Oc2ccc(Oc3ccc([C@@H](C)CC)cc3)cc2)cc1	1-[(2S)-butan-2-yl]-4-(4-{4-[(2S)-butan-2-yl]phenoxy}phenoxy)benzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	PR #930	pass
+CC[C@@H](C)c1ccc(Oc2ccc(Oc3ccc([C@H](C)CC)cc3)cc2)cc1	1-[(2R)-butan-2-yl]-4-(4-{4-[(2R)-butan-2-yl]phenoxy}phenoxy)benzene	not_preferred	P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	PR #930	pass
+Oc1ccc(/C=C/c2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	4-{(1E)-2-[4-(4-phenoxyphenoxy)phenyl]ethenyl}phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
+Oc1ccc(/C=C\c2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	4-{(1Z)-2-[4-(4-phenoxyphenoxy)phenyl]ethenyl}phenol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	issue #928	pass
+Oc1ccc(-c2ccc(OCCOc3ccc(-c4ccccc4)cc3)cc2)cc1	4'-{2-[([1,1'-biphenyl]-4-yl)oxy]ethoxy}[1,1'-biphenyl]-4-ol	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
 O=C(OCc1ccc(-c2ccccc2)cc1)c1ccc(-c2ccccc2)cc1	([1,1'-biphenyl]-4-yl)methyl [1,1'-biphenyl]-4-carboxylate	preferred	P-65.6.3.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6506030301; P-65.6.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6506030301; P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
 O=C(O)CN(CCNC(=O)CCCC)C(C)=O	{N-[2-(pentanamido)ethyl]acetamido}acetic acid	preferred	P-66.1.1.4.3 https://iupac.qmul.ac.uk/BlueBook/P6a.html#6601010403	PR #930	pass
 O=C(O)CCN(CCNC(=O)CCCC)C=O	3-{N-[2-(pentanamido)ethyl]formamido}propanoic acid	preferred	P-66.1.1.4.3 https://iupac.qmul.ac.uk/BlueBook/P6a.html#6601010403	PR #930	pass
@@ -131,9 +131,9 @@ OC(=O)CCN(C)C(=O)c1ccc(C)cc1	3-(N,4-dimethylbenzamido)propanoic acid	preferred	P
 CN(C(C)C(=O)O)S(=O)(=O)c1ccc(C)cc1	2-(N,4-dimethylbenzene-1-sulfonamido)propanoic acid	preferred	P-66.1.1.4.3 https://iupac.qmul.ac.uk/BlueBook/P6a.html#6601010403; P-65.3.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#65030202	PR #930	pass
 O=C(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1	bis(4-phenoxyphenyl) carbonate	preferred	P-65.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#650203; P-65.6.3.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6506030301; P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
 O=C(OC(=O)c1ccc(Oc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1	4-phenoxybenzoic anhydride	preferred	P-65.7.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#650701; P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503	PR #930	pass
-COC(=O)c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	methyl 4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)benzoate	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503; P-65.6.3.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P6.html#650603030404	PR #930	pass
-CC(=O)Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenyl acetate	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503; P-65.6.3.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P6.html#650603030404	PR #930	pass
-COC(=O)c1cc(C(=O)OC)cc(Oc2ccc(C(=O)Oc3ccc(Oc4ccccc4)cc3)cc2)c1	dimethyl 5-[(4-{[(4-phenoxyphenyl)oxy]carbonyl}phenyl)oxy]benzene-1,3-dicarboxylate	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503; P-65.6.3.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P6.html#650603030404	PR #930	pass
+COC(=O)c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	methyl 4-[4-(4-phenoxyphenoxy)phenoxy]benzoate	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503; P-65.6.3.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P6.html#650603030404	PR #930	pass
+CC(=O)Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1	4-[4-(4-phenoxyphenoxy)phenoxy]phenyl acetate	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503; P-65.6.3.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P6.html#650603030404	PR #930	pass
+COC(=O)c1cc(C(=O)OC)cc(Oc2ccc(C(=O)Oc3ccc(Oc4ccccc4)cc3)cc2)c1	dimethyl 5-{4-[(4-phenoxyphenoxy)carbonyl]phenoxy}benzene-1,3-dicarboxylate	not_preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52020503; P-65.6.3.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P6.html#650603030404	PR #930	pass
 # benzo-bicycles-check (audit of PR #919)
 C1=COc2ccccc2C=C1	1-benzoxepine	preferred	P-25.2.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25020204	PR #919	pass
 C1=Cc2ccccc2OC=N1	1,3-benzoxazepine	preferred	P-25.2.2.4 https://iupac.qmul.ac.uk/BlueBook/P2.html#25020204	PR #919	pass
@@ -363,7 +363,7 @@ N(c1ccccc1)c1ccccc1	N-phenylaniline	preferred	P-52.2.5.3 https://iupac.qmul.ac.u
 CC(=O)OC(C)=O	acetic anhydride	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52.2.5.3; P-15.3.1.2.2.3, P-15.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#15.3.1.2.2.3; P-51.1.5 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.1.5; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.3.1	PR #912	pass
 O=C(O)CC(c1ccccc1)c1ccccc1	3,3-diphenylpropanoic acid	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52.2.5.3; P-15.3.1.2.2.3, P-15.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#15.3.1.2.2.3; P-51.1.5 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.1.5; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.3.1	PR #912	pass
 Brc1cccc(Cc2cccc(Cl)c2)c1	1-bromo-3-[(3-chlorophenyl)methyl]benzene	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52.2.5.3; P-15.3.1.2.2.3, P-15.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#15.3.1.2.2.3; P-51.1.5 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.1.5; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.3.1	PR #912	pass
-O=C(O)c1ccc(CC(Cl)OCCc2ccc(C(=O)O)cc2)cc1	4-(2-{[2-(4-carboxyphenyl)-1-chloroethyl]oxy}ethyl)benzoic acid	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52.2.5.3; P-15.3.1.2.2.3, P-15.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#15.3.1.2.2.3; P-51.1.5 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.1.5; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.3.1	PR #912	pass
+O=C(O)c1ccc(CC(Cl)OCCc2ccc(C(=O)O)cc2)cc1	4-{2-[2-(4-carboxyphenyl)-1-chloroethoxy]ethyl}benzoic acid	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52.2.5.3; P-15.3.1.2.2.3, P-15.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#15.3.1.2.2.3; P-51.1.5 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.1.5; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.3.1	PR #912	pass
 CC[C@@H](C)c1ccc(Sc2ccc(cc2)[C@@H](C)CC)cc1	1-[(2R)-butan-2-yl]-4-({4-[(2S)-butan-2-yl]phenyl}sulfanyl)benzene	preferred	P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52.2.5.3; P-15.3.1.2.2.3, P-15.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#15.3.1.2.2.3; P-51.1.5 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.1.5; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#51.3.1	PR #912	pass
 # formerly asserted in mod.rs linear phane cases
 c1ccccc1CC1CCC(CCc2ccccc2Cc2ccccc2)CC1	1,8(1),3(1,2)-tribenzena-6(1,4)-cyclohexanaoctaphane	preferred	P-52.2.5.1(2), P-52.2.5.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#52.2.5.3	issue #928	known-failure
@@ -605,7 +605,7 @@ CC[O-]	ethoxide	preferred	P-72.2.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P7.html
 CC(C)(C)[O-]	tert-butoxide	preferred	P-72.2.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#7202020202	issue #966	pass
 [O-]c1ccccc1[O-]	benzene-1,2-bis(olate)	preferred	P-72.2.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#7202020202	issue #966	pass
 [Na+].[Na+].Cc1ccc(cc1)C(=O)[O-].CC(=O)[O-]	disodium acetate 4-methylbenzoate	preferred	P-14.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#1405; P-77 https://iupac.qmul.ac.uk/BlueBook/P7.html#77	issue #966	known-failure
-[Na+].[Na+].[Na+].CC(=O)CC[O-].O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]	trisodium 4-[(4-carboxylatophenyl)oxy]benzoate 3-oxobutan-1-olate	not_preferred	P-14.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#1405; P-77 https://iupac.qmul.ac.uk/BlueBook/P7.html#77; P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601	issue #966	known-failure
+[Na+].[Na+].[Na+].CC(=O)CC[O-].O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]	trisodium 4-(4-carboxylatophenoxy)benzoate 3-oxobutan-1-olate	not_preferred	P-14.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#1405; P-77 https://iupac.qmul.ac.uk/BlueBook/P7.html#77; P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601	issue #966	known-failure
 [Na+].[Na+].CCCCCCCCCC(C)C(=O)[O-].CC(C)CCCCCCCCC(=O)[O-]	disodium 2-methylundecanoate 10-methylundecanoate	preferred	P-14.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#1405	issue #966	known-failure
 C[N+](C)(C)c1ccc2c(c1)C1CCC2O1.[Cl-]	N,N,N-trimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-aminium chloride	unverified	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-31.1.4.2.4 https://iupac.qmul.ac.uk/BlueBook/P3.html#3101040204	issue #966	pass
 Nc1ccc2c(c1)C1CCC2O1	1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-amine	unverified	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-31.1.4.2.4 https://iupac.qmul.ac.uk/BlueBook/P3.html#3101040204	issue #966	pass
@@ -614,6 +614,26 @@ Oc1ccc2c(c1)C1CCC2O1	1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-ol	unverified	P-14
 [O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1	5-(2-carboxylatophenyl)-1H-pyrrol-1-ide-3-carboxylate	preferred	P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601; P-72.7(a) https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
 [O-]C(=O)c1ccccc1CC(=O)[O-]	2-(carboxylatomethyl)benzoate	preferred	P-72.6.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720601; P-72.7(e) https://iupac.qmul.ac.uk/BlueBook/P7.html#7207	issue #942	pass
 [O-]C(=O)c1ccccc1CC(=O)O	2-(carboxymethyl)benzoate	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #942	pass
+# retained-names alkoxy (issue #975)
+Clc1ccc(Oc2ccccc2Cl)cc1	1-chloro-2-(4-chlorophenoxy)benzene	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+Oc1ccc(Oc2ccc(Cl)cc2)cc1	4-(4-chlorophenoxy)phenol	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+OC(=O)COc1ccc(Cl)cc1Cl	(2,4-dichlorophenoxy)acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+OC(=O)COCCCl	(2-chloroethoxy)acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+OC(=O)COCc1ccc(Cl)cc1	[(4-chlorophenyl)methoxy]acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202; P-57.4 https://iupac.qmul.ac.uk/BlueBook/P5.html#5704	issue #975	pass
+FC(F)(F)Oc1ccccc1	(trifluoromethoxy)benzene	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+OC(=O)COCCCCCl	(4-chlorobutoxy)acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+OC(=O)COCC(C)(C)C	(2,2-dimethylpropoxy)acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+OC(=O)CO[C@@H](C)c1ccccc1	[(1S)-1-phenylethoxy]acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+OC(=O)COCCCCCO	[(5-hydroxypentyl)oxy]acetic acid	preferred	P-63.2.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020201	issue #975	pass
+OC(=O)COC1CC1	(cyclopropyloxy)acetic acid	preferred	P-63.2.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020201	issue #975	pass
+[O-]C(=O)c1ccc(Oc2ccc(C([O-])=O)cc2)cc1	4-(4-carboxylatophenoxy)benzoate	not_preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	issue #975	pass
+Clc1ccc(Oc2cccc(Oc3ccc(Cl)cc3)c2)cc1	1,3-bis(4-chlorophenoxy)benzene	not_preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202; P-51.3.1 https://iupac.qmul.ac.uk/BlueBook/P5.html#510301	issue #975	pass
+OC(=O)COCCOCCCl	[2-(2-chloroethoxy)ethoxy]acetic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+c1ccccc1Oc1ccc(Oc2ccc(O)cc2)cc1	4-(4-phenoxyphenoxy)phenol	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+OCCOc1ccc(Cl)cc1	2-(4-chlorophenoxy)ethan-1-ol	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+CC(Oc1ccc(Cl)cc1)C(=O)O	2-(4-chlorophenoxy)propanoic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+COc1ccc(OCCCl)cc1	1-(2-chloroethoxy)-4-methoxybenzene	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
+O=C(O)C(c1ccc(Cl)cc1)COc1ccc(Cl)cc1	3-(4-chlorophenoxy)-2-(4-chlorophenyl)propanoic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202; P-14.5.2 https://iupac.qmul.ac.uk/BlueBook/P1.html#140502	issue #975	pass
 
 # anion-parent-choice (issue #942)
 [O-]C(=O)c1cc(C(=O)[O-])ccc1Cc1c[c-]c[nH]1	4-[(1H-pyrrol-4-id-2-yl)methyl]benzene-1,3-dicarboxylate	preferred	P-72.6.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720603	issue #942	pass
