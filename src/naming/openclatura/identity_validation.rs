@@ -277,7 +277,7 @@ mod tests {
             ("[NH4+]", "ammonium"),
             ("[O-2]", "oxide"),
             ("[Ca+2]", "calcium(2+)"),
-            ("[N-]1[NH+]=CC=C1", "1H-pyrazol-1-ide-2-ium"),
+            ("[N-]1[NH+]=CC=C1", "1H-pyrazol-2-ium-1-ide"),
         ] {
             assert_eq!(
                 name_smiles(smiles).map(|name| name.text).as_deref(),

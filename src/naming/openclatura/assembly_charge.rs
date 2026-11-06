@@ -126,13 +126,8 @@ pub fn parent_charge_suffix(parts: &AssemblyParts) -> String {
     let anion = parts.anion_suffix.as_ref().map_or_else(String::new, |op| {
         spelling::anion_suffix(if op.cite_locants { &op.locants } else { &[] })
     });
-    // This increment preserves each route's charge order and does not elide
-    // between charge suffixes. Ionic retained parents already carried ium.
-    if ionic_retained {
-        format!("{cation}{anion}")
-    } else {
-        format!("{anion}{cation}")
-    }
+    // P-74.1.1: cationic suffixes precede anionic suffixes, irrespective of locants.
+    spelling::join(&cation, &anion)
 }
 
 pub fn has_parent_anion_suffix(parts: &AssemblyParts) -> bool {
@@ -163,12 +158,9 @@ fn fusion_parent_charge_suffix(parts: &AssemblyParts) -> Option<String> {
     {
         return None;
     }
-    let nitrogen_anion = plan
-        .charge_operations
-        .iter()
-        .any(|op| op.symbol == "N" && op.observed_charge == -1);
     let mut result = String::new();
-    for sign in if nitrogen_anion { [-1, 1] } else { [1, -1] } {
+    // P-74.1.1: suffix citation order is independent of numbering seniority.
+    for sign in [1, -1] {
         let mut locants: Vec<_> = plan
             .charge_operations
             .iter()
@@ -192,15 +184,18 @@ fn fusion_parent_charge_suffix(parts: &AssemblyParts) -> Option<String> {
             .map_or(if sign > 0 { "ium" } else { "ide" }, |rule| {
                 rule.suffix.as_str()
             });
-        result.push_str(&format!(
-            "-{}-{}{suffix}",
-            locants.join(","),
-            if locants.len() > 1 {
-                multipliers::basic(locants.len())
-            } else {
-                String::new()
-            }
-        ));
+        result = spelling::join(
+            &result,
+            &format!(
+                "-{}-{}{suffix}",
+                locants.join(","),
+                if locants.len() > 1 {
+                    multipliers::basic(locants.len())
+                } else {
+                    String::new()
+                }
+            ),
+        );
     }
     Some(result)
 }
