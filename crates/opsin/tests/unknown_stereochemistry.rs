@@ -297,10 +297,12 @@ fn amino_acid_xi_rejects_global_rac_or_rel() {
     for qualifier in ["rac", "rel"] {
         for spelling in ["xi", "ξ"] {
             for parent in ["alanine", "N-acetylalanine"] {
-                // Separate and combined tokens: rac-(ξ) carries the group on the ξ node.
+                // Separate and combined tokens: rac-(ξ) carries the group on the ξ node;
+                // in the last spelling the qualifier sits on the N-acetyl component.
                 for name in [
                     format!("({qualifier})-({spelling})-{parent}"),
                     format!("{qualifier}-({spelling})-{parent}"),
+                    format!("({qualifier})-N-acetyl-({spelling})-alanine"),
                 ] {
                     let result = parser.parse(&name, &ParseOptions::strict());
                     assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
@@ -766,14 +768,33 @@ fn ascii_xi_keeps_its_historical_meaning_on_true_centres() {
 }
 
 #[test]
-fn amino_acid_xi_without_inherited_parity_keeps_the_generic_path() {
-    // Phenylglycine carries no inherited parity, so the ASCII xi stays as on main.
+fn amino_acid_xi_rejects_d_or_l_spelled_in_the_amino_acid_token() {
     let parser = Parser::new().unwrap();
-    for name in ["(xi)-phenylglycine", "xi-phenylglycine"] {
+    for name in [
+        "(ξ)-d-aspart-1-yl-L-alanine",
+        "(ξ)-d-alpha-aspartyl-L-alanine",
+        "(xi)-d-aspart-1-yl-L-alanine",
+    ] {
+        let result = parser.parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+    }
+}
+
+#[test]
+fn amino_acid_xi_without_one_inherited_parity_at_alpha_keeps_the_generic_path() {
+    // Phenylglycine carries no inherited parity; dopa's sole centre has no alpha
+    // locant and beta-homoalanine's is not at alpha. ASCII xi stays as on main.
+    let parser = Parser::new().unwrap();
+    for (name, smiles) in [
+        ("(xi)-phenylglycine", "NC(c1ccccc1)C(=O)O"),
+        ("xi-phenylglycine", "NC(c1ccccc1)C(=O)O"),
+        ("(xi)-dopa", "NC(Cc1ccc(O)c(O)c1)C(=O)O"),
+        ("(xi)-beta-homoalanine", "CC(N)CC(=O)O"),
+    ] {
         let structure = parsed(&parser, name);
         assert_eq!(
             canonical(&structure.semantic_cxsmiles().unwrap()),
-            canonical("NC(c1ccccc1)C(=O)O"),
+            canonical(smiles),
             "{name}"
         );
         assert!(
