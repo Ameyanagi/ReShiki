@@ -1051,8 +1051,8 @@ mod tests {
             ),
             (
                 "C1C=Cc2cc3sccc3n12",
-                "5H-pyrrolo[1,2-a]thieno[2,3-d]pyrrole",
-                NameStatus::NotPreferred(NameReason::UnregisteredRetainedComponent),
+                "5H-thieno[2,3-b]pyrrolizine",
+                NameStatus::Preferred,
             ),
             (
                 "C[SH2]C",
@@ -2337,6 +2337,60 @@ mod tests {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips() {
+        use crate::naming::NameStatus;
+        // Issue #969: P-25.3.2.4 selects the senior retained component;
+        // P-25.3.1.3 and P-25.3.3 assign its descriptor and completed locants.
+        // In the two pyrido cases, parent side b is component 2 -> 3,
+        // giving [2,3-b] and [3,2-b], respectively.
+        for (smiles, expected) in [
+            ("C1C=Cc2cc3sccc3n12", "5H-thieno[2,3-b]pyrrolizine"),
+            ("C1C=Cc2cc3ccsc3n12", "7H-thieno[3,2-b]pyrrolizine"),
+            ("C1=CCc2c3ccsc3cn12", "4H-thieno[3,2-a]pyrrolizine"),
+            (
+                "CC1C=Cc2cc3sccc3n12",
+                "5-methyl-5H-thieno[2,3-b]pyrrolizine",
+            ),
+            ("C1C=Cc2cc3occc3n12", "5H-furo[2,3-b]pyrrolizine"),
+            ("C1C=Cc2cc3ncccc3n12", "6H-pyrido[2,3-b]pyrrolizine"),
+            ("C1C=Cc2cc3cccnc3n12", "8H-pyrido[3,2-b]pyrrolizine"),
+            ("c1ccc2c(c1)Cc1cccn12", "9H-pyrrolo[1,2-a]indole"),
+            ("C1C=CN2C=CC=C12", "1H-pyrrolizine"),
+            ("C1=CC2=CC=CN2C1", "3H-pyrrolizine"),
+            ("C1CC2=CC=CN2C1", "2,3-dihydro-1H-pyrrolizine"),
+            ("CC1=CC2=CC=CN2C1", "2-methyl-3H-pyrrolizine"),
+            ("C1C=Cc2ccc3sccc3c2N1", "1,2-dihydrothieno[2,3-h]quinoline"),
+            ("c1cc2cc3occc3n2cc1", "furo[2,3-b]indolizine"),
+            ("c1cn2cnc3[nH]cnc3c2n1", "3H-imidazo[2,1-i]purine"),
+            (
+                "S1CC=C2C1=NC=1N2C=2C(=C3C1N=C1C=CC=CC1=C3)N=CC2",
+                "2H-benzo[b]pyrrolo[2,3-f]thieno[2',3':4,5]imidazo[1,2-h][1,7]naphthyridine",
+            ),
+            ("c1ccc2c(c1)Cc1c(ccc3ccccc13)O2", "12H-benzo[a]xanthene"),
+            ("C1C=Cn2c1cc1sccc12", "7H-thieno[2,3-b]pyrrolizine"),
+            // Quinolizine also has a neutral trivalent donor N5. Its
+            // component C4 (input atom 13) releases H to C6 (atom 11).
+            // Parent 2 -> 3 and thiophene 2 -> 3 both map to input 5 -> 4,
+            // so P-25.3.1.3 gives [2,3-b]. Completed input-order locants
+            // are 1,2,3,3a,10a,10,9a,9,8,7,6,5,4 (P-25.3.3).
+            ("S1C=CC=2C1=CC1=CC=CCN1C2", "6H-thieno[2,3-b]quinolizine"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            assert_eq!(
+                crate::naming::canonical_smiles(smiles).unwrap(),
+                crate::naming::canonical_smiles(&parsed.smiles).unwrap(),
+                "{}",
+                name.text,
+            );
         }
     }
 
