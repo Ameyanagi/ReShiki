@@ -9,11 +9,13 @@ use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{canonical_ranks, get_cyclic_atoms};
 use super::formatting::{
     format_center_ligands_by, format_multiplier, is_complex_prefix, needs_complex_multiplier,
-    needs_simple_multiplier_parentheses, oxy_prefix_from_branch, strip_outer_parentheses,
+    needs_simple_multiplier_parentheses, strip_outer_parentheses,
 };
 use super::graph_kernel::{Edge, biconnected_edge_components, normalize_edge};
 use super::molecule::{Atom, AtomSet, Bond, Molecule, component_atoms_until_blocked};
-use super::namer::{name_subgraph_with_upstream, name_subgraph_without_attachment_stereo};
+use super::namer::{
+    name_subgraph_rendered, name_subgraph_with_upstream, name_subgraph_without_attachment_stereo,
+};
 use super::nomenclature::RULES;
 use super::perception::{PerceivedGroup, perceive_groups};
 use super::rules::{elements, multipliers, retained, stems};
@@ -1290,7 +1292,9 @@ fn central_ligand_name(
     if alkyl.is_empty() {
         Ok(String::new())
     } else {
-        Ok(oxy_prefix_from_branch(&alkyl))
+        let mut exclude = outside(mol, atoms);
+        exclude.insert(neighbor);
+        Ok(name_subgraph_rendered(mol, roots[0], &exclude, Some(neighbor))?.into_oxy_prefix())
     }
 }
 

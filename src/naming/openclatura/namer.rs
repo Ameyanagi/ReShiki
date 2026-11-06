@@ -9,6 +9,7 @@ use super::component_group_rules::{
 use super::component_namer::{name_component, name_component_with_citation};
 use super::formatting::{
     format_center_ligands_by, is_complex_prefix, is_composite_prefix, strip_outer_parentheses,
+    substituted_alkoxy_prefix,
 };
 use super::heteroatom_subgraphs::name_heteroatom_subgraph;
 use super::locant_elision::apply_redundant_locant_elision;
@@ -378,6 +379,7 @@ fn name_subgraph_rendered_except_stereo(
             return Ok(RenderedSubstituentName {
                 text,
                 outer_parentheses_optional: false,
+                oxy_prefix: None,
             });
         }
     }
@@ -385,6 +387,7 @@ fn name_subgraph_rendered_except_stereo(
         return Ok(RenderedSubstituentName {
             text,
             outer_parentheses_optional: false,
+            oxy_prefix: None,
         });
     }
     let sub_exclude: AtomSet = mol
@@ -535,6 +538,7 @@ fn name_subgraph_rendered_except_stereo(
     let text = super::assembler::post_process_name(&text);
     super::assembler::mark_assembled_name(mol, &parts);
     Ok(RenderedSubstituentName {
+        oxy_prefix: substituted_alkoxy_prefix(&text, &parts),
         text,
         outer_parentheses_optional: !parts.stereo_features.is_empty(),
     })
@@ -907,7 +911,7 @@ mod tests {
             ),
             (
                 "CN(C)CCOC(C1=CC=CC=C1)C2=CC=CC=C2",
-                "2-[(diphenylmethyl)oxy]-N,N-dimethylethan-1-amine",
+                "2-(diphenylmethoxy)-N,N-dimethylethan-1-amine",
             ),
             (
                 "c1ccc(-c2cccc(Nc3cnccn3)n2)cc1",
