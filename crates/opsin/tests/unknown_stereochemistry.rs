@@ -61,6 +61,29 @@ fn coupled_xi_rejects_nonstereogenic_wrong_case_and_mixed_descriptors() {
 }
 
 #[test]
+fn unlocanted_xi_keeps_the_ordinary_stereocentre_search() {
+    // Coupled ring centres are reachable only through a locanted lowercase ξ.
+    let parser = Parser::new().unwrap();
+    let structure = parsed(&parser, "(Ξ)-4-(2-hydroxypropyl)cyclohexan-1-ol");
+    assert_eq!(
+        canonical(&structure.semantic_cxsmiles().unwrap()),
+        canonical("CC(O)CC1CCC(O)CC1")
+    );
+    assert!(
+        structure
+            .graph
+            .atoms
+            .iter()
+            .all(|atom| atom.parity.is_none())
+    );
+    let result = parser.parse(
+        "(ξ)-4-(2-hydroxypropyl)cyclohexan-1-ol",
+        &ParseOptions::strict(),
+    );
+    assert_eq!(result.status, Status::Failure, "{}", result.message);
+}
+
+#[test]
 fn coupled_lowercase_rs_controls_keep_their_distinct_configurations() {
     let parser = Parser::new().unwrap();
     let mut identities = Vec::new();

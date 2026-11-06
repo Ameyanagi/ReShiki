@@ -1438,12 +1438,15 @@ impl<'a> StereochemistryHandler<'a> {
         let locant = self.attribute(id, LOCANT_ATR);
         let value = self.attr(id, VALUE_ATR);
         let unknown = matches!(value.as_str(), "xi" | "Xi" | "ξ");
+        // Only a locanted lowercase ξ may name a coupled r/s centre; anything
+        // else keeps the ordinary stereocentre search.
+        let coupled = matches!(value.as_str(), "xi" | "ξ");
         let fragments = self.possible_fragments(id)?;
         for &fragment in &fragments {
             let atom = if let Some(locant) = &locant {
                 self.graph().atom_by_locant(fragment, locant).filter(|a| {
                     self.atom_stereo_centre_map.contains_key(a)
-                        || (unknown && self.coupled_unknown_candidates.contains(a))
+                        || (coupled && self.coupled_unknown_candidates.contains(a))
                 })
             } else {
                 self.graph()
@@ -1454,12 +1457,6 @@ impl<'a> StereochemistryHandler<'a> {
                     .find(|a| {
                         self.not_explicitly_defined_stereo_centre_map
                             .contains_key(a)
-                            || (unknown
-                                && self.coupled_unknown_candidates.contains(a)
-                                && !self
-                                    .unknown_stereo_centres
-                                    .iter()
-                                    .any(|centre| centre.atom == *a))
                     })
             };
             if let Some(atom) = atom {
@@ -1570,9 +1567,6 @@ impl<'a> StereochemistryHandler<'a> {
         crate::modern_cip::atom_labels(&seeded)
     }
     fn validate_coupled_unknown_centre(&self, centre: &UnknownStereoCentre) -> Result {
-        if centre.value == "Xi" {
-            return stereo("Uppercase Xi cannot specify a pseudoasymmetric stereocentre");
-        }
         let mut visited = BTreeSet::new();
         let mut pending = vec![centre.atom];
         while let Some(atom) = pending.pop() {
