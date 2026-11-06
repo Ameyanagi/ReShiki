@@ -782,6 +782,44 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn alkoxy_contractions_preserve_parent_components() {
+        for (smiles, expected) in [
+            ("OC(=O)COC(C)C", "[(propan-2-yl)oxy]acetic acid"),
+            ("OC(=O)COCC(C)C", "(2-methylpropoxy)acetic acid"),
+            ("OC(=O)COCCCCCCl", "[(5-chloropentyl)oxy]acetic acid"),
+            (
+                "OC(=O)COC(C)(C)CCl",
+                "[(1-chloro-2-methylpropan-2-yl)oxy]acetic acid",
+            ),
+            (
+                "OC(=O)COc1ccc(-c2ccccc2)cc1",
+                "[([1,1'-biphenyl]-4-yl)oxy]acetic acid",
+            ),
+            ("OC(=O)COCC1CCCCC1", "(cyclohexylmethoxy)acetic acid"),
+            ("OC(=O)COCc1ccccc1", "(benzyloxy)acetic acid"),
+            ("OC(=O)COC(C)CCl", "[(1-chloropropan-2-yl)oxy]acetic acid"),
+            (
+                "OC(=O)CSc1ccc(Cl)cc1",
+                "[(4-chlorophenyl)sulfanyl]acetic acid",
+            ),
+            ("OC(=O)COCCO", "(2-hydroxyethoxy)acetic acid"),
+            ("OC(=O)COC(C)(C)C", "tert-butoxyacetic acid"),
+            ("ClCCOC(=O)c1ccccc1", "2-chloroethyl benzoate"),
+            ("COc1ccccc1", "anisole"),
+            ("OC(=O)COC(C)CC", "[(butan-2-yl)oxy]acetic acid"),
+            ("OC(=O)C(OCCO)OCCO", "bis(2-hydroxyethoxy)acetic acid"),
+            (
+                "ClCOc1ccc(CCl)cc1",
+                "1-(chloromethoxy)-4-(chloromethyl)benzene",
+            ),
+            ("ClCCOC(=O)CC(=O)O", "(2-chloroethoxycarbonyl)acetic acid"),
+            ("CC(C)CO[SiH2]C", "methyl(2-methylpropoxy)silane"),
+        ] {
+            assert_eq!(name_smiles(smiles).unwrap().text, expected, "{smiles}");
+        }
+    }
+
+    #[test]
     fn skeletal_replacement_counts_heterounits_and_the_cited_group() {
         for (smiles, required) in [
             ("COCOCOC", false),
@@ -1016,7 +1054,7 @@ mod tests {
             ),
             (
                 "Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenol",
+                "4-[4-(4-phenoxyphenoxy)phenoxy]phenol",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             (
@@ -1066,12 +1104,12 @@ mod tests {
             ),
             (
                 "COCCOCCOCCOC",
-                "1-methoxy-2-({2-[(2-methoxyethyl)oxy]ethyl}oxy)ethane",
+                "1-methoxy-2-[2-(2-methoxyethoxy)ethoxy]ethane",
                 NameStatus::Unverified(NameReason::UnauditedParent),
             ),
             (
                 "CC(=O)NCCOCCOCCOCCOC",
-                "N-(2-{[2-({2-[(2-methoxyethyl)oxy]ethyl}oxy)ethyl]oxy}ethyl)acetamide",
+                "N-(2-{2-[2-(2-methoxyethoxy)ethoxy]ethoxy}ethyl)acetamide",
                 NameStatus::Unverified(NameReason::UnauditedParent),
             ),
             ("CCOCCOCC", "1,2-diethoxyethane", NameStatus::Preferred),
@@ -1203,7 +1241,7 @@ mod tests {
             ),
             (
                 "O=C(O)CCCCCCCCCOc1ccc(-c2ccc(OCCCCCCCCCC(=O)O)cc2)cc1",
-                "10-{[4'-(10-hydroxy-10-oxodecoxy)[1,1'-biphenyl]-4-yl]oxy}decanoic acid",
+                "10-({4'-[(10-hydroxy-10-oxodecyl)oxy][1,1'-biphenyl]-4-yl}oxy)decanoic acid",
             ),
             (
                 "P(CC(=O)O)(CC(=O)O)CC(=O)O",
@@ -1784,7 +1822,7 @@ mod tests {
             // P-52.2.5.3 applies without identical-unit ring junctions.
             (
                 "Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenol",
+                "4-[4-(4-phenoxyphenoxy)phenoxy]phenol",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             (
@@ -1794,7 +1832,7 @@ mod tests {
             ),
             (
                 "Oc1ccc(Oc2ccc(Sc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "4-({4-[(4-phenoxyphenyl)sulfanyl]phenyl}oxy)phenol",
+                "4-{4-[(4-phenoxyphenyl)sulfanyl]phenoxy}phenol",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             (
@@ -1805,7 +1843,7 @@ mod tests {
             // A linear phane outranks the multiplicative name (P-51.3.2).
             (
                 "c1ccccc1Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2",
-                "1-phenoxy-4-[(4-phenoxyphenyl)oxy]benzene",
+                "1-phenoxy-4-(4-phenoxyphenoxy)benzene",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             (
@@ -1864,24 +1902,24 @@ mod tests {
             // P-65.6.3.3.4.4: a phane within either component still counts.
             (
                 "COC(=O)c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "methyl 4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)benzoate",
+                "methyl 4-[4-(4-phenoxyphenoxy)phenoxy]benzoate",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             (
                 "CC(=O)Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenyl acetate",
+                "4-[4-(4-phenoxyphenoxy)phenoxy]phenyl acetate",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             // P-65.6.3.3.4: an ester prefix does not split the acid parent.
             (
                 "OC(=O)c1ccc(Oc2ccc(C(=O)Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "4-[(4-{[(4-phenoxyphenyl)oxy]carbonyl}phenyl)oxy]benzoic acid",
+                "4-{4-[(4-phenoxyphenoxy)carbonyl]phenoxy}benzoic acid",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             // A same-key ester outside the selected parent remains a prefix.
             (
                 "COC(=O)c1cc(C(=O)OC)cc(Oc2ccc(C(=O)Oc3ccc(Oc4ccccc4)cc3)cc2)c1",
-                "dimethyl 5-[(4-{[(4-phenoxyphenyl)oxy]carbonyl}phenyl)oxy]benzene-1,3-dicarboxylate",
+                "dimethyl 5-{4-[(4-phenoxyphenoxy)carbonyl]phenoxy}benzene-1,3-dicarboxylate",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
         ] {
@@ -1948,7 +1986,7 @@ mod tests {
             // P-52.2.5.3: a four-ring path within one component still counts.
             (
                 "COC(=O)Oc1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "methyl 4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)phenyl carbonate",
+                "methyl 4-[4-(4-phenoxyphenoxy)phenoxy]phenyl carbonate",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             (
@@ -1964,7 +2002,7 @@ mod tests {
             // A phosphonate prefix under a senior nitrile keeps the full skeleton.
             (
                 "N#Cc1ccc(Oc2ccc(P(=O)(OC)Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "4-[(4-{methoxy[(4-phenoxyphenyl)oxy]phosphoryl}phenyl)oxy]benzonitrile",
+                "4-{4-[methoxy(4-phenoxyphenoxy)phosphoryl]phenoxy}benzonitrile",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
         ] {
@@ -1991,7 +2029,7 @@ mod tests {
                 .unwrap();
         assert_eq!(
             name.text,
-            "4-{[4-(dimethylamino)phenyl]oxy}phenyl 4-phenoxyphenyl phenyl phosphate sulfide"
+            "4-[4-(dimethylamino)phenoxy]phenyl 4-phenoxyphenyl phenyl phosphate sulfide"
         );
         assert_eq!(
             name.status,

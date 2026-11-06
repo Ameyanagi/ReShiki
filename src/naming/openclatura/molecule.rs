@@ -28,6 +28,7 @@ struct NamingBudget {
     higher_order_fusion_alternative: Cell<bool>,
     benzo_fusion_alternative: Cell<bool>,
     acid_prefix_mode: Cell<bool>,
+    isotope_parent: Cell<bool>,
 }
 
 impl Default for NamingBudget {
@@ -46,6 +47,7 @@ impl Default for NamingBudget {
             higher_order_fusion_alternative: Cell::new(false),
             benzo_fusion_alternative: Cell::new(false),
             acid_prefix_mode: Cell::new(false),
+            isotope_parent: Cell::new(false),
         }
     }
 }
@@ -192,6 +194,16 @@ impl Molecule {
 
     pub(super) fn uses_acid_prefixes(&self) -> bool {
         self.naming_budget.acid_prefix_mode.get()
+    }
+
+    /// The isotope adapter names the stripped parent and needs a proven atom
+    /// locant map, which only ordinary parent plans provide.
+    pub(super) fn mark_isotope_parent(&self) {
+        self.naming_budget.isotope_parent.set(true);
+    }
+
+    pub(super) fn is_isotope_parent(&self) -> bool {
+        self.naming_budget.isotope_parent.get()
     }
 
     pub(super) fn mark_name(&self, status: NameStatus) {

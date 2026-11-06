@@ -7,9 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{canonical_ranks, get_cyclic_atoms};
-use super::formatting::{
-    format_center_ligands_by, format_multiplier, oxy_prefix_from_branch, strip_outer_parentheses,
-};
+use super::formatting::{format_center_ligands_by, format_multiplier, strip_outer_parentheses};
 use super::graph_kernel::{Edge, biconnected_edge_components, normalize_edge};
 use super::molecule::{Atom, AtomSet, Bond, Molecule, component_atoms_until_blocked};
 use super::namer::{name_subgraph_rendered, name_subgraph_with_upstream};
@@ -1260,7 +1258,12 @@ fn central_ligand_name(
     if alkyl.is_empty() {
         Ok(String::new())
     } else {
-        Ok(oxy_prefix_from_branch(&alkyl))
+        let mut exclude = outside(mol, atoms);
+        exclude.insert(neighbor);
+        Ok(
+            name_subgraph_rendered(mol, roots[0], &exclude, Some(neighbor), false)?
+                .into_oxy_prefix(),
+        )
     }
 }
 
@@ -1311,7 +1314,9 @@ fn simple_central_parent_hydride_name(
     // P-73.1.1.1/.2: protonated chalcogen hydrides retain the systematic
     // sulfanium, selanium or tellanium parent, including remaining hydrogens.
     // Other ionic or radical centers require the ordinary parent selection.
-    let chalcogen_onium = a.charge == 1
+    // The isotope adapter needs atom locants, which this shortcut lacks.
+    let chalcogen_onium = !mol.is_isotope_parent()
+        && a.charge == 1
         && matches!(a.symbol.as_str(), "S" | "Se" | "Te")
         && mol.get_neighbors(c).len() + a.total_h_count.max(a.explicit_h_count) == 3
         && mol
