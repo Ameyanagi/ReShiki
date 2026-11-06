@@ -740,7 +740,7 @@ mod tests {
             &mol,
             &modifiers,
             &[vec![0, 1, 2]],
-            &AtomSet::from([0, 2]),
+            &[0, 2],
             None,
             &BTreeMap::new(),
             false,
@@ -794,7 +794,7 @@ mod tests {
                 &mol,
                 &modifiers,
                 &[vec![4, 3, 2, 1, 0]],
-                &AtomSet::from([0, 4]),
+                &[0, 4],
                 None,
                 &BTreeMap::from([(1, vec!["methyl".into()])]),
                 &maps,
@@ -893,6 +893,7 @@ mod tests {
         for path in [vec![0, 1], vec![1, 0]] {
             let numbered = number_parent(
                 &mol,
+                &NumberingModifiers::default(),
                 &[path],
                 &[0, 1, 1],
                 None,
