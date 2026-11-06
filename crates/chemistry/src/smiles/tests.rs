@@ -626,6 +626,7 @@ fn terminal_hydride_is_no_stereo_ligand() -> anyhow::Result<()> {
     for (first, second) in [
         ("C[C@H](F)[H-]", "C[C@@H](F)[H-]"),
         ("C[C@H](F)<-[H-]", "C[C@@H](F)<-[H-]"),
+        ("C[C@H](F)[H-] |H:1.2|", "C[C@@H](F)[H-] |H:1.2|"),
     ] {
         assert_eq!(
             super::stereoisomers(first)?,
