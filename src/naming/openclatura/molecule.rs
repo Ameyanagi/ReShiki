@@ -334,6 +334,8 @@ impl Molecule {
         let ring_assemblies = self.naming_budget.ring_assembly_junctions.borrow().clone();
         let higher_order_fusion = self.has_higher_order_fusion_alternative();
         let benzo_fusion = self.has_benzo_fusion_alternative();
+        let relative_ring = self.has_relative_ring_alternative();
+        let endo_exo = self.naming_budget.endo_exo_alternative.borrow().clone();
         let result = name();
         if !matches!(result, Ok(Some(_))) {
             self.set_name_status(status);
@@ -345,6 +347,10 @@ impl Molecule {
             self.naming_budget
                 .benzo_fusion_alternative
                 .set(benzo_fusion);
+            self.naming_budget
+                .relative_ring_alternative
+                .set(relative_ring);
+            *self.naming_budget.endo_exo_alternative.borrow_mut() = endo_exo;
         }
         result
     }
@@ -612,6 +618,21 @@ mod tests {
         );
         fragment.set_name_status(NameStatus::Preferred);
         assert_eq!(mol.name_status(), NameStatus::Preferred);
+    }
+
+    #[test]
+    fn discarded_candidates_restore_stereo_alternatives() {
+        let mol = super::super::graph_io::read_smiles("CCO").unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let _: Option<()> = mol
+            .candidate(|| {
+                mol.mark_relative_ring_alternative();
+                mol.mark_endo_exo_alternative(&atoms);
+                Ok(None)
+            })
+            .unwrap();
+        assert!(!mol.has_relative_ring_alternative());
+        assert!(!mol.has_endo_exo_alternative());
     }
 
     #[test]

@@ -8,6 +8,7 @@
 #![cfg_attr(not(test), allow(clippy::indexing_slicing))]
 
 mod additive;
+mod amine_oxides;
 mod assembler;
 mod assembly_charge;
 mod assembly_parent;
@@ -66,6 +67,8 @@ mod subgraph_tools;
 mod unknown_stereo;
 mod von_baeyer;
 
+#[cfg(test)]
+mod amine_oxide_tests;
 #[cfg(test)]
 mod anion_parent_tests;
 #[cfg(test)]
@@ -224,11 +227,15 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
     if components.len() != 1 {
         return Err("openclatura: expected one connected component".into());
     }
+    let oxide = amine_oxides::name(&mol, &components[0])?;
     let phane = phane::name(&mol);
     let component =
         match component_namer::name_component_with_citation(&mol, &components[0], None, None) {
             Ok(component) => component,
             Err(error) => {
+                if let Some(name) = oxide {
+                    return Ok(name);
+                }
                 return phane.map_or(Err(error), |text| {
                     Ok(Name {
                         text,
@@ -244,6 +251,12 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
             }
         };
     assess_derivation(&mol, &component.derivation);
+    // Preserve already certified fused oxide templates, including isoquinoline 2-oxide.
+    if mol.name_status() != crate::naming::NameStatus::Preferred
+        && let Some(name) = oxide
+    {
+        return Ok(name);
+    }
     let text = component.text;
     if phane.is_some() {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
@@ -2481,11 +2494,6 @@ mod tests {
                 "NC(=O)CNC(=O)c1ccccc1",
                 "2-benzamidoacetamide",
                 R::PrincipalGroupTie,
-            ),
-            (
-                "CC[N+](C)(C)[S-]",
-                "N,N-dimethylethanamine sulfide",
-                R::AmineChalcogenide,
             ),
             (
                 "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
