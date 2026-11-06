@@ -397,12 +397,6 @@ fn collect_indicated_hydrogens(
     if name_states && metadata.is_some_and(|m| m.mancude_double_bonds == 0) {
         return Ok(());
     }
-    // P-14.7.1: a tetrazolide keeps the indicated hydrogen of 1H-tetrazole.
-    if parts.retained_name.as_deref() == Some("tetrazole")
-        && numbered_path.iter().any(|i| mol.atoms[i].charge > 0)
-    {
-        return Ok(());
-    }
     let oxo = parts
         .principal_group
         .as_ref()
