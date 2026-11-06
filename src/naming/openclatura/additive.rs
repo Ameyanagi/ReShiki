@@ -415,7 +415,14 @@ fn collect_indicated_hydrogens(
     let mut defaults: BTreeSet<_> = metadata
         .map(|m| m.default_indicated_h.iter().cloned().collect())
         .unwrap_or_default();
+    let pyran_parent = matches!(
+        parts.retained_name.as_deref(),
+        Some("pyran" | "thiopyran" | "selenopyran" | "telluropyran")
+    );
+    // Pyran's template saturation supports fusion hydrogen consumption;
+    // the standalone parent still cites its movable carbon indicated H.
     let inherent: BTreeSet<_> = metadata
+        .filter(|_| !pyran_parent)
         .map(|m| m.inherent_saturated_locants.iter().cloned().collect())
         .unwrap_or_default();
     let mut declared = if defaults.is_empty() {
@@ -431,7 +438,8 @@ fn collect_indicated_hydrogens(
                     let b = ring_bonds(mol, i, &ring);
                     !b.is_empty() && b.iter().all(|b| b.order == 1)
                 }
-                && (mol.atoms[&i].explicit_h_count + mol.atoms[&i].total_h_count > 0
+                && ((pyran_parent && saturated_ring_site(mol, i, &ring))
+                    || mol.atoms[&i].explicit_h_count + mol.atoms[&i].total_h_count > 0
                     || oxo_ring_site(mol, i, &ring))
         })
         .map(|i| locants[i].clone())

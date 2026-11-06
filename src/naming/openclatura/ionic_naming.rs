@@ -122,7 +122,7 @@ pub(super) fn prepare_anion_parent(
         return Ok(());
     }
     // Benzene is otherwise recognised only during assembly.
-    super::assembly_parent::promote_benzene_retained_name(parts);
+    super::assembly_parent::promote_retained_hydride_name(parts);
     // Contracted substituent stems (phenyl) have no anion spelling yet.
     // Parent numbering already assigns skeletal anions their low locants.
     let hydro = |key: &str| parts.hydro_operations.iter().any(|op| op.key == key);

@@ -688,6 +688,45 @@ C[Se+](C)C	trimethylselanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueB
 C[Te+](C)C	trimethyltellanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
 C[S+](C)CCO	(2-hydroxyethyl)di(methyl)sulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
 C[S+](C)CC(=O)O	(carboxymethyl)di(methyl)sulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+# retained-names (PR for issue #943)
+# retained-names parents (issue #943)
+C#C	acetylene	preferred	P-31.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P3.html#31010201	issue #943	pass
+[H]C#C[H]	acetylene	preferred	P-31.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P3.html#31010201	issue #943	pass
+ClC#C	chloroethyne	preferred	P-31.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P3.html#31010201	issue #943	pass
+C#Cc1ccccc1	ethynylbenzene	preferred	P-31.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P3.html#31010201	issue #943	pass
+C=C	ethene	preferred	P-31.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P3.html#31010201	issue #943	pass
+O1CC=CC=C1	2H-pyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+S1CC=CC=C1	2H-thiopyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+[Se]1CC=CC=C1	2H-selenopyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+[Te]1CC=CC=C1	2H-telluropyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+CC1OC=CC=C1	2-methyl-2H-pyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+CC1(C)OC=CC=C1	2,2-dimethyl-2H-pyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+C1=C[Se]C=CC1	4H-selenopyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+C1=C[Te]C=CC1	4H-telluropyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+O=C1C=CC=CO1	2H-pyran-2-one	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+OC1C=CC=CO1	2H-pyran-2-ol	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+C1=CCC=CO1	4H-pyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+O=C1C=COC=C1	4H-pyran-4-one	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+C1CC=COC1	3,4-dihydro-2H-pyran	preferred	P-22.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#220201; P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-25.7.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#25070103	issue #943	pass
+C1CCOCC1	oxane	preferred	P-22.2.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#2202020101	issue #943	pass
+O1C=CC2=CC=CC2=C1	cyclopenta[c]pyran	preferred	FR-2.2 https://iupac.qmul.ac.uk/fusedring/FR22.html	issue #943 audit	pass
+S1C=CC2=CC=CC2=C1	cyclopenta[c]thiopyran	preferred	FR-2.2 https://iupac.qmul.ac.uk/fusedring/FR22.html	issue #943 audit	pass
+O=C1c2ccccc2Cc2ccccc12	anthracen-9(10H)-one	preferred	P-25.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250101; P-58.2.2 https://iupac.qmul.ac.uk/BlueBook/P5.html#580202	issue #943	pass
+O=C1c2ccccc2C(C)c2ccccc12	10-methylanthracen-9(10H)-one	preferred	P-25.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250101; P-58.2.2 https://iupac.qmul.ac.uk/BlueBook/P5.html#580202	issue #943	pass
+O=C1c2ccccc2Cc2cc(Cl)ccc12	3-chloroanthracen-9(10H)-one	preferred	P-25.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250101; P-58.2.2 https://iupac.qmul.ac.uk/BlueBook/P5.html#580202	issue #943	pass
+O=C1c2ccccc2C(C)(C)c2ccccc12	10,10-dimethylanthracen-9(10H)-one	preferred	P-25.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250101; P-58.2.2 https://iupac.qmul.ac.uk/BlueBook/P5.html#580202	issue #943	pass
+O=C1Cc2ccccc2-c2ccccc12	phenanthren-9(10H)-one	preferred	P-25.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250101; P-58.2.2 https://iupac.qmul.ac.uk/BlueBook/P5.html#580202	issue #943	pass
+O=C1c2ccccc2C(=O)c2ccccc12	anthracene-9,10-dione	preferred	P-25.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250101; P-58.2.2 https://iupac.qmul.ac.uk/BlueBook/P5.html#580202	issue #943	pass
+C1c2ccccc2Cc2ccccc12	9,10-dihydroanthracene	preferred	P-25.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250101; P-31.2.3.3 https://iupac.qmul.ac.uk/BlueBook/P3.html#31020303	issue #943	pass
+O=c1c2ccccc2[nH]c2ccccc12	acridin-9(10H)-one	preferred	P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201; P-58.2.2 https://iupac.qmul.ac.uk/BlueBook/P5.html#580202	issue #943	pass
+O=C1CC=Cc2ccccc12	naphthalen-1(2H)-one	preferred	P-25.1.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250101; P-58.2.2 https://iupac.qmul.ac.uk/BlueBook/P5.html#580202	issue #943	pass
+S1c2ccccc2Cc2ccccc21	9H-thioxanthene	preferred	P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	issue #943	pass
+O=C1c2ccccc2Sc2ccccc12	9H-thioxanthen-9-one	preferred	P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	issue #943	pass
+C1OC2(CCCC2)c2ccccc21	3H-spiro[[2]benzofuran-1,1'-cyclopentane]	preferred	P-24.5 https://iupac.qmul.ac.uk/BlueBook/P2.html#2405; P-24.3.2 https://iupac.qmul.ac.uk/BlueBook/P2.html#240302; P-31.2.3.3.3 https://iupac.qmul.ac.uk/BlueBook/P3.html#3102030303	issue #980	known-failure
+C1CCC2(CC1)CCc1ccccc1O2	3,4-dihydrospiro[[1]benzopyran-2,1'-cyclohexane]	preferred	P-24.5 https://iupac.qmul.ac.uk/BlueBook/P2.html#2405; P-24.3.2 https://iupac.qmul.ac.uk/BlueBook/P2.html#240302; P-31.2.3.3.3 https://iupac.qmul.ac.uk/BlueBook/P3.html#3102030303	issue #943	pass
+c1ccc2c(c1)COC21CCNCC1	3H-spiro[[2]benzofuran-1,4'-piperidine]	preferred	P-24.5 https://iupac.qmul.ac.uk/BlueBook/P2.html#2405; P-24.3.2 https://iupac.qmul.ac.uk/BlueBook/P2.html#240302; P-31.2.3.3.3 https://iupac.qmul.ac.uk/BlueBook/P3.html#3102030303	issue #980	known-failure
+C1Oc2ccccc2C12CCCC2	2H-spiro[[1]benzofuran-3,1'-cyclopentane]	preferred	P-24.5 https://iupac.qmul.ac.uk/BlueBook/P2.html#2405; P-24.3.2 https://iupac.qmul.ac.uk/BlueBook/P2.html#240302; P-31.2.3.3.3 https://iupac.qmul.ac.uk/BlueBook/P3.html#3102030303	issue #980	known-failure
+C1CC2(CC1)c1ccccc1-c1ccccc21	spiro[cyclopentane-1,9'-fluorene]	preferred	P-24.5 https://iupac.qmul.ac.uk/BlueBook/P2.html#2405; P-24.3.2 https://iupac.qmul.ac.uk/BlueBook/P2.html#240302; P-31.2.3.3.3 https://iupac.qmul.ac.uk/BlueBook/P3.html#3102030303	issue #943	pass
 # anion-parent-choice (issue #942)
 [O-]C(=O)c1cc(C(=O)[O-])ccc1Cc1c[c-]c[nH]1	4-[(1H-pyrrol-4-id-2-yl)methyl]benzene-1,3-dicarboxylate	preferred	P-72.6.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720603	issue #942	pass
 CCc1c[c-]c[nH]1	5-ethyl-1H-pyrrol-3-ide	preferred	P-14.4(c) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass

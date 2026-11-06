@@ -170,7 +170,36 @@ fn absorbed_chain_branch(
     text.strip_suffix("amino")
         .map(|prefix| (format!("{prefix}{word}"), 0))
 }
-pub fn promote_benzene_retained_name(parts: &mut AssemblyParts) {
+pub fn promote_retained_hydride_name(parts: &mut AssemblyParts) {
+    // P-31.1.2.1 permits acetylene only for unmodified, neutral HC≡CH.
+    if !parts.is_ring
+        && !parts.is_substituent
+        && !parts.isotope_explicit_locants
+        && parts.parent_length == 2
+        && parts.principal_group.is_none()
+        && parts.substituents.is_empty()
+        && parts.a_prefixes.is_empty()
+        && parts.parent_charges.is_empty()
+        && parts
+            .parent_atom_symbols_by_locant
+            .values()
+            .all(|s| s == "C")
+        && parts.parent_atom_hydrogens_by_locant.len() == 2
+        && parts
+            .parent_atom_hydrogens_by_locant
+            .values()
+            .all(|&h| h == 1)
+        && parts
+            .parent_atom_isotopes_by_locant
+            .values()
+            .all(Option::is_none)
+        && let [bond] = parts.unsaturations.as_slice()
+        && bond.bond_key == "triple"
+        && bond.locants == ["1"]
+    {
+        parts.retained_name = Some("acetylene".into());
+        parts.unsaturations.clear();
+    }
     if parts.is_ring
         && !parts.is_bicycle
         && !parts.is_spiro
@@ -1313,7 +1342,7 @@ mod tests {
     fn methylbenzene_retained_names_require_plain_methyl_substitution() {
         for locants in [vec!["1", "2", "3"], vec!["1", "3", "5"]] {
             let mut parts = methylbenzene_parts(&locants);
-            promote_benzene_retained_name(&mut parts);
+            promote_retained_hydride_name(&mut parts);
             assert_eq!(
                 parts.retained_name.as_deref(),
                 Some("benzene"),
@@ -1330,7 +1359,7 @@ mod tests {
         ] {
             let mut parts = methylbenzene_parts(&["1"]);
             parts.substituents[0].name = name.into();
-            promote_benzene_retained_name(&mut parts);
+            promote_retained_hydride_name(&mut parts);
             assert_eq!(parts.retained_name.as_deref(), Some("benzene"), "{name}");
             assert_eq!(parts.substituents[0].name, name);
         }
@@ -1338,7 +1367,7 @@ mod tests {
         parts
             .substituents
             .push(SubstituentItem::new("chloro", vec!["4".into()]));
-        promote_benzene_retained_name(&mut parts);
+        promote_retained_hydride_name(&mut parts);
         assert_eq!(parts.retained_name.as_deref(), Some("benzene"));
         assert_eq!(parts.substituents.len(), 2);
     }
@@ -1380,7 +1409,7 @@ mod tests {
             for &(label, guard) in guards {
                 let mut parts = methylbenzene_parts(&locants);
                 guard(&mut parts);
-                promote_benzene_retained_name(&mut parts);
+                promote_retained_hydride_name(&mut parts);
                 assert_eq!(
                     parts.retained_name.as_deref(),
                     Some("benzene"),
@@ -1388,6 +1417,29 @@ mod tests {
                 );
                 assert_eq!(parts.substituents[0].locants.len(), locants.len());
             }
+        }
+    }
+
+    #[test]
+    fn acetylene_is_reserved_for_the_unmodified_parent() {
+        for (smiles, expected) in [
+            ("C#C", "acetylene"),
+            ("[H]C#C[H]", "acetylene"),
+            ("ClC#C", "chloroethyne"),
+            ("C#Cc1ccccc1", "ethynylbenzene"),
+            ("C=C", "ethene"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+        }
+        for smiles in ["[13CH]#C", "[2H]C#C", "[C]#C", "[C-]#C"] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert!(!name.text.contains("acetylene"), "{smiles}: {}", name.text);
         }
     }
 
