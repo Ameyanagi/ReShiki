@@ -3,8 +3,8 @@ use super::{
     assembly_charge::positive_parent_n_charges,
     assembly_parent::{
         format_parent_tail, format_substituent_tail, parent_stem_and_terminal,
-        promote_acyl_substituent_name, promote_benzene_retained_name,
-        promote_retained_functional_parent, promote_retained_substituent_name,
+        promote_acyl_substituent_name, promote_retained_functional_parent,
+        promote_retained_hydride_name, promote_retained_substituent_name,
         select_retained_anion_name,
     },
     assembly_parts::{AssemblyParts, HydroOperation},
@@ -578,7 +578,7 @@ pub(super) fn assemble_name_with_parent(
     }
     promote_acyl_substituent_name(parts);
     promote_retained_substituent_name(parts);
-    promote_benzene_retained_name(parts);
+    promote_retained_hydride_name(parts);
     select_retained_anion_name(parts);
     promote_retained_functional_parent(parts)?;
     let spiro_sides = super::assembly_spiro::split_spiro_substituents(parts)?;
@@ -600,14 +600,14 @@ pub(super) fn assemble_name_with_parent(
         name.clone()
     } else {
         let (stem, terminal) = parent_stem_and_terminal(parts)?;
-        let parent_terminal = if parts
-            .parent_hydride
-            .as_ref()
-            .is_some_and(|p| p.uses_fusion_plan())
-        {
+        let parent_terminal = if spiro_sides.is_empty() {
             terminal.clone()
         } else {
-            "e".into()
+            // A spiro bracket cites the component hydride, even when the
+            // assembled parent receives an outer substituent suffix.
+            let mut component = parts.clone();
+            component.is_substituent = false;
+            parent_stem_and_terminal(&component)?.1
         };
         let stem = format!("{a_prefix}{stem}");
         let tail = if parts.is_substituent {
@@ -692,6 +692,68 @@ mod tests {
             add_front_modifiers(&parts, "parent"),
             "1-ethyl 4-(2-methoxyethyl) 2-methyl parent"
         );
+    }
+
+    #[test]
+    fn retained_names_preserve_fusion_and_spiro_components() {
+        for (smiles, expected) in [
+            ("O1C=CC2=CC=CC2=C1", "cyclopenta[c]pyran"),
+            ("S1C=CC2=CC=CC2=C1", "cyclopenta[c]thiopyran"),
+            ("O1C=CC2=CC=CC=C2C1", "1H-2-benzopyran"),
+            // Spelling regressions only: these spiro names are not yet the
+            // PINs (assembled-parent hydrogen, #980), so their status is not asserted.
+            (
+                "C1COc2ccccc2C12CCCC2",
+                "3,4-dihydrospiro[2H-1-benzopyran-4,1'-cyclopentane]",
+            ),
+            (
+                "O=C(O)Cc1ccc2c(c1)CC=CC21CCNCC1",
+                "(5,8-dihydrospiro[naphthalene-5,4'-piperidine]-2-yl)acetic acid",
+            ),
+            (
+                "C1OC2(CCCC2)c2ccccc21",
+                "1,3-dihydrospiro[[2]benzofuran-1,1'-cyclopentane]",
+            ),
+            (
+                "C1CCC2(CC1)CCc1ccccc1O2",
+                "3,4-dihydrospiro[[1]benzopyran-2,1'-cyclohexane]",
+            ),
+            (
+                "c1ccc2c(c1)COC21CCNCC1",
+                "1,3-dihydrospiro[[2]benzofuran-1,4'-piperidine]",
+            ),
+            (
+                "C1Oc2ccccc2C12CCCC2",
+                "2,3-dihydrospiro[[1]benzofuran-3,1'-cyclopentane]",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            if !expected.contains("spiro") {
+                assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            }
+        }
+    }
+
+    #[test]
+    fn standalone_pyrans_cite_indicated_hydrogen_after_substitution() {
+        for (smiles, expected) in [
+            ("O1CC=CC=C1", "2H-pyran"),
+            ("S1CC=CC=C1", "2H-thiopyran"),
+            ("CC1OC=CC=C1", "2-methyl-2H-pyran"),
+            ("CC1(C)OC=CC=C1", "2,2-dimethyl-2H-pyran"),
+            ("O=C1C=CC=CO1", "2H-pyran-2-one"),
+            ("OC1C=CC=CO1", "2H-pyran-2-ol"),
+            ("[Se]1CC=CC=C1", "2H-selenopyran"),
+            ("[Te]1CC=CC=C1", "2H-telluropyran"),
+            ("C1=C[Se]C=CC1", "4H-selenopyran"),
+            ("C1=C[Te]C=CC1", "4H-telluropyran"),
+            ("CC1(C)C=COC=C1", "4,4-dimethyl-4H-pyran"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        }
     }
 
     #[test]
@@ -1052,7 +1114,7 @@ mod tests {
             ),
             (
                 "CC1=CC(=O)OC(=C1C(=O)NC2CC2)C",
-                "N-cyclopropyl-4,6-dimethyl-2-oxopyran-5-carboxamide",
+                "N-cyclopropyl-4,6-dimethyl-2-oxo-2H-pyran-5-carboxamide",
             ),
         ] {
             assert_eq!(
