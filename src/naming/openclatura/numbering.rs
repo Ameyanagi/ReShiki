@@ -565,7 +565,7 @@ fn numbering_preference(
 pub(super) fn chain_orientations_before_stereo(
     mol: &Molecule,
     path: &[usize],
-    principal: &AtomSet,
+    principal: &[usize],
     substituents: &BTreeMap<usize, Vec<String>>,
 ) -> Vec<Vec<usize>> {
     let reversed: Vec<_> = path.iter().rev().copied().collect();
@@ -760,13 +760,13 @@ mod tests {
         let path = vec![0, 1, 3, 4, 5];
         let substituents = BTreeMap::from([(1, vec!["fluoro".into()])]);
         assert_eq!(
-            chain_orientations_before_stereo(&mol, &path, &AtomSet::new(), &substituents),
+            chain_orientations_before_stereo(&mol, &path, &[], &substituents),
             vec![path.clone()]
         );
         let reversed: Vec<_> = path.iter().rev().copied().collect();
         for path in [&path, &reversed] {
             assert_eq!(
-                chain_orientations_before_stereo(&mol, path, &AtomSet::from([5]), &substituents),
+                chain_orientations_before_stereo(&mol, path, &[5], &substituents),
                 vec![reversed.clone()]
             );
         }

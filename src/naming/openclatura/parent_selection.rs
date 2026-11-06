@@ -484,11 +484,15 @@ fn prefer_single_centre_exchanged_arms(
         if named.is_err() {
             return;
         }
-        let mut locants: Vec<_> =
-            chain_orientations_before_stereo(mol, path, &principal, &substituents)
-                .iter()
-                .filter_map(|path| path.iter().position(|a| *a == centres[atoms]))
-                .collect();
+        let mut locants: Vec<_> = chain_orientations_before_stereo(
+            mol,
+            path,
+            &principal.iter().copied().collect::<Vec<_>>(),
+            &substituents,
+        )
+        .iter()
+        .filter_map(|path| path.iter().position(|a| *a == centres[atoms]))
+        .collect();
         locants.sort();
         locants.dedup();
         if reference_locants.as_ref().is_some_and(|r| r != &locants) {
