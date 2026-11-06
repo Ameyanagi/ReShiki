@@ -1137,6 +1137,11 @@ mod tests {
                 NameStatus::Preferred,
             ),
             (
+                "BrC1CC(C2CCCCC2(C1)Cl)C(=O)OC(=O)C1C(CC(C2CCCCC12)Cl)Br",
+                "2-bromo-4-chlorodecahydronaphthalene-1-carboxylic 3-bromo-4a-chlorodecahydronaphthalene-1-carboxylic anhydride",
+                NameStatus::Preferred,
+            ),
+            (
                 "CC(=O)OC(=O)c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
                 "acetic 4-[4-(4-phenoxyphenoxy)phenoxy]benzoic anhydride",
                 NameStatus::NotPreferred(NameReason::LinearPhane),

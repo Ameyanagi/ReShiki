@@ -3259,16 +3259,33 @@ pub(super) fn try_name_anhydride_component(
                 // P-65.7.2: the acids are cited in alphanumerical order: their
                 // Roman letters first, then their locants in order of citation
                 // (P-14.5.1, P-14.5.4).
-                halves.sort_by_cached_key(|half| {
-                    let letters = super::numbering::substituent_citation_name(
-                        &substituent_sort_key(&half.0).0,
-                    );
-                    let locants: Vec<usize> = half
-                        .0
-                        .split(|c: char| !c.is_ascii_digit())
-                        .filter_map(|n| n.parse().ok())
-                        .collect();
+                // A locant such as 4a is a number with its letter; neither
+                // takes part in the alphabetical comparison.
+                let split = |text: &str| {
+                    let (mut letters, mut locants) = (String::new(), Vec::<usize>::new());
+                    let mut chars = text.chars().peekable();
+                    while let Some(c) = chars.next() {
+                        if let Some(digit) = c.to_digit(10) {
+                            let mut locant = digit as usize;
+                            while let Some(d) = chars.peek().and_then(|c| c.to_digit(10)) {
+                                locant = locant * 10 + d as usize;
+                                chars.next();
+                            }
+                            locants.push(locant);
+                            let mut rest = chars.clone();
+                            if rest.next().is_some_and(|c| c.is_ascii_lowercase())
+                                && !rest.next().is_some_and(char::is_alphabetic)
+                            {
+                                chars.next();
+                            }
+                        } else if c.is_alphabetic() {
+                            letters.push(c);
+                        }
+                    }
                     (letters, locants)
+                };
+                halves.sort_by_cached_key(|half| {
+                    (split(&substituent_sort_key(&half.0).0).0, split(&half.0).1)
                 });
                 format!("{} {} {class}", halves[0].1, halves[1].1)
             };

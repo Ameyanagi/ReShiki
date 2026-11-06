@@ -963,6 +963,10 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
             }
         }
     }
+    // P-14.3.3: skeletal locants in the parent name (1,3,5-trioxane) are
+    // essential, so its prefix locants stay too.
+    let skeletal_locants = super::assembly_parent::parent_stem_and_terminal(parts)
+        .is_ok_and(|(stem, _)| stem.contains(|c: char| c.is_ascii_digit()));
     let mut ordered: Vec<_> = all
         .iter()
         .enumerate()
@@ -973,7 +977,9 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
                 parts
                     .principal_group
                     .as_ref()
-                    .is_none_or(|group| !group.external_substitution_sites)
+                    .map_or(!skeletal_locants, |group| {
+                        !group.external_substitution_sites
+                    })
                     && parts.parent_atom_hydrogens_by_locant.len() == g.nodes.len()
             }
             "suffix" => {
@@ -1398,6 +1404,12 @@ mod tests {
                 "1,3,3,4,4-pentachlorocyclobut-1-ene",
             ),
             ("ClC1(Cl)CC1", "1,1-dichlorocyclopropane"),
+            ("CC1OCOCO1", "2-methyl-1,3,5-trioxane"),
+            (
+                "FC1(F)OC(F)(F)OC(F)(F)O1",
+                "2,2,4,4,6,6-hexafluoro-1,3,5-trioxane",
+            ),
+            ("Fc1c(F)c(F)nc(F)c1F", "pentafluoropyridine"),
             (
                 "ClC(Cl)=C(Cl)C(Cl)=C(Cl)Cl",
                 "1,1,2,3,4,4-hexachlorobuta-1,3-diene",
