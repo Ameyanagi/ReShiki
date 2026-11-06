@@ -1233,6 +1233,19 @@ impl Builder<'_> {
                 return Err(error("Unsupported or invalid anhydride"));
             }
             let copy = self.assembly.clone_element(words[0], 0)?;
+            // The implicit acid copy shares the original whole-molecule qualifier.
+            for stereo in self
+                .assembly
+                .arena
+                .descendants_named(copy, "stereoChemistry")
+            {
+                if matches!(
+                    self.assembly.arena[stereo].attribute("type"),
+                    Some("REL" | "RAC")
+                ) {
+                    self.assembly.arena.detach(stereo);
+                }
+            }
             self.assembly.arena.insert_after(words[0], copy);
             let mut two = self.results(copy)?;
             self.link_anhydride_results(&smiles, &mut one, &mut two)?;

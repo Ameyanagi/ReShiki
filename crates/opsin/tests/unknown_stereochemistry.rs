@@ -276,6 +276,58 @@ fn ignored_xi_preserves_the_complete_global_stereo_group() {
 }
 
 #[test]
+fn xi_removal_compacts_surviving_salt_stereo_groups() {
+    let parser = Parser::new().unwrap();
+    for (prefix, kind) in [
+        ("rel", StereoGroupType::Relative),
+        ("rac", StereoGroupType::Racemic),
+    ] {
+        let name = format!("{prefix}-(2R)-alaninium ({prefix})-(2Xi)-alaninate");
+        let result = parser.parse(&name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+        let structure = result.structure.unwrap();
+        let written = structure.semantic_cxsmiles().unwrap();
+        let centres: Vec<_> = structure
+            .graph
+            .atoms
+            .iter()
+            .filter(|atom| atom.active && atom.locants.iter().any(|locant| locant == "2"))
+            .collect();
+        assert_eq!(centres.len(), 2, "{name}");
+        for centre in centres {
+            let cation = structure
+                .graph
+                .neighbours(centre.id)
+                .iter()
+                .any(|&atom| structure.graph.atom(atom).charge == 1);
+            if cation {
+                let group = centre.parity.as_ref().unwrap().stereo_group;
+                assert_eq!(group.kind, kind, "{name}");
+                assert_eq!(group.number, 1, "{name}");
+            } else {
+                assert!(centre.parity.is_none(), "{name}: alaninate C2");
+            }
+        }
+        assert_eq!(
+            structure
+                .graph
+                .atoms
+                .iter()
+                .filter(|atom| atom.active && atom.parity.is_some())
+                .count(),
+            1,
+            "{name}"
+        );
+        let expected = "C[C@H]([NH3+])C(=O)O.CC(N)C(=O)[O-] |o1:1|";
+        assert_eq!(
+            stereoisomers(&written).unwrap(),
+            stereoisomers(expected).unwrap(),
+            "{name}: {written}"
+        );
+    }
+}
+
+#[test]
 fn either_xi_case_is_allowed_when_ligand_stereochemistry_is_undefined() {
     let parser = Parser::new().unwrap();
     for name in [

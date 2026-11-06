@@ -690,6 +690,43 @@ fn assert_whole_name_group(
 }
 
 #[test]
+fn symmetric_anhydrides_preserve_whole_name_relative_and_racemic_scope() {
+    use std::collections::BTreeSet;
+    for (prefix, kind) in [
+        ("rel", StereoGroupType::Relative),
+        ("rac", StereoGroupType::Racemic),
+    ] {
+        let name = format!("{prefix}-(2R)-2-hydroxypropanoic anhydride");
+        let structure = parse_name(&name);
+        assert_whole_name_group(&name, &structure, kind, 2, "C[C@H](O)C(=O)OC(=O)[C@@H](O)C");
+        let mut pending = vec![structure.graph.fragment(structure.fragment).atoms[0]];
+        let mut component = BTreeSet::new();
+        while let Some(atom) = pending.pop() {
+            if component.insert(atom) {
+                pending.extend(structure.graph.neighbours(atom));
+            }
+        }
+        assert_eq!(
+            component.len(),
+            structure
+                .graph
+                .atoms
+                .iter()
+                .filter(|atom| atom.active)
+                .count(),
+            "{name}"
+        );
+        assert_eq!(
+            reshiki_chemistry::smiles::stereoisomers(&structure.semantic_cxsmiles().unwrap())
+                .unwrap()
+                .len(),
+            2,
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn whole_name_groups_leave_undefined_and_explicitly_unknown_centres_unconfigured() {
     for (prefix, kind) in [
         ("rel", StereoGroupType::Relative),
@@ -755,6 +792,8 @@ fn whole_name_groups_leave_undefined_and_explicitly_unknown_centres_unconfigured
 #[test]
 fn whole_name_and_independent_relative_or_racemic_scopes_are_refused() {
     for name in [
+        "rel-rel-(2R)-2-hydroxypropanoic anhydride",
+        "rel-rac-(2R)-2-hydroxypropanoic anhydride",
         "rel-(1R,2S)-2-[rac-(1S)-1-fluoroethyl]cyclohexan-1-ol",
         "rel-(1R,2S)-2-[rel-(1S)-1-fluoroethyl]cyclohexan-1-ol",
         "rel-(1R,2S)-2-[(1RS)-1-fluoroethyl]cyclohexan-1-ol",

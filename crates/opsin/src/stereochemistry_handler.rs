@@ -467,7 +467,34 @@ impl<'a> StereochemistryHandler<'a> {
             let result = self.match_stereochemistry(id);
             self.warning_or_error(result)?
         }
-        self.resolve_unknown_stereo_centres()?;
+        if !self.unknown_stereo_centres.is_empty() {
+            self.resolve_unknown_stereo_centres()?;
+            // Xi can remove an entire group; export requires contiguous group numbers.
+            for kind in [StereoGroupType::Relative, StereoGroupType::Racemic] {
+                let numbers: BTreeSet<_> = self
+                    .graph()
+                    .atoms
+                    .iter()
+                    .filter(|atom| atom.active)
+                    .filter_map(|atom| atom.parity.as_ref())
+                    .filter(|parity| parity.stereo_group.kind == kind)
+                    .map(|parity| parity.stereo_group.number)
+                    .collect();
+                let numbers: BTreeMap<_, _> = numbers.into_iter().zip(1..).collect();
+                for parity in self
+                    .state
+                    .graph_mut()
+                    .atoms
+                    .iter_mut()
+                    .filter(|atom| atom.active)
+                    .filter_map(|atom| atom.parity.as_mut())
+                {
+                    if parity.stereo_group.kind == kind {
+                        parity.stereo_group.number = numbers[&parity.stereo_group.number];
+                    }
+                }
+            }
+        }
         if has_cage_descriptor
             && !requested_group_kinds.is_empty()
             && !self.cage_scope_is_single_group(&requested_group_kinds)
