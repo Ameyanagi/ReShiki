@@ -202,22 +202,22 @@ fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
         (
             "CC(C)CC(=O)Nc1ccc(NC(=O)c2cccnc2Sc2ccccc2)cc1",
             "N-[4-(3-methylbutanamido)phenyl]-2-(phenylsulfanyl)pyridine-3-carboxamide",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
         ),
         (
             "c1c(NC(=O)c2cccnc2Sc2ccccc2)ccc(NC(CC(C)C)=O)c1",
             "N-[4-(3-methylbutanamido)phenyl]-2-(phenylsulfanyl)pyridine-3-carboxamide",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
         ),
         (
             "CC(C)[C@H](NC(=O)c1ccc(Cl)cc1)C(=O)NCCC1=CCCCC1",
             "4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
         ),
         (
             "CC([C@@H](C(NCCC1=CCCCC1)=O)NC(c1ccc(Cl)cc1)=O)C",
             "4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
         ),
         (
             "NC(=O)C(NC(=O)c1ccccc1)C(N)=O",
@@ -237,7 +237,7 @@ fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
         (
             "CC(=O)Nc1ccc(C(N)=O)cc1",
             "4-acetamidobenzamide",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
         ),
         (
             "CC(=O)NCCNC(=O)CC",
@@ -247,7 +247,7 @@ fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
         (
             "NC(=O)CNC(=O)c1ccccc1",
             "N-(2-amino-2-oxoethyl)benzamide",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
         ),
     ] {
         let identity = canonical_smiles(smiles).unwrap();

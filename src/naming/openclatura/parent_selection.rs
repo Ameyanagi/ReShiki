@@ -61,11 +61,6 @@ struct ParentScore {
     path_tiebreak: Vec<usize>,
 }
 
-struct ParentCandidates {
-    choices: Vec<(ParentScore, ParentSelection)>,
-    single_group_ring_chain_tie: bool,
-}
-
 impl ParentScore {
     fn principal_preference(&self) -> (i64, i64, i64, [i64; 19], i64, i64) {
         (
@@ -277,8 +272,8 @@ pub fn select_principal_parent(
     ring_systems: &[RingSystem],
     principal_carbons: &[usize],
     groups: &[PerceivedGroup],
-) -> Option<(ParentSelection, bool)> {
-    let candidates = parent_candidates(
+) -> Option<ParentSelection> {
+    parent_candidates(
         mol,
         chains,
         ring_systems,
@@ -286,12 +281,10 @@ pub fn select_principal_parent(
         Some(groups),
         &AtomSet::new(),
         true,
-    );
-    candidates
-        .choices
-        .into_iter()
-        .min_by(|a, b| a.0.cmp(&b.0))
-        .map(|(_, selection)| (selection, candidates.single_group_ring_chain_tie))
+    )
+    .into_iter()
+    .min_by(|a, b| a.0.cmp(&b.0))
+    .map(|(_, selection)| selection)
 }
 
 /// Compare the cited anion with actual competing parents, using the same
@@ -333,7 +326,6 @@ pub(super) fn anion_parent_is_senior(
         false,
     );
     let Some(cited_score) = candidates
-        .choices
         .iter()
         .filter(|(_, selection)| selection.atom_set() == *parent)
         .map(|(score, _)| score)
@@ -347,7 +339,7 @@ pub(super) fn anion_parent_is_senior(
         .copied()
         .filter(|id| mol.atoms[id].charge < 0)
         .collect();
-    candidates.choices.iter().all(|(score, selection)| {
+    candidates.iter().all(|(score, selection)| {
         let centres = anionic_centres(mol, &selection.atom_set(), &groups);
         selection.atom_set() == *parent || centres.is_subset(&cited_centres) || cited_score < score
     })
@@ -370,7 +362,6 @@ pub fn select_principal_parent_with_excluded(
         excluded,
         true,
     )
-    .choices
     .into_iter()
     .min_by(|a, b| a.0.cmp(&b.0))
     .map(|(_, selection)| selection)
@@ -394,8 +385,7 @@ pub(super) fn senior_parent_candidates(
         Some(groups),
         excluded,
         false,
-    )
-    .choices;
+    );
     for (score, _) in &mut candidates {
         score.attached_prefixes = 0;
         score.assembly_substituent_locants = None;
@@ -416,7 +406,7 @@ fn parent_candidates(
     groups: Option<&[PerceivedGroup]>,
     excluded: &AtomSet,
     atom_order_tiebreak: bool,
-) -> ParentCandidates {
+) -> Vec<(ParentScore, ParentSelection)> {
     let groups = ParentGroups {
         principal: principal_carbons,
         anionic: groups,
@@ -554,27 +544,6 @@ fn parent_candidates(
             },
         )
     }));
-    let bearing: Vec<_> = candidates
-        .iter()
-        .filter(|(score, _)| score.contains_principal < 0)
-        .collect();
-    // P-44.1.2.2 decides one ring against chains only after equal group counts.
-    // Maximal paths cover every pair of vertices in each carbon-tree component.
-    // A count of one on every path therefore rules out an omitted branched
-    // parent carrying multiple principal groups. Check coverage separately so
-    // an unsupported attachment cannot make that proof vacuously true.
-    let single_group_ring_chain_tie = bearing
-        .iter()
-        .filter(|(_, selection)| selection.is_ring)
-        .count()
-        == 1
-        && bearing.iter().any(|(_, selection)| !selection.is_ring)
-        && bearing.iter().all(|(score, _)| score.principal_count == -1)
-        && principal_carbons.iter().all(|atom| {
-            bearing
-                .iter()
-                .any(|(_, selection)| selection.primary_path().contains(atom))
-        });
     if compare_assembly {
         prefer_ring_or_chain_class(&mut candidates, mol);
     }
@@ -585,10 +554,7 @@ fn parent_candidates(
     }
     prefer_spiro_backbone_components(&mut candidates, ring_systems, mol);
     prefer_assembly_substituent_citation(&mut candidates, mol, excluded);
-    ParentCandidates {
-        choices: candidates,
-        single_group_ring_chain_tie,
-    }
+    candidates
 }
 
 fn prefer_assembly_substituent_citation(
@@ -837,67 +803,6 @@ mod tests {
     };
     use super::*;
 
-    #[test]
-    fn ring_chain_tie_metadata_requires_complete_single_group_candidates() {
-        use super::super::{component_group_rules, perception, principal_groups};
-
-        for (smiles, expected) in [
-            ("NC(=O)CNC(=O)c1ccccc1", true),
-            ("NC(=O)C(NC(=O)c1ccccc1)C(N)=O", false),
-            ("NC(=O)CC(C(N)=O)(c1ccc(C(N)=O)cc1C(N)=O)CC(N)=O", false),
-            ("CC(=O)Nc1ncc(C(=O)Nc2ccc(C(N)=O)cn2)o1", false),
-            ("NC(=O)CNC(=O)c1ccccc1-c1ccccc1", false),
-            ("CC(=O)NCCNC(=O)CC", false),
-            ("NC(=O)c1ccccc1", false),
-        ] {
-            let mol = read_smiles(smiles).unwrap();
-            let mut groups = perception::perceive_groups(&mol);
-            let key = principal_groups::component_principal_key(&mol, &groups, false);
-            let mut excluded = AtomSet::new();
-            component_group_rules::retarget_external_carbonyl_groups(
-                &mol,
-                &mut groups,
-                key.as_deref(),
-                &mut excluded,
-                &super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new()),
-            );
-            let principal =
-                principal_groups::candidate_principal_attachments(&mol, &groups, key.as_deref());
-            component_group_rules::exclude_nonparent_group_atoms(
-                &mol,
-                &groups,
-                &mut excluded,
-                &super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new()),
-            );
-            let chains = find_all_carbon_paths(&mol, &excluded).unwrap();
-            let rings = find_ring_systems(&mol, &excluded).unwrap();
-            let candidates = parent_candidates(
-                &mol,
-                &chains,
-                &rings,
-                &principal,
-                Some(&groups),
-                &excluded,
-                true,
-            );
-            assert_eq!(candidates.single_group_ring_chain_tie, expected, "{smiles}");
-            if expected {
-                let mut unsupported = principal;
-                unsupported.push(mol.atoms.values().find(|a| a.symbol == "N").unwrap().idx);
-                let candidates = parent_candidates(
-                    &mol,
-                    &chains,
-                    &rings,
-                    &unsupported,
-                    Some(&groups),
-                    &excluded,
-                    true,
-                );
-                assert!(!candidates.single_group_ring_chain_tie);
-            }
-        }
-    }
-
     fn linked_skeletal_anions(symbol: &str, hydrogen_count: usize) -> Molecule {
         use super::super::molecule::{Atom, Bond};
 
@@ -987,8 +892,7 @@ mod tests {
                 &principal,
                 &groups,
             )
-            .unwrap()
-            .0;
+            .unwrap();
             assert_eq!(
                 anionic_centre_count(&mol, &parent.atom_set(), &groups),
                 1,
@@ -1013,8 +917,7 @@ mod tests {
             &[],
             &groups,
         )
-        .unwrap()
-        .0;
+        .unwrap();
         assert!(!parent.is_ring);
         assert_eq!(anionic_centre_count(&mol, &parent.atom_set(), &groups), 2);
     }
@@ -1084,8 +987,7 @@ mod tests {
             &principal,
             &groups,
         )
-        .unwrap()
-        .0;
+        .unwrap();
         assert!(parent.is_ring);
         assert!(parent.atom_set().iter().any(|i| mol.atoms[i].charge < 0));
         assert_eq!(anionic_centre_count(&mol, &parent.atom_set(), &groups), 1);
@@ -1102,8 +1004,7 @@ mod tests {
             &[],
             &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
         assert!(parent.is_ring);
         assert_eq!(parent.primary_path().len(), 6);
     }
@@ -1118,8 +1019,7 @@ mod tests {
             &[1],
             &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
         assert!(!parent.is_ring);
         assert!(parent.atom_set().contains(&1));
     }
@@ -1137,8 +1037,7 @@ mod tests {
             &[principal],
             &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
         assert!(parent.atom_set().contains(&principal));
         assert_eq!(
             parent.ring_assembly.unwrap().name,
@@ -1161,8 +1060,7 @@ mod tests {
                 &[],
                 &[],
             )
-            .unwrap()
-            .0;
+            .unwrap();
             let atoms = parent.atom_set();
             assert_eq!(
                 parent.ring_assembly.unwrap().name,
@@ -1190,9 +1088,7 @@ mod tests {
             .unwrap();
         assert_eq!(assembly.ring_count, 2);
         assert_eq!(assembly.locant_maps[0].len(), 12);
-        let parent = select_principal_parent(&mol, &[], &systems, &[], &[])
-            .unwrap()
-            .0;
+        let parent = select_principal_parent(&mol, &[], &systems, &[], &[]).unwrap();
         assert!(parent.ring_assembly.is_none());
         assert_eq!(parent.primary_path().len(), 12);
     }
@@ -1216,8 +1112,7 @@ mod tests {
                 &[],
                 &[],
             )
-            .unwrap()
-            .0;
+            .unwrap();
             assert_eq!(parent.primary_path().len(), atoms, "{smiles}");
             assert_eq!(parent.ring_assembly.unwrap().ring_count, rings, "{smiles}");
         }

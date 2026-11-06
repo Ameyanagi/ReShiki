@@ -2478,6 +2478,11 @@ mod tests {
                 R::PrincipalGroupTie,
             ),
             (
+                "NC(=O)CNC(=O)c1ccccc1",
+                "N-(2-amino-2-oxoethyl)benzamide",
+                R::PrincipalGroupTie,
+            ),
+            (
                 "CC[N+](C)(C)[S-]",
                 "N,N-dimethylethanamine sulfide",
                 R::AmineChalcogenide,
