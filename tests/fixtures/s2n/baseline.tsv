@@ -92,7 +92,7 @@ parity_text	drug	12	20
 parity_text	exploratory	1	1
 parity_text	fixtures	21	22
 parity_text	heterocycle	24	25
-parity_text	integration	16	16
+parity_text	integration	15	16
 parity_text	mr_assembly	3	10
 parity_text	mr_bridged	14	14
 parity_text	mr_fused	18	18
@@ -105,4 +105,4 @@ parity_text	roundtrip	73	77
 parity_text	stereo	14	16
 parity_text	suffix_on_ring	20	20
 parity_text	unit	47	52
-parity_text	total	374	431
+parity_text	total	373	431

@@ -1,16 +1,20 @@
 //! Retained fused-parent production gate and derivative admission policies.
 use super::{
+    additive::retained_suffix_hydrogen_state,
     assembly_parts::{RetainedParentMetadata, SubstituentItem},
     fusion::{
         exocyclic::is_neutral_external_pi_ligand,
         mancude::suffix_hydrogen_state,
         numbering::{RETAINED_PARENT_BOND_CAPACITY_ERROR, retained_template_parent_bond_model},
     },
+    locants::retained_locant_sort_key,
     molecule::{AtomSet, Molecule},
     perception::PerceivedGroup,
     retained_derivative_hydrogen::prove_retained_oxo_carbon_hydrogen,
     retained_fused_templates::{
-        GRAPH_DATA, MatchOptions, is_saturated_site, match_retained_graph_templates_with_options,
+        GRAPH_DATA, MatchOptions, is_saturated_site,
+        match_retained_graph_template_maps_with_options,
+        match_retained_graph_templates_with_options,
     },
     retained_graph_model::RetainedGraphTemplateMatch,
     retained_name_policy::retained_parent_name_policy,
@@ -177,6 +181,89 @@ pub fn production_retained_fused_parent(
     let Some(first) = matches.first() else {
         return Ok(None);
     };
+    if principal_key == Some("ketone")
+        && first.template.indicated_hydrogen_count() > 0
+        && parent_atoms.iter().all(|id| mol.atoms[id].charge == 0)
+    {
+        let suffix: AtomSet = perceived_groups
+            .iter()
+            .filter(|g| g.key == "ketone" && parent_atoms.contains(&g.attachment_carbon))
+            .map(|g| g.attachment_carbon)
+            .collect();
+        // P-58.2: admit reduced sites with the parent H seed intact;
+        // suffix composition below determines its permissible relocation.
+        let alternatives = eligible(
+            mol,
+            &parent_atoms,
+            match_retained_graph_template_maps_with_options(
+                mol,
+                &parent_atoms,
+                &first.template,
+                true,
+                false,
+            ),
+            principal_key,
+            required_suffix_state.as_ref(),
+        )?;
+        let keys = |sites: Vec<&String>| {
+            let mut keys: Vec<_> = sites
+                .into_iter()
+                .map(|l| retained_locant_sort_key(l))
+                .collect();
+            keys.sort();
+            keys
+        };
+        let mut candidates = Vec::new();
+        for m in matches
+            .iter()
+            .chain(&alternatives)
+            .filter(|m| m.template.name == first.template.name)
+        {
+            let Some((indicated, _, state)) = retained_suffix_hydrogen_state(
+                mol,
+                &m.template,
+                &parent_atoms,
+                &suffix,
+                &m.atom_to_locant,
+                &m.indicated_h,
+            )?
+            else {
+                continue;
+            };
+            // P-59.1.10 / P-14.4: compare permissible P-58.2 assignments
+            // by indicated H, principal groups, added H, then hydro prefixes.
+            let rank = (
+                keys(indicated.iter().collect()),
+                keys(suffix.iter().map(|id| &m.atom_to_locant[id]).collect()),
+                keys(
+                    state
+                        .bond_delta
+                        .added_hydrogen_operations
+                        .iter()
+                        .flat_map(|op| &op.locants)
+                        .collect(),
+                ),
+                keys(
+                    state
+                        .hydro_operations
+                        .iter()
+                        .flat_map(|op| &op.locants)
+                        .collect(),
+                ),
+            );
+            let mut m = m.clone();
+            m.indicated_h = indicated;
+            candidates.push((rank, m));
+        }
+        if let Some(best) = candidates.iter().map(|(rank, _)| rank).min().cloned() {
+            matches = candidates
+                .into_iter()
+                .filter(|(rank, _)| *rank == best)
+                .map(|(_, m)| m)
+                .collect();
+        }
+    }
+    let first = &matches[0];
     let parent_name = &first.template.name;
     let maps: Vec<_> = matches
         .iter()
