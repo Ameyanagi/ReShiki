@@ -589,9 +589,6 @@ pub fn read(text: &str) -> Result<Imported> {
         stereo::CoordinateBounds::NativeImport,
     )?;
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
-    if annotations.relative {
-        relative_stereo(&mut prepared.state)?;
-    }
     let mut dropped_cumulene_ez = false;
     for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {
         let [(a, _), (b, _)] = chain.ends;
@@ -599,6 +596,11 @@ pub fn read(text: &str) -> Result<Imported> {
             dropped_cumulene_ez = true;
             break;
         }
+    }
+    // After cumulene detection: an `r` group would make enantiomorphic ligands
+    // rank equal and hide the dropped E/Z.
+    if annotations.relative {
+        relative_stereo(&mut prepared.state)?;
     }
     // Native RemoveHs preserves properties on retained atoms. Keep the raw
     // values for the later depiction stage, which converts rank properties
