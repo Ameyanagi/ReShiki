@@ -777,7 +777,11 @@ fn amino_acid_xi_without_inherited_parity_keeps_the_generic_path() {
             "{name}"
         );
         assert!(
-            structure.graph.atoms.iter().all(|atom| atom.parity.is_none()),
+            structure
+                .graph
+                .atoms
+                .iter()
+                .all(|atom| atom.parity.is_none()),
             "{name}"
         );
     }
