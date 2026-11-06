@@ -943,7 +943,7 @@ mod tests {
             ("CC(=O)OC(C)=O", "acetic anhydride", NameStatus::Preferred),
             (
                 "CC(=O)OC(=O)CCC(=O)OC(C)=O",
-                "acetic 4-(acetyloxy)-4-oxobutanoic anhydride",
+                "4-(acetyloxy)-4-oxobutanoic acetic anhydride",
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
@@ -1121,15 +1121,26 @@ mod tests {
                 NameStatus::Preferred,
             ),
             // P-65.7.2: acids in alphanumerical order (P-14.5); issue #949.
+            // Only names without enclosing marks or italic letters are
+            // reordered; the others keep the string order, unverified.
             (
-                "O=C(OC(=O)c1ccc(Sc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
-                "4-phenoxybenzoic 4-(phenylsulfanyl)benzoic anhydride",
+                "CC(=O)OC(=O)C(Cl)C",
+                "acetic 2-chloropropanoic anhydride",
                 NameStatus::Preferred,
             ),
-            // A locant tie-break is left unverified.
+            (
+                "O=C(OC(=O)c1ccc(Sc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
+                "4-(phenylsulfanyl)benzoic 4-phenoxybenzoic anhydride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
             (
                 "O=C(OC(=O)CCCCCCCCC(Cl)C)C(Cl)CCCCCCCCC",
                 "10-chloroundecanoic 2-chloroundecanoic anhydride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
+            ),
+            (
+                "BrC1=CC=C2C(=N1)C=C(O2)C(=O)OC(=S)C2=C(C=1C=NC=CC1O2)Br",
+                "3-bromofuro[3,2-c]pyridine-2-carbothioic 5-bromofuro[3,2-b]pyridine-2-carboxylic anhydride",
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
@@ -1144,7 +1155,7 @@ mod tests {
             ),
             (
                 "CC(=O)OC(=O)c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "acetic 4-[4-(4-phenoxyphenoxy)phenoxy]benzoic anhydride",
+                "4-[4-(4-phenoxyphenoxy)phenoxy]benzoic acetic anhydride",
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
             (

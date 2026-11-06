@@ -3257,15 +3257,21 @@ pub(super) fn try_name_anhydride_component(
                     halves[1].1 = format!("{}-{}", mol.atoms[&path[2]].symbol, halves[1].1);
                 }
                 // P-65.7.2: the acids are cited in alphanumerical order by their
-                // Roman letters (P-14.5.1). Names with stereodescriptors, italic
-                // letters or compound locants such as 4a, and locant tie-breaks
-                // (P-14.5.4), keep the plain string order and stay unverified.
+                // Roman letters (P-14.5.1). Only names spelled from lowercase
+                // words, digits, hyphens and commas are ordered here. Enclosing
+                // marks, a lone letter (4a, o-, r), an italic word (tert) or a
+                // letter tie (P-14.5.4) keeps the plain string order, unverified.
                 let plain = |name: &str| {
-                    !name.contains(|c: char| c.is_uppercase() || c == 'ξ')
-                        && !name
-                            .as_bytes()
-                            .windows(2)
-                            .any(|w| w[0].is_ascii_digit() && w[1].is_ascii_lowercase())
+                    name.chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-,".contains(c))
+                        && name.split(|c: char| !c.is_ascii_lowercase()).all(|word| {
+                            word.len() != 1
+                                && ![
+                                    "tert", "sec", "cis", "trans", "endo", "exo", "syn", "anti",
+                                    "rel", "rac", "meso", "erythro", "threo",
+                                ]
+                                .contains(&word)
+                        })
                 };
                 let keys = halves.each_ref().map(|half| {
                     substituent_sort_key(&half.0)
@@ -3888,7 +3894,7 @@ mod tests {
             ("CC(=O)OC(C)=O", "acetic anhydride", true),
             (
                 "CC(=O)OC(=O)CCC(=O)OC(C)=O",
-                "acetic 4-(acetyloxy)-4-oxobutanoic anhydride",
+                "4-(acetyloxy)-4-oxobutanoic acetic anhydride",
                 false,
             ),
         ] {
