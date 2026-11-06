@@ -706,7 +706,7 @@ fn cited_indicated_hydrogens(
     bond_model: &ParentBondModel,
 ) -> Result<Vec<String>, String> {
     let locants: BTreeMap<_, _> = numbering.abstract_atom_to_locant.iter().cloned().collect();
-    let candidates = parent_hydrogen_candidates(mol, ast, &locants);
+    let candidates = parent_hydrogen_candidates(mol, ast, &locants, bond_model);
     let mut unpaired = AtomSet::new();
     for assignment in &bond_model.allowed_kekule_assignments {
         let paired = assignment.paired_atoms();

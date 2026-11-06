@@ -80,7 +80,7 @@ fn descriptor_ester_prefix(
     }
     let mut blocked = context.sub_exclude.clone();
     blocked.insert(terminal.atom);
-    let branch = name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom))?;
+    let branch = name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom), false)?;
     let mut ligand = element_ligand(branch, &terminal.element)?;
     for linker in linkers[..linkers.len() - 1].iter().rev() {
         ligand = element_ligand(
@@ -143,7 +143,7 @@ fn central_chalcogen_linkage_prefix(
             let mut blocked = context.sub_exclude.clone();
             blocked.insert(terminal.atom);
             element_ligand(
-                name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom))?,
+                name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom), false)?,
                 &terminal.element,
             )?
         } else {
@@ -286,7 +286,7 @@ pub fn ester_prefix_from_group(
     };
     let mut blocked = exclude.clone();
     blocked.insert(oxygen);
-    let branch = name_subgraph_rendered(mol, root, &blocked, Some(oxygen))?;
+    let branch = name_subgraph_rendered(mol, root, &blocked, Some(oxygen), false)?;
     if RULES.prefixes.peroxy_ester_groups.contains(&group.key) {
         return Ok(format!(
             "({}peroxycarbonyl)",

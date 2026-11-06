@@ -233,7 +233,6 @@ mod tests {
             "CCC[As-](C)",
             "CCC[Sb-](C)(C)C",
             "CCC[SH2-]",
-            "CCC[SeH2+]",
             "CCC[TeH2-]",
             "CCC[ClH+]",
             "CCC[IH-]",
@@ -269,6 +268,7 @@ mod tests {
             ("CC(=O)[O-]", "acetate"),
             ("C[S-]", "methanethiolate"),
             ("C[SeH]", "methaneselenol"),
+            ("CCC[SeH2+]", "propylselanium"),
             ("CS", "methanethiol"),
             ("C[PH2]", "phosphanylmethane"),
             ("C[SH2]C", "dimethyl-lambda4-sulfane"),
@@ -277,7 +277,7 @@ mod tests {
             ("[NH4+]", "ammonium"),
             ("[O-2]", "oxide"),
             ("[Ca+2]", "calcium(2+)"),
-            ("[N-]1[NH+]=CC=C1", "1H-pyrazol-1-ide-2-ium"),
+            ("[N-]1[NH+]=CC=C1", "1H-pyrazol-2-ium-1-ide"),
         ] {
             assert_eq!(
                 name_smiles(smiles).map(|name| name.text).as_deref(),

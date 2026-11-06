@@ -1,7 +1,9 @@
 //! Parent numbering criteria ported from Python `numbering.py`.
 use super::{
     assembly_prefixes::substituent_sort_key,
-    locants::{LocantKey, get_atom_locants, get_bond_locants, retained_locant_sort_key},
+    locants::{
+        LocantKey, get_atom_locants, get_bond_locants, parse_locant, retained_locant_sort_key,
+    },
     molecule::{AtomSet, Molecule},
     rules::{elements, retained},
 };
@@ -15,6 +17,95 @@ pub struct NumberingTopology {
     pub is_bicycle: bool,
     pub is_spiro: bool,
     pub is_polycycle: bool,
+}
+
+/// Comparisons used only after every existing parent-numbering criterion ties.
+#[derive(Default)]
+pub struct NumberingModifiers {
+    pub nitrogen_substituents: BTreeMap<usize, Vec<String>>,
+    pub ester_alcohols: BTreeMap<usize, String>,
+    pub acid_isotopes: Vec<(usize, String, u16)>,
+}
+
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
+struct ModifierPreference {
+    nitrogen_locants: Vec<usize>,
+    nitrogen_citation: Vec<usize>,
+    isotope_locants: Vec<Vec<LocantKey>>,
+    alcohol_citation: Vec<LocantKey>,
+}
+
+impl NumberingModifiers {
+    fn preference(&self, map: &BTreeMap<usize, String>) -> ModifierPreference {
+        let mut nitrogens: Vec<_> = self
+            .nitrogen_substituents
+            .iter()
+            .filter(|(carbon, _)| map.contains_key(carbon))
+            .collect();
+        nitrogens.sort_by_key(|(carbon, _)| parse_locant(&map[carbon]));
+        let mut nitrogen_locants = Vec::new();
+        let mut nitrogen_citation = Vec::new();
+        for (index, (_, names)) in nitrogens.into_iter().enumerate() {
+            for name in names {
+                nitrogen_locants.push(index);
+                nitrogen_citation.push((substituent_sort_key(name), index));
+            }
+        }
+        nitrogen_locants.sort();
+        nitrogen_citation.sort();
+        let mut alcohol_citation: Vec<_> = self
+            .ester_alcohols
+            .iter()
+            .filter_map(|(carbon, name)| {
+                map.get(carbon)
+                    .map(|locant| (substituent_sort_key(name), retained_locant_sort_key(locant)))
+            })
+            .collect();
+        alcohol_citation.sort();
+        let mut isotope_locants = Vec::new();
+        let mut isotopes_by_priority: BTreeMap<_, Vec<_>> = BTreeMap::new();
+        for (atom, symbol, mass) in &self.acid_isotopes {
+            if let Some(locant) = map.get(atom) {
+                let locant = retained_locant_sort_key(locant);
+                isotope_locants.push(locant.clone());
+                if let Some(element) = elements::get(symbol) {
+                    isotopes_by_priority
+                        .entry((element.atomic_number, *mass))
+                        .or_default()
+                        .push(locant);
+                }
+            }
+        }
+        isotope_locants.sort();
+        // P-82.5.2: all modified positions, then higher atomic and mass number.
+        let isotope_locants = std::iter::once(isotope_locants)
+            .chain(isotopes_by_priority.into_values().rev().map(|mut locants| {
+                locants.sort();
+                locants
+            }))
+            .collect();
+        ModifierPreference {
+            nitrogen_locants,
+            nitrogen_citation: nitrogen_citation
+                .into_iter()
+                .map(|(_, locant)| locant)
+                .collect(),
+            isotope_locants,
+            alcohol_citation: alcohol_citation
+                .into_iter()
+                .map(|(_, locant)| locant)
+                .collect(),
+        }
+    }
+
+    fn path_preference(&self, path: &[usize]) -> ModifierPreference {
+        let map = path
+            .iter()
+            .enumerate()
+            .map(|(index, &carbon)| (carbon, (index + 1).to_string()))
+            .collect();
+        self.preference(&map)
+    }
 }
 impl NumberingTopology {
     fn has_fixed_paths(self) -> bool {
@@ -154,8 +245,9 @@ impl NumberingPreference {
 #[allow(clippy::too_many_arguments)]
 fn number_parent(
     mol: &Molecule,
+    modifiers: &NumberingModifiers,
     candidate_paths: &[Vec<usize>],
-    principal_carbons: &AtomSet,
+    principal_carbons: &[usize],
     root: Option<usize>,
     substituent_mapping: &BTreeMap<usize, Vec<String>>,
     is_ring: bool,
@@ -203,7 +295,12 @@ fn number_parent(
             retained_name,
             topology,
         );
-        if evaluation.compare(&best_score, is_ring) == Ordering::Less {
+        if evaluation.compare(&best_score, is_ring).then_with(|| {
+            modifiers
+                .path_preference(candidate)
+                .cmp(&modifiers.path_preference(&best))
+        }) == Ordering::Less
+        {
             best = candidate.clone();
             best_score = evaluation;
         }
@@ -216,8 +313,9 @@ pub type ProvenHydrogenLocants = BTreeMap<Vec<(usize, String)>, (Vec<String>, Ve
 #[allow(clippy::too_many_arguments)]
 pub fn choose_parent_numbering(
     mol: &Molecule,
+    modifiers: &NumberingModifiers,
     candidate_paths: &[Vec<usize>],
-    principal_atoms: &AtomSet,
+    principal_atoms: &[usize],
     root: Option<usize>,
     substituent_mapping: &BTreeMap<usize, Vec<String>>,
     locant_maps: &[BTreeMap<usize, String>],
@@ -239,6 +337,7 @@ pub fn choose_parent_numbering(
             Vec<(String, LocantKey)>,
             Vec<(LocantKey, usize)>,
             Vec<usize>,
+            ModifierPreference,
         );
         let evaluate = |map: &BTreeMap<usize, String>| -> MapScore {
             let value = |idx: &usize| retained_locant_sort_key(&map[idx]);
@@ -361,6 +460,7 @@ pub fn choose_parent_numbering(
                 citation,
                 stereo,
                 stereochemistry_preference(mol, &path, false),
+                modifiers.preference(map),
             )
         };
         if let Some(chosen) = locant_maps.iter().min_by_key(|map| evaluate(map)).cloned() {
@@ -371,6 +471,7 @@ pub fn choose_parent_numbering(
     }
     let path = number_parent(
         mol,
+        modifiers,
         candidate_paths,
         principal_atoms,
         root,
@@ -392,7 +493,7 @@ pub fn choose_parent_numbering(
 fn numbering_preference(
     mol: &Molecule,
     path: &[usize],
-    principal: &AtomSet,
+    principal: &[usize],
     root: Option<usize>,
     substituents: &BTreeMap<usize, Vec<String>>,
     retained_name: Option<&str>,
@@ -407,7 +508,13 @@ fn numbering_preference(
             .copied()
             .collect(),
     );
-    let principal = get_atom_locants(path, principal);
+    // A parent atom can carry several external principal groups.
+    let mut principal: Vec<_> = principal
+        .iter()
+        .filter_map(|atom| path.iter().position(|candidate| candidate == atom))
+        .map(|position| position + 1)
+        .collect();
+    principal.sort_unstable();
     let hetero_by_priority = heteroatom_locants_by_priority(mol, path, !topology.has_fixed_paths());
     let indicated_hydrogen = get_atom_locants(
         path,
@@ -618,6 +725,89 @@ mod tests {
         graph_io::read_smiles,
     };
     use super::*;
+
+    #[test]
+    fn late_nitrogen_numbering_preserves_multiplicity_before_citation() {
+        let mol = read_smiles("CCC").unwrap();
+        let modifiers = NumberingModifiers {
+            nitrogen_substituents: BTreeMap::from([
+                (0, vec!["ethyl".into()]),
+                (2, vec!["methyl".into(), "methyl".into()]),
+            ]),
+            ..NumberingModifiers::default()
+        };
+        let path = number_parent(
+            &mol,
+            &modifiers,
+            &[vec![0, 1, 2]],
+            &[0, 2],
+            None,
+            &BTreeMap::new(),
+            false,
+            false,
+            None,
+            NumberingTopology::default(),
+        );
+        assert_eq!(path, vec![2, 1, 0]);
+
+        let modifiers = NumberingModifiers {
+            nitrogen_substituents: BTreeMap::from([
+                (0, vec!["methyl".into()]),
+                (2, vec!["ethyl".into()]),
+            ]),
+            ..NumberingModifiers::default()
+        };
+        assert!(modifiers.path_preference(&[2, 1, 0]) < modifiers.path_preference(&[0, 1, 2]));
+    }
+
+    #[test]
+    fn existing_carbon_numbering_precedes_late_nitrogen_and_alcohol_citation() {
+        let mol = read_smiles("CCCCC").unwrap();
+        let modifiers = NumberingModifiers {
+            nitrogen_substituents: BTreeMap::from([
+                (0, vec!["methyl".into()]),
+                (4, vec!["ethyl".into(), "ethyl".into()]),
+            ]),
+            ester_alcohols: BTreeMap::from([(0, "methyl".into()), (4, "ethyl".into())]),
+            ..NumberingModifiers::default()
+        };
+        for maps in [
+            Vec::new(),
+            vec![
+                BTreeMap::from([
+                    (0, "1".into()),
+                    (1, "2".into()),
+                    (2, "3".into()),
+                    (3, "4".into()),
+                    (4, "5".into()),
+                ]),
+                BTreeMap::from([
+                    (4, "1".into()),
+                    (3, "2".into()),
+                    (2, "3".into()),
+                    (1, "4".into()),
+                    (0, "5".into()),
+                ]),
+            ],
+        ] {
+            let (path, _) = choose_parent_numbering(
+                &mol,
+                &modifiers,
+                &[vec![4, 3, 2, 1, 0]],
+                &[0, 4],
+                None,
+                &BTreeMap::from([(1, vec!["methyl".into()])]),
+                &maps,
+                false,
+                None,
+                false,
+                NumberingTopology::default(),
+                None,
+            );
+            assert_eq!(path, vec![0, 1, 2, 3, 4]);
+        }
+    }
+
     #[test]
     fn ordinary_and_retained_numbering_prefer_m_to_p() {
         let mut mol = read_smiles("c1(-c2ccccc2)ccc(-c2ccccc2)cc1").unwrap();
@@ -633,8 +823,9 @@ mod tests {
         let substituents = BTreeMap::from([(0, vec!["phenyl".into()]), (9, vec!["phenyl".into()])]);
         let numbered = number_parent(
             &mol,
+            &NumberingModifiers::default(),
             &[other.clone(), preferred.clone()],
-            &AtomSet::new(),
+            &[],
             None,
             &substituents,
             true,
@@ -654,8 +845,9 @@ mod tests {
             .collect();
         let (numbered, map) = choose_parent_numbering(
             &mol,
+            &NumberingModifiers::default(),
             &[],
-            &AtomSet::new(),
+            &[],
             None,
             &substituents,
             &maps,
@@ -673,14 +865,15 @@ mod tests {
     #[test]
     fn double_bonds_take_low_locants_only_after_multiple_bonds_tie() {
         for (smiles, principal, expected) in [
-            ("C#CCC=C", AtomSet::new(), vec![4, 3, 2, 1, 0]),
-            ("C#CCC=C", AtomSet::from([0]), vec![0, 1, 2, 3, 4]),
-            ("C#CCC=CC", AtomSet::new(), vec![0, 1, 2, 3, 4, 5]),
+            ("C#CCC=C", vec![], vec![4, 3, 2, 1, 0]),
+            ("C#CCC=C", vec![0], vec![0, 1, 2, 3, 4]),
+            ("C#CCC=CC", vec![], vec![0, 1, 2, 3, 4, 5]),
         ] {
             let mol = read_smiles(smiles).unwrap();
             let path: Vec<_> = (0..mol.atoms.len()).collect();
             let numbered = number_parent(
                 &mol,
+                &NumberingModifiers::default(),
                 &[path],
                 &principal,
                 None,
@@ -695,13 +888,34 @@ mod tests {
     }
 
     #[test]
+    fn repeated_principal_groups_choose_the_lowest_locant_sequence() {
+        let mol = read_smiles("CC").unwrap();
+        for path in [vec![0, 1], vec![1, 0]] {
+            let numbered = number_parent(
+                &mol,
+                &NumberingModifiers::default(),
+                &[path],
+                &[0, 1, 1],
+                None,
+                &BTreeMap::new(),
+                false,
+                false,
+                None,
+                NumberingTopology::default(),
+            );
+            assert_eq!(numbered, [1, 0]);
+        }
+    }
+
+    #[test]
     fn principal_group_numbering_precedes_unsaturation() {
         let mol = read_smiles("C=CCCCO").unwrap();
         let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
         let numbered = number_parent(
             &mol,
+            &NumberingModifiers::default(),
             &paths,
-            &AtomSet::from([4]),
+            &[4],
             None,
             &BTreeMap::new(),
             false,
@@ -722,28 +936,28 @@ mod tests {
             (
                 "CC(C)[CH-]C(=O)C(C)C",
                 vec![0, 1, 3, 4, 6, 8],
-                AtomSet::from([4]),
+                vec![4],
                 vec![0, 1, 3, 4, 6, 8],
                 false,
             ),
             (
                 "[NH3+]CC[CH-]C#N",
                 vec![1, 2, 3],
-                AtomSet::from([1]),
+                vec![1],
                 vec![3, 2, 1],
                 false,
             ),
             (
                 "[C-]#CCCC(=O)[O-]",
                 vec![0, 1, 2, 3, 4],
-                AtomSet::from([4]),
+                vec![4],
                 vec![0, 1, 2, 3, 4],
                 false,
             ),
             (
                 "[CH-]1CCC(CC1)S(=O)(=O)[O-]",
                 vec![0, 1, 2, 3, 4, 5],
-                AtomSet::from([3]),
+                vec![3],
                 vec![0, 1, 2, 3, 4, 5],
                 true,
             ),
@@ -751,6 +965,7 @@ mod tests {
             let mol = read_smiles(smiles).unwrap();
             let (numbered, _) = choose_parent_numbering(
                 &mol,
+                &NumberingModifiers::default(),
                 &[path],
                 &principal,
                 None,
@@ -785,8 +1000,9 @@ mod tests {
             let mol = read_smiles(smiles).unwrap();
             let (numbered, _) = choose_parent_numbering(
                 &mol,
+                &NumberingModifiers::default(),
                 &[path],
-                &AtomSet::new(),
+                &[],
                 None,
                 &substituents,
                 &[],
@@ -815,8 +1031,9 @@ mod tests {
             .collect();
         let (numbered, map) = choose_parent_numbering(
             &mol,
+            &NumberingModifiers::default(),
             &[],
-            &AtomSet::from([3]),
+            &[3],
             None,
             &BTreeMap::new(),
             &maps,
@@ -855,12 +1072,12 @@ mod tests {
                 })
                 .collect();
             for locant_maps in [&[][..], maps.as_slice()] {
-                for (free_valence, principal, expected) in [
-                    (Some(root), AtomSet::new(), &rooted),
-                    (None, AtomSet::from([root]), &anionic),
-                ] {
+                for (free_valence, principal, expected) in
+                    [(Some(root), vec![], &rooted), (None, vec![root], &anionic)]
+                {
                     let (numbered, _) = choose_parent_numbering(
                         &mol,
+                        &NumberingModifiers::default(),
                         &paths,
                         &principal,
                         free_valence,
@@ -884,8 +1101,9 @@ mod tests {
         let preferred = vec![0, 5, 4, 3, 2, 1];
         let ordinary = number_parent(
             &mol,
+            &NumberingModifiers::default(),
             &[vec![0, 1, 2, 3, 4, 5]],
-            &AtomSet::new(),
+            &[],
             None,
             &BTreeMap::new(),
             true,
@@ -905,8 +1123,9 @@ mod tests {
             .collect();
         let (numbered, map) = choose_parent_numbering(
             &mol,
+            &NumberingModifiers::default(),
             &[],
-            &AtomSet::new(),
+            &[],
             None,
             &BTreeMap::new(),
             &maps,
@@ -926,8 +1145,9 @@ mod tests {
         let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let numbered = number_parent(
             &mol,
+            &NumberingModifiers::default(),
             &rings[0].paths,
-            &AtomSet::new(),
+            &[],
             None,
             &BTreeMap::new(),
             true,
@@ -952,8 +1172,9 @@ mod tests {
         let subs = BTreeMap::from([(1, vec!["methyl".into()]), (5, vec!["ethyl".into()])]);
         let numbered = number_parent(
             &mol,
+            &NumberingModifiers::default(),
             &[path],
-            &AtomSet::new(),
+            &[],
             None,
             &subs,
             false,
@@ -971,8 +1192,9 @@ mod tests {
         let system = &rings[0];
         let (path, map) = choose_parent_numbering(
             &mol,
+            &NumberingModifiers::default(),
             &system.paths,
-            &AtomSet::new(),
+            &[],
             None,
             &BTreeMap::new(),
             &[],

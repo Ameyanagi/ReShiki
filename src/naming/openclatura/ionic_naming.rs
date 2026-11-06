@@ -115,14 +115,13 @@ pub(super) fn prepare_anion_parent(
         return Ok(());
     }
     let zwitterion = ring_nitrogen_zwitterion(mol, parts, path, &sites);
-    // Multiple anionic skeletal centres can share the suffix. Keep the old
-    // boundary for parents that also carry a cationic centre: the renderer
-    // still cites `ide` before `ium` (P-74.1.1 puts `ium` first).
+    // Multiple anionic skeletal centres can share the suffix; their combination
+    // with skeletal cations remains outside the supported parent-anion scope.
     if negative.len() > 1 && sites.iter().any(|site| site.charge > 0) {
         return Ok(());
     }
     // Benzene is otherwise recognised only during assembly.
-    super::assembly_parent::promote_benzene_retained_name(parts);
+    super::assembly_parent::promote_retained_hydride_name(parts);
     // Contracted substituent stems (phenyl) have no anion spelling yet.
     // Parent numbering already assigns skeletal anions their low locants.
     let hydro = |key: &str| parts.hydro_operations.iter().any(|op| op.key == key);

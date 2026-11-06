@@ -1087,12 +1087,12 @@ mod tests {
             ),
             (
                 "CP(C)Cl",
-                "chlorodimethylphosphane",
+                "chlorodi(methyl)phosphane",
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
                 "COP(C)C",
-                "methoxydimethylphosphane",
+                "methoxydi(methyl)phosphane",
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
@@ -2349,10 +2349,10 @@ mod tests {
             ),
             (
                 "CP(C)(F)=O",
-                "fluorodimethylphosphane oxide",
+                "fluorodi(methyl)phosphane oxide",
                 R::FunctionalClass,
             ),
-            ("CN(C)Cl", "chlorodimethylazane", R::HydrideParent),
+            ("CN(C)Cl", "chlorodi(methyl)azane", R::HydrideParent),
             ("CC=NN", "acetaldehyde hydrazone", R::FunctionalClass),
             (
                 "ClC#[N+][O-]",
