@@ -17,8 +17,8 @@ use super::{
     parent_selection::select_principal_parent,
     principal_groups::{
         add_component_principal_group, candidate_principal_attachments, component_groups,
-        component_principal_key, demote_neutral_suffixes_for_skeletal_anion, equivalent_amide_keys,
-        partition_principal_and_prefix_groups,
+        component_principal_key, demote_neutral_suffixes_for_skeletal_anion, is_neutral_amide,
+        partition_principal_and_prefix_groups, selects_neutral_amides,
     },
     special_cases::{
         StructuralParentName, blocking_suffix_defers_to_chain_parent, single_atom_component_name,
@@ -282,31 +282,30 @@ fn component_pipeline(
     {
         return Ok(ComponentResult::Shortcut(result));
     }
-    // P-44.1 resolves amide/carboxamide through parent selection below; other
-    // neutral classes and rooted projections still use the first senior key.
     let seniority = |g: &super::perception::PerceivedGroup| {
         g.resolved_rule.as_ref().and_then(|r| r.seniority.clone())
     };
-    if let Some(selected) = groups
+    let selected = groups
         .iter()
-        .find(|g| Some(g.key.as_str()) == key.as_deref())
-        && selected
+        .find(|g| Some(g.key.as_str()) == key.as_deref());
+    let tied_group = |g: &&super::perception::PerceivedGroup| {
+        selected.is_some_and(|selected| {
+            g.is_principal_candidate && g.key != selected.key && seniority(g) == seniority(selected)
+        })
+    };
+    let principal_tie = selected.is_some_and(|selected| {
+        selected
             .atom_ids()
             .iter()
             .map(|id| mol.atoms[id].charge)
             .sum::<i32>()
             >= 0
-        && groups.iter().any(|g| {
-            g.is_principal_candidate
-                && g.key != selected.key
-                && seniority(g) == seniority(selected)
-                && !(projection.is_none() && equivalent_amide_keys(&g.key, &selected.key))
-        })
-    {
-        mol.mark_name(crate::naming::NameStatus::Unverified(
-            crate::naming::NameReason::PrincipalGroupTie,
-        ));
-    }
+    }) && groups.iter().any(|g| tied_group(&g));
+    let neutral_amide_tie = selects_neutral_amides(mol, &groups, key.as_deref())
+        && groups
+            .iter()
+            .filter(tied_group)
+            .all(|g| is_neutral_amide(mol, g));
 
     let base_exclude: AtomSet = mol
         .atoms
@@ -321,14 +320,27 @@ fn component_pipeline(
     let principal = candidate_principal_attachments(mol, &groups, key.as_deref());
     exclude_nonparent_group_atoms(mol, &groups, &mut exclude, &cyclic);
     exclude_nonparent_group_atoms(mol, &prefix_only_groups, &mut exclude, &cyclic);
-    let selection = if let Some(projection) = &projection {
-        super::namer::select_subgraph_parent(mol, projection.junction, component_atoms, &exclude)?
+    let (selection, single_group_ring_chain_tie) = if let Some(projection) = &projection {
+        (
+            super::namer::select_subgraph_parent(
+                mol,
+                projection.junction,
+                component_atoms,
+                &exclude,
+            )?,
+            false,
+        )
     } else {
         let chains = find_all_carbon_paths(mol, &exclude)?;
         let rings = find_ring_systems(mol, &exclude)?;
         select_principal_parent(mol, &chains, &rings, &principal, &groups)
             .ok_or("openclatura: no supported parent skeleton")?
     };
+    if principal_tie && !(neutral_amide_tie && single_group_ring_chain_tie) {
+        mol.mark_name(crate::naming::NameStatus::Unverified(
+            crate::naming::NameReason::PrincipalGroupTie,
+        ));
+    }
     let path = selection.primary_path();
     let parent = selection.atom_set();
     groups.retain(|g| parent.contains(&g.attachment_carbon));
@@ -664,6 +676,36 @@ fn collect_component_branch_substituents(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unresolved_amide_parents_keep_their_names_and_tie_status() {
+        use crate::naming::{NameReason, NameStatus};
+
+        for (smiles, expected) in [
+            ("[NH3+]C(=O)CNC(=O)c1ccccc1", "2-benzamidoacetamide"),
+            (
+                "[Cl-].[NH3+]C(=O)CNC(=O)c1ccccc1",
+                "2-benzamidoacetamide chloride",
+            ),
+            (
+                "NC(=O)CC(C(N)=O)(c1ccc(C(N)=O)cc1C(N)=O)CC(N)=O",
+                "4-(1,5-diamino-3-carbamoyl-1,5-dioxopentan-3-yl)benzene-1,3-dicarboxamide",
+            ),
+            (
+                "CC(=O)Nc1ncc(C(=O)Nc2ccc(C(N)=O)cn2)o1",
+                "2-acetamido-N-(5-carbamoylpyridin-2-yl)-1,3-oxazole-5-carboxamide",
+            ),
+            ("NC(=O)C(NC(=O)c1ccccc1)C(N)=O", "2-benzamidopropanediamide"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::Unverified(NameReason::PrincipalGroupTie),
+                "{smiles}"
+            );
+        }
+    }
+
     #[test]
     fn unresolved_principal_classes_keep_their_tie_status() {
         use crate::naming::{NameReason, NameStatus};

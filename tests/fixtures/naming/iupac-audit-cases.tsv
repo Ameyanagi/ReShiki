@@ -696,9 +696,16 @@ CC(C)CC(=O)Nc1ccc(NC(=O)c2cccnc2Sc2ccccc2)cc1	N-[4-(3-methylbutanamido)phenyl]-2
 c1c(NC(=O)c2cccnc2Sc2ccccc2)ccc(NC(CC(C)C)=O)c1	N-[4-(3-methylbutanamido)phenyl]-2-(phenylsulfanyl)pyridine-3-carboxamide	preferred	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-44.1.2.2 https://iupac.qmul.ac.uk/BlueBook/P4.html#44010202	issue #953	pass
 CC(C)[C@H](NC(=O)c1ccc(Cl)cc1)C(=O)NCCC1=CCCCC1	4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide	preferred	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-44.1.2.2 https://iupac.qmul.ac.uk/BlueBook/P4.html#44010202	issue #953	pass
 CC([C@@H](C(NCCC1=CCCCC1)=O)NC(c1ccc(Cl)cc1)=O)C	4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide	preferred	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-44.1.2.2 https://iupac.qmul.ac.uk/BlueBook/P4.html#44010202	issue #953	pass
-NC(=O)C(NC(=O)c1ccccc1)C(N)=O	2-benzamidopropanediamide	preferred	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-44.1.2.2 https://iupac.qmul.ac.uk/BlueBook/P4.html#44010202	issue #953	pass
+# Multiple amides remain unverified: this patch certifies only complete one-per-parent ring/chain ties.
+NC(=O)C(NC(=O)c1ccccc1)C(N)=O	2-benzamidopropanediamide	unverified	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-44.1.2.2 https://iupac.qmul.ac.uk/BlueBook/P4.html#44010202	issue #953	pass
 CC(=O)Nc1ccc(C(N)=O)cc1	4-acetamidobenzamide	preferred	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-44.1.2.2 https://iupac.qmul.ac.uk/BlueBook/P4.html#44010202	issue #953	pass
 CC(=O)NCCNC(=O)CC	N-(2-acetamidoethyl)propanamide	preferred	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-44.1.2.2 https://iupac.qmul.ac.uk/BlueBook/P4.html#44010202	issue #953	pass
 CNC(=O)C(=O)NCC	N-ethyl-N'-methylethanediamide	not_preferred	P-66.1.1.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P6a.html#660101010201 (unretained oxamide parent; house N/N' spelling)	issue #953	pass
 CCNC(=O)C(=O)Nc1ccccc1	N-ethyl-N'-phenylethanediamide	not_preferred	P-66.1.1.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P6a.html#660101010201 (unretained oxamide parent; house N/N' spelling)	issue #953	pass
 NC(=O)CNC(=O)c1ccccc1	N-(2-amino-2-oxoethyl)benzamide	preferred	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-44.1.2.2 https://iupac.qmul.ac.uk/BlueBook/P4.html#44010202	issue #953	pass
+# The existing parent choices below remain unverified pending complete polyamide counting and ring seniority.
+NC(=O)CC(C(N)=O)(c1ccc(C(N)=O)cc1C(N)=O)CC(N)=O	4-(1,5-diamino-3-carbamoyl-1,5-dioxopentan-3-yl)benzene-1,3-dicarboxamide	unverified	P-44.1.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440101; P-66.1.1.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P6a.html#660101010102	issue #953	pass
+CC(=O)Nc1ncc(C(=O)Nc2ccc(C(N)=O)cn2)o1	2-acetamido-N-(5-carbamoylpyridin-2-yl)-1,3-oxazole-5-carboxamide	unverified	P-44.2.1 https://iupac.qmul.ac.uk/BlueBook/P4.html#440201; P-66.1.1.4.3 https://iupac.qmul.ac.uk/BlueBook/P6a.html#6601010403	issue #953	pass
+# Main's amidium renderer loses the charge; the reconstruction gate must continue refusing these names.
+[NH3+]C(=O)CNC(=O)c1ccccc1		refuse	P-73.7(a) https://iupac.qmul.ac.uk/BlueBook/P7.html#7307; P-73.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010201	issue #953	pass
+[Cl-].[NH3+]C(=O)CNC(=O)c1ccccc1		refuse	P-73.7(a) https://iupac.qmul.ac.uk/BlueBook/P7.html#7307; P-73.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010201	issue #953	pass

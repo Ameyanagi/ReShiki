@@ -35,6 +35,8 @@ const CURATED: &[&str] = &[
     "[NH3+]CC(=O)[O-]",
     "C[N+](C)(C)CC(=O)[O-]",
     "C[NH2+]C",
+    "[NH3+]C(=O)CNC(=O)c1ccccc1",
+    "[Cl-].[NH3+]C(=O)CNC(=O)c1ccccc1",
     "[O-][N+](=O)c1ccccc1",
     "O=C(O)[C@H](O)[C@H](O)C(=O)O",
     "C[C@H](O)[C@@H](O)C",
@@ -192,6 +194,8 @@ fn atom_order_keeps_name_and_status() {
 
 #[test]
 fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
+    use crate::naming::NameReason;
+
     let mut parser = Measurements::default();
     let mut failures = Vec::new();
     for (smiles, expected, status) in [
@@ -218,7 +222,17 @@ fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
         (
             "NC(=O)C(NC(=O)c1ccccc1)C(N)=O",
             "2-benzamidopropanediamide",
-            NameStatus::Preferred,
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "NC(=O)CC(C(N)=O)(c1ccc(C(N)=O)cc1C(N)=O)CC(N)=O",
+            "4-(1,5-diamino-3-carbamoyl-1,5-dioxopentan-3-yl)benzene-1,3-dicarboxamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "CC(=O)Nc1ncc(C(=O)Nc2ccc(C(N)=O)cn2)o1",
+            "2-acetamido-N-(5-carbamoylpyridin-2-yl)-1,3-oxazole-5-carboxamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
         ),
         (
             "CC(=O)Nc1ccc(C(N)=O)cc1",

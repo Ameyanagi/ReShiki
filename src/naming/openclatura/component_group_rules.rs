@@ -2,7 +2,7 @@
 use super::molecule::{AtomSet, Molecule};
 use super::nomenclature::RULES;
 use super::perception::{LigandRole, PerceivedGroup};
-use super::principal_groups::equivalent_amide_keys;
+use super::principal_groups::{is_neutral_amide, selects_neutral_amides};
 
 /// The registry's ring-carboxylate key also represents neutral esters, so the
 /// descriptor, rather than that key alone, establishes an acid anion prefix.
@@ -101,13 +101,14 @@ pub fn retarget_external_carbonyl_groups(
     let selects_carboxylate = groups.iter().any(|g| {
         g.is_principal_candidate && Some(g.key.as_str()) == principal_key && is_carboxylate_group(g)
     });
+    let neutral_amides = selects_neutral_amides(m, groups, principal_key);
     for g in groups {
         // Only an established prefix excludes an acid-anion carbon. Other
         // carboxylates must remain available as parent candidates.
         let prefix_carboxylate = principal_key.is_none() && is_carboxylate_group(g);
         if g.is_principal_candidate
             && (Some(g.key.as_str()) == principal_key
-                || principal_key.is_some_and(|key| equivalent_amide_keys(&g.key, key))
+                || neutral_amides && is_neutral_amide(m, g)
                 || selects_carboxylate && is_carboxylate_group(g))
             || !(prefix_carboxylate
                 || g.resolved_rule

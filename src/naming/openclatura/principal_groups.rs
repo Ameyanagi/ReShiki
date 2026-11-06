@@ -99,9 +99,27 @@ fn neutral_anion_seniority(group: &PerceivedGroup) -> Option<&[i64]> {
         .and_then(|r| r.seniority.as_deref())
 }
 
-/// P-44.1: amide and carboxamide are suffix spellings of the same principal class.
-pub fn equivalent_amide_keys(left: &str, right: &str) -> bool {
-    matches!(left, "amide" | "ring_amide") && matches!(right, "amide" | "ring_amide")
+/// P-44.1: neutral amide and carboxamide share a principal class; amidium does not.
+pub fn is_neutral_amide(mol: &Molecule, group: &PerceivedGroup) -> bool {
+    matches!(group.key.as_str(), "amide" | "ring_amide")
+        && group
+            .atom_ids()
+            .iter()
+            .map(|id| mol.atoms[id].charge)
+            .sum::<i32>()
+            == 0
+}
+
+pub fn selects_neutral_amides(
+    mol: &Molecule,
+    groups: &[PerceivedGroup],
+    key: Option<&str>,
+) -> bool {
+    let mut selected = groups
+        .iter()
+        .filter(|g| g.is_principal_candidate && Some(g.key.as_str()) == key);
+    selected.next().is_some_and(|g| is_neutral_amide(mol, g))
+        && selected.all(|g| is_neutral_amide(mol, g))
 }
 
 /// Equivalent amide and anionic suffix classes remain candidates until
@@ -114,6 +132,7 @@ pub fn candidate_principal_attachments(
     let selected = groups
         .iter()
         .find(|g| g.is_principal_candidate && Some(g.key.as_str()) == key);
+    let neutral_amides = selects_neutral_amides(mol, groups, key);
     let anionic = |g: &PerceivedGroup| {
         g.atom_ids()
             .iter()
@@ -126,7 +145,7 @@ pub fn candidate_principal_attachments(
         .filter(|g| {
             g.is_principal_candidate
                 && (Some(g.key.as_str()) == key
-                    || key.is_some_and(|key| equivalent_amide_keys(&g.key, key))
+                    || neutral_amides && is_neutral_amide(mol, g)
                     || selected.is_some_and(|selected| {
                         anionic(selected)
                             && anionic(g)
@@ -332,6 +351,49 @@ mod tests {
             assert_eq!(
                 candidate_principal_attachments(&mol, &groups, key.as_deref()).len(),
                 1,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn charged_amides_do_not_expand_the_selected_suffix_class() {
+        use super::super::{
+            component_group_rules::retarget_external_carbonyl_groups, graph_io::read_smiles,
+        };
+        for smiles in [
+            "[NH3+]C(=O)CNC(=O)c1ccccc1",
+            "NC(=O)C[NH2+]C(=O)c1ccccc1",
+            "NC(=O)CN(CC(=O)[NH3+])C(=O)c1ccccc1",
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let mut groups = perceive_groups(&mol);
+            let key = component_principal_key(&mol, &groups, false);
+            assert!(
+                !selects_neutral_amides(&mol, &groups, key.as_deref()),
+                "{smiles}"
+            );
+            let expected: Vec<_> = groups
+                .iter()
+                .filter(|g| g.is_principal_candidate && Some(g.key.as_str()) == key.as_deref())
+                .map(|g| g.attachment_carbon)
+                .collect();
+            assert!(!expected.is_empty(), "{smiles}");
+            assert_eq!(
+                candidate_principal_attachments(&mol, &groups, key.as_deref()),
+                expected,
+                "{smiles}"
+            );
+            retarget_external_carbonyl_groups(
+                &mol,
+                &mut groups,
+                key.as_deref(),
+                &mut AtomSet::new(),
+                &get_cyclic_atoms(&mol, &AtomSet::new()),
+            );
+            assert_eq!(
+                candidate_principal_attachments(&mol, &groups, key.as_deref()),
+                expected,
                 "{smiles}"
             );
         }
