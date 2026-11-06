@@ -158,12 +158,14 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
 }
 
 /// Nonitalic Roman letters, then locants (italic element locants before numerals).
-type SaltIonKey = (String, Vec<(bool, usize, String)>);
+type SaltIonKey = (String, Option<Vec<(bool, usize, String)>>);
 
 /// P-14.5 key of a cited ion name: Roman letters first, then locants at the
 /// first difference. `None` for spellings it does not cover: non-ASCII marks,
 /// lambda, superscripts, brackets holding descriptors (fusion letters,
 /// ring-assembly or von Baeyer locants) and composite or unknown italic locants.
+/// Locants are compared only in names with no enclosing marks or tert/sec, where
+/// every locant is a primary one and no italic descriptor precedes them (P-14.5.3).
 fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
     // Enclosing brackets always hold parentheses; other brackets are descriptors.
     let descriptor_bracket = name
@@ -174,6 +176,7 @@ fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
         return None;
     }
     let (mut letters, mut locants) = (String::new(), Vec::new());
+    let mut primary_locants = !name.contains('(');
     for token in name.split(|c: char| !c.is_ascii_alphanumeric() && c != '\'') {
         let digits = token
             .find(|c: char| !c.is_ascii_digit())
@@ -195,11 +198,13 @@ fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
             locants.push((false, 0, token.to_owned()));
         } else if token.starts_with(|c: char| c.is_ascii_uppercase()) || token.contains('\'') {
             return None;
-        } else if !matches!(token, "tert" | "sec") {
+        } else if matches!(token, "tert" | "sec") {
+            primary_locants = false;
+        } else {
             letters.push_str(token);
         }
     }
-    Some((letters, locants))
+    Some((letters, primary_locants.then_some(locants)))
 }
 
 pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, String> {
@@ -233,12 +238,19 @@ pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, Strin
         ions.push((q < 0, name, component, key));
     }
     // Ions of one sign are ordered by the key; when any of them has no key or
-    // two different names tie, main's character order stays and is unverified.
+    // two different names are not told apart by it, main's character order
+    // stays and is unverified.
     let ordered = ions.iter().all(|(negative, name, _, key)| {
         ions.iter().all(|other| {
             other.0 != *negative
                 || other.1.text == name.text
-                || key.is_some() && other.3.is_some() && *key != other.3
+                || match (key, &other.3) {
+                    (Some((a, a_locants)), Some((b, b_locants))) => {
+                        a != b
+                            || a_locants.is_some() && b_locants.is_some() && a_locants != b_locants
+                    }
+                    _ => false,
+                }
         })
     });
     let mut grouped = BTreeMap::new();
@@ -355,6 +367,15 @@ mod tests {
                 NameStatus::Unverified(NameReason::SaltIonOrder),
                 "{smiles}"
             );
+        }
+        // Letter ties that need internal locants or tert/sec are not ordered.
+        for (first, second) in [
+            ("2-(3-chloropropyl)octanoate", "2-chloro-2-propyloctanoate"),
+            ("2-butylanilinium", "N-(tert-butyl)anilinium"),
+        ] {
+            let (first, second) = (salt_ion_sort_key(first), salt_ion_sort_key(second));
+            assert_eq!(first.as_ref().unwrap().0, second.as_ref().unwrap().0);
+            assert!(first.unwrap().1.is_none() || second.unwrap().1.is_none());
         }
         // One stereospecified ion per sign leaves nothing to order.
         let name = name_salt("C[C@@H](CC)[NH3+].[Cl-]", IsotopeStyle::Iupac).unwrap();
