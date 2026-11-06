@@ -226,6 +226,40 @@ pub fn promote_retained_hydride_name(parts: &mut AssemblyParts) {
         parts.retained_name = Some("anisole".into());
         parts.substituents.clear();
     }
+    // P-22.1.3 retains toluene and the three xylenes as unsubstituted PINs.
+    if parts.retained_name.as_deref() != Some("benzene")
+        || parts.is_substituent
+        || parts.principal_group.is_some()
+        || !parts.parent_charges.is_empty()
+        || parts.isotope_explicit_locants
+        || parts
+            .parent_atom_isotopes_by_locant
+            .values()
+            .any(Option::is_some)
+        || !parts.unsaturations.is_empty()
+        || !parts.hydro_operations.is_empty()
+        || !parts.indicated_hydrogens.is_empty()
+        || parts.substituents.iter().any(|item| item.name != "methyl")
+    {
+        return;
+    }
+    // Benzene locants are single digits.
+    let locants: Vec<_> = parts
+        .substituents
+        .iter()
+        .flat_map(|item| &item.locants)
+        .map(|locant| locant.as_bytes()[0] - b'0')
+        .collect();
+    let retained = match locants.as_slice() {
+        [_] => "toluene".into(),
+        [a, b] => {
+            let distance = a.abs_diff(*b);
+            format!("1,{}-xylene", distance.min(6 - distance) + 1)
+        }
+        _ => return,
+    };
+    parts.retained_name = Some(retained);
+    parts.substituents.clear();
 }
 /// Select the retained anion parent before promotion so a missed application
 /// remains visible to the derivation assessor.
@@ -1257,7 +1291,134 @@ fn assembly_suffix_stem(parts: &AssemblyParts, elide: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::assembly_parts::{SubstituentItem, UnsaturationItem};
     use super::*;
+
+    fn methylbenzene_parts(locants: &[&str]) -> AssemblyParts {
+        let mut parts = AssemblyParts::new(6);
+        parts.is_ring = true;
+        parts.unsaturations.push(UnsaturationItem {
+            bond_key: "double".into(),
+            locants: vec!["1".into(), "3".into(), "5".into()],
+            ..Default::default()
+        });
+        parts.substituents.push(SubstituentItem::new(
+            "methyl",
+            locants.iter().map(|&locant| locant.into()).collect(),
+        ));
+        parts
+    }
+
+    #[test]
+    fn methylbenzene_retained_names_follow_ring_separation() {
+        for (locants, expected) in [
+            (vec!["1"], "toluene"),
+            (vec!["1", "2"], "1,2-xylene"),
+            (vec!["1", "3"], "1,3-xylene"),
+            (vec!["1", "4"], "1,4-xylene"),
+            (vec!["6", "1"], "1,2-xylene"),
+            (vec!["2", "4"], "1,3-xylene"),
+            (vec!["5", "2"], "1,4-xylene"),
+        ] {
+            for grouped in [false, true] {
+                let mut parts = methylbenzene_parts(&locants);
+                if !grouped {
+                    parts.substituents = locants
+                        .iter()
+                        .map(|&locant| SubstituentItem::new("methyl", vec![locant.into()]))
+                        .collect();
+                }
+                assert_eq!(
+                    super::super::assembler::assemble_name_raw(&mut parts).unwrap(),
+                    expected,
+                    "{locants:?}, grouped={grouped}"
+                );
+                assert!(parts.substituents.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn methylbenzene_retained_names_require_plain_methyl_substitution() {
+        for locants in [vec!["1", "2", "3"], vec!["1", "3", "5"]] {
+            let mut parts = methylbenzene_parts(&locants);
+            promote_retained_hydride_name(&mut parts);
+            assert_eq!(
+                parts.retained_name.as_deref(),
+                Some("benzene"),
+                "{locants:?}"
+            );
+            assert_eq!(parts.substituents[0].locants.len(), locants.len());
+        }
+        for name in [
+            "ethyl",
+            "chloromethyl",
+            "(methyl)",
+            "methylium",
+            "(methyl-d3)",
+        ] {
+            let mut parts = methylbenzene_parts(&["1"]);
+            parts.substituents[0].name = name.into();
+            promote_retained_hydride_name(&mut parts);
+            assert_eq!(parts.retained_name.as_deref(), Some("benzene"), "{name}");
+            assert_eq!(parts.substituents[0].name, name);
+        }
+        let mut parts = methylbenzene_parts(&["1"]);
+        parts
+            .substituents
+            .push(SubstituentItem::new("chloro", vec!["4".into()]));
+        promote_retained_hydride_name(&mut parts);
+        assert_eq!(parts.retained_name.as_deref(), Some("benzene"));
+        assert_eq!(parts.substituents.len(), 2);
+    }
+
+    #[test]
+    fn methylbenzene_retained_names_exclude_functional_ionic_and_isotope_parents() {
+        use super::super::assembly_parts::{ParentChargeItem, PrincipalGroupItem};
+        type Guard = fn(&mut AssemblyParts);
+        let guards: &[(&str, Guard)] = &[
+            ("substituent", |p| p.is_substituent = true),
+            ("benzoic acid", |p| {
+                p.principal_group = Some(PrincipalGroupItem::new(
+                    "ring_carboxylic_acid",
+                    vec!["1".into()],
+                ))
+            }),
+            ("sulfonic acid", |p| {
+                p.principal_group = Some(PrincipalGroupItem::new("sulfonic_acid", vec!["1".into()]))
+            }),
+            ("parent cation", |p| {
+                p.parent_charges.push(ParentChargeItem {
+                    charge: 1,
+                    ..Default::default()
+                })
+            }),
+            ("parent anion", |p| {
+                p.parent_charges.push(ParentChargeItem {
+                    charge: -1,
+                    ..Default::default()
+                })
+            }),
+            ("isotope adapter", |p| p.isotope_explicit_locants = true),
+            ("parent isotope", |p| {
+                p.parent_atom_isotopes_by_locant
+                    .insert("2".into(), Some(13));
+            }),
+        ];
+        for locants in [vec!["1"], vec!["1", "4"]] {
+            for &(label, guard) in guards {
+                let mut parts = methylbenzene_parts(&locants);
+                guard(&mut parts);
+                promote_retained_hydride_name(&mut parts);
+                assert_eq!(
+                    parts.retained_name.as_deref(),
+                    Some("benzene"),
+                    "{label}, {locants:?}"
+                );
+                assert_eq!(parts.substituents[0].locants.len(), locants.len());
+            }
+        }
+    }
 
     #[test]
     fn acetylene_is_reserved_for_the_unmodified_parent() {

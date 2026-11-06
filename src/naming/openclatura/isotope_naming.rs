@@ -382,6 +382,7 @@ pub(super) fn name_smiles(smiles: &str, style: IsotopeStyle) -> Result<Name, Str
         return Err("openclatura: polonium nomenclature is not validated".into());
     }
     super::validate_parent(&parent)?;
+    parent.mark_isotope_parent();
     let atoms = parent.atoms.keys().copied().collect();
     let base = component_namer::name_component_with_atom_locants(&parent, &atoms, Some(&source))?;
     let locants = &base.locants;
@@ -548,6 +549,15 @@ mod tests {
                 "{smiles}"
             );
         }
+    }
+
+    #[test]
+    fn isotopic_onium_keeps_the_ordinary_parent_plan() {
+        // The sulfanium shortcut has no atom locants for the isotope descriptor.
+        let smiles = "[13CH3][S+](C)C";
+        let name = name_smiles(smiles, IsotopeStyle::Iupac).unwrap();
+        assert_eq!(name.text, "(dimethylsulfaniumyl)(1-13C)methane");
+        verify(smiles, &name.text).unwrap();
     }
 
     #[test]
