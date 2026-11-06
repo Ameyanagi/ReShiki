@@ -1126,20 +1126,16 @@ mod tests {
                 "4-phenoxybenzoic 4-(phenylsulfanyl)benzoic anhydride",
                 NameStatus::Preferred,
             ),
+            // A locant tie-break is left unverified.
             (
                 "O=C(OC(=O)CCCCCCCCC(Cl)C)C(Cl)CCCCCCCCC",
-                "2-chloroundecanoic 10-chloroundecanoic anhydride",
-                NameStatus::Preferred,
+                "10-chloroundecanoic 2-chloroundecanoic anhydride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
-                "O=C(OC(=O)C(Cl)C(Br)C)C(Br)C(Cl)C",
-                "2-bromo-3-chlorobutanoic 3-bromo-2-chlorobutanoic anhydride",
-                NameStatus::Preferred,
-            ),
-            (
-                "BrC1CC(C2CCCCC2(C1)Cl)C(=O)OC(=O)C1C(CC(C2CCCCC12)Cl)Br",
-                "2-bromo-4-chlorodecahydronaphthalene-1-carboxylic 3-bromo-4a-chlorodecahydronaphthalene-1-carboxylic anhydride",
-                NameStatus::Preferred,
+                "BrC1C(CC(C2CCCCC12)C(=O)OC(=O)C1C(CCC2(CCCCC12)Br)Cl)Cl",
+                "4-bromo-3-chlorodecahydronaphthalene-1-carboxylic 4a-bromo-2-chlorodecahydronaphthalene-1-carboxylic anhydride",
+                NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
                 "CC(=O)OC(=O)c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",

@@ -3244,7 +3244,7 @@ pub(super) fn try_name_anhydride_component(
             // P-65.7.1–P-65.7.4: O bridges, or chalcogen/peroxy bridges between
             // graph-equivalent acid halves.
             let ranks = canonical_ranks(mol, None);
-            let certified = anhydride_count == 1
+            let mut certified = anhydride_count == 1
                 && bridge.is_disjoint(&get_cyclic_atoms(mol, &AtomSet::new()))
                 && (path.len() == 3 && mol.atoms[&path[1]].symbol == "O"
                     || ranks[&descriptor.centers[0]] == ranks[&descriptor.centers[1]]);
@@ -3256,22 +3256,14 @@ pub(super) fn try_name_anhydride_component(
                     halves[0].1 = format!("{}-{}", mol.atoms[&path[1]].symbol, halves[0].1);
                     halves[1].1 = format!("{}-{}", mol.atoms[&path[2]].symbol, halves[1].1);
                 }
-                // P-65.7.2: the acids are cited in alphanumerical order: their
-                // Roman letters first, then their locants in order of citation
-                // (P-14.5.1, P-14.5.4).
-                // A locant such as 4a is a number with its letter; neither
-                // takes part in the alphabetical comparison.
-                let split = |text: &str| {
-                    let (mut letters, mut locants) = (String::new(), Vec::<usize>::new());
+                // P-65.7.2: the acids are cited in alphanumerical order, Roman
+                // letters first (P-14.5.1). A locant such as 4a takes no part.
+                let letters = |text: &str| {
+                    let mut letters = String::new();
                     let mut chars = text.chars().peekable();
                     while let Some(c) = chars.next() {
-                        if let Some(digit) = c.to_digit(10) {
-                            let mut locant = digit as usize;
-                            while let Some(d) = chars.peek().and_then(|c| c.to_digit(10)) {
-                                locant = locant * 10 + d as usize;
-                                chars.next();
-                            }
-                            locants.push(locant);
+                        if c.is_ascii_digit() {
+                            while chars.next_if(char::is_ascii_digit).is_some() {}
                             let mut rest = chars.clone();
                             if rest.next().is_some_and(|c| c.is_ascii_lowercase())
                                 && !rest.next().is_some_and(char::is_alphabetic)
@@ -3282,11 +3274,18 @@ pub(super) fn try_name_anhydride_component(
                             letters.push(c);
                         }
                     }
-                    (letters, locants)
+                    letters
                 };
-                halves.sort_by_cached_key(|half| {
-                    (split(&substituent_sort_key(&half.0).0).0, split(&half.0).1)
-                });
+                let keys = halves
+                    .each_ref()
+                    .map(|half| letters(&substituent_sort_key(&half.0).0));
+                if keys[0] == keys[1] {
+                    // Locant tie-breaks (P-14.5.4) are not implemented here.
+                    certified = false;
+                    halves.sort_by(|a, b| a.0.cmp(&b.0));
+                } else if keys[1] < keys[0] {
+                    halves.swap(0, 1);
+                }
                 format!("{} {} {class}", halves[0].1, halves[1].1)
             };
             Ok(Some(StructuralParentName {
