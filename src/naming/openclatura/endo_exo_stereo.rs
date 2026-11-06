@@ -322,6 +322,47 @@ mod tests {
     }
 
     #[test]
+    fn cage_relative_names_keep_descriptors_when_spirobi_is_ineligible() {
+        for (input, primary, alternative) in [
+            (
+                "C12([C@@H](Br)[C@@H]3CC[C@H]1C3)CC1CCC2C1",
+                "(1S,3S,4R)-3-bromospiro[bicyclo[2.2.1]heptane-2,2'-bicyclo[2.2.1]heptane]",
+                "3-exo-bromospiro[bicyclo[2.2.1]heptane-2,2'-bicyclo[2.2.1]heptane]",
+            ),
+            (
+                "C12([C@H](Br)[C@@H]3CC[C@H]1C3)CC1CCC2C1",
+                "(1S,3R,4R)-3-bromospiro[bicyclo[2.2.1]heptane-2,2'-bicyclo[2.2.1]heptane]",
+                "3-endo-bromospiro[bicyclo[2.2.1]heptane-2,2'-bicyclo[2.2.1]heptane]",
+            ),
+        ] {
+            let identity = canonical_smiles(input).unwrap();
+            for order in atom_orders(input) {
+                assert_eq!(canonical_smiles(&order).unwrap(), identity, "{order}");
+                let name = name_smiles(&order).unwrap();
+                assert_eq!(name.text, primary, "{order}");
+                assert_eq!(
+                    name.status,
+                    NameStatus::Unverified(NameReason::UnauditedParent),
+                    "{order}"
+                );
+                assert_eq!(
+                    name.alternatives.len(),
+                    1,
+                    "{order}: {:?}",
+                    name.alternatives
+                );
+                assert_eq!(name.alternatives[0].name, alternative, "{order}");
+                assert_eq!(
+                    name.alternatives[0].status,
+                    NameStatus::NotPreferred(NameReason::EndoExoStereo)
+                );
+            }
+            assert_round_trip(primary, &identity, false);
+            assert_round_trip(alternative, &identity, true);
+        }
+    }
+
+    #[test]
     fn cage_relative_names_decline_other_stereo_and_unsupported_centres() {
         for input in [
             // A side-chain stereocentre cannot be represented by cage faces.

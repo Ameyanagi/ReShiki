@@ -429,6 +429,20 @@ pub fn build_parent_assembly_plan_with_parent(
     } else {
         &proof_maps
     };
+    let mut parent_numbering_maps = if locant_maps.is_empty() {
+        selection
+            .paths
+            .iter()
+            .map(|path| {
+                path.iter()
+                    .enumerate()
+                    .map(|(index, &atom)| (atom, (index + 1).to_string()))
+                    .collect()
+            })
+            .collect()
+    } else {
+        locant_maps.to_vec()
+    };
     let (numbered_path, selected_map) = choose_parent_numbering(
         mol,
         modifiers,
@@ -458,15 +472,27 @@ pub fn build_parent_assembly_plan_with_parent(
             .map(|(i, &idx)| (idx, (i + 1).to_string()))
             .collect()
     });
+    if !parent_numbering_maps.contains(&locant_map) {
+        parent_numbering_maps.push(locant_map.clone());
+    }
     if !variants.is_empty() {
         let selected = variants
-            .into_iter()
+            .iter()
             .find(|plan| {
                 plan.numbering
                     .string_input_locant_maps()
                     .contains(&locant_map)
             })
+            .cloned()
             .ok_or("openclatura: fusion assembly numbering is not audited")?;
+        let registry = super::fusion::registry::fusion_component_registry();
+        let identity = super::fusion::descriptor::render_fusion_name(&selected.ast, registry)?;
+        parent_numbering_maps.clear();
+        for variant in &variants {
+            if super::fusion::descriptor::render_fusion_name(&variant.ast, registry)? == identity {
+                parent_numbering_maps.extend(variant.numbering.string_input_locant_maps());
+            }
+        }
         let previous = parent
             .take()
             .ok_or("openclatura: fusion numbering variants have no parent")?;
@@ -496,6 +522,7 @@ pub fn build_parent_assembly_plan_with_parent(
         upstream,
         parent.as_ref(),
     )?;
+    parts.parent_numbering_maps = parent_numbering_maps;
     if let Some(parent) = parent {
         if let Some(metadata) = &parent.hydride_metadata {
             parts.retained_parent_metadata = Some(metadata.clone());

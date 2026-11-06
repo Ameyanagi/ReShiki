@@ -745,6 +745,25 @@ O=C1C=CC=C[N-]1	pyridin-1-id-2(1H)-one	unverified	P-72.2.2.1.1 https://iupac.qmu
 [C-]#CCCC(=O)[O-]	pent-1-yn-1-id-5-oate	preferred	P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
 [CH-]1CCC(CC1)S(=O)(=O)[O-]	cyclohexan-1-ide-4-sulfonate	preferred	P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
 
+# D: spirobi (issue #921)
+C1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12	1,1'-spirobi[indene]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+CC1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12	3-methyl-1,1'-spirobi[indene]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C12(CC3CCC1C3)C1CCC2CC1	2,7'-spirobi[bicyclo[2.2.1]heptane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C12(CC3CCC1C3)CC1CCC2O1	7-oxa-2,2'-spirobi[bicyclo[2.2.1]heptane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C12(CC3CCC1C3)CC1CCC2C1	2,2'-spirobi[bicyclo[2.2.1]heptane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C12(C3CCC1CC3)C1CCC2CC1	7,7'-spirobi[bicyclo[2.2.1]heptane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C1CCC2C(C1)C23C4CCCCC34	7,7'-spirobi[bicyclo[4.1.0]heptane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C12(CC3CCC1C3)CC1CCC2S1	7-thia-2,2'-spirobi[bicyclo[2.2.1]heptane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C12(CC3CCC1O3)CC1CCC2O1	7,7'-dioxa-2,2'-spirobi[bicyclo[2.2.1]heptane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C1=CC2(Oc3ccccc31)C=COc1ccccc12	2,4'-spirobi[[1]benzopyran]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+c1ccc2c(c1)CC1(S2)Cc2ccccc2S1	3H,3'H-2,2'-spirobi[[1]benzothiophene]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+# Hydro-prefixed spirobi names are emitted but remain unverified.
+C1Cc2ccccc2C12CCc1ccccc12	2,2',3,3'-tetrahydro-1,1'-spirobi[indene]	unverified	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C12(CC3C=CC1C3)CC1CCC2C1	2,2'-spirobi[bicyclo[2.2.1]heptan]-5-ene	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403; P-31.1.5.2.1 https://iupac.qmul.ac.uk/BlueBook/P3.html#3101050201	issue #921	pass
+C12(CC3SCC1CC3)CC3CSC2CC3	5,6'-dithia-2,2'-spirobi[bicyclo[2.2.2]octane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+C12(CC3COC1C3)CC3CSC2C3	6-oxa-6'-thia-2,2'-spirobi[bicyclo[2.2.1]heptane]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+c1ccc2c(c1)CC1(S2)CSc2ccccc21	2'H,3H-2,3'-spirobi[[1]benzothiophene]	preferred	P-24.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#2403	issue #921	pass
+
 # Amine and imine oxides (issue #944)
 [O-][n+]1ccccc1	pyridine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
 C[N+]1([O-])CCCCC1	1-methylpiperidine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
