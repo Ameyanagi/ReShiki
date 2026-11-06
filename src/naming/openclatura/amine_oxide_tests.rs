@@ -191,7 +191,7 @@ fn amine_oxide_functional_class_keeps_neutral_assessment() {
         (
             "linear phane",
             "C[N+](C)([O-])c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-            "N,N-dimethyl-4-({4-[(4-phenoxyphenyl)oxy]phenyl}oxy)aniline N-oxide",
+            "N,N-dimethyl-4-[4-(4-phenoxyphenoxy)phenoxy]aniline N-oxide",
             NameStatus::NotPreferred(NameReason::LinearPhane),
         ),
         (
