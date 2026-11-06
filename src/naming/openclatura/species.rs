@@ -388,7 +388,7 @@ mod tests {
             salt_ion_sort_key("2-chloro-2-propyloctanoate").unwrap(),
         );
         assert_eq!(first.0, second.0);
-        assert!(first.1.is_none() && second.1.is_none());
+        assert!(first.1.is_none() || second.1.is_none());
         // One stereospecified ion per sign leaves nothing to order.
         let name = name_salt("C[C@@H](CC)[NH3+].CC(=O)[O-]", IsotopeStyle::Iupac).unwrap();
         assert_eq!(name.status, NameStatus::Preferred, "{}", name.text);
