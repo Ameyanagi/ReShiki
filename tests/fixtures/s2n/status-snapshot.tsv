@@ -150,7 +150,7 @@ C1CC12CC2	spiro[2.2]pentane	preferred
 C1CCC2(CC1)OCCO2	1,4-dioxaspiro[4.5]decane	preferred	
 O=C1CCCC12CCCCC2	spiro[4.5]decan-1-one	preferred	
 C1CCC2(CC1)CCCO2	1-oxaspiro[4.5]decane	preferred	
-C1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12	spiro[indene-1,1'-indene]	unverified	unaudited_parent
+C1=CC2(C3=CC=CC=C13)C=CC1=CC=CC=C12	1,1'-spirobi[indene]	preferred	
 C1CC2CCC1C2	bicyclo[2.2.1]heptane	preferred	
 C1C[C@H]2C[C@@H]1C=C2	(1R,4S)-bicyclo[2.2.1]hept-2-ene	preferred	
 C1CC2CCC1CC2	bicyclo[2.2.2]octane	preferred	
