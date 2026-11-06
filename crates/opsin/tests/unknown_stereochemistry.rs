@@ -555,4 +555,3 @@ fn ascii_xi_keeps_its_historical_meaning_on_true_centres() {
         );
     }
 }
-
