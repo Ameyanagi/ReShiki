@@ -1453,6 +1453,10 @@ impl<'a> ComponentProcessor<'a> {
                 .copied()
                 .filter(|&atom| graph.atom(atom).parity.is_some())
                 .collect();
+            // Without inherited parity, keep main's generic xi handling.
+            if inherited.is_empty() {
+                continue;
+            }
             let alpha = graph.atom_by_locant(fragment, "alpha");
             if inherited.len() != 1 || alpha != inherited.first().copied() {
                 return Err(error(

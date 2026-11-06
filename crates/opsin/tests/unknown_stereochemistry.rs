@@ -764,3 +764,21 @@ fn ascii_xi_keeps_its_historical_meaning_on_true_centres() {
         );
     }
 }
+
+#[test]
+fn amino_acid_xi_without_inherited_parity_keeps_the_generic_path() {
+    // Phenylglycine carries no inherited parity, so the ASCII xi stays as on main.
+    let parser = Parser::new().unwrap();
+    for name in ["(xi)-phenylglycine", "xi-phenylglycine"] {
+        let structure = parsed(&parser, name);
+        assert_eq!(
+            canonical(&structure.semantic_cxsmiles().unwrap()),
+            canonical("NC(c1ccccc1)C(=O)O"),
+            "{name}"
+        );
+        assert!(
+            structure.graph.atoms.iter().all(|atom| atom.parity.is_none()),
+            "{name}"
+        );
+    }
+}
