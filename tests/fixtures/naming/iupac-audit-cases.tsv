@@ -635,6 +635,59 @@ CC(Oc1ccc(Cl)cc1)C(=O)O	2-(4-chlorophenoxy)propanoic acid	preferred	P-63.2.2.2 h
 COc1ccc(OCCCl)cc1	1-(2-chloroethoxy)-4-methoxybenzene	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202	issue #975	pass
 O=C(O)C(c1ccc(Cl)cc1)COc1ccc(Cl)cc1	3-(4-chlorophenoxy)-2-(4-chlorophenyl)propanoic acid	preferred	P-63.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#63020202; P-14.5.2 https://iupac.qmul.ac.uk/BlueBook/P1.html#140502	issue #975	pass
 
+# retained-names (PR for issue #971)
+# retained-names toluene/xylene/acids (issue #971)
+Cc1ccccc1	toluene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Cc1ccccc1C	1,2-xylene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Cc1cccc(C)c1	1,3-xylene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Cc1ccc(C)cc1	1,4-xylene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Cc1cc(C)cc(C)c1	1,3,5-trimethylbenzene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Cc1ccc(C)c(C)c1	1,2,4-trimethylbenzene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Clc1ccc(C)cc1	1-chloro-4-methylbenzene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+ClCc1ccccc1	(chloromethyl)benzene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+BrCc1ccccc1CBr	1,2-bis(bromomethyl)benzene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-]	2-methyl-1,3,5-trinitrobenzene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Cc1ccccc1C(=O)O	2-methylbenzoic acid	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+Cc1ccc(S(=O)(=O)O)cc1	4-methylbenzene-1-sulfonic acid	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+CCc1ccccc1	ethylbenzene	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+COc1ccccc1	anisole	preferred	P-22.1.3 https://iupac.qmul.ac.uk/BlueBook/P2.html#220103; P-61.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#610203	issue #971	pass
+OC(=O)CC(O)(CC(=O)O)C(=O)O	2-hydroxypropane-1,2,3-tricarboxylic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201; P-65.1.1.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501010203	issue #971	pass
+OC(=O)CC(CC(=O)O)C(=O)O	propane-1,2,3-tricarboxylic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
+OC(=O)CCC(CCC(=O)O)C(=O)O	pentane-1,3,5-tricarboxylic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
+OC(=O)C(C(=O)O)C(C(=O)O)C(=O)O	ethane-1,1,2,2-tetracarboxylic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
+OC(=O)C(C)(C(=O)O)C(=O)O	ethane-1,1,1-tricarboxylic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
+[O-]C(=O)CC(O)(CC(=O)[O-])C(=O)[O-]	2-hydroxypropane-1,2,3-tricarboxylate	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201; P-65.1.1.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501010203	issue #971	pass
+CCOC(=O)CC(O)(CC(=O)OCC)C(=O)OCC	triethyl 2-hydroxypropane-1,2,3-tricarboxylate	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201; P-65.1.1.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501010203	issue #971	pass
+OC(=O)C(C(=O)O)C(=O)O	methanetricarboxylic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
+O=C(O)CC(CC(=O)O)(CC(=O)O)C(=O)O	2-(carboxymethyl)propane-1,2,3-tricarboxylic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
+CCOC(=O)CC(O)(CC(=O)O)C(=O)O	2-(2-ethoxy-2-oxoethyl)-2-hydroxybutanedioic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201; P-65.6.3.3.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6506030305	issue #971	pass
+OC(=O)CC(=O)O	propanedioic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
+OC(=O)CCC(=O)O	butanedioic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
+OC(=O)CC(CC(=O)O)CC(=O)O	3-(carboxymethyl)pentanedioic acid	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #983	known-failure
+
+# retained-names (PR for issue #972)
+# retained-names sulfanium (issue #972)
+C[S+](C)C	trimethylsulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[SH+]C	dimethylsulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[S+](C)c1ccccc1	dimethyl(phenyl)sulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+CC[S+](CC)CC	triethylsulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[S+](C)CC	ethyldi(methyl)sulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+CC[S+](C)CCC	ethyl(methyl)(propyl)sulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[SH2+]	methylsulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[S+](C)CCCCCC[N+](C)(C)C	6-(dimethylsulfaniumyl)-N,N,N-trimethylhexan-1-aminium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301; P-73.7 https://iupac.qmul.ac.uk/BlueBook/P7.html#7307	issue #972	pass
+CC[Si](C)(C)C	ethyltri(methyl)silane	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+CC[P+](C)(C)C	ethyltri(methyl)phosphanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[Si](C)(C)c1ccccc1	trimethyl(phenyl)silane	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[S+](C)C.[I-]	trimethylsulfanium iodide	unverified	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[S+]1CCCC1	1-methylthiolan-1-ium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[S+](C)[CH2-]	(dimethylsulfaniumyl)methanide	unverified	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[P+](C)(C)C	tetramethylphosphanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[N+](C)(C)C	N,N,N-trimethylmethanaminium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+CSC	(methylsulfanyl)methane	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[Se+](C)C	trimethylselanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[Te+](C)C	trimethyltellanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[S+](C)CCO	(2-hydroxyethyl)di(methyl)sulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
+C[S+](C)CC(=O)O	(carboxymethyl)di(methyl)sulfanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #972	pass
 # retained-names (PR for issue #943)
 # retained-names parents (issue #943)
 C#C	acetylene	preferred	P-31.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P3.html#31010201	issue #943	pass

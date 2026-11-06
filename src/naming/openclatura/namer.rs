@@ -32,7 +32,7 @@ pub(super) fn name_subgraph_with_upstream(
     exclude_atoms: &AtomSet,
     upstream_atom: Option<usize>,
 ) -> Result<String, String> {
-    name_subgraph_rendered(mol, start_idx, exclude_atoms, upstream_atom).map(|n| n.text)
+    name_subgraph_rendered(mol, start_idx, exclude_atoms, upstream_atom, false).map(|n| n.text)
 }
 
 fn direct_amide_prefix(
@@ -284,7 +284,7 @@ fn collect_subgraph_substituents(
             branch_exclude.extend(&parent);
             let atoms = subgraph_component(mol, n, &branch_exclude);
             super::spiro_subgraph::require_single_parent_attachment(mol, &atoms, &parent)?;
-            let name = name_subgraph_rendered(mol, n, &branch_exclude, Some(idx))?;
+            let name = name_subgraph_rendered(mol, n, &branch_exclude, Some(idx), false)?;
             if name.text.is_empty() {
                 return Err("openclatura: empty recursive substituent".into());
             }
@@ -336,8 +336,10 @@ pub(super) fn name_subgraph_rendered(
     start: usize,
     exclude: &AtomSet,
     upstream: Option<usize>,
+    acid_prefix_mode: bool,
 ) -> Result<RenderedSubstituentName, String> {
     let _depth = mol.enter_naming()?;
+    let _acid_prefix_scope = acid_prefix_mode.then(|| mol.enter_acid_prefix_scope());
     let atom = mol
         .atoms
         .get(&start)
@@ -394,7 +396,8 @@ pub(super) fn name_subgraph_rendered(
         .iter()
         .filter(|g| {
             g.atom_ids().is_subset(&component)
-                && (is_carboxylate_group(g) || anionic_parent && is_carboxylic_acid_group(g))
+                && (is_carboxylate_group(g)
+                    || (anionic_parent || mol.uses_acid_prefixes()) && is_carboxylic_acid_group(g))
         })
         .cloned()
         .collect();
@@ -781,6 +784,24 @@ pub(super) fn capped_acid_name(
 mod tests {
     use super::{AssemblyParts, BTreeMap, name_subgraph_with_upstream, simple_rooted_carbanion};
     use crate::naming::openclatura::{graph_io::read_smiles, molecule::AtomSet};
+
+    #[test]
+    fn acid_prefix_context_crosses_heteroatoms_and_stays_within_its_branch() {
+        let mol = read_smiles("COCC(=O)O").unwrap();
+        let excluded = AtomSet::from([0]);
+        assert_eq!(
+            super::name_subgraph_rendered(&mol, 1, &excluded, Some(0), true)
+                .unwrap()
+                .text,
+            "(carboxymethoxy)"
+        );
+        assert_eq!(
+            name_subgraph_with_upstream(&mol, 1, &excluded, Some(0)).unwrap(),
+            "(2-hydroxy-2-oxoethoxy)"
+        );
+        assert!(super::name_subgraph_rendered(&mol, 0, &excluded, None, true).is_err());
+        assert!(!mol.uses_acid_prefixes());
+    }
 
     #[test]
     fn public_naming_bounds_recursion_on_a_two_mebibyte_stack() {
