@@ -238,14 +238,14 @@ COC(=O)C1=CC(=CC=C1)S(=O)(=O)N2C(=O)CN(C2=O)C3=CC=CC=C3	methyl 3-(2,5-dioxo-3-ph
 CC1=CC2=C(C=C1)N=C(N2)C3CCCN3C(=O)NC4=CC=CC=C4OC(C)C	2-(6-methyl-1H-1,3-benzimidazol-2-yl)-N-{2-[(propan-2-yl)oxy]phenyl}pyrrolidine-1-carboxamide	preferred	
 CC1=CC=C(C=C1)N2C(=O)C3=C(N=C2SCC(=O)N/N=C\C4=CC(=C(C=C4)OC(=O)C)OC)SC5=C3CCCC5	2-methoxy-4-{(Z)-[(2-{[3-(4-methylphenyl)-4-oxo-5,6,7,8-tetrahydro[1]benzothieno[2,3-d]pyrimidin-2-yl]sulfanyl}acetamido)imino]methyl}phenyl acetate	preferred	
 CCCC1=C(SC(=C1)C(=O)OCC(=O)NC2=CC(=C(C=C2)OC)S(=O)(=O)N3CCCCC3)C	2-{[4-methoxy-3-(piperidine-1-sulfonyl)phenyl]amino}-2-oxoethyl 5-methyl-4-propylthiophene-2-carboxylate	preferred	
-COC1=CC2=C(C3=C(C=C(C=C3)Cl)N=C2C=C1)NCCCN(CCCNC4=C5C=C(C=CC5=NC6=C4C=CC(=C6)Cl)OC)CC7CC7	N-(6-chloro-2-methoxyacridin-9-yl)-N'-{3-[(6-chloro-2-methoxyacridin-9-yl)amino]propyl}-N'-(cyclopropylmethyl)propane-1,3-diamine	preferred	
+COC1=CC2=C(C3=C(C=C(C=C3)Cl)N=C2C=C1)NCCCN(CCCNC4=C5C=C(C=CC5=NC6=C4C=CC(=C6)Cl)OC)CC7CC7	N'-(6-chloro-2-methoxyacridin-9-yl)-N-{3-[(6-chloro-2-methoxyacridin-9-yl)amino]propyl}-N-(cyclopropylmethyl)propane-1,3-diamine	preferred	
 C1=CC=C(C=C1)C2=C(C3=C(C=C(C(=C3)C#N)Cl)NC2=O)N	4-amino-7-chloro-2-oxo-3-phenyl-1,2-dihydroquinoline-6-carbonitrile	preferred	
 COC1=CC=C(C=C1)C(=O)CCC(=O)N2CCC3=CC=CC=C3C2	1-(4-methoxyphenyl)-4-(1,2,3,4-tetrahydroisoquinolin-2-yl)butane-1,4-dione	preferred	
 CCC(=O)N1CC/C(=N\OS(=O)(=O)O)/C2=C1C=CC(=C2)Br	1-[(4E)-6-bromo-4-(sulfooxyimino)-2,3-dihydro-1H-quinolin-1-yl]propan-1-one	preferred	
 C/C(=C\C1=CC=C(C=C1)C(=O)O)/C#N	4-[(1E)-2-methyl-3-nitriloprop-1-en-1-yl]benzoic acid	preferred	
 CC(C)NC1=C(C=CC(=C1)N2CCN(CC2)C(=O)C3=CC=CC=C3F)[N+](=O)[O-]	(2-fluorophenyl)(4-{4-nitro-3-[(propan-2-yl)amino]phenyl}piperazin-1-yl)methanone	preferred	
 CN(CC1=C(C=CC=C1Cl)F)C(=O)/C=C/C2=CC=C(C=C2)OC	(2E)-N-[(2-chloro-6-fluorophenyl)methyl]-3-(4-methoxyphenyl)-N-methylprop-2-enamide	preferred	
-CC(C)(C)OC(=O)CC(C)(C)COC(=O)CC(=O)OC	3-[4-(tert-butoxy)-2,2-dimethyl-4-oxobutyl] 1-methyl propanedioate	preferred	
+CC(C)(C)OC(=O)CC(C)(C)COC(=O)CC(=O)OC	4-(tert-butoxy)-2,2-dimethyl-4-oxobutyl methyl propanedioate	preferred	
 C1CCC2=C(C1)C3=C(S2)N=C(NC3=O)CCC(=O)NCC4=CC=C(C=C4)Cl	N-[(4-chlorophenyl)methyl]-3-(4-oxo-3,4,5,6,7,8-hexahydro[1]benzothieno[2,3-d]pyrimidin-2-yl)propanamide	preferred	
 C(CCN1C(=C(C2=NC3=NON=C3N=C21)C#N)N)CC(=O)O	5-(6-amino-7-cyano[1,2,5]oxadiazolo[3,4-b]pyrrolo[2,3-e]pyrazin-5-yl)pentanoic acid	preferred	
 CC1=CC=C(C=C1)N2C(=C(C(=N2)C)C3=CC=CC=C3)NC(=O)CCC(=O)O	3-{[3-methyl-1-(4-methylphenyl)-4-phenyl-1H-pyrazol-5-yl]carbamoyl}propanoic acid	preferred	
