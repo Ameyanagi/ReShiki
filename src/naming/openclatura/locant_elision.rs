@@ -7,7 +7,10 @@ use super::{
     assembly_utils::parse_locant,
     graph_kernel::{Edge, normalize_edge},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, BTreeSet},
+};
 const MAX_CANDIDATE_PLACEMENTS: usize = 10_000;
 type NodeLabel = (String, i32, Option<u16>, bool);
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -317,6 +320,7 @@ fn supported(parts: &AssemblyParts) -> bool {
         || !parts.parent_charges.is_empty()
         || !parts.a_prefixes.is_empty()
         || !parts.front_modifier_locants.is_empty()
+            && !(parts.ester_site_exchange_proven && parts.front_modifiers.len() == 2)
         || !parts.principal_suffix_modifiers.is_empty()
         || !parts.hydro_operations.is_empty()
         || parts
@@ -464,30 +468,68 @@ fn isomorphic<'a>(
     let target_signatures: Vec<_> = target_adj.iter().map(multiset).collect();
     type LabeledAdjacency<'a> = [BTreeMap<usize, EdgeLabel<'a>>];
     type EdgeSignatures<'a> = [Vec<EdgeLabel<'a>>];
+    // Propagate decorations along chains so frontier ties use atom environments.
+    let ranks = |decoration: &Decoration, adjacency: &LabeledAdjacency<'_>| {
+        let mut ranks = vec![0; n];
+        loop {
+            let keys: Vec<_> = (0..n)
+                .map(|i| {
+                    let mut neighbors: Vec<_> = adjacency[i]
+                        .iter()
+                        .map(|(&j, label)| (label, ranks[j]))
+                        .collect();
+                    neighbors.sort();
+                    (ranks[i], &g.nodes[i], &decoration.0[i], neighbors)
+                })
+                .collect();
+            let ordering: BTreeMap<_, _> = keys
+                .iter()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .enumerate()
+                .map(|(rank, key)| (key, rank))
+                .collect();
+            let refined: Vec<_> = keys.iter().map(|key| ordering[key]).collect();
+            if refined == ranks {
+                return ranks;
+            }
+            ranks = refined;
+        }
+    };
+    let source_ranks = ranks(actual, &source_adj);
+    let target_ranks = ranks(candidate, &target_adj);
+    let mut target_order: Vec<_> = (0..n).collect();
+    target_order.sort_by_key(|&i| target_ranks[i]);
     fn search(
         graphs: (&Graph, &Decoration, &Decoration),
         adjacency: (&LabeledAdjacency<'_>, &LabeledAdjacency<'_>),
         signatures: (&EdgeSignatures<'_>, &EdgeSignatures<'_>),
+        ordering: (&[usize], &[usize]),
         mapping: &mut [Option<usize>],
         used: &mut [bool],
-        depth: usize,
         budget: &mut usize,
     ) -> Option<bool> {
         let (g, actual, candidate) = graphs;
         let (source_adj, target_adj) = adjacency;
         let (source_signatures, target_signatures) = signatures;
-        if depth == mapping.len() {
-            return Some(true);
-        }
-        let source = (0..mapping.len())
+        let (source_ranks, target_order) = ordering;
+        let Some(source) = (0..mapping.len())
             .filter(|&i| mapping[i].is_none())
             .min_by_key(|&i| {
-                source_adj[i]
-                    .keys()
-                    .filter(|&&j| mapping[j].is_some())
-                    .count()
-            })?;
-        for target in 0..mapping.len() {
+                (
+                    Reverse(
+                        source_adj[i]
+                            .keys()
+                            .filter(|&&j| mapping[j].is_some())
+                            .count(),
+                    ),
+                    source_ranks[i],
+                )
+            })
+        else {
+            return Some(true);
+        };
+        for &target in target_order {
             consume(budget)?;
             if used[target]
                 || g.nodes[source] != g.nodes[target]
@@ -506,13 +548,7 @@ fn isomorphic<'a>(
             mapping[source] = Some(target);
             used[target] = true;
             if search(
-                graphs,
-                adjacency,
-                signatures,
-                mapping,
-                used,
-                depth + 1,
-                budget,
+                graphs, adjacency, signatures, ordering, mapping, used, budget,
             )? {
                 return Some(true);
             }
@@ -525,12 +561,98 @@ fn isomorphic<'a>(
         (g, actual, candidate),
         (&source_adj, &target_adj),
         (&source_signatures, &target_signatures),
+        (&source_ranks, &target_order),
         &mut vec![None; n],
         &mut vec![false; n],
-        0,
         budget,
     )
 }
+
+/// P-65.6.3.3.2.1: the two alcohol assignments coincide only when the
+/// complete acid component admits an exchange of its ester carbonyl sites.
+pub fn ester_sites_are_equivalent(
+    mol: &super::molecule::Molecule,
+    acid_atoms: &super::molecule::AtomSet,
+    sites: &[usize],
+) -> bool {
+    if sites.len() != 2 || sites[0] == sites[1] {
+        return false;
+    }
+    let mut parts = AssemblyParts::new(acid_atoms.len());
+    for &id in acid_atoms {
+        let atom = &mol.atoms[&id];
+        // An unlabeled graph cannot establish preservation of stereochemical
+        // configurations or relative stereo under the proposed exchange.
+        if atom.has_stereo() {
+            return false;
+        }
+        let locant = id.to_string();
+        parts.parent_atom_ids_by_locant.insert(locant.clone(), id);
+        parts
+            .parent_atom_symbols_by_locant
+            .insert(locant.clone(), atom.symbol.clone());
+        parts
+            .parent_atom_charges_by_locant
+            .insert(locant.clone(), atom.charge);
+        parts
+            .parent_atom_isotopes_by_locant
+            .insert(locant, atom.isotope);
+    }
+    for bond in mol.bonds.values() {
+        if !acid_atoms.contains(&bond.u) || !acid_atoms.contains(&bond.v) {
+            continue;
+        }
+        if bond.stereo.is_some() || !matches!(bond.order, 1..=3) {
+            return false;
+        }
+        // Aromatic equivalence is independent of the localized Kekule orders.
+        let order = if bond.is_aromatic { 0 } else { bond.order };
+        parts
+            .parent_bond_orders_by_locants
+            .insert((bond.u.to_string(), bond.v.to_string()), order);
+    }
+    let Some(g) = graph(&parts, true) else {
+        return false;
+    };
+    let positions: Option<Vec<_>> = sites
+        .iter()
+        .map(|id| g.locants.iter().position(|l| l == &id.to_string()))
+        .collect();
+    let Some(positions) = positions else {
+        return false;
+    };
+    let mut all: Vec<_> = g
+        .locants
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            let atom = &mol.atoms[&parts.parent_atom_ids_by_locant[l]];
+            Feature {
+                category: "atom_state",
+                key: format!(
+                    "{}:{}:{}",
+                    atom.total_h_count, atom.radical_electrons, atom.is_aromatic
+                ),
+                positions: vec![Position::Node(i)],
+            }
+        })
+        .collect();
+    let fixed = all.len();
+    for (i, &position) in positions.iter().enumerate() {
+        all.push(Feature {
+            category: "ester_site",
+            key: i.to_string(),
+            positions: vec![Position::Node(position)],
+        });
+    }
+    let actual = decorate(&g, &all);
+    all[fixed].positions[0] = Position::Node(positions[1]);
+    all[fixed + 1].positions[0] = Position::Node(positions[0]);
+    let candidate = decorate(&g, &all);
+    let mut budget = MAX_CANDIDATE_PLACEMENTS;
+    isomorphic(&g, &actual, &candidate, &mut budget) == Some(true)
+}
+
 fn stereo_positions(parts: &AssemblyParts, g: &Graph, atom: bool) -> Vec<Position> {
     if atom {
         return g
@@ -889,6 +1011,115 @@ mod tests {
     use super::super::assembly_parts::{PrincipalGroupItem, UnsaturationItem};
     use super::*;
 
+    fn acid_graph(
+        smiles: &str,
+    ) -> (
+        super::super::molecule::Molecule,
+        super::super::molecule::AtomSet,
+        Vec<usize>,
+    ) {
+        let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let sites = mol
+            .atoms
+            .iter()
+            .filter(|(id, atom)| {
+                atom.is_carbon()
+                    && [1, 2].into_iter().all(|order| {
+                        mol.get_neighbors(**id).iter().any(|&other| {
+                            mol.atoms[&other].symbol == "O"
+                                && mol.get_bond(**id, other).is_some_and(|b| b.order == order)
+                        })
+                    })
+            })
+            .map(|(&id, _)| id)
+            .collect();
+        (mol, atoms, sites)
+    }
+
+    #[test]
+    fn ester_site_exchange_preserves_the_complete_acid_component() {
+        for (smiles, equivalent) in [
+            ("O=C(O)CC(=O)O", true),
+            ("O=C(O)CCC(=O)O", true),
+            ("C(CCCCCCCCC(O)=O)(O)=O", true),
+            ("C(C(O)=O)CCCCCCCC(O)=O", true),
+            ("O=C(O)CCCCCCCCCCC(=O)O", true),
+            ("O=C(O)C(C)C(=O)O", true),
+            ("O=C(O)C(F)CC(=O)O", false),
+            ("O=C(O)[13CH2]CC(=O)O", false),
+            ("O=C(O)CC(=O)[18OH]", false),
+            ("O=C(O)c1ccc(C(=O)O)c(C)c1", false),
+            ("O=C(O)CC(C(=O)O)CC(=O)O", false),
+        ] {
+            let (mol, atoms, sites) = acid_graph(smiles);
+            assert_eq!(
+                ester_sites_are_equivalent(&mol, &atoms, &sites),
+                equivalent,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn ester_site_exchange_ignores_aromatic_kekule_orders() {
+        let (mut mol, atoms, sites) = acid_graph("O=C(O)c1cccc(C(=O)O)c1");
+        assert!(ester_sites_are_equivalent(&mol, &atoms, &sites));
+        for bond in mol.bonds.values_mut().filter(|b| b.is_aromatic) {
+            bond.order = 3 - bond.order;
+        }
+        assert!(ester_sites_are_equivalent(&mol, &atoms, &sites));
+        for bond in mol.bonds.values_mut() {
+            bond.is_aromatic = false;
+        }
+        assert!(!ester_sites_are_equivalent(&mol, &atoms, &sites));
+    }
+
+    #[test]
+    fn ester_site_exchange_keeps_locants_for_unsupported_stereo() {
+        for smiles in [
+            "O=C(O)[C@H](O)[C@@H](O)C(=O)O",
+            "O=C(O)C([C@H](F)Cl)C(=O)O",
+            "O=C(O)/C=C\\C(=O)O",
+        ] {
+            let (mol, atoms, sites) = acid_graph(smiles);
+            assert!(
+                !ester_sites_are_equivalent(&mol, &atoms, &sites),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn acid_prefix_elision_requires_proven_ester_site_equivalence() {
+        let mut parts = parent(3, false, false);
+        parts.parent_atom_hydrogens_by_locant =
+            BTreeMap::from([("1".into(), 0), ("2".into(), 1), ("3".into(), 0)]);
+        parts.principal_group = Some(PrincipalGroupItem::new(
+            "ester",
+            vec!["1".into(), "3".into()],
+        ));
+        parts
+            .substituents
+            .push(super::super::assembly_parts::SubstituentItem::new(
+                "methyl",
+                vec!["2".into()],
+            ));
+        parts.front_modifiers = vec!["ethyl".into(), "methyl".into()];
+        parts.front_modifier_locants = vec![Some("1".into()), Some("3".into())];
+        apply_redundant_locant_elision(&mut parts);
+        assert!(parts.elided_substituent_locants.is_empty());
+        let mut more_than_two = parts.clone();
+        more_than_two.ester_site_exchange_proven = true;
+        more_than_two.front_modifiers.push("propyl".into());
+        more_than_two.front_modifier_locants.push(Some("2".into()));
+        apply_redundant_locant_elision(&mut more_than_two);
+        assert!(more_than_two.elided_substituent_locants.is_empty());
+        parts.ester_site_exchange_proven = true;
+        apply_redundant_locant_elision(&mut parts);
+        assert!(parts.elided_substituent_locants.contains("methyl"));
+    }
+
     fn parent(n: usize, ring: bool, heteroatom: bool) -> AssemblyParts {
         let mut parts = AssemblyParts::new(n);
         parts.is_ring = ring;
@@ -1054,6 +1285,46 @@ mod tests {
     }
 
     #[test]
+    fn chain_exchange_search_is_atom_order_independent() {
+        for n in [10, 12, 40, 100] {
+            for order in [
+                (0..n).collect::<Vec<_>>(),
+                (0..n).rev().collect(),
+                (0..n).map(|i| (17 * i + 3) % n).collect(),
+            ] {
+                let mut parts = parent(n, false, false);
+                parts.parent_bond_orders_by_locants = (1..n)
+                    .map(|i| {
+                        (
+                            ((order[i - 1] + 1).to_string(), (order[i] + 1).to_string()),
+                            1,
+                        )
+                    })
+                    .collect();
+                let g = graph(&parts, true).unwrap();
+                let mut sites: Vec<_> = [order[0], order[n - 1]]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, position)| Feature {
+                        category: "ester_site",
+                        key: i.to_string(),
+                        positions: vec![Position::Node(position)],
+                    })
+                    .collect();
+                let actual = decorate(&g, &sites);
+                sites[0].positions = vec![Position::Node(order[n - 1])];
+                sites[1].positions = vec![Position::Node(order[0])];
+                let candidate = decorate(&g, &sites);
+                let mut budget = MAX_CANDIDATE_PLACEMENTS;
+                assert_eq!(isomorphic(&g, &actual, &candidate, &mut budget), Some(true));
+                assert_eq!(budget, MAX_CANDIDATE_PLACEMENTS - n * (n + 1) / 2);
+                let mut insufficient = n * (n + 1) / 2 - 1;
+                assert_eq!(isomorphic(&g, &actual, &candidate, &mut insufficient), None);
+            }
+        }
+    }
+
+    #[test]
     fn elision_requires_every_compatible_placement_to_be_equivalent() {
         for (n, ring, heteroatom, expected) in [
             (3, false, false, true),
@@ -1086,11 +1357,10 @@ mod tests {
         apply_redundant_locant_elision(&mut p);
         assert!(!p.elide_principal_group_locants);
 
-        // Match the upstream conservative search limit even for a symmetric
-        // placement that could be established with a faster specialized proof.
+        // P-14.3.4.4: all alcohol placements on an unsubstituted ring are equivalent.
         let mut p = parent(9, true, false);
         p.principal_group = Some(PrincipalGroupItem::new("alcohol", vec!["6".into()]));
         apply_redundant_locant_elision(&mut p);
-        assert!(!p.elide_principal_group_locants);
+        assert!(p.elide_principal_group_locants);
     }
 }

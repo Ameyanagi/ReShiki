@@ -8,7 +8,9 @@ use super::{
         select_retained_anion_name,
     },
     assembly_parts::{AssemblyParts, HydroOperation},
-    assembly_prefixes::{format_replacement_prefixes, format_substituent_prefixes},
+    assembly_prefixes::{
+        format_replacement_prefixes, format_substituent_prefixes, substituent_sort_key,
+    },
     assembly_utils::{needs_hyphen, parse_locant},
     formatting::format_multiplier,
     fused_ion_templates::{consume_fused_ion_operation, select_fused_ion_operation},
@@ -508,13 +510,6 @@ fn add_stereo(parts: &AssemblyParts, word: &str, cites_locants: bool) -> String 
         ),
     }
 }
-fn front_modifier_sort_key(name: &str) -> String {
-    name.strip_prefix("tert-")
-        .or_else(|| name.strip_prefix("sec-"))
-        .unwrap_or(name)
-        .trim_start_matches(['(', '['])
-        .to_lowercase()
-}
 fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     if parts.front_modifiers.is_empty() {
         return word.into();
@@ -522,7 +517,8 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     let have = parts.front_modifier_locants.len() == parts.front_modifiers.len()
         && parts.front_modifier_locants.iter().all(Option::is_some);
     let distinct = parts.front_modifiers.iter().collect::<BTreeSet<_>>().len();
-    if have && distinct > 1 {
+    let redundant = parts.front_modifiers.len() == 2 && parts.ester_site_exchange_proven;
+    if have && distinct > 1 && !redundant {
         let mut by_name: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
         for (m, l) in parts
             .front_modifiers
@@ -533,7 +529,7 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
             by_name.entry(m).or_default().push(l);
         }
         let mut modifiers: Vec<_> = by_name.into_iter().collect();
-        modifiers.sort_by_key(|(name, _)| front_modifier_sort_key(name));
+        modifiers.sort_by_key(|(name, _)| substituent_sort_key(name));
         let mods = modifiers
             .into_iter()
             .map(|(name, mut locs)| {
@@ -552,7 +548,9 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     for m in &parts.front_modifiers {
         *counts.entry(m).or_insert(0_usize) += 1;
     }
-    let mods = counts
+    let mut modifiers: Vec<_> = counts.into_iter().collect();
+    modifiers.sort_by_key(|(name, _)| substituent_sort_key(name));
+    let mods = modifiers
         .into_iter()
         .map(|(m, c)| {
             if c > 1 {
@@ -673,6 +671,28 @@ mod tests {
         nomenclature::{rule_from_value, section},
     };
     use super::*;
+
+    #[test]
+    fn ester_front_modifiers_use_prefix_citation_order() {
+        let mut parts = AssemblyParts::new(4);
+        parts.front_modifiers = vec!["2-methoxyethyl".into(), "ethyl".into()];
+        parts.front_modifier_locants = vec![Some("4".into()), Some("1".into())];
+        assert_eq!(
+            add_front_modifiers(&parts, "butanedioate"),
+            "1-ethyl 4-(2-methoxyethyl) butanedioate"
+        );
+        parts.ester_site_exchange_proven = true;
+        assert_eq!(
+            add_front_modifiers(&parts, "butanedioate"),
+            "ethyl 2-methoxyethyl butanedioate"
+        );
+        parts.front_modifiers.push("methyl".into());
+        parts.front_modifier_locants.push(Some("2".into()));
+        assert_eq!(
+            add_front_modifiers(&parts, "parent"),
+            "1-ethyl 4-(2-methoxyethyl) 2-methyl parent"
+        );
+    }
 
     #[test]
     fn retained_names_preserve_fusion_and_spiro_components() {
