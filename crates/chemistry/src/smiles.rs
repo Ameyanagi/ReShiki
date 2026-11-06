@@ -24,6 +24,7 @@ use super::{
     graph::{Atom, Bond, Graph},
     kekulize::Direction,
     ranking::{AtomMetadata, BondMetadata, Metadata},
+    stereo::perception::State,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -56,12 +57,13 @@ type Result<T> = std::result::Result<T, Error>;
 /// The stereoisomers a structure denotes, as canonical isomeric SMILES.
 /// Ungrouped and absolute centres stay fixed; each OR (`o`) or AND (`&`)
 /// group is the given configuration or its full inversion, independently of
-/// the other groups. A molecule-level `r` makes the absolute (ABS) group
-/// relative: every other tetrahedral centre, including `a` members, forms one
-/// more such group. OR and AND groups expand alike.
+/// the other groups. Import converts a molecule-level `r` into one AND group
+/// over tetrahedral centres outside explicit `a`, `o` and `&` groups. With no
+/// independent explicit OR/AND groups, inversion-equivalent structures need
+/// no added group.
+/// OR and AND groups expand alike.
 pub fn stereoisomers(text: &str) -> Result<BTreeSet<String>> {
-    let imported = read(text)?;
-    let mut state = imported.prepared.state;
+    let mut state = read(text)?.prepared.state;
     let atoms = &state.metadata.atoms;
     let tetrahedral = |atom: &usize| {
         atoms
@@ -75,14 +77,6 @@ pub fn stereoisomers(text: &str) -> Result<BTreeSet<String>> {
         .filter(|group| matches!(group.kind, 1 | 2))
         .map(|group| group.atoms.iter().copied().filter(tetrahedral).collect())
         .collect();
-    if imported.relative {
-        let grouped: HashSet<_> = units.iter().flatten().copied().collect();
-        units.push(
-            (0..atoms.len())
-                .filter(|atom| !grouped.contains(atom) && tetrahedral(atom))
-                .collect(),
-        );
-    }
     units.retain(|unit| !unit.is_empty());
     state.metadata.groups.clear();
     (0..1usize << units.len())
@@ -94,25 +88,33 @@ pub fn stereoisomers(text: &str) -> Result<BTreeSet<String>> {
                 .flat_map(|(_, unit)| unit.iter().copied())
                 .collect();
             let mut member = state.clone();
-            for (atom, meta) in member.metadata.atoms.iter_mut().enumerate() {
-                if flipped.contains(&atom) {
-                    meta.chiral_tag = 3 - meta.chiral_tag;
-                }
-            }
-            // Ring member signs record equal or opposite winding of two centres.
-            for (atom, properties) in member.properties.atoms.iter_mut().enumerate() {
-                for other in properties.ring_members.iter_mut().flatten() {
-                    let partner = other.unsigned_abs() as usize - 1;
-                    if flipped.contains(&atom) != flipped.contains(&partner) {
-                        *other = -*other;
-                    }
-                }
-            }
-            Ok(write::write(&member, Default::default())
-                .map_err(|error| Error::Write(Box::new(error)))?
-                .text)
+            invert_tetrahedral(&mut member, &flipped);
+            canonical_smiles(&member)
         })
         .collect()
+}
+
+fn invert_tetrahedral(state: &mut State, flipped: &HashSet<usize>) {
+    for (atom, meta) in state.metadata.atoms.iter_mut().enumerate() {
+        if flipped.contains(&atom) {
+            meta.chiral_tag = 3 - meta.chiral_tag;
+        }
+    }
+    // Ring member signs record equal or opposite winding of two centres.
+    for (atom, properties) in state.properties.atoms.iter_mut().enumerate() {
+        for other in properties.ring_members.iter_mut().flatten() {
+            let partner = other.unsigned_abs() as usize - 1;
+            if flipped.contains(&atom) != flipped.contains(&partner) {
+                *other = -*other;
+            }
+        }
+    }
+}
+
+fn canonical_smiles(state: &State) -> Result<String> {
+    Ok(write::write(state, Default::default())
+        .map_err(|error| Error::Write(Box::new(error)))?
+        .text)
 }
 
 #[derive(Debug, Serialize)]

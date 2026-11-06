@@ -798,6 +798,38 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn symmetric_azine_ylidene_spelling_keeps_unaudited_status() {
+        use crate::naming::{NameReason, NameStatus};
+
+        for (smiles, expected) in [
+            ("C/C=N/N=C/C", "(1E,2E)-diethylidenehydrazine"),
+            ("CC/C=N/N=C/CC", "(1E,2E)-dipropylidenehydrazine"),
+            (
+                "C/C(/CC)=N\\N=C(/C)\\CC",
+                "(1E,2E)-di(butan-2-ylidene)hydrazine",
+            ),
+            ("CC(C)=NN=C(C)C", "di(propan-2-ylidene)hydrazine"),
+            ("CCCCCCCCCC=NN=CCCCCCCCCC", "di(decylidene)hydrazine"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                NameStatus::Unverified(NameReason::UnauditedPath),
+                "{smiles}"
+            );
+        }
+        assert!(name_smiles("C/C=N/N=C\\C").is_err());
+    }
+
+    #[test]
+    fn azine_spelling_preserves_alkene_control() {
+        let name = name_smiles("C/C=C/C").unwrap();
+        assert_eq!(name.text, "(2E)-but-2-ene");
+        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+    }
+
+    #[test]
     fn alkoxy_contractions_preserve_parent_components() {
         for (smiles, expected) in [
             ("OC(=O)COC(C)C", "[(propan-2-yl)oxy]acetic acid"),

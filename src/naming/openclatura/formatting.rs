@@ -58,6 +58,10 @@ pub fn needs_complex_multiplier(name: &str) -> bool {
         ]
         .contains(&name)
 }
+/// P-16.3.4(d): keep multiplied `dec` groups distinct from longer chains.
+pub fn needs_simple_multiplier_parentheses(name: &str) -> bool {
+    name.starts_with("dec")
+}
 pub fn format_multiplier(name: &str, count: usize, safe_enclose: bool) -> String {
     let complex = is_complex_prefix(name) || (count > 1 && needs_complex_multiplier(name));
     if count == 1 {
@@ -72,12 +76,13 @@ pub fn format_multiplier(name: &str, count: usize, safe_enclose: bool) -> String
     } else {
         multipliers::basic(count)
     };
-    if complex && !is_fully_enclosed(name) {
+    if (complex || needs_simple_multiplier_parentheses(name)) && !is_fully_enclosed(name) {
         format!("{mult}({name})")
     } else {
         format!("{mult}{name}")
     }
 }
+
 pub fn count_names(names: &[String]) -> BTreeMap<String, usize> {
     let mut result = BTreeMap::new();
     for name in names {
@@ -213,6 +218,21 @@ pub fn format_element_substituent(
 
 #[cfg(test)]
 mod tests {
+    use super::format_multiplier;
+
+    #[test]
+    fn simple_dec_prefixes_keep_basic_multipliers_and_parentheses() {
+        for (name, count, expected) in [
+            ("decyl", 1, "decyl"),
+            ("decyl", 2, "di(decyl)"),
+            ("decylidene", 2, "di(decylidene)"),
+            ("decyl", 3, "tri(decyl)"),
+            ("ethylidene", 2, "diethylidene"),
+        ] {
+            assert_eq!(format_multiplier(name, count, false), expected);
+        }
+    }
+
     #[test]
     fn oxy_prefix_keeps_parent_hydride_acyl_enclosed() {
         // P-16.5.1.4: (methanethioyl)oxy, as in (cyclohexanecarbonyl)sulfanyl (P-57.4).

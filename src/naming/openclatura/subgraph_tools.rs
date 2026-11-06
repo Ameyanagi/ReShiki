@@ -36,6 +36,17 @@ pub fn emit_bond_stereo(
     locants: &BTreeMap<usize, String>,
     upstream_atom: Option<usize>,
 ) {
+    emit_bond_stereo_except(mol, parts, numbered_path, locants, upstream_atom, None);
+}
+
+pub(super) fn emit_bond_stereo_except(
+    mol: &Molecule,
+    parts: &mut AssemblyParts,
+    numbered_path: &[usize],
+    locants: &BTreeMap<usize, String>,
+    upstream_atom: Option<usize>,
+    excluded_bond: Option<usize>,
+) {
     let path_set: AtomSet = numbered_path.iter().copied().collect();
     let cyclic = get_cyclic_atoms(mol, &AtomSet::new());
     for &u in numbered_path {
@@ -46,7 +57,7 @@ pub fn emit_bond_stereo(
             let Some(stereo) = bond.stereo.as_ref() else {
                 continue;
             };
-            if bond.in_small_ring {
+            if bond.in_small_ring || Some(bond.idx) == excluded_bond {
                 continue;
             }
             if Some(v) == upstream_atom && (mol.atoms[&v].is_carbon() || cyclic.contains(&v)) {
@@ -354,6 +365,30 @@ mod tests {
         parts.stereo_features.clear();
         emit_bond_stereo(&mol, &mut parts, &[axis.v], &locants, Some(axis.u));
         assert!(parts.stereo_features.is_empty());
+    }
+
+    #[test]
+    fn omitting_attachment_bond_stereo_keeps_internal_descriptors() {
+        let mol = read_smiles("C/C=C/C=N/O").unwrap();
+        let attachment = mol.get_bond(3, 4).unwrap();
+        let locants = BTreeMap::from([
+            (3, "1".into()),
+            (2, "2".into()),
+            (1, "3".into()),
+            (0, "4".into()),
+        ]);
+        let mut parts = AssemblyParts::new(4);
+        parts.is_substituent = true;
+        emit_bond_stereo_except(
+            &mol,
+            &mut parts,
+            &[3, 2, 1, 0],
+            &locants,
+            Some(4),
+            Some(attachment.idx),
+        );
+        assert_eq!(parts.stereo_features, [("2".into(), "E".into())]);
+        assert_eq!(attachment.stereo.as_deref(), Some("E"));
     }
 
     #[test]

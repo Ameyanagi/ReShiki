@@ -15,8 +15,12 @@ use crate::graph::{
 use crate::parse_tree::{Arena, NodeId};
 use crate::stereo_analyser::{StereoBond, StereoCentre};
 use crate::xml_declarations::*;
-use reshiki_chemistry::stereo::{axis_ends_distinct, cip::label};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use reshiki_chemistry::stereo::{
+    axis_ends_distinct,
+    cip::label,
+    perception::{RingCache, RingKind},
+};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 
 /// Numbered [2.2.1] or [3.2.1] cage. Coordinates are only a
@@ -227,6 +231,7 @@ pub struct StereochemistryHandler<'a> {
     cage_stereo_groups: BTreeMap<AtomId, CageStereochemistry>,
     unknown_stereo_centres: Vec<UnknownStereoCentre>,
     unknown_stereo_reservations: BTreeSet<AtomId>,
+    coupled_unknown_candidates: BTreeSet<AtomId>,
 }
 impl<'a> StereochemistryHandler<'a> {
     pub fn new(
@@ -247,6 +252,7 @@ impl<'a> StereochemistryHandler<'a> {
             cage_stereo_groups: BTreeMap::new(),
             unknown_stereo_centres: Vec::new(),
             unknown_stereo_reservations: BTreeSet::new(),
+            coupled_unknown_candidates: BTreeSet::new(),
             atom_stereo_centre_map: atoms,
             bond_stereo_bond_map: bonds,
         }
@@ -335,6 +341,12 @@ impl<'a> StereochemistryHandler<'a> {
         }
     }
     pub fn apply_stereochemical_elements(&mut self, elements: &[NodeId]) -> Result {
+        if elements.iter().any(|&id| {
+            self.attr(id, TYPE_ATR) == ALPHA_OR_BETA_TYPE_VAL
+                && matches!(self.attr(id, VALUE_ATR).as_str(), "xi" | "Xi" | "ξ")
+        }) {
+            self.find_coupled_unknown_candidates()?;
+        }
         // Descriptor-set prefixes, starred R/S and RS/SR have already been
         // normalized to Rel/Rac attributes; standalone qualifiers keep a type.
         let mut requested_group_kinds = BTreeSet::new();
@@ -1426,12 +1438,16 @@ impl<'a> StereochemistryHandler<'a> {
         let locant = self.attribute(id, LOCANT_ATR);
         let value = self.attr(id, VALUE_ATR);
         let unknown = matches!(value.as_str(), "xi" | "Xi" | "ξ");
+        // Only a locanted lowercase ξ may name a coupled r/s centre; anything
+        // else keeps the ordinary stereocentre search.
+        let coupled = matches!(value.as_str(), "xi" | "ξ");
         let fragments = self.possible_fragments(id)?;
         for &fragment in &fragments {
             let atom = if let Some(locant) = &locant {
-                self.graph()
-                    .atom_by_locant(fragment, locant)
-                    .filter(|a| self.atom_stereo_centre_map.contains_key(a))
+                self.graph().atom_by_locant(fragment, locant).filter(|a| {
+                    self.atom_stereo_centre_map.contains_key(a)
+                        || (coupled && self.coupled_unknown_candidates.contains(a))
+                })
             } else {
                 self.graph()
                     .fragment(fragment)
@@ -1499,6 +1515,87 @@ impl<'a> StereochemistryHandler<'a> {
             self.arena.to_xml(id)
         ))
     }
+    fn find_coupled_unknown_candidates(&mut self) -> Result {
+        let (mut native, indices) = crate::modern_cip::state(self.graph())?;
+        // stereogenic_units consumes a ring cache; the CIP adapter leaves it empty.
+        native.rings = RingCache {
+            kind: RingKind::Fast,
+            atoms: reshiki_chemistry::rings::fast(&native.graph)
+                .map_err(StereochemistryError::Uninterpretable)?
+                .atoms,
+        };
+        let (possible, _) = reshiki_chemistry::stereo::perception::stereogenic_units(&native)
+            .map_err(StereochemistryError::Uninterpretable)?;
+        let possible: BTreeSet<_> = possible.into_iter().collect();
+        let candidates = indices
+            .into_iter()
+            .filter_map(|(atom, index)| {
+                (!self.atom_stereo_centre_map.contains_key(&atom) && possible.contains(&index))
+                    .then_some(atom)
+            })
+            .collect::<BTreeSet<_>>();
+        if !candidates.is_empty() {
+            let labels = self.seeded_coupled_labels(&candidates)?;
+            self.coupled_unknown_candidates.extend(
+                candidates
+                    .into_iter()
+                    .filter(|atom| matches!(labels.get(atom).map(String::as_str), Some("r" | "s"))),
+            );
+        }
+        Ok(())
+    }
+    fn seeded_coupled_labels(
+        &self,
+        candidates: &BTreeSet<AtomId>,
+    ) -> Result<HashMap<AtomId, String>> {
+        let mut seeded = self.graph().clone();
+        for &atom in candidates {
+            if seeded.atom(atom).parity.is_some() {
+                continue;
+            }
+            let mut neighbours = seeded.neighbours(atom);
+            if neighbours.len() == 3 {
+                neighbours.push(atom);
+            }
+            let references = neighbours.try_into().map_err(|_| {
+                StereochemistryError::StructureBuilding(
+                    "Only tetrahedral chirality is currently supported".into(),
+                )
+            })?;
+            seeded.atom_mut(atom).parity = Some(AtomParity::new(atom_references(references), 1));
+        }
+        crate::modern_cip::atom_labels(&seeded)
+    }
+    fn validate_coupled_unknown_centre(&self, centre: &UnknownStereoCentre) -> Result {
+        let mut visited = BTreeSet::new();
+        let mut pending = vec![centre.atom];
+        while let Some(atom) = pending.pop() {
+            if !visited.insert(atom) {
+                continue;
+            }
+            if self.coupled_unknown_candidates.contains(&atom)
+                && self.graph().atom(atom).parity.is_some()
+            {
+                return stereo(
+                    "Mixed defined and unknown coupled pseudoasymmetric stereochemistry is not supported",
+                );
+            }
+            for &bond in &self.graph().atom(atom).bonds {
+                if crate::cycle_detector::is_bond_in_cycle(self.graph(), bond) {
+                    pending.push(self.graph().bond(bond).other_atom(atom).unwrap());
+                }
+            }
+        }
+        let labels = self.seeded_coupled_labels(&self.coupled_unknown_candidates)?;
+        if matches!(
+            labels.get(&centre.atom).map(String::as_str),
+            Some("r" | "s")
+        ) {
+            Ok(())
+        } else {
+            stereo("Could not confirm coupled pseudoasymmetric stereochemistry")
+        }
+    }
     fn resolve_unknown_stereo_centres(&mut self) -> Result {
         self.unknown_stereo_reservations.clear();
         let mut centres = std::mem::take(&mut self.unknown_stereo_centres);
@@ -1537,6 +1634,9 @@ impl<'a> StereochemistryHandler<'a> {
     }
     fn validate_unknown_stereo_centre(&mut self, centre: &UnknownStereoCentre) -> Result {
         let atom = centre.atom;
+        if self.coupled_unknown_candidates.contains(&atom) {
+            return self.validate_coupled_unknown_centre(centre);
+        }
         if centre.value == "xi" || (centre.value == "ξ" && centre.alpha_beta) {
             return Ok(());
         }
