@@ -26,6 +26,13 @@ impl Context {
             }
             result.push((self.other(b, atom)?, dir));
         }
+        // P-92.3: an explicit terminal ¹H and an implicit H cannot define E/Z.
+        if let [(neighbor, _)] = result.as_slice()
+            && self.hydrogens(atom)? > 0
+            && self.terminal_hydrogen(*neighbor)?
+        {
+            return Ok(Vec::new());
+        }
         if (require_direction && !seen)
             || (result.len() == 2
                 && at(&self.ranks, at(&result, 0)?.0)? == at(&self.ranks, at(&result, 1)?.0)?)

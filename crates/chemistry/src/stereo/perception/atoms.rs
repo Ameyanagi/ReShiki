@@ -1,5 +1,17 @@
 use super::*;
 impl Context {
+    /// An H or ¹H with one neighbour and nothing else attached: the same CIP
+    /// ligand as an implicit H (P-92.3), whatever the bond type (single,
+    /// dative or CX hydrogen bond). Charge is no sequence-rule criterion; a
+    /// bridging hydride or an H carrying another H continues the ligand.
+    pub(super) fn terminal_hydrogen(&self, atom: usize) -> Result<bool, String> {
+        let a = at(&self.state.graph.atoms, atom)?;
+        Ok(a.atomic_number == 1
+            && a.isotope <= 1
+            && self.hydrogens(atom)? == 0
+            && at(&self.neighbors, atom)?.len() == 1)
+    }
+
     // FindStereo.cpp::isAtomPotentialTetrahedralCenter (2026.03.6).
     pub(super) fn potential_tetrahedral(
         &mut self,
@@ -28,8 +40,7 @@ impl Context {
         if hs == 1 {
             for &b in at(&self.neighbors, i)? {
                 work.spend(1)?;
-                let a = at(&self.state.graph.atoms, self.other(b, i)?)?;
-                if a.atomic_number == 1 && a.isotope == 0 {
+                if self.terminal_hydrogen(self.other(b, i)?)? {
                     return Ok(false);
                 }
             }
@@ -75,8 +86,7 @@ impl Context {
         if hs == 1 {
             for &b in at(&self.neighbors, i)? {
                 work.spend(1)?;
-                let neighbor = at(&self.state.graph.atoms, self.other(b, i)?)?;
-                if neighbor.atomic_number == 1 && neighbor.isotope == 0 {
+                if self.terminal_hydrogen(self.other(b, i)?)? {
                     return Ok(false);
                 }
             }

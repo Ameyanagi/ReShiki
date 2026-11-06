@@ -83,6 +83,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("opsin", "processing_functional_replacement"): 0,
     ("opsin", "processing_phane_rings"): 0,
     ("opsin", "processing_pipeline"): 0,
+    ("opsin", "protium"): 0,
     ("opsin", "processing_rings"): 0,
     ("opsin", "processing_rings_topology"): 0,
     ("opsin", "processing_upstream"): 0,
