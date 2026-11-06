@@ -1510,7 +1510,7 @@ mod tests {
     }
 
     #[test]
-    fn anion_charge_stacks_keep_route_order_and_cation_only_spelling() {
+    fn anion_charge_stacks_cite_cations_first_and_keep_cation_only_spelling() {
         use super::super::assembly_parts::{AnionSuffix, ParentChargeItem};
         let mut parts = AssemblyParts::new(5);
         parts.is_ring = true;
@@ -1525,7 +1525,18 @@ mod tests {
             locants: vec!["1".into()],
             cite_locants: true,
         });
-        assert_eq!(rendered_parent(&parts), "pyrazol-1-ide-2-ium");
+        assert_eq!(rendered_parent(&parts), "pyrazol-2-ium-1-ide");
+
+        parts.parent_length = 6;
+        parts.retained_name = Some("1,2,4-triazine".into());
+        parts.parent_charges.push(ParentChargeItem {
+            locant: "4".into(),
+            symbol: "N".into(),
+            charge: 1,
+            ..Default::default()
+        });
+        assert_eq!(rendered_parent(&parts), "1,2,4-triazine-2,4-diium-1-ide");
+        parts.parent_charges.pop();
 
         parts.parent_length = 6;
         parts.retained_name = Some("piperidine".into());

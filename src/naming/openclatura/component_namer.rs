@@ -6,14 +6,17 @@ use super::{
         exclude_nonparent_group_atoms, external_chain_carboxylic_parent, principal_involved_atoms,
         retarget_external_carbonyl_groups,
     },
-    component_modifiers::{add_component_front_modifiers, add_component_n_substituents},
+    component_modifiers::{
+        add_component_n_substituents, collect_component_front_modifiers,
+        collect_numbering_n_substituents,
+    },
     functional_prefixes::collect_component_prefix_substituents,
     graph_kernel::Edge,
     molecule::{AtomSet, Molecule, bond_ids_within},
     namer::name_subgraph_rendered,
     parent_pipeline::{
-        ParentAssemblyPlan, build_parent_assembly_plan, build_parent_assembly_plan_with_parent,
-        resolve_retained_parent,
+        ParentAssemblyPlan, build_parent_assembly_plan_with_modifiers,
+        build_parent_assembly_plan_with_parent, resolve_retained_parent,
     },
     parent_selection::select_principal_parent,
     principal_groups::{
@@ -73,7 +76,7 @@ pub(super) fn name_component_with_citation(
     citation: Option<&str>,
     principal_atom: Option<usize>,
 ) -> Result<ComponentName, String> {
-    match component_pipeline(mol, component_atoms, citation, principal_atom, None)? {
+    match component_pipeline(mol, component_atoms, citation, principal_atom, None, None)? {
         ComponentResult::Shortcut(name) => Ok(ComponentName {
             text: name.name,
             principal_group_atoms: AtomSet::new(),
@@ -119,8 +122,9 @@ pub(super) struct IsotopeParentName {
 pub(super) fn name_component_with_atom_locants(
     mol: &Molecule,
     component_atoms: &AtomSet,
+    isotope_source: Option<&Molecule>,
 ) -> Result<IsotopeParentName, String> {
-    match component_pipeline(mol, component_atoms, None, None, None)? {
+    match component_pipeline(mol, component_atoms, None, None, None, isotope_source)? {
         ComponentResult::Shortcut(name) => Ok(IsotopeParentName {
             rendered_parent: name.name.clone(),
             text: name.name,
@@ -188,6 +192,7 @@ pub(super) fn build_spiro_component_parts(
                     required_core,
                     prefix_only,
                 }),
+                None,
             )? {
                 ComponentResult::Shortcut(_) => None,
                 ComponentResult::Plan(plan, _, _) => Some(*plan),
@@ -241,6 +246,7 @@ fn component_pipeline(
     citation: Option<&str>,
     principal_atom: Option<usize>,
     projection: Option<SpiroProjection<'_>>,
+    isotope_source: Option<&Molecule>,
 ) -> Result<ComponentResult, String> {
     let _depth = mol.enter_naming()?;
     let as_prefix = projection.as_ref().is_some_and(|p| {
@@ -441,6 +447,16 @@ fn component_pipeline(
     {
         retained_name = None;
     }
+    let front = collect_component_front_modifiers(mol, &groups, key.as_deref(), &sub_exclude)?;
+    let numbering_n_subs =
+        collect_numbering_n_substituents(mol, &groups, key.as_deref(), path, &sub_exclude)?;
+    let modifiers = super::numbering::NumberingModifiers {
+        nitrogen_substituents: numbering_n_subs
+            .as_ref()
+            .map_or_else(BTreeMap::new, |subs| subs.numbering_modifiers()),
+        ester_alcohols: front.numbering_modifiers(),
+        acid_isotopes: front.acid_isotopes(isotope_source),
+    };
     let mut plan = if let Some(projection) = &projection {
         if !parent.contains(&projection.junction) {
             return Ok(ComponentResult::Shortcut(StructuralParentName::ordinary(
@@ -469,6 +485,7 @@ fn component_pipeline(
                 &mapping,
                 retained_name,
                 &maps,
+                &modifiers,
                 Some(proof.parent.hydride),
             )?
         } else {
@@ -494,7 +511,7 @@ fn component_pipeline(
                 maps.clear();
                 retained_metadata = None;
             }
-            build_parent_assembly_plan(
+            build_parent_assembly_plan_with_modifiers(
                 mol,
                 &selection,
                 &[projection.junction],
@@ -503,10 +520,11 @@ fn component_pipeline(
                 &numbering_mapping,
                 retained_name,
                 &maps,
+                &modifiers,
             )?
         }
     } else {
-        build_parent_assembly_plan(
+        build_parent_assembly_plan_with_modifiers(
             mol,
             &selection,
             &principal,
@@ -515,6 +533,7 @@ fn component_pipeline(
             &mapping,
             retained_name,
             &maps,
+            &modifiers,
         )?
     };
     if retained_metadata.is_some() {
@@ -525,17 +544,21 @@ fn component_pipeline(
     let parts = &mut plan.parts;
     parts.principal_citation_mode = citation.map(str::to_owned);
     emit_bond_stereo(mol, parts, numbered, locants, None);
-    let (front, component_splits) =
-        add_component_front_modifiers(mol, parts, &groups, key.as_deref(), &sub_exclude, locants)?;
-    let n_subs = add_component_n_substituents(
-        mol,
-        parts,
-        &groups,
-        key.as_deref(),
-        numbered,
-        locants,
-        &sub_exclude,
-    )?;
+    front.add_to_parts(isotope_source.unwrap_or(mol), parts, locants);
+    let component_splits = front.component_splits;
+    let n_subs = if let Some(subs) = numbering_n_subs {
+        subs.add_to_parts(parts, locants)
+    } else {
+        add_component_n_substituents(
+            mol,
+            parts,
+            &groups,
+            key.as_deref(),
+            numbered,
+            locants,
+            &sub_exclude,
+        )?
+    };
     add_parent_features(mol, parts, numbered, locants)?;
     add_component_principal_group(
         mol,
@@ -561,7 +584,7 @@ fn component_pipeline(
     // Preserve the upstream complete-name requirement without its trace/audit machinery.
     let mut named = parent.clone();
     named.extend(principal_atoms);
-    named.extend(front);
+    named.extend(front.consumed);
     named.extend(n_subs);
     named.extend(
         parts

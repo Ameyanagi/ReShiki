@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 
 use super::assembly_parts::{AssemblyParts, ParentChargeItem, SubstituentItem};
 use super::molecule::{AtomSet, Molecule, bond_ids_within};
-use super::numbering::{NumberingTopology, ProvenHydrogenLocants, choose_parent_numbering};
+use super::numbering::{
+    NumberingModifiers, NumberingTopology, ProvenHydrogenLocants, choose_parent_numbering,
+};
 use super::parent_selection::ParentSelection;
 use super::ring_parent::{ParentHydrideKind, RingParent};
 use crate::naming::{NameReason, NameStatus};
@@ -215,6 +217,31 @@ pub fn build_parent_assembly_plan(
     retained_name: Option<String>,
     locant_maps: &[BTreeMap<usize, String>],
 ) -> Result<ParentAssemblyPlan, String> {
+    build_parent_assembly_plan_with_modifiers(
+        mol,
+        selection,
+        principal_carbons,
+        root,
+        upstream,
+        substituents,
+        retained_name,
+        locant_maps,
+        &NumberingModifiers::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_parent_assembly_plan_with_modifiers(
+    mol: &Molecule,
+    selection: &ParentSelection,
+    principal_carbons: &[usize],
+    root: Option<usize>,
+    upstream: Option<usize>,
+    substituents: &BTreeMap<usize, Vec<SubstituentItem>>,
+    retained_name: Option<String>,
+    locant_maps: &[BTreeMap<usize, String>],
+    modifiers: &NumberingModifiers,
+) -> Result<ParentAssemblyPlan, String> {
     let parent = if let Some(assembly) = &selection.ring_assembly {
         Some(RingParent::from_ring_assembly(
             selection.atom_set(),
@@ -240,6 +267,7 @@ pub fn build_parent_assembly_plan(
         substituents,
         retained_name,
         locant_maps,
+        modifiers,
         parent,
     )
 }
@@ -254,6 +282,7 @@ pub fn build_parent_assembly_plan_with_parent(
     substituents: &BTreeMap<usize, Vec<SubstituentItem>>,
     retained_name: Option<String>,
     locant_maps: &[BTreeMap<usize, String>],
+    modifiers: &NumberingModifiers,
     mut parent: Option<RingParent>,
 ) -> Result<ParentAssemblyPlan, String> {
     let retained_name = parent
@@ -402,6 +431,7 @@ pub fn build_parent_assembly_plan_with_parent(
     };
     let (numbered_path, selected_map) = choose_parent_numbering(
         mol,
+        modifiers,
         &selection.paths,
         principal_carbons,
         root,
