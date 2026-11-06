@@ -1,8 +1,6 @@
 relation	smiles	reason
 atom_maps	C1=Cc2cc3ccc(cc4ccc(cc5nc(cc1n2)C=C5)[nH]4)[nH]3	issue #953: atom maps move the double-bond locants of the von Baeyer porphyrin name (tetracosa-1,3(24),4,... vs 1(20),2,4,...)
 atom_order	C1=Cc2cc3ccc(cc4ccc(cc5nc(cc1n2)C=C5)[nH]4)[nH]3	issue #953: atom order moves the double-bond locants of the von Baeyer porphyrin name (tetracosa-1,3(24),4,... vs 1(20),2,4,...)
-atom_order	CC(C)CC(=O)Nc1ccc(NC(=O)c2cccnc2Sc2ccccc2)cc1	issue #953: atom order picks which of two tied amides is the parent (butanamide vs pyridine-3-carboxamide); status is principal_group_tie
-atom_order	CC(C)[C@H](NC(=O)c1ccc(Cl)cc1)C(=O)NCCC1=CCCCC1	issue #953: atom order picks which of two tied amides is the parent (benzamide vs butanamide); status is principal_group_tie
 atom_order	CCOc1cc(CN(CC(=O)NC(=O)NCC(C)C)C2CC2)ccc1OC(F)F	issue #953: atom order picks the acetamide or the urea as parent, both labelled preferred
 atom_order	CN1CCC(N2CCC(NC(=O)C(=O)Nc3cccc(-n4cccn4)c3)CC2)CC1	issue #953: atom order swaps N and N' of ethanediamide between the two substituents
 atom_order	COC(=O)CC(=O)OCC(C)(C)CC(=O)OC(C)(C)C	issue #953: atom order swaps the ester locants of propanedioate (1-methyl 3-[...butyl] vs 1-[...butyl] 3-methyl), both labelled preferred

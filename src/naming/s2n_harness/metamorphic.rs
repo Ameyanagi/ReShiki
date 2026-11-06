@@ -190,6 +190,108 @@ fn atom_order_keeps_name_and_status() {
     });
 }
 
+#[test]
+fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
+    let mut parser = Measurements::default();
+    let mut failures = Vec::new();
+    for (smiles, expected, status) in [
+        (
+            "CC(C)CC(=O)Nc1ccc(NC(=O)c2cccnc2Sc2ccccc2)cc1",
+            "N-[4-(3-methylbutanamido)phenyl]-2-(phenylsulfanyl)pyridine-3-carboxamide",
+            NameStatus::Preferred,
+        ),
+        (
+            "c1c(NC(=O)c2cccnc2Sc2ccccc2)ccc(NC(CC(C)C)=O)c1",
+            "N-[4-(3-methylbutanamido)phenyl]-2-(phenylsulfanyl)pyridine-3-carboxamide",
+            NameStatus::Preferred,
+        ),
+        (
+            "CC(C)[C@H](NC(=O)c1ccc(Cl)cc1)C(=O)NCCC1=CCCCC1",
+            "4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide",
+            NameStatus::Preferred,
+        ),
+        (
+            "CC([C@@H](C(NCCC1=CCCCC1)=O)NC(c1ccc(Cl)cc1)=O)C",
+            "4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide",
+            NameStatus::Preferred,
+        ),
+        (
+            "NC(=O)C(NC(=O)c1ccccc1)C(N)=O",
+            "2-benzamidopropanediamide",
+            NameStatus::Preferred,
+        ),
+        (
+            "CC(=O)Nc1ccc(C(N)=O)cc1",
+            "4-acetamidobenzamide",
+            NameStatus::Preferred,
+        ),
+        (
+            "CC(=O)NCCNC(=O)CC",
+            "N-(2-acetamidoethyl)propanamide",
+            NameStatus::Preferred,
+        ),
+        (
+            "NC(=O)CNC(=O)c1ccccc1",
+            "N-(2-amino-2-oxoethyl)benzamide",
+            NameStatus::Preferred,
+        ),
+    ] {
+        let identity = canonical_smiles(smiles).unwrap();
+        assert_eq!(parser.parse_name(expected).unwrap(), identity, "{expected}");
+        let expected = Ok((expected.to_owned(), status));
+        failures.extend(mismatch(smiles, &expected, &outcome(smiles)));
+        let seed = smiles.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+        });
+        for order in 0..6 {
+            let mut rng = generator::SplitMix64(seed.wrapping_add(order));
+            let mut permuted = smiles.to_owned();
+            for _ in 0..3 {
+                let state = state(&permuted);
+                permuted = smiles_in_order(&state, Some(rng.below(state.graph.atoms.len())));
+            }
+            assert_eq!(canonical_smiles(&permuted).unwrap(), identity, "{permuted}");
+            failures.extend(mismatch(&permuted, &expected, &outcome(&permuted)));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn untied_diamide_controls_keep_cli_names_and_status_in_six_orders() {
+    use crate::naming::NameReason;
+
+    let mut parser = Measurements::default();
+    for (smiles, expected) in [
+        ("CNC(=O)C(=O)NCC", "N-ethyl-N'-methylethanediamide"),
+        ("CCNC(=O)C(=O)Nc1ccccc1", "N-ethyl-N'-phenylethanediamide"),
+    ] {
+        let identity = canonical_smiles(smiles).unwrap();
+        assert_eq!(parser.parse_name(expected).unwrap(), identity);
+        let expected = Ok((
+            expected.to_owned(),
+            NameStatus::NotPreferred(NameReason::UnretainedParent),
+        ));
+        assert_eq!(outcome(&identity), expected, "{smiles}");
+        let seed = smiles.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+        });
+        for order in 0..6 {
+            let mut rng = generator::SplitMix64(seed.wrapping_add(order));
+            let mut permuted = smiles.to_owned();
+            for _ in 0..3 {
+                let state = state(&permuted);
+                permuted = smiles_in_order(&state, Some(rng.below(state.graph.atoms.len())));
+            }
+            let canonical = canonical_smiles(&permuted).unwrap();
+            assert_eq!(canonical, identity, "{permuted}");
+            // The CLI canonicalizes input. Direct N/N' numbering still has
+            // issue #953 group D's separate atom-order dependence.
+            assert_eq!(outcome(&canonical), expected, "{permuted}");
+        }
+    }
+}
+
 /// `text` with every CIP descriptor in a descriptor group mapped by `map`.
 /// Groups are innermost parentheses before a hyphen whose items are all
 /// `locant? descriptor`, as `(2R,4aS,1'M,NS)-`.

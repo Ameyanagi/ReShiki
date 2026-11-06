@@ -17,7 +17,7 @@ use super::{
     parent_selection::select_principal_parent,
     principal_groups::{
         add_component_principal_group, candidate_principal_attachments, component_groups,
-        component_principal_key, demote_neutral_suffixes_for_skeletal_anion,
+        component_principal_key, demote_neutral_suffixes_for_skeletal_anion, equivalent_amide_keys,
         partition_principal_and_prefix_groups,
     },
     special_cases::{
@@ -282,8 +282,8 @@ fn component_pipeline(
     {
         return Ok(ComponentResult::Shortcut(result));
     }
-    // The key is the first of equally senior groups, such as carboxylic_acid
-    // and ring_carboxylic_acid, not the P-44.1 count and ring-over-chain choice.
+    // P-44.1 resolves amide/carboxamide through parent selection below; other
+    // neutral classes and rooted projections still use the first senior key.
     let seniority = |g: &super::perception::PerceivedGroup| {
         g.resolved_rule.as_ref().and_then(|r| r.seniority.clone())
     };
@@ -297,7 +297,10 @@ fn component_pipeline(
             .sum::<i32>()
             >= 0
         && groups.iter().any(|g| {
-            g.is_principal_candidate && g.key != selected.key && seniority(g) == seniority(selected)
+            g.is_principal_candidate
+                && g.key != selected.key
+                && seniority(g) == seniority(selected)
+                && !(projection.is_none() && equivalent_amide_keys(&g.key, &selected.key))
         })
     {
         mol.mark_name(crate::naming::NameStatus::Unverified(
@@ -661,6 +664,46 @@ fn collect_component_branch_substituents(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unresolved_principal_classes_keep_their_tie_status() {
+        use crate::naming::{NameReason, NameStatus};
+
+        for smiles in [
+            "O=C(O)Cc1ccc(C(=O)O)cc1",
+            "N#CCc1ccc(C#N)cc1",
+            "NC(=O)CNCCNC(=O)NC",
+        ] {
+            assert_eq!(
+                super::super::name_smiles(smiles).unwrap().status,
+                NameStatus::Unverified(NameReason::PrincipalGroupTie),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn resolved_amide_parent_keeps_existing_status_marks() {
+        use super::super::graph_io::read_smiles;
+        use crate::naming::{NameReason, NameStatus};
+
+        for status in [
+            NameStatus::Preferred,
+            NameStatus::NotPreferred(NameReason::UnretainedParent),
+            NameStatus::Unverified(NameReason::UnauditedParent),
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ] {
+            let mol = read_smiles("NC(=O)CNC(=O)c1ccccc1").unwrap();
+            mol.certify();
+            mol.mark_name(status);
+            let atoms = mol.atoms.keys().copied().collect();
+            assert_eq!(
+                super::name_component(&mol, &atoms).unwrap(),
+                "N-(2-amino-2-oxoethyl)benzamide"
+            );
+            assert_eq!(mol.name_status(), status);
+        }
+    }
+
     #[test]
     fn charged_retained_fallback_requires_citable_donor_hydrogen() {
         for smiles in ["C1=N[NH2+]c2ccccc21", "C1=Nc2ccccc2[NH2+]1"] {
