@@ -310,6 +310,13 @@ fn combinations<T: Clone>(
     Some(out)
 }
 fn supported(parts: &AssemblyParts) -> bool {
+    // P-65.6.3.3.1: a single ester alcohol component leaves acid locant elision intact.
+    let single_ester_modifier = parts.principal_group.as_ref().is_some_and(|group| {
+        group.key == "ester"
+            && group.locants.len() == 1
+            && parts.front_modifiers.len() == 1
+            && parts.front_modifier_locants == [Some(group.locants[0].clone())]
+    });
     !(parts.is_substituent
         || parts.is_bicycle
         || parts.is_spiro
@@ -320,6 +327,7 @@ fn supported(parts: &AssemblyParts) -> bool {
         || !parts.parent_charges.is_empty()
         || !parts.a_prefixes.is_empty()
         || !parts.front_modifier_locants.is_empty()
+            && !single_ester_modifier
             && !(parts.ester_site_exchange_proven && parts.front_modifiers.len() == 2)
         || !parts.principal_suffix_modifiers.is_empty()
         || !parts.hydro_operations.is_empty()
@@ -1141,6 +1149,71 @@ mod tests {
         let smiles = format!("{}[C@H](F)Cl", "C".repeat(400));
         let name = super::super::name_smiles(&smiles).unwrap();
         assert_eq!(name.text, "(1R)-1-chloro-1-fluorohentetractane");
+    }
+
+    #[test]
+    fn single_ester_acid_component_omits_only_redundant_locants() {
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            ("FCC(=O)OC", "methyl fluoroacetate"),
+            ("FC(F)C(=O)OC", "methyl difluoroacetate"),
+            ("FC(F)(F)C(=O)OC", "methyl trifluoroacetate"),
+            ("ClC(Cl)C(=O)OCC", "ethyl dichloroacetate"),
+            ("COC(=O)Cc1ccc2[nH]ccc2c1", "methyl (1H-indol-5-yl)acetate"),
+            ("COC(=O)[C@H](F)Cl", "methyl (R)-chlorofluoroacetate"),
+            ("OCC(=O)OCC", "ethyl hydroxyacetate"),
+            ("FCC(=O)Oc1ccccc1", "phenyl fluoroacetate"),
+            ("FCC(=O)OCC(=O)OC", "2-methoxy-2-oxoethyl fluoroacetate"),
+            ("FCC(=O)O", "fluoroacetic acid"),
+            ("CC(=O)OC", "methyl acetate"),
+            ("FCCC(=O)OC", "methyl 3-fluoropropanoate"),
+            ("CC(F)C(=O)OC", "methyl 2-fluoropropanoate"),
+            ("O=C(NC)CF", "2-fluoro-N-methylacetamide"),
+            (
+                "COC(=O)C(F)CC(=O)OCC",
+                "4-ethyl 1-methyl 2-fluorobutanedioate",
+            ),
+            ("FCCOC(=O)CF", "2-fluoroethyl fluoroacetate"),
+            (
+                "C[C@H](CC)OC(=O)[C@H](F)Cl",
+                "(2R)-butan-2-yl (R)-chlorofluoroacetate",
+            ),
+            (
+                "C[C@@H](CC)OC(=O)[C@H](F)Cl",
+                "(2S)-butan-2-yl (R)-chlorofluoroacetate",
+            ),
+            ("O=C(O)[C@H](F)Cl", "(R)-chlorofluoroacetic acid"),
+        ] {
+            let canonical = crate::naming::canonical_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(&canonical).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{expected}: {}",
+                parsed.message
+            );
+            let actual = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            crate::naming::verify_identity(smiles, &actual).unwrap();
+        }
+        let input = reshiki_chemistry::smiles::read("C[C@H](CC)OC(=O)[C@H](F)Cl").unwrap();
+        let labeled = reshiki_chemistry::stereo::cip::label::assign(
+            &input.prepared.state,
+            &Default::default(),
+        )
+        .unwrap();
+        for atom in [1, 7] {
+            assert_eq!(
+                labeled.state.properties.atoms[atom].cip_code.as_deref(),
+                Some("R")
+            );
+        }
     }
 
     #[test]

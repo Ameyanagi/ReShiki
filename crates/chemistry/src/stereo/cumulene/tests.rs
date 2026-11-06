@@ -150,6 +150,8 @@ fn lost_directions_follow_retained_and_removed_hydrogens() {
         ("[CH3:1]/C([CH3:2])=C=C=C/C", false),
         ("[H]/N=C=C=CC", false),
         ("[H]N=C=C=C/C", false),
+        ("C[C@H](F)/C([C@H](F)C)=C=C=C/[C@H](O)Cl", true),
+        ("C[C@H](F)/C([C@H](F)C)=C=C=C/[C@H](O)Cl |r|", true),
     ] {
         let imported = crate::smiles::read(text).unwrap();
         assert_eq!(imported.dropped_cumulene_ez, dropped, "{text}");

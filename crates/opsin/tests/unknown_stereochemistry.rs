@@ -1,5 +1,129 @@
 use opsin::{ParseOptions, Parser, Status, WarningKind};
 
+fn canonical(smiles: &str) -> String {
+    let imported = reshiki_chemistry::smiles::read(smiles).unwrap();
+    reshiki_chemistry::smiles::write::write(&imported.prepared.state, Default::default())
+        .unwrap()
+        .text
+}
+
+fn parsed(parser: &Parser, name: &str) -> opsin::Structure {
+    let result = parser.parse(name, &ParseOptions::strict());
+    assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+    result.structure.unwrap()
+}
+
+#[test]
+fn coupled_pseudoasymmetric_xi_has_no_configured_centres() {
+    let parser = Parser::new().unwrap();
+    for (name, smiles) in [
+        ("(1ξ,4ξ)-cyclohexane-1,4-diol", "OC1CCC(O)CC1"),
+        ("(1xi,4xi)-cyclohexane-1,4-diol", "OC1CCC(O)CC1"),
+        ("(4ξ,1ξ)-cyclohexane-1,4-diol", "OC1CCC(O)CC1"),
+        ("(1ξ,4ξ)-cyclohexane-1,4-diamine", "NC1CCC(N)CC1"),
+        ("(2xi)-butan-2-ol", "CC(CC)O"),
+    ] {
+        let structure = parsed(&parser, name);
+        assert_eq!(
+            canonical(&structure.semantic_cxsmiles().unwrap()),
+            canonical(smiles),
+            "{name}"
+        );
+        assert!(
+            structure
+                .graph
+                .atoms
+                .iter()
+                .all(|atom| atom.parity.is_none()),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn coupled_xi_rejects_nonstereogenic_wrong_case_and_mixed_descriptors() {
+    let parser = Parser::new().unwrap();
+    for name in [
+        "(1ξ)-cyclohexan-1-ol",
+        "(1xi)-cyclohexan-1-ol",
+        "(1xi,2xi)-ethane-1,2-diol",
+        "(1Ξ,4Ξ)-cyclohexane-1,4-diol",
+        "(2ξ)-2-aminopropanoic acid",
+        "(1s,4ξ)-cyclohexane-1,4-diol",
+        "(1ξ,4s)-cyclohexane-1,4-diol",
+        "(1s,4xi)-cyclohexane-1,4-diol",
+        "(1xi,4s)-cyclohexane-1,4-diol",
+    ] {
+        let result = parser.parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+        assert!(result.structure.is_none(), "{name}");
+    }
+}
+
+#[test]
+fn unlocanted_xi_keeps_the_ordinary_stereocentre_search() {
+    // Coupled ring centres are reachable only through a locanted lowercase ξ.
+    let parser = Parser::new().unwrap();
+    let structure = parsed(&parser, "(Ξ)-4-(2-hydroxypropyl)cyclohexan-1-ol");
+    assert_eq!(
+        canonical(&structure.semantic_cxsmiles().unwrap()),
+        canonical("CC(O)CC1CCC(O)CC1")
+    );
+    assert!(
+        structure
+            .graph
+            .atoms
+            .iter()
+            .all(|atom| atom.parity.is_none())
+    );
+    let result = parser.parse(
+        "(ξ)-4-(2-hydroxypropyl)cyclohexan-1-ol",
+        &ParseOptions::strict(),
+    );
+    assert_eq!(result.status, Status::Failure, "{}", result.message);
+}
+
+#[test]
+fn coupled_lowercase_rs_controls_keep_their_distinct_configurations() {
+    let parser = Parser::new().unwrap();
+    let mut identities = Vec::new();
+    for (name, label) in [
+        ("(1s,4s)-cyclohexane-1,4-diol", "s"),
+        ("(1r,4r)-cyclohexane-1,4-diol", "r"),
+    ] {
+        let structure = parsed(&parser, name);
+        for locant in ["1", "4"] {
+            let atom = structure
+                .graph
+                .atom_by_locant(structure.fragment, locant)
+                .unwrap();
+            let parity = structure.graph.atom(atom).parity.as_ref().unwrap();
+            assert_eq!(
+                parity.stereo_group.kind,
+                opsin::graph::StereoGroupType::Absolute,
+                "{name}"
+            );
+        }
+        let smiles = structure.semantic_cxsmiles().unwrap();
+        let native = reshiki_chemistry::smiles::read(&smiles).unwrap();
+        let labels = reshiki_chemistry::stereo::cip::label::assign(
+            &native.prepared.state,
+            &Default::default(),
+        )
+        .unwrap();
+        let labels: Vec<_> = labels
+            .state
+            .properties
+            .atoms
+            .iter()
+            .filter_map(|atom| atom.cip_code.as_deref())
+            .collect();
+        assert_eq!(labels, [label, label], "{name}");
+        identities.push(canonical(&smiles));
+    }
+    assert_ne!(identities[0], identities[1]);
+}
+
 #[test]
 fn xi_case_survives_tokenization_in_both_directions() {
     let parser = Parser::new().unwrap();

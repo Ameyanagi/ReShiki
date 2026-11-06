@@ -708,26 +708,94 @@ fn s2n_fast_subset() {
     run(true);
 }
 
-#[test]
-fn relative_cxsmiles_known_failure_927_item_5() {
-    use reshiki_chemistry::smiles::stereoisomers;
+#[tokio::test]
+async fn relative_cxsmiles_refuses_absolute_identity_927_item_5() {
+    for smiles in [
+        "C[C@H](O)C(=O)O |r|",
+        "C[C@@H](O)C(=O)O |r|",
+        "C[C@H](O)[C@@H](C)Cl |r|",
+        "C[C@H](O)[C@@H](O)C |r|",
+        "C[C@H](O)[C@@H](C)Cl |o1:1,3|",
+        "C[C@H](O)[C@@H](C)Cl |&1:1,3|",
+        "C[C@H](O)[C@H](F)Cl |r,o1:1,a:3|",
+        "[H][C@](C)(O)C(=O)O |r|",
+    ] {
+        let imported = reshiki_chemistry::smiles::read(smiles).unwrap();
+        let error = super::canonical_state(&imported.prepared.state).unwrap_err();
+        assert!(
+            error.contains("relative stereo groups"),
+            "{smiles}: {error}"
+        );
+        let error = crate::engine::LocalEngine::in_process()
+            .request(crate::engine::Request::import_smiles(smiles))
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("Unsupported drawing stereochemistry"),
+            "{smiles}: {error}"
+        );
+    }
+}
 
-    // #927 item 5: import keeps the representative drawing but loses bare `r`.
-    let intended = "C[C@H](O)C(=O)O |r|";
-    let imported = reshiki_chemistry::smiles::read(intended).unwrap();
-    let canonical = super::canonical_state(&imported.prepared.state).unwrap();
-    let name = namer(&canonical).unwrap().text;
-    assert_eq!(name, "(2S)-2-hydroxypropanoic acid");
-    let parsed = opsin::Parser::new()
-        .unwrap()
-        .parse(&name, &opsin::ParseOptions::strict());
-    assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
-    let actual = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
-    assert_ne!(
-        stereoisomers(&actual).unwrap(),
-        stereoisomers(intended).unwrap(),
-        "#927 item 5 is fixed: make this a passing assertion and close the item"
-    );
+#[tokio::test]
+async fn relative_cxsmiles_preserves_inversion_invariant_configurations() {
+    for (smiles, expected) in [
+        ("O[C@H]1CC[C@@H](O)CC1", "(1s,4s)-cyclohexane-1,4-diol"),
+        ("C[C@H](O)[C@H](O)C", "(2R,3S)-butane-2,3-diol"),
+    ] {
+        for input in [smiles.to_owned(), format!("{smiles} |r|")] {
+            let response = crate::engine::LocalEngine::in_process()
+                .request(crate::engine::Request::import_smiles(&input))
+                .await
+                .unwrap();
+            let identity = super::document_identity(&response.document.unwrap()).unwrap();
+            super::verify_identity(smiles, &identity.smiles).unwrap();
+            let record = super::generate_name(&identity, super::Cancel::default())
+                .await
+                .unwrap();
+            assert_eq!(record.title, expected, "{input}");
+            assert_eq!(
+                record.name_status,
+                Some(super::NameStatus::Preferred),
+                "{input}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn relative_cxsmiles_preserves_absolute_and_unconfigured_controls() {
+    for (smiles, expected) in [
+        ("C[C@H](O)C(=O)O", "(2S)-2-hydroxypropanoic acid"),
+        ("CC(O)C(=O)O |r|", "2-hydroxypropanoic acid"),
+        ("C/C=C/C |r|", "(2E)-but-2-ene"),
+        ("CCO |r|", "ethanol"),
+    ] {
+        let response = crate::engine::LocalEngine::in_process()
+            .request(crate::engine::Request::import_smiles(smiles))
+            .await
+            .unwrap();
+        let identity = super::document_identity(&response.document.unwrap()).unwrap();
+        let record = super::generate_name(&identity, super::Cancel::default())
+            .await
+            .unwrap();
+        assert_eq!(record.title, expected, "{smiles}");
+        assert_eq!(
+            record.name_status,
+            Some(super::NameStatus::Preferred),
+            "{smiles}"
+        );
+        if smiles == "C[C@H](O)C(=O)O" {
+            assert_eq!(
+                record
+                    .synonyms
+                    .iter()
+                    .map(|alias| alias.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["L-lactic acid", "(+)-lactic acid"],
+            );
+        }
+    }
 }
 
 #[test]

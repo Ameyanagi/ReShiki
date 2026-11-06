@@ -6,7 +6,7 @@ use crate::{
     cx,
     kekulize::Direction,
     ranking::StereoGroup,
-    stereo::{self, Point3, wedging::Conformer},
+    stereo::{self, Point3, perception::State, wedging::Conformer},
 };
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -18,7 +18,7 @@ pub struct Imported {
     pub name: Option<String>,
     /// SMILES directions specified odd-cumulene E/Z that preparation discarded.
     pub dropped_cumulene_ez: bool,
-    /// Molecule-level CX relative stereochemistry (`r`).
+    /// Original molecule-level CX `r` marker, normalized into stereo groups.
     #[serde(skip)]
     pub relative: bool,
     /// Reaction CX attachment markers affect wedge selection before drawing.
@@ -325,12 +325,58 @@ fn int_property(
     value
 }
 
+fn relative_stereo(state: &mut State) -> Result<()> {
+    let metadata = &state.metadata;
+    // Explicit enhanced stereo labels take precedence over molecule-level r.
+    let grouped: HashSet<_> = metadata
+        .groups
+        .iter()
+        .flat_map(|group| group.atoms.iter().copied())
+        .collect();
+    let atoms: Vec<_> = metadata
+        .atoms
+        .iter()
+        .enumerate()
+        .filter_map(|(atom, meta)| {
+            (matches!(meta.chiral_tag, 1 | 2) && !grouped.contains(&atom)).then_some(atom)
+        })
+        .collect();
+    if atoms.is_empty() {
+        return Ok(());
+    }
+    // Equivalence of the drawn member need not survive independent group inversions.
+    if !metadata
+        .groups
+        .iter()
+        .any(|group| matches!(group.kind, 1 | 2))
+    {
+        // Atom maps are not molecular identity.
+        let mut unmapped = state.clone();
+        for atom in &mut unmapped.metadata.atoms {
+            atom.map_number = 0;
+            atom.map_present = false;
+        }
+        let mut inverse = unmapped.clone();
+        super::invert_tetrahedral(&mut inverse, &atoms.iter().copied().collect());
+        if super::canonical_smiles(&unmapped)? == super::canonical_smiles(&inverse)? {
+            return Ok(());
+        }
+    }
+    state.metadata.groups.push(StereoGroup {
+        kind: 2,
+        atoms,
+        ..StereoGroup::default()
+    });
+    Ok(())
+}
+
 /// Reactions apply CX annotations after bare parsing and keep explicit H.
 /// They sanitize without the default molecule import's stereo perception.
+/// Molecule-level `r` is normalized before refusing enhanced stereo groups.
 pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
     use crate::{
         sanitize,
-        stereo::perception::{Properties, RingCache, RingKind, State},
+        stereo::perception::{Properties, RingCache, RingKind},
     };
     let mut annotations = Annotations::new(&parsed);
     for event in events {
@@ -353,7 +399,6 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
             !stereo::allene::supported(&clean.graph, i, a.chiral_tag, a.chiral_permutation)
         })
         || clean.metadata.bonds.iter().any(|b| b.stereo > 7)
-        || !clean.metadata.groups.is_empty()
     {
         return Err(Error::Unsupported(
             "reaction stereochemistry or radical count",
@@ -398,7 +443,7 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
             entries
         })
         .collect();
-    Ok(Imported {
+    let mut imported = Imported {
         dropped_cumulene_ez: false,
         relative: annotations.relative,
         reaction_properties,
@@ -432,7 +477,16 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         },
         conformers: annotations.context.conformers,
         name: None,
-    })
+    };
+    if annotations.relative {
+        relative_stereo(&mut imported.prepared.state)?;
+    }
+    if !imported.prepared.state.metadata.groups.is_empty() {
+        return Err(Error::Unsupported(
+            "reaction stereochemistry or radical count",
+        ));
+    }
+    Ok(imported)
 }
 
 /// Read default SMILES/CXSMILES chemistry, retaining input conformers and name.
@@ -534,7 +588,7 @@ pub fn read(text: &str) -> Result<Imported> {
         conf,
         stereo::CoordinateBounds::NativeImport,
     )?;
-    let (prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
+    let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
     let mut dropped_cumulene_ez = false;
     for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {
         let [(a, _), (b, _)] = chain.ends;
@@ -542,6 +596,11 @@ pub fn read(text: &str) -> Result<Imported> {
             dropped_cumulene_ez = true;
             break;
         }
+    }
+    // After cumulene detection: an `r` group would make enantiomorphic ligands
+    // rank equal and hide the dropped E/Z.
+    if annotations.relative {
+        relative_stereo(&mut prepared.state)?;
     }
     // Native RemoveHs preserves properties on retained atoms. Keep the raw
     // values for the later depiction stage, which converts rank properties
