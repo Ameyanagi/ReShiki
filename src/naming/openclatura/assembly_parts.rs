@@ -148,6 +148,8 @@ pub struct AssemblyParts {
     pub parent_atom_hydrogens_by_locant: BTreeMap<String, usize>,
     pub parent_external_bonds_by_locant: BTreeMap<String, Vec<(usize, usize, usize)>>,
     pub parent_atom_ids_by_locant: BTreeMap<String, usize>,
+    /// Admissible parent numberings before local functional-group preferences.
+    pub parent_numbering_maps: Vec<BTreeMap<usize, String>>,
     pub parent_atom_symbols_by_locant: BTreeMap<String, String>,
     pub parent_atom_charges_by_locant: BTreeMap<String, i32>,
     pub parent_atom_isotopes_by_locant: BTreeMap<String, Option<u16>>,
@@ -163,6 +165,7 @@ pub struct AssemblyParts {
     pub is_spiro_component: bool,
     pub is_spiro_side_projection: bool,
     pub spiro_prefix_composition: bool,
+    pub spiro_same_size_components: bool,
     /// The renderer cited locants on hydro prefixes of a fully hydrogenated parent.
     pub locanted_total_hydrogenation: bool,
 }
@@ -226,6 +229,7 @@ impl AssemblyParts {
             parent_atom_hydrogens_by_locant: BTreeMap::new(),
             parent_external_bonds_by_locant: BTreeMap::new(),
             parent_atom_ids_by_locant: BTreeMap::new(),
+            parent_numbering_maps: vec![],
             parent_atom_symbols_by_locant: BTreeMap::new(),
             parent_atom_charges_by_locant: BTreeMap::new(),
             parent_atom_isotopes_by_locant: BTreeMap::new(),
@@ -240,6 +244,7 @@ impl AssemblyParts {
             is_spiro_component: false,
             is_spiro_side_projection: false,
             spiro_prefix_composition: false,
+            spiro_same_size_components: false,
             locanted_total_hydrogenation: false,
         }
     }
