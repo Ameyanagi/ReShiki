@@ -256,7 +256,7 @@ C1=CC2=C(C3=C(C=CC=N3)C=C2)N=C1	1,10-phenanthroline	preferred	Table 2.8 / P-25.2
 c1nccc2ccncc12	2,7-naphthyridine	preferred	Table 2.8 / P-25.2.1 https://iupac.qmul.ac.uk/BlueBook/P2.html#250201	PR #932	pass
 c2c4c1ccccc1ncc4cc5nc3ccccc3cc25	quinolino[4,3-b]acridine	preferred	FR-2.3(g) https://iupac.qmul.ac.uk/fusedring/FR23.html	PR #932	pass
 c1c3ncncc3cc4nc2ccccc2cc14	pyrimido[4,5-b]acridine	preferred	P-25.3.2.4(b) https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; FR-2.3(b) https://iupac.qmul.ac.uk/fusedring/FR23.html	PR #932	pass
-O1CCC2CCCCC2C1	octahydro-1H-2-benzopyran	preferred	P-31.2.3.3.2 https://iupac.qmul.ac.uk/BlueBook/P3.html#3102030302	issue #949	known-failure
+O1CCC2CCCCC2C1	octahydro-1H-2-benzopyran	preferred	P-31.2.3.3.2 https://iupac.qmul.ac.uk/BlueBook/P3.html#3102030302	issue #949	pass
 N1CCCCCCCC2CCCCC12	tetradecahydro-1-benzazecine	preferred	P-25.3.2.4(b) https://iupac.qmul.ac.uk/BlueBook/P2.html#25030204; FR-2.3(b) https://iupac.qmul.ac.uk/fusedring/FR23.html	PR #932	pass
 C1CC2CCCC1C2	bicyclo[3.2.1]octane	preferred	five-membered-ring gate (P-52.2.4) https://iupac.qmul.ac.uk/BlueBook/P5.html#52020401	PR #932	pass
 COCCN1C(=O)[C@H]2[C@@H]([NH2+][C@]3([C@@H]2C1=O)C4=C(C(=CC=C4)Cl)NC3=O)CCSC	(1R,5R,6R,8S)-7'-chloro-3-(2-methoxyethyl)-8-[2-(methylsulfanyl)ethyl]-2'-oxospiro[3,7-diazabicyclo[3.3.0]octane-6,3'-(2,3-dihydro-1H-indole)]-7-ium-2,4-dione	not_preferred	five-membered-ring gate (P-52.2.4) https://iupac.qmul.ac.uk/BlueBook/P5.html#52020401; P-92 https://iupac.qmul.ac.uk/BlueBook/P9.html#92	issue #925	pass
@@ -900,3 +900,23 @@ O=C1C(=O)Cc2ccc(Cl)cc21	6-chloro-1H-indene-1,2(3H)-dione	preferred	P-59.1.10 htt
 O=C1Cc2ccccc2C1=O	1H-indene-1,2(3H)-dione	preferred	P-59.1.10 https://iupac.qmul.ac.uk/BlueBook/P5.html#590110; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-58.2.3.1.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030103	issue #944	pass
 C1C(=O)C(=O)c2ccccc12	1H-indene-1,2(3H)-dione	preferred	P-59.1.10 https://iupac.qmul.ac.uk/BlueBook/P5.html#590110; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-58.2.3.1.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030103	issue #944	pass
 O=C1C(=O)C(C)(C)c2ccccc12	3,3-dimethyl-1H-indene-1,2(3H)-dione	preferred	P-59.1.10 https://iupac.qmul.ac.uk/BlueBook/P5.html#590110; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-58.2.3.1.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030103	issue #944	pass
+# locant omission, prefix locant sets and anhydride order (issue #949)
+FC(F)(F)C(F)(F)C(F)(F)F	octafluoropropane	preferred	P-14.3.4.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#140304	issue #949	pass
+ClC1=C(Cl)C1(Cl)Cl	tetrachlorocyclopropene	preferred	P-14.3.4.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#140304	issue #949	pass
+FC1(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C1(F)F	dodecafluorocyclohexane	preferred	P-14.3.4.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#140304	issue #949	pass
+FC(F)(F)C(F)=C(F)F	hexafluoropropene	preferred	P-14.3.4.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#140304	issue #949	pass
+FC=C(F)F	trifluoroethene	preferred	P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#140304	issue #949	pass
+ClC(Cl)C(Cl)(Cl)Cl	pentachloroethane	preferred	P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#140304	issue #949	pass
+BrC(Cl)=C(Cl)Cl	bromotrichloroethene	preferred	P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#140304	issue #949	pass
+BrC(Br)=C(Cl)Cl	1,1-dibromo-2,2-dichloroethene	preferred	P-14.3.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140303	issue #949	pass
+ClC1=C(Cl)C1Cl	1,2,3-trichlorocycloprop-1-ene	preferred	P-14.3.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140303	issue #949	pass
+ClC(Cl)=C(Cl)C(Cl)=C(Cl)Cl	1,1,2,3,4,4-hexachlorobuta-1,3-diene	preferred	P-14.3.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140303	issue #949	pass
+ClC=C=C=C=C=C=C=C=C=C=C=C=C	chlorotridecadodecaene	preferred	P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#140304	issue #949	pass
+CC12CCCCC1CCCO2	8a-methyloctahydro-2H-1-benzopyran	preferred	P-31.2.3.3.2 https://iupac.qmul.ac.uk/BlueBook/P3.html#3102030302	issue #949	pass
+ClC(Cl)=C=C=CBr	4-bromo-1,1-dichlorobuta-1,2,3-triene	preferred	P-14.4(f) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404	issue #949	pass
+ClC(Cl)=CBr	2-bromo-1,1-dichloroethene	preferred	P-14.4(f) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404	issue #949	pass
+BrC1CCC2CC(Cl)(Cl)CCC2C1	6-bromo-2,2-dichlorodecahydronaphthalene	preferred	P-14.4(f) https://iupac.qmul.ac.uk/BlueBook/P1.html#1404	issue #949	pass
+O=C(OC(=O)c1ccc(Sc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1	4-phenoxybenzoic 4-(phenylsulfanyl)benzoic anhydride	preferred	P-65.7.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#650702	issue #949	pass
+O=C(OC(=O)CCCCCCCCC(Cl)C)C(Cl)CCCCCCCCC	2-chloroundecanoic 10-chloroundecanoic anhydride	preferred	P-65.7.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#650702; P-14.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#1405	issue #949	pass
+# substituent amine N-sulfide is a prefix, not a class name (issue #947 item 3)
+O=P(Oc1ccc(Oc2ccccc2)cc1)(Oc1ccccc1)Oc1ccc(Oc2ccc([N+](C)(C)[S-])cc2)cc1	4-{4-[dimethyl(sulfido)ammonio]phenoxy}phenyl 4-phenoxyphenyl phenyl phosphate	not_preferred	P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102; P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205	issue #947	pass

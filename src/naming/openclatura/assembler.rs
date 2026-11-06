@@ -387,14 +387,8 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (Stri
                             .map(|(edge, _)| *edge)
                             .collect()
             });
-        if !parts.spiro_prefix_composition
-            && (fully_hydrogenated_fusion
-                || additive.len() + indicated.len().max(stated) == parts.parent_length)
-        {
-            return (format!("{hydro}{sep}{core}"), cites_locants);
-        }
         // P-31.2.3.3.2: complete hydrogenation omits the hydro locants.
-        parts.locanted_total_hydrogenation = !parts.spiro_prefix_composition
+        let saturated = !parts.spiro_prefix_composition
             && parts
                 .parent_bond_orders_by_locants
                 .values()
@@ -403,6 +397,19 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (Stri
                 .hydro_operations
                 .iter()
                 .any(|operation| operation.key == "added_hydrogen");
+        let charged = parts
+            .parent_atom_charges_by_locant
+            .values()
+            .any(|&charge| charge != 0);
+        if !parts.spiro_prefix_composition
+            && (fully_hydrogenated_fusion
+                || additive.len() + indicated.len().max(stated) == parts.parent_length
+                || saturated && !charged)
+        {
+            return (format!("{hydro}{sep}{core}"), cites_locants);
+        }
+        // A charged parent's hydrogen count is not proven complete here.
+        parts.locanted_total_hydrogenation = saturated;
         core = format!("{}-{hydro}{sep}{core}", additive.join(","));
         cites_locants = true;
     }

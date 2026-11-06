@@ -2980,7 +2980,20 @@ fn nitrogen_chalcogenide_name(
     reduced.set_atom_charge(n, 0)?;
     let parent =
         super::component_namer::name_component_with_citation(&reduced, &reduced_atoms, None, None)?;
-    if parent.text.is_empty() {
+    // P-62.5: the class name only follows a parent amine or imine; a
+    // substituent N-chalcogenide is cited as a prefix (P-73.6).
+    let names_the_amine = match &parent.derivation {
+        super::component_namer::Derivation::Plan {
+            parent_atoms,
+            principal_group,
+            ..
+        } => match principal_group {
+            None => parent_atoms.contains(&n),
+            Some((key, group)) => matches!(key.as_str(), "amine" | "imine") && group.contains(&n),
+        },
+        super::component_namer::Derivation::Shortcut { .. } => false,
+    };
+    if parent.text.is_empty() || !names_the_amine {
         return Ok(None);
     }
     let Some(class) = section("chalcogenide_class_names")[&mol.atoms[&ch].symbol].as_str() else {
@@ -3243,7 +3256,20 @@ pub(super) fn try_name_anhydride_component(
                     halves[0].1 = format!("{}-{}", mol.atoms[&path[1]].symbol, halves[0].1);
                     halves[1].1 = format!("{}-{}", mol.atoms[&path[2]].symbol, halves[1].1);
                 }
-                halves.sort_by(|a, b| a.0.cmp(&b.0));
+                // P-65.7.2: the acids are cited in alphanumerical order: their
+                // Roman letters first, then their locants in order of citation
+                // (P-14.5.1, P-14.5.4).
+                halves.sort_by_cached_key(|half| {
+                    let letters = super::numbering::substituent_citation_name(
+                        &substituent_sort_key(&half.0).0,
+                    );
+                    let locants: Vec<usize> = half
+                        .0
+                        .split(|c: char| !c.is_ascii_digit())
+                        .filter_map(|n| n.parse().ok())
+                        .collect();
+                    (letters, locants)
+                });
                 format!("{} {} {class}", halves[0].1, halves[1].1)
             };
             Ok(Some(StructuralParentName {
@@ -3852,7 +3878,7 @@ mod tests {
             ("CC(=O)OC(C)=O", "acetic anhydride", true),
             (
                 "CC(=O)OC(=O)CCC(=O)OC(C)=O",
-                "4-(acetyloxy)-4-oxobutanoic acetic anhydride",
+                "acetic 4-(acetyloxy)-4-oxobutanoic anhydride",
                 false,
             ),
         ] {
