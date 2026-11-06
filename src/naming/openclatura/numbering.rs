@@ -19,9 +19,12 @@ pub struct NumberingTopology {
     pub is_polycycle: bool,
 }
 
-/// Comparisons used only after every existing parent-numbering criterion ties.
+/// Contextual numbering criteria and final tie breakers.
 #[derive(Default)]
 pub struct NumberingModifiers {
+    /// P-24.5.1: minimize the junction within the component's own numbering,
+    /// before hydrogen state and characteristic suffixes are considered.
+    pub spiro_junction: Option<usize>,
     pub nitrogen_substituents: BTreeMap<usize, Vec<String>>,
     pub ester_alcohols: BTreeMap<usize, String>,
     pub acid_isotopes: Vec<(usize, String, u16)>,
@@ -295,11 +298,27 @@ fn number_parent(
             retained_name,
             topology,
         );
-        if evaluation.compare(&best_score, is_ring).then_with(|| {
-            modifiers
-                .path_preference(candidate)
-                .cmp(&modifiers.path_preference(&best))
-        }) == Ordering::Less
+        let spiro_preference = modifiers
+            .spiro_junction
+            .map_or(Ordering::Equal, |junction| {
+                evaluation
+                    .hetero_by_priority
+                    .cmp(&best_score.hetero_by_priority)
+                    .then_with(|| {
+                        candidate
+                            .iter()
+                            .position(|&atom| atom == junction)
+                            .cmp(&best.iter().position(|&atom| atom == junction))
+                    })
+            });
+        if spiro_preference
+            .then_with(|| evaluation.compare(&best_score, is_ring))
+            .then_with(|| {
+                modifiers
+                    .path_preference(candidate)
+                    .cmp(&modifiers.path_preference(&best))
+            })
+            == Ordering::Less
         {
             best = candidate.clone();
             best_score = evaluation;
@@ -334,6 +353,7 @@ pub fn choose_parent_numbering(
             Vec<LocantKey>,
             Vec<LocantKey>,
             Vec<LocantKey>,
+            Vec<LocantKey>,
             Vec<(String, LocantKey)>,
             Vec<(LocantKey, usize)>,
             Vec<usize>,
@@ -358,6 +378,12 @@ pub fn choose_parent_numbering(
                 .map(value)
                 .collect();
             principal.sort();
+            let junction = modifiers
+                .spiro_junction
+                .iter()
+                .filter(|atom| map.contains_key(atom))
+                .map(value)
+                .collect();
             let mut hetero: BTreeMap<usize, Vec<LocantKey>> = BTreeMap::new();
             for (&idx, atom) in &mol.atoms {
                 if !topology.is_assembly && map.contains_key(&idx) && atom.symbol != "C" {
@@ -451,6 +477,7 @@ pub fn choose_parent_numbering(
             // descriptors are scored on every map.
             (
                 hetero,
+                junction,
                 indicated,
                 free_valence,
                 skeletal_anions,
@@ -753,6 +780,51 @@ mod tests {
         graph_io::read_smiles,
     };
     use super::*;
+
+    #[test]
+    fn spiro_junction_precedes_real_suffix_and_suffix_precedes_unsaturation() {
+        let mol = read_smiles("O=C1CC=CC2(C1)CCc1ccccc12").unwrap();
+        let path = number_parent(
+            &mol,
+            &NumberingModifiers {
+                spiro_junction: Some(5),
+                ..Default::default()
+            },
+            &[vec![1, 2, 3, 4, 5, 6]],
+            &[1],
+            None,
+            &BTreeMap::new(),
+            true,
+            false,
+            None,
+            NumberingTopology::default(),
+        );
+        // Junction 1 comes before the carbonyl's preferred 1. Of the two
+        // junction-1 directions, carbonyl 3 beats double-bond 2/carbonyl 5.
+        assert_eq!(path, vec![5, 6, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn spiro_junction_respects_intrinsic_heterocycle_numbering() {
+        let mol = read_smiles("N1CCC2(CC1)CCc1ccccc12").unwrap();
+        let path = number_parent(
+            &mol,
+            &NumberingModifiers {
+                spiro_junction: Some(3),
+                ..Default::default()
+            },
+            &[vec![0, 1, 2, 3, 4, 5]],
+            &[1],
+            None,
+            &BTreeMap::new(),
+            true,
+            false,
+            Some("piperidine"),
+            NumberingTopology::default(),
+        );
+        assert_eq!(path, vec![0, 1, 2, 3, 4, 5]);
+        assert_eq!(path.iter().position(|&atom| atom == 3), Some(3));
+    }
 
     #[test]
     fn pre_stereo_chain_orientations_respect_principal_and_prefix_locants() {

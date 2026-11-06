@@ -1015,7 +1015,14 @@ pub(super) fn systematic_suffix_hydrogen_state(
     if quota > carbon_h {
         return Ok(None);
     }
-    graph_suffix_hydrogen_state(mol, &plan.abstract_parent_graph, suffix, suffix, locants)
+    graph_suffix_hydrogen_state(
+        mol,
+        &plan.abstract_parent_graph,
+        suffix,
+        suffix,
+        locants,
+        None,
+    )
 }
 
 fn parent_pi_atoms(model: &super::fusion::model::ParentBondModel) -> AtomSet {
@@ -1034,12 +1041,13 @@ fn parent_pi_atoms(model: &super::fusion::model::ParentBondModel) -> AtomSet {
         .collect()
 }
 
-fn graph_suffix_hydrogen_state(
+pub(super) fn graph_suffix_hydrogen_state(
     mol: &Molecule,
     graph: &super::fusion::model::FusionGraph,
     suffix: &AtomSet,
     free_valences: &AtomSet,
     locants: &BTreeMap<usize, String>,
+    spiro_junction: Option<usize>,
 ) -> Result<Option<SuffixHydrogenState>, String> {
     use super::fusion::{mancude::suffix_hydrogen_state, numbering};
     let atoms: AtomSet = locants.keys().copied().collect();
@@ -1053,7 +1061,22 @@ fn graph_suffix_hydrogen_state(
         .map(|(_, l)| l.clone())
         .collect();
     let model = numbering::parent_bond_model(graph)?;
-    let capable = parent_pi_atoms(&model);
+    let capable = if let Some(junction) = spiro_junction {
+        // A site isolated from pi bonding by the junction still needs indicated
+        // H (benzofuran C2 next to spiro C3). Inherently saturated sites, such
+        // as carbon between two oxygens, remain outside the parent pi set.
+        let mut component = graph.clone();
+        for atom in &mut component.atoms {
+            if atom.id == junction {
+                atom.forced_single = false;
+            }
+        }
+        let mut capable = parent_pi_atoms(&numbering::parent_bond_model(&component)?);
+        capable.remove(&junction);
+        capable
+    } else {
+        parent_pi_atoms(&model)
+    };
     let quota = capable
         .len()
         .saturating_sub(2 * model.maximum_non_cumulative_double_bonds);
@@ -1193,7 +1216,7 @@ fn apply_lambda_parent_hydrogens(
         suffix.extend(&free_valences);
     }
     let Some((indicated, model, state)) =
-        graph_suffix_hydrogen_state(mol, &graph, &suffix, &free_valences, locants)?
+        graph_suffix_hydrogen_state(mol, &graph, &suffix, &free_valences, locants, None)?
     else {
         return Err("openclatura: lambda parent hydrogen state not proved".into());
     };
@@ -1604,12 +1627,16 @@ mod tests {
     }
 
     #[test]
-    fn projected_spiro_components_keep_complete_parent_hydrogen_composition() {
+    fn projected_spiro_components_keep_unverified_hydrogen_fallback() {
         let smiles = "CC1C2C(C(=O)N(C2=O)C3=CC=CC=C3OC)C4(N1)C5=CC=CC=C5N(C4=O)CCBr";
         let name = super::super::name_smiles(smiles).unwrap();
         assert_eq!(
             name.text,
-            "1-(2-bromoethyl)-5'-(2-methoxyphenyl)-3'-methyl-2-oxo-3'H,3a'H,6a'H-spiro[2,3-dihydro-1H-indole-3,1'-2H-pyrrolo[3,4-c]pyrrole]-4',6'-dione"
+            "1-(2-bromoethyl)-5'-(2-methoxyphenyl)-3'-methyl-2-oxospiro[2,3-dihydro-1H-indole-3,1'-2H-pyrrolo[3,4-c]pyrrole]-4',6'(3'H,3a'H,6a'H)-dione"
+        );
+        assert_eq!(
+            name.status,
+            crate::naming::NameStatus::Unverified(crate::naming::NameReason::SpiroHydrogen)
         );
         let parsed = opsin::Parser::new()
             .unwrap()

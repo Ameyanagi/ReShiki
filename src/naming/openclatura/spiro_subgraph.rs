@@ -8,6 +8,100 @@ use super::{
 };
 use std::collections::{BTreeSet, VecDeque};
 
+/// Bounded P-24.5 context shared by main and projected-component numbering.
+/// Identical skeletons keep the independently composed spirobi route.
+pub(super) fn heterogeneous_spiro_junction(mol: &Molecule) -> Option<usize> {
+    if mol.is_isotope_parent()
+        || mol
+            .atoms
+            .values()
+            .any(|atom| atom.charge != 0 || atom.isotope.is_some() || atom.radical_electrons != 0)
+    {
+        return None;
+    }
+    if !mol.atoms.iter().any(|(&id, atom)| {
+        atom.is_carbon()
+            && mol.get_neighbors(id).len() == 4
+            && mol
+                .get_neighbors(id)
+                .iter()
+                .all(|&neighbor| mol.bond_order(id, neighbor) == 1)
+    }) {
+        return None;
+    }
+    let all = mol.atoms.keys().copied().collect();
+    let blocks: Vec<_> = biconnected_edge_components(mol, &all)
+        .into_iter()
+        .filter(|edges| edges.len() > 1)
+        .map(|edges| edges.iter().flat_map(|&(a, b)| [a, b]).collect::<AtomSet>())
+        .collect();
+    let mut pair = None;
+    for (index, first) in blocks.iter().enumerate() {
+        for second in &blocks[index + 1..] {
+            let shared: Vec<_> = first.intersection(second).copied().collect();
+            if shared.is_empty() {
+                continue;
+            }
+            let [junction] = shared.as_slice() else {
+                return None;
+            };
+            if pair.replace((index, second, *junction)).is_some() {
+                return None;
+            }
+        }
+    }
+    let (index, second, junction) = pair?;
+    let first = &blocks[index];
+    let skeleton = first.union(second).copied().collect();
+    if super::heterospiro::has_nonstandard_bonding(mol, &skeleton) {
+        // Identity recovery cannot carry lambda descriptors into the new core.
+        // Keep the original numbering as well as its descriptor-bearing name.
+        return None;
+    }
+    let groups = super::principal_groups::component_groups(mol, &skeleton);
+    if super::principal_groups::component_principal_key(mol, &groups, false)
+        .is_some_and(|key| key != "ketone")
+    {
+        // Unsupported suffixes keep the original fallback numbering too.
+        return None;
+    }
+    let polycyclic = |atoms: &AtomSet| {
+        mol.bonds
+            .values()
+            .filter(|bond| atoms.contains(&bond.u) && atoms.contains(&bond.v))
+            .count()
+            > atoms.len()
+    };
+    if !polycyclic(first) && !polycyclic(second) {
+        return None;
+    }
+    // Explicit monocycle unsaturation belongs outside the spiro bracket
+    // (P-31.2.3.3.3), a syntax the current parser cannot reconstruct yet.
+    if [first, second].into_iter().any(|atoms| {
+        !polycyclic(atoms)
+            && mol
+                .bonds
+                .values()
+                .any(|bond| atoms.contains(&bond.u) && atoms.contains(&bond.v) && bond.order > 1)
+    }) {
+        return None;
+    }
+    if [first, second].into_iter().any(|atoms| {
+        polycyclic(atoms) && !super::fusion::faces::bridge_free_fusion_parent_eligible(mol, atoms)
+    }) || super::ring_assembly::same_parent_skeleton(mol, first, second)
+    {
+        return None;
+    }
+    let atom = &mol.atoms[&junction];
+    (atom.is_carbon()
+        && mol.get_neighbors(junction).len() == 4
+        && mol
+            .get_neighbors(junction)
+            .iter()
+            .all(|&neighbor| mol.bond_order(junction, neighbor) == 1))
+    .then_some(junction)
+}
+
 pub fn require_single_parent_attachment(
     mol: &Molecule,
     component: &AtomSet,
@@ -142,8 +236,14 @@ fn graph_spiro_side(
         return Ok(None);
     }
     let side_mol = project_spiro_side_molecule(mol, side_atoms, junction);
-    let Some(mut plan) =
-        build_spiro_component_parts(&side_mol, side_atoms, junction, required_core, prefix_only)?
+    let Some(mut plan) = build_spiro_component_parts(
+        &side_mol,
+        side_atoms,
+        junction,
+        required_core,
+        prefix_only,
+        heterogeneous_spiro_junction(mol) == Some(junction),
+    )?
     else {
         return Ok(None);
     };
@@ -328,7 +428,7 @@ mod tests {
             .map(|name| name.text)
             .as_deref(),
             Ok(
-                "1'-{2-[2-(tert-butyl)-4-methylphenoxy]acetyl}-6,7-dimethylspiro[[1]benzopyran-2,4'-piperidine]-4-one"
+                "1'-{2-[2-(tert-butyl)-4-methylphenoxy]acetyl}-6,7-dimethylspiro[[1]benzopyran-2,4'-piperidin]-4(3H)-one"
             )
         );
     }

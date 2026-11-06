@@ -170,6 +170,27 @@ fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
     visit_hydride_isomorphisms(left, right, |_| true)
 }
 
+/// Compare parent skeletons independently of hydrogenation or substitution.
+pub(super) fn same_parent_skeleton(mol: &Molecule, left: &AtomSet, right: &AtomSet) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let skeleton = |atoms| {
+        let mut graph = mol.subgraph(atoms);
+        for atom in graph.atoms.values_mut() {
+            atom.is_aromatic = false;
+            atom.total_h_count = 0;
+            atom.explicit_h_count = 0;
+        }
+        for bond in graph.bonds.values_mut() {
+            bond.order = 1;
+            bond.is_aromatic = false;
+        }
+        graph
+    };
+    same_hydride(&skeleton(left), &skeleton(right))
+}
+
 fn identical_junctions(mol: &Molecule, atoms: &[AtomSet]) -> Vec<(usize, usize, usize)> {
     let units: Vec<_> = atoms.iter().map(|a| hydride(mol, a)).collect();
     let owner: BTreeMap<_, _> = atoms

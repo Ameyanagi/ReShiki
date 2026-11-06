@@ -153,6 +153,7 @@ pub enum NameReason {
     AmineOxideZwitterion,
     PrincipalGroupTie,
     LambdaParentHydrogen,
+    SpiroHydrogen,
     IsotopePlacement,
     BoughtonIsotope,
     RadicalIon,
@@ -232,6 +233,9 @@ impl NameReason {
             }
             Self::UnauditedParent => {
                 "Uses a parent hydride family whose preferred-name choice has not been audited: porphyrin, corrin and gonane have no PIN designation (P-10/P-12); the von Baeyer versus fusion choice for polycycles of three or more rings has not been checked (P-52.2.4.3, P-31.1.4.3.4); skeletal-replacement chains and monocycles have unchecked conditions (P-15.4.3, P-22.2.3), as do skeletal-replacement fusion hydrides and chains requiring replacement with four heterounits (P-51.4.1, P-15.4.3.2); spiro compounds of identical components need spirobi names (P-24.3)."
+            }
+            Self::SpiroHydrogen => {
+                "The completed spiro parent’s indicated, added or hydro hydrogen state and suffix composition have not been verified (P-24.5, P-31.2, P-58.2)."
             }
             Self::UnauditedPath => {
                 "The naming path that built this name has not been audited against the IUPAC 2013 preferred-name rules (P-10/P-12)."

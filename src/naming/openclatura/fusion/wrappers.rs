@@ -291,11 +291,19 @@ pub fn plan_fusion_spiro_side(
     mol: &Molecule,
     atoms: &AtomSet,
     junction: usize,
+    prioritize_junction: bool,
 ) -> Result<Option<FusionSpiroSidePlan>, String> {
     if !atoms.contains(&junction) || atoms.iter().any(|a| mol.atoms[a].charge != 0) {
         return Ok(None);
     }
-    let Some(parent) = systematic_fusion_parent(mol, atoms)? else {
+    let parent = if prioritize_junction {
+        super::planner::plan_fusion_parent_for_spiro(mol, atoms)?
+            .map(systematic_fusion_wrapper_parent)
+            .transpose()?
+    } else {
+        systematic_fusion_parent(mol, atoms)?
+    };
+    let Some(parent) = parent else {
         return Ok(None);
     };
     let Some(junction_locant) = parent
@@ -1007,6 +1015,10 @@ fn systematic_fusion_parent(
     let Some(plan) = plan_fusion_parent(mol, atoms)? else {
         return Ok(None);
     };
+    systematic_fusion_wrapper_parent(plan).map(Some)
+}
+
+fn systematic_fusion_wrapper_parent(plan: FusionParentPlan) -> Result<WrapperParentPlan, String> {
     let bond_models = if plan.numbering_variants.is_empty() {
         vec![plan.bond_model.clone()]
     } else {
@@ -1023,7 +1035,7 @@ fn systematic_fusion_parent(
         hydrogenation: None,
     };
     parent.validate()?;
-    Ok(Some(parent))
+    Ok(parent)
 }
 
 fn bridge_path_components(
@@ -1876,7 +1888,9 @@ mod tests {
         use super::super::super::molecule::{Atom, Bond};
         let mut mol = read_smiles("O1C2=C(C=C1)C=CS2").unwrap();
         let atoms = mol.atoms.keys().copied().collect();
-        let side = plan_fusion_spiro_side(&mol, &atoms, 4).unwrap().unwrap();
+        let side = plan_fusion_spiro_side(&mol, &atoms, 4, false)
+            .unwrap()
+            .unwrap();
         assert_eq!(side.parent.name(), "thieno[2,3-b]furan");
         assert_eq!(side.junction_locant, "2");
         let fusion = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();

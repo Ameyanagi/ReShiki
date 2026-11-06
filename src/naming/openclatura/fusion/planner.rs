@@ -46,11 +46,20 @@ pub fn plan_fusion_parent(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
     if let Some(cached) = mol.fusion_plan_cache.borrow().get(atoms) {
         return cached.clone();
     }
-    let result = plan_uncached(mol, atoms);
+    let result = plan_uncached(mol, atoms, false);
     mol.fusion_plan_cache
         .borrow_mut()
         .insert(atoms.clone(), result.clone());
     result
+}
+
+/// Component-local indicated H cannot discard a valid lower spiro junction.
+/// This context is kept outside the ordinary isolated-parent plan cache.
+pub(in super::super) fn plan_fusion_parent_for_spiro(
+    mol: &Molecule,
+    atoms: &AtomSet,
+) -> PlanResult {
+    plan_uncached(mol, atoms, true)
 }
 
 fn rejected(error: String) -> PlanResult {
@@ -61,7 +70,7 @@ fn rejected(error: String) -> PlanResult {
     }
 }
 
-fn plan_uncached(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
+fn plan_uncached(mol: &Molecule, atoms: &AtomSet, spiro_component: bool) -> PlanResult {
     let config = fusion_nomenclature_config();
     let support = &config.rules.support;
     if atoms.len() < 6 || atoms.iter().any(|a| !mol.atoms.contains_key(a)) {
@@ -142,6 +151,7 @@ fn plan_uncached(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
             &face_model,
             &mut intrinsic_layouts,
             &mut numbering_cache,
+            spiro_component,
         ) {
             Ok(Some(plan)) => return Ok(Some(plan)),
             Ok(None) => (),
@@ -163,6 +173,7 @@ pub(super) fn plan_numbered_candidate(
     face_model: &FaceModel,
     intrinsic_layouts: &mut Option<Vec<FusedLayout>>,
     numbering_cache: &mut BTreeMap<bool, CompletedNumberingSelection>,
+    spiro_component: bool,
 ) -> PlanResult {
     let specs = component_specs(ast, registry)?;
     let directed = component_entry_layouts(face_model, ast, &specs)?;
@@ -205,8 +216,9 @@ pub(super) fn plan_numbered_candidate(
             && specs
                 .values()
                 .all(|s| s.atoms().iter().all(|a| a.symbol == "C" && a.charge == 0)));
+    let defer_indicated_hydrogen = prove_carbon_h || spiro_component;
     let selection = if !component_directed {
-        if let Some(cached) = numbering_cache.get(&prove_carbon_h) {
+        if let Some(cached) = numbering_cache.get(&defer_indicated_hydrogen) {
             cached.clone()
         } else {
             let selection = completed_system_numbering_selection(
@@ -214,9 +226,9 @@ pub(super) fn plan_numbered_candidate(
                 bounded,
                 Some(face_model),
                 layouts,
-                prove_carbon_h,
+                defer_indicated_hydrogen,
             )?;
-            numbering_cache.insert(prove_carbon_h, selection.clone());
+            numbering_cache.insert(defer_indicated_hydrogen, selection.clone());
             selection
         }
     } else {
@@ -225,7 +237,7 @@ pub(super) fn plan_numbered_candidate(
             bounded,
             Some(face_model),
             layouts,
-            prove_carbon_h,
+            defer_indicated_hydrogen,
         )?
     };
     if selection.accepted.is_empty() {
@@ -261,7 +273,7 @@ pub(super) fn plan_numbered_candidate(
                 bounded,
                 Some(face_model),
                 &layouts,
-                prove_carbon_h,
+                defer_indicated_hydrogen,
             )
             .ok()?;
             let directed_maps: Vec<_> = selection.accepted.iter().map(|n| n.string_map()).collect();
@@ -362,7 +374,7 @@ pub(super) fn plan_numbered_candidate(
     // A ketone suffix can consume intrinsic carbon H at a different site.
     // Keep tied skeletal numberings for suffix composition in the assembly
     // pipeline before comparing indicated-H and suffix locants (P-14.4).
-    if prove_carbon_h && !suffix_composition_proved {
+    if prove_carbon_h && !suffix_composition_proved && !spiro_component {
         let best = alternatives
             .iter()
             .map(|p| {

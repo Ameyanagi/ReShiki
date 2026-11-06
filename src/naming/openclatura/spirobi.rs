@@ -17,14 +17,14 @@ use std::collections::{BTreeMap, BTreeSet};
 type Locants = BTreeMap<usize, String>;
 type LocantKey = (u8, usize, String);
 
-fn prime_locant(locant: &str) -> String {
+pub(super) fn prime_locant(locant: &str) -> String {
     // P-14.3.1: primes precede a fusion letter, e.g. 3'a.
     let digits = locant.bytes().take_while(u8::is_ascii_digit).count();
     format!("{}'{}", &locant[..digits], &locant[digits..])
 }
 
 #[derive(PartialEq, Eq)]
-enum Component {
+pub(super) enum Component {
     VonBaeyer(String),
     Fused(String),
 }
@@ -36,7 +36,7 @@ impl Component {
     }
 }
 
-fn component(parts: &AssemblyParts) -> Result<Option<Component>, String> {
+pub(super) fn component(parts: &AssemblyParts) -> Result<Option<Component>, String> {
     if parts.is_spiro || parts.is_ring_assembly() {
         return Ok(None);
     }
@@ -110,16 +110,15 @@ struct Hydrogen {
     hydro: Vec<String>,
 }
 
-fn fused_hydrogen(
+pub(super) fn completed_graph(
     mol: &Molecule,
-    parts: &AssemblyParts,
+    atoms: &AtomSet,
     map: &Locants,
     junction: usize,
-) -> Result<Option<Hydrogen>, String> {
+) -> FusionGraph {
     // P-24.3.2: discard component indicated H and make the completed system mancude.
-    let graph = FusionGraph {
-        atoms: parts
-            .parent_atom_ids
+    FusionGraph {
+        atoms: atoms
             .iter()
             .map(|&id| {
                 let atom = &mol.atoms[&id];
@@ -145,7 +144,16 @@ fn fused_hydrogen(
                 bond_class: "mancude".into(),
             })
             .collect(),
-    };
+    }
+}
+
+fn fused_hydrogen(
+    mol: &Molecule,
+    parts: &AssemblyParts,
+    map: &Locants,
+    junction: usize,
+) -> Result<Option<Hydrogen>, String> {
+    let graph = completed_graph(mol, &parts.parent_atom_ids, map, junction);
     let model = parent_bond_model(&graph)?;
     let Some(delta) = compare_actual_parent_to_implied_parent(
         mol,
@@ -191,7 +199,7 @@ fn fused_hydrogen(
     }))
 }
 
-fn project(
+pub(super) fn project(
     mol: &Molecule,
     parts: &AssemblyParts,
     map: &Locants,
@@ -268,6 +276,45 @@ fn project(
         projected.principal_group = Some(group);
     }
     Some(projected)
+}
+
+/// A side projected as a prefix still contributes to the system's principal suffix.
+pub(super) fn promote_suffixes(
+    mol: &Molecule,
+    parts: &mut AssemblyParts,
+    groups: &[super::perception::PerceivedGroup],
+    maps: &[&Locants],
+) {
+    for group in groups {
+        let Some(locant) = maps
+            .iter()
+            .find_map(|map| map.get(&group.attachment_carbon))
+        else {
+            continue;
+        };
+        if !parts
+            .substituents
+            .iter()
+            .any(|item| item.atom_ids == group.atoms_involved)
+        {
+            continue;
+        }
+        parts
+            .substituents
+            .retain(|item| item.atom_ids != group.atoms_involved);
+        let principal = parts.principal_group.get_or_insert_with(|| {
+            super::assembly_parts::PrincipalGroupItem {
+                key: group.key.clone(),
+                resolved_rule: group.resolved_rule.clone(),
+                ..Default::default()
+            }
+        });
+        principal.locants.push(locant.clone());
+        principal.atom_ids.extend(group.atom_ids());
+    }
+    if let Some(principal) = &mut parts.principal_group {
+        principal.bond_ids = super::molecule::bond_ids_within(mol, &principal.atom_ids);
+    }
 }
 
 #[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -520,30 +567,7 @@ pub(super) fn compose(
                         projected.principal_group = Some(group);
                     }
                 }
-                // A side projected as a prefix still contributes to the system's principal suffix.
-                if let Some(principal) = &mut projected.principal_group {
-                    for group in &groups {
-                        let Some(locant) = first_map
-                            .get(&group.attachment_carbon)
-                            .or_else(|| primed.get(&group.attachment_carbon))
-                        else {
-                            continue;
-                        };
-                        if !projected
-                            .substituents
-                            .iter()
-                            .any(|item| item.atom_ids == group.atoms_involved)
-                        {
-                            continue;
-                        }
-                        projected
-                            .substituents
-                            .retain(|item| item.atom_ids != group.atoms_involved);
-                        principal.locants.push(locant.clone());
-                        principal.atom_ids.extend(group.atom_ids());
-                    }
-                    principal.bond_ids = super::molecule::bond_ids_within(mol, &principal.atom_ids);
-                }
+                promote_suffixes(mol, &mut projected, &groups, &[first_map, &primed]);
                 let unsaturation = if von_baeyer {
                     unsaturation_ranks(mol, [first_map, &primed])
                 } else {
