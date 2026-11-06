@@ -663,7 +663,7 @@ O=C(O)CC(CC(=O)O)(CC(=O)O)C(=O)O	2-(carboxymethyl)propane-1,2,3-tricarboxylic ac
 CCOC(=O)CC(O)(CC(=O)O)C(=O)O	2-(2-ethoxy-2-oxoethyl)-2-hydroxybutanedioic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201; P-65.6.3.3.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6506030305	issue #971	pass
 OC(=O)CC(=O)O	propanedioic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
 OC(=O)CCC(=O)O	butanedioic acid	preferred	P-65.1.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020201	issue #971	pass
-OC(=O)CC(CC(=O)O)CC(=O)O	3-(carboxymethyl)pentanedioic acid	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #983	known-failure
+OC(=O)CC(CC(=O)O)CC(=O)O	3-(carboxymethyl)pentanedioic acid	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #983	pass
 
 # retained-names (PR for issue #972)
 # retained-names sulfanium (issue #972)
@@ -900,3 +900,14 @@ O=C1C(=O)Cc2ccc(Cl)cc21	6-chloro-1H-indene-1,2(3H)-dione	preferred	P-59.1.10 htt
 O=C1Cc2ccccc2C1=O	1H-indene-1,2(3H)-dione	preferred	P-59.1.10 https://iupac.qmul.ac.uk/BlueBook/P5.html#590110; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-58.2.3.1.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030103	issue #944	pass
 C1C(=O)C(=O)c2ccccc12	1H-indene-1,2(3H)-dione	preferred	P-59.1.10 https://iupac.qmul.ac.uk/BlueBook/P5.html#590110; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-58.2.3.1.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030103	issue #944	pass
 O=C1C(=O)C(C)(C)c2ccccc12	3,3-dimethyl-1H-indene-1,2(3H)-dione	preferred	P-59.1.10 https://iupac.qmul.ac.uk/BlueBook/P5.html#590110; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-58.2.3.1.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030103	issue #944	pass
+# carboxy prefix on branches (issue #983)
+OC(=O)CCC(CC(=O)O)CCC(=O)O	4-(carboxymethyl)heptanedioic acid	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #983	pass
+OC(=O)CC(CCC(=O)O)CC(=O)O	3-(carboxymethyl)hexanedioic acid	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #983	pass
+OC(=O)CCC(CCC(=O)O)(CCC(=O)O)C	4-(2-carboxyethyl)-4-methylheptanedioic acid	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #983	pass
+OC(=O)COc1ccc(cc1)CC(=O)O	[4-(carboxymethoxy)phenyl]acetic acid	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #983	pass
+OC(=O)CC(CC(=O)O)(CC(=O)O)C(=O)O	2-(carboxymethyl)propane-1,2,3-tricarboxylic acid	preferred	P-65.1.2.2.3 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020203	issue #983	pass
+# hydrazinecarboxylic acid (issue #984)
+OC(=O)NN	hydrazinecarboxylic acid	preferred	P-65.1.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020202	issue #984	pass
+NNC(=O)OC	methyl hydrazinecarboxylate	preferred	P-65.1.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020202; P-65.6.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6506030301	issue #984	pass
+NNC(=O)OC(C)(C)C	tert-butyl hydrazinecarboxylate	preferred	P-65.1.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020202; P-65.6.3.3.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#6506030301	issue #984	pass
+NNC(=O)[O-]	hydrazinecarboxylate	preferred	P-65.1.2.2.2 https://iupac.qmul.ac.uk/BlueBook/P6.html#6501020202; P-72.2.2.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#720202020101	issue #984	pass

@@ -415,12 +415,17 @@ fn name_subgraph_rendered_except_stereo(
                 })
         },
     );
+    // P-65.1.2.2.3: an acid that the suffix cannot express is cited as carboxy.
+    let acid_parent = perceived
+        .iter()
+        .any(|g| Some(g.key.as_str()) == principal_key.as_deref() && is_carboxylic_acid_group(g));
     let mut acid_prefixes: Vec<_> = perceived
         .iter()
         .filter(|g| {
             g.atom_ids().is_subset(&component)
                 && (is_carboxylate_group(g)
-                    || (anionic_parent || mol.uses_acid_prefixes()) && is_carboxylic_acid_group(g))
+                    || (anionic_parent || acid_parent || mol.uses_acid_prefixes())
+                        && is_carboxylic_acid_group(g))
         })
         .cloned()
         .collect();
@@ -822,9 +827,10 @@ mod tests {
                 .text,
             "(carboxymethoxy)"
         );
+        // The molecule's acid principal group selects carboxy without the scope.
         assert_eq!(
             name_subgraph_with_upstream(&mol, 1, &excluded, Some(0)).unwrap(),
-            "(2-hydroxy-2-oxoethoxy)"
+            "(carboxymethoxy)"
         );
         assert!(super::name_subgraph_rendered(&mol, 0, &excluded, None, true).is_err());
         assert!(!mol.uses_acid_prefixes());
@@ -886,7 +892,7 @@ mod tests {
             ("CC(=O)[O-]", 1, "carboxylato"),
             ("CC(=O)N(C)C", 1, "(dimethylcarbamoyl)"),
             ("NC=S", 1, "(methanethioyl)"),
-            ("NC(=O)CCC(=O)O", 1, "(4-hydroxy-1,4-dioxobutyl)"),
+            ("NC(=O)CCC(=O)O", 1, "(3-carboxypropanoyl)"),
             ("COC", 1, "methoxy"),
             ("CN(C)C", 1, "(dimethylamino)"),
         ] {
