@@ -2380,6 +2380,24 @@
           "S": 1
         },
         "no_cumulated_double_bonds": true
+      },
+      {
+        "name": "selenopyran",
+        "size": 6,
+        "double_bonds": 2,
+        "symbols": {
+          "Se": 1
+        },
+        "no_cumulated_double_bonds": true
+      },
+      {
+        "name": "telluropyran",
+        "size": 6,
+        "double_bonds": 2,
+        "symbols": {
+          "Te": 1
+        },
+        "no_cumulated_double_bonds": true
       }
     ]
   },
