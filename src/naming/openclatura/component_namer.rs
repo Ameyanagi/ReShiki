@@ -629,6 +629,18 @@ fn render_component_and_parent(
     numbered: &[usize],
     locants: &BTreeMap<usize, String>,
 ) -> Result<(String, String), String> {
+    if let Some(name) = super::spirobi::compose(mol, parts)? {
+        super::parent_pipeline::mark_rendered_parent_status(mol, parts);
+        if !name.audited {
+            mol.mark_name(crate::naming::NameStatus::Unverified(
+                crate::naming::NameReason::UnauditedParent,
+            ));
+        }
+        return Ok((
+            super::assembler::post_process_name(&name.name),
+            super::assembler::post_process_name(&name.parent),
+        ));
+    }
     let fusion_parent = parts
         .parent_hydride
         .as_ref()
