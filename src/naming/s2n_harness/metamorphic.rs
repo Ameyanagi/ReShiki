@@ -35,6 +35,8 @@ const CURATED: &[&str] = &[
     "[NH3+]CC(=O)[O-]",
     "C[N+](C)(C)CC(=O)[O-]",
     "C[NH2+]C",
+    "[NH3+]C(=O)CNC(=O)c1ccccc1",
+    "[Cl-].[NH3+]C(=O)CNC(=O)c1ccccc1",
     "[O-][N+](=O)c1ccccc1",
     "O=C(O)[C@H](O)[C@H](O)C(=O)O",
     "C[C@H](O)[C@@H](O)C",
@@ -193,6 +195,131 @@ fn atom_order_keeps_name_and_status() {
             })
             .collect()
     });
+}
+
+#[test]
+fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
+    use crate::naming::NameReason;
+
+    let mut parser = Measurements::default();
+    let mut failures = Vec::new();
+    for (smiles, expected, status) in [
+        // Shared-N imide and a separate skeletal cation: never Preferred here.
+        (
+            "O=C(NC(=O)CC(N)=O)c1ccccc1",
+            "N-(3-amino-1,3-dioxopropyl)benzamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "NC(=O)c1ccc(NC(C)=O)cc1Cc1cc[nH+]cc1",
+            "4-acetamido-2-[(pyridin-1-ium-4-yl)methyl]benzamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "CC(C)CC(=O)Nc1ccc(NC(=O)c2cccnc2Sc2ccccc2)cc1",
+            "N-[4-(3-methylbutanamido)phenyl]-2-(phenylsulfanyl)pyridine-3-carboxamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "c1c(NC(=O)c2cccnc2Sc2ccccc2)ccc(NC(CC(C)C)=O)c1",
+            "N-[4-(3-methylbutanamido)phenyl]-2-(phenylsulfanyl)pyridine-3-carboxamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "CC(C)[C@H](NC(=O)c1ccc(Cl)cc1)C(=O)NCCC1=CCCCC1",
+            "4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "CC([C@@H](C(NCCC1=CCCCC1)=O)NC(c1ccc(Cl)cc1)=O)C",
+            "4-chloro-N-[(2S)-1-{[2-(cyclohex-1-en-1-yl)ethyl]amino}-3-methyl-1-oxobutan-2-yl]benzamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "NC(=O)C(NC(=O)c1ccccc1)C(N)=O",
+            "2-benzamidopropanediamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "NC(=O)CC(C(N)=O)(c1ccc(C(N)=O)cc1C(N)=O)CC(N)=O",
+            "4-(1,5-diamino-3-carbamoyl-1,5-dioxopentan-3-yl)benzene-1,3-dicarboxamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "CC(=O)Nc1ncc(C(=O)Nc2ccc(C(N)=O)cn2)o1",
+            "2-acetamido-N-(5-carbamoylpyridin-2-yl)-1,3-oxazole-5-carboxamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "CC(=O)Nc1ccc(C(N)=O)cc1",
+            "4-acetamidobenzamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "CC(=O)NCCNC(=O)CC",
+            "N-(2-acetamidoethyl)propanamide",
+            NameStatus::Preferred,
+        ),
+        (
+            "NC(=O)CNC(=O)c1ccccc1",
+            "N-(2-amino-2-oxoethyl)benzamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+    ] {
+        let identity = canonical_smiles(smiles).unwrap();
+        assert_eq!(parser.parse_name(expected).unwrap(), identity, "{expected}");
+        let expected = Ok((expected.to_owned(), status));
+        failures.extend(mismatch(smiles, &expected, &outcome(smiles)));
+        let seed = smiles.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+        });
+        for order in 0..6 {
+            let mut rng = generator::SplitMix64(seed.wrapping_add(order));
+            let mut permuted = smiles.to_owned();
+            for _ in 0..3 {
+                let state = state(&permuted);
+                permuted = smiles_in_order(&state, Some(rng.below(state.graph.atoms.len())));
+            }
+            assert_eq!(canonical_smiles(&permuted).unwrap(), identity, "{permuted}");
+            failures.extend(mismatch(&permuted, &expected, &outcome(&permuted)));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn untied_diamide_controls_keep_cli_names_and_status_in_six_orders() {
+    use crate::naming::NameReason;
+
+    let mut parser = Measurements::default();
+    for (smiles, expected) in [
+        ("CNC(=O)C(=O)NCC", "N-ethyl-N'-methylethanediamide"),
+        ("CCNC(=O)C(=O)Nc1ccccc1", "N-ethyl-N'-phenylethanediamide"),
+    ] {
+        let identity = canonical_smiles(smiles).unwrap();
+        assert_eq!(parser.parse_name(expected).unwrap(), identity);
+        let expected = Ok((
+            expected.to_owned(),
+            NameStatus::NotPreferred(NameReason::UnretainedParent),
+        ));
+        assert_eq!(outcome(&identity), expected, "{smiles}");
+        let seed = smiles.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+        });
+        for order in 0..6 {
+            let mut rng = generator::SplitMix64(seed.wrapping_add(order));
+            let mut permuted = smiles.to_owned();
+            for _ in 0..3 {
+                let state = state(&permuted);
+                permuted = smiles_in_order(&state, Some(rng.below(state.graph.atoms.len())));
+            }
+            let canonical = canonical_smiles(&permuted).unwrap();
+            assert_eq!(canonical, identity, "{permuted}");
+            // The CLI canonicalizes input. Direct N/N' numbering still has
+            // issue #953 group D's separate atom-order dependence.
+            assert_eq!(outcome(&canonical), expected, "{permuted}");
+        }
+    }
 }
 
 #[test]

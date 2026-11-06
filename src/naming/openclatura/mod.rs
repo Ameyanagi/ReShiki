@@ -2527,7 +2527,7 @@ mod tests {
             ),
             (
                 "NC(=O)CNC(=O)c1ccccc1",
-                "2-benzamidoacetamide",
+                "N-(2-amino-2-oxoethyl)benzamide",
                 R::PrincipalGroupTie,
             ),
             (

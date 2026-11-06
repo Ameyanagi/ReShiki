@@ -539,6 +539,19 @@ mod tests {
     }
 
     #[test]
+    fn labelled_amide_keeps_the_labelled_parent() {
+        // The cross-key amide parent would move the label into a substituent.
+        for (smiles, expected) in [
+            ("N[13C](=O)CNC(=O)c1ccccc1", "2-benzamido(1-13C)acetamide"),
+            ("NC(=O)[13CH2]NC(=O)c1ccccc1", "2-benzamido(2-13C)acetamide"),
+        ] {
+            let name = name_smiles(smiles, IsotopeStyle::Iupac).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            verify(smiles, &name.text).unwrap();
+        }
+    }
+
+    #[test]
     fn ambiguous_branch_and_suffix_positions_are_refused() {
         for smiles in ["[13CH3]C1CCCCC1", "C(=[18O])O", "[2H][2H]", "[13CH3]"] {
             // Generation keeps only names that the parser reconstructs exactly.
