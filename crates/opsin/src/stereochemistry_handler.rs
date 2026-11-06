@@ -242,21 +242,10 @@ impl<'a> StereochemistryHandler<'a> {
     ) -> Self {
         let atoms: BTreeMap<_, _> = centres.iter().map(|c| (c.atom, *c)).collect();
         let bonds: BTreeMap<_, _> = bonds.iter().map(|b| (b.bond, *b)).collect();
-        let undefined_atoms = atoms
-            .iter()
-            .filter(|(atom, _)| {
-                !state
-                    .graph()
-                    .atom(**atom)
-                    .properties
-                    .unknown_amino_acid_stereo
-            })
-            .map(|(&atom, &centre)| (atom, centre))
-            .collect();
         Self {
             state,
             arena,
-            not_explicitly_defined_stereo_centre_map: undefined_atoms,
+            not_explicitly_defined_stereo_centre_map: atoms.clone(),
             not_explicitly_defined_stereo_bond_map: bonds.clone(),
             pseudo_stereo_centres: Vec::new(),
             preassigned_pseudo_stereo_centres: Vec::new(),
@@ -912,12 +901,6 @@ impl<'a> StereochemistryHandler<'a> {
         locant: Option<&str>,
         kind: StereoGroupType,
     ) -> Result<bool> {
-        if locant
-            .and_then(|locant| self.graph().atom_by_locant(fragment, locant))
-            .is_some_and(|atom| self.graph().atom(atom).properties.unknown_amino_acid_stereo)
-        {
-            return stereo("Explicit stereochemistry conflicts with amino-acid xi");
-        }
         let pseudo = matches!(value, "r" | "s");
         let available = |a: &AtomId| {
             self.not_explicitly_defined_stereo_centre_map

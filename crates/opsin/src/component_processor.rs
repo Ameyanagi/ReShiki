@@ -1236,22 +1236,6 @@ impl<'a> ComponentProcessor<'a> {
         amino_acid: NodeId,
         value: &str,
     ) -> Result<bool> {
-        if self
-            .state
-            .graph()
-            .fragment(frag(arena, amino_acid)?)
-            .atoms
-            .iter()
-            .any(|&atom| {
-                self.state
-                    .graph()
-                    .atom(atom)
-                    .properties
-                    .unknown_amino_acid_stereo
-            })
-        {
-            return Err(error("D/L stereochemistry conflicts with amino-acid xi"));
-        }
         let atoms: Vec<_> = self
             .state
             .fragment_manager
@@ -1401,107 +1385,6 @@ impl<'a> ComponentProcessor<'a> {
                     "Unexpected value for D/L stereochemistry found before carbohydrate prefix: {value}"
                 )));
             }
-        }
-        Ok(())
-    }
-    fn apply_amino_acid_xi_prefixes(
-        &mut self,
-        arena: &mut Arena,
-        sub_or_root: NodeId,
-        rac_or_rel: bool,
-    ) -> Result<()> {
-        'descriptors: for stereo in arena.children_with_attribute(
-            sub_or_root,
-            STEREOCHEMISTRY_EL,
-            TYPE_ATR,
-            ALPHA_OR_BETA_TYPE_VAL,
-        ) {
-            if arena[stereo].attribute(LOCANT_ATR).is_some()
-                || !matches!(arena[stereo].attribute(VALUE_ATR), Some("xi" | "ξ"))
-            {
-                continue;
-            }
-            let Some(mut target) = arena.next_sibling_named(stereo, GROUP_EL) else {
-                continue;
-            };
-            let mut scope = sub_or_root;
-            // In (xi)-N-acetylalanine, the prefix precedes the N modifier's
-            // subtree. Follow those attachments to their amino-acid component.
-            while arena[target].attribute(TYPE_ATR) != Some(AMINOACID_TYPE_VAL) {
-                if arena[scope].name != SUBSTITUENT_EL
-                    || !arena
-                        .children_named(scope, LOCANT_EL)
-                        .into_iter()
-                        .any(|locant| arena.value(locant) == "N")
-                {
-                    continue 'descriptors;
-                }
-                let Some(next) = arena.next_sibling(scope) else {
-                    continue 'descriptors;
-                };
-                scope = next;
-                let Some(group) = arena.first_child_named(scope, GROUP_EL) else {
-                    continue 'descriptors;
-                };
-                target = group;
-            }
-            let fragment = frag(arena, target)?;
-            let graph = self.state.graph();
-            let inherited: Vec<_> = graph
-                .fragment(fragment)
-                .atoms
-                .iter()
-                .copied()
-                .filter(|&atom| graph.atom(atom).parity.is_some())
-                .collect();
-            if inherited.len() > 1 {
-                return Err(error(
-                    "Amino-acid xi requires exactly one inherited stereocentre at alpha",
-                ));
-            }
-            // Otherwise, without one inherited parity at alpha, keep the generic
-            // xi handling.
-            let Some(alpha) = graph
-                .atom_by_locant(fragment, "alpha")
-                .filter(|alpha| inherited.first() == Some(alpha))
-            else {
-                continue;
-            };
-            // ξ is an unknown configuration: it conflicts with rac/rel anywhere in
-            // the name and with D/L, whether a separate descriptor or spelled in
-            // the amino-acid token (d-aspart-1-yl).
-            if rac_or_rel
-                || arena
-                    .value(target)
-                    .split('-')
-                    .any(|part| part.eq_ignore_ascii_case("d") || part.eq_ignore_ascii_case("l"))
-                || arena
-                    .children_named(sub_or_root, STEREOCHEMISTRY_EL)
-                    .into_iter()
-                    .chain(arena.children_named(scope, STEREOCHEMISTRY_EL))
-                    .any(|other| {
-                        if other == stereo {
-                            return false;
-                        }
-                        match arena[other].attribute(TYPE_ATR) {
-                            Some(DLSTEREOCHEMISTRY_TYPE_VAL) => true,
-                            Some(R_OR_S_TYPE_VAL) => {
-                                arena[other].attribute(LOCANT_ATR).is_none_or(|locant| {
-                                    graph.atom_by_locant(fragment, locant) == Some(alpha)
-                                })
-                            }
-                            _ => false,
-                        }
-                    })
-            {
-                return Err(error(
-                    "Explicit stereochemistry conflicts with amino-acid xi",
-                ));
-            }
-            let atom = self.state.graph_mut().atom_mut(alpha);
-            atom.parity = None;
-            atom.properties.unknown_amino_acid_stereo = true;
-            arena.detach(stereo);
         }
         Ok(())
     }
@@ -3766,18 +3649,6 @@ impl ComponentProcessor<'_> {
         }
         let words = arena.descendants_named(parse, WORD_EL);
         let word_count = words.len();
-        let rac_or_rel = arena
-            .descendants_named(parse, STEREOCHEMISTRY_EL)
-            .into_iter()
-            .any(|stereo| {
-                matches!(
-                    arena[stereo].attribute(TYPE_ATR),
-                    Some(RAC_TYPE_VAL | REL_TYPE_VAL)
-                ) || matches!(
-                    arena[stereo].attribute(STEREOGROUP_ATR),
-                    Some("Rac" | "Rel")
-                )
-            });
         for word in words.into_iter().rev() {
             let rule = arena
                 .parent_word_rule(word)
@@ -3811,7 +3682,6 @@ impl ComponentProcessor<'_> {
                 self.process_charge_and_oxidation_number_specification(arena, group, fragment)?;
             }
             for &sub in &sub_and_root {
-                self.apply_amino_acid_xi_prefixes(arena, sub, rac_or_rel)?;
                 self.apply_dl_prefixes(arena, sub)?;
                 crate::component_processor_carbohydrates::process_carbohydrates(
                     self.state, arena, sub,

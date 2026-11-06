@@ -159,8 +159,6 @@ pub struct AtomProperties {
     pub oxidation_number: Option<i32>,
     pub is_aldehyde: bool,
     pub is_anomeric: bool,
-    /// A component-local amino-acid ξ keeps its inherited alpha centre unknown.
-    pub unknown_amino_acid_stereo: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
