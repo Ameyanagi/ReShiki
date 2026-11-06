@@ -2125,24 +2125,6 @@
     "bluebook_rule": "Ordered retained-name and contracted-prefix post-processing replacements",
     "values": [
       {
-        "pattern": "methyloxy",
-        "replacement": "methoxy",
-        "category": "retained_alias",
-        "reason": "Contract systematic alkyloxy spelling to retained methoxy."
-      },
-      {
-        "pattern": "propyloxy",
-        "replacement": "propoxy",
-        "category": "retained_alias",
-        "reason": "Contract systematic alkyloxy spelling to retained propoxy."
-      },
-      {
-        "pattern": "butyloxy",
-        "replacement": "butoxy",
-        "category": "retained_alias",
-        "reason": "Contract systematic alkyloxy spelling to retained butoxy."
-      },
-      {
         "pattern": "aminoamino",
         "replacement": "hydrazinyl",
         "category": "retained_alias",
@@ -2396,6 +2378,24 @@
         "double_bonds": 2,
         "symbols": {
           "S": 1
+        },
+        "no_cumulated_double_bonds": true
+      },
+      {
+        "name": "selenopyran",
+        "size": 6,
+        "double_bonds": 2,
+        "symbols": {
+          "Se": 1
+        },
+        "no_cumulated_double_bonds": true
+      },
+      {
+        "name": "telluropyran",
+        "size": 6,
+        "double_bonds": 2,
+        "symbols": {
+          "Te": 1
         },
         "no_cumulated_double_bonds": true
       }
