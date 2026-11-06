@@ -720,9 +720,7 @@ pub fn indicated_hydrogen_like_atoms(
     if let Some((indicated, _)) = mancude_hydro_split(mol, path, name) {
         return indicated;
     }
-    if (!retained::cites_indicated_hydrogen(mol, path, name) && !include_all_ring_carbons)
-        || (name == Some("tetrazole") && path.iter().any(|idx| mol.atoms[idx].charge > 0))
-    {
+    if !retained::cites_indicated_hydrogen(mol, path, name) && !include_all_ring_carbons {
         return AtomSet::new();
     }
     let ring: AtomSet = path.iter().copied().collect();
