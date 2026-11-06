@@ -222,6 +222,55 @@ fn specified_cumulene_ez_is_rejected_before_cleanup() {
 }
 
 #[test]
+fn issue_946_parent_controls_keep_their_existing_names() {
+    for (smiles, expected) in [
+        (
+            "C[C@H](Cl)[C@@H](F)C([C@H](Cl)[C@@H](F)C)=C=C=CC",
+            "(6S,7S)-7-chloro-5-[(1S,2S)-1-chloro-2-fluoropropyl]-6-fluoroocta-2,3,4-triene",
+        ),
+        (
+            "C[C@H](F)[C@H](Cl)C([C@H](Cl)[C@@H](F)C)=C=C=CC",
+            "(6R,7S)-6-chloro-5-[(1S,2S)-1-chloro-2-fluoropropyl]-7-fluoroocta-2,3,4-triene",
+        ),
+        (
+            "C[C@H](F)C(C(F)C)CCCC",
+            "(2S)-2-fluoro-3-(1-fluoroethyl)heptane",
+        ),
+    ] {
+        // The bounded P-44.4.1.12.2 rule excludes two-centre or unspecified arms.
+        let name = openclatura::name_smiles(smiles).unwrap();
+        assert_eq!(name.text, expected, "{smiles}");
+        assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        let request = local::verification_request(&name.text).unwrap();
+        let reply = worker::respond(&request).unwrap();
+        let parsed = local::verification_result(&name.text, &reply).unwrap();
+        verify_identity(smiles, &parsed.smiles).unwrap();
+    }
+}
+
+#[test]
+fn issue_946_protium_preserves_identity_without_phantom_configuration() {
+    for smiles in ["[1H][C@@H](C)O", "O[C@H](C[1H])C"] {
+        assert_eq!(
+            canonical_smiles(smiles).unwrap_err(),
+            "Native import could not retain every specified tetrahedral center; no name or graph was assigned",
+            "{smiles}"
+        );
+    }
+    verify_identity("[1H]C/C(C)=C/F", "[1H]CC(C)=CF").unwrap();
+    for (smiles, opposite) in [
+        ("[1H][C@](F)(Cl)Br", "[1H][C@@](F)(Cl)Br"),
+        ("[1H][C@]([2H])(F)Cl", "[1H][C@@]([2H])(F)Cl"),
+    ] {
+        assert!(verify_identity(smiles, opposite).is_err(), "{smiles}");
+        assert!(
+            verify_identity(smiles, &smiles.replace("[1H]", "[H]")).is_err(),
+            "{smiles} lost its specified isotope"
+        );
+    }
+}
+
+#[test]
 fn selections_cannot_silently_truncate_a_molecule() -> Result<(), String> {
     let mut doc = Document::default();
     let a = doc.add_atom("C", crate::document::Point::new(0., 0.));

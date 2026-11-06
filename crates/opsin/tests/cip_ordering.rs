@@ -263,6 +263,25 @@ fn specified_isotope_precedes_unspecified_even_for_a_lower_mass() {
 }
 
 #[test]
+fn protium_ties_unlabelled_hydrogen_locally_and_in_remote_ligands() {
+    for (smiles, centre, first, second) in [("C([1H])([H])(F)Cl", 0, 1, 2), ("OC(C[1H])C", 1, 2, 4)]
+    {
+        let graph = graph(smiles, true);
+        assert_eq!(
+            CipSequenceRules::new(&graph, AtomId(centre))
+                .compare_ligands(AtomId(first), AtomId(second)),
+            Err(CipOrderingError::UnresolvedTie),
+            "{smiles}"
+        );
+    }
+    check(
+        &graph("C(Cl)([2H])([3H])[1H]", false),
+        1,
+        &[Id(5), Id(3), Id(4), Id(2)],
+    );
+}
+
+#[test]
 fn multiple_bond_to_chiral_root_does_not_duplicate_the_root() {
     // P-91.1.4.2.4: the terminal =O has no extra S ghost. Consequently the
     // physical H neighbour distinguishes OH from terminal O in this graph.

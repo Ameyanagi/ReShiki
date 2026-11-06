@@ -59,7 +59,7 @@ pub(super) fn priorities(
     for (atom, meta) in graph.atoms.iter().zip(&metadata.atoms) {
         work.spend(1)?;
         let mut mass = 0;
-        if atom.isotope != 0 {
+        if atom.isotope != 0 && !(atom.atomic_number == 1 && atom.isotope == 1) {
             mass = i32::from(atom.isotope)
                 - i32::from(at(ELEMENTS, usize::from(atom.atomic_number))?.common_isotope);
             if mass >= 0 {
@@ -174,6 +174,19 @@ fn refine(
             *degree.get_mut(atom).ok_or("Missing CIP atom degree")? += 1;
         }
     }
+    let mut hydrogens: Vec<_> = graph
+        .atoms
+        .iter()
+        .zip(cache)
+        .enumerate()
+        .map(|(i, (a, v))| {
+            if queries.and_then(|q| q.get(i)).copied().unwrap_or(false) {
+                0
+            } else {
+                usize::from(a.explicit_hydrogens) + v.implicit_hydrogens as usize
+            }
+        })
+        .collect();
     // Unlike the native fixed 16-slot array, this remains safe for high-degree
     // atoms. A bond to P of degree 3/4 has a special duplicate-atom weight.
     let mut neighbors = vec![Vec::new(); n];
@@ -197,6 +210,21 @@ fn refine(
                     _ => return Err("Invalid CIP bond type".into()),
                 }
             };
+            // Keep a ¹H atom in the structure, but give it the refinement
+            // contribution of an implicit H (CH₂–¹H = CH₃). Unlabelled explicit
+            // H keeps its legacy ranking.
+            let neighbor = at(&graph.atoms, other)?;
+            if neighbor.atomic_number == 1
+                && neighbor.isotope == 1
+                && neighbor.charge == 0
+                && *at(&degree, other)? == 1
+                && bond.order == 1
+            {
+                *hydrogens
+                    .get_mut(atom)
+                    .ok_or("Missing CIP hydrogen count")? += 1;
+                continue;
+            }
             storage += weight;
             neighbors
                 .get_mut(atom)
@@ -204,19 +232,6 @@ fn refine(
                 .push((other, weight));
         }
     }
-    let hydrogens: Vec<_> = graph
-        .atoms
-        .iter()
-        .zip(cache)
-        .enumerate()
-        .map(|(i, (a, v))| {
-            if queries.and_then(|q| q.get(i)).copied().unwrap_or(false) {
-                0
-            } else {
-                usize::from(a.explicit_hydrogens) + v.implicit_hydrogens as usize
-            }
-        })
-        .collect();
     for &count in &hydrogens {
         storage += count;
     }
