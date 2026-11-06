@@ -163,7 +163,8 @@ type SaltIonKey = (String, Option<Vec<(bool, usize, String)>>);
 /// P-14.5 key of a cited ion name: Roman letters first, then locants at the
 /// first difference. `None` for spellings it does not cover: non-ASCII marks,
 /// lambda, superscripts, brackets holding descriptors (fusion letters,
-/// ring-assembly or von Baeyer locants) and composite or unknown italic locants.
+/// ring-assembly or von Baeyer locants), italic parent descriptors such as the
+/// s/as of indacene, and composite or unknown italic locants.
 /// Locants are compared only in names with no enclosing marks or tert/sec, where
 /// every locant is a primary one and no italic descriptor precedes them (P-14.5.3).
 fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
@@ -172,7 +173,12 @@ fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
         .split('[')
         .skip(1)
         .any(|rest| !rest.split(']').next().unwrap_or(rest).contains('('));
-    if !name.is_ascii() || name.contains("lambda") || name.contains('^') || descriptor_bracket {
+    if !name.is_ascii()
+        || name.contains("lambda")
+        || name.contains("s-indacene")
+        || name.contains('^')
+        || descriptor_bracket
+    {
         return None;
     }
     let (mut letters, mut locants) = (String::new(), Vec::new());
@@ -196,7 +202,10 @@ fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
             "N" | "O" | "S" | "Se" | "Te" | "P"
         ) {
             locants.push((false, 0, token.to_owned()));
-        } else if token.starts_with(|c: char| c.is_ascii_uppercase()) || token.contains('\'') {
+        } else if token.starts_with(|c: char| c.is_ascii_uppercase())
+            || token.contains('\'')
+            || token.len() == 1
+        {
             return None;
         } else if matches!(token, "tert" | "sec") {
             primary_locants = false;
@@ -342,6 +351,8 @@ mod tests {
             "(2H3)acetate",
             "1lambda^5-phosphinin-1-ylium",
             "N1-methylbutanediamide",
+            "3-chloros-indacene-1-carboxylate",
+            "s-triazin-2-olate",
             "(2R)-butan-2-olate",
         ] {
             assert_eq!(salt_ion_sort_key(name), None, "{name}");
