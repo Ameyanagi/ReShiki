@@ -703,7 +703,7 @@ mod tests {
             ),
             (
                 "CC(=O)OC(=O)c1ccc([C@H](F)Cl)cc1",
-                "acetic 4-[(R)-chlorofluoromethyl]benzoic anhydride",
+                "4-[(R)-chlorofluoromethyl]benzoic acetic anhydride",
             ),
             (
                 "O=C(O)CNC(=O)c1ccc([C@H](F)Cl)cc1",
@@ -711,7 +711,7 @@ mod tests {
             ),
             (
                 "CC(=O)OC(=O)[C@H](F)Cl",
-                "acetic (R)-chlorofluoroacetic anhydride",
+                "(R)-chlorofluoroacetic acetic anhydride",
             ),
         ] {
             let name = super::super::name_smiles(smiles).unwrap();

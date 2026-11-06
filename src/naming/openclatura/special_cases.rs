@@ -3256,31 +3256,25 @@ pub(super) fn try_name_anhydride_component(
                     halves[0].1 = format!("{}-{}", mol.atoms[&path[1]].symbol, halves[0].1);
                     halves[1].1 = format!("{}-{}", mol.atoms[&path[2]].symbol, halves[1].1);
                 }
-                // P-65.7.2: the acids are cited in alphanumerical order, Roman
-                // letters first (P-14.5.1). A locant such as 4a takes no part.
-                let letters = |text: &str| {
-                    let mut letters = String::new();
-                    let mut chars = text.chars().peekable();
-                    while let Some(c) = chars.next() {
-                        if c.is_ascii_digit() {
-                            while chars.next_if(char::is_ascii_digit).is_some() {}
-                            let mut rest = chars.clone();
-                            if rest.next().is_some_and(|c| c.is_ascii_lowercase())
-                                && !rest.next().is_some_and(char::is_alphabetic)
-                            {
-                                chars.next();
-                            }
-                        } else if c.is_alphabetic() {
-                            letters.push(c);
-                        }
-                    }
-                    letters
+                // P-65.7.2: the acids are cited in alphanumerical order by their
+                // Roman letters (P-14.5.1). Names with stereodescriptors, italic
+                // letters or compound locants such as 4a, and locant tie-breaks
+                // (P-14.5.4), keep the plain string order and stay unverified.
+                let plain = |name: &str| {
+                    !name.contains(|c: char| c.is_uppercase() || c == 'ξ')
+                        && !name
+                            .as_bytes()
+                            .windows(2)
+                            .any(|w| w[0].is_ascii_digit() && w[1].is_ascii_lowercase())
                 };
-                let keys = halves
-                    .each_ref()
-                    .map(|half| letters(&substituent_sort_key(&half.0).0));
-                if keys[0] == keys[1] {
-                    // Locant tie-breaks (P-14.5.4) are not implemented here.
+                let keys = halves.each_ref().map(|half| {
+                    substituent_sort_key(&half.0)
+                        .0
+                        .chars()
+                        .filter(|c| c.is_alphabetic())
+                        .collect::<String>()
+                });
+                if keys[0] == keys[1] || !halves.iter().all(|half| plain(&half.0)) {
                     certified = false;
                     halves.sort_by(|a, b| a.0.cmp(&b.0));
                 } else if keys[1] < keys[0] {
