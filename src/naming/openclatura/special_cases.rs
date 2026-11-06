@@ -1313,11 +1313,12 @@ fn simple_central_parent_hydride_name(
                 .components
                 .mononuclear_parent_hydrides
                 .contains_key(&mol.atoms[i].symbol)
-                && !matches!(mol.atoms[i].symbol.as_str(), "O" | "F" | "Cl" | "Br" | "I")
+                && (mol.atoms[i].symbol != "O" || mol.atoms[i].charge == 1)
+                && !matches!(mol.atoms[i].symbol.as_str(), "F" | "Cl" | "Br" | "I")
                 && (mol.degree(*i) >= 2
                     || mol.degree(*i) == 1
                         && mol.atoms[i].charge == 1
-                        && matches!(mol.atoms[i].symbol.as_str(), "S" | "Se" | "Te"))
+                        && matches!(mol.atoms[i].symbol.as_str(), "O" | "S" | "Se" | "Te"))
         })
         .collect();
     if centers.len() != 1 {
@@ -1346,12 +1347,13 @@ fn simple_central_parent_hydride_name(
             .iter()
             .any(|&n| is_chalcogen(n) && mol.atoms[&n].charge == -1 && mol.degree(n) == 1);
     // P-73.1.1.1/.2: protonated chalcogen hydrides retain the systematic
-    // sulfanium, selanium or tellanium parent, including remaining hydrogens.
+    // oxidanium, sulfanium, selanium or tellanium parent, including remaining
+    // hydrogens.
     // Other ionic or radical centers require the ordinary parent selection.
     // The isotope adapter needs atom locants, which this shortcut lacks.
     let chalcogen_onium = !mol.is_isotope_parent()
         && a.charge == 1
-        && matches!(a.symbol.as_str(), "S" | "Se" | "Te")
+        && matches!(a.symbol.as_str(), "O" | "S" | "Se" | "Te")
         && mol.get_neighbors(c).len() + a.total_h_count.max(a.explicit_h_count) == 3
         && mol
             .get_neighbors(c)
@@ -3552,6 +3554,14 @@ mod tests {
             ("C[Se+](C)C", "trimethylselanium"),
             ("CCC[SeH2+]", "propylselanium"),
             ("C[Te+](C)C", "trimethyltellanium"),
+            ("C[O+](C)C", "trimethyloxidanium"),
+            ("C[OH+]C", "dimethyloxidanium"),
+            ("C[OH2+]", "methyloxidanium"),
+            ("CC[O+](CC)CC", "triethyloxidanium"),
+            ("C[O+](C)CC", "ethyldi(methyl)oxidanium"),
+            ("C[O+](C)c1ccccc1", "dimethyl(phenyl)oxidanium"),
+            ("C[O+](C)CC(=O)O", "(carboxymethyl)di(methyl)oxidanium"),
+            ("C[O+](C)C(C)=O", "acetyldi(methyl)oxidanium"),
         ] {
             let mol = read_smiles(smiles).unwrap();
             let result = simple_central_parent_hydride_name(&mol, &all_atoms(&mol))
@@ -3569,6 +3579,8 @@ mod tests {
     fn chalcogen_onium_shortcut_declines_rings_and_other_ionic_centers() {
         for smiles in [
             "C[S+]1CCCC1",
+            "C[O+]1CCCC1",
+            "C=[O+]C",
             "C[S+](C)[CH2-]",
             "C[S+](C)C[O-]",
             "C[S+](C)CCCCCC[N+](C)(C)C",
