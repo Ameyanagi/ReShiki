@@ -764,6 +764,34 @@ CCCCCCCCCC=NN=CCCCCCCCCC	di(decylidene)hydrazine	unverified	P-16.3.4(d) https://
 O[C@H]1CC[C@@H](O)CC1 |r|	(1s,4s)-cyclohexane-1,4-diol	preferred	P-93.5.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P9.html#9305010102	issue #927	pass
 C[C@H](O)[C@H](O)C |r|	(2R,3S)-butane-2,3-diol	preferred	P-91.2.1.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#91020101	issue #927	pass
 C[C@H](O)[C@@H](O)C |r|		refuse	P-93.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P9.html#93010201; CXSMILES r flag https://docs.chemaxon.com/latest/formats_chemaxon-extended-smiles-and-smarts-cxsmiles-and-cxsmarts.html	issue #927	pass
+
+# Amine and imine oxides (issue #944)
+[O-][n+]1ccccc1	pyridine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+]1([O-])CCCCC1	1-methylpiperidine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+](C)(C)[O-]	N,N-dimethylmethanamine N-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+CC[N+](CC)([O-])CC	N,N-diethylethanamine N-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ccc(C)cc1	4-methylpyridine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][N+]1(C)CCCC1	1-methylpyrrolidine 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C1CC[N+]2([O-])CCC1CC2	1-azabicyclo[3.2.2]nonane 1-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C=[N+](C)[O-]	N-methylmethanimine N-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102; P-74.2.2.1.9 https://iupac.qmul.ac.uk/BlueBook/P7.html#7402020109	issue #944	pass
+C=[N+](Cl)[O-]	N-chloromethanimine N-oxide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102; P-74.2.2.1.9 https://iupac.qmul.ac.uk/BlueBook/P7.html#7402020109	issue #944	pass
+C[N+]1([O-])CCOCC1	4-methylmorpholine 4-oxide	unverified	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ccncc1	pyrazine 1-oxide	unverified	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[S-][n+]1ccccc1	pyridine 1-sulfide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ccccc1C(=O)O	1-oxidopyridin-1-ium-2-carboxylic acid	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+CC(=O)N1CC[N+](C)([O-])CC1	1-(4-methyl-4-oxidopiperazin-4-ium-1-yl)ethan-1-one	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ccc(N)cc1	1-oxidopyridin-1-ium-4-amine	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][NH2+]CC	N-oxidoethanaminium	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[NH+](C)[O-]	N-methyl-N-oxidomethanaminium	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[O-][n+]1ncccc1	1-oxidopyridazin-1-ium	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+]1([O-])CC[N+](C)([O-])CC1	1,4-dimethyl-1,4-dioxidopiperazine-1,4-diium	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[Se-][n+]1ccccc1	pyridine 1-selenide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+[Te-][n+]1ccccc1	pyridine 1-telluride	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+CC[N+](C)(C)[S-]	N,N-dimethylethanamine N-sulfide	preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+](C)([O-])CC(=O)[O-]	[dimethyl(oxido)ammonio]acetate	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C=[N+]([O-])CC(=O)[O-]	[methylidene(oxido)ammonio]acetate	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+C[N+]([O-])(C)Cc1ccc(C(=O)[O-])cc1	4-{[dimethyl(oxido)ammonio]methyl}benzoate	not_preferred	P-62.5 https://iupac.qmul.ac.uk/BlueBook/P6.html#6205; P-74.2.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#74020102	issue #944	pass
+
 # issue #953: E/D design matrix; house N/N' spelling and statuses retained.
 COC(=O)CC(=O)OCC(C)(C)CC(=O)OC(C)(C)C	4-(tert-butoxy)-2,2-dimethyl-4-oxobutyl methyl propanedioate	preferred	P-65.6.3.3.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#650603030201; P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#14030404	issue #953	pass
 CCOC(=O)CC(=O)OC	ethyl methyl propanedioate	preferred	P-65.6.3.3.2.1 https://iupac.qmul.ac.uk/BlueBook/P6.html#650603030201; P-14.3.4.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#14030404	issue #953	pass

@@ -75,6 +75,9 @@ pub(super) fn name_smiles(
     let status = normal.status;
     normal.status = NameStatus::NotPreferred(NameReason::UnknownConfiguration);
     let mol = graph_io::read_smiles(smiles)?;
+    // The explicit route may use a different name family (e.g. an oxide
+    // zwitterion under P-62.5); preserve any departures it records.
+    mol.set_name_status(status);
     normal.omitted_units = mol
         .atoms
         .values()
@@ -131,7 +134,7 @@ pub(super) fn name_smiles(
         0,
         AlternativeName {
             name: super::nest_enclosing_marks(&explicit_raw),
-            status,
+            status: mol.name_status(),
         },
     );
     Ok(Some(normal))
