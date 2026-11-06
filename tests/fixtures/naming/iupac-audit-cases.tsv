@@ -912,3 +912,19 @@ C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC[C@@H]4[C@@]3(CC[C@@H](C4)
 CC(=O)[O-].CC(=O)[O-].CC(C)(C)[NH2+]c1ccccc1.[NH3+]c1ccccc1CCCC	2-butylanilinium N-(tert-butyl)anilinium diacetate	unverified	P-14.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#1405; P-14.5.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140503; P-77 https://iupac.qmul.ac.uk/BlueBook/P7.html#77	issue #966	pass
 [Na+].[Na+].ClC1=c2cc3c(cc2C(C(=O)[O-])=C1)=CC=C3.O=C([O-])c1ccc(Cl)c2ccccc12	disodium 3-chloros-indacene-1-carboxylate 4-chloronaphthalene-1-carboxylate	unverified	P-14.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#1405; P-14.5.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140503; P-77 https://iupac.qmul.ac.uk/BlueBook/P7.html#77	issue #966	pass
 [Na+].[Na+].ClC1=c2cc3c(cc2C([O-])=C1)=CC=C3.[O-]c1ccc(Cl)c2ccccc12	disodium 3-chloros-indacen-1-olate 4-chloronaphthalen-1-olate	unverified	P-14.5 https://iupac.qmul.ac.uk/BlueBook/P1.html#1405; P-14.5.3 https://iupac.qmul.ac.uk/BlueBook/P1.html#140503; P-77 https://iupac.qmul.ac.uk/BlueBook/P7.html#77	issue #966	pass
+# oxonium parent (issue #982)
+C[O+](C)C	trimethyloxidanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102	issue #982	pass
+C[OH+]C	dimethyloxidanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102	issue #982	pass
+C[OH2+]	methyloxidanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102	issue #982	pass
+CC[O+](CC)CC	triethyloxidanium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102	issue #982	pass
+C[O+](C)c1ccccc1	dimethyl(phenyl)oxidanium	preferred	P-73.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010201; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #982	pass
+C[O+](C)C(C)=O	acetyldi(methyl)oxidanium	preferred	P-73.1.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010201; P-16.5.1.3.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#1605010301	issue #982	pass
+C[O+]1CCCC1	1-methyloxolan-1-ium	preferred	P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102	issue #982	pass
+# tetrazole ions keep indicated hydrogen (issue #987)
+[N-]1N=N[N+](C)=C1	4-methyl-1H-tetrazol-4-ium-1-ide	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201; P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #987	pass
+[N-]1N=N[NH+]=C1	1H-tetrazol-4-ium-1-ide	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201; P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #987	pass
+[n-]1nn[n+](C)c1C	4,5-dimethyl-1H-tetrazol-4-ium-1-ide	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201; P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #987	pass
+C[n+]1cn(C)nn1	1,4-dimethyl-1H-tetrazol-4-ium	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404	issue #987	pass
+c1ccc(cc1)-c1nn(-c2ccccc2)[n+](n1)-c1ccccc1	2,3,5-triphenyl-2H-tetrazol-3-ium	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404	issue #987	pass
+C[n+]1c[nH]nn1	4-methyl-1H-tetrazol-4-ium	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-73.1.1.2 https://iupac.qmul.ac.uk/BlueBook/P7.html#73010102; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404	issue #987	pass
+[n-]1cc[n+](C)c1	3-methyl-1H-imidazol-3-ium-1-ide	preferred	P-14.7.1 https://iupac.qmul.ac.uk/BlueBook/P1.html#140701; P-72.2.2.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#72020201; P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #987	pass
