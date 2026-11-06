@@ -337,8 +337,8 @@ fn anion_parent_choice_matrix() {
                 && error.ends_with(" has no supported charge citation") => {}
         result => failures.push(format!("nonroot chain carbanion: {smiles}: {result:?}")),
     }
-    // Several skeletal anions with a skeletal cation: the renderer would cite
-    // `-diide-5-ium` (P-74.1.1 wants `-5-ium-1,3-diide`), so keep declining.
+    // Several skeletal anions with a skeletal cation remain outside the
+    // supported parent-anion scope after the P-74.1.1 spelling correction.
     let smiles = "[N-]1C[NH2+]C[N-]C1";
     if let Ok(name) = super::name_smiles(smiles) {
         failures.push(format!("mixed-charge ring: {smiles}: {}", name.text));
