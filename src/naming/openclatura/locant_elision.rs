@@ -7,7 +7,10 @@ use super::{
     assembly_utils::parse_locant,
     graph_kernel::{Edge, normalize_edge},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, BTreeSet},
+};
 const MAX_CANDIDATE_PLACEMENTS: usize = 10_000;
 type NodeLabel = (String, i32, Option<u16>, bool);
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -465,30 +468,68 @@ fn isomorphic<'a>(
     let target_signatures: Vec<_> = target_adj.iter().map(multiset).collect();
     type LabeledAdjacency<'a> = [BTreeMap<usize, EdgeLabel<'a>>];
     type EdgeSignatures<'a> = [Vec<EdgeLabel<'a>>];
+    // Propagate decorations along chains so frontier ties use atom environments.
+    let ranks = |decoration: &Decoration, adjacency: &LabeledAdjacency<'_>| {
+        let mut ranks = vec![0; n];
+        loop {
+            let keys: Vec<_> = (0..n)
+                .map(|i| {
+                    let mut neighbors: Vec<_> = adjacency[i]
+                        .iter()
+                        .map(|(&j, label)| (label, ranks[j]))
+                        .collect();
+                    neighbors.sort();
+                    (ranks[i], &g.nodes[i], &decoration.0[i], neighbors)
+                })
+                .collect();
+            let ordering: BTreeMap<_, _> = keys
+                .iter()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .enumerate()
+                .map(|(rank, key)| (key, rank))
+                .collect();
+            let refined: Vec<_> = keys.iter().map(|key| ordering[key]).collect();
+            if refined == ranks {
+                return ranks;
+            }
+            ranks = refined;
+        }
+    };
+    let source_ranks = ranks(actual, &source_adj);
+    let target_ranks = ranks(candidate, &target_adj);
+    let mut target_order: Vec<_> = (0..n).collect();
+    target_order.sort_by_key(|&i| target_ranks[i]);
     fn search(
         graphs: (&Graph, &Decoration, &Decoration),
         adjacency: (&LabeledAdjacency<'_>, &LabeledAdjacency<'_>),
         signatures: (&EdgeSignatures<'_>, &EdgeSignatures<'_>),
+        ordering: (&[usize], &[usize]),
         mapping: &mut [Option<usize>],
         used: &mut [bool],
-        depth: usize,
         budget: &mut usize,
     ) -> Option<bool> {
         let (g, actual, candidate) = graphs;
         let (source_adj, target_adj) = adjacency;
         let (source_signatures, target_signatures) = signatures;
-        if depth == mapping.len() {
-            return Some(true);
-        }
-        let source = (0..mapping.len())
+        let (source_ranks, target_order) = ordering;
+        let Some(source) = (0..mapping.len())
             .filter(|&i| mapping[i].is_none())
             .min_by_key(|&i| {
-                source_adj[i]
-                    .keys()
-                    .filter(|&&j| mapping[j].is_some())
-                    .count()
-            })?;
-        for target in 0..mapping.len() {
+                (
+                    Reverse(
+                        source_adj[i]
+                            .keys()
+                            .filter(|&&j| mapping[j].is_some())
+                            .count(),
+                    ),
+                    source_ranks[i],
+                )
+            })
+        else {
+            return Some(true);
+        };
+        for &target in target_order {
             consume(budget)?;
             if used[target]
                 || g.nodes[source] != g.nodes[target]
@@ -507,13 +548,7 @@ fn isomorphic<'a>(
             mapping[source] = Some(target);
             used[target] = true;
             if search(
-                graphs,
-                adjacency,
-                signatures,
-                mapping,
-                used,
-                depth + 1,
-                budget,
+                graphs, adjacency, signatures, ordering, mapping, used, budget,
             )? {
                 return Some(true);
             }
@@ -526,9 +561,9 @@ fn isomorphic<'a>(
         (g, actual, candidate),
         (&source_adj, &target_adj),
         (&source_signatures, &target_signatures),
+        (&source_ranks, &target_order),
         &mut vec![None; n],
         &mut vec![false; n],
-        0,
         budget,
     )
 }
@@ -1007,6 +1042,9 @@ mod tests {
         for (smiles, equivalent) in [
             ("O=C(O)CC(=O)O", true),
             ("O=C(O)CCC(=O)O", true),
+            ("C(CCCCCCCCC(O)=O)(O)=O", true),
+            ("C(C(O)=O)CCCCCCCC(O)=O", true),
+            ("O=C(O)CCCCCCCCCCC(=O)O", true),
             ("O=C(O)C(C)C(=O)O", true),
             ("O=C(O)C(F)CC(=O)O", false),
             ("O=C(O)[13CH2]CC(=O)O", false),
@@ -1247,6 +1285,46 @@ mod tests {
     }
 
     #[test]
+    fn chain_exchange_search_is_atom_order_independent() {
+        for n in [10, 12, 40, 100] {
+            for order in [
+                (0..n).collect::<Vec<_>>(),
+                (0..n).rev().collect(),
+                (0..n).map(|i| (17 * i + 3) % n).collect(),
+            ] {
+                let mut parts = parent(n, false, false);
+                parts.parent_bond_orders_by_locants = (1..n)
+                    .map(|i| {
+                        (
+                            ((order[i - 1] + 1).to_string(), (order[i] + 1).to_string()),
+                            1,
+                        )
+                    })
+                    .collect();
+                let g = graph(&parts, true).unwrap();
+                let mut sites: Vec<_> = [order[0], order[n - 1]]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, position)| Feature {
+                        category: "ester_site",
+                        key: i.to_string(),
+                        positions: vec![Position::Node(position)],
+                    })
+                    .collect();
+                let actual = decorate(&g, &sites);
+                sites[0].positions = vec![Position::Node(order[n - 1])];
+                sites[1].positions = vec![Position::Node(order[0])];
+                let candidate = decorate(&g, &sites);
+                let mut budget = MAX_CANDIDATE_PLACEMENTS;
+                assert_eq!(isomorphic(&g, &actual, &candidate, &mut budget), Some(true));
+                assert_eq!(budget, MAX_CANDIDATE_PLACEMENTS - n * (n + 1) / 2);
+                let mut insufficient = n * (n + 1) / 2 - 1;
+                assert_eq!(isomorphic(&g, &actual, &candidate, &mut insufficient), None);
+            }
+        }
+    }
+
+    #[test]
     fn elision_requires_every_compatible_placement_to_be_equivalent() {
         for (n, ring, heteroatom, expected) in [
             (3, false, false, true),
@@ -1279,11 +1357,10 @@ mod tests {
         apply_redundant_locant_elision(&mut p);
         assert!(!p.elide_principal_group_locants);
 
-        // Match the upstream conservative search limit even for a symmetric
-        // placement that could be established with a faster specialized proof.
+        // P-14.3.4.4: all alcohol placements on an unsubstituted ring are equivalent.
         let mut p = parent(9, true, false);
         p.principal_group = Some(PrincipalGroupItem::new("alcohol", vec!["6".into()]));
         apply_redundant_locant_elision(&mut p);
-        assert!(!p.elide_principal_group_locants);
+        assert!(p.elide_principal_group_locants);
     }
 }

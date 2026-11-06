@@ -253,7 +253,7 @@ fn issue_953_ester_and_n_substituent_numbering_matrix() {
             errors.extend(mismatch(&permuted, &base, &outcome(&permuted)));
         }
     }
-    assert_eq!(count, 25, "all E/D design matrix rows must be tested");
+    assert_eq!(count, 29, "all E/D design matrix rows must be tested");
     assert!(errors.is_empty(), "{}", errors.join("\n"));
 }
 
