@@ -297,9 +297,14 @@ fn amino_acid_xi_rejects_global_rac_or_rel() {
     for qualifier in ["rac", "rel"] {
         for spelling in ["xi", "ξ"] {
             for parent in ["alanine", "N-acetylalanine"] {
-                let name = format!("({qualifier})-({spelling})-{parent}");
-                let result = parser.parse(&name, &ParseOptions::strict());
-                assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+                // Separate and combined tokens: rac-(ξ) carries the group on the ξ node.
+                for name in [
+                    format!("({qualifier})-({spelling})-{parent}"),
+                    format!("{qualifier}-({spelling})-{parent}"),
+                ] {
+                    let result = parser.parse(&name, &ParseOptions::strict());
+                    assert_eq!(result.status, Status::Failure, "{name}: {}", result.message);
+                }
             }
         }
     }

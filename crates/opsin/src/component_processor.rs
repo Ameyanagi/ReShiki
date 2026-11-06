@@ -1460,7 +1460,9 @@ impl<'a> ComponentProcessor<'a> {
                 ));
             }
             let alpha = alpha.unwrap();
-            if arena
+            // ξ is an unknown configuration, not a racemate or relative pair.
+            if arena[stereo].attribute(STEREOGROUP_ATR).is_some()
+                || arena
                 .children_named(sub_or_root, STEREOCHEMISTRY_EL)
                 .into_iter()
                 .chain(arena.children_named(scope, STEREOCHEMISTRY_EL))
@@ -1469,7 +1471,6 @@ impl<'a> ComponentProcessor<'a> {
                         return false;
                     }
                     match arena[other].attribute(TYPE_ATR) {
-                        // ξ is an unknown configuration, not a racemate or relative pair.
                         Some(DLSTEREOCHEMISTRY_TYPE_VAL | RAC_TYPE_VAL | REL_TYPE_VAL) => true,
                         Some(R_OR_S_TYPE_VAL) => {
                             arena[other].attribute(LOCANT_ATR).is_none_or(|locant| {
