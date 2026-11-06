@@ -3,7 +3,8 @@ use super::{
     assembly_parts::SubstituentItem,
     chains::{find_all_carbon_paths, find_ring_systems, get_cyclic_atoms},
     component_group_rules::{
-        exclude_nonparent_group_atoms, principal_involved_atoms, retarget_external_carbonyl_groups,
+        exclude_nonparent_group_atoms, external_chain_carboxylic_parent, principal_involved_atoms,
+        retarget_external_carbonyl_groups,
     },
     component_modifiers::{
         add_component_n_substituents, collect_component_front_modifiers,
@@ -40,6 +41,7 @@ pub(super) fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Resul
 pub(super) enum Derivation {
     Plan {
         parent_atoms: AtomSet,
+        parent_locants: BTreeMap<usize, String>,
         principal_group: Option<(String, AtomSet)>,
         retained_anion_name: super::assembly_parts::RetainedAnionName,
         component_splits: BTreeSet<Edge>,
@@ -99,6 +101,7 @@ pub(super) fn name_component_with_citation(
                     .map_or_else(AtomSet::new, |(_, atoms)| atoms.clone()),
                 derivation: Derivation::Plan {
                     parent_atoms,
+                    parent_locants: plan.locant_map,
                     principal_group,
                     retained_anion_name: plan.parts.retained_anion_name,
                     component_splits,
@@ -149,10 +152,11 @@ pub(super) fn name_component_with_atom_locants(
             )?;
             Ok(IsotopeParentName {
                 text,
-                locants: plan.locant_map,
+                locants: plan.locant_map.clone(),
                 rendered_parent,
                 derivation: Derivation::Plan {
                     parent_atoms,
+                    parent_locants: plan.locant_map,
                     principal_group: plan.parts.principal_group.map(|g| (g.key, g.atom_ids)),
                     retained_anion_name: plan.parts.retained_anion_name,
                     component_splits,
@@ -288,6 +292,60 @@ fn component_pipeline(
     {
         return Ok(ComponentResult::Shortcut(result));
     }
+    let base_exclude: AtomSet = mol
+        .atoms
+        .keys()
+        .copied()
+        .filter(|i| !component_atoms.contains(i))
+        .collect();
+    let cyclic = get_cyclic_atoms(mol, &AtomSet::new());
+    // The isotope adapter cannot place labels on carboxy carbons outside the
+    // parent chain, so it keeps the carbonyl-inclusive parent.
+    let external = if projection.is_none()
+        && principal_atom.is_none()
+        && !as_prefix
+        && !mol.is_isotope_parent()
+    {
+        mol.candidate(|| {
+            external_chain_carboxylic_parent(mol, &groups, key.as_deref(), &base_exclude, &cyclic)
+        })?
+    } else {
+        None
+    };
+    let acid_prefix_mode = external
+        .as_ref()
+        .is_some_and(|p| p.key == "ring_carboxylic_acid");
+    let selection = if let Some(external) = external {
+        groups = external.groups;
+        key = Some(external.key);
+        external.selection
+    } else {
+        let mut exclude = base_exclude.clone();
+        retarget_external_carbonyl_groups(mol, &mut groups, key.as_deref(), &mut exclude, &cyclic);
+        retarget_external_carbonyl_groups(
+            mol,
+            &mut prefix_only_groups,
+            None,
+            &mut exclude,
+            &cyclic,
+        );
+        let principal = candidate_principal_attachments(mol, &groups, key.as_deref());
+        exclude_nonparent_group_atoms(mol, &groups, &mut exclude, &cyclic);
+        exclude_nonparent_group_atoms(mol, &prefix_only_groups, &mut exclude, &cyclic);
+        if let Some(projection) = &projection {
+            super::namer::select_subgraph_parent(
+                mol,
+                projection.junction,
+                component_atoms,
+                &exclude,
+            )?
+        } else {
+            let chains = find_all_carbon_paths(mol, &exclude)?;
+            let rings = find_ring_systems(mol, &exclude)?;
+            select_principal_parent(mol, &chains, &rings, &principal, &groups)
+                .ok_or("openclatura: no supported parent skeleton")?
+        }
+    };
     // The key is the first of equally senior groups, such as carboxylic_acid
     // and ring_carboxylic_acid, not the P-44.1 count and ring-over-chain choice.
     let seniority = |g: &super::perception::PerceivedGroup| {
@@ -310,28 +368,6 @@ fn component_pipeline(
             crate::naming::NameReason::PrincipalGroupTie,
         ));
     }
-
-    let base_exclude: AtomSet = mol
-        .atoms
-        .keys()
-        .copied()
-        .filter(|i| !component_atoms.contains(i))
-        .collect();
-    let mut exclude = base_exclude.clone();
-    let cyclic = get_cyclic_atoms(mol, &AtomSet::new());
-    retarget_external_carbonyl_groups(mol, &mut groups, key.as_deref(), &mut exclude, &cyclic);
-    retarget_external_carbonyl_groups(mol, &mut prefix_only_groups, None, &mut exclude, &cyclic);
-    let principal = candidate_principal_attachments(mol, &groups, key.as_deref());
-    exclude_nonparent_group_atoms(mol, &groups, &mut exclude, &cyclic);
-    exclude_nonparent_group_atoms(mol, &prefix_only_groups, &mut exclude, &cyclic);
-    let selection = if let Some(projection) = &projection {
-        super::namer::select_subgraph_parent(mol, projection.junction, component_atoms, &exclude)?
-    } else {
-        let chains = find_all_carbon_paths(mol, &exclude)?;
-        let rings = find_ring_systems(mol, &exclude)?;
-        select_principal_parent(mol, &chains, &rings, &principal, &groups)
-            .ok_or("openclatura: no supported parent skeleton")?
-    };
     let path = selection.primary_path();
     let parent = selection.atom_set();
     groups.retain(|g| parent.contains(&g.attachment_carbon));
@@ -363,6 +399,7 @@ fn component_pipeline(
         &principal_atoms,
         &base_exclude,
         &sub_exclude,
+        acid_prefix_mode,
     )?;
     let retained_fused = super::retained_fused_production::production_retained_fused_parent(
         mol,
@@ -618,6 +655,7 @@ fn render_component_and_parent(
     Ok((name, super::assembler::post_process_name(&parent)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_component_branch_substituents(
     mol: &Molecule,
     path: &[usize],
@@ -626,6 +664,7 @@ fn collect_component_branch_substituents(
     principal: &AtomSet,
     base_exclude: &AtomSet,
     sub_exclude: &AtomSet,
+    acid_prefix_mode: bool,
 ) -> Result<(), String> {
     let main: AtomSet = path.iter().copied().collect();
     for &idx in path {
@@ -661,7 +700,8 @@ fn collect_component_branch_substituents(
             }
             let atoms = subgraph_component(mol, root, sub_exclude);
             super::spiro_subgraph::require_single_parent_attachment(mol, &atoms, &main)?;
-            let branch = name_subgraph_rendered(mol, root, sub_exclude, Some(idx))?;
+            let branch =
+                name_subgraph_rendered(mol, root, sub_exclude, Some(idx), acid_prefix_mode)?;
             if branch.text.is_empty() {
                 return Err("openclatura: empty branch prefix".into());
             }
@@ -684,6 +724,85 @@ fn collect_component_branch_substituents(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn external_carboxylic_parent_names_keep_multiplicities_and_maximize_groups() {
+        for (smiles, expected) in [
+            (
+                "OC(=O)C(C)(C(=O)O)C(=O)O",
+                "ethane-1,1,1-tricarboxylic acid",
+            ),
+            (
+                "OC(=O)C(C(=O)O)C(C(=O)O)C(=O)O",
+                "ethane-1,1,2,2-tetracarboxylic acid",
+            ),
+            (
+                "OC(=O)C(C(=O)O)CCC(=O)O",
+                "propane-1,1,3-tricarboxylic acid",
+            ),
+            (
+                "OC(=O)C(C(=O)O)C(CCCCC)CC(=O)O",
+                "2-pentylpropane-1,1,3-tricarboxylic acid",
+            ),
+            (
+                "O=C(O)CC(CC(=O)O)(CC(=O)O)C(=O)O",
+                "2-(carboxymethyl)propane-1,2,3-tricarboxylic acid",
+            ),
+            (
+                "OC(=O)CC(OCC(=O)O)(CC(=O)O)C(=O)O",
+                "2-(carboxymethoxy)propane-1,2,3-tricarboxylic acid",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn external_carboxylic_parent_fallbacks_keep_dioic_names() {
+        for (smiles, expected) in [
+            ("OC(=O)CC(=O)O", "propanedioic acid"),
+            ("OC(=O)CCC(=O)O", "butanedioic acid"),
+            (
+                "CCOC(=O)CC(O)(CC(=O)O)C(=O)O",
+                "2-(2-ethoxy-2-oxoethyl)-2-hydroxybutanedioic acid",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn branched_acid_without_three_groups_on_one_chain_is_not_tricarboxylic() {
+        let name = super::super::name_smiles("OC(=O)CC(CC(=O)O)CC(=O)O").unwrap();
+        assert!(!name.text.contains("tricarboxylic"));
+    }
+
+    #[test]
+    fn external_carboxylates_with_another_anion_keep_the_old_parent() {
+        // Any anionic centre outside the suffix keeps main's carbonyl-inclusive
+        // parent; its PIN (2-oxidopropane-1,2,3-tricarboxylate) is not reached yet.
+        let name = super::super::name_smiles("[O-]C(=O)CC([O-])(CC(=O)[O-])C(=O)[O-]").unwrap();
+        assert_eq!(name.text, "3-carboxylato-3-oxidopentanedioate");
+    }
+
+    #[test]
+    fn isotope_labelled_tricarboxylic_acid_keeps_the_ordinary_parent() {
+        let name = super::super::name_smiles("O[13C](=O)CC(O)(CC(=O)O)C(=O)O").unwrap();
+        assert_eq!(name.text, "3-carboxy-3-hydroxy(1-13C)pentanedioic acid");
+        assert!(!matches!(name.status, crate::naming::NameStatus::Preferred));
+    }
+
     #[test]
     fn charged_retained_fallback_requires_citable_donor_hydrogen() {
         for smiles in ["C1=N[NH2+]c2ccccc21", "C1=Nc2ccccc2[NH2+]1"] {

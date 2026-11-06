@@ -150,6 +150,7 @@ pub enum NameReason {
     SubstitutedRetainedParent,
     AtomOrder,
     AmineChalcogenide,
+    AmineOxideZwitterion,
     PrincipalGroupTie,
     LambdaParentHydrogen,
     IsotopePlacement,
@@ -242,7 +243,10 @@ impl NameReason {
                 "The name can depend on input atom order; its preferred numbering has not been verified."
             }
             Self::AmineChalcogenide => {
-                "Amine oxide-type names (amine sulfide, selenide, telluride) have not been checked against the preferred IUPAC form."
+                "The parent or oxide locant of this amine or imine oxide, sulfide, selenide or telluride has not been verified against the preferred IUPAC form (P-62.5)."
+            }
+            Self::AmineOxideZwitterion => {
+                "Uses a zwitterionic amine or imine oxide name; preferred IUPAC names use functional-class nomenclature for one oxide or the lambda-convention for multiple oxides (P-62.5, P-74.2.1.2, P-74.2.2.1.9)."
             }
             Self::RelativeRingStereo => {
                 "Uses cis/trans for an achiral cyclic compound; preferred IUPAC names use CIP r/s descriptors, while cis/trans is used in general nomenclature (P-93.5.1.1.2)."

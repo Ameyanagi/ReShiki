@@ -27,6 +27,8 @@ struct NamingBudget {
     benzoheterocycle_names: Cell<bool>,
     higher_order_fusion_alternative: Cell<bool>,
     benzo_fusion_alternative: Cell<bool>,
+    acid_prefix_mode: Cell<bool>,
+    isotope_parent: Cell<bool>,
 }
 
 impl Default for NamingBudget {
@@ -44,6 +46,8 @@ impl Default for NamingBudget {
             benzoheterocycle_names: Cell::new(true),
             higher_order_fusion_alternative: Cell::new(false),
             benzo_fusion_alternative: Cell::new(false),
+            acid_prefix_mode: Cell::new(false),
+            isotope_parent: Cell::new(false),
         }
     }
 }
@@ -53,6 +57,17 @@ pub(super) struct NamingDepth<'a>(&'a NamingBudget);
 impl Drop for NamingDepth<'_> {
     fn drop(&mut self) {
         self.0.depth.set(self.0.depth.get() - 1);
+    }
+}
+
+pub(super) struct AcidPrefixScope<'a> {
+    active: &'a Cell<bool>,
+    previous: bool,
+}
+
+impl Drop for AcidPrefixScope<'_> {
+    fn drop(&mut self) {
+        self.active.set(self.previous);
     }
 }
 
@@ -166,6 +181,29 @@ impl Clone for Molecule {
 impl Molecule {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Keep acid prefixes through carbon and heteroatom branch recursion,
+    /// restoring the enclosing component's naming mode when the branch ends.
+    pub(super) fn enter_acid_prefix_scope(&self) -> AcidPrefixScope<'_> {
+        AcidPrefixScope {
+            active: &self.naming_budget.acid_prefix_mode,
+            previous: self.naming_budget.acid_prefix_mode.replace(true),
+        }
+    }
+
+    pub(super) fn uses_acid_prefixes(&self) -> bool {
+        self.naming_budget.acid_prefix_mode.get()
+    }
+
+    /// The isotope adapter names the stripped parent and needs a proven atom
+    /// locant map, which only ordinary parent plans provide.
+    pub(super) fn mark_isotope_parent(&self) {
+        self.naming_budget.isotope_parent.set(true);
+    }
+
+    pub(super) fn is_isotope_parent(&self) -> bool {
+        self.naming_budget.isotope_parent.get()
     }
 
     pub(super) fn mark_name(&self, status: NameStatus) {
@@ -293,6 +331,8 @@ impl Molecule {
         let ring_assemblies = self.naming_budget.ring_assembly_junctions.borrow().clone();
         let higher_order_fusion = self.has_higher_order_fusion_alternative();
         let benzo_fusion = self.has_benzo_fusion_alternative();
+        let relative_ring = self.has_relative_ring_alternative();
+        let endo_exo = self.naming_budget.endo_exo_alternative.borrow().clone();
         let result = name();
         if !matches!(result, Ok(Some(_))) {
             self.set_name_status(status);
@@ -304,6 +344,10 @@ impl Molecule {
             self.naming_budget
                 .benzo_fusion_alternative
                 .set(benzo_fusion);
+            self.naming_budget
+                .relative_ring_alternative
+                .set(relative_ring);
+            *self.naming_budget.endo_exo_alternative.borrow_mut() = endo_exo;
         }
         result
     }
@@ -570,6 +614,21 @@ mod tests {
         );
         fragment.set_name_status(NameStatus::Preferred);
         assert_eq!(mol.name_status(), NameStatus::Preferred);
+    }
+
+    #[test]
+    fn discarded_candidates_restore_stereo_alternatives() {
+        let mol = super::super::graph_io::read_smiles("CCO").unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let _: Option<()> = mol
+            .candidate(|| {
+                mol.mark_relative_ring_alternative();
+                mol.mark_endo_exo_alternative(&atoms);
+                Ok(None)
+            })
+            .unwrap();
+        assert!(!mol.has_relative_ring_alternative());
+        assert!(!mol.has_endo_exo_alternative());
     }
 
     #[test]
