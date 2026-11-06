@@ -317,6 +317,7 @@ fn supported(parts: &AssemblyParts) -> bool {
         || !parts.parent_charges.is_empty()
         || !parts.a_prefixes.is_empty()
         || !parts.front_modifier_locants.is_empty()
+            && !(parts.ester_site_exchange_proven && parts.front_modifiers.len() == 2)
         || !parts.principal_suffix_modifiers.is_empty()
         || !parts.hydro_operations.is_empty()
         || parts
@@ -531,6 +532,92 @@ fn isomorphic<'a>(
         budget,
     )
 }
+
+/// P-65.6.3.3.2.1: the two alcohol assignments coincide only when the
+/// complete acid component admits an exchange of its ester carbonyl sites.
+pub fn ester_sites_are_equivalent(
+    mol: &super::molecule::Molecule,
+    acid_atoms: &super::molecule::AtomSet,
+    sites: &[usize],
+) -> bool {
+    if sites.len() != 2 || sites[0] == sites[1] {
+        return false;
+    }
+    let mut parts = AssemblyParts::new(acid_atoms.len());
+    for &id in acid_atoms {
+        let atom = &mol.atoms[&id];
+        // An unlabeled graph cannot establish preservation of stereochemical
+        // configurations or relative stereo under the proposed exchange.
+        if atom.has_stereo() {
+            return false;
+        }
+        let locant = id.to_string();
+        parts.parent_atom_ids_by_locant.insert(locant.clone(), id);
+        parts
+            .parent_atom_symbols_by_locant
+            .insert(locant.clone(), atom.symbol.clone());
+        parts
+            .parent_atom_charges_by_locant
+            .insert(locant.clone(), atom.charge);
+        parts
+            .parent_atom_isotopes_by_locant
+            .insert(locant, atom.isotope);
+    }
+    for bond in mol.bonds.values() {
+        if !acid_atoms.contains(&bond.u) || !acid_atoms.contains(&bond.v) {
+            continue;
+        }
+        if bond.stereo.is_some() || !matches!(bond.order, 1..=3) {
+            return false;
+        }
+        // Aromatic equivalence is independent of the localized Kekule orders.
+        let order = if bond.is_aromatic { 0 } else { bond.order };
+        parts
+            .parent_bond_orders_by_locants
+            .insert((bond.u.to_string(), bond.v.to_string()), order);
+    }
+    let Some(g) = graph(&parts, true) else {
+        return false;
+    };
+    let positions: Option<Vec<_>> = sites
+        .iter()
+        .map(|id| g.locants.iter().position(|l| l == &id.to_string()))
+        .collect();
+    let Some(positions) = positions else {
+        return false;
+    };
+    let mut all: Vec<_> = g
+        .locants
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            let atom = &mol.atoms[&parts.parent_atom_ids_by_locant[l]];
+            Feature {
+                category: "atom_state",
+                key: format!(
+                    "{}:{}:{}",
+                    atom.total_h_count, atom.radical_electrons, atom.is_aromatic
+                ),
+                positions: vec![Position::Node(i)],
+            }
+        })
+        .collect();
+    let fixed = all.len();
+    for (i, &position) in positions.iter().enumerate() {
+        all.push(Feature {
+            category: "ester_site",
+            key: i.to_string(),
+            positions: vec![Position::Node(position)],
+        });
+    }
+    let actual = decorate(&g, &all);
+    all[fixed].positions[0] = Position::Node(positions[1]);
+    all[fixed + 1].positions[0] = Position::Node(positions[0]);
+    let candidate = decorate(&g, &all);
+    let mut budget = MAX_CANDIDATE_PLACEMENTS;
+    isomorphic(&g, &actual, &candidate, &mut budget) == Some(true)
+}
+
 fn stereo_positions(parts: &AssemblyParts, g: &Graph, atom: bool) -> Vec<Position> {
     if atom {
         return g
@@ -888,6 +975,112 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
 mod tests {
     use super::super::assembly_parts::{PrincipalGroupItem, UnsaturationItem};
     use super::*;
+
+    fn acid_graph(
+        smiles: &str,
+    ) -> (
+        super::super::molecule::Molecule,
+        super::super::molecule::AtomSet,
+        Vec<usize>,
+    ) {
+        let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let sites = mol
+            .atoms
+            .iter()
+            .filter(|(id, atom)| {
+                atom.is_carbon()
+                    && [1, 2].into_iter().all(|order| {
+                        mol.get_neighbors(**id).iter().any(|&other| {
+                            mol.atoms[&other].symbol == "O"
+                                && mol.get_bond(**id, other).is_some_and(|b| b.order == order)
+                        })
+                    })
+            })
+            .map(|(&id, _)| id)
+            .collect();
+        (mol, atoms, sites)
+    }
+
+    #[test]
+    fn ester_site_exchange_preserves_the_complete_acid_component() {
+        for (smiles, equivalent) in [
+            ("O=C(O)CC(=O)O", true),
+            ("O=C(O)CCC(=O)O", true),
+            ("O=C(O)C(C)C(=O)O", true),
+            ("O=C(O)C(F)CC(=O)O", false),
+            ("O=C(O)[13CH2]CC(=O)O", false),
+            ("O=C(O)CC(=O)[18OH]", false),
+            ("O=C(O)c1ccc(C(=O)O)c(C)c1", false),
+            ("O=C(O)CC(C(=O)O)CC(=O)O", false),
+        ] {
+            let (mol, atoms, sites) = acid_graph(smiles);
+            assert_eq!(
+                ester_sites_are_equivalent(&mol, &atoms, &sites),
+                equivalent,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn ester_site_exchange_ignores_aromatic_kekule_orders() {
+        let (mut mol, atoms, sites) = acid_graph("O=C(O)c1cccc(C(=O)O)c1");
+        assert!(ester_sites_are_equivalent(&mol, &atoms, &sites));
+        for bond in mol.bonds.values_mut().filter(|b| b.is_aromatic) {
+            bond.order = 3 - bond.order;
+        }
+        assert!(ester_sites_are_equivalent(&mol, &atoms, &sites));
+        for bond in mol.bonds.values_mut() {
+            bond.is_aromatic = false;
+        }
+        assert!(!ester_sites_are_equivalent(&mol, &atoms, &sites));
+    }
+
+    #[test]
+    fn ester_site_exchange_keeps_locants_for_unsupported_stereo() {
+        for smiles in [
+            "O=C(O)[C@H](O)[C@@H](O)C(=O)O",
+            "O=C(O)C([C@H](F)Cl)C(=O)O",
+            "O=C(O)/C=C\\C(=O)O",
+        ] {
+            let (mol, atoms, sites) = acid_graph(smiles);
+            assert!(
+                !ester_sites_are_equivalent(&mol, &atoms, &sites),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn acid_prefix_elision_requires_proven_ester_site_equivalence() {
+        let mut parts = parent(3, false, false);
+        parts.parent_atom_hydrogens_by_locant =
+            BTreeMap::from([("1".into(), 0), ("2".into(), 1), ("3".into(), 0)]);
+        parts.principal_group = Some(PrincipalGroupItem::new(
+            "ester",
+            vec!["1".into(), "3".into()],
+        ));
+        parts
+            .substituents
+            .push(super::super::assembly_parts::SubstituentItem::new(
+                "methyl",
+                vec!["2".into()],
+            ));
+        parts.front_modifiers = vec!["ethyl".into(), "methyl".into()];
+        parts.front_modifier_locants = vec![Some("1".into()), Some("3".into())];
+        apply_redundant_locant_elision(&mut parts);
+        assert!(parts.elided_substituent_locants.is_empty());
+        let mut more_than_two = parts.clone();
+        more_than_two.ester_site_exchange_proven = true;
+        more_than_two.front_modifiers.push("propyl".into());
+        more_than_two.front_modifier_locants.push(Some("2".into()));
+        apply_redundant_locant_elision(&mut more_than_two);
+        assert!(more_than_two.elided_substituent_locants.is_empty());
+        parts.ester_site_exchange_proven = true;
+        apply_redundant_locant_elision(&mut parts);
+        assert!(parts.elided_substituent_locants.contains("methyl"));
+    }
 
     fn parent(n: usize, ring: bool, heteroatom: bool) -> AssemblyParts {
         let mut parts = AssemblyParts::new(n);
