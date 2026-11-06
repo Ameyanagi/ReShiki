@@ -19,11 +19,22 @@ pub(super) fn parent_hydrogen_candidates(
     mol: &Molecule,
     ast: &FusionNameAst,
     locants: &BTreeMap<usize, String>,
+    model: &ParentBondModel,
 ) -> AtomSet {
     let mut candidates: AtomSet =
         super::numbering::indicated_hydrogen_candidate_atoms(mol, locants)
             .into_iter()
             .collect();
+    if locants.keys().any(|id| mol.atoms[id].charge > 0)
+        && observed_parent_matches_bond_model(mol, model)
+    {
+        // P-74.1.1: restore neutral-parent N-H without consuming a parent pi bond.
+        candidates.extend(
+            locants
+                .keys()
+                .filter(|id| mol.atoms[id].symbol == "N" && mol.atoms[id].charge == -1),
+        );
+    }
     if ast.plan_kind == "benzoheterocycle" {
         // P-58.2.4 applies prefix substitution after parent hydrogen selection.
         // A neutral N with two single ring bonds retains its N-H role when
@@ -744,6 +755,45 @@ pub(super) fn intrinsic_carbon_parent_model(
 mod tests {
     use super::super::super::molecule::{Atom, Bond};
     use super::*;
+
+    #[test]
+    fn zwitterion_parent_hydrogen_requires_the_completed_parent_pi_maximum() {
+        for (smiles, expected) in [
+            ("[N-]1[NH+]=CC=C2N=CC=C12", true),
+            ("[N-]1[NH2+]CCC2N=CC=C12", false),
+        ] {
+            let mol = super::super::super::graph_io::read_smiles(smiles).unwrap();
+            let locants = mol
+                .atoms
+                .keys()
+                .map(|&id| (id, (id + 1).to_string()))
+                .collect();
+            let graph = FusionGraph {
+                atoms: mol
+                    .atoms
+                    .values()
+                    .map(|atom| FusionGraphAtom::new(atom.idx, &atom.symbol))
+                    .collect(),
+                bonds: mol
+                    .bonds
+                    .values()
+                    .map(|bond| FusionGraphBond {
+                        atoms: normalize_edge(bond.u, bond.v),
+                        bond_class: "mancude".into(),
+                    })
+                    .collect(),
+            };
+            let model = parent_bond_model(&graph).unwrap();
+            assert_eq!(model.maximum_non_cumulative_double_bonds, 4);
+            let candidates =
+                parent_hydrogen_candidates(&mol, &FusionNameAst::default(), &locants, &model);
+            assert_eq!(candidates.contains(&0), expected, "{smiles}");
+        }
+        assert_eq!(
+            super::super::super::name_smiles("[N-]1[NH2+]CCC2N=CC=C12").unwrap_err(),
+            "openclatura: protonated fused hydrogenation state not ported"
+        );
+    }
 
     #[test]
     fn aromatic_donor_hydrogen_and_sigma_substitution_share_the_lone_pair_role() {

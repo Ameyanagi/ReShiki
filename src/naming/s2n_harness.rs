@@ -493,6 +493,7 @@ fn ratchet(reports: &BTreeMap<&str, Report>) {
     // roundtrips, by the intentional-departure tests below. FR-3.5
     // component changes are likewise pinned by the fr35_* identity tests.
     // Substituted monocycle suffix locants follow P-14.3.4.2(c), not upstream.
+    // P-74.1.1 charge-suffix order is pinned by the zwitterion_suffix_order test.
     for (category, counts) in reports["parity"].rows() {
         current.insert(
             ("parity_text".into(), category.into()),

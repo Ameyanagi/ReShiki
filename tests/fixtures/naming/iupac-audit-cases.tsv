@@ -692,6 +692,18 @@ O=C1C=CC=C[N-]1	pyridin-1-id-2(1H)-one	unverified	P-72.2.2.1.1 https://iupac.qmu
 [C-]#CCCC(=O)[O-]	pent-1-yn-1-id-5-oate	preferred	P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
 [CH-]1CCC(CC1)S(=O)(=O)[O-]	cyclohexan-1-ide-4-sulfonate	preferred	P-72.5.3 https://iupac.qmul.ac.uk/BlueBook/P7.html#720503	issue #942	pass
 
+# zwitterion-suffix-order (issue #979)
+[N-]1C[NH2+]CC1	imidazolidin-3-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+[N-]1[NH+]=CC=C1	1H-pyrazol-2-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+[N-]1CC[NH2+]CC1	piperazin-4-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+C[N+]1=CC=C[N-]1	2-methyl-1H-pyrazol-2-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+[N-]1C=C[NH+]=C1	1H-imidazol-3-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+[N-]1[NH+]=CC=C2N=CC=C12	1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+C1C[N-]C[NH2+]1	imidazolidin-3-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+C1=C[N-][NH+]=C1	1H-pyrazol-2-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+[NH+]1=CC=C2N=CC=C2[N-]1	1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+C1C=C2N=CC=C2[N-][NH+]=1	1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide	preferred	P-74.1.1 https://iupac.qmul.ac.uk/BlueBook/P7.html#740101	issue #979	pass
+
 # B: indene dione numbering (issue #944)
 O=C1C(=O)Cc2ccccc21	1H-indene-1,2(3H)-dione	preferred	P-59.1.10 https://iupac.qmul.ac.uk/BlueBook/P5.html#590110; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-58.2.3.1.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030103	issue #944	pass
 CC1(C)C(=O)C(=O)c2ccccc21	3,3-dimethyl-1H-indene-1,2(3H)-dione	preferred	P-59.1.10 https://iupac.qmul.ac.uk/BlueBook/P5.html#590110; P-14.4 https://iupac.qmul.ac.uk/BlueBook/P1.html#1404; P-58.2.3.1.3 https://iupac.qmul.ac.uk/BlueBook/P5.html#5802030103	issue #944	pass
