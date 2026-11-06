@@ -1120,44 +1120,6 @@ mod tests {
                 "acetic propanoic anhydride",
                 NameStatus::Preferred,
             ),
-            // P-65.7.2: acids in alphanumerical order (P-14.5); issue #949.
-            // Only names without enclosing marks or italic letters are
-            // reordered; the others keep the string order, unverified.
-            (
-                "CC(=O)OC(=O)C(Cl)C",
-                "acetic 2-chloropropanoic anhydride",
-                NameStatus::Preferred,
-            ),
-            (
-                "O=C(OC(=O)c1ccc(Sc2ccccc2)cc1)c1ccc(Oc2ccccc2)cc1",
-                "4-(phenylsulfanyl)benzoic 4-phenoxybenzoic anhydride",
-                NameStatus::Unverified(NameReason::UnauditedPath),
-            ),
-            (
-                "O=C(OC(=O)CCCCCCCCC(Cl)C)C(Cl)CCCCCCCCC",
-                "10-chloroundecanoic 2-chloroundecanoic anhydride",
-                NameStatus::Unverified(NameReason::UnauditedPath),
-            ),
-            (
-                "BrC1=CC=C2C(=N1)C=C(O2)C(=O)OC(=S)C2=C(C=1C=NC=CC1O2)Br",
-                "3-bromofuro[3,2-c]pyridine-2-carbothioic 5-bromofuro[3,2-b]pyridine-2-carboxylic anhydride",
-                NameStatus::Unverified(NameReason::UnauditedPath),
-            ),
-            (
-                "O=C(OC(=O)c1c(Br)cc([C@H](Br)Cl)cc1)c1cc(Br)c([C@H](F)Cl)cc1",
-                "2-bromo-4-[(S)-bromochloromethyl]benzoic 3-bromo-4-[(R)-chlorofluoromethyl]benzoic anhydride",
-                NameStatus::Unverified(NameReason::UnauditedPath),
-            ),
-            (
-                "BrC1C(CC(C2CCCCC12)C(=O)OC(=O)C1C(CCC2(CCCCC12)Br)Cl)Cl",
-                "4-bromo-3-chlorodecahydronaphthalene-1-carboxylic 4a-bromo-2-chlorodecahydronaphthalene-1-carboxylic anhydride",
-                NameStatus::Unverified(NameReason::UnauditedPath),
-            ),
-            (
-                "CC(=O)OC(=O)c1ccc(Oc2ccc(Oc3ccc(Oc4ccccc4)cc3)cc2)cc1",
-                "4-[4-(4-phenoxyphenoxy)phenoxy]benzoic acetic anhydride",
-                NameStatus::NotPreferred(NameReason::LinearPhane),
-            ),
             (
                 "CP(C)Cl",
                 "chlorodi(methyl)phosphane",

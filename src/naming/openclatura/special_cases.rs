@@ -3244,7 +3244,7 @@ pub(super) fn try_name_anhydride_component(
             // P-65.7.1–P-65.7.4: O bridges, or chalcogen/peroxy bridges between
             // graph-equivalent acid halves.
             let ranks = canonical_ranks(mol, None);
-            let mut certified = anhydride_count == 1
+            let certified = anhydride_count == 1
                 && bridge.is_disjoint(&get_cyclic_atoms(mol, &AtomSet::new()))
                 && (path.len() == 3 && mol.atoms[&path[1]].symbol == "O"
                     || ranks[&descriptor.centers[0]] == ranks[&descriptor.centers[1]]);
@@ -3256,36 +3256,7 @@ pub(super) fn try_name_anhydride_component(
                     halves[0].1 = format!("{}-{}", mol.atoms[&path[1]].symbol, halves[0].1);
                     halves[1].1 = format!("{}-{}", mol.atoms[&path[2]].symbol, halves[1].1);
                 }
-                // P-65.7.2: the acids are cited in alphanumerical order by their
-                // Roman letters (P-14.5.1). Only names spelled from lowercase
-                // words, digits, hyphens and commas are ordered here. Enclosing
-                // marks, a lone letter (4a, o-, r), an italic word (tert) or a
-                // letter tie (P-14.5.4) keeps the plain string order, unverified.
-                let plain = |name: &str| {
-                    name.chars()
-                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-,".contains(c))
-                        && name.split(|c: char| !c.is_ascii_lowercase()).all(|word| {
-                            word.len() != 1
-                                && ![
-                                    "tert", "sec", "cis", "trans", "endo", "exo", "syn", "anti",
-                                    "rel", "rac", "meso", "erythro", "threo",
-                                ]
-                                .contains(&word)
-                        })
-                };
-                let keys = halves.each_ref().map(|half| {
-                    substituent_sort_key(&half.0)
-                        .0
-                        .chars()
-                        .filter(|c| c.is_alphabetic())
-                        .collect::<String>()
-                });
-                if keys[0] == keys[1] || !halves.iter().all(|half| plain(&half.0)) {
-                    certified = false;
-                    halves.sort_by(|a, b| a.0.cmp(&b.0));
-                } else if keys[1] < keys[0] {
-                    halves.swap(0, 1);
-                }
+                halves.sort_by(|a, b| a.0.cmp(&b.0));
                 format!("{} {} {class}", halves[0].1, halves[1].1)
             };
             Ok(Some(StructuralParentName {
