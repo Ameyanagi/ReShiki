@@ -203,6 +203,17 @@ fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
     let mut parser = Measurements::default();
     let mut failures = Vec::new();
     for (smiles, expected, status) in [
+        // Shared-N imide and a separate skeletal cation: never Preferred here.
+        (
+            "O=C(NC(=O)CC(N)=O)c1ccccc1",
+            "N-(3-amino-1,3-dioxopropyl)benzamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
+        (
+            "NC(=O)c1ccc(NC(C)=O)cc1Cc1cc[nH+]cc1",
+            "4-acetamido-2-[(pyridin-1-ium-4-yl)methyl]benzamide",
+            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+        ),
         (
             "CC(C)CC(=O)Nc1ccc(NC(=O)c2cccnc2Sc2ccccc2)cc1",
             "N-[4-(3-methylbutanamido)phenyl]-2-(phenylsulfanyl)pyridine-3-carboxamide",

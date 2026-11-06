@@ -110,6 +110,9 @@ pub fn is_neutral_amide(mol: &Molecule, group: &PerceivedGroup) -> bool {
             == 0
 }
 
+/// The isotope adapter places labels through the parent's locant map, so a
+/// stripped-isotope parent keeps the selected amide rather than moving a
+/// labelled carbon into a substituent.
 pub fn selects_neutral_amides(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -118,7 +121,8 @@ pub fn selects_neutral_amides(
     let mut selected = groups
         .iter()
         .filter(|g| g.is_principal_candidate && Some(g.key.as_str()) == key);
-    selected.next().is_some_and(|g| is_neutral_amide(mol, g))
+    !mol.is_isotope_parent()
+        && selected.next().is_some_and(|g| is_neutral_amide(mol, g))
         && selected.all(|g| is_neutral_amide(mol, g))
 }
 
