@@ -39,6 +39,30 @@ fn chain(n: usize) -> anyhow::Result<State> {
 }
 
 #[test]
+fn protium_mass_matches_implicit_hydrogen_without_losing_the_label() -> anyhow::Result<()> {
+    for (text, equal) in [("[1H]C", true), ("[2H]C", false), ("[3H]C", false)] {
+        let state = crate::smiles::prepare(text)?.state;
+        let mut mol = Molecule::new(&state)?;
+        let mut graph = Digraph::new(&mol, 1, false)?;
+        graph.edges(&mut mol, 0)?;
+        let labeled = graph.nodes.iter().find(|n| n.atom == Some(0)).unwrap();
+        let implicit = graph
+            .nodes
+            .iter()
+            .find(|n| n.flags & IMPLICIT_HYDROGEN != 0)
+            .unwrap();
+        assert_eq!(labeled.mass == implicit.mass, equal, "{text}");
+        assert_eq!(labeled.isotope, state.graph.atoms[0].isotope, "{text}");
+        let mut ordinary = state.clone();
+        ordinary.graph.atoms[0].isotope = 0;
+        let ordinary = Molecule::new(&ordinary)?;
+        let ordinary = Digraph::new(&ordinary, 0, false)?;
+        assert_eq!(labeled.mass == ordinary.node(0)?.mass, equal, "{text}");
+    }
+    Ok(())
+}
+
+#[test]
 fn bad_indices_and_a_different_source_cannot_edit_the_graph() -> anyhow::Result<()> {
     let state = chain(3)?;
     let mut mol = Molecule::new(&state)?;

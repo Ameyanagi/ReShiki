@@ -830,11 +830,7 @@ impl<'a> Writer<'a> {
 
     fn implicit_proton(&self, atom: AtomId) -> bool {
         let a = self.graph.atom(atom);
-        if a.element != Element::H
-            || a.charge != 0
-            || a.isotope.is_some_and(|isotope| isotope != 1)
-            || a.bonds.len() != 1
-        {
+        if a.element != Element::H || a.charge != 0 || a.isotope.is_some() || a.bonds.len() != 1 {
             return false;
         }
         let neighbour = self.graph.bond(a.bonds[0]).other_atom(atom).unwrap();

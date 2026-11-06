@@ -220,9 +220,11 @@ impl<'a> Digraph<'a> {
         } else {
             0
         };
+        // For CIP, protium and ordinary H are the same ligand; the isotope
+        // label remains part of the molecular graph and serialized structure.
         let mass = if flags & DUPLICATE != 0 {
             0.
-        } else if isotope == 0 {
+        } else if isotope == 0 || number == 1 && isotope == 1 {
             at(ELEMENTS, usize::from(number))?.average
         } else {
             ISOTOPES

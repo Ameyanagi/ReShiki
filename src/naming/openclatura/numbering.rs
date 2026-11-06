@@ -561,7 +561,35 @@ fn numbering_preference(
     }
 }
 
-/// P-31.1.4.3.4: after structural numbering ties, prefer R to S and M to P
+/// Keep every chain orientation permitted by criteria preceding stereo.
+pub(super) fn chain_orientations_before_stereo(
+    mol: &Molecule,
+    path: &[usize],
+    principal: &[usize],
+    substituents: &BTreeMap<usize, Vec<String>>,
+) -> Vec<Vec<usize>> {
+    let reversed: Vec<_> = path.iter().rev().copied().collect();
+    let evaluate = |path: &[usize]| {
+        let mut preference = numbering_preference(
+            mol,
+            path,
+            principal,
+            None,
+            substituents,
+            None,
+            NumberingTopology::default(),
+        );
+        preference.stereochemistry.clear();
+        preference
+    };
+    match evaluate(path).compare(&evaluate(&reversed), false) {
+        Ordering::Less => vec![path.to_vec()],
+        Ordering::Greater => vec![reversed],
+        Ordering::Equal => vec![path.to_vec(), reversed],
+    }
+}
+
+/// P-14.4(j): after structural numbering ties, prefer R to S and M to P
 /// at the first differing locant. An internal axis is cited once, at its lower
 /// locant; an axis leaving this parent is cited at the parent endpoint.
 fn stereochemistry_preference(
@@ -727,6 +755,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn pre_stereo_chain_orientations_respect_principal_and_prefix_locants() {
+        let mol = read_smiles("C[C@H](F)CCC").unwrap();
+        let path = vec![0, 1, 3, 4, 5];
+        let substituents = BTreeMap::from([(1, vec!["fluoro".into()])]);
+        assert_eq!(
+            chain_orientations_before_stereo(&mol, &path, &[], &substituents),
+            vec![path.clone()]
+        );
+        let reversed: Vec<_> = path.iter().rev().copied().collect();
+        for path in [&path, &reversed] {
+            assert_eq!(
+                chain_orientations_before_stereo(&mol, path, &[5], &substituents),
+                vec![reversed.clone()]
+            );
+        }
+    }
+
+    #[test]
     fn late_nitrogen_numbering_preserves_multiplicity_before_citation() {
         let mol = read_smiles("CCC").unwrap();
         let modifiers = NumberingModifiers {
@@ -807,7 +853,6 @@ mod tests {
             assert_eq!(path, vec![0, 1, 2, 3, 4]);
         }
     }
-
     #[test]
     fn ordinary_and_retained_numbering_prefer_m_to_p() {
         let mut mol = read_smiles("c1(-c2ccccc2)ccc(-c2ccccc2)cc1").unwrap();
