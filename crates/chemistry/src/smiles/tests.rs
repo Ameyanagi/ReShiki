@@ -623,9 +623,20 @@ fn bridging_hydride_keeps_configuration() -> anyhow::Result<()> {
 #[test]
 fn terminal_hydride_is_no_stereo_ligand() -> anyhow::Result<()> {
     // Charge is no sequence-rule criterion: H⁻ and H tie (P-92.3).
-    assert_eq!(
-        super::stereoisomers("C[C@H](F)[H-]")?,
-        super::stereoisomers("C[C@@H](F)[H-]")?
-    );
+    for (first, second) in [
+        ("C[C@H](F)[H-]", "C[C@@H](F)[H-]"),
+        ("C[C@H](F)<-[H-]", "C[C@@H](F)<-[H-]"),
+    ] {
+        assert_eq!(
+            super::stereoisomers(first)?,
+            super::stereoisomers(second)?,
+            "{first}"
+        );
+        for smiles in [first, second] {
+            let state = super::read(smiles)?.prepared.state;
+            assert_eq!(state.metadata.atoms[1].chiral_tag, 0, "{smiles}");
+            assert!(state.properties.atoms[1].cip_code.is_none(), "{smiles}");
+        }
+    }
     Ok(())
 }

@@ -1,15 +1,16 @@
 use super::*;
 impl Context {
-    /// An H or ¹H with one single bond and nothing else attached: the same CIP
-    /// ligand as an implicit H (P-92.3). Charge is no sequence-rule criterion;
-    /// a bridging hydride or an H carrying another H continues the ligand.
+    /// An H or ¹H with one single or dative bond and nothing else attached: the
+    /// same CIP ligand as an implicit H (P-92.3). Charge is no sequence-rule
+    /// criterion; a bridging hydride or an H carrying another H continues the
+    /// ligand.
     pub(super) fn terminal_hydrogen(&self, atom: usize) -> Result<bool, String> {
         let a = at(&self.state.graph.atoms, atom)?;
         Ok(a.atomic_number == 1
             && a.isotope <= 1
             && self.hydrogens(atom)? == 0
             && matches!(at(&self.neighbors, atom)?.as_slice(),
-                [bond] if at(&self.state.graph.bonds, *bond)?.order == 1))
+                [bond] if matches!(at(&self.state.graph.bonds, *bond)?.order, 1 | 5)))
     }
 
     // FindStereo.cpp::isAtomPotentialTetrahedralCenter (2026.03.6).
