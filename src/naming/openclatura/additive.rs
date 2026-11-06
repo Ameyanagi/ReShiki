@@ -415,7 +415,14 @@ fn collect_indicated_hydrogens(
     let mut defaults: BTreeSet<_> = metadata
         .map(|m| m.default_indicated_h.iter().cloned().collect())
         .unwrap_or_default();
+    let pyran_parent = matches!(
+        parts.retained_name.as_deref(),
+        Some("pyran" | "thiopyran" | "selenopyran" | "telluropyran")
+    );
+    // Pyran's template saturation supports fusion hydrogen consumption;
+    // the standalone parent still cites its movable carbon indicated H.
     let inherent: BTreeSet<_> = metadata
+        .filter(|_| !pyran_parent)
         .map(|m| m.inherent_saturated_locants.iter().cloned().collect())
         .unwrap_or_default();
     let mut declared = if defaults.is_empty() {
@@ -431,7 +438,8 @@ fn collect_indicated_hydrogens(
                     let b = ring_bonds(mol, i, &ring);
                     !b.is_empty() && b.iter().all(|b| b.order == 1)
                 }
-                && (mol.atoms[&i].explicit_h_count + mol.atoms[&i].total_h_count > 0
+                && ((pyran_parent && saturated_ring_site(mol, i, &ring))
+                    || mol.atoms[&i].explicit_h_count + mol.atoms[&i].total_h_count > 0
                     || oxo_ring_site(mol, i, &ring))
         })
         .map(|i| locants[i].clone())
@@ -1214,12 +1222,58 @@ fn apply_lambda_parent_hydrogens(
     Ok(true)
 }
 
+pub(super) fn retained_suffix_hydrogen_state(
+    mol: &Molecule,
+    template: &super::retained_graph_model::RetainedGraphTemplate,
+    atoms: &AtomSet,
+    suffix: &AtomSet,
+    locants: &BTreeMap<usize, String>,
+    indicated_seed: &[String],
+) -> Result<Option<SuffixHydrogenState>, String> {
+    use super::fusion::{mancude::suffix_hydrogen_state, numbering};
+    let by_loc = locants.iter().map(|(&id, l)| (l.clone(), id)).collect();
+    let suffix_locants: BTreeSet<_> = suffix.iter().map(|a| locants[a].clone()).collect();
+    let mut citations = vec![template.default_indicated_h.clone()];
+    if indicated_seed.len() == template.indicated_hydrogen_count() {
+        citations.push(indicated_seed.to_vec());
+    }
+    let mut candidates = Vec::new();
+    for indicated in suffix_hydrogen_citations(mol, atoms, locants, &suffix_locants, citations) {
+        if indicated.len() != template.indicated_hydrogen_count() {
+            continue;
+        }
+        let model = match numbering::retained_template_parent_bond_model(
+            template,
+            &by_loc,
+            Some(&indicated),
+        ) {
+            Ok(model) => model,
+            Err(error) if error == numbering::RETAINED_PARENT_BOND_CAPACITY_ERROR => continue,
+            Err(error) => return Err(error),
+        };
+        let Some(state) = suffix_hydrogen_state(mol, atoms, &model, suffix, locants)? else {
+            continue;
+        };
+        let rank = suffix_hydrogen_rank(
+            &indicated,
+            &suffix_locants,
+            suffix.len(),
+            &template.fusion_atoms,
+            &state,
+        );
+        candidates.push((rank, indicated, model, state));
+    }
+    Ok(candidates
+        .into_iter()
+        .min_by(|a, b| a.0.cmp(&b.0))
+        .map(|(_, indicated, model, state)| (indicated, model, state)))
+}
+
 fn apply_suffix_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
     locants: &BTreeMap<usize, String>,
 ) -> Result<bool, String> {
-    use super::fusion::{mancude::suffix_hydrogen_state, numbering};
     use super::graph_kernel::normalize_edge;
 
     // Spiro components leave suffix composition to the complete spiro parent.
@@ -1298,42 +1352,27 @@ fn apply_suffix_hydrogens(
         {
             continue;
         }
-        let mut citations = vec![template.default_indicated_h.clone()];
-        if let Some(metadata) = &parts.retained_parent_metadata
-            && metadata.default_indicated_h.len() == template.indicated_hydrogen_count()
-        {
-            citations.push(metadata.default_indicated_h.clone());
-        }
-        for indicated in suffix_hydrogen_citations(mol, atoms, locants, &suffix_locants, citations)
-        {
-            if indicated.len() != template.indicated_hydrogen_count() {
-                continue;
-            }
-            let model = match numbering::retained_template_parent_bond_model(
-                template,
-                &by_loc,
-                Some(&indicated),
-            ) {
-                Ok(model) => model,
-                Err(error) if error == numbering::RETAINED_PARENT_BOND_CAPACITY_ERROR => continue,
-                Err(error) => return Err(error),
-            };
-            let Some(state) = suffix_hydrogen_state(mol, atoms, &model, &suffix, locants)? else {
-                continue;
-            };
-            let rank = (
-                std::cmp::Reverse(capacity),
-                suffix_hydrogen_rank(
-                    &indicated,
-                    &suffix_locants,
-                    group.locants.len(),
-                    &template.fusion_atoms,
-                    &state,
-                ),
-                template.priority,
-            );
-            candidates.push((rank, template, indicated, model, state));
-        }
+        let seed = parts
+            .retained_parent_metadata
+            .as_ref()
+            .map_or(&[][..], |metadata| metadata.default_indicated_h.as_slice());
+        let Some((indicated, model, state)) =
+            retained_suffix_hydrogen_state(mol, template, atoms, &suffix, locants, seed)?
+        else {
+            continue;
+        };
+        let rank = (
+            std::cmp::Reverse(capacity),
+            suffix_hydrogen_rank(
+                &indicated,
+                &suffix_locants,
+                group.locants.len(),
+                &template.fusion_atoms,
+                &state,
+            ),
+            template.priority,
+        );
+        candidates.push((rank, template, indicated, model, state));
     }
     let Some((_, template, indicated, model, state)) =
         candidates.into_iter().min_by(|a, b| a.0.cmp(&b.0))
@@ -1377,6 +1416,64 @@ fn apply_suffix_hydrogens(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ring_ketone_numbering_compares_suffix_before_added_hydrogen() {
+        use crate::naming::{NameStatus, verify_identity};
+        let parser = opsin::Parser::new().unwrap();
+        for (smiles, expected) in [
+            ("O=C1C(=O)Cc2ccccc21", "1H-indene-1,2(3H)-dione"),
+            (
+                "CC1(C)C(=O)C(=O)c2ccccc21",
+                "3,3-dimethyl-1H-indene-1,2(3H)-dione",
+            ),
+            (
+                "O=C1C(=O)Cc2ccc(Cl)cc21",
+                "6-chloro-1H-indene-1,2(3H)-dione",
+            ),
+            ("O=C1Cc2ccccc2C1=O", "1H-indene-1,2(3H)-dione"),
+            ("C1C(=O)C(=O)c2ccccc12", "1H-indene-1,2(3H)-dione"),
+            (
+                "O=C1C(=O)C(C)(C)c2ccccc12",
+                "3,3-dimethyl-1H-indene-1,2(3H)-dione",
+            ),
+            ("O=C1CC(=O)c2ccccc21", "1H-indene-1,3(2H)-dione"),
+            (
+                "O=C1CC(=O)c2ccc(Cl)cc21",
+                "5-chloro-1H-indene-1,3(2H)-dione",
+            ),
+            (
+                "O=C1CC(=O)c2c1ccc1ccccc21",
+                "1H-cyclopenta[a]naphthalene-1,3(2H)-dione",
+            ),
+            (
+                "C1C(=O)c2c(C1=O)c1ccccc1cc2",
+                "1H-cyclopenta[a]naphthalene-1,3(2H)-dione",
+            ),
+            ("O=C1Cc2ccccc2C1", "1,3-dihydro-2H-inden-2-one"),
+            ("O=C1Nc2ccccc2C1=O", "1H-indole-2,3-dione"),
+            ("O=C1CC(=O)C(=O)c2ccccc12", "naphthalene-1,2,4(3H)-trione"),
+            ("O=C1C(=O)CCc2ccccc21", "3,4-dihydronaphthalene-1,2-dione"),
+            ("O=C1CCc2ccccc12", "2,3-dihydro-1H-inden-1-one"),
+            ("O=C1Cc2ccccc2C(=O)C1", "naphthalene-1,3(2H,4H)-dione"),
+            ("O=C1C=Cc2ccccc12", "1H-inden-1-one"),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                opsin::Status::Success,
+                "{}: {}",
+                name.text,
+                parsed.message
+            );
+            let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
+            verify_identity(smiles, &reconstructed)
+                .unwrap_or_else(|error| panic!("{smiles} -> {}: {error}", name.text));
+        }
+    }
+
     #[test]
     fn suffix_hydrogen_names_are_preferred_and_round_trip() {
         use crate::naming::{NameStatus, verify_identity};

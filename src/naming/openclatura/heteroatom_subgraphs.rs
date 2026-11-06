@@ -598,7 +598,7 @@ fn name_oxygen(
             "hydroperoxy".into()
         });
     }
-    let b = name_subgraph_rendered(mol, next, &with_atoms(exclude, [start]), Some(start))?;
+    let b = name_subgraph_rendered(mol, next, &with_atoms(exclude, [start]), Some(start), false)?;
     // Upstream's sulfonic-acid-to-sulfonamido conversion preserves the O-N-S
     // linkage when the named nitrogen bears the proved sulfonyl group.
     // Upstream divergence: other amidooxy contractions change a carbon-acyl aminooxy ligand's parsed connectivity.
@@ -836,6 +836,7 @@ fn name_nitrogen(
     if order == 2 && atom.charge <= 0 && names.len() > 1 {
         mol.set_name_status(status);
     }
+    super::amine_oxides::assess_cationic_prefix(mol, start);
     if order == 1
         && atom.charge > 0
         && let Some(prefix) =

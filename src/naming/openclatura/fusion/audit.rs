@@ -2007,7 +2007,7 @@ fn audit_indicated_hydrogens(
         );
         return Ok(());
     };
-    let mut candidates = parent_hydrogen_candidates(mol, ast, &selected);
+    let mut candidates = parent_hydrogen_candidates(mol, ast, &selected, model);
     candidates.extend(intrinsic);
     if !cited_atoms.is_subset(&candidates) {
         issue(

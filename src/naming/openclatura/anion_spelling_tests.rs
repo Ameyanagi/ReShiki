@@ -111,11 +111,11 @@ fn anion_spelling_matrix() {
             "[O-]C(=O)c1ccccc1[CH2-]",
             "(2-carboxylatophenyl)methanide",
         ),
-        (28, "[N-]1[NH+]=CC=C1", "1H-pyrazol-1-ide-2-ium"),
+        (28, "[N-]1[NH+]=CC=C1", "1H-pyrazol-2-ium-1-ide"),
         (
             29,
             "[N-]1[NH+]=CC=C2N=CC=C12",
-            "pyrrolo[3,2-c]pyridazin-1-ide-2-ium",
+            "1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide",
         ),
         (30, "C[S+](C)[CH-]C", "1-(dimethylsulfaniumyl)ethan-1-ide"),
         (31, "[NH2+]1CC[NH2+]CC1", "piperazine-1,4-diium"),
@@ -140,6 +140,138 @@ fn anion_spelling_matrix() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn zwitterion_suffix_order_preserves_numbering_status_and_identity() {
+    // P-74.1.1: cite cations first while anionic centres retain low locants
+    // and the neutral parent's indicated hydrogen remains explicit.
+    let parser = opsin::Parser::new().unwrap();
+    for (smiles, expected, status) in [
+        (
+            "[N-]1C[NH2+]CC1",
+            "imidazolidin-3-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[N-]1[NH+]=CC=C1",
+            "1H-pyrazol-2-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[N-]1CC[NH2+]CC1",
+            "piperazin-4-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "C[N+]1=CC=C[N-]1",
+            "2-methyl-1H-pyrazol-2-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[N-]1C=C[NH+]=C1",
+            "1H-imidazol-3-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[N-]1[NH+]=CC=C2N=CC=C12",
+            "1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "C1C[N-]C[NH2+]1",
+            "imidazolidin-3-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "C1=C[N-][NH+]=C1",
+            "1H-pyrazol-2-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[NH+]1=CC=C2N=CC=C2[N-]1",
+            "1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "C1C=C2N=CC=C2[N-][NH+]=1",
+            "1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[NH2+]1CC(=O)[CH-]CC1",
+            "3-oxopiperidin-1-ium-4-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[CH-]1CC[NH2+]CC1",
+            "piperidin-1-ium-4-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[O-]C(=O)C1CCC[N-]1",
+            "pyrrolidin-1-ide-2-carboxylate",
+            NameStatus::Preferred,
+        ),
+        (
+            "[O-]C(=O)C[NH3+]",
+            "azaniumylacetate",
+            NameStatus::Preferred,
+        ),
+        (
+            "[N-]1C(=O)NC(=O)C1",
+            "2,4-dioxoimidazolidin-1-ide",
+            NameStatus::Preferred,
+        ),
+        (
+            "C[N+](C)(C)[N-]C",
+            "N-(trimethylammonio)methanaminide",
+            NameStatus::Unverified(NameReason::CationPrefix),
+        ),
+        (
+            "[Na+].[Cl-]",
+            "sodium chloride",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        (
+            "[N-]1CC[N-]CC1",
+            "piperazine-1,4-diide",
+            NameStatus::Preferred,
+        ),
+        (
+            "[NH2+]1CC[NH2+]CC1",
+            "piperazine-1,4-diium",
+            NameStatus::Preferred,
+        ),
+        (
+            "[NH4+]",
+            "ammonium",
+            NameStatus::Unverified(NameReason::UnauditedPath),
+        ),
+        ("CC(=O)[O-]", "acetate", NameStatus::Preferred),
+    ] {
+        assert_name_and_round_trip(&parser, smiles, expected, status);
+    }
+    // Exercise traversal order inside the namer as well as the CLI boundary.
+    for (smiles, expected) in [
+        ("C1C[N-]C[NH2+]1", "imidazolidin-3-ium-1-ide"),
+        ("C1=C[N-][NH+]=C1", "1H-pyrazol-2-ium-1-ide"),
+        (
+            "[NH+]1=CC=C2N=CC=C2[N-]1",
+            "1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide",
+        ),
+        (
+            "C1C=C2N=CC=C2[N-][NH+]=1",
+            "1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide",
+        ),
+    ] {
+        let actual = name_smiles(smiles).unwrap();
+        assert_eq!(
+            (actual.text.as_str(), actual.status),
+            (expected, NameStatus::Preferred),
+            "{smiles}"
+        );
+    }
 }
 
 #[test]

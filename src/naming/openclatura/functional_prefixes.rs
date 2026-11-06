@@ -80,7 +80,7 @@ fn descriptor_ester_prefix(
     }
     let mut blocked = context.sub_exclude.clone();
     blocked.insert(terminal.atom);
-    let branch = name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom))?;
+    let branch = name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom), false)?;
     let mut ligand = element_ligand(branch, &terminal.element)?;
     for linker in linkers[..linkers.len() - 1].iter().rev() {
         ligand = element_ligand(
@@ -143,7 +143,7 @@ fn central_chalcogen_linkage_prefix(
             let mut blocked = context.sub_exclude.clone();
             blocked.insert(terminal.atom);
             element_ligand(
-                name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom))?,
+                name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom), false)?,
                 &terminal.element,
             )?
         } else {
@@ -286,7 +286,7 @@ pub fn ester_prefix_from_group(
     };
     let mut blocked = exclude.clone();
     blocked.insert(oxygen);
-    let branch = name_subgraph_rendered(mol, root, &blocked, Some(oxygen))?;
+    let branch = name_subgraph_rendered(mol, root, &blocked, Some(oxygen), false)?;
     if RULES.prefixes.peroxy_ester_groups.contains(&group.key) {
         return Ok(format!(
             "({}peroxycarbonyl)",
@@ -398,6 +398,7 @@ pub fn prefix_from_group(
             })
             .collect();
         if group.key == "iminium" {
+            super::amine_oxides::assess_cationic_prefix(context.mol, n);
             if context.mol.get_neighbors(n).iter().all(|&neighbor| {
                 neighbor == group.attachment_carbon || context.mol.atoms[&neighbor].symbol == "H"
             }) {
@@ -474,6 +475,9 @@ pub fn prefix_from_group(
                 })
             })
         {
+            if let Some(n) = amide_nitrogen(context.mol, group) {
+                super::amine_oxides::assess_cationic_prefix(context.mol, n);
+            }
             context
                 .mol
                 .mark_name(NameStatus::Unverified(NameReason::CationPrefix));
