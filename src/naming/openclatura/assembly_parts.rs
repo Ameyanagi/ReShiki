@@ -6,6 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct RenderedSubstituentName {
     pub text: String,
     pub outer_parentheses_optional: bool,
+    pub oxy_prefix: Option<String>,
+}
+impl RenderedSubstituentName {
+    pub fn into_oxy_prefix(self) -> String {
+        self.oxy_prefix
+            .unwrap_or_else(|| super::formatting::oxy_prefix_from_branch(&self.text))
+    }
 }
 #[derive(Clone, Debug, Default)]
 pub struct SubstituentItem {
