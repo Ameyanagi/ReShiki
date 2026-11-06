@@ -160,6 +160,23 @@ fn mismatch(detail: &str, expected: &Outcome, actual: &Outcome) -> Option<String
     })
 }
 
+fn random_atom_order(smiles: &str, seed: u64) -> String {
+    let mut rng = generator::SplitMix64(seed);
+    let mut permuted = smiles.to_owned();
+    // Each re-read renumbers atoms in the previous traversal order.
+    for _ in 0..3 {
+        let state = state(&permuted);
+        let root = rng.below(state.graph.atoms.len());
+        permuted = smiles_in_order(&state, Some(root));
+    }
+    // The writer keeps component order, so shuffle the components too.
+    let mut components: Vec<_> = permuted.split('.').collect();
+    for i in (1..components.len()).rev() {
+        components.swap(i, rng.below(i + 1));
+    }
+    components.join(".")
+}
+
 #[test]
 fn atom_order_keeps_name_and_status() {
     check("atom_order", |c, base| {
@@ -169,20 +186,7 @@ fn atom_order_keeps_name_and_status() {
         });
         (0..3)
             .filter_map(|order| {
-                let mut rng = generator::SplitMix64(seed.wrapping_add(order));
-                let mut permuted = c.to_owned();
-                // Each re-read renumbers atoms in the previous traversal order.
-                for _ in 0..3 {
-                    let state = state(&permuted);
-                    let root = rng.below(state.graph.atoms.len());
-                    permuted = smiles_in_order(&state, Some(root));
-                }
-                // The writer keeps component order, so shuffle the components too.
-                let mut components: Vec<_> = permuted.split('.').collect();
-                for i in (1..components.len()).rev() {
-                    components.swap(i, rng.below(i + 1));
-                }
-                let permuted = components.join(".");
+                let permuted = random_atom_order(c, seed.wrapping_add(order));
                 match canonical_smiles(&permuted) {
                     Ok(identity) if identity == c => mismatch(&permuted, base, &outcome(&permuted)),
                     identity => Some(format!("{permuted} has identity {identity:?}")),
@@ -303,6 +307,103 @@ fn untied_diamide_controls_keep_cli_names_and_status_in_six_orders() {
             // issue #953 group D's separate atom-order dependence.
             assert_eq!(outcome(&canonical), expected, "{permuted}");
         }
+    }
+}
+
+#[test]
+fn issue_953_ester_and_n_substituent_numbering_matrix() {
+    let permutations = BTreeMap::from([
+        (
+            "CN1CCC(N2CCC(NC(=O)C(=O)Nc3cccc(-n4cccn4)c3)CC2)CC1",
+            "c1(NC(C(NC2CCN(C3CCN(C)CC3)CC2)=O)=O)cccc(-n2cccn2)c1",
+        ),
+        (
+            "COC(=O)CC(=O)OCC(C)(C)CC(=O)OC(C)(C)C",
+            "C(OC(CC(OC)=O)=O)C(C)(C)CC(=O)OC(C)(C)C",
+        ),
+        (
+            "COc1ccc2nc3cc(Cl)ccc3c(NCCCN(CCCNc3c4ccc(Cl)cc4nc4ccc(OC)cc34)CC3CC3)c2c1",
+            "C(CCNc1c2c(nc3ccc(OC)cc31)cc(Cl)cc2)N(CCCNc1c2c(nc3ccc(OC)cc13)cc(Cl)cc2)CC1CC1",
+        ),
+    ]);
+    let mut count = 0;
+    let mut errors = Vec::new();
+    for line in include_str!("../../../tests/fixtures/naming/iupac-audit-cases.tsv")
+        .lines()
+        .filter(|line| line.contains("\tissue #953\t"))
+    {
+        let [smiles, expected_name, expected_status, _, _, "pass"] =
+            line.split('\t').collect::<Vec<_>>()[..]
+        else {
+            panic!("malformed issue #953 row: {line}");
+        };
+        count += 1;
+        let base = outcome(smiles);
+        println!("matrix {count}: {smiles} => {}", describe(&base));
+        match &base {
+            Ok((name, status)) => {
+                let status = match status {
+                    NameStatus::Preferred => "preferred",
+                    NameStatus::NotPreferred(_) => "not_preferred",
+                    NameStatus::Unverified(_) => "unverified",
+                };
+                if (name.as_str(), status) != (expected_name, expected_status) {
+                    errors.push(format!(
+                        "{smiles}: expected {expected_name} [{expected_status}], got {}",
+                        describe(&base)
+                    ));
+                }
+            }
+            Err(()) => errors.push(format!("{smiles}: unexpectedly declined")),
+        }
+        let canonical = canonical_smiles(smiles).unwrap();
+        let orders = (0..6)
+            .map(|seed| random_atom_order(smiles, 953 + seed))
+            .chain(permutations.get(smiles).map(|s| (*s).to_owned()));
+        for permuted in orders {
+            assert_eq!(
+                canonical_smiles(&permuted).unwrap(),
+                canonical,
+                "{permuted}"
+            );
+            errors.extend(mismatch(&permuted, &base, &outcome(&permuted)));
+        }
+    }
+    assert_eq!(count, 29, "all E/D design matrix rows must be tested");
+    assert!(errors.is_empty(), "{}", errors.join("\n"));
+}
+
+#[test]
+fn issue_953_ester_isotopic_hydrogens_precede_alcohol_assignment() {
+    let mut parser = Measurements::default();
+    for (smiles, name) in [
+        (
+            "CCOC(=O)C([2H])CC(=O)OC",
+            "1-ethyl 4-methyl (2-2H1)butanedioate",
+        ),
+        (
+            "CCOC(=O)CC([2H])C(=O)OC",
+            "4-ethyl 1-methyl (2-2H1)butanedioate",
+        ),
+        (
+            "CCOC(=O)C([2H])C([2H])([2H])C(=O)OC",
+            "4-ethyl 1-methyl (2,2,3-2H3)butanedioate",
+        ),
+    ] {
+        let expected = Ok((
+            name.to_owned(),
+            NameStatus::Unverified(crate::naming::NameReason::IsotopePlacement),
+        ));
+        assert_eq!(outcome(smiles), expected, "{smiles}");
+        for seed in 0..6 {
+            let permuted = random_atom_order(smiles, 953 + seed);
+            assert_eq!(outcome(&permuted), expected, "{permuted}");
+        }
+        assert_eq!(
+            parser.parse_name(name).unwrap(),
+            canonical_smiles(smiles).unwrap(),
+            "{name}"
+        );
     }
 }
 

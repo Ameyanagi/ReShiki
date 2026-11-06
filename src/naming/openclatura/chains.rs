@@ -826,7 +826,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn symmetric_diamide_prime_ties_keep_upstream_endpoint_order() {
+    fn symmetric_diamide_numbering_breaks_endpoint_ties_by_citation() {
         let smiles = "C1CCC(CC1)NC(=O)CCC(=O)NC2=NN=C3N2C=CC=C3";
         let mol = read_smiles(smiles).unwrap();
         assert_eq!(
@@ -837,7 +837,7 @@ mod tests {
             super::super::name_smiles(smiles)
                 .map(|name| name.text)
                 .as_deref(),
-            Ok("N'-cyclohexyl-N-([1,2,4]triazolo[4,3-a]pyridin-3-yl)butanediamide"),
+            Ok("N-cyclohexyl-N'-([1,2,4]triazolo[4,3-a]pyridin-3-yl)butanediamide"),
         );
     }
 
