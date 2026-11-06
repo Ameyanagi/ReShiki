@@ -76,7 +76,7 @@ fn salt_anion_spelling_matrix() {
         (
             "B14",
             "[Na+].[Na+].[Na+].CC(=O)CC[O-].O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
-            "trisodium 3-oxobutan-1-olate 4-[(4-carboxylatophenyl)oxy]benzoate",
+            "trisodium 3-oxobutan-1-olate 4-(4-carboxylatophenoxy)benzoate",
             NameStatus::NotPreferred(NameReason::Multiplicative),
         ),
         (
@@ -130,7 +130,7 @@ fn salt_anion_spelling_matrix() {
         (
             "B25",
             "O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
-            "4-[(4-carboxylatophenyl)oxy]benzoate",
+            "4-(4-carboxylatophenoxy)benzoate",
             NameStatus::NotPreferred(NameReason::Multiplicative),
         ),
         (

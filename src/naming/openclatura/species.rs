@@ -245,7 +245,7 @@ mod tests {
             ),
             (
                 "[Na+].[Na+].[Na+].CC(=O)CC[O-].O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
-                "trisodium 3-oxobutan-1-olate 4-[(4-carboxylatophenyl)oxy]benzoate",
+                "trisodium 3-oxobutan-1-olate 4-(4-carboxylatophenoxy)benzoate",
                 NameStatus::NotPreferred(NameReason::Multiplicative),
             ),
         ] {
@@ -735,7 +735,7 @@ mod tests {
             ),
             (
                 format!("[Na+].[Na+].[Na+].CC(=O)CC[O-].{OXYDIBENZOATE}"),
-                "trisodium 3-oxobutan-1-olate 4-[(4-carboxylatophenyl)oxy]benzoate",
+                "trisodium 3-oxobutan-1-olate 4-(4-carboxylatophenoxy)benzoate",
                 NotPreferred(Multiplicative),
             ),
             (
@@ -745,7 +745,7 @@ mod tests {
             ),
             (
                 format!("{EPOXY_AMINIUM}.{EPOXY_AMINIUM}.{OXYDIBENZOATE}"),
-                "bis(N,N,N-trimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-aminium) 4-[(4-carboxylatophenyl)oxy]benzoate",
+                "bis(N,N,N-trimethyl-1,2,3,4-tetrahydro-1,4-epoxynaphthalen-6-aminium) 4-(4-carboxylatophenoxy)benzoate",
                 NotPreferred(Multiplicative),
             ),
             (
@@ -761,7 +761,7 @@ mod tests {
             ),
             (
                 format!("[Na+].[Na+].{OXYDIBENZOATE}"),
-                "disodium 4-[(4-carboxylatophenyl)oxy]benzoate",
+                "disodium 4-(4-carboxylatophenoxy)benzoate",
                 NotPreferred(Multiplicative),
             ),
             (
@@ -786,7 +786,7 @@ mod tests {
             ),
             (
                 format!("{NONANYL_AMINIUM}.{NONANYL_AMINIUM}.{OXYDIBENZOATE}"),
-                "bis[N,N,N-trimethyl-1-(tricyclo[3.3.1.0^{3,7}]nonan-2-yl)methanaminium] 4-[(4-carboxylatophenyl)oxy]benzoate",
+                "bis[N,N,N-trimethyl-1-(tricyclo[3.3.1.0^{3,7}]nonan-2-yl)methanaminium] 4-(4-carboxylatophenoxy)benzoate",
                 NotPreferred(Multiplicative),
             ),
             ("[O-]c1ccccc1".into(), "phenoxide", Preferred),

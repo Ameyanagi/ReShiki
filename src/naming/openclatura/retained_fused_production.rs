@@ -439,3 +439,52 @@ fn saturation_is_hydro_citable(mol: &Molecule, m: &RetainedGraphTemplateMatch) -
         .count();
     saturated > 0 && saturated < m.atom_to_locant.len()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::{
+        chains::find_ring_systems, graph_io::read_smiles, perception::perceive_groups,
+    };
+    use super::*;
+
+    #[test]
+    fn anthracene_and_phenanthrene_admit_retained_derivatives() {
+        for (smiles, parent, principal) in [
+            ("c1ccc2cc3ccccc3cc2c1", "anthracene", None),
+            ("c1ccc2c(c1)ccc1ccccc12", "phenanthrene", None),
+            ("C1c2ccccc2Cc2ccccc21", "anthracene", None),
+            ("C1Cc2ccccc2-c2ccccc21", "phenanthrene", None),
+            ("OC1c2ccccc2Cc2ccccc21", "anthracene", Some("alcohol")),
+            ("OC1Cc2ccccc2-c2ccccc21", "phenanthrene", Some("alcohol")),
+            ("O=C1c2ccccc2Cc2ccccc12", "anthracene", Some("ketone")),
+            ("O=C1Cc2ccccc2-c2ccccc12", "phenanthrene", Some("ketone")),
+            ("O=C1c2ccccc2C(=O)c2ccccc12", "anthracene", Some("ketone")),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
+            let retained = production_retained_fused_parent(
+                &mol,
+                &rings[0].atoms.iter().copied().collect::<Vec<_>>(),
+                &mol.atoms.keys().copied().collect(),
+                &perceive_groups(&mol),
+                principal,
+                &BTreeMap::new(),
+                None,
+            )
+            .unwrap()
+            .unwrap_or_else(|| panic!("{smiles}"));
+            assert_eq!(retained.name, parent, "{smiles}");
+            assert!(!retained.locant_maps.is_empty(), "{smiles}");
+            assert!(
+                retained
+                    .locant_maps
+                    .iter()
+                    .all(|map| map.len() == 14 && map.values().any(|locant| locant == "10a")),
+                "{smiles}"
+            );
+            assert_eq!(retained.metadata.mancude_double_bonds, 7, "{smiles}");
+            assert_eq!(retained.metadata.indicated_hydrogen_count, 0, "{smiles}");
+            assert!(retained.metadata.default_indicated_h.is_empty(), "{smiles}");
+        }
+    }
+}
