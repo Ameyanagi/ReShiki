@@ -107,19 +107,26 @@ pub fn format_center_ligands_by<K: Ord>(names: &[String], sort_key: impl Fn(&str
         let count = counts[*name];
         let substituted = stems::terminal_stem(name)
             .is_some_and(|s| *name != &format!("{s}yl") && *name != &format!("cyclo{s}yl"));
-        let mut ligand = if count > 1 && substituted && !is_fully_enclosed(name) {
-            format!("{}({name})", multipliers::complex_(count))
+        let complex =
+            is_complex_prefix(name) || count > 1 && (substituted || needs_complex_multiplier(name));
+        let multiplier = if count == 1 {
+            String::new()
+        } else if complex {
+            multipliers::complex_(count)
         } else {
-            format_multiplier(name, count, false)
+            multipliers::basic(count)
         };
         let merges = count == 1
             && ordered[i + 1..]
                 .iter()
                 .any(|later| counts[*later] > 1 && name.ends_with(later.as_str()));
-        if (merges || (i > 0 && count == 1)) && !is_fully_enclosed(&ligand) {
-            ligand = format!("({ligand})");
+        // P-16.5.1.3.1: later distinct ligands are enclosed, with a simple
+        // multiplying prefix outside the parentheses: ethyldi(methyl).
+        if (complex || merges || i > 0) && !is_fully_enclosed(name) {
+            rendered.push_str(&format!("{multiplier}({name})"));
+        } else {
+            rendered.push_str(&format!("{multiplier}{name}"));
         }
-        rendered.push_str(&ligand);
     }
     rendered
 }

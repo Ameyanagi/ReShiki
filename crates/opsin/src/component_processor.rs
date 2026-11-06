@@ -1463,23 +1463,23 @@ impl<'a> ComponentProcessor<'a> {
             // ξ is an unknown configuration, not a racemate or relative pair.
             if arena[stereo].attribute(STEREOGROUP_ATR).is_some()
                 || arena
-                .children_named(sub_or_root, STEREOCHEMISTRY_EL)
-                .into_iter()
-                .chain(arena.children_named(scope, STEREOCHEMISTRY_EL))
-                .any(|other| {
-                    if other == stereo {
-                        return false;
-                    }
-                    match arena[other].attribute(TYPE_ATR) {
-                        Some(DLSTEREOCHEMISTRY_TYPE_VAL | RAC_TYPE_VAL | REL_TYPE_VAL) => true,
-                        Some(R_OR_S_TYPE_VAL) => {
-                            arena[other].attribute(LOCANT_ATR).is_none_or(|locant| {
-                                graph.atom_by_locant(fragment, locant) == Some(alpha)
-                            })
+                    .children_named(sub_or_root, STEREOCHEMISTRY_EL)
+                    .into_iter()
+                    .chain(arena.children_named(scope, STEREOCHEMISTRY_EL))
+                    .any(|other| {
+                        if other == stereo {
+                            return false;
                         }
-                        _ => false,
-                    }
-                })
+                        match arena[other].attribute(TYPE_ATR) {
+                            Some(DLSTEREOCHEMISTRY_TYPE_VAL | RAC_TYPE_VAL | REL_TYPE_VAL) => true,
+                            Some(R_OR_S_TYPE_VAL) => {
+                                arena[other].attribute(LOCANT_ATR).is_none_or(|locant| {
+                                    graph.atom_by_locant(fragment, locant) == Some(alpha)
+                                })
+                            }
+                            _ => false,
+                        }
+                    })
             {
                 return Err(error(
                     "Explicit stereochemistry conflicts with amino-acid xi",

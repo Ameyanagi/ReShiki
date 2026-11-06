@@ -1294,7 +1294,10 @@ fn central_ligand_name(
     } else {
         let mut exclude = outside(mol, atoms);
         exclude.insert(neighbor);
-        Ok(name_subgraph_rendered(mol, roots[0], &exclude, Some(neighbor))?.into_oxy_prefix())
+        Ok(
+            name_subgraph_rendered(mol, roots[0], &exclude, Some(neighbor), false)?
+                .into_oxy_prefix(),
+        )
     }
 }
 
@@ -1311,7 +1314,10 @@ fn simple_central_parent_hydride_name(
                 .mononuclear_parent_hydrides
                 .contains_key(&mol.atoms[i].symbol)
                 && !matches!(mol.atoms[i].symbol.as_str(), "O" | "F" | "Cl" | "Br" | "I")
-                && mol.degree(*i) >= 2
+                && (mol.degree(*i) >= 2
+                    || mol.degree(*i) == 1
+                        && mol.atoms[i].charge == 1
+                        && matches!(mol.atoms[i].symbol.as_str(), "S" | "Se" | "Te"))
         })
         .collect();
     if centers.len() != 1 {
@@ -1339,18 +1345,36 @@ fn simple_central_parent_hydride_name(
             .get_neighbors(c)
             .iter()
             .any(|&n| is_chalcogen(n) && mol.atoms[&n].charge == -1 && mol.degree(n) == 1);
-    let onium = a.charge == 1
-        && senior
-        && !oxide
-        && a.total_h_count == 0
+    // P-73.1.1.1/.2: protonated chalcogen hydrides retain the systematic
+    // sulfanium, selanium or tellanium parent, including remaining hydrogens.
+    // Other ionic or radical centers require the ordinary parent selection.
+    // The isotope adapter needs atom locants, which this shortcut lacks.
+    let chalcogen_onium = !mol.is_isotope_parent()
+        && a.charge == 1
+        && matches!(a.symbol.as_str(), "S" | "Se" | "Te")
+        && mol.get_neighbors(c).len() + a.total_h_count.max(a.explicit_h_count) == 3
         && mol
             .get_neighbors(c)
             .iter()
-            .all(|n| mol.atoms[n].is_carbon());
+            .all(|n| mol.atoms[n].is_carbon() && mol.bond_order(c, *n) == 1)
+        && mol
+            .atoms
+            .values()
+            .all(|atom| atom.radical_electrons == 0 && (atom.idx == c || atom.charge == 0))
+        && !get_cyclic_atoms(mol, &outside(mol, atoms)).contains(&c);
+    let onium = chalcogen_onium
+        || a.charge == 1
+            && senior
+            && !oxide
+            && a.total_h_count == 0
+            && mol
+                .get_neighbors(c)
+                .iter()
+                .all(|n| mol.atoms[n].is_carbon());
     if a.charge != 0 && !oxide && !onium {
         return Ok(None);
     }
-    let hydrocarbyl = senior && !has_principal_group(mol, atoms);
+    let hydrocarbyl = chalcogen_onium || senior && !has_principal_group(mol, atoms);
     let mut names = Vec::new();
     let mut chalcogen = None;
     for &n in mol.get_neighbors(c) {
@@ -1381,7 +1405,13 @@ fn simple_central_parent_hydride_name(
                     .iter()
                     .any(|other| *other != n && ligand.contains(other))
             {
-                name = branch_name(mol, atoms, n, &set([c]), c)?;
+                name = if chalcogen_onium {
+                    let mut exclude = outside(mol, atoms);
+                    exclude.insert(c);
+                    name_subgraph_rendered(mol, n, &exclude, Some(c), true)?.text
+                } else {
+                    branch_name(mol, atoms, n, &set([c]), c)?
+                };
             }
         }
         if name.is_empty() {
@@ -1460,17 +1490,18 @@ fn simple_central_parent_hydride_name(
     // P-44.1.2 and P-68.3.2.3.1: senior hydrides with organyl ligands,
     // including a terminal chalcogen suffix on P, As or Sb. The charge-separated
     // P+-O- representation (and its analogues) has the same ligand role as P=O.
-    let certified = matches!(
-        a.symbol.as_str(),
-        "B" | "Si" | "Ge" | "Sn" | "Pb" | "P" | "As" | "Sb" | "Bi"
-    ) && mol.get_neighbors(c).iter().all(|&n| {
-        mol.bond_order(c, n) == 1 && mol.atoms[&n].is_carbon()
-            || (mol.bond_order(c, n) == 2
-                || oxide && mol.bond_order(c, n) == 1 && mol.atoms[&n].charge == -1)
-                && matches!(a.symbol.as_str(), "P" | "As" | "Sb")
-                && is_chalcogen(n)
-                && mol.degree(n) == 1
-    });
+    let certified = chalcogen_onium
+        || matches!(
+            a.symbol.as_str(),
+            "B" | "Si" | "Ge" | "Sn" | "Pb" | "P" | "As" | "Sb" | "Bi"
+        ) && mol.get_neighbors(c).iter().all(|&n| {
+            mol.bond_order(c, n) == 1 && mol.atoms[&n].is_carbon()
+                || (mol.bond_order(c, n) == 2
+                    || oxide && mol.bond_order(c, n) == 1 && mol.atoms[&n].charge == -1)
+                    && matches!(a.symbol.as_str(), "P" | "As" | "Sb")
+                    && is_chalcogen(n)
+                    && mol.degree(n) == 1
+        });
     let name = if !prefix.is_empty() && !lambda.is_empty() {
         format!("{prefix}-{parent}")
     } else {
@@ -3507,6 +3538,89 @@ mod tests {
     }
 
     #[test]
+    fn chalcogen_onium_hydrides_use_preferred_systematic_parents() {
+        for (smiles, expected) in [
+            ("C[S+](C)C", "trimethylsulfanium"),
+            ("C[SH+]C", "dimethylsulfanium"),
+            ("C[SH2+]", "methylsulfanium"),
+            ("C[S+](C)c1ccccc1", "dimethyl(phenyl)sulfanium"),
+            ("CC[S+](CC)CC", "triethylsulfanium"),
+            ("C[S+](C)CC", "ethyldi(methyl)sulfanium"),
+            ("CC[S+](C)CCC", "ethyl(methyl)(propyl)sulfanium"),
+            ("C[S+](C)CCO", "(2-hydroxyethyl)di(methyl)sulfanium"),
+            ("C[S+](C)CC(=O)O", "(carboxymethyl)di(methyl)sulfanium"),
+            ("C[Se+](C)C", "trimethylselanium"),
+            ("CCC[SeH2+]", "propylselanium"),
+            ("C[Te+](C)C", "trimethyltellanium"),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let result = simple_central_parent_hydride_name(&mol, &all_atoms(&mol))
+                .unwrap()
+                .unwrap();
+            assert_eq!(result.name, expected, "{smiles}");
+            assert!(result.certified, "{smiles}");
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn chalcogen_onium_shortcut_declines_rings_and_other_ionic_centers() {
+        for smiles in [
+            "C[S+]1CCCC1",
+            "C[S+](C)[CH2-]",
+            "C[S+](C)C[O-]",
+            "C[S+](C)CCCCCC[N+](C)(C)C",
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            assert!(
+                simple_central_parent_hydride_name(&mol, &all_atoms(&mol))
+                    .unwrap()
+                    .is_none(),
+                "{smiles}"
+            );
+        }
+        for radical_center in [0, 1] {
+            let mut mol = read_smiles("C[S+](C)C").unwrap();
+            mol.atoms
+                .get_mut(&radical_center)
+                .unwrap()
+                .radical_electrons = 1;
+            assert!(
+                simple_central_parent_hydride_name(&mol, &all_atoms(&mol))
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        for (smiles, expected) in [
+            (
+                "C[S+](C)CCCCCC[N+](C)(C)C",
+                "6-(dimethylsulfaniumyl)-N,N,N-trimethylhexan-1-aminium",
+            ),
+            ("[CH2-][S+](C)C", "(dimethylsulfaniumyl)methanide"),
+            ("C[N+](C)(C)C", "N,N,N-trimethylmethanaminium"),
+        ] {
+            assert_eq!(
+                super::super::name_smiles(smiles).unwrap().text,
+                expected,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn mononuclear_hydrides_enclose_later_repeated_simple_ligands() {
+        for (smiles, expected) in [
+            ("CC[Si](C)(C)C", "ethyltri(methyl)silane"),
+            ("CC[P+](C)(C)C", "ethyltri(methyl)phosphanium"),
+            ("C[Si](C)(C)c1ccccc1", "trimethyl(phenyl)silane"),
+        ] {
+            assert_eq!(special(smiles).as_deref(), Some(expected), "{smiles}");
+        }
+    }
+
+    #[test]
     fn shortcut_certificates_require_audited_ligands() {
         for (smiles, expected, certified) in [
             ("CP(C)(C)=O", "trimethyl-lambda5-phosphanone", true),
@@ -3517,8 +3631,8 @@ mod tests {
             ("CP(C)(C)=[Se]", "trimethyl-lambda5-phosphaneselone", true),
             ("CP(C)(C)=[Te]", "trimethyl-lambda5-phosphanetellone", true),
             ("CC[Sn](CC)(CC)CC", "tetraethylstannane", true),
-            ("CP(C)Cl", "chlorodimethylphosphane", false),
-            ("COP(C)C", "methoxydimethylphosphane", false),
+            ("CP(C)Cl", "chlorodi(methyl)phosphane", false),
+            ("COP(C)C", "methoxydi(methyl)phosphane", false),
             ("C[Al](C)C", "trimethylalumane", false),
             ("CCB(O)O", "ethylboronic acid", true),
             ("CCO[N+](=O)[O-]", "ethyl nitrate", true),
