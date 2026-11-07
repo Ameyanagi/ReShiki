@@ -1451,3 +1451,111 @@ async fn reaction_imports_keep_stated_alkene_stereo() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+/// A wU/wD flag replaces the `/` or `\` on its bond. Where the flag cannot mean
+/// a wedge, import keeps the E/Z the direction states, as the bare SMILES does,
+/// although RDKit drops it (#1042). Other flagged directions keep main's result.
+#[tokio::test]
+async fn wedge_flags_keep_stated_alkene_stereo() -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    let engine = crate::engine::LocalEngine::in_process();
+    let analysis = async |text: &str| -> anyhow::Result<(String, String)> {
+        let analysis = engine
+            .request(Request::import("smiles", text))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .analysis
+            .context("Missing analysis")?;
+        Ok((analysis.smiles, analysis.inchi))
+    };
+    let dropped = smiles::read_dropping_flagged_ez;
+    let stereo =
+        |text: &str, read: fn(&str) -> std::result::Result<smiles::Imported, smiles::Error>| {
+            anyhow::Ok(serde_json::to_value(read(text)?.prepared.state.metadata)?)
+        };
+    const FLUOROIMINE: &str = "InChI=1S/CH2FN/c2-1-3/h1,3H";
+    const BUTENE: &str = "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3";
+    for (text, smiles, inchi) in [
+        ("[H]/N=C/F |wU:1.0|", "[H]/N=C/F", "/b3-1+"),
+        ("[H]/N=C/F |wD:1.0|", "[H]/N=C/F", "/b3-1+"),
+        (r"[H]\N=C/F |wU:1.0|", r"[H]/N=C\F", "/b3-1-"),
+        (
+            "[H]/N=C/F |(0,0,;1,0,;0,1,;-1,-1,;1,1,;0,-1,),wU:1.0|",
+            "[H]/N=C/F",
+            "/b3-1+",
+        ),
+        (
+            "[H]/N=C/F |(-1,1,;0,0,;1,0,;2,-1,),wU:1.0|",
+            "[H]/N=C/F",
+            "/b3-1+",
+        ),
+        // The flag begins at a terminal atom or at a double-bond end.
+        ("C/C=C/C |wU:0.0|", "C/C=C/C", "/b4-3+"),
+        (r"C/C=C\C |wU:0.0|", r"C/C=C\C", "/b4-3-"),
+        ("C/C=C/C |wU:1.0|", "C/C=C/C", "/b4-3+"),
+    ] {
+        let bare = text.split_once(' ').context("Missing CX suffix")?.0;
+        let inchi = format!(
+            "{}{inchi}",
+            if text.contains('N') {
+                FLUOROIMINE
+            } else {
+                BUTENE
+            }
+        );
+        assert_eq!(analysis(text).await?, (smiles.into(), inchi), "{text}");
+        assert_eq!(analysis(text).await?, analysis(bare).await?, "{text}");
+        assert_ne!(
+            stereo(text, smiles::read)?,
+            stereo(text, dropped)?,
+            "{text}"
+        );
+    }
+    // The flag can mean a centre or an axis, the double-bond end has another
+    // neighbour, or the double bond is cumulated: the flag still replaces the
+    // direction, as on main.
+    for (text, smiles, inchi) in [
+        (
+            "F/C(=C/F)C(Cl)=C/Br |wU:0.0,wU:4.4|",
+            "FC=C(F)C(Cl)=CBr",
+            "InChI=1S/C4H2BrClF2/c5-1-3(6)4(8)2-7/h1-2H",
+        ),
+        (
+            "C/C=C=CC |(0,1,;0,0,;1,0,;2,0,;2,1,),wU:1.0,wU:3.3|",
+            "CC=C=CC",
+            "InChI=1S/C5H8/c1-3-5-4-2/h3-4H,1-2H3",
+        ),
+        (
+            "c1/[p@](F)(C)cccc1 |wU:1.0|",
+            "C[P@]1(F)=CC=CC=C1",
+            "InChI=1S/C6H8FP/c1-8(7)5-3-2-4-6-8/h2-6H,1H3",
+        ),
+        (
+            "[H]/CC=C/F |wU:1.0|",
+            "CC=CF",
+            "InChI=1S/C3H5F/c1-2-3-4/h2-3H,1H3",
+        ),
+        (
+            "F/C=C/[C@H](Cl)Br |wU:3.2|",
+            "FC=C[C@H](Cl)Br",
+            "InChI=1S/C3H3BrClF/c4-3(5)1-2-6/h1-3H/t3-/m0/s1",
+        ),
+        (
+            "C/C(F)=C/F |wU:1.0|",
+            "CC(F)=CF",
+            "InChI=1S/C3H4F2/c1-3(5)2-4/h2H,1H3",
+        ),
+    ] {
+        assert_eq!(
+            analysis(text).await?,
+            (smiles.into(), inchi.into()),
+            "{text}"
+        );
+        assert_eq!(
+            stereo(text, smiles::read)?,
+            stereo(text, dropped)?,
+            "{text}"
+        );
+    }
+    Ok(())
+}

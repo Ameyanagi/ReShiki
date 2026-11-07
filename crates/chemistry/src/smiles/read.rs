@@ -489,9 +489,76 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     Ok(imported)
 }
 
+/// A wU/wD flag replaces the `/` or `\` on its bond, as in RDKit, and the
+/// E/Z that direction stated is lost (#1042). Restore it where the flag joins
+/// a terminal atom to a double-bond end with no other neighbour, the double
+/// bond is not cumulated and neither atom carries a tag. Whichever atom the
+/// flag begins at, it is then no tetrahedral centre, and neither atom has
+/// another single bond that the flag could help make a chiral axis.
+fn keep_stated_alkene_directions(
+    parsed: &mut Parsed,
+    stated: &[crate::graph::Bond],
+    stated_directions: &[Direction],
+) -> Result<()> {
+    let graph = &parsed.graph;
+    let mut degree = vec![0usize; graph.atoms.len()];
+    let mut doubles = vec![Vec::new(); graph.atoms.len()];
+    for bond in &graph.bonds {
+        for (atom, partner) in [(bond.a, bond.b), (bond.b, bond.a)] {
+            *degree.get_mut(atom).ok_or(Error::Limit)? += 1;
+            if bond.order == 2 && !bond.aromatic {
+                doubles.get_mut(atom).ok_or(Error::Limit)?.push(partner);
+            }
+        }
+    }
+    // An end of a lone double bond whose only other bond is the flagged one.
+    let alkene_end = |atom: usize| -> Result<bool> {
+        Ok(*at(&degree, atom)? == 2
+            && match at(&doubles, atom)?.as_slice() {
+                &[partner] => at(&doubles, partner)?.len() == 1,
+                _ => false,
+            })
+    };
+    let mut restore = Vec::new();
+    for (id, ((bond, direction), stated_direction)) in graph
+        .bonds
+        .iter()
+        .zip(&parsed.directions)
+        .zip(stated_directions)
+        .enumerate()
+    {
+        if bond.order == 1
+            && matches!(direction, Direction::Wedge | Direction::Hash)
+            && matches!(stated_direction, Direction::Up | Direction::Down)
+            && at(&parsed.metadata.atoms, bond.a)?.chiral_tag == 0
+            && at(&parsed.metadata.atoms, bond.b)?.chiral_tag == 0
+            && (*at(&degree, bond.a)? == 1 && alkene_end(bond.b)?
+                || *at(&degree, bond.b)? == 1 && alkene_end(bond.a)?)
+        {
+            restore.push(id);
+        }
+    }
+    for id in restore {
+        put(&mut parsed.graph.bonds, id, at(stated, id)?.clone())?;
+        put(&mut parsed.directions, id, *at(stated_directions, id)?)?;
+    }
+    Ok(())
+}
+
 /// Read default SMILES/CXSMILES chemistry, retaining input conformers and name.
 /// Drawing layout and the application's editable-chemistry checks follow this.
 pub fn read(text: &str) -> Result<Imported> {
+    read_with(text, true)
+}
+
+/// Read as RDKit does, letting every wU/wD flag drop the E/Z its bond's `/`
+/// or `\` states. Reference comparisons use it to find the inputs where
+/// `read` deliberately differs (#1042).
+pub fn read_dropping_flagged_ez(text: &str) -> Result<Imported> {
+    read_with(text, false)
+}
+
+fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
@@ -534,8 +601,13 @@ pub fn read(text: &str) -> Result<Imported> {
                 .collect(),
         };
         let extension = cx::read(suffix, &topology)?;
+        let stated = parsed.graph.bonds.clone();
+        let stated_directions = parsed.directions.clone();
         for event in extension.events {
             annotations.apply(&mut parsed, event)?;
+        }
+        if keep_stated_ez {
+            keep_stated_alkene_directions(&mut parsed, &stated, &stated_directions)?;
         }
         cx::trim(suffix.get(extension.end..).ok_or(Error::Limit)?)
     } else {
