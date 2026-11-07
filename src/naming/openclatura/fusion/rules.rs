@@ -17,6 +17,7 @@ pub struct ChemicalComponentSeniorityKey {
     pub heteroatom_kind_count: i64,
     pub heteroatom_counts_by_priority: Vec<i64>,
     pub horizontal_row_count: i64,
+    pub upper_right_quadrant_count: i64,
     pub all_heteroatom_locants: Vec<LocantKey>,
     pub per_element_locants: Vec<Vec<LocantKey>>,
     pub peripheral_fusion_carbon_locants: Vec<LocantKey>,
@@ -39,6 +40,7 @@ impl ChemicalComponentSeniorityKey {
             self.heteroatom_kind_count.into(),
             seq(&self.heteroatom_counts_by_priority, |n| (*n).into()),
             self.horizontal_row_count.into(),
+            self.upper_right_quadrant_count.into(),
             seq(&self.all_heteroatom_locants, lk),
             seq(&self.per_element_locants, |v| seq(v, lk)),
             seq(&self.peripheral_fusion_carbon_locants, lk),
@@ -97,6 +99,18 @@ pub fn component_spec_seniority_key(spec: &FusionComponentSpec) -> ChemicalCompo
         .collect();
     let mut sizes = spec.ring_sizes();
     sizes.sort_by(|a, b| b.cmp(a));
+    // P-25.3.2.3.3(b): in a two-ring horizontal orientation, phenanthrene
+    // has 1 1/2 rings in the upper right quadrant and phenalene has one.
+    // Count half-rings only for these three-six-membered-ring topologies.
+    let upper_right_quadrant_count = if sizes == [6, 6, 6] && spec.horizontal_ring_count == 2 {
+        match spec.interior_atoms.len() {
+            0 => -3,
+            1 => -2,
+            _ => 0,
+        }
+    } else {
+        0
+    };
     let mut fusion = spec
         .fusion_carbon_locants()
         .iter()
@@ -118,6 +132,7 @@ pub fn component_spec_seniority_key(spec: &FusionComponentSpec) -> ChemicalCompo
             .map(|s| -counts.get(s.as_str()).copied().unwrap_or(0))
             .collect(),
         horizontal_row_count: -(spec.horizontal_ring_count as i64),
+        upper_right_quadrant_count,
         all_heteroatom_locants: all,
         per_element_locants: per,
         peripheral_fusion_carbon_locants: fusion,

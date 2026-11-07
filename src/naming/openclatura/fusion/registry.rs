@@ -505,6 +505,7 @@ impl FusionComponentRegistry {
             s.usable_as_parent = row.allow_as_parent;
             s.usable_as_attached = row.allow_as_attached;
             s.usable_as_peri_parent = row.allow_as_peri_parent;
+            s.parent_hydride_only = row.parent_hydride_only;
             s.benzoheterocycle_component =
                 is_benzoheterocycle(&s) && !is_trivial_benzo_name(&s.parent_name);
             s.accepted_general_prefixes = row.accepted_general_prefixes.clone();
@@ -554,7 +555,7 @@ impl FusionComponentRegistry {
         mol: &Molecule,
         model: &FaceModel,
     ) -> Result<Vec<FusionComponentMatch>, String> {
-        self.match_faces(mol, &model.faces, None)
+        self.match_faces(mol, mol, &model.faces, None)
     }
     /// P-25.3.2.4: assess the rendered parent without adding planning candidates.
     pub fn has_senior_unregistered_retained_component(
@@ -574,6 +575,7 @@ impl FusionComponentRegistry {
             return false;
         };
         let faces: Vec<_> = plan.numbering.selected_face_model.faces.iter().collect();
+        let derivative = is_fused_ring_derivative(mol, &faces);
         // A Table 2.8 component is senior whether or not the planner could use
         // it, as for pyrrolizine in 5H-thieno[2,3-b]pyrrolizine (issue #969).
         // Benzopyran rows are benzo names, which P-25.3.5 cites differently
@@ -586,10 +588,10 @@ impl FusionComponentRegistry {
             .retained_component_status
             .iter()
             .filter(|s| {
-                !self
-                    .components
-                    .iter()
-                    .any(|c| c.template_names.contains(&s.template.name))
+                !self.components.iter().any(|c| {
+                    c.template_names.contains(&s.template.name)
+                        && !(derivative && c.spec.parent_hydride_only)
+                })
             })
             .chain(table_28)
             // A complete retained parent is not a bypassed fusion component.
@@ -631,6 +633,7 @@ impl FusionComponentRegistry {
     pub fn match_faces(
         &self,
         mol: &Molecule,
+        matching_parent: &Molecule,
         faces: &[Face],
         skeleton: Option<&BTreeMap<usize, usize>>,
     ) -> Result<Vec<FusionComponentMatch>, String> {
@@ -655,6 +658,9 @@ impl FusionComponentRegistry {
             }
         }
         let sizes: BTreeSet<_> = self.topology_index.keys().map(|(n, _)| *n).collect();
+        let derivative = is_fused_ring_derivative(mol, &normalized);
+        // Matching may restore an anion's parent H; eligibility uses the input charge.
+        let mol = matching_parent;
         let subsets = connected_face_subsets(&normalized, &sizes);
         let mut out = Vec::new();
         let mut seen = BTreeSet::new();
@@ -674,6 +680,9 @@ impl FusionComponentRegistry {
             {
                 let c = &self.components[ci];
                 let spec = &c.templates[ti];
+                if derivative && spec.parent_hydride_only {
+                    continue;
+                }
                 let mut matching = spec.template.clone();
                 // The component parent proof can release a carbon H tautomer at fusion.
                 matching.atoms = super::indicated_hydrogen::component_parent_atoms(spec)?;
@@ -1248,6 +1257,21 @@ impl FusionComponentRegistry {
             .collect())
     }
 }
+fn is_fused_ring_derivative(mol: &Molecule, faces: &[&Face]) -> bool {
+    let atoms: AtomSet = faces
+        .iter()
+        .flat_map(|f| f.atom_cycle.iter().copied())
+        .collect();
+    atoms.iter().any(|&a| {
+        let atom = &mol.atoms[&a];
+        atom.charge != 0
+            || mol.get_neighbors(a).iter().any(|&n| {
+                !atoms.contains(&n)
+                    && (mol.get_bond(a, n).is_some_and(|b| b.order == 2)
+                        || atom.symbol == "N" && mol.atoms[&n].symbol != "H")
+            })
+    })
+}
 fn topology_key(k: &TopologyKey) -> ComparisonKey {
     ComparisonKey::tuple([
         k.size.into(),
@@ -1581,6 +1605,31 @@ mod tests {
         rules::{component_automorphisms, component_spec_seniority_key},
     };
     use super::*;
+    fn incomplete_pheno_registry() -> FusionComponentRegistry {
+        let mut data: FusionComponentData =
+            serde_json::from_str(include_str!("../data/fusion_components.json")).unwrap();
+        let omitted = ["10H-phenoxazine", "10H-phenothiazine"];
+        data.components
+            .retain(|row| !omitted.contains(&row.key.as_str()));
+        FusionComponentRegistry::from_data(&data).unwrap()
+    }
+    fn junior_parent_plan(mol: &Molecule, parent: &str) -> FusionParentPlan {
+        let atoms = super::super::super::chains::find_ring_systems(mol, &AtomSet::new())
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap()
+            .atoms;
+        let bounded = select_bounded_face_model(mol, &atoms).unwrap().unwrap();
+        let mut plan = FusionParentPlan::default();
+        plan.numbering.selected_face_model = typed_face_model(mol, &bounded);
+        plan.ast.parent_occurrences = vec![0];
+        plan.ast.component_occurrences = vec![FusionComponentMatch {
+            spec_key: parent.into(),
+            ..Default::default()
+        }];
+        plan
+    }
     #[test]
     fn checked_in_registry_preserves_component_policy_and_exact_symmetries() {
         let r = fusion_component_registry();
@@ -1719,11 +1768,14 @@ mod tests {
     #[test]
     fn unregistered_retained_status_requires_exact_faces_and_template_identity() {
         let mut mol = read_smiles("c1ccc2c(c1)Nc1c(ccc3ccccc13)S2").unwrap();
-        let atoms = mol.atoms.keys().copied().collect();
-        let mut plan = super::super::planner::plan_fusion_parent(&mol, &atoms)
+        let atoms: AtomSet = mol.atoms.keys().copied().collect();
+        let mut registry = incomplete_pheno_registry();
+        let (benzo, hetero) = benzo_test_pair("generated-hw:S.C.C.N.C.C", ["5", "6"]);
+        let junior = registry
+            .benzoheterocycle_matches(&benzo, &hetero)
             .unwrap()
-            .unwrap();
-        let mut registry = fusion_component_registry().clone();
+            .remove(0);
+        let mut plan = junior_parent_plan(&mol, &junior.spec_key);
         assert!(registry.has_senior_unregistered_retained_component(&mol, &plan));
 
         // Bond orders and retained hydrogenation are irrelevant to this proof.
@@ -1779,22 +1831,14 @@ mod tests {
     }
     #[test]
     fn unregistered_retained_status_requires_a_strictly_senior_proper_component() {
-        let registry = fusion_component_registry();
+        let registry = incomplete_pheno_registry();
         for (smiles, parent, expected) in [
             ("c1ccc2c(c1)Nc1c(ccc3ccccc13)O2", "pyran", true),
             ("c1ccc2c(c1)Cc1cc3ncccc3cc1O2", "quinoline", false),
             ("c1ccc2c(c1)Nc1ccccc1O2", "pyran", false),
         ] {
             let mol = read_smiles(smiles).unwrap();
-            let atoms = mol.atoms.keys().copied().collect();
-            let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
-            let mut plan = FusionParentPlan::default();
-            plan.numbering.selected_face_model = typed_face_model(&mol, &bounded);
-            plan.ast.parent_occurrences = vec![0];
-            plan.ast.component_occurrences = vec![FusionComponentMatch {
-                spec_key: parent.into(),
-                ..Default::default()
-            }];
+            let plan = junior_parent_plan(&mol, parent);
             assert_eq!(
                 registry.has_senior_unregistered_retained_component(&mol, &plan),
                 expected,
@@ -1809,6 +1853,119 @@ mod tests {
                 assert!(!equal.has_senior_unregistered_retained_component(&mol, &plan));
             }
         }
+    }
+    #[test]
+    fn pheno_components_keep_pin_prefixes_and_chemical_seniority() {
+        let r = fusion_component_registry();
+        assert_eq!(
+            r.components()
+                .iter()
+                .filter(|c| c.spec.parent_hydride_only)
+                .count(),
+            4
+        );
+        for (name, parent, prefix) in [
+            ("10H-phenoxazine", "phenoxazine", "phenoxazino"),
+            ("10H-phenothiazine", "phenothiazine", "phenothiazino"),
+            ("phenoxathiine", "phenoxathiine", "phenoxathiino"),
+            ("thianthrene", "thianthrene", "thianthreno"),
+        ] {
+            let spec = r.get(name).unwrap().spec;
+            assert!(spec.pin_component && spec.usable_as_parent && spec.usable_as_attached);
+            assert!(spec.parent_hydride_only);
+            assert_eq!(spec.parent_name, parent);
+            assert_eq!(spec.attached_prefix, prefix);
+            assert_eq!(spec.rings.len(), 3);
+            assert_eq!(spec.horizontal_ring_count, 3);
+        }
+        // The raw retained template is also used directly for peri-fused components.
+        assert_eq!(
+            r.template_spec("2-benzofuran").unwrap().attached_prefix,
+            "[2]benzofuro"
+        );
+        let key = |name| component_spec_seniority_key(&r.get(name).unwrap().spec);
+        assert!(key("10H-phenoxazine") < key("10H-phenothiazine"));
+        assert!(key("10H-phenothiazine") < key("phenazine"));
+        assert!(key("phenoxathiine") < key("thianthrene"));
+        assert!(key("pyridine") < key("phenoxathiine"));
+    }
+    #[test]
+    fn parent_hydride_components_are_unregistered_for_fused_ring_derivatives() {
+        let registry = fusion_component_registry();
+        for (smiles, derivative) in [
+            ("c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2", false),
+            ("Cc1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2", false),
+            ("[NH3+]Cc1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2", false),
+            ("c1ccc2c(c1)N([H])c1cc3cnc4ccccc4c3cc1O2", false),
+            ("c1ccc2c(c1)N(C)c1cc3cnc4ccccc4c3cc1O2", true),
+            ("c1ccc2c(c1)Nc1cc3c[nH+]c4ccccc4c3cc1O2", true),
+            ("O=C1CC=C2Oc3cc4Nc5ccccc5Sc4cc3NC2=C1", true),
+            ("N=C1CC=C2Oc3cc4Nc5ccccc5Sc4cc3NC2=C1", true),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let plan = junior_parent_plan(&mol, "phenanthridine");
+            let matches = registry
+                .match_face_model(&mol, &plan.numbering.selected_face_model)
+                .unwrap();
+            assert_eq!(
+                matches
+                    .iter()
+                    .any(|m| registry.spec_for_match(m).unwrap().parent_hydride_only),
+                !derivative,
+                "{smiles}"
+            );
+            assert_eq!(
+                registry.has_senior_unregistered_retained_component(&mol, &plan),
+                derivative,
+                "{smiles}"
+            );
+        }
+    }
+    #[test]
+    fn angular_six_membered_tricycles_rank_above_phenalene_topologies() {
+        let r = fusion_component_registry();
+        let perimidine = component_spec_seniority_key(&r.get("1H-perimidine").unwrap().spec);
+        for locants in [
+            "1,7", "1,8", "1,9", "1,10", "2,7", "2,8", "2,9", "3,7", "3,8", "4,7",
+        ] {
+            let name = format!("{locants}-phenanthroline");
+            let key = component_spec_seniority_key(&r.get(&name).unwrap().spec);
+            assert!(key < perimidine, "{name}");
+            assert!(key.as_tuple() < perimidine.as_tuple(), "{name}");
+        }
+        let phenanthrene = r.get("phenanthrene").unwrap().spec;
+        let mut phenalene = r.template_spec("1H-phenalene").unwrap().clone();
+        phenalene.horizontal_ring_count = 2;
+        let a = component_spec_seniority_key(&phenanthrene);
+        let b = component_spec_seniority_key(&phenalene);
+        assert_eq!(a.horizontal_row_count, -2);
+        assert_eq!(b.horizontal_row_count, -2);
+        assert_eq!(a.earliest_special_heteroatom, b.earliest_special_heteroatom);
+        assert_eq!(a.ring_count, b.ring_count);
+        assert_eq!(a.ring_size_vector, b.ring_size_vector);
+        assert_eq!(a.heteroatom_count, b.heteroatom_count);
+        assert_eq!(a.heteroatom_kind_count, b.heteroatom_kind_count);
+        assert_eq!(
+            a.heteroatom_counts_by_priority,
+            b.heteroatom_counts_by_priority
+        );
+        assert_eq!(a.upper_right_quadrant_count, -3);
+        assert_eq!(b.upper_right_quadrant_count, -2);
+        assert!(a < b);
+        assert!(a.as_tuple() < b.as_tuple());
+        for name in ["anthracene", "naphthalene"] {
+            assert_eq!(
+                component_spec_seniority_key(&r.get(name).unwrap().spec).upper_right_quadrant_count,
+                0,
+                "{name}"
+            );
+        }
+        let mut mixed_sizes = phenanthrene;
+        mixed_sizes.rings[0].pop();
+        assert_eq!(
+            component_spec_seniority_key(&mixed_sizes).upper_right_quadrant_count,
+            0
+        );
     }
     #[test]
     fn retained_tricycles_preserve_numbering_and_seniority() {
@@ -1923,7 +2080,7 @@ mod tests {
                     size: 6,
                     edge_cycle: Vec::new(),
                 };
-                let matches = r.match_faces(&mol, &[face], None).unwrap();
+                let matches = r.match_faces(&mol, &mol, &[face], None).unwrap();
                 assert!(!matches.is_empty(), "{smiles}");
                 assert!(matches.iter().all(|m| m.spec_key == name), "{smiles}");
             }
@@ -1939,7 +2096,7 @@ mod tests {
             size: 6,
             edge_cycle: Vec::new(),
         };
-        let matches = r.match_faces(&mol, &[f], None).unwrap();
+        let matches = r.match_faces(&mol, &mol, &[f], None).unwrap();
         assert_eq!(matches.len(), 6);
         for m in &matches {
             let spec = r.spec_for_match(m).unwrap();

@@ -153,11 +153,13 @@ pub enum NameReason {
     AmineOxideZwitterion,
     PrincipalGroupTie,
     LambdaParentHydrogen,
+    SpiroHydrogen,
     IsotopePlacement,
     BoughtonIsotope,
     RadicalIon,
     AnionParent,
     IonicSuffixOrder,
+    SaltIonOrder,
     Phane,
     RelativeRingStereo,
     EndoExoStereo,
@@ -195,7 +197,7 @@ impl NameReason {
                 "Uses isoxazole or isothiazole as a fusion parent component, as in cyclopenta[c]isoxazole or benzo[d]isothiazole; preferred IUPAC names use [1,2]oxazole and [1,2]thiazole, or a benzo name such as 1,2-benzothiazole (P-25.3.2.1.2, P-25.2.2.4)."
             }
             Self::UnregisteredRetainedComponent => {
-                "Uses a junior fusion parent although a senior retained component is present, as in 12H-naphtho[2,1-b][1]benzothiopyran rather than 12H-benzo[a]thioxanthene, or 5H-pyrrolo[1,2-a]thieno[2,3-d]pyrrole rather than 5H-thieno[2,3-b]pyrrolizine (P-25.3.2.4; P-25.2.1, Table 2.8)."
+                "Uses a junior fusion parent although a senior retained component is present, as in 9-(diethylamino)naphtho[2,1-b][1,4]benzoxazin-5-one rather than 9-(diethylamino)-5H-benzo[a]phenoxazin-5-one (P-25.3.2.4; P-25.2.1, Table 2.8; P-25.2.2.2, P-25.2.2.3)."
             }
             Self::HigherOrderFusion => {
                 "Cites an isolated benzo ring as a separate higher-order component, as in [1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazole; preferred IUPAC names treat the benzo ring and an ortho-fused heteromonocycle as one benzoheterocycle component, as in [1,3]thiazolo[5,4-e][1,3]benzoxazole (P-25.3.5, P-25.2.2.4; FR-3.5)."
@@ -232,6 +234,9 @@ impl NameReason {
             }
             Self::UnauditedParent => {
                 "Uses a parent hydride family whose preferred-name choice has not been audited: porphyrin, corrin and gonane have no PIN designation (P-10/P-12); the von Baeyer versus fusion choice for polycycles of three or more rings has not been checked (P-52.2.4.3, P-31.1.4.3.4); skeletal-replacement chains and monocycles have unchecked conditions (P-15.4.3, P-22.2.3), as do skeletal-replacement fusion hydrides and chains requiring replacement with four heterounits (P-51.4.1, P-15.4.3.2); spiro compounds of identical components need spirobi names (P-24.3)."
+            }
+            Self::SpiroHydrogen => {
+                "The completed spiro parent’s indicated, added or hydro hydrogen state and suffix composition have not been verified (P-24.5, P-31.2, P-58.2)."
             }
             Self::UnauditedPath => {
                 "The naming path that built this name has not been audited against the IUPAC 2013 preferred-name rules (P-10/P-12)."
@@ -274,6 +279,9 @@ impl NameReason {
             }
             Self::IonicSuffixOrder => {
                 "The suffix order of a skeletal -ide with a characteristic cationic suffix such as -aminium is not settled: P-70.3.3.2.2 places cumulative suffixes before functional suffixes, whereas P-74.1.2 places cationic suffixes before anionic suffixes."
+            }
+            Self::SaltIonOrder => {
+                "The order of the ions in this salt has not been verified: P-14.5 orders them by their Roman letters, then locants, leaving out stereo and isotope descriptors, and this name has descriptors or spellings that the ordering does not yet cover."
             }
             Self::AnionParent => {
                 "The anionic parent, suffix or retained-name choice for this anion has not been verified (P-72.7, P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."

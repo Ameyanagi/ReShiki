@@ -425,7 +425,7 @@ CC(C)OOC(C)C	1,2-bis(propan-2-yl)dioxidane	not_preferred	hydride_parent
 NNCCOC	1-(2-methoxyethyl)hydrazine	unverified	unaudited_path
 OOCCNN	1-(2-hydroperoxyethyl)hydrazine	unverified	unaudited_path
 COc1ccc2c(c1)[nH]c1cc(F)ccc12	2-fluoro-7-methoxy-9H-carbazole	preferred	
-Cc1ccc(F)c2c1C1(CN2)CC1N	7'-fluoro-4'-methylspiro[cyclopropane-2,3'-(2,3-dihydro-1H-indole)]-1-amine	preferred	
+Cc1ccc(F)c2c1C1(CN2)CC1N	7'-fluoro-4'-methylspiro[cyclopropane-2,3'-(2,3-dihydro-1H-indole)]-1-amine	unverified	spiro_hydrogen
 C=C	ethene	preferred	
 C#C	acetylene	preferred	
 c1ccccc1-c2ccccc2	1,1'-biphenyl	preferred	
@@ -470,7 +470,7 @@ c1ccoc1	furan	preferred
 c1ccccc1-c2ccncc2	4-phenylpyridine	preferred	
 C1CCC2(CC1)CCC2	spiro[3.5]nonane	preferred	
 C1C2CC1CC2	bicyclo[2.1.1]hexane	preferred	
-C1C2CC3CC1CC2C3	1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+C1C2CC3CC1CC2C3	octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
 CCC(=O)O	propanoic acid	preferred	
 CCC(=O)OC	methyl propanoate	preferred	
 CC(C)C(=O)N	2-methylpropanamide	preferred	
@@ -560,7 +560,7 @@ c1nccs1	1,3-thiazole	preferred
 CCC(C)CCCCCC1CCCCC1-C2CCCCC2	2-(6-methyloctyl)-1,1'-bi(cyclohexane)	preferred	
 CCCC1CCC2(CC1)CCC2	7-propylspiro[3.5]nonane	preferred	
 CCC(C)C(CC)C(CC)C(CC)CCC1C2CC1CC2	5-(3,4,5-triethyl-6-methyloctyl)bicyclo[2.1.1]hexane	preferred	
-CC(CC)CC1C2CC3CC1CC2C3	1-(2-methylbutyl)-1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CC(CC)CC1C2CC3CC1CC2C3	1-(2-methylbutyl)octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
 CCC(C)Cc1ccc2ncccc2c1	6-(2-methylbutyl)quinoline	preferred	
 CCC(CC)CCCC(CC)CC(=O)O	3,7-diethylnonanoic acid	preferred	
 CCCCC(CC)CC(=O)OCCCC(CC)C(CC)CCC	4,5-diethyloctyl 3-ethylheptanoate	preferred	
@@ -656,7 +656,7 @@ CC(CC)Cc1ccoc1	3-(2-methylbutyl)furan	preferred
 CC(CC)Cc1ccccc1-c2ccccc2	2-(2-methylbutyl)-1,1'-biphenyl	preferred	
 CC(CC)CCCC1CCC2(CC1)CCC2	7-(4-methylhexyl)spiro[3.5]nonane	preferred	
 CCC(C)CC1C2CC1CC2	5-(2-methylbutyl)bicyclo[2.1.1]hexane	preferred	
-CCCCCC1C2CC3CC1CC2C3	1-pentyl-1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CCCCCC1C2CC3CC1CC2C3	1-pentyloctahydro-2,5-methanopentalene	unverified	bridged_fused_parent
 CCC(C)CC(CC)Cc1ccc2ncccc2c1	6-(2-ethyl-4-methylhexyl)quinoline	preferred	
 CC(CC)CCCCC(=O)O	6-methyloctanoic acid	preferred	
 CCC(C)C(C)C(C)C(C)C(CC)CC(=O)OCCC(C)CC	3-methylpentyl 3-ethyl-4,5,6,7-tetramethylnonanoate	preferred	
@@ -752,7 +752,7 @@ CC(CC)CC(CC)Cc1nccs1	2-(2-ethyl-4-methylhexyl)-1,3-thiazole	preferred
 CC(C)C(C)CCCc1ccoc1-c2ccsc2	3-(4,5-dimethylhexyl)-2-(thiophen-3-yl)furan	preferred	
 CCCC(CC)CC1CCC2(CC1)CCC2	7-(2-ethylpentyl)spiro[3.5]nonane	preferred	
 CCC1C2CC1CC2	5-ethylbicyclo[2.1.1]hexane	preferred	
-CC(CC)C(CC)CC1C2CC3CC1CC2C3	1-(2-ethyl-3-methylpentyl)-1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CC(CC)C(CC)CC1C2CC3CC1CC2C3	1-(2-ethyl-3-methylpentyl)octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
 CCC(CC)Cc1ccc2ncccc2c1	6-(2-ethylbutyl)quinoline	preferred	
 CCCCC(C)CC(C)CC(=O)O	3,5-dimethylnonanoic acid	preferred	
 CCC(=O)OCC(C)C	2-methylpropyl propanoate	preferred	
@@ -824,7 +824,7 @@ CCc1cc[nH]c1	3-ethyl-1H-pyrrole	preferred
 CCCc1ccccc1-c2ccncc2	4-(2-propylphenyl)pyridine	preferred	
 CC(C)C(CC)CC(CC)CC1CC2(C1)CCC2	2-(2,4-diethyl-5-methylhexyl)spiro[3.3]heptane	preferred	
 CC(C)C(C)CC(C)C(CC)CC1CC2CCCC1C2	6-(2-ethyl-3,5,6-trimethylheptyl)bicyclo[3.2.1]octane	preferred	
-CC(CC)C(CC)CCC1C2CC3CC1CC2C3	1-(3-ethyl-4-methylhexyl)-1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
+CC(CC)C(CC)CCC1C2CC3CC1CC2C3	1-(3-ethyl-4-methylhexyl)octahydro-2,5-methanopentalene	unverified	bridged_fused_parent
 CCCC(CC)C(C)Cc1ccc2[nH]ccc2c1	5-(3-ethyl-2-methylhexyl)-1H-indole	preferred	
 CC(CC)C(CC)CC(=O)O	3-ethyl-4-methylhexanoic acid	preferred	
 CCC(CC)CC(CC)CC(=O)OCCCC(CC)C(C)CCC	4-ethyl-5-methyloctyl 3,5-diethylheptanoate	preferred	

@@ -156,7 +156,8 @@ const CONTROLS: &[Case] = &[
         "D15",
         "C1=CC2(c3ccccc13)N=Cc1ccccc12",
         "spiro[indene-1,1'-isoindole]",
-        UNVERIFIED,
+        // Different skeletons now have a completed-parent P-24.5 proof.
+        NameStatus::Preferred,
     ),
     (
         "D16",

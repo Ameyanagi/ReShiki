@@ -2982,7 +2982,20 @@ fn nitrogen_chalcogenide_name(
     reduced.set_atom_charge(n, 0)?;
     let parent =
         super::component_namer::name_component_with_citation(&reduced, &reduced_atoms, None, None)?;
-    if parent.text.is_empty() {
+    // P-62.5: the class name only follows a parent amine or imine; a
+    // substituent N-chalcogenide is cited as a prefix (P-73.6).
+    let names_the_amine = match &parent.derivation {
+        super::component_namer::Derivation::Plan {
+            parent_atoms,
+            principal_group,
+            ..
+        } => match principal_group {
+            None => parent_atoms.contains(&n),
+            Some((key, group)) => matches!(key.as_str(), "amine" | "imine") && group.contains(&n),
+        },
+        super::component_namer::Derivation::Shortcut { .. } => false,
+    };
+    if parent.text.is_empty() || !names_the_amine {
         return Ok(None);
     }
     let Some(class) = section("chalcogenide_class_names")[&mol.atoms[&ch].symbol].as_str() else {

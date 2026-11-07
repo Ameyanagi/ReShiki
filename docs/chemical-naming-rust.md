@@ -327,14 +327,19 @@ no mark. Reasons for a name that is not the PIN:
 
 Reasons for an unverified name: `ionic_suffix_order` (the order of skeletal
 `-ide` and characteristic `-aminium` is unsettled between P-70.3.3.2.2 and
-P-74.1.2; for example, `1-cyanopropan-1-id-3-aminium`), `opsin_fusion_layout` (fusion numbering chosen
+P-74.1.2; for example, `1-cyanopropan-1-id-3-aminium`), `salt_ion_order` (a
+salt whose ions of one sign carry stereo or isotope descriptors or spellings
+that the P-14.5 letters-then-locants order does not cover yet, so the ions keep
+their plain character order), `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `fusion_multiparent` (a base fusion component cited
 with two identical attached components, which may need a multiparent name
 under P-25.3.7.1), `hydro_prefix_locants` (locanted hydro prefixes for a
 completely hydrogenated polycyclic parent, P-31.2.3.3.2), `cation_prefix`
 (`ammonio`, where the need for `azaniumyl` under P-73.6 has not been verified),
-`bridged_fused_parent`, `unaudited_path` (a naming path not audited against
-P-10/P-12), `unaudited_parent` (porphyrin, corrin, gonane; von Baeyer polycycles
+`bridged_fused_parent`, `spiro_hydrogen` (the completed spiro parent’s indicated,
+added or hydro hydrogen state and suffix composition have not been verified),
+`unaudited_path` (a naming path not audited against P-10/P-12),
+`unaudited_parent` (porphyrin, corrin, gonane; von Baeyer polycycles
 of three or more rings; skeletal-replacement chains, monocycles and fusion
 hydrides; acyclic paths with at least four skeletal heterounits under P-51.4.1
 and P-15.4.3.2; spiro compounds of identical components, which take spirobi

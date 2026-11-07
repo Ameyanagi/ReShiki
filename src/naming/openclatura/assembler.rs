@@ -126,7 +126,11 @@ fn indicated_run(text: &str) -> Option<IndicatedHydrogenRun<'_>> {
         .map(|s| {
             let l = s.strip_suffix('H')?;
             let digits = l.chars().take_while(|c| c.is_ascii_digit()).count();
-            (digits > 0 && l[digits..].chars().all(|c| c.is_ascii_lowercase())).then_some(l)
+            (digits > 0
+                && l[digits..]
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '\''))
+            .then_some(l)
         })
         .collect::<Option<_>>()?;
     Some(IndicatedHydrogenRun { locants, remainder })
@@ -387,14 +391,8 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (Stri
                             .map(|(edge, _)| *edge)
                             .collect()
             });
-        if !parts.spiro_prefix_composition
-            && (fully_hydrogenated_fusion
-                || additive.len() + indicated.len().max(stated) == parts.parent_length)
-        {
-            return (format!("{hydro}{sep}{core}"), cites_locants);
-        }
         // P-31.2.3.3.2: complete hydrogenation omits the hydro locants.
-        parts.locanted_total_hydrogenation = !parts.spiro_prefix_composition
+        let saturated = !parts.spiro_prefix_composition
             && parts
                 .parent_bond_orders_by_locants
                 .values()
@@ -403,6 +401,19 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (Stri
                 .hydro_operations
                 .iter()
                 .any(|operation| operation.key == "added_hydrogen");
+        let charged = parts
+            .parent_atom_charges_by_locant
+            .values()
+            .any(|&charge| charge != 0);
+        if !parts.spiro_prefix_composition
+            && (fully_hydrogenated_fusion
+                || additive.len() + indicated.len().max(stated) == parts.parent_length
+                || saturated && !charged)
+        {
+            return (format!("{hydro}{sep}{core}"), cites_locants);
+        }
+        // A charged parent's hydrogen count is not proven complete here.
+        parts.locanted_total_hydrogenation = saturated;
         core = format!("{}-{hydro}{sep}{core}", additive.join(","));
         cites_locants = true;
     }
@@ -426,7 +437,7 @@ fn move_added_hydrogen(parts: &AssemblyParts, core: &str, suffix: &str) -> (Stri
     };
     if !suffix_locs
         .chars()
-        .all(|c| c.is_ascii_digit() || c.is_ascii_lowercase() || c == ',')
+        .all(|c| c.is_ascii_digit() || c.is_ascii_lowercase() || c == ',' || c == '\'')
     {
         return (core.into(), suffix.into());
     }
@@ -633,6 +644,25 @@ pub(super) fn assemble_name_with_parent(
         let (core, suffix) = move_added_hydrogen(parts, &core, &spiro.suffix);
         format!("{core}{suffix}")
     };
+    finish_name_with_parent(parts, core, cites_locants)
+}
+
+/// Render a proved completed parent without importing component-local H quotas.
+pub(super) fn assemble_completed_parent(
+    parts: &mut AssemblyParts,
+    core: &str,
+    suffix: &str,
+) -> Result<(String, String), String> {
+    let (core, _) = add_indicated_hydrogen_prefix(parts, core);
+    let (core, suffix) = move_added_hydrogen(parts, &core, suffix);
+    finish_name_with_parent(parts, format!("{core}{suffix}"), true)
+}
+
+fn finish_name_with_parent(
+    parts: &mut AssemblyParts,
+    core: String,
+    mut cites_locants: bool,
+) -> Result<(String, String), String> {
     // Plan the core first: its citations keep optional substituent locants too.
     if cites_locants {
         parts.elided_substituent_locants.clear();
@@ -704,11 +734,10 @@ mod tests {
             ("O1C=CC2=CC=CC2=C1", "cyclopenta[c]pyran"),
             ("S1C=CC2=CC=CC2=C1", "cyclopenta[c]thiopyran"),
             ("O1C=CC2=CC=CC=C2C1", "1H-2-benzopyran"),
-            // Spelling regressions only: these spiro names are not yet the
-            // PINs (assembled-parent hydrogen, #980), so their status is not asserted.
+            // Completed spiro-parent hydrogen is composed before rendering.
             (
                 "C1COc2ccccc2C12CCCC2",
-                "3,4-dihydrospiro[2H-1-benzopyran-4,1'-cyclopentane]",
+                "2,3-dihydrospiro[[1]benzopyran-4,1'-cyclopentane]",
             ),
             (
                 "O=C(O)Cc1ccc2c(c1)CC=CC21CCNCC1",
@@ -716,7 +745,7 @@ mod tests {
             ),
             (
                 "C1OC2(CCCC2)c2ccccc21",
-                "1,3-dihydrospiro[[2]benzofuran-1,1'-cyclopentane]",
+                "3H-spiro[[2]benzofuran-1,1'-cyclopentane]",
             ),
             (
                 "C1CCC2(CC1)CCc1ccccc1O2",
@@ -724,11 +753,11 @@ mod tests {
             ),
             (
                 "c1ccc2c(c1)COC21CCNCC1",
-                "1,3-dihydrospiro[[2]benzofuran-1,4'-piperidine]",
+                "3H-spiro[[2]benzofuran-1,4'-piperidine]",
             ),
             (
                 "C1Oc2ccccc2C12CCCC2",
-                "2,3-dihydrospiro[[1]benzofuran-3,1'-cyclopentane]",
+                "2H-spiro[[1]benzofuran-3,1'-cyclopentane]",
             ),
         ] {
             let name = super::super::name_smiles(smiles).unwrap();

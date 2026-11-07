@@ -225,6 +225,7 @@ fn select_replacement_state(
             &faces,
             &mut layouts,
             &mut numbering_cache,
+            false,
         ) {
             Ok(Some(plan)) => plan,
             Ok(None) => continue,

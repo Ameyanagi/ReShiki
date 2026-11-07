@@ -170,6 +170,7 @@ struct SpiroProjection<'a> {
     junction: usize,
     required_core: Option<&'a AtomSet>,
     prefix_only: bool,
+    prioritize_junction: bool,
 }
 enum ComponentResult {
     Shortcut(StructuralParentName),
@@ -182,6 +183,7 @@ pub(super) fn build_spiro_component_parts(
     junction: usize,
     required_core: Option<&AtomSet>,
     prefix_only: bool,
+    prioritize_junction: bool,
 ) -> Result<Option<ParentAssemblyPlan>, String> {
     mol.candidate(|| {
         Ok(
@@ -194,6 +196,7 @@ pub(super) fn build_spiro_component_parts(
                     junction,
                     required_core,
                     prefix_only,
+                    prioritize_junction,
                 }),
                 None,
             )? {
@@ -454,6 +457,13 @@ fn component_pipeline(
     let numbering_n_subs =
         collect_numbering_n_substituents(mol, &groups, key.as_deref(), path, &sub_exclude)?;
     let modifiers = super::numbering::NumberingModifiers {
+        spiro_junction: match &projection {
+            Some(projection) => projection
+                .prioritize_junction
+                .then_some(projection.junction),
+            None => super::spiro_subgraph::heterogeneous_spiro_junction(mol),
+        }
+        .filter(|junction| parent.contains(junction)),
         nitrogen_substituents: numbering_n_subs
             .as_ref()
             .map_or_else(BTreeMap::new, |subs| subs.numbering_modifiers()),
@@ -472,8 +482,12 @@ fn component_pipeline(
                     String::new(),
                 )));
             }
-            let Some(proof) =
-                super::fusion::wrappers::plan_fusion_spiro_side(mol, core, projection.junction)?
+            let Some(proof) = super::fusion::wrappers::plan_fusion_spiro_side(
+                mol,
+                core,
+                projection.junction,
+                modifiers.spiro_junction.is_some(),
+            )?
             else {
                 return Ok(ComponentResult::Shortcut(StructuralParentName::ordinary(
                     String::new(),
@@ -493,12 +507,20 @@ fn component_pipeline(
             )?
         } else {
             let mut numbering_mapping = mapping.clone();
-            for atom in &principal {
-                numbering_mapping
-                    .entry(*atom)
-                    .or_default()
-                    .push(SubstituentItem::new("", vec![]));
-            }
+            // Keep the legacy projected-parent priority outside the bounded
+            // heterogeneous assembly; within it the real suffix stays senior
+            // to unsaturation and substituent criteria after the junction.
+            let numbering_principal = if modifiers.spiro_junction.is_some() {
+                principal.clone()
+            } else {
+                for atom in &principal {
+                    numbering_mapping
+                        .entry(*atom)
+                        .or_default()
+                        .push(SubstituentItem::new("", vec![]));
+                }
+                vec![projection.junction]
+            };
             if selection.is_ring
                 && !selection.is_bicycle
                 && !selection.is_polycycle
@@ -517,7 +539,7 @@ fn component_pipeline(
             build_parent_assembly_plan_with_modifiers(
                 mol,
                 &selection,
-                &[projection.junction],
+                &numbering_principal,
                 None,
                 None,
                 &numbering_mapping,
@@ -639,6 +661,18 @@ fn render_component_and_parent(
         return Ok((
             super::assembler::post_process_name(&name.name),
             super::assembler::post_process_name(&name.parent),
+        ));
+    }
+    if let Some((name, parent)) = super::heterospiro::compose(mol, parts)? {
+        super::parent_pipeline::mark_rendered_parent_status(mol, parts);
+        return Ok((
+            super::assembler::post_process_name(&name),
+            super::assembler::post_process_name(&parent),
+        ));
+    }
+    if super::heterospiro::needs_hydrogen_proof(mol, parts) {
+        mol.mark_name(crate::naming::NameStatus::Unverified(
+            crate::naming::NameReason::SpiroHydrogen,
         ));
     }
     let fusion_parent = parts
