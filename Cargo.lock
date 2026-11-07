@@ -3880,7 +3880,7 @@ dependencies = [
 
 [[package]]
 name = "reshiki"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -4104,7 +4104,7 @@ dependencies = [
 
 [[package]]
 name = "reshiki-python"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "opsin",
  "png 0.17.16",
