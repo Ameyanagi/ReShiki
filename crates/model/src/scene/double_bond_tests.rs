@@ -13,6 +13,200 @@ fn chain(points: &[(f32, f32)], edges: &[(usize, usize, u8)]) -> Document {
     doc
 }
 
+/// Euclidean distance to the measured glyph's conservative ink silhouette,
+/// independent of the renderer's ray/box intersection arithmetic.
+fn glyph_distance(point: Point, ((lo, hi), radius): ((Point, Point), f32)) -> f32 {
+    let x = (point.x - (lo.x + hi.x) * 0.5).abs() - (hi.x - lo.x) * 0.5 + radius;
+    let y = (point.y - (lo.y + hi.y) * 0.5).abs() - (hi.y - lo.y) * 0.5 + radius;
+    x.max(0.).hypot(y.max(0.)) + x.max(y).min(0.) - radius
+}
+
+fn rotated_carbonyl(degrees: f32, reversed: bool) -> Document {
+    let mut doc = chain(&[(0., 0.), (42., 0.)], &[(0, 1, 2)]);
+    doc.atoms[1].element = "O".into();
+    doc.drawing_style.font_family = "Liberation Sans".into();
+    if reversed {
+        doc.bonds[0].reverse();
+    }
+    let ids = doc.all_ids();
+    crate::editing::transform_about(&mut doc, &ids, Point::default(), 1., degrees);
+    doc
+}
+
+fn rendered_double_rails(doc: &Document) -> Vec<(Point, Point, f32)> {
+    let rails: Vec<_> = primitives(doc)
+        .into_iter()
+        .filter_map(|part| match part {
+            Primitive::Line(a, b, width) => Some((a, b, width)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        rails.len(),
+        2,
+        "The full scene must retain both double rails"
+    );
+    rails
+}
+
+#[test]
+fn rotating_carbonyl_rails_do_not_stop_at_empty_oxygen_box_corners() {
+    crate::atom_labels::test_support::with_fonts(|| {
+        for reversed in [false, true] {
+            for degrees in (0..360).step_by(15) {
+                let doc = rotated_carbonyl(degrees as f32, reversed);
+                assert!(
+                    (doc.atoms[0].position.distance(doc.atoms[1].position) - 42.).abs() < 0.001
+                );
+                let oxygen = &doc.atoms[1];
+                let shapes = atom_label_ink_shapes(oxygen, &doc);
+                assert_eq!(shapes.len(), 1, "The fixture must have just the O glyph");
+                let shape = shapes[0];
+                assert!(shape.1 > 5., "The pinned O must have rounded corners");
+                let saved = doc.clone();
+                let rails = rendered_double_rails(&doc);
+                let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
+                for (a, b, width) in rails {
+                    let end = if a.distance(oxygen.position) < b.distance(oxygen.position) {
+                        a
+                    } else {
+                        b
+                    };
+                    let distance = glyph_distance(end, shape);
+                    assert!(
+                        distance <= margin + width * 0.5 + 0.15,
+                        "Excess O gap: angle={degrees}, reversed={reversed}, distance={distance}, margin={margin}, width={width}"
+                    );
+                    assert!(
+                        distance >= width * 0.5 - 0.03,
+                        "The round rail cap overlaps O ink: angle={degrees}, reversed={reversed}"
+                    );
+                }
+                assert_eq!(doc, saved, "Rendering must leave the bond geometry intact");
+            }
+        }
+    });
+}
+
+#[test]
+fn rotating_double_rails_keep_both_round_and_rectangular_labels_clear() {
+    crate::atom_labels::test_support::with_fonts(|| {
+        for first in ["O", "N"] {
+            for degrees in (0..360).step_by(15) {
+                let mut doc = chain(&[(0., 0.), (70., 0.)], &[(0, 1, 2)]);
+                doc.atoms[0].element = first.into();
+                doc.atoms[1].element = "O".into();
+                doc.drawing_style.font_family = "Liberation Sans".into();
+                let ids = doc.all_ids();
+                crate::editing::transform_about(
+                    &mut doc,
+                    &ids,
+                    Point::default(),
+                    1.,
+                    degrees as f32,
+                );
+                let first_shapes = atom_label_ink_shapes(&doc.atoms[0], &doc);
+                if first == "N" {
+                    assert!(first_shapes.iter().all(|(_, radius)| *radius < 0.1));
+                }
+                let shapes: Vec<_> = first_shapes
+                    .into_iter()
+                    .chain(atom_label_ink_shapes(&doc.atoms[1], &doc))
+                    .collect();
+                let rails = rendered_double_rails(&doc);
+                // Sampling each actual scene stroke also covers its round caps.
+                // Unlike a length invariant, this remains valid for upright N/O
+                // glyphs whose visible outlines change with the bond direction.
+                for (a, b, width) in rails {
+                    for step in 0..=200 {
+                        let t = step as f32 / 200.;
+                        let point = a.offset((b.x - a.x) * t, (b.y - a.y) * t);
+                        for &shape in &shapes {
+                            assert!(
+                                glyph_distance(point, shape) >= width * 0.5 - 0.03,
+                                "Rail ink overlaps {first}=O label: angle={degrees}, point={point:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn rotating_carbonyl_visible_rail_tips_remain_mechanism_arrow_targets() {
+    crate::atom_labels::test_support::with_fonts(|| {
+        for reversed in [false, true] {
+            for degrees in [0., 15., 30., 45., 60., 75., 90., 135., 225., 315.] {
+                let doc = rotated_carbonyl(degrees, reversed);
+                let oxygen = &doc.atoms[1];
+                let boxes = atom_label_ink_boxes(oxygen, &doc);
+                for (a, b, _) in rendered_double_rails(&doc) {
+                    let (tip, other) = if a.distance(oxygen.position) < b.distance(oxygen.position)
+                    {
+                        (a, b)
+                    } else {
+                        (b, a)
+                    };
+                    // Use real scene ink just inside the round cap, rather than
+                    // guessing where the end should be from clipping helpers.
+                    let step = 0.1 / tip.distance(other);
+                    let point = tip.offset((other.x - tip.x) * step, (other.y - tip.y) * step);
+                    assert!(boxes.iter().all(|(lo, hi)| {
+                        point.x < lo.x || point.x > hi.x || point.y < lo.y || point.y > hi.y
+                    }));
+                    let picked = crate::arrow_anchors::pick(&doc, point, 0.02);
+                    assert!(
+                        matches!(
+                            picked,
+                            Some(crate::arrow_anchors::Pick::Bond { a: 1, b: 2, .. })
+                        ),
+                        "Visible C=O tip was not a bond target: angle={degrees}, reversed={reversed}, point={point:?}, picked={picked:?}"
+                    );
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn rotating_carbonyl_small_margins_keep_label_box_ownership() {
+    crate::atom_labels::test_support::with_fonts(|| {
+        for margin in [0., 0.001, 0.2] {
+            for degrees in (0..360).step_by(15) {
+                let mut doc = rotated_carbonyl(degrees as f32, false);
+                doc.drawing_style.margin_width_pt = margin;
+                let oxygen = &doc.atoms[1];
+                let boxes = atom_label_ink_boxes(oxygen, &doc);
+                for (a, b, _) in rendered_double_rails(&doc) {
+                    for step in 0..=200 {
+                        let t = step as f32 / 200.;
+                        let point = a.offset((b.x - a.x) * t, (b.y - a.y) * t);
+                        assert!(
+                            boxes.iter().all(|(lo, hi)| {
+                                point.x <= lo.x + 0.01
+                                    || point.x >= hi.x - 0.01
+                                    || point.y <= lo.y + 0.01
+                                    || point.y >= hi.y - 0.01
+                            }),
+                            "A rail center entered label-owned ink bounds: angle={degrees}, margin={margin}, point={point:?}"
+                        );
+                    }
+                }
+                let (lo, hi) = boxes[0];
+                let inset = (hi.x - lo.x).min(hi.y - lo.y) * 0.02;
+                let corner = lo.offset(inset, inset);
+                assert!(glyph_distance(corner, atom_label_ink_shapes(oxygen, &doc)[0]) > 0.);
+                assert!(matches!(
+                    crate::arrow_anchors::pick(&doc, corner, 0.02),
+                    Some(crate::arrow_anchors::Pick::Atom(2))
+                ));
+            }
+        }
+    });
+}
+
 #[test]
 fn chain_doubles_count_substituents_and_respect_the_style_and_explicit_positions() {
     // E-but-2-ene has one substituent on each side. ChemDraw selects the
