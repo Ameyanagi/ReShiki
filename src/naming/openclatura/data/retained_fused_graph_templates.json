@@ -10754,7 +10754,7 @@
       "name": "2-benzofuran",
       "pin": true,
       "priority": 30,
-      "attached_prefix": "isobenzofurano",
+      "attached_prefix": "[2]benzofuro",
       "template": {
         "atoms": [
           {
@@ -35648,7 +35648,7 @@
       "name": "phenoxathiine",
       "pin": true,
       "priority": 365,
-      "attached_prefix": null,
+      "attached_prefix": "phenoxathiino",
       "template": {
         "atoms": [
           {

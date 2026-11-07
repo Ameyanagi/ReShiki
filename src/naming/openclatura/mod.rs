@@ -2281,31 +2281,175 @@ mod tests {
     }
 
     #[test]
-    fn fusion_unregistered_retained_components_keep_names_and_report_departures() {
-        use crate::naming::{NameReason, NameStatus};
-        // P-25.2.2.2/3 retained components are outside Table 2.8. Until
-        // they are registered, preserve the generated alternatives.
+    fn pheno_fusion_components_choose_preferred_parents_and_round_trip() {
+        use crate::naming::NameStatus;
+        use reshiki_chemistry::inchi::{generator, kernel};
+        let inchi = |smiles: &str| {
+            let state = reshiki_chemistry::smiles::prepare(smiles).unwrap().state;
+            let input = kernel::Molecule::prepare(&state, None).unwrap();
+            let output = generator::generate_in_process(&input).unwrap();
+            assert!(output.status.is_success(), "{smiles}: {}", output.message);
+            output.inchi
+        };
         for (smiles, expected) in [
             (
                 "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2",
-                "8H-[1,4]benzoxazino[3,2-j]phenanthridine",
+                "8H-quinolino[3,4-b]phenoxazine",
+            ),
+            (
+                "C1=CC=C2C(=C1)NC1=CC3=CN=C4C=CC=CC4=C3C=C1O2",
+                "8H-quinolino[3,4-b]phenoxazine",
             ),
             (
                 "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1S2",
-                "8H-[1,4]benzothiazino[3,2-j]phenanthridine",
+                "8H-quinolino[3,4-b]phenothiazine",
             ),
             (
                 "c1ccc2cc3c(cc2c1)Nc1cc2ccccc2cc1O3",
-                "13H-dinaphtho[2,3-b:2',3'-e][1,4]oxazine",
+                "13H-dibenzo[b,i]phenoxazine",
+            ),
+            ("c1ccc2c(c1)Sc1ccc3ccccc3c1S2", "benzo[a]thianthrene"),
+            ("c1ccc2c(c1)Oc1ccc3ccccc3c1S2", "benzo[a]phenoxathiine"),
+            ("c1ccc2c(c1)Nc1ccc3ccccc3c1S2", "7H-benzo[c]phenothiazine"),
+            (
+                "c1ccc2c(c1)Nc1c(ccc3ccccc13)S2",
+                "12H-benzo[a]phenothiazine",
+            ),
+            ("c1ccc2c(c1)Nc1ccc3ccccc3c1O2", "7H-benzo[c]phenoxazine"),
+            ("c1ccc2c(c1)Oc1ccc3ccccc3c1N2", "12H-benzo[a]phenoxazine"),
+            ("c1ccc2c(c1)Nc1cc3ccccc3cc1S2", "12H-benzo[b]phenothiazine"),
+            ("c1ccc2cc3c(cc2c1)Sc1ccccc1S3", "benzo[b]thianthrene"),
+            ("c1cc2Nc3ccccc3Oc2c2ncccc12", "7H-pyrido[3,2-c]phenoxazine"),
+            (
+                "c1ccc2c(c1)Oc1ccc3ncccc3c1N2",
+                "12H-pyrido[3,2-a]phenoxazine",
+            ),
+            (
+                "c1ccc2nc3cc4Oc5ccccc5Nc4cc3nc2c1",
+                "14H-quinoxalino[2,3-b]phenoxazine",
+            ),
+            (
+                "c1ccc2c(c1)Oc1cc3Sc4ccccc4Sc3cc1S2",
+                "[1,4]benzodithiino[2,3-b]phenoxathiine",
+            ),
+            (
+                "c1ccc2c(c1)Nc1cc3Sc4ccccc4Nc3cc1O2",
+                "7,14-dihydro[1,4]benzothiazino[2,3-b]phenoxazine",
             ),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                NameStatus::NotPreferred(NameReason::UnregisteredRetainedComponent),
-                "{smiles}"
-            );
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+            let request = crate::naming::local::parse_request(&name.text).unwrap();
+            let reply = crate::naming::worker::respond(&request).unwrap();
+            let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
+            crate::naming::verify_identity(smiles, &parsed.smiles).unwrap();
+            assert_eq!(inchi(smiles), inchi(&parsed.smiles), "{expected}");
+        }
+    }
+
+    #[test]
+    fn pheno_fusion_derivatives_preserve_main_names_and_statuses() {
+        use crate::naming::{NameReason, NameStatus};
+        let unregistered = NameStatus::NotPreferred(NameReason::UnregisteredRetainedComponent);
+        let fallback = NameStatus::NotPreferred(NameReason::VonBaeyerFusionFallback);
+        // Keep derivative behavior unchanged until its hydrogen composition and
+        // parent selection can be audited together (issue #1022).
+        for (smiles, expected, status) in [
+            (
+                "c1ccc2c(c1)N(C)c1cc3cnc4ccccc4c3cc1O2",
+                "8-methyl[1,4]benzoxazino[3,2-j]phenanthridine",
+                unregistered,
+            ),
+            (
+                "c1ccc2c(c1)N(C)c1cc3Sc4ccccc4Nc3cc1O2",
+                "11-methyl-4-oxa-15-thia-11,22-diazapentacyclo[12.8.0.0^{16,21}.0^{3,12}.0^{5,10}]docosa-1,3(12),5,7,9,13,16,18,20-nonaene",
+                fallback,
+            ),
+            (
+                "c1ccc2c(c1)Nc1cc3Sc4ccccc4N(C)c3cc1O2",
+                "22-methyl-4-oxa-15-thia-11,22-diazapentacyclo[12.8.0.0^{16,21}.0^{3,12}.0^{5,10}]docosa-1(14),2,5,7,9,12,16,18,20-nonaene",
+                fallback,
+            ),
+            (
+                "c1ccc2c(c1)N(C)c1cc3Sc4ccccc4N(C)c3cc1O2",
+                "11,22-dimethyl-4-oxa-15-thia-11,22-diazapentacyclo[12.8.0.0^{16,21}.0^{3,12}.0^{5,10}]docosa-1(14),2,5,7,9,12,16,18,20-nonaene",
+                fallback,
+            ),
+            (
+                "CN1c2ccccc2Nc2ccncc21",
+                "10-methyl-5,10-dihydropyrido[3,4-b]quinoxaline",
+                NameStatus::Preferred,
+            ),
+            (
+                "c1ccc2c(c1)Oc1ccc3ccccc3c1[N-]2",
+                "naphtho[2,1-b][1,4]benzoxazin-12-ide",
+                unregistered,
+            ),
+            (
+                "c1ccc2c(c1)Oc1ccc3ccccc3c1[N+]2(C)C",
+                "12,12-dimethylnaphtho[2,1-b][1,4]benzoxazin-12-ium",
+                unregistered,
+            ),
+            (
+                "c1ccc2c(c1)Sc1ccc3ccccc3c1[N-]2",
+                "naphtho[2,1-b][1,4]benzothiazin-12-ide",
+                unregistered,
+            ),
+            (
+                "c1ccc2c(c1)Sc1ccc3ccccc3c1[N+]2(C)C",
+                "12,12-dimethylnaphtho[2,1-b][1,4]benzothiazin-12-ium",
+                unregistered,
+            ),
+            (
+                "c1ccc2c(c1)[N-]c1cc3cnc4ccccc4c3cc1O2",
+                "[1,4]benzoxazino[3,2-j]phenanthridin-8-ide",
+                unregistered,
+            ),
+            (
+                "c1ccc2c(c1)[N+](C)(C)c1cc3cnc4ccccc4c3cc1O2",
+                "8,8-dimethyl[1,4]benzoxazino[3,2-j]phenanthridin-8-ium",
+                unregistered,
+            ),
+            (
+                "O=C1CC=C2Oc3cc4Nc5ccccc5Sc4cc3NC2=C1",
+                "4-oxa-15-thia-11,22-diazapentacyclo[12.8.0.0^{16,21}.0^{3,12}.0^{5,10}]docosa-1,3(12),5,9,13,16,18,20-octaen-8-one",
+                fallback,
+            ),
+            (
+                "O=C1CC=C2Oc3cc4N(C)c5ccccc5Sc4cc3NC2=C1",
+                "22-methyl-4-oxa-15-thia-11,22-diazapentacyclo[12.8.0.0^{16,21}.0^{3,12}.0^{5,10}]docosa-1,3(12),5,9,13,16,18,20-octaen-8-one",
+                fallback,
+            ),
+            (
+                "O=C1CC=C2Oc3cc4Nc5ccccc5Sc4cc3N(C)C2=C1",
+                "11-methyl-4-oxa-15-thia-11,22-diazapentacyclo[12.8.0.0^{16,21}.0^{3,12}.0^{5,10}]docosa-1,3(12),5,9,13,16,18,20-octaen-8-one",
+                fallback,
+            ),
+            (
+                "O=C1CC=C2Oc3cc4Nc5ccccc5Sc4cc3[N+](C)(C)C2=C1",
+                "11,11-dimethyl-4-oxa-15-thia-11,22-diazapentacyclo[12.8.0.0^{16,21}.0^{3,12}.0^{5,10}]docosa-1,3(12),5,9,13,16,18,20-octaen-11-ium-8-one",
+                fallback,
+            ),
+            (
+                "O=C1CC=C2Oc3cc4[N+](C)(C)c5ccccc5Sc4cc3NC2=C1",
+                "22,22-dimethyl-4-oxa-15-thia-11,22-diazapentacyclo[12.8.0.0^{16,21}.0^{3,12}.0^{5,10}]docosa-1(14),2,5,9,12,16,18,20-octaen-22-ium-8-one",
+                fallback,
+            ),
+            (
+                "CCN(CC)c1ccc2nc3c(cc(=O)c4ccccc34)oc2c1",
+                "9-(diethylamino)naphtho[2,1-b][1,4]benzoxazin-5-one",
+                unregistered,
+            ),
+            (
+                "O=S1c2ccccc2S(=O)c2ccccc21",
+                "5lambda^4,10lambda^4-thianthrene-5,10-dione",
+                NameStatus::Preferred,
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, status, "{smiles}");
         }
     }
 
