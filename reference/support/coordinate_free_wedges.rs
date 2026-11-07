@@ -2,10 +2,11 @@
 //! import draws wedges from them, while the original worker reads CX wedge
 //! flags on its own depiction. Live comparisons check only acceptance for these
 //! inputs; the tag result has its own native_import test. Reaction SMILES keep
-//! the worker's behaviour (#1048), as do inputs with wavy flags (#1049).
+//! the worker's behaviour (#1048), as do inputs left with a wavy bond (#1049).
 use reshiki::chemistry::{kekulize::Direction, smiles};
 
-/// SMILES with CX wedge or hash flags, no wavy flags and no coordinates.
+/// SMILES with CX wedge or hash flags and no coordinates, left without a
+/// wavy bond after preparation, exactly as import decides.
 pub fn flagged(format: &str, text: &str) -> bool {
     format == "smiles"
         && smiles::read(text).is_ok_and(|imported| {
