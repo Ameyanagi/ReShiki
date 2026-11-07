@@ -1442,3 +1442,96 @@ fn buchwald_ligands_lay_out_without_ring_overlap() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn reaction_imports_keep_stated_alkene_stereo() -> anyhow::Result<()> {
+    // Reaction participants keep `/` `\` (or RXN geometry) as directions
+    // without assigned stereo. Those state E/Z; an alkene the input leaves
+    // open stays unspecified (#1043, #909).
+    const AGENT_RXN: &str = "$RXN\n\n      RDKit\n\n  1  1  1\n\
+        $MOL\n\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n\
+        \x20   0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\nM  END\n\
+        $MOL\n\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n\
+        \x20   0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\nM  END\n\
+        $MOL\n\n     RDKit          2D\n\n  4  3  0  0  0  0  0  0  0  0999 V2000\n\
+        \x20  -1.9796   -0.1365    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        \x20  -0.5994    0.4508    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        \x20   0.5994   -0.4508    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        \x20   1.9796    0.1365    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        \x20 1  2  1  0\n  2  3  2  0\n  3  4  1  0\nM  END\n";
+    let engine = crate::engine::LocalEngine::in_process();
+    for (format, text, smiles, inchi, unspecified) in [
+        (
+            "rsmi",
+            "C/C=C/C>>C",
+            "C.C/C=C/C",
+            Some("InChI=1S/C4H8.CH4/c1-3-4-2;/h3-4H,1-2H3;1H4/b4-3+;"),
+            0,
+        ),
+        (
+            "rsmi",
+            r"C/C=C\C>>C",
+            r"C.C/C=C\C",
+            Some("InChI=1S/C4H8.CH4/c1-3-4-2;/h3-4H,1-2H3;1H4/b4-3-;"),
+            0,
+        ),
+        (
+            "rsmi",
+            "C/C=C/C>O>N",
+            "C/C=C/C.N.O",
+            Some("InChI=1S/C4H8.H3N.H2O/c1-3-4-2;;/h3-4H,1-2H3;1H3;1H2/b4-3+;;"),
+            0,
+        ),
+        (
+            "rsmi",
+            "CC=CC>>C",
+            "C.CC=CC",
+            Some("InChI=1S/C4H8.CH4/c1-3-4-2;/h3-4H,1-2H3;1H4"),
+            1,
+        ),
+        ("rsmi", "C/C=C/CC=CCC>>C", "C.C/C=C/CC=CCC", None, 1),
+        ("rsmi", "CC=CCC/C=C/CC>>C", "C.CC=CCC/C=C/CC", None, 1),
+        // Input coordinates take precedence over directions, as in RDKit.
+        (
+            "rsmi",
+            "C/C=C/C>>C |(0,1,;1,0,;2,0,;3,1,;4,0,)|",
+            r"C.C/C=C\C",
+            None,
+            0,
+        ),
+        // Source perception fails on the invalid property: keep #909's rule.
+        (
+            "rsmi",
+            "(C/C=C/C.CC=CC)>>C |(0,1,;1,0,;2,0,;3,-1,;5,1,;6,0,;7,0,;8,-1,;10,0,),atomProp:1._UnknownStereo.x|",
+            "C.CC=CC.CC=CC",
+            None,
+            2,
+        ),
+        ("rxn", AGENT_RXN, "C.C.C/C=C/C", None, 0),
+    ] {
+        let response = engine
+            .request(Request::import(format, text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let analysis = response.analysis.unwrap();
+        assert_eq!(analysis.smiles, smiles, "{text}");
+        if let Some(inchi) = inchi {
+            assert_eq!(analysis.inchi, inchi, "{text}");
+        }
+        let document = response.document.unwrap();
+        let marked = document
+            .bonds
+            .iter()
+            .filter(|bond| bond.order == 2 && bond.stereo_authoritative)
+            .count();
+        assert_eq!(marked, unspecified, "{text}");
+        assert!(
+            document
+                .bonds
+                .iter()
+                .all(|bond| bond.stereo.is_none() && bond.stereo_atoms.is_empty()),
+            "{text}"
+        );
+    }
+    Ok(())
+}
