@@ -1159,9 +1159,8 @@ async fn wedge_flagged_smiles_import_keeps_stated_stereo_identifiers() -> anyhow
     let engine = crate::engine::LocalEngine::in_process();
     const RING: &str = "InChI=1S/C5H9FO/c6-4-1-2-5(7)3-4/h4-5,7H,1-3H2";
     for (text, inchi) in [
-        // Without coordinates the flag is read on the unreflected layout, as
-        // the reference worker reads it on its own depiction.
-        ("C1[C@@H](F)CC[C@H]1O |wU:1.0|", "/t4-,5-/m1/s1"),
+        // Without coordinates the @/@@ tags state m0 whatever the flag (#1044).
+        ("C1[C@@H](F)CC[C@H]1O |wU:1.0|", "/t4-,5+/m0/s1"),
         ("C1[C@@H](F)CC[C@H]1O |wD:1.0|", "/t4-,5+/m0/s1"),
         // With coordinates, tags, wedges and coordinates all state m0.
         (WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
@@ -1186,6 +1185,105 @@ async fn wedge_flagged_smiles_import_keeps_stated_stereo_identifiers() -> anyhow
             "{text}"
         );
     }
+    Ok(())
+}
+
+/// A CX wedge flag without coordinates has no geometric meaning, so the
+/// @/@@ tag (or its absence) states the configuration: the flagged import
+/// draws and identifies exactly as the bare SMILES, whether the flag read on
+/// the layout would agree with the tag (wD here) or not (wU) (#1044).
+#[tokio::test]
+async fn coordinate_free_wedge_flags_follow_the_tag() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let import = async |format: &str, text: &str| {
+        engine
+            .request(Request::import(format, text))
+            .await
+            .map_err(anyhow::Error::msg)
+    };
+    // The flag also names a bond's begin atom, which orders a plain bond's ends.
+    let drawn = |response: &Response| {
+        let mut document = response.document.clone().unwrap();
+        for bond in &mut document.bonds {
+            if bond.display == "plain" && bond.a > bond.b {
+                std::mem::swap(&mut bond.a, &mut bond.b);
+            }
+        }
+        document
+    };
+    const ALANINE: &str = "InChI=1S/C3H7NO2/c1-2(4)3(5)6/h2H,4H2,1H3,(H,5,6)/t2-/m0/s1";
+    for (format, bare, inchi) in [
+        ("smiles", "C[C@H](N)C(=O)O", Some(ALANINE)),
+        ("naming_smiles", "C[C@H](N)C(=O)O", Some(ALANINE)),
+        (
+            "smiles",
+            "C1[C@@H](F)CC[C@H]1O",
+            Some("InChI=1S/C5H9FO/c6-4-1-2-5(7)3-4/h4-5,7H,1-3H2/t4-,5+/m0/s1"),
+        ),
+        (
+            "smiles",
+            "CC=[C@]=CC",
+            Some("InChI=1S/C5H8/c1-3-5-4-2/h3-4H,1-2H3/t5-/m0/s1"),
+        ),
+        ("smiles", "FC(Cl)(Br)I", None),
+    ] {
+        let stated =
+            smiles::write::write(&smiles::read(bare)?.prepared.state, Default::default())?.text;
+        let expected = import(format, bare).await?;
+        for flag in ["wU", "wD"] {
+            let text = format!("{bare} |{flag}:1.0|");
+            let imported = import(format, &text).await?;
+            if let Some(analysis) = &expected.analysis {
+                let actual = imported.analysis.as_ref().unwrap();
+                assert_eq!(actual.inchi, analysis.inchi, "{text}");
+                assert_eq!(actual.smiles, analysis.smiles, "{text}");
+            }
+            if let Some(inchi) = inchi {
+                assert_eq!(imported.analysis.as_ref().unwrap().inchi, inchi, "{text}");
+            }
+            let mut visible = drawn(&imported);
+            assert_eq!(visible, drawn(&expected), "{text}");
+            for atom in &mut visible.atoms {
+                atom.stereo = None;
+            }
+            assert_eq!(
+                smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?
+                    .text,
+                stated,
+                "{text}: visible wedges must state the tag"
+            );
+        }
+    }
+    // A wavy flag next to a wedge flag keeps the flags on the layout (#1049):
+    // the drawing must not lose the tagged centre's stereobond.
+    let text = "C[C@H](N)C(=O)O |w:0.0,wD:1.1|";
+    let mut visible = drawn(&import("smiles", text).await?);
+    for atom in &mut visible.atoms {
+        atom.stereo = None;
+    }
+    assert_eq!(
+        smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+        "C[C@H](N)C(=O)O",
+        "{text}"
+    );
+    // An axial flag has no tag to defer to: the molecule reader takes the
+    // configuration from it, and the drawing is wedged from that.
+    let binol = "c1(-c2c(O)c3c(cc2)cccc3)c(O)c2c(cc1)cccc2";
+    let mut axes = Vec::new();
+    for flag in ["wU", "wD"] {
+        let document = import("smiles", &format!("{binol} |{flag}:0.13|"))
+            .await?
+            .document
+            .unwrap();
+        let labels = document
+            .bonds
+            .iter()
+            .filter_map(|bond| bond.cip_label.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(labels.len(), 1, "{flag}: {labels:?}");
+        axes.push(labels);
+    }
+    assert_ne!(axes[0], axes[1]);
     Ok(())
 }
 
