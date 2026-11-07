@@ -1,5 +1,7 @@
 //! Assemble imported participants without changing their chemistry or conformers.
 use super::{Error, Imported, document, invalid, molfile};
+use std::collections::BTreeSet;
+
 use crate::{
     atom_labels::HydrogenPosition,
     document::{Annotation, Arrow, Document, Point},
@@ -57,6 +59,7 @@ impl Drawing {
         if labels.len() != self.parts.len() {
             return Err(invalid("Reaction label participant count changed"));
         }
+        let read_axes = axes(self.parts.iter().map(|part| part.drawing.molecule()));
         let mut doc = Document::default();
         for (part, labels) in self.parts.into_iter().zip(labels) {
             let positions: Vec<_> = part.positions.into_iter().map(Position::point).collect();
@@ -84,8 +87,38 @@ impl Drawing {
         doc.reactions.push(self.reaction);
         layout_ink(&mut doc);
         doc.validate().map_err(invalid)?;
+        // A drawing stores axes only as wedges on its XY: a flattened 3D axis
+        // or a file wedge on a ring double bond can lose one or add another.
+        // Refuse rather than change them, as RXN import did before axes (#892).
+        if !read_axes.is_empty() && axes(std::iter::once(&document::prepare(&doc)?)) != read_axes {
+            return Err(invalid(
+                "The drawing cannot keep this reaction's atropisomer axes",
+            ));
+        }
         Ok(doc)
     }
+}
+
+/// Every axis (bond stereo 6/7) by its atom IDs.
+fn axes<'a>(molecules: impl Iterator<Item = &'a document::Molecule>) -> BTreeSet<(u64, u64, u8)> {
+    molecules
+        .flat_map(|molecule| {
+            let state = &molecule.state;
+            state
+                .graph
+                .bonds
+                .iter()
+                .zip(&state.metadata.bonds)
+                .filter(|(_, metadata)| matches!(metadata.stereo, 6 | 7))
+                .filter_map(|(bond, metadata)| {
+                    Some((
+                        *molecule.ids.get(bond.a)?,
+                        *molecule.ids.get(bond.b)?,
+                        metadata.stereo,
+                    ))
+                })
+        })
+        .collect()
 }
 
 /// Labels exist only after participant chemistry finishes. Arrange the final
@@ -191,21 +224,6 @@ impl Builder<'_> {
         mut x: f64,
     ) -> Result<f64, Error> {
         for (index, source) in sources.iter().enumerate() {
-            // The drawing keeps only XY and wedges, which can lose a 3D axis.
-            // Refuse it, as RXN import did before axes (#892).
-            if source.annotations.is_3d
-                && source
-                    .molecule
-                    .state
-                    .metadata
-                    .bonds
-                    .iter()
-                    .any(|bond| matches!(bond.stereo, 6 | 7))
-            {
-                return Err(invalid(
-                    "Atropisomer axes in 3D reaction participants are not supported",
-                ));
-            }
             let mut molecule = source.molecule.clone();
             molecule.ids = (0..molecule.state.graph.atoms.len())
                 .map(|_| self.id())
