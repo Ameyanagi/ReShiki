@@ -1,6 +1,8 @@
 //! Complete-response differential tests against the unchanged PythonEngine.
 //! Reference requests use Request -> Value -> JSON and JSON -> Value -> Response
 //! through the real engine transport, including both f32 conversion boundaries.
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     arrows::ArrowStyle,
@@ -186,6 +188,7 @@ async fn all_operations(
 #[tokio::test]
 async fn complete_responses_match_original_worker_for_molecules_and_exports() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -247,7 +250,13 @@ async fn complete_responses_match_original_worker_for_molecules_and_exports() ->
         let (compared, mismatches) =
             operation_comparisons(&reference, &config, &document, &text).await;
         count += compared;
-        failures.extend(mismatches);
+        // #879 draws ²H/³H as D/T in ChemDraw exports, which the original
+        // writer predates; D/T export has its own tests. Other exports still compare.
+        failures.extend(mismatches.into_iter().filter(|m| {
+            !(text == "[2H]O[3H]"
+                && (m.starts_with("[2H]O[3H]: export/Some(\"cdxml\")")
+                    || m.starts_with("[2H]O[3H]: export/Some(\"cdx\")")))
+        }));
     }
     eprintln!("Compared {count} complete molecular responses with the original worker");
     reference_presentation::report_mismatches("native-response-molecular", &failures)
@@ -255,6 +264,7 @@ async fn complete_responses_match_original_worker_for_molecules_and_exports() ->
 
 #[tokio::test]
 async fn empty_exotic_and_unsupported_requests_keep_native_rules() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -333,6 +343,7 @@ async fn empty_exotic_and_unsupported_requests_keep_native_rules() -> anyhow::Re
 #[tokio::test]
 async fn styles_high_ids_groups_abbreviations_and_reaction_warnings_survive() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -410,6 +421,7 @@ async fn styles_high_ids_groups_abbreviations_and_reaction_warnings_survive() ->
 
 #[tokio::test]
 async fn helper_resource_failures_are_typed_atomic_and_recoverable() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -449,6 +461,7 @@ async fn helper_resource_failures_are_typed_atomic_and_recoverable() -> anyhow::
 
 #[tokio::test]
 async fn overlapping_builds_retain_their_immutable_snapshots() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -481,6 +494,7 @@ async fn overlapping_builds_retain_their_immutable_snapshots() -> anyhow::Result
 #[tokio::test]
 async fn shared_prepared_analysis_preserves_chemical_state_and_native_results() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -520,6 +534,7 @@ async fn shared_prepared_analysis_preserves_chemical_state_and_native_results() 
 
 #[tokio::test]
 async fn native_adapter_early_empty_result_does_not_require_a_helper() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let reference = PythonEngine::default();
     let mut document = Document::default();
     let center = document.add_atom("*", Point::default());
@@ -561,6 +576,7 @@ async fn native_adapter_early_empty_result_does_not_require_a_helper() -> anyhow
 #[tokio::test]
 async fn native_drawing_precision_and_measurements_survive_the_real_transport() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     use reshiki::{
         graphics::{Graphic, GraphicKind, GraphicStyle},
         scientific::{AtomMark, MarkKind, OrbitalKind, SymbolKind},
@@ -658,6 +674,7 @@ async fn native_drawing_precision_and_measurements_survive_the_real_transport() 
 #[tokio::test]
 async fn malformed_prepared_inputs_and_stage_order_do_not_publish_partial_results()
 -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -712,6 +729,7 @@ async fn malformed_prepared_inputs_and_stage_order_do_not_publish_partial_result
 
 #[tokio::test]
 async fn picture_drawings_preserve_the_complete_document_and_exports() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -808,6 +826,7 @@ fn normalized_picture_payloads(xml: &str) -> anyhow::Result<String> {
 #[tokio::test(flavor = "current_thread")]
 async fn cancelling_a_running_response_kills_helper_and_preserves_snapshots() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     use std::process::{Command, Stdio};
     let Some(stub) = helper("inchi-helper-stub")? else {
         return Ok(());

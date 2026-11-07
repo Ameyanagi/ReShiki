@@ -1,3 +1,5 @@
+#[path = "support/empty_heads.rs"]
+mod empty_heads;
 use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reshiki::{
@@ -16,6 +18,8 @@ use std::{
     path::Path,
     process::{Command, Stdio},
 };
+
+const ARROWED: &str = "Arrowed, shaded or doubled CDXML curves are not supported yet";
 
 #[derive(Deserialize)]
 struct Pixels {
@@ -122,6 +126,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
     let header: Value = serde_json::from_str(&lines.next().context("Oracle header")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut converted, mut bounded, mut decoded) = (0, 0, 0, 0, 0);
+    let mut arrowed = 0;
     let mut failures = Vec::new();
     for line in lines {
         // Preserve exact worker transport: JSON -> Value(f64) -> typed Case.
@@ -148,9 +153,11 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
         let actual = match (actual, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
-                if let Some(error) =
-                    difference(&serde_json::to_value(&actual.graphics)?, expected, "native")
-                {
+                if let Some(error) = difference(
+                    &empty_heads::without(serde_json::to_value(&actual.graphics)?),
+                    expected,
+                    "native",
+                ) {
                     failures.push(format!("{}: {error}", case.name));
                 }
                 assert_eq!(
@@ -163,6 +170,33 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             }
             (Err(actual), None) if Some(actual.to_string()) == case.error => {
                 rejected += 1;
+                continue;
+            }
+            // #777: arrowed curves are no longer refused; shaded and doubled
+            // curves keep the original rejection under its narrower wording.
+            (Err(actual), None)
+                if case.error.as_deref() == Some(ARROWED)
+                    && matches!(
+                        actual.to_string().as_str(),
+                        "Shaded or doubled CDXML curves are not supported yet"
+                            | "Unsupported CDXML arrowhead"
+                    ) =>
+            {
+                rejected += 1;
+                continue;
+            }
+            // #777: an arrowed curve the original importer refused now becomes
+            // a pen path with heads. Its head geometry has its own tests.
+            (Ok(actual), None)
+                if case.error.as_deref() == Some(ARROWED)
+                    && actual.graphics.iter().any(|g| {
+                        g.heads.as_ref().is_some_and(|h| {
+                            h.head != reshiki::arrows::Head::None
+                                || h.tail != reshiki::arrows::Head::None
+                        })
+                    }) =>
+            {
+                arrowed += 1;
                 continue;
             }
             (Err(actual), _) => {
@@ -195,7 +229,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             (Ok(actual), Ok(expected)) => {
                 converted += 1;
                 if let Some(error) = difference(
-                    &serde_json::to_value(&actual)?,
+                    &empty_heads::without(serde_json::to_value(&actual)?),
                     &serde_json::to_value(expected)?,
                     "document",
                 ) {
@@ -248,7 +282,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
         failures.len(),
         failures
             .iter()
-            .take(25)
+            .take(60)
             .cloned()
             .collect::<Vec<_>>()
             .join("\n")
@@ -257,7 +291,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
         accepted > 2000 && rejected > 800 && converted > 1500 && bounded > 100 && decoded >= 90
     );
     eprintln!(
-        "{accepted} native successes, {rejected} exact errors, {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
+        "{accepted} native successes, {rejected} exact errors, {arrowed} arrowed curves now accepted (#777), {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
     );
     Ok(())
 }

@@ -232,6 +232,8 @@ def curated():
         "[C@H3]F",
         "[P@H](F)Cl",
         "F[C@]([C@H](F)Cl)([C@@H](F)Cl)Br",
+        # #992 made [1H]/C=C/F a non-stereo bond; a dummy end ranks its implicit H first.
+        "*/C=C/F",
     ]
     rng = random.Random(832014)
     for index, text in enumerate(texts):

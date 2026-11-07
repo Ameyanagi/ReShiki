@@ -1,3 +1,6 @@
+#[path = "support/crossed_double.rs"]
+#[allow(dead_code)]
+mod crossed_double;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, reaction},
@@ -63,6 +66,15 @@ fn output_matches_reference(format: &str) -> anyhow::Result<()> {
             });
         let failure = match (&actual, &case.expected) {
             (Ok(actual), Some(expected)) if actual == expected => {
+                accepted += 1;
+                None
+            }
+            // #793: crossed doubles (order 2, wavy) are written as "either".
+            (Ok(actual), Some(expected))
+                if crossed_double::matches_in_blocks(actual, expected, |block, a, b| {
+                    crossed_in_participant(&case.document, block, a, b)
+                }) =>
+            {
                 accepted += 1;
                 None
             }
@@ -291,4 +303,48 @@ async fn dense_ring_reaction_export_never_calls_the_backend() -> anyhow::Result<
         );
     }
     Ok(())
+}
+
+/// Whether atoms `a` and `b` (1-based) of the RXN's molecule `block` (reactants,
+/// then products, then agents) form a crossed double bond in the drawing.
+/// Like `write_rxn`, a block lists its members in document atom order. Only a
+/// single reaction without coefficients is mapped; anything else stays strict.
+fn crossed_in_participant(document: &Value, block: usize, a: usize, b: usize) -> bool {
+    let reactions = document["reactions"]
+        .as_array()
+        .map_or(&[][..], Vec::as_slice);
+    let [reaction] = reactions else {
+        return false;
+    };
+    let participants: Vec<_> = ["reactants", "products", "agents"]
+        .iter()
+        .flat_map(|role| reaction[*role].as_array().into_iter().flatten())
+        .collect();
+    if participants.iter().any(|p| p["coefficient"] != 1) {
+        return false;
+    }
+    let Some(members) = participants.get(block).and_then(|p| p["atoms"].as_array()) else {
+        return false;
+    };
+    let atoms: Vec<_> = document["atoms"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|atom| &atom["id"])
+        .filter(|id| members.contains(id))
+        .collect();
+    let (Some(a), Some(b)) = (
+        a.checked_sub(1).and_then(|i| atoms.get(i)),
+        b.checked_sub(1).and_then(|i| atoms.get(i)),
+    ) else {
+        return false;
+    };
+    document["bonds"].as_array().is_some_and(|bonds| {
+        bonds.iter().any(|bond| {
+            bond["order"] == 2
+                && bond["display"] == "wavy"
+                && ((bond["a"] == **a && bond["b"] == **b)
+                    || (bond["a"] == **b && bond["b"] == **a))
+        })
+    })
 }

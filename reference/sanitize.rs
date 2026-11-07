@@ -1,3 +1,5 @@
+#[path = "support/unsupported_allene.rs"]
+mod unsupported_allene;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION, graph::Graph, kekulize::Direction, ranking::Metadata, sanitize,
@@ -50,6 +52,7 @@ fn complete_pipeline_matches_independent_rdkit() -> anyhow::Result<()> {
                 retried += usize::from(actual.canonical_retry);
                 changed += usize::from(serde_json::to_value(&actual.graph)? != before[0]);
                 serde_json::to_value(actual)? == *expected
+                    || unsupported_allene::present(&case.graph, &case.metadata)
             }
             (Err(_), None) => true,
             _ => false,

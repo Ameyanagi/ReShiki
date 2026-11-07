@@ -430,7 +430,8 @@ pub fn for_generated(
     }
     let mut molecule = molecule.clone();
     let mut dummy_labels = dummy_labels.to_vec();
-    if options.ring_fusion_hydrogens {
+    let refine = super::refine();
+    if options.ring_fusion_hydrogens && refine {
         let expanded =
             wedging::generated::add_fusion_hydrogens(&molecule.state, &molecule.positions, 1.5)
                 .map_err(Error::WedgeAssignment)?;
@@ -453,7 +454,7 @@ pub fn for_generated(
         false,
         vec![false; molecule.ids.len()],
         options,
-        true,
+        refine,
     )?;
     let mut drawing = reconstruct(
         work,

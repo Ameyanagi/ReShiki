@@ -1,4 +1,6 @@
 //! Complete aromatic responses compared with the retained original worker.
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     document::{Document, History, Point},
@@ -123,7 +125,8 @@ async fn compare_request(
         }
         (Err(actual), Err(expected)) => {
             anyhow::ensure!(
-                actual.to_string() == expected,
+                actual.to_string() == expected
+                    || shared_anchor(&request, &actual.to_string(), &expected),
                 "Error changed: {actual} != {expected}"
             );
             Ok(false)
@@ -132,6 +135,26 @@ async fn compare_request(
             "Outcome changed: {actual:?} != {expected:?}"
         )),
     }
+}
+
+/// The editor lets one abbreviation anchor carry several outside bonds (#36);
+/// the original worker refuses that before the ring check. Both refuse the edit.
+fn shared_anchor(request: &Request, actual: &str, expected: &str) -> bool {
+    actual == "Select all atoms of an aromatic ring; saturated rings keep their chemistry"
+        && expected == "Abbreviations need one attachment atom and at most one outside bond"
+        && request.document.as_ref().is_some_and(|doc| {
+            doc.abbreviations.iter().any(|group| {
+                doc.bonds
+                    .iter()
+                    .filter(|b| {
+                        let (a, b) = (b.a, b.b);
+                        (a == group.anchor && !group.members.contains(&b))
+                            || (b == group.anchor && !group.members.contains(&a))
+                    })
+                    .count()
+                    > 1
+            })
+        })
 }
 
 #[derive(Default)]
@@ -242,6 +265,7 @@ async fn compare_corpus(
 
 #[tokio::test]
 async fn complete_aromatic_responses_match_original_worker() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(helper) = helper()? else {
         return Ok(());
     };
@@ -330,6 +354,7 @@ fn restore_request(value: serde_json::Value) -> anyhow::Result<Request> {
 #[test]
 #[ignore = "explicit fixture input serialization; requires input/output paths"]
 fn serialize_aromatic_requests() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let input = PathBuf::from(
         std::env::var_os("RESHIKI_AROMATIC_REQUESTS_INPUT")
             .context("Set RESHIKI_AROMATIC_REQUESTS_INPUT")?,
@@ -460,6 +485,7 @@ struct GoldenCase {
 /// InChI helper. This test never starts Python or generates expected responses.
 #[tokio::test]
 async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(helper) = helper()? else {
         return Ok(());
     };
@@ -608,6 +634,7 @@ fn benzene() -> Document {
 #[tokio::test]
 async fn display_response_is_one_undoable_edit_and_failures_publish_nothing() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     let original = benzene();
     let selected = original.atoms.iter().map(|a| a.id).collect();
     let request = Arc::new(request(original.clone(), selected));
@@ -635,6 +662,7 @@ async fn display_response_is_one_undoable_edit_and_failures_publish_nothing() ->
 
 #[tokio::test]
 async fn validation_does_not_resolve_a_helper_and_matches_original_errors() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let reference = PythonEngine::default();
     let document = benzene();
     let selected: Vec<_> = document.atoms.iter().map(|a| a.id).collect();

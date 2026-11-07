@@ -1,4 +1,7 @@
 //! Native reaction parsing is separate from default molecular SMILES import.
+#[path = "support/smiles_extensions.rs"]
+#[allow(dead_code)]
+mod smiles_extensions;
 use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, reaction};
 use serde::{Deserialize, Serialize};
@@ -103,7 +106,9 @@ fn compare_reference(suite: &str) -> anyhow::Result<()> {
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let actual = match reaction::read_smiles(&case.text) {
-            Ok(reaction) => Ok(serde_json::to_value(reaction)?),
+            Ok(reaction) => Ok(smiles_extensions::without_cumulene_flag(
+                serde_json::to_value(reaction)?,
+            )),
             Err(error) => Err(error.to_string()),
         };
         let failure = match (&actual, &case.expected) {

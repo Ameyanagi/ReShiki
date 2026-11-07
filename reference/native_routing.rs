@@ -1,6 +1,8 @@
 //! Real default dispatch in a subprocess whose Python worker records startup
 //! and rejects every request. Expected chemistry comes from the original worker
 //! in the parent; environment overrides never mutate the test runner process.
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     arrows::ArrowStyle,
@@ -480,6 +482,14 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
         let mut failures = Vec::new();
         for (index, response) in actual {
             let case = cases.get(index).context("Invalid routing response index")?;
+            // #879 draws ²H/³H as D/T in ChemDraw exports, which the original
+            // writer predates; D/T export has its own tests.
+            if case.name == "[2H]O[3H]"
+                && case.operation == "export"
+                && matches!(case.format.as_deref(), Some("cdxml" | "cdx"))
+            {
+                continue;
+            }
             let source = serde_json::to_value(&case.document)?;
             if let Err(error) = outcome(
                 response,
@@ -502,6 +512,7 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
 #[tokio::test]
 async fn supported_default_requests_are_python_free_and_match_original_worker() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     let Some(helper) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -515,6 +526,7 @@ async fn supported_default_requests_are_python_free_and_match_original_worker() 
 }
 #[tokio::test]
 async fn coordinate_imports_are_python_free_and_match_original_worker() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(helper) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -528,6 +540,7 @@ async fn coordinate_imports_are_python_free_and_match_original_worker() -> anyho
 }
 #[tokio::test]
 async fn invalid_imports_never_fall_back_to_python() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let reference = PythonEngine::default();
     let mut cases = Vec::new();
     for (format, text) in [
@@ -556,6 +569,7 @@ async fn invalid_imports_never_fall_back_to_python() -> anyhow::Result<()> {
 }
 #[tokio::test]
 async fn helper_discovery_is_lazy_for_empty_and_exotic_results() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let reference = PythonEngine::default();
     let mut cases = cases(true).await?;
@@ -576,6 +590,7 @@ async fn helper_discovery_is_lazy_for_empty_and_exotic_results() -> anyhow::Resu
 }
 #[tokio::test]
 async fn helper_errors_do_not_fall_back_to_python() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(stub) = helper("inchi-helper-stub")? else {
         return Ok(());
     };
@@ -644,6 +659,7 @@ impl ChemistryEngine for RecordingBackend {
 }
 #[tokio::test]
 async fn custom_backends_keep_existing_dispatch_and_binary_conversion() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let recorder = RecordingBackend::default();
     let local = LocalEngine::with_backend(recorder.clone());
@@ -710,6 +726,7 @@ async fn custom_backends_keep_existing_dispatch_and_binary_conversion() -> anyho
 #[tokio::test(flavor = "current_thread")]
 #[ignore = "Invoked by isolated routing subprocess tests"]
 async fn routing_child() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let mode = std::env::var("RESHIKI_NATIVE_ROUTING_MODE")?;
     let fixture = std::fs::read(
         std::env::var_os("RESHIKI_NATIVE_ROUTING_FIXTURE").context("Missing fixture")?,

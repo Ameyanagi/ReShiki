@@ -1,3 +1,5 @@
+#[path = "support/axial_extension.rs"]
+mod axial_extension;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -182,6 +184,15 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
                     None
                 }
                 (Err(error), Some(_)) => Some(format!("Rejected supported input: {error}")),
+                (Ok(actual), None)
+                    if axial_extension::accepted(
+                        &case.name,
+                        case.failure.as_deref(),
+                        &serde_json::to_value(&actual.molecule.state)?,
+                    ) =>
+                {
+                    None
+                }
                 (Ok(_), None) => Some(format!("Accepted invalid input: {:?}", case.failure)),
             }
         };

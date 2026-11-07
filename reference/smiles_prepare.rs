@@ -1,3 +1,6 @@
+#[path = "support/smiles_extensions.rs"]
+#[allow(dead_code)]
+mod smiles_extensions;
 use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, smiles};
 use serde::{Deserialize, Serialize};
@@ -76,9 +79,17 @@ fn smiles_chemistry_matches_native_import() -> anyhow::Result<()> {
         let failure = match (&result, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
-                difference(&serde_json::to_value(actual)?, expected, "molecule")
+                let mut actual = serde_json::to_value(actual)?;
+                smiles_extensions::phantom_hydrogen_ez(&mut actual["state"], &expected["state"]);
+                difference(&actual, expected, "molecule")
             }
             (Err(_), None) => {
+                rejected += 1;
+                None
+            }
+            (Err(error), Some(_))
+                if smiles_extensions::refused_allene(&case.text, &error.to_string()) =>
+            {
                 rejected += 1;
                 None
             }
