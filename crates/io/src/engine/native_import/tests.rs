@@ -1122,6 +1122,73 @@ fn cross(o: &Point3, a: &Point3, b: &Point3) -> f64 {
     (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
 }
 
+/// CX wedge flags carry configuration only at the coordinates they are read
+/// against: the input coordinates when given, else the fresh layout, which
+/// conventional orientation must then not mirror (#1037).
+const WEDGE_FLAGGED_RING: &str = "C1[C@@H](F)CC[C@H]1O |(0,-1.03088,;1.21353,-0.149206,;2.64011,-0.612731,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,),wD:1.1,5.6|";
+/// The same stereoisomer drawn mirrored in y, with wedges instead of hashes.
+const MIRRORED_WEDGE_FLAGGED_RING: &str = "C1[C@@H](F)CC[C@H]1O |(0,1.03088,;1.21353,0.149206,;2.64011,0.612731,;0.75,-1.27738,;-0.75,-1.27738,;-1.21353,0.149206,;-2.64011,0.612731,),wU:1.1,5.6|";
+
+#[test]
+fn wedge_flagged_smiles_import_keeps_the_stated_enantiomer() -> anyhow::Result<()> {
+    let stated = smiles::write::write(
+        &smiles::read("O[C@@H]1CC[C@H](F)C1")?.prepared.state,
+        Default::default(),
+    )?
+    .text;
+    for text in [
+        WEDGE_FLAGGED_RING,
+        MIRRORED_WEDGE_FLAGGED_RING,
+        "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,;1.21353,-0.149206,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,;0,-1.03088,),wU:1.0,4.4|",
+    ] {
+        let mut visible = imported_smiles(text)?.document;
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        assert_eq!(
+            smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+            stated,
+            "{text}: visible wedges must keep the stated enantiomer"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn wedge_flagged_smiles_import_keeps_stated_stereo_identifiers() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    const RING: &str = "InChI=1S/C5H9FO/c6-4-1-2-5(7)3-4/h4-5,7H,1-3H2";
+    for (text, inchi) in [
+        // Without coordinates the flag is read on the unreflected layout, as
+        // the reference worker reads it on its own depiction.
+        ("C1[C@@H](F)CC[C@H]1O |wU:1.0|", "/t4-,5-/m1/s1"),
+        ("C1[C@@H](F)CC[C@H]1O |wD:1.0|", "/t4-,5+/m0/s1"),
+        // With coordinates, tags, wedges and coordinates all state m0.
+        (WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
+        (MIRRORED_WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
+        // With 3D coordinates the flags are again read on the fresh layout.
+        (
+            "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,-0.75;1.21353,-0.149206,;0.75,1.27738,0.75;-0.75,1.27738,-0.75;-1.21353,-0.149206,0.75;-2.64011,-0.612731,;0,-1.03088,-0.75),wU:1.0,4.4|",
+            "/t4-,5+/m0/s1",
+        ),
+        (
+            "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,;1.21353,-0.149206,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,;0,-1.03088,),wU:1.0,4.4|",
+            "/t4-,5+/m0/s1",
+        ),
+    ] {
+        let imported = engine
+            .request(Request::import("smiles", text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            imported.analysis.unwrap().inchi,
+            format!("{RING}{inchi}"),
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
 /// No non-bonded atom pair is inside the depictor's 0.7-unit collision
 /// threshold (bonds are 1.5 units), and no bond outside a ring crosses that
 /// ring's edges or ends inside its polygon.

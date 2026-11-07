@@ -9,6 +9,7 @@ use crate::{
     chemistry::{
         self, cdxml, depict, document as molecular,
         inchi::{helper, output},
+        kekulize::Direction,
         molfile, reaction, smiles,
         stereo::{Point3, perception::State},
     },
@@ -206,6 +207,15 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                     crate::molecule_names::apply_axis_markers(&imported.prepared.state)
                         .map_err(|_| Error::AxisMarkers)?;
             }
+            // Wedges were read at the 2D input coordinates, which the fresh
+            // layout replaces; draw them again from the stereo they set (#1037).
+            if imported.conformers.iter().any(|c| !c.is_3d) {
+                for direction in &mut imported.prepared.state.directions {
+                    if matches!(direction, Direction::Wedge | Direction::Hash) {
+                        *direction = Direction::None;
+                    }
+                }
+            }
             let mut molecule = molecule(imported.prepared.state)?;
             let mut warnings = layout(&mut molecule, &imported.reaction_properties)?;
             // Import perception does not keep cumulene E/Z; say so.
@@ -379,7 +389,15 @@ fn coordinates(
     let positions = template_retry::improve(state, &ranks, conformer.positions, 1.5);
     let mut layout = chain_layout::improve(state, &ranks, positions);
     chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
-    chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
+    // Input wedge flags are read against these coordinates, so a reflection
+    // would invert them (#1037). Rotation and translation keep their meaning.
+    if !state
+        .directions
+        .iter()
+        .any(|d| matches!(d, Direction::Wedge | Direction::Hash))
+    {
+        chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
+    }
     chemistry::layout_refinement::arrange_components(state, &mut layout.positions);
     Ok(layout)
 }
