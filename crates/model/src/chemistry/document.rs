@@ -315,10 +315,21 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
     .map_err(Error::Stereo)?;
     // Axis wedges are drawing input, so every prepare perceives them afresh.
     // Remove provisional tags on small rings, as sanitized file imports do.
+    // A wavy double bond is a MOL crossed bond (EITHERDOUBLE), which does not
+    // hide an axis the way a wavy single bond does.
+    let directions: Vec<_> = sanitized
+        .directions
+        .iter()
+        .zip(&document.bonds)
+        .map(|(&direction, bond)| match direction {
+            Direction::Unknown if bond.order == 2 => Direction::EitherDouble,
+            direction => direction,
+        })
+        .collect();
     if let Ok(metadata) = stereo::detect_atropisomers(
         &drawn.graph,
         &drawn.metadata,
-        &sanitized.directions,
+        &directions,
         Some(&stereo::wedging::Conformer {
             positions: input.positions.clone(),
             is_3d: false,

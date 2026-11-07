@@ -191,6 +191,21 @@ impl Builder<'_> {
         mut x: f64,
     ) -> Result<f64, Error> {
         for (index, source) in sources.iter().enumerate() {
+            // The drawing keeps only XY and wedges, which can lose a 3D axis.
+            // Refuse it, as RXN import did before axes (#892).
+            if source.annotations.is_3d
+                && source
+                    .molecule
+                    .state
+                    .metadata
+                    .bonds
+                    .iter()
+                    .any(|bond| matches!(bond.stereo, 6 | 7))
+            {
+                return Err(invalid(
+                    "Atropisomer axes in 3D reaction participants are not supported",
+                ));
+            }
             let mut molecule = source.molecule.clone();
             molecule.ids = (0..molecule.state.graph.atoms.len())
                 .map(|_| self.id())
