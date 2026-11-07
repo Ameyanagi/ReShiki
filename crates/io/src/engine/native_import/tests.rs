@@ -1166,6 +1166,11 @@ async fn wedge_flagged_smiles_import_keeps_stated_stereo_identifiers() -> anyhow
         // With coordinates, tags, wedges and coordinates all state m0.
         (WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
         (MIRRORED_WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
+        // With 3D coordinates the flags are again read on the fresh layout.
+        (
+            "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,-0.75;1.21353,-0.149206,;0.75,1.27738,0.75;-0.75,1.27738,-0.75;-1.21353,-0.149206,0.75;-2.64011,-0.612731,;0,-1.03088,-0.75),wU:1.0,4.4|",
+            "/t4-,5+/m0/s1",
+        ),
         (
             "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,;1.21353,-0.149206,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,;0,-1.03088,),wU:1.0,4.4|",
             "/t4-,5+/m0/s1",

@@ -207,9 +207,9 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                     crate::molecule_names::apply_axis_markers(&imported.prepared.state)
                         .map_err(|_| Error::AxisMarkers)?;
             }
-            // Wedges were read at the input coordinates, which the fresh
+            // Wedges were read at the 2D input coordinates, which the fresh
             // layout replaces; draw them again from the stereo they set (#1037).
-            if !imported.conformers.is_empty() {
+            if imported.conformers.iter().any(|c| !c.is_3d) {
                 for direction in &mut imported.prepared.state.directions {
                     if matches!(direction, Direction::Wedge | Direction::Hash) {
                         *direction = Direction::None;
