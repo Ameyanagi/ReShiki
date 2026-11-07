@@ -175,3 +175,96 @@ fn large_neighbor_ordering_uses_bounded_dynamic_storage() -> TestResult {
     assert!(with_work(&state, &props, Some(&conf), false, &mut Work(1000)).is_err());
     Ok(())
 }
+
+const SMILES: &str = "O=C1C=CNC(=O)N1C(=C)[C@]([C@H](C)Br)([C@@H](F)C)[C@H](Cl)C";
+
+/// RDKit's AtropManyChirals.cxsmi in its macOS/Windows fresh layout, with
+/// the N-vinyl axis N8-C9 (zero-based 7-8) and optionally moved atoms.
+fn atrop_fixture(
+    smiles: &str,
+    moved: &[(usize, (f64, f64))],
+) -> anyhow::Result<(WedgeState, WedgeProperties, Conformer, usize)> {
+    let prepared = crate::smiles::prepare(smiles)?.state;
+    let axis = prepared
+        .graph
+        .bonds
+        .iter()
+        .position(|b| (b.a, b.b) == (7, 8))
+        .ok_or_else(|| anyhow::anyhow!("Missing axis"))?;
+    let mut metadata = prepared.metadata;
+    metadata.bonds[axis].stereo = 7;
+    let state = WedgeState {
+        directions: vec![Direction::None; prepared.graph.bonds.len()],
+        graph: prepared.graph,
+        metadata,
+        rings: prepared.rings,
+    };
+    let props = WedgeProperties {
+        attachment_points: vec![false; prepared.valences.len()],
+        valences: prepared.valences,
+    };
+    let mut conf = Conformer {
+        is_3d: false,
+        positions: [
+            (-61.08, 75.62),
+            (-69.01, 34.38),
+            (-108.70, 20.63),
+            (-116.63, -20.62),
+            (-84.88, -48.11),
+            (-45.20, -34.36),
+            (-29.66, -50.39),
+            (-37.26, 6.88),
+            (1.07, 24.04),
+            (1.72, 66.04),
+            (37.12, 2.48),
+            (58.68, 38.53),
+            (38.24, 75.22),
+            (100.67, 37.88),
+            (73.16, -19.08),
+            (109.86, 1.36),
+            (72.51, -61.07),
+            (18.78, -35.30),
+            (-1.74, -44.07),
+            (42.34, -70.07),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point3 { x, y, z: 0.0 })
+        .collect(),
+    };
+    for (atom, (x, y)) in moved {
+        conf.positions[*atom] = Point3 {
+            x: *x,
+            y: *y,
+            z: 0.0,
+        };
+    }
+    Ok((state, props, conf, axis))
+}
+
+#[test]
+fn a_drawing_that_hides_an_axis_is_refused() -> TestResult {
+    // The reference wedges C11 towards axis end C9; read as C9's end, that
+    // hash hides the N-vinyl axis whatever the N8 wedge. The raw chooser keeps
+    // the reference pick; a drawing refuses it instead of losing the axis.
+    let (state, props, conf, axis) = atrop_fixture(SMILES, &[])?;
+    let raw = wedge_molecule(&state, &props, Some(&conf), false).map_err(anyhow::Error::msg)?;
+    let mut cleared = raw.metadata.clone();
+    cleared.bonds[axis].stereo = 0;
+    let read =
+        super::super::detect_atropisomers(&raw.graph, &cleared, &raw.directions, Some(&conf))?;
+    assert_eq!(read.bonds[axis].stereo, 0);
+    for (two_bonds, ring_preference) in [(false, false), (false, true), (true, true)] {
+        assert!(
+            generated::wedge_drawing(&state, &props, &conf, two_bonds, ring_preference).is_err()
+        );
+    }
+    // Without the axis the same drawing is the reference's.
+    let mut plain = state.clone();
+    plain.metadata.bonds[axis].stereo = 0;
+    let drawn = generated::wedge_drawing(&plain, &props, &conf, false, false)
+        .map_err(anyhow::Error::msg)?;
+    let reference =
+        wedge_molecule(&plain, &props, Some(&conf), false).map_err(anyhow::Error::msg)?;
+    assert_eq!(drawn.directions, reference.directions);
+    Ok(())
+}

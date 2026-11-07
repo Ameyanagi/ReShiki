@@ -2,14 +2,18 @@
 //!
 //! Keep these conventions separate from the pinned RDKit bond chooser. A raw
 //! `wedge_molecule` call continues to reproduce that chooser exactly.
-use super::{Conformer, WedgeProperties, WedgeState, at, wedge_bond};
+use super::{Conformer, WedgeProperties, WedgeState, at, wedge_bond, wedge_molecule};
 use crate::{
     electronic,
     graph::{Atom, Bond, Graph},
     kekulize::Direction,
     ranking::{AtomMetadata, BondMetadata},
     rings,
-    stereo::{Point3, drawing::from_directions, perception},
+    stereo::{
+        Point3,
+        drawing::{detect_atropisomers, from_directions},
+        perception,
+    },
 };
 use std::collections::HashSet;
 
@@ -251,6 +255,59 @@ fn preserves_center(
     )?;
     Ok(at(&perceived.metadata.atoms, atom)?.chiral_tag
         == at(&state.metadata.atoms, atom)?.chiral_tag)
+}
+
+/// Wedge a drawing for display: the reference chooser, then the ring
+/// preference when asked. An axis end reads every wedge on its bonds, even
+/// one that starts at a neighbouring centre (RDKit getBondDir), so the wedges
+/// may not read back as the same axes. Then the drawing without the ring
+/// preference is tried, and if it does not keep them either, the drawing is
+/// refused rather than silently losing an axis, as the reference refuses
+/// atropisomer bond stereo.
+pub fn wedge_drawing(
+    input: &WedgeState,
+    properties: &WedgeProperties,
+    conformer: &Conformer,
+    two_bonds: bool,
+    ring_preference: bool,
+) -> Result<WedgeState, String> {
+    let raw = wedge_molecule(input, properties, Some(conformer), two_bonds)?;
+    let preferred = if ring_preference {
+        Some(prefer_ring_wedges(&raw, properties, conformer)?)
+    } else {
+        None
+    };
+    let axes = input
+        .metadata
+        .bonds
+        .iter()
+        .any(|meta| matches!(meta.stereo, 6 | 7));
+    preferred
+        .into_iter()
+        .chain([raw])
+        .find(|drawn| !axes || keeps_axes(drawn, conformer))
+        .ok_or_else(|| {
+            "The wedges in this layout cannot show the atropisomer axis next to a wedged stereocentre"
+                .into()
+        })
+}
+
+fn keeps_axes(state: &WedgeState, conformer: &Conformer) -> bool {
+    // Detection keeps a previous tag where it reads nothing, so clear them.
+    let mut cleared = state.metadata.clone();
+    for meta in &mut cleared.bonds {
+        if matches!(meta.stereo, 6 | 7) {
+            meta.stereo = 0;
+        }
+    }
+    detect_atropisomers(&state.graph, &cleared, &state.directions, Some(conformer)).is_ok_and(
+        |read| {
+            read.bonds
+                .iter()
+                .zip(&state.metadata.bonds)
+                .all(|(read, meta)| !matches!(meta.stereo, 6 | 7) || read.stereo == meta.stereo)
+        },
+    )
 }
 
 /// Apply generated-drawing conventions after `wedge_molecule` without changing

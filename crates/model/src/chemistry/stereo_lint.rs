@@ -855,7 +855,7 @@ pub fn redraw(source: &Document, selected: &[u64]) -> Result<(Document, usize), 
                 }
             })
             .collect();
-        let wedged = wedging::wedge_molecule(
+        let wedged = wedging::generated::wedge_drawing(
             &wedging::WedgeState {
                 graph: state.graph.clone(),
                 metadata: state.metadata.clone(),
@@ -866,11 +866,12 @@ pub fn redraw(source: &Document, selected: &[u64]) -> Result<(Document, usize), 
                 valences: state.valences.clone(),
                 attachment_points: vec![false; molecule.ids.len()],
             },
-            Some(&wedging::Conformer {
+            &wedging::Conformer {
                 positions: molecule.positions.clone(),
                 is_3d: false,
-            }),
+            },
             source.drawing_style.two_wedge_stereocentres,
+            false,
         )
         .map_err(document::Error::WedgeAssignment)?;
         let mut edited = part.clone();
