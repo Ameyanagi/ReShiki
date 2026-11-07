@@ -1,4 +1,52 @@
 use super::*;
+
+#[test]
+fn overlapping_double_candidates_share_one_query_graph() {
+    let mut constructions = Vec::new();
+    for candidates in [1, 32] {
+        let mut doc = Document::default();
+        for _ in 0..candidates {
+            let a = doc.add_atom("C", Point::default());
+            let b = doc.add_atom("C", Point::new(42., 0.));
+            doc.add_bond(a, b, 2, "plain");
+        }
+        // Automatic ethene rails need the graph to resolve their placement;
+        // explicit Center would bypass the scan this regression exercises.
+        assert!(
+            doc.bonds
+                .iter()
+                .all(|bond| { bond.double_position == crate::bonds::DoublePosition::Auto })
+        );
+        let half_spacing =
+            doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio * 0.5;
+        let before = crate::scene::graph::construction_count();
+        assert!(matches!(
+            crate::arrow_anchors::pick(&doc, Point::new(21., half_spacing), 0.02),
+            Some(crate::arrow_anchors::Pick::Bond { .. })
+        ));
+        constructions.push((
+            candidates,
+            crate::scene::graph::construction_count() - before,
+        ));
+
+        let before = crate::scene::graph::construction_count();
+        assert_eq!(
+            crate::arrow_anchors::pick(&doc, Point::new(50_000., 50_000.), 0.02),
+            None
+        );
+        assert_eq!(
+            crate::scene::graph::construction_count(),
+            before,
+            "Remote pointer queries must leave the graph index cold"
+        );
+    }
+    assert_eq!(
+        constructions,
+        [(1, 1), (32, 1)],
+        "All nearby candidates must share one graph for each public pick query"
+    );
+}
+
 #[test]
 fn fully_opaque_and_remote_pointer_queries_leave_visibility_caches_cold() {
     let mut doc = Document::from_native_file(include_bytes!(

@@ -75,8 +75,8 @@ impl<'a> AttachmentInk<'a> {
     pub(crate) fn mark(&self, id: u64) -> bool {
         self.doc.atom_drawn(id) && self.opacity().is_none_or(|paint| paint.atom(id) > 0.)
     }
-    pub(crate) fn segment(&self, index: usize) -> Option<(Point, Point)> {
-        bond_segment(&self.drawn, self.drawn.bonds.get(index)?, self.opacity())
+    pub(crate) fn segment(&self, index: usize, faces: &FaceIndex<'_>) -> Option<(Point, Point)> {
+        bond_segment_with_faces(faces, faces.doc().bonds.get(index)?, self.opacity())
     }
     pub(crate) fn label_hit(&self, p: Point, radius: f32) -> Option<u64> {
         let isotopes = HydrogenIsotopeLabels::new(&self.drawn);

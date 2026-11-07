@@ -29,6 +29,16 @@ fn eligible(faces: &FaceIndex<'_>, b: &Bond) -> bool {
 fn other(b: &Bond, id: u64) -> u64 {
     if b.a == id { b.b } else { b.a }
 }
+pub(crate) fn centered_plain_double(faces: &FaceIndex<'_>, bond: &Bond) -> bool {
+    bond.order == 2
+        && bond.display == "plain"
+        && bond
+            .secondary_display
+            .as_deref()
+            .is_none_or(|d| d == "plain")
+        && !bond.ring_arc
+        && crate::scene::double_position(faces, bond) == crate::bonds::DoublePosition::Center
+}
 /// Per-scene graph facts. Rebuilt from a borrowed document, so no persistent
 /// invalidation or stale geometry is involved when atoms or bonds change.
 pub struct Joins<'a> {
@@ -63,16 +73,7 @@ impl<'a> Joins<'a> {
         for (index, bond) in doc.bonds.iter().enumerate() {
             // Centered rails can meet existing outlines, but are not themselves
             // skeleton edges for other bonds' corners (including cumulenes).
-            if bond.order == 2
-                && bond.display == "plain"
-                && bond
-                    .secondary_display
-                    .as_deref()
-                    .is_none_or(|d| d == "plain")
-                && !bond.ring_arc
-                && crate::scene::double_position(faces, bond)
-                    == crate::bonds::DoublePosition::Center
-            {
+            if centered_plain_double(faces, bond) {
                 centered.insert((bond.a, bond.b));
             }
             if eligible(faces, bond) {
