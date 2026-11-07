@@ -512,6 +512,11 @@ fn name_subgraph_rendered_except_stereo(
             &plan.locant_map,
         )?;
     }
+    if super::heterospiro::needs_hydrogen_proof(mol, &parts) {
+        mol.mark_name(crate::naming::NameStatus::Unverified(
+            crate::naming::NameReason::SpiroHydrogen,
+        ));
+    }
     let raw = super::assembler::assemble_name_raw(&mut parts)?;
     let mut represented: AtomSet = parts
         .a_prefixes

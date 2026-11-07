@@ -247,6 +247,19 @@ pub fn build_parent_assembly_plan_with_modifiers(
             selection.atom_set(),
             assembly.clone(),
         )?)
+    } else if modifiers.spiro_junction.is_some()
+        && retained_name.is_none()
+        && (selection.is_bicycle || selection.is_polycycle)
+    {
+        let fusion =
+            super::fusion::planner::plan_fusion_parent_for_spiro(mol, &selection.atom_set())?
+                .map(RingParent::from_fusion_plan)
+                .transpose()?;
+        if fusion.is_some() || root.is_some() {
+            fusion
+        } else {
+            resolve_parent_hydride_plan(mol, selection, retained_name.as_deref())?
+        }
     } else if root.is_some() {
         if retained_name.is_none() && (selection.is_bicycle || selection.is_polycycle) {
             super::fusion::planner::plan_fusion_parent(mol, &selection.atom_set())?
@@ -429,6 +442,63 @@ pub fn build_parent_assembly_plan_with_parent(
     } else {
         &proof_maps
     };
+    // A prefix-only side projection can still supply the completed spiro
+    // parent's ketone suffix. Keep those real suffix sites in its numbering.
+    let projected_ketones: Vec<_> =
+        if modifiers.spiro_junction.is_some() && principal_carbons.is_empty() {
+            let atoms = selection.atom_set();
+            super::perception::perceive_groups(mol)
+                .into_iter()
+                .filter(|group| group.key == "ketone" && atoms.contains(&group.attachment_carbon))
+                .map(|group| group.attachment_carbon)
+                .collect()
+        } else {
+            vec![]
+        };
+    let principal_carbons = if projected_ketones.is_empty() {
+        principal_carbons
+    } else {
+        &projected_ketones
+    };
+    // P-24.5.1 compares the junction before the completed system's indicated
+    // H and suffix. Isolated-component H can choose the wrong remaining map,
+    // even after the junction has tied, so derive its scoring state here.
+    if let Some(junction) = modifiers.spiro_junction
+        && (selection.is_bicycle || selection.is_polycycle)
+        && !locant_maps.is_empty()
+    {
+        let atoms = selection.atom_set();
+        let ketones: AtomSet = super::perception::perceive_groups(mol)
+            .into_iter()
+            .filter(|group| {
+                group.key == "ketone" && principal_carbons.contains(&group.attachment_carbon)
+            })
+            .map(|group| group.attachment_carbon)
+            .collect();
+        for map in locant_maps {
+            let graph = super::spirobi::completed_graph(mol, &atoms, map, junction);
+            if let Some((indicated, _, state)) = super::additive::graph_suffix_hydrogen_state(
+                mol,
+                &graph,
+                &ketones,
+                &ketones,
+                map,
+                Some(junction),
+            )? {
+                let hydro = state
+                    .hydro_operations
+                    .iter()
+                    .flat_map(|operation| operation.locants.iter().cloned())
+                    .collect();
+                proven_hydrogens.insert(
+                    map.iter()
+                        .map(|(&atom, locant)| (atom, locant.clone()))
+                        .collect(),
+                    (indicated, hydro),
+                );
+            }
+        }
+    }
     let mut parent_numbering_maps = if locant_maps.is_empty() {
         selection
             .paths
@@ -460,10 +530,11 @@ pub fn build_parent_assembly_plan_with_parent(
             is_spiro: selection.is_spiro,
             is_polycycle: selection.is_polycycle,
         },
-        parent
-            .as_ref()
-            .filter(|p| p.is_systematic_fusion() || p.assembly.is_some())
-            .map(|_| &proven_hydrogens),
+        (modifiers.spiro_junction.is_some()
+            || parent
+                .as_ref()
+                .is_some_and(|p| p.is_systematic_fusion() || p.assembly.is_some()))
+        .then_some(&proven_hydrogens),
     );
     let locant_map = selected_map.unwrap_or_else(|| {
         numbered_path

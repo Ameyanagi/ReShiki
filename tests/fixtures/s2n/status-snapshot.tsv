@@ -425,7 +425,7 @@ CC(C)OOC(C)C	1,2-bis(propan-2-yl)dioxidane	not_preferred	hydride_parent
 NNCCOC	1-(2-methoxyethyl)hydrazine	unverified	unaudited_path
 OOCCNN	1-(2-hydroperoxyethyl)hydrazine	unverified	unaudited_path
 COc1ccc2c(c1)[nH]c1cc(F)ccc12	2-fluoro-7-methoxy-9H-carbazole	preferred	
-Cc1ccc(F)c2c1C1(CN2)CC1N	7'-fluoro-4'-methylspiro[cyclopropane-2,3'-(2,3-dihydro-1H-indole)]-1-amine	preferred	
+Cc1ccc(F)c2c1C1(CN2)CC1N	7'-fluoro-4'-methylspiro[cyclopropane-2,3'-(2,3-dihydro-1H-indole)]-1-amine	unverified	spiro_hydrogen
 C=C	ethene	preferred	
 C#C	acetylene	preferred	
 c1ccccc1-c2ccccc2	1,1'-biphenyl	preferred	

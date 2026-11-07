@@ -333,8 +333,10 @@ with two identical attached components, which may need a multiparent name
 under P-25.3.7.1), `hydro_prefix_locants` (locanted hydro prefixes for a
 completely hydrogenated polycyclic parent, P-31.2.3.3.2), `cation_prefix`
 (`ammonio`, where the need for `azaniumyl` under P-73.6 has not been verified),
-`bridged_fused_parent`, `unaudited_path` (a naming path not audited against
-P-10/P-12), `unaudited_parent` (porphyrin, corrin, gonane; von Baeyer polycycles
+`bridged_fused_parent`, `spiro_hydrogen` (the completed spiro parent’s indicated,
+added or hydro hydrogen state and suffix composition have not been verified),
+`unaudited_path` (a naming path not audited against P-10/P-12),
+`unaudited_parent` (porphyrin, corrin, gonane; von Baeyer polycycles
 of three or more rings; skeletal-replacement chains, monocycles and fusion
 hydrides; acyclic paths with at least four skeletal heterounits under P-51.4.1
 and P-15.4.3.2; spiro compounds of identical components, which take spirobi

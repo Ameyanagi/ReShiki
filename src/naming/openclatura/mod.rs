@@ -28,6 +28,9 @@ mod fusion;
 mod graph_io;
 mod graph_kernel;
 mod heteroatom_subgraphs;
+mod heterospiro;
+#[cfg(test)]
+mod heterospiro_tests;
 mod identity_validation;
 mod ionic_naming;
 mod isotope_naming;
