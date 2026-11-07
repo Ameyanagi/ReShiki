@@ -247,7 +247,7 @@ pub fn substituent_locant_set_is_unique(
         return false;
     }
     let mut budget = MAX_CANDIDATE_PLACEMENTS;
-    let Some(options) = combinations(&candidates, selected.len(), false, &mut budget) else {
+    let Some(options) = combinations(&candidates, selected.len(), &mut budget) else {
         return false;
     };
     options.iter().all(|target| {
@@ -265,16 +265,10 @@ fn consume(budget: &mut usize) -> Option<()> {
         Some(())
     }
 }
-fn combinations<T: Clone>(
-    items: &[T],
-    k: usize,
-    repeated: bool,
-    budget: &mut usize,
-) -> Option<Vec<Vec<T>>> {
+fn combinations<T: Clone>(items: &[T], k: usize, budget: &mut usize) -> Option<Vec<Vec<T>>> {
     fn recur<T: Clone>(
         items: &[T],
         k: usize,
-        repeated: bool,
         current: &mut Vec<T>,
         out: &mut Vec<Vec<T>>,
         budget: &mut usize,
@@ -284,30 +278,63 @@ fn combinations<T: Clone>(
             out.push(current.clone());
             return Some(());
         }
-        if items.is_empty() || !repeated && k > items.len() {
+        if k > items.len() {
             return Some(());
         }
-        for i in 0..if repeated {
-            items.len()
-        } else {
-            items.len() - k + 1
-        } {
+        for i in 0..=items.len() - k {
             current.push(items[i].clone());
-            recur(
-                &items[i + usize::from(!repeated)..],
-                k - 1,
-                repeated,
-                current,
-                out,
-                budget,
-            )?;
+            recur(&items[i + 1..], k - 1, current, out, budget)?;
             current.pop();
         }
         Some(())
     }
     let mut out = vec![];
-    recur(items, k, repeated, &mut vec![], &mut out, budget)?;
+    recur(items, k, &mut vec![], &mut out, budget)?;
     Some(out)
+}
+/// Placements of `k` prefixes on nodes, at most `bounds[i]` on node `i`.
+fn multisets(bounds: &[usize], k: usize, budget: &mut usize) -> Option<Vec<Vec<Position>>> {
+    fn recur(
+        bounds: &[usize],
+        node: usize,
+        k: usize,
+        current: &mut Vec<Position>,
+        out: &mut Vec<Vec<Position>>,
+        budget: &mut usize,
+    ) -> Option<()> {
+        consume(budget)?;
+        if k == 0 {
+            out.push(current.clone());
+            return Some(());
+        }
+        if bounds[node..].iter().sum::<usize>() < k {
+            return Some(());
+        }
+        let bound = bounds[node];
+        for count in 0..=bound.min(k) {
+            current.extend(std::iter::repeat_n(Position::Node(node), count));
+            recur(bounds, node + 1, k - count, current, out, budget)?;
+            current.truncate(current.len() - count);
+        }
+        Some(())
+    }
+    let mut out = vec![];
+    recur(bounds, 0, k, &mut vec![], &mut out, budget)?;
+    Some(out)
+}
+/// Hydrogens each node gives up to the cited unsaturation.
+fn unsaturation_load(g: &Graph, features: &[Feature]) -> Vec<usize> {
+    let mut load = vec![0; g.nodes.len()];
+    for f in features.iter().filter(|f| f.category == "unsaturation") {
+        let order = if f.key == "triple" { 2 } else { 1 };
+        for p in &f.positions {
+            if let Position::Edge((a, b)) = p {
+                load[*a] += order;
+                load[*b] += order;
+            }
+        }
+    }
+    load
 }
 fn supported(parts: &AssemblyParts) -> bool {
     // P-65.6.3.3.1: a single ester alcohol component leaves acid locant elision intact.
@@ -810,31 +837,32 @@ pub fn bond_stereo_locant_is_unambiguous(mol: &super::molecule::Molecule, bond: 
 
 fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Option<bool> {
     let actual = decorate(g, all);
+    let load = unsaturation_load(g, all);
     let mut options = Vec::new();
     for &i in omitted {
         let f = &all[i];
-        let universe: Vec<_> = if f.category == "unsaturation" {
-            g.edges.keys().copied().map(Position::Edge).collect()
-        } else {
-            (0..g.nodes.len()).map(Position::Node).collect()
-        };
         let mut actual_sig: Vec<_> = f.positions.iter().map(|p| signature(p, g)).collect();
         actual_sig.sort();
-        let candidates = combinations(
-            &universe,
-            f.positions.len(),
-            f.category == "substituent",
-            budget,
-        )?
+        let candidates = if f.category == "unsaturation" {
+            let edges: Vec<_> = g.edges.keys().copied().map(Position::Edge).collect();
+            combinations(&edges, f.positions.len(), budget)?
+        } else if f.category != "substituent" {
+            let nodes: Vec<_> = (0..g.nodes.len()).map(Position::Node).collect();
+            combinations(&nodes, f.positions.len(), budget)?
+        } else {
+            // A node holds its hydrogens and prefixes, and the hydrogens that
+            // moving its unsaturation away would free.
+            let bounds: Vec<_> = (0..g.nodes.len())
+                .map(|i| g.substituent_capacity[i] + load[i])
+                .collect();
+            multisets(&bounds, f.positions.len(), budget)?
+        }
         .into_iter()
+        // A prefix can move to any atom with room for it, whatever its element.
         .filter(|candidate| {
             let mut sig: Vec<_> = candidate.iter().map(|p| signature(p, g)).collect();
             sig.sort();
-            sig == actual_sig
-                && (f.category != "substituent"
-                    || candidate
-                        .iter()
-                        .all(|p| matches!(p, Position::Node(i) if g.substituent_capacity[*i] > 0)))
+            f.category == "substituent" || sig == actual_sig
         })
         .collect::<Vec<_>>();
         if candidates.is_empty() {
@@ -850,7 +878,7 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         return Some(false);
     }
     fn visit(
-        graph: (&Graph, &Decoration),
+        graph: (&Graph, &Decoration, &[usize]),
         all: &[Feature],
         omitted: &[usize],
         options: &[Vec<Vec<Position>>],
@@ -858,7 +886,7 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         chosen: &mut Vec<Feature>,
         budget: &mut usize,
     ) -> Option<bool> {
-        let (g, actual) = graph;
+        let (g, actual, load) = graph;
         if depth < omitted.len() {
             for positions in &options[depth] {
                 let f = &all[omitted[depth]];
@@ -876,13 +904,15 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         }
         consume(budget)?;
         let candidate = decorate(g, chosen);
+        let candidate_load = unsaturation_load(g, chosen);
         if omitted.iter().any(|&i| all[i].category == "substituent")
             && candidate.0.iter().enumerate().any(|(i, labels)| {
                 labels
                     .iter()
                     .filter(|(category, _)| category == "substituent")
                     .count()
-                    > g.substituent_capacity[i]
+                    + candidate_load[i]
+                    > g.substituent_capacity[i] + load[i]
             })
         {
             return Some(true);
@@ -895,7 +925,15 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         .filter(|(i, _)| !omitted.contains(i))
         .map(|(_, f)| f.clone())
         .collect();
-    visit((g, &actual), all, omitted, &options, 0, &mut fixed, budget)
+    visit(
+        (g, &actual, &load),
+        all,
+        omitted,
+        &options,
+        0,
+        &mut fixed,
+        budget,
+    )
 }
 pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
     if !parts.omit_redundant_locants || !supported(parts) {
@@ -925,15 +963,23 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
             }
         }
     }
+    // P-14.3.3: skeletal locants in the parent name (1,3,5-trioxane) are
+    // essential, so its prefix locants stay too.
+    let skeletal_locants = super::assembly_parent::parent_stem_and_terminal(parts)
+        .is_ok_and(|(stem, _)| stem.contains(|c: char| c.is_ascii_digit()));
     let mut ordered: Vec<_> = all
         .iter()
         .enumerate()
         .filter(|(_, f)| match f.category {
+            // P-14.3.4.4, P-14.3.4.5: prefixes move freely on a parent without
+            // external suffix sites.
             "substituent" => {
                 parts
                     .principal_group
                     .as_ref()
-                    .is_some_and(|group| !group.external_substitution_sites)
+                    .map_or(!skeletal_locants, |group| {
+                        !group.external_substitution_sites
+                    })
                     && parts.parent_atom_hydrogens_by_locant.len() == g.nodes.len()
             }
             "suffix" => {
@@ -961,7 +1007,7 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
     let mut selected = vec![];
     'outer: for size in (1..=ordered.len()).rev() {
         let mut subset_budget = usize::MAX;
-        let Some(subsets) = combinations(&ordered, size, false, &mut subset_budget) else {
+        let Some(subsets) = combinations(&ordered, size, &mut subset_budget) else {
             return;
         };
         for subset in subsets {
@@ -1324,6 +1370,63 @@ mod tests {
         }
         let error = super::super::name_smiles("F/C=C=C=C/Cl").unwrap_err();
         assert!(error.contains("cumulene E/Z"), "{error}");
+    }
+
+    #[test]
+    fn parents_without_suffixes_omit_locants_only_when_no_isomer_exists() {
+        // P-14.3.4.4, P-14.3.4.5; issue #949.
+        for (smiles, expected) in [
+            ("FC(F)(F)C(F)(F)C(F)(F)F", "octafluoropropane"),
+            ("ClC1=C(Cl)C1(Cl)Cl", "tetrachlorocyclopropene"),
+            ("FC=C(F)F", "trifluoroethene"),
+            ("ClC(Cl)C(Cl)(Cl)Cl", "pentachloroethane"),
+            ("BrC(Cl)=C(Cl)Cl", "bromotrichloroethene"),
+            ("FC(F)(F)C(F)=C(F)F", "hexafluoropropene"),
+            ("ClC1=C(Cl)C(Cl)(Cl)C1(Cl)Cl", "hexachlorocyclobutene"),
+            (
+                "FC1(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C1(F)F",
+                "dodecafluorocyclohexane",
+            ),
+            (
+                "FC1(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C1(F)F",
+                "tetracontafluorocycloicosane",
+            ),
+            ("CC(Cl)(Cl)Cl", "1,1,1-trichloroethane"),
+            ("ClC(Cl)C(Cl)Cl", "1,1,2,2-tetrachloroethane"),
+            ("CC(C)(Cl)Cl", "2,2-dichloropropane"),
+            ("CC(C)(C)C", "2,2-dimethylpropane"),
+            ("ClC(Cl)=C", "1,1-dichloroethene"),
+            ("BrC(Br)=C(Cl)Cl", "1,1-dibromo-2,2-dichloroethene"),
+            ("BrC(Cl)=C(Br)Cl", "1,2-dibromo-1,2-dichloroethene"),
+            ("ClC1=C(Cl)C1Cl", "1,2,3-trichlorocycloprop-1-ene"),
+            (
+                "ClC1=CC(Cl)(Cl)C1(Cl)Cl",
+                "1,3,3,4,4-pentachlorocyclobut-1-ene",
+            ),
+            ("ClC1(Cl)CC1", "1,1-dichlorocyclopropane"),
+            ("CC1OCOCO1", "2-methyl-1,3,5-trioxane"),
+            (
+                "FC1(F)OC(F)(F)OC(F)(F)O1",
+                "2,2,4,4,6,6-hexafluoro-1,3,5-trioxane",
+            ),
+            ("Fc1c(F)c(F)nc(F)c1F", "pentafluoropyridine"),
+            (
+                "ClC(Cl)=C(Cl)C(Cl)=C(Cl)Cl",
+                "1,1,2,3,4,4-hexachlorobuta-1,3-diene",
+            ),
+            (
+                "ClC(Cl)=C=C(Cl)C(Cl)(Cl)Cl",
+                "1,1,3,4,4,4-hexachlorobuta-1,2-diene",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(
+                name.status,
+                crate::naming::NameStatus::Preferred,
+                "{smiles}"
+            );
+        }
     }
 
     #[test]

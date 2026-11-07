@@ -404,10 +404,11 @@ pub fn choose_parent_numbering(
                     group
                 })
                 .collect();
+            // P-14.4(f): one locant per prefix.
             let mut subst: Vec<_> = substituent_mapping
-                .keys()
-                .filter(|idx| map.contains_key(idx))
-                .map(value)
+                .iter()
+                .filter(|(idx, _)| map.contains_key(idx))
+                .flat_map(|(idx, items)| std::iter::repeat_n(value(idx), items.len()))
                 .collect();
             subst.sort();
             let ring: AtomSet = map.keys().copied().collect();
@@ -550,7 +551,10 @@ fn numbering_preference(
     let hydro = mancude_hydro_split(mol, path, retained_name)
         .map(|(_, hydro)| get_atom_locants(path, &hydro))
         .unwrap_or_default();
-    let substituent_locants = get_atom_locants(path, &substituents.keys().copied().collect());
+    // P-14.4(f): every prefix counts, so {1,1,4} is lower than {1,4,4}.
+    let substituent_locants = path.iter().enumerate().flat_map(|(i, atom)| {
+        std::iter::repeat_n(i + 1, substituents.get(atom).map_or(0, Vec::len))
+    });
     // P-31.1.1.1: low locants to multiple bonds as a set, then to double bonds.
     let (mut double_bonds, triple_bonds) = if retained_name.is_some() {
         Default::default()
@@ -567,7 +571,6 @@ fn numbering_preference(
     unsaturation.sort();
     double_bonds.sort();
     let mut substituent_and_unsaturation: Vec<_> = substituent_locants
-        .into_iter()
         .chain(unsaturation.iter().copied())
         .collect();
     substituent_and_unsaturation.sort();
@@ -1298,6 +1301,28 @@ mod tests {
             NumberingTopology::default(),
         );
         assert_eq!(numbered, (0..7).rev().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn prefix_locant_sets_count_every_prefix() {
+        // P-14.4(f): {1,1,4} is lower than {1,4,4}; issue #949.
+        for (smiles, expected) in [
+            ("ClC(Cl)=C=C=CBr", "4-bromo-1,1-dichlorobuta-1,2,3-triene"),
+            ("ClC(Cl)=CBr", "2-bromo-1,1-dichloroethene"),
+            ("ClC1(Cl)CCC(Br)CC1", "4-bromo-1,1-dichlorocyclohexane"),
+            (
+                "BrC1CCC2CC(Cl)(Cl)CCC2C1",
+                "6-bromo-2,2-dichlorodecahydronaphthalene",
+            ),
+            ("CC(C)(C)CC(C)C", "2,2,4-trimethylpentane"),
+            (
+                "ClC(Cl)=C=C=C(Br)Br",
+                "1,1-dibromo-4,4-dichlorobuta-1,2,3-triene",
+            ),
+        ] {
+            let name = super::super::name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+        }
     }
 
     #[test]

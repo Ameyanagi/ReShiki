@@ -1003,8 +1003,8 @@ mod tests {
         for (smiles, text, status) in [
             (
                 "O1CCC2CCCCC2C1",
-                "3,4,4a,5,6,7,8,8a-octahydro-1H-2-benzopyran",
-                NameStatus::Unverified(NameReason::HydroPrefixLocants),
+                "octahydro-1H-2-benzopyran",
+                NameStatus::Preferred,
             ),
             (
                 "C1CCC2CCCCC2C1",

@@ -971,8 +971,8 @@ mod tests {
             ),
             (
                 "O1CCC2CCCCC2C1",
-                "3,4,4a,5,6,7,8,8a-octahydro-1H-2-benzopyran",
-                NameStatus::Unverified(NameReason::HydroPrefixLocants),
+                "octahydro-1H-2-benzopyran",
+                NameStatus::Preferred,
             ),
             (
                 "O=C(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1",
@@ -1110,7 +1110,7 @@ mod tests {
             ),
             (
                 "C1C2CC3CC1CC2C3",
-                "1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene",
+                "octahydro-2,5-methanopentalene",
                 NameStatus::Unverified(NameReason::BridgedFusedParent),
             ),
             (
@@ -2073,18 +2073,19 @@ mod tests {
     }
 
     #[test]
-    fn linear_phane_status_preserves_reduced_parent_components() {
+    fn substituent_amine_sulfide_is_cited_as_a_prefix() {
         use crate::naming::{NameReason, NameStatus};
         let name =
             name_smiles("O=P(Oc1ccc(Oc2ccccc2)cc1)(Oc1ccccc1)Oc1ccc(Oc2ccc([N+](C)(C)[S-])cc2)cc1")
                 .unwrap();
+        // P-62.5 names only a parent amine; this N-sulfide is a prefix (#947).
         assert_eq!(
             name.text,
-            "4-[4-(dimethylamino)phenoxy]phenyl 4-phenoxyphenyl phenyl phosphate sulfide"
+            "4-{4-[dimethyl(sulfido)ammonio]phenoxy}phenyl 4-phenoxyphenyl phenyl phosphate"
         );
         assert_eq!(
             name.status,
-            NameStatus::Unverified(NameReason::AmineChalcogenide)
+            NameStatus::NotPreferred(NameReason::AmineOxideZwitterion)
         );
     }
 

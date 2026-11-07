@@ -771,7 +771,7 @@ mod tests {
             ),
             (
                 format!("{PENTALENE_CARBOXYLATE}.{BIS_AMINIUM}.{PENTALENE_CARBOXYLATE}"),
-                "N,N,N-trimethyl-1-{4-[(trimethylammonio)methyl]phenyl}methanaminium bis(1,2,3,3a,4,5,6,6a-octahydro-2,5-methanopentalene-1-carboxylate)",
+                "N,N,N-trimethyl-1-{4-[(trimethylammonio)methyl]phenyl}methanaminium bis(octahydro-2,5-methanopentalene-1-carboxylate)",
                 NotPreferred(Multiplicative),
             ),
             (
