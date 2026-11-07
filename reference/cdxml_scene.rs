@@ -204,9 +204,11 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
         "Projected-dative document extensions: {dative_extensions}; final-only rejections: {final_only_rejected}"
     );
     reference_diagnostics::report("CDXML scene", &failures)?;
+    // #792 (9e5ef83b) added tests/fixtures/chemdraw-acs1996-chain-alkenes.cdxml;
+    // every top-level fixture runs twice, adding two native and two document accepts.
     assert_eq!(
         (accepted, rejected, converted, bounds),
-        (2645, 286, 2353, 578)
+        (2647, 286, 2355, 578)
     );
     // Nine original raw Documents failed the projection requirement. The
     // independently adapted paint now passes the same validation boundary.
