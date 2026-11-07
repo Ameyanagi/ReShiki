@@ -8,7 +8,7 @@ This list credits authors of contributions to ReShiki.
 consistent mechanism-arrow targeting](changes/carbonyl-rotation.md) in
 [PR #1027](https://github.com/Ameyanagi/ReShiki/pull/1027).
 
-Under review: @Ameyanagi — stable Linux window identity and matching desktop
+@Ameyanagi — stable Linux window identity and matching desktop
 launcher metadata in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
 Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
 [Window-metadata checks and limits](changes/linux-window-identity.md).
@@ -291,7 +291,7 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
-The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.1.md) credit contributors alongside their changes.
+The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.14.md) credit contributors alongside their changes.
 
 Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535); [validation and reusable evidence](changes/qa-513.md).
 
@@ -303,7 +303,9 @@ Artemisinin depiction and whole-molecule cleanup diagnostics: @Ameyanagi in [PR 
 
 Release preparation and documentation for 0.13.1: @Ameyanagi in [PR #583](https://github.com/Ameyanagi/ReShiki/pull/583).
 
-Under review: @Ameyanagi — confirmed online chemical-name lookup in
+Release preparation and documentation for 0.14.0: @Ameyanagi.
+
+@Ameyanagi — confirmed online chemical-name lookup in
 [PR #599](https://github.com/Ameyanagi/ReShiki/pull/599). @fusion809 reported
 the unsupported common names in [issue #596](https://github.com/Ameyanagi/ReShiki/issues/596).
 [Native and browser evidence](changes/online-name-lookup.md).

@@ -7,7 +7,7 @@ performance of a physical Windows GPU.
 
 ## Environment and build
 
-- Windows 11 Pro x64, build 26200, QEMU Q35 VM at `192.168.1.51`.
+- Windows 11 Pro x64, build 26200, QEMU Q35 VM.
 - Eight logical processors, approximately 16 GiB RAM, interactive RDP session.
 - Windows reports a Red Hat QXL controller and Microsoft Remote Display Adapter.
 - WGPU reports only `Microsoft Basic Render Driver`, `DeviceType::Cpu`, DX12.
@@ -65,7 +65,7 @@ tests. This dispatch produced Actions artifacts; prerelease publication belongs
 to the nightly workflow after it is merged into `main`.
 
 The Windows x64 artifact was downloaded, its checksum verified locally and on
-`192.168.1.51`, and its extracted executable tested in the unlocked RDP session:
+the Windows x64 VM, and its extracted executable tested in the unlocked RDP session:
 
 - Version: `0.9.1-nightly.20260928.36480533735.1`.
 - Runtime commit: `360eb6186fe883b6a84ffe720794c7941d896beb`.
@@ -122,8 +122,8 @@ interface and canvas; chemistry and export remain CPU work.
 
 ## Physical GPU rendering on the Linux host
 
-The same source was built in an isolated checkout on the VM's Arch Linux host,
-`amearch`, with Rust 1.95.0. Vulkan reports an AMD Radeon 780M integrated GPU
+The same source was built in an isolated checkout on the VM's Arch Linux host
+(Arch Linux x64), with Rust 1.95.0. Vulkan reports an AMD Radeon 780M integrated GPU
 (RADV PHOENIX), Mesa 26.1.3, Vulkan 1.4.348. It is the host's only GPU and remains
 bound to `amdgpu`; the Windows VM has no PCI GPU passthrough.
 

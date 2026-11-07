@@ -1,6 +1,6 @@
 [package]
 name = "reshiki"
-version = "0.13.1"
+version = "0.14.0"
 edition = "2024"
 default-run = "reshiki"
 description = "A molecular drawing workspace"
@@ -50,7 +50,7 @@ default-members = [
 
 # Public language packages follow the application release version.
 [workspace.package]
-version = "0.13.1"
+version = "0.14.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }

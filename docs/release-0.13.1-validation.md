@@ -219,7 +219,7 @@ The unavailable Dependabot alert inventory remains qualified in its
 [original receipt](images/release-0.13.1/security-manual/dependabot-availability.json).
 
 The [exact-source local receipt](images/release-0.13.1/accepted-followups/security-minimal-d658a67e-local.json)
-records the archived `d658a67e` tree tested on `amearch`. Complete Linux
+records the archived `d658a67e` tree tested on Arch Linux x64. Complete Linux
 `nix flake check` and the original installed-binary checks passed in
 **380.77 s (about 6 m 21 s)**. The log started **one application derivation and
 zero source toolchain builds**. All three cache-aware plans and eight build-step
@@ -358,7 +358,7 @@ import regression, plus normal hooks. The [focused receipt](images/release-0.13.
 keeps that local scope. Required live [Checks run 40308091132](https://github.com/Ameyanagi/ReShiki/actions/runs/40308091132)
 completed **successfully: 31 successful jobs, one expected skip and all twelve
 live-reference shards passed**. The [hosted and Linux verification](images/release-0.13.1/accepted-followups/reference-live-and-linux-verification.json)
-also records the exact original assertion failing on amearch and the separately
+also records the exact original assertion failing on Arch Linux x64 and the separately
 rebuilt candidate passing the focused 7 + 1 checks plus 48 relevant test
 invocations across nine commands, including overlapping execution. This is
 bounded Linux reproduction, not a universal automatic-indicator guarantee.
