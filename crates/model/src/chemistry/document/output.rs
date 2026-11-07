@@ -557,7 +557,7 @@ fn wedge(
         positions: molecule.positions.clone(),
         is_3d,
     };
-    let wedged = wedging::wedge_molecule(
+    let wedged = wedging::generated::wedge_drawing(
         &wedging::WedgeState {
             graph: kekule.assignment.graph,
             metadata: state.metadata.clone(),
@@ -565,16 +565,11 @@ fn wedge(
             rings: state.rings.clone(),
         },
         &properties,
-        Some(&conformer),
+        &conformer,
         options.two_wedge_stereocentres,
+        generated && !is_3d,
     )
     .map_err(Error::WedgeAssignment)?;
-    let wedged = if generated && !is_3d {
-        wedging::generated::prefer_ring_wedges(&wedged, &properties, &conformer)
-            .map_err(Error::WedgeAssignment)?
-    } else {
-        wedged
-    };
     let mut work = molecule.clone();
     work.state.graph = wedged.graph;
     work.state.metadata = wedged.metadata;
