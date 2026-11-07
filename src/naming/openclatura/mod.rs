@@ -1036,7 +1036,7 @@ mod tests {
             ),
             (
                 "COP(=O)(OC)OCC(=O)O",
-                "2-hydroxy-2-oxoethyl dimethyl phosphate",
+                "carboxymethyl dimethyl phosphate",
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
             (
@@ -1289,11 +1289,11 @@ mod tests {
             ),
             (
                 "O=C(O)CCCCCCCCCOc1ccc(-c2ccc(OCCCCCCCCCC(=O)O)cc2)cc1",
-                "10-({4'-[(10-hydroxy-10-oxodecyl)oxy][1,1'-biphenyl]-4-yl}oxy)decanoic acid",
+                "10-({4'-[(9-carboxynonyl)oxy][1,1'-biphenyl]-4-yl}oxy)decanoic acid",
             ),
             (
                 "P(CC(=O)O)(CC(=O)O)CC(=O)O",
-                "[bis(2-hydroxy-2-oxoethyl)phosphanyl]acetic acid",
+                "[bis(carboxymethyl)phosphanyl]acetic acid",
             ),
             // P-15.3 / P-51.3.1: a more substituted core does not remove
             // identical terminal parents from multiplicative eligibility.
@@ -2494,7 +2494,7 @@ mod tests {
             ),
             (
                 "S(CC(=O)O)CC(=O)O",
-                "[(2-hydroxy-2-oxoethyl)sulfanyl]acetic acid",
+                "(carboxymethylsulfanyl)acetic acid",
                 R::Multiplicative,
             ),
         ] {

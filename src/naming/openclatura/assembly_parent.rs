@@ -142,7 +142,7 @@ fn absorbed_chain_branch(
         ("carboxylic_acid", "amino") => Some("carbamic acid"),
         ("amide", "hydrazinyl") => Some("hydrazinecarboxamide"),
         ("thioamide", "hydrazinyl") => Some("hydrazinecarbothioamide"),
-        ("ester", "hydrazinyl") => Some("hydrazinecarboxylate"),
+        ("ester" | "carboxylate", "hydrazinyl") => Some("hydrazinecarboxylate"),
         ("carboxylic_acid", "hydrazinyl") => Some("hydrazinecarboxylic acid"),
         ("ester" | "carboxylate", "amino") => Some("carbamate"),
         ("acid_chloride", "amino") => Some("carbamic chloride"),
