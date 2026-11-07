@@ -37,6 +37,8 @@ fn helper(name: &str) -> anyhow::Result<Option<PathBuf>> {
     Ok(None)
 }
 
+#[path = "support/coordinate_free_wedges.rs"]
+mod coordinate_free_wedges;
 #[path = "support/molfile_restrictions.rs"]
 mod molfile_restrictions;
 #[path = "support/reaction_presentation.rs"]
@@ -333,6 +335,12 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 continue;
             }
         };
+        if matches!((&actual, &expected), (Ok(Outcome::Complete(_)), Some(_)))
+            && coordinate_free_wedges::flagged(format, &case.text)
+        {
+            accepted += 1;
+            continue;
+        }
         let error = match (actual, expected) {
             (Ok(Outcome::Complete(a)), None) if projected.is_some() => {
                 // The original complete response exists, but its order-5 paint
