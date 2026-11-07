@@ -70,13 +70,13 @@ fn salt_anion_spelling_matrix() {
         (
             "B13",
             "[Na+].[Na+].Cc1ccc(cc1)C(=O)[O-].CC(=O)[O-]",
-            "disodium 4-methylbenzoate acetate",
+            "disodium acetate 4-methylbenzoate",
             NameStatus::Preferred,
         ),
         (
             "B14",
             "[Na+].[Na+].[Na+].CC(=O)CC[O-].O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
-            "trisodium 3-oxobutan-1-olate 4-(4-carboxylatophenoxy)benzoate",
+            "trisodium 4-(4-carboxylatophenoxy)benzoate 3-oxobutan-1-olate",
             NameStatus::NotPreferred(NameReason::Multiplicative),
         ),
         (

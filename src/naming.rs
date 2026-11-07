@@ -159,6 +159,7 @@ pub enum NameReason {
     RadicalIon,
     AnionParent,
     IonicSuffixOrder,
+    SaltIonOrder,
     Phane,
     RelativeRingStereo,
     EndoExoStereo,
@@ -278,6 +279,9 @@ impl NameReason {
             }
             Self::IonicSuffixOrder => {
                 "The suffix order of a skeletal -ide with a characteristic cationic suffix such as -aminium is not settled: P-70.3.3.2.2 places cumulative suffixes before functional suffixes, whereas P-74.1.2 places cationic suffixes before anionic suffixes."
+            }
+            Self::SaltIonOrder => {
+                "The order of the ions in this salt has not been verified: P-14.5 orders them by their Roman letters, then locants, leaving out stereo and isotope descriptors, and this name has descriptors or spellings that the ordering does not yet cover."
             }
             Self::AnionParent => {
                 "The anionic parent, suffix or retained-name choice for this anion has not been verified (P-72.7, P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."
