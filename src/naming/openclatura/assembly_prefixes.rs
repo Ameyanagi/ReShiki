@@ -229,10 +229,16 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> (String, bool) {
         .collect();
     let cites_locants = groups.iter().any(|(_, _, _, loc)| !loc.is_empty());
     let mut rendered = String::new();
+    // P-93.4.2.1.3: element locants such as N- do not make a lone
+    // stereodescriptor take a locant; numeric parent locants do.
+    let mut cites_numeric_locants = false;
     for (name, items, locs, mut loc) in groups {
         if cites_locants && parts.elided_substituent_locants.contains(name) {
             loc = substituent_locant_string(parts, &locs, grouped.len());
         }
+        cites_numeric_locants |= loc
+            .split(',')
+            .any(|l| l.starts_with(|c: char| c.is_ascii_digit()));
         let optional = items.iter().all(|i| i.outer_parentheses_optional);
         let per = if name.contains("diyl") && !name.contains("ylidene") {
             2
@@ -290,7 +296,7 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> (String, bool) {
         }
         rendered.push_str(&piece);
     }
-    (rendered, cites_locants)
+    (rendered, cites_numeric_locants)
 }
 pub fn format_replacement_prefixes(parts: &AssemblyParts) -> (String, bool) {
     if super::assembly_charge::inferred_ionic_retained_parent(parts).is_some() {

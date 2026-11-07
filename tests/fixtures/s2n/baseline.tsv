@@ -48,7 +48,7 @@ parity	drug	20	20
 parity	exploratory	1	1
 parity	fixtures	22	22
 parity	heterocycle	25	25
-parity	integration	16	16
+parity	integration	12	16
 parity	mr_assembly	10	10
 parity	mr_bridged	14	14
 parity	mr_fused	18	18
@@ -61,7 +61,7 @@ parity	roundtrip	77	77
 parity	stereo	16	16
 parity	suffix_on_ring	20	20
 parity	unit	43	52
-parity	total	421	431
+parity	total	417	431
 structure	alcohol_amine	13	13
 structure	alkenyl_benzyl	10	10
 structure	chain_ring_prefix	12	12
@@ -70,7 +70,7 @@ structure	drug	20	20
 structure	exploratory	1	1
 structure	fixtures	22	22
 structure	heterocycle	25	25
-structure	integration	16	16
+structure	integration	12	16
 structure	mr_assembly	10	10
 structure	mr_bridged	14	14
 structure	mr_fused	20	20
@@ -83,7 +83,7 @@ structure	roundtrip	77	77
 structure	stereo	16	16
 structure	suffix_on_ring	20	20
 structure	unit	43	52
-structure	total	424	434
+structure	total	420	434
 parity_text	alcohol_amine	13	13
 parity_text	alkenyl_benzyl	10	10
 parity_text	chain_ring_prefix	9	12
@@ -92,7 +92,7 @@ parity_text	drug	12	20
 parity_text	exploratory	1	1
 parity_text	fixtures	20	22
 parity_text	heterocycle	24	25
-parity_text	integration	15	16
+parity_text	integration	11	16
 parity_text	mr_assembly	3	10
 parity_text	mr_bridged	14	14
 parity_text	mr_fused	18	18
@@ -105,4 +105,4 @@ parity_text	roundtrip	71	77
 parity_text	stereo	14	16
 parity_text	suffix_on_ring	18	20
 parity_text	unit	46	52
-parity_text	total	361	431
+parity_text	total	357	431

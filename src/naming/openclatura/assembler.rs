@@ -327,11 +327,6 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (Stri
     if indicated.is_empty() {
         indicated = parts.indicated_hydrogens.clone();
     }
-    let cationic: BTreeSet<_> = positive_parent_n_charges(parts)
-        .iter()
-        .map(|c| c.locant.as_str())
-        .collect();
-    indicated.retain(|l| !cationic.contains(l.as_str()));
     indicated.sort_by_key(|l| parse_locant(l));
     indicated.dedup();
     additive.sort_by_key(|l| parse_locant(l));
