@@ -303,7 +303,7 @@ Packaging checks the application's selected CPU architecture, including ARM64 on
 
 Build runners are macOS 14 on Apple Silicon, macOS 15 on Intel, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
 
-Build on the target operating system with Rust 1.99.0, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
+Build on the target operating system with Rust 1.99.1, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
 
 On macOS, run `python3 scripts/build_macos_app.py` for a development app. Add `--portable --release` for an optimized bundle in `dist/ReShiki.app`. Both forms include one executable, the icon, license notices and an ad-hoc signature; release signing replaces that signature.
 
