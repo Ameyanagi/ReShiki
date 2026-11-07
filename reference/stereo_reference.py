@@ -27,6 +27,59 @@ def state(mol):
     )
 
 
+def supported_allene(mol, center):
+    """crates/chemistry/src/stereo/allene.rs `supported` for tag 5: a winding
+    of 1 or 2 on a neutral sp carbon between two terminal carbons."""
+    atom = mol.GetAtomWithIdx(center)
+    if not atom.HasProp("_chiralPermutation") or atom.GetUnsignedProp("_chiralPermutation") not in (
+        1,
+        2,
+    ):
+        return False
+
+    def carbon(a):
+        return (
+            a.GetAtomicNum() == 6
+            and not a.GetIsAromatic()
+            and a.GetFormalCharge() == 0
+            and a.GetNumRadicalElectrons() == 0
+        )
+
+    def incident(index):
+        return [b for b in mol.GetBonds() if index in (b.GetBeginAtomIdx(), b.GetEndAtomIdx())]
+
+    ends = incident(center)
+    if not carbon(atom) or atom.GetNumExplicitHs() != 0 or len(ends) != 2:
+        return False
+    for bond in ends:
+        if bond.GetBondType() != Chem.BondType.DOUBLE or bond.GetIsAromatic():
+            return False
+        end = bond.GetOtherAtom(atom)
+        if not carbon(end):
+            return False
+        others = [b for b in incident(end.GetIdx()) if b.GetIdx() != bond.GetIdx()]
+        if any(b.GetBondType() != Chem.BondType.SINGLE or b.GetIsAromatic() for b in others):
+            return False
+        count, hydrogens = len(others), end.GetNumExplicitHs()
+        if not 1 <= count <= 2 or hydrogens > 2 - count:
+            return False
+        if end.GetNoImplicit() and count + hydrogens != 2:
+            return False
+    return True
+
+
+def clear_unsupported_allenes(mol):
+    """#892: chirality cleanup clears tag 5 and its winding where
+    `supported_allene` fails; RDKit keeps both. Clear them first so RDKit
+    settles everything else, including the stereo groups."""
+    for atom in mol.GetAtoms():
+        if atom.GetChiralTag() == Chem.ChiralType.CHI_ALLENE and not supported_allene(
+            mol, atom.GetIdx()
+        ):
+            atom.SetChiralTag(Chem.ChiralType.CHI_UNSPECIFIED)
+            atom.ClearProp("_chiralPermutation")
+
+
 def emit(name, original, operation="chirality", basis=False):
     mol = Chem.Mol(original)
     mol.UpdatePropertyCache(strict=False)
@@ -42,6 +95,7 @@ def emit(name, original, operation="chirality", basis=False):
         if operation in ("atrop", "both"):
             Chem.CleanupAtropisomers(mol)
         if operation in ("chirality", "both"):
+            clear_unsupported_allenes(mol)
             Chem.CleanupChirality(mol)
         expected = state(mol)
     except (ValueError, RuntimeError):

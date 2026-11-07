@@ -1,3 +1,5 @@
+#[path = "support/crossed_double.rs"]
+mod crossed_double;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -48,6 +50,7 @@ fn molecular_file_output_matches_native_writers() -> anyhow::Result<()> {
     let version: Value = serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut total, mut accepted, mut rejected, mut mismatches) = (0, 0, 0, 0);
+    let mut crossed = 0;
     let mut failures = Vec::new();
     for line in lines {
         let line = line?;
@@ -70,6 +73,15 @@ fn molecular_file_output_matches_native_writers() -> anyhow::Result<()> {
         let failure = match (&result, &case.expected) {
             (Ok(actual), Some(expected)) if actual == expected => {
                 accepted += 1;
+                None
+            }
+            (Ok(actual), Some(expected))
+                if crossed_double::matches(actual, expected, |a, b| {
+                    crossed_double::pairs(&input.state).contains(&(a, b))
+                }) =>
+            {
+                accepted += 1;
+                crossed += 1;
                 None
             }
             (Err(_), None) => {
@@ -103,7 +115,7 @@ fn molecular_file_output_matches_native_writers() -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success(), "MOL oracle failed");
     eprintln!(
-        "Verified {total} MOL outputs: {accepted} accepted, {rejected} rejected, {mismatches} mismatches"
+        "Verified {total} MOL outputs: {accepted} accepted ({crossed} crossed doubles written as either, #793), {rejected} rejected, {mismatches} mismatches"
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(

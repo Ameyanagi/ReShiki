@@ -117,10 +117,14 @@ pub(super) fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
                 bond_length: request.bond_length,
                 canonical_orientation: request.canonical_orientation,
                 use_ring_templates: request.use_ring_templates,
+                path_angle_expansion: chemistry::document::refine(),
                 ..Default::default()
             },
         )?
         .positions;
+        if !chemistry::document::refine() {
+            return Ok(positions);
+        }
         if request.fixed.is_empty() {
             positions = template_retry::improve(
                 &request.molecule.state,

@@ -1,3 +1,6 @@
+#[path = "support/hydrogen_isotopes.rs"]
+#[allow(dead_code)]
+mod hydrogen_isotopes;
 use anyhow::Context;
 use reshiki::{
     document::{Annotation, Document, Point},
@@ -740,7 +743,8 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
             // The original writer predates Haworth semantics and explicit
             // contracted-group alignment. Those templates are checked against
             // real ChemDraw exports in haworth_interchange.rs instead.
-            .filter(|t| t.group != "Carbohydrates")
+            // #881's nucleosides use the same explicit contracted-group alignment.
+            .filter(|t| !matches!(t.group.as_str(), "Carbohydrates" | "Nucleosides"))
             .map(|t| (format!("template/{}", t.id), t.document.clone())),
     );
     use reshiki::{
@@ -892,6 +896,21 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         }
         let expected = oracle.request(&request)?;
         let actual = drawing::write(&doc, drawing::Options::from(&request));
+        let actual = if hydrogen_isotopes::labelled(&doc) {
+            actual.map(|xml| hydrogen_isotopes::as_mass_numbers(&xml))
+        } else {
+            actual
+        };
+        // #882 marks a polyhedral frame metal as "not a stereocentre" so
+        // ChemDraw reads its wedges as projection; the original writer predates it.
+        let actual = if name.starts_with("template/builtin:Coordination geometry/") {
+            actual.map(|xml| {
+                assert_eq!(xml.matches(" AS=\"N\"").count(), 1, "{name}");
+                xml.replacen(" AS=\"N\"", "", 1)
+            })
+        } else {
+            actual
+        };
         match (actual, expected.get("output").and_then(Value::as_str)) {
             (Ok(actual), Some(expected)) => {
                 if let Err(error) = compare_xml_with_source(&actual, expected, &name, Some(&doc)) {
@@ -901,6 +920,16 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
                 accepted += 1;
             }
             (Err(_), None) => {
+                rejected += 1;
+            }
+            // #894: CDXML/CDX export asks to convert a Fischer projection first
+            // "instead of dropping the stereo"; the original writer predates it.
+            (Err(error), Some(_))
+                if name.starts_with("template/builtin:Fischer projections/")
+                    && error.to_string().contains(
+                        "CDXML/CDX cannot preserve Fischer projection stereochemistry",
+                    ) =>
+            {
                 rejected += 1;
             }
             (actual, expected) => failures.push(format!(

@@ -10,13 +10,38 @@ from rdkit import Chem, RDConfig, RDLogger, rdBase
 if TYPE_CHECKING or __package__:
     from .kekulize_reference import DIRECTIONS, directions
     from .ranking_reference import metadata
-    from .stereo_reference import group, state
+    from .stereo_reference import clear_unsupported_allenes, group, state
     from .valence_reference import ORDERS, atom_molecule, graph
 else:
     from kekulize_reference import DIRECTIONS, directions
     from ranking_reference import metadata
-    from stereo_reference import group, state
+    from stereo_reference import clear_unsupported_allenes, group, state
     from valence_reference import ORDERS, atom_molecule, graph
+
+
+def n_oxide(mol):
+    """#883: ReShiki charge-separates a neutral, trivalent N->O dative arrow to
+    a neutral, H-free terminal O (crates/chemistry/src/normalize.rs) before
+    sanitizing. Apply the same edit so the rest of the result is compared."""
+    mol.UpdatePropertyCache(strict=False)
+    for bond in mol.GetBonds():
+        n, o = bond.GetBeginAtom(), bond.GetEndAtom()
+        if (
+            bond.GetBondType() == Chem.BondType.DATIVE
+            and n.GetAtomicNum() == 7
+            and n.GetFormalCharge() == 0
+            and n.GetNumRadicalElectrons() == 0
+            and n.GetValence(Chem.ValenceType.EXPLICIT) + n.GetNumImplicitHs() == 3
+            and o.GetAtomicNum() == 8
+            and o.GetFormalCharge() == 0
+            and o.GetNumExplicitHs() == 0
+            and o.GetNumRadicalElectrons() == 0
+            and o.GetDegree() == 1
+        ):
+            n.SetFormalCharge(1)
+            o.SetFormalCharge(-1)
+            bond.SetBondType(Chem.BondType.SINGLE)
+    mol.ClearComputedProps(includeRings=True)
 
 
 def emit(name, original):
@@ -25,6 +50,8 @@ def emit(name, original):
     mol.ClearComputedProps(includeRings=True)
     source = dict(graph=graph(mol), metadata=metadata(mol), directions=directions(mol))
     failure = None
+    n_oxide(mol)
+    clear_unsupported_allenes(mol)
     try:
         failed = Chem.SanitizeMol(mol, catchErrors=True)
         if failed:

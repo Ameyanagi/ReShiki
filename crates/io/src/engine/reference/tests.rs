@@ -81,6 +81,13 @@ fn matches_request(
 ) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    // #877: the worker has no display formula or mass percentages.
+    for side in [&mut actual, &mut expected] {
+        if let Some(analysis) = side["analysis"].as_object_mut() {
+            analysis.remove("display_formula");
+            analysis.remove("mass_percent");
+        }
+    }
     reaction_presentation::adapt_import(operation, format, &actual, &mut expected)?;
     reference_presentation::compare_export(&actual, &mut expected)?;
     for field in ["mass", "exact_mass", "logp", "tpsa"] {

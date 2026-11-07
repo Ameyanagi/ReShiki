@@ -592,8 +592,22 @@ impl Context {
                 .atoms
                 .get_mut(i)
                 .ok_or("Missing stereo atom")?;
+            // An allene winding survives only on a supported allene centre;
+            // elsewhere tag 5 is cleared, as RDKit does.
+            if meta.chiral_tag == 5 {
+                // The allene topology check scans the bond list.
+                work.spend(self.state.graph.bonds.len())?;
+            }
+            let allene = meta.chiral_tag == 5
+                && crate::stereo::allene::supported(
+                    &self.state.graph,
+                    i,
+                    5,
+                    meta.chiral_permutation,
+                );
             if meta.chiral_tag != 0
-                && !matches!(meta.chiral_tag, 5..=8)
+                && !matches!(meta.chiral_tag, 6..=8)
+                && !allene
                 && at(&self.state.properties.atoms, i)?.cip_code.is_none()
                 && (!*at(&special, i)? || !meta.ring_stereo)
             {

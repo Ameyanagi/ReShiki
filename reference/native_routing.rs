@@ -1,6 +1,10 @@
 //! Real default dispatch in a subprocess whose Python worker records startup
 //! and rejects every request. Expected chemistry comes from the original worker
 //! in the parent; environment overrides never mutate the test runner process.
+#[path = "support/hydrogen_isotopes.rs"]
+mod hydrogen_isotopes;
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     arrows::ArrowStyle,
@@ -45,6 +49,22 @@ impl Case {
         request.format = self.format.clone();
         request.text = self.text.clone();
         request.selected_ids = self.selected.clone();
+        request
+    }
+
+    /// #879: a ChemDraw export of a D/T drawing, compared in 2H/3H form.
+    fn dt_export(&self, format: &str) -> bool {
+        self.operation == "export"
+            && self.format.as_deref() == Some(format)
+            && hydrogen_isotopes::labelled(&self.document)
+    }
+
+    /// The native request: CDX of a D/T drawing uses the 2H/3H option.
+    fn native_request(&self) -> Request {
+        let mut request = self.request();
+        if self.dt_export("cdx") {
+            request.document = Some(hydrogen_isotopes::mass_numbers(&self.document));
+        }
         request
     }
 }
@@ -480,6 +500,15 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
         let mut failures = Vec::new();
         for (index, response) in actual {
             let case = cases.get(index).context("Invalid routing response index")?;
+            let response = response.map(|mut r| {
+                if case.dt_export("cdxml") {
+                    r.output = r.output.map(|xml| hydrogen_isotopes::as_mass_numbers(&xml));
+                }
+                if case.dt_export("cdx") {
+                    r.document.iter_mut().for_each(hydrogen_isotopes::auto);
+                }
+                r
+            });
             let source = serde_json::to_value(&case.document)?;
             if let Err(error) = outcome(
                 response,
@@ -502,6 +531,7 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
 #[tokio::test]
 async fn supported_default_requests_are_python_free_and_match_original_worker() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     let Some(helper) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -515,6 +545,7 @@ async fn supported_default_requests_are_python_free_and_match_original_worker() 
 }
 #[tokio::test]
 async fn coordinate_imports_are_python_free_and_match_original_worker() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(helper) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -528,6 +559,7 @@ async fn coordinate_imports_are_python_free_and_match_original_worker() -> anyho
 }
 #[tokio::test]
 async fn invalid_imports_never_fall_back_to_python() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let reference = PythonEngine::default();
     let mut cases = Vec::new();
     for (format, text) in [
@@ -556,6 +588,7 @@ async fn invalid_imports_never_fall_back_to_python() -> anyhow::Result<()> {
 }
 #[tokio::test]
 async fn helper_discovery_is_lazy_for_empty_and_exotic_results() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let reference = PythonEngine::default();
     let mut cases = cases(true).await?;
@@ -576,6 +609,7 @@ async fn helper_discovery_is_lazy_for_empty_and_exotic_results() -> anyhow::Resu
 }
 #[tokio::test]
 async fn helper_errors_do_not_fall_back_to_python() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(stub) = helper("inchi-helper-stub")? else {
         return Ok(());
     };
@@ -644,6 +678,7 @@ impl ChemistryEngine for RecordingBackend {
 }
 #[tokio::test]
 async fn custom_backends_keep_existing_dispatch_and_binary_conversion() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let recorder = RecordingBackend::default();
     let local = LocalEngine::with_backend(recorder.clone());
@@ -710,6 +745,7 @@ async fn custom_backends_keep_existing_dispatch_and_binary_conversion() -> anyho
 #[tokio::test(flavor = "current_thread")]
 #[ignore = "Invoked by isolated routing subprocess tests"]
 async fn routing_child() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let mode = std::env::var("RESHIKI_NATIVE_ROUTING_MODE")?;
     let fixture = std::fs::read(
         std::env::var_os("RESHIKI_NATIVE_ROUTING_FIXTURE").context("Missing fixture")?,
@@ -722,7 +758,7 @@ async fn routing_child() -> anyhow::Result<()> {
     if matches!(mode.as_str(), "native" | "lazy") {
         let mut responses = Vec::new();
         for (index, case) in cases.iter().enumerate() {
-            let request = case.request();
+            let request = case.native_request();
             let before = serde_json::to_value(&request)?;
             responses.push((index, local.execute(request.clone()).await));
             assert_eq!(before, serde_json::to_value(request)?);
@@ -731,7 +767,7 @@ async fn routing_child() -> anyhow::Result<()> {
         for index in concurrent_indices(&cases) {
             let case = cases.get(index).context("Missing concurrent case")?.clone();
             let local = local.clone();
-            tasks.spawn(async move { (index, local.execute(case.request()).await) });
+            tasks.spawn(async move { (index, local.execute(case.native_request()).await) });
         }
         while let Some(result) = tasks.join_next().await {
             responses.push(result?);

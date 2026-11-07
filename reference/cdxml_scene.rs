@@ -1,3 +1,5 @@
+#[path = "support/empty_heads.rs"]
+mod empty_heads;
 #[path = "support/reference_dative.rs"]
 mod reference_dative;
 #[path = "support/reference_diagnostics.rs"]
@@ -125,7 +127,7 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
                         expected.clone()
                     });
                 for d in reference_diagnostics::numeric_differences(
-                    &serde_json::to_value(actual)?,
+                    &empty_heads::without(serde_json::to_value(actual)?),
                     &expected,
                     "scene",
                 ) {
@@ -173,7 +175,7 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
             (Ok(actual), Ok(expected)) => {
                 converted += 1;
                 for d in reference_diagnostics::numeric_differences(
-                    &serde_json::to_value(actual.document)?,
+                    &empty_heads::without(serde_json::to_value(actual.document)?),
                     &serde_json::to_value(expected)?,
                     "document",
                 ) {

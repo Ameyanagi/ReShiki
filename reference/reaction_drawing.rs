@@ -1,3 +1,7 @@
+#[path = "support/axial_extension.rs"]
+mod axial_extension;
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, document::Labels, reaction},
@@ -71,6 +75,7 @@ fn differences(a: &Value, e: &Value, path: &str) -> Vec<String> {
 
 #[test]
 fn drawing_diagnostics_report_every_field_difference() {
+    rdkit_parity::enable();
     let actual = serde_json::json!({
         "a": null,
         "b": [1, 2, 3],
@@ -103,6 +108,7 @@ fn drawing_diagnostics_report_every_field_difference() {
 
 #[tokio::test]
 async fn mapped_reaction_imports_keep_visible_ink_spacing() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     use reshiki::engine::{LocalEngine, Request};
 
     for input in [
@@ -162,6 +168,7 @@ async fn mapped_reaction_imports_keep_visible_ink_spacing() -> anyhow::Result<()
 
 #[test]
 fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -307,6 +314,20 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                             }
                             Ok(_) => vec!["Accepted invalid drawing".into()],
                         }
+                    } else if draft
+                        .labels()
+                        .and_then(|labels| draft.finish(labels))
+                        .is_ok_and(|doc| {
+                            axial_extension::accepted(
+                                &case.name,
+                                case.failure.as_deref(),
+                                "rxn",
+                                &case.text,
+                                axial_extension::Checked::Document(&doc),
+                            )
+                        })
+                    {
+                        Vec::new()
                     } else {
                         vec![format!("Accepted rejected drawing: {:?}", case.failure)]
                     }
@@ -366,6 +387,7 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
 
 #[test]
 fn reaction_completion_is_atomic_and_rejects_incomplete_labels() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     use reshiki::{
         atom_labels::HydrogenPosition,
         chemistry::{document, molfile},

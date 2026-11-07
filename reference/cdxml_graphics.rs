@@ -1,3 +1,5 @@
+#[path = "support/empty_heads.rs"]
+mod empty_heads;
 use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reshiki::{
@@ -16,6 +18,8 @@ use std::{
     path::Path,
     process::{Command, Stdio},
 };
+
+const ARROWED: &str = "Arrowed, shaded or doubled CDXML curves are not supported yet";
 
 #[derive(Deserialize)]
 struct Pixels {
@@ -40,6 +44,7 @@ struct Case {
     images: bool,
     image_error: Option<String>,
     image_pixels: Vec<Pixels>,
+    unarrowed: Option<Value>,
 }
 fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
     match (actual, expected) {
@@ -122,6 +127,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
     let header: Value = serde_json::from_str(&lines.next().context("Oracle header")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut converted, mut bounded, mut decoded) = (0, 0, 0, 0, 0);
+    let mut arrowed = 0;
     let mut failures = Vec::new();
     for line in lines {
         // Preserve exact worker transport: JSON -> Value(f64) -> typed Case.
@@ -145,12 +151,49 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             bounded += 1;
             continue;
         }
+        // #777: ReShiki reads an arrowed curve that the original worker
+        // refused. The same file without arrowheads gives the expected curve
+        // and bindings, and each curve's heads must match its source.
+        if let (Ok(actual), None, Some(unarrowed)) = (&actual, &case.expected, &case.unarrowed) {
+            let mut graphics = serde_json::to_value(&actual.graphics)?;
+            let mut heads = Vec::new();
+            for graphic in graphics.as_array_mut().into_iter().flatten() {
+                if let Some(h) = graphic.as_object_mut().and_then(|g| g.remove("heads")) {
+                    heads.push(serde_json::json!([h["head"], h["tail"]]));
+                }
+            }
+            let source: Vec<Value> = unarrowed["heads"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|pair| {
+                    let kind = |value: &Value| match value.as_str() {
+                        Some("Full") => "full",
+                        Some("HalfLeft") => "left",
+                        Some("HalfRight") => "right",
+                        _ => "none",
+                    };
+                    serde_json::json!([kind(&pair[0]), kind(&pair[1])])
+                })
+                .collect();
+            if let Some(error) = difference(&graphics, &unarrowed["graphics"], "arrowed") {
+                failures.push(format!("{}: {error}", case.name));
+            } else if serde_json::to_value(&actual.bindings)? != unarrowed["bindings"] {
+                failures.push(format!("{}: arrowed curve bindings", case.name));
+            } else if heads != source {
+                failures.push(format!("{}: heads {heads:?} != {source:?}", case.name));
+            }
+            arrowed += 1;
+            continue;
+        }
         let actual = match (actual, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
-                if let Some(error) =
-                    difference(&serde_json::to_value(&actual.graphics)?, expected, "native")
-                {
+                if let Some(error) = difference(
+                    &empty_heads::without(serde_json::to_value(&actual.graphics)?),
+                    expected,
+                    "native",
+                ) {
                     failures.push(format!("{}: {error}", case.name));
                 }
                 assert_eq!(
@@ -162,6 +205,19 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
                 actual
             }
             (Err(actual), None) if Some(actual.to_string()) == case.error => {
+                rejected += 1;
+                continue;
+            }
+            // #777: arrowed curves are no longer refused; shaded and doubled
+            // curves keep the original rejection under its narrower wording.
+            (Err(actual), None)
+                if case.error.as_deref() == Some(ARROWED)
+                    && matches!(
+                        actual.to_string().as_str(),
+                        "Shaded or doubled CDXML curves are not supported yet"
+                            | "Unsupported CDXML arrowhead"
+                    ) =>
+            {
                 rejected += 1;
                 continue;
             }
@@ -195,7 +251,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             (Ok(actual), Ok(expected)) => {
                 converted += 1;
                 if let Some(error) = difference(
-                    &serde_json::to_value(&actual)?,
+                    &empty_heads::without(serde_json::to_value(&actual)?),
                     &serde_json::to_value(expected)?,
                     "document",
                 ) {
@@ -248,16 +304,21 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
         failures.len(),
         failures
             .iter()
-            .take(25)
+            .take(60)
             .cloned()
             .collect::<Vec<_>>()
             .join("\n")
     );
     assert!(
-        accepted > 2000 && rejected > 800 && converted > 1500 && bounded > 100 && decoded >= 90
+        accepted > 2000
+            && rejected > 800
+            && converted > 1500
+            && bounded > 100
+            && decoded >= 90
+            && arrowed > 0
     );
     eprintln!(
-        "{accepted} native successes, {rejected} exact errors, {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
+        "{accepted} native successes, {rejected} exact errors, {arrowed} arrowed curves now accepted (#777), {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
     );
     Ok(())
 }
