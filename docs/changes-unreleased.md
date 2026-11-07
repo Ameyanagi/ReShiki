@@ -3,6 +3,7 @@
 Under review: @Ameyanagi — rotating a centered carbonyl double bond no longer
 leaves an excessive gap to its O label. The longer visible rail tips remain
 mechanism-arrow targets, and small margins preserve label selection.
+[PR #1027](https://github.com/Ameyanagi/ReShiki/pull/1027).
 [Matched renderer comparison](changes/carbonyl-rotation.md).
 
 ![Rotated carbonyl double bonds keep a compact gap to the upright O label](images/carbonyl-rotation/after.png)

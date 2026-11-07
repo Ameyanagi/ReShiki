@@ -5,7 +5,8 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 This list credits authors of contributions to ReShiki.
 
 Under review: @Ameyanagi — [carbonyl rail clearance during rotation and
-consistent mechanism-arrow targeting](changes/carbonyl-rotation.md).
+consistent mechanism-arrow targeting](changes/carbonyl-rotation.md) in
+[PR #1027](https://github.com/Ameyanagi/ReShiki/pull/1027).
 
 Under review: @Ameyanagi — stable Linux window identity and matching desktop
 launcher metadata in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
