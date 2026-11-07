@@ -708,9 +708,10 @@ fn complete_fusion_plan(
         return Err("openclatura: nonhexagonal fusion parser numbering not ported".into());
     }
     // P-73.1.1.2: a protonated N-H⁺ cites the hydrogenation of its neutral
-    // parent hydride plus -ium. Indicated H at such an N can instead name an
-    // impossible parent (2H-isoquinoline) or another tautomer, so require the
-    // neutral parent's indicated H; the full neutral-parent route is not ported.
+    // parent hydride plus -ium. Indicated H at such an N combined with hydro
+    // prefixes can instead name an impossible parent (3,4-dihydro-2H-
+    // isoquinoline) or another tautomer, so a plan that cites both must match
+    // the neutral parent's citation; the full neutral-parent route is not ported.
     let hydrons: AtomSet = graph
         .atoms
         .iter()
@@ -723,12 +724,16 @@ fn complete_fusion_plan(
                 && super::mancude::all_single(mol, id)
         })
         .collect();
-    if plan
-        .numbering
-        .abstract_atom_to_locant
-        .iter()
-        .any(|(id, locant)| hydrons.contains(id) && plan.indicated_hydrogens.contains(locant))
-    {
+    let indicated = |p: &FusionParentPlan| -> AtomSet {
+        p.numbering
+            .abstract_atom_to_locant
+            .iter()
+            .filter(|(_, l)| p.indicated_hydrogens.contains(l))
+            .map(|(id, _)| *id)
+            .collect()
+    };
+    let hydro = |p: &FusionParentPlan| p.derivative_state.bond_delta.hydrogenated_atom_ids();
+    if !hydro(&plan).is_empty() && !indicated(&plan).is_disjoint(&hydrons) {
         let mut neutral = mol.clone();
         for atom in neutral
             .atoms
@@ -739,18 +744,6 @@ fn complete_fusion_plan(
             atom.total_h_count -= 1;
             atom.explicit_h_count = atom.explicit_h_count.saturating_sub(1);
         }
-        let indicated = |p: &FusionParentPlan| -> AtomSet {
-            p.numbering
-                .abstract_atom_to_locant
-                .iter()
-                .filter(|(_, l)| p.indicated_hydrogens.contains(l))
-                .map(|(id, _)| *id)
-                .collect()
-        };
-        // A plan without hydrogenated edges leaves hydro citation to later
-        // assembly; one that carries them must cite the neutral parent's sites.
-        let hydro = |p: &FusionParentPlan| p.derivative_state.bond_delta.hydrogenated_atom_ids();
-        let cited_hydro = hydro(&plan);
         let witness = complete_fusion_plan(
             &neutral,
             atoms,
@@ -761,8 +754,8 @@ fn complete_fusion_plan(
             graph,
             initial_model,
         );
-        if !matches!(witness, Ok(Some(ref neutral)) if indicated(&plan) == indicated(neutral)
-            && (cited_hydro.is_empty() || cited_hydro == hydro(neutral)))
+        if !matches!(witness, Ok(Some(ref neutral))
+            if indicated(&plan) == indicated(neutral) && hydro(&plan) == hydro(neutral))
         {
             return Err(
                 "openclatura: protonated ring N-H hydrogen citation from the neutral parent hydride not ported"
