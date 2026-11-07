@@ -1307,7 +1307,8 @@ async fn reaction_imports_keep_stated_alkene_stereo() -> anyhow::Result<()> {
             Some("InChI=1S/C4H8.CH4/c1-3-4-2;/h3-4H,1-2H3;1H4"),
             1,
         ),
-        ("rsmi", "C/C=C/CC=CC>>C", "C.CC=CC/C=C/C", None, 1),
+        ("rsmi", "C/C=C/CC=CCC>>C", "C.C/C=C/CC=CCC", None, 1),
+        ("rsmi", "CC=CCC/C=C/CC>>C", "C.CC=CCC/C=C/CC", None, 1),
         // Input coordinates take precedence over directions, as in RDKit.
         (
             "rsmi",
@@ -1343,7 +1344,10 @@ async fn reaction_imports_keep_stated_alkene_stereo() -> anyhow::Result<()> {
             .count();
         assert_eq!(marked, unspecified, "{text}");
         assert!(
-            document.bonds.iter().all(|bond| bond.stereo.is_none()),
+            document
+                .bonds
+                .iter()
+                .all(|bond| bond.stereo.is_none() && bond.stereo_atoms.is_empty()),
             "{text}"
         );
     }
