@@ -4,7 +4,12 @@ use super::{Error, Molecule, WORLD_PER_DEPICT_UNIT, at, invalid};
 use crate::{
     chemistry::{
         ELEMENTS, RDKIT_VERSION, kekulize, ranking,
-        stereo::{allene, cip::label, perception::RingKind, stereogenic_odd_cumulenes, wedging},
+        stereo::{
+            allene,
+            cip::label,
+            perception::{self, RingKind},
+            stereogenic_odd_cumulenes, wedging,
+        },
     },
     document::{Atom, AtomStereo, Bond, Document, Point},
 };
@@ -471,18 +476,30 @@ pub fn for_generated(
 
 /// Newly laid-out coordinates must not specify an alkene the source left open.
 /// Without a base drawing, reconstructed bonds retain the source graph order.
+/// Reaction participants, as in RDKit, can keep `/` `\` or file-geometry
+/// directions without assigned stereo; those directions state the E/Z (#1043).
+/// Perceived sources come back unchanged; if perception fails, only stored
+/// stereo counts.
 fn preserve_unspecified_alkenes(molecule: &Molecule, document: &mut Document) {
     let Ok(prepared) = super::prepare(document) else {
         return;
     };
-    for (((bond, chemical), source), perceived) in document
+    let options = perception::Options {
+        clean: false,
+        force: false,
+        flag_possible: false,
+    };
+    let directed = perception::perceive(&molecule.state, options).ok();
+    let stated = directed.as_ref().unwrap_or(&molecule.state);
+    for ((((bond, chemical), source), stated), perceived) in document
         .bonds
         .iter_mut()
         .zip(&molecule.state.graph.bonds)
         .zip(&molecule.state.metadata.bonds)
+        .zip(&stated.metadata.bonds)
         .zip(&prepared.state.metadata.bonds)
     {
-        if chemical.order == 2 && source.stereo == 0 && perceived.stereo > 1 {
+        if chemical.order == 2 && source.stereo == 0 && stated.stereo <= 1 && perceived.stereo > 1 {
             bond.stereo_authoritative = true;
         }
     }
