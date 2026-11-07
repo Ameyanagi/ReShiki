@@ -1123,8 +1123,11 @@ fn cross(o: &Point3, a: &Point3, b: &Point3) -> f64 {
 }
 
 /// CX wedge flags carry configuration only at the coordinates they are read
-/// against, so conventional orientation must not mirror them (#1037).
+/// against: the input coordinates when given, else the fresh layout, which
+/// conventional orientation must then not mirror (#1037).
 const WEDGE_FLAGGED_RING: &str = "C1[C@@H](F)CC[C@H]1O |(0,-1.03088,;1.21353,-0.149206,;2.64011,-0.612731,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,),wD:1.1,5.6|";
+/// The same stereoisomer drawn mirrored in y, with wedges instead of hashes.
+const MIRRORED_WEDGE_FLAGGED_RING: &str = "C1[C@@H](F)CC[C@H]1O |(0,1.03088,;1.21353,0.149206,;2.64011,0.612731,;0.75,-1.27738,;-0.75,-1.27738,;-1.21353,0.149206,;-2.64011,0.612731,),wU:1.1,5.6|";
 
 #[test]
 fn wedge_flagged_smiles_import_keeps_the_stated_enantiomer() -> anyhow::Result<()> {
@@ -1135,6 +1138,7 @@ fn wedge_flagged_smiles_import_keeps_the_stated_enantiomer() -> anyhow::Result<(
     .text;
     for text in [
         WEDGE_FLAGGED_RING,
+        MIRRORED_WEDGE_FLAGGED_RING,
         "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,;1.21353,-0.149206,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,;0,-1.03088,),wU:1.0,4.4|",
     ] {
         let mut visible = imported_smiles(text)?.document;
@@ -1161,6 +1165,7 @@ async fn wedge_flagged_smiles_import_keeps_stated_stereo_identifiers() -> anyhow
         ("C1[C@@H](F)CC[C@H]1O |wD:1.0|", "/t4-,5+/m0/s1"),
         // With coordinates, tags, wedges and coordinates all state m0.
         (WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
+        (MIRRORED_WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
         (
             "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,;1.21353,-0.149206,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,;0,-1.03088,),wU:1.0,4.4|",
             "/t4-,5+/m0/s1",
