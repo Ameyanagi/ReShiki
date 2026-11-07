@@ -9,6 +9,7 @@ use crate::{
     chemistry::{
         self, cdxml, depict, document as molecular,
         inchi::{helper, output},
+        kekulize::Direction,
         molfile, reaction, smiles,
         stereo::{Point3, perception::State},
     },
@@ -379,7 +380,15 @@ fn coordinates(
     let positions = template_retry::improve(state, &ranks, conformer.positions, 1.5);
     let mut layout = chain_layout::improve(state, &ranks, positions);
     chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
-    chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
+    // Input wedge flags are read against these coordinates, so a reflection
+    // would invert them (#1037). Rotation and translation keep their meaning.
+    if !state
+        .directions
+        .iter()
+        .any(|d| matches!(d, Direction::Wedge | Direction::Hash))
+    {
+        chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
+    }
     chemistry::layout_refinement::arrange_components(state, &mut layout.positions);
     Ok(layout)
 }
