@@ -10,12 +10,14 @@ from rdkit import Chem, RDConfig, RDLogger, rdBase
 if TYPE_CHECKING or __package__:
     from .kekulize_reference import DIRECTIONS, directions
     from .ranking_reference import metadata
-    from .stereo_reference import clear_unsupported_allenes, group, state
+    from .stereo_allene_reference import clear_unsupported_allenes
+    from .stereo_reference import group, state
     from .valence_reference import ORDERS, atom_molecule, graph
 else:
     from kekulize_reference import DIRECTIONS, directions
     from ranking_reference import metadata
-    from stereo_reference import clear_unsupported_allenes, group, state
+    from stereo_allene_reference import clear_unsupported_allenes
+    from stereo_reference import group, state
     from valence_reference import ORDERS, atom_molecule, graph
 
 
