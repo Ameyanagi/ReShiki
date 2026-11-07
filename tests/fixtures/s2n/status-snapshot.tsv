@@ -287,8 +287,8 @@ S=C=N	isothiocyanic acid	unverified	unaudited_path
 [FH]	hydrogen fluoride	unverified	unaudited_path
 CC1CCCCCC2CCCC2C1	5-methyldodecahydrocyclopenta[9]annulene	preferred	
 OC1=CC2CCCC2CCCCCC1	2,3,3a,6,7,8,9,10,11,11a-decahydro-1H-cyclopenta[10]annulen-5-ol	preferred	
-CN1CCCC2C1C[NH2+]C2	1-methyl-2,3,4,4a,7,7a-hexahydro-6H-pyrrolo[3,4-b]pyridin-6-ium	unverified	hydro_prefix_locants
-CC[NH+]1CCc2c(cc[nH]c2=O)C1	2-ethyl-2,3,4,6-tetrahydropyrido[4,3-c]pyridin-2-ium-5-one	preferred	
+CN1CCCC2C1C[NH2+]C2		declined	openclatura: protonated ring N-H hydrogen citation from the neutral parent hydride not ported
+CC[NH+]1CCc2c(cc[nH]c2=O)C1		declined	openclatura: protonated ring N-H hydrogen citation from the neutral parent hydride not ported
 [N-]1[NH+]=CC=C2N=CC=C12	1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide	preferred	
 [NH3+][C-]1C=CC2=C1N=NO2	cyclopenta[d][1,2,3]oxadiazol-4-id-4-aminium	unverified	ionic_suffix_order
 [NH2+](C)[C-]1C=CC2=C1N=NO2	N-methylcyclopenta[d][1,2,3]oxadiazol-4-id-4-aminium	unverified	ionic_suffix_order
