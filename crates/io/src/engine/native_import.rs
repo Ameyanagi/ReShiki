@@ -208,9 +208,17 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                         .map_err(|_| Error::AxisMarkers)?;
             }
             // Wedges were read at the 2D input coordinates, which the fresh
-            // layout replaces; draw them again from the stereo they set (#1037).
-            if imported.conformers.iter().any(|c| !c.is_3d) {
-                for direction in &mut imported.prepared.state.directions {
+            // layout replaces (#1037). Without coordinates the @/@@ tags state
+            // the configuration (#1044); smiles::read has already taken any
+            // axial configuration from the flags. Either way, draw wedges again
+            // from the stereo. A kept wavy bond would stop that redraw at a
+            // tagged centre, so wavy inputs still read the flags on the layout
+            // (#1049).
+            let directions = &mut imported.prepared.state.directions;
+            let tag_wins =
+                imported.conformers.is_empty() && !directions.contains(&Direction::Unknown);
+            if tag_wins || imported.conformers.iter().any(|c| !c.is_3d) {
+                for direction in directions {
                     if matches!(direction, Direction::Wedge | Direction::Hash) {
                         *direction = Direction::None;
                     }
