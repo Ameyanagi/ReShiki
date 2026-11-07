@@ -158,6 +158,7 @@ pub enum NameReason {
     BoughtonIsotope,
     RadicalIon,
     AnionParent,
+    CationParent,
     IonicSuffixOrder,
     SaltIonOrder,
     Phane,
@@ -285,6 +286,9 @@ impl NameReason {
             }
             Self::AnionParent => {
                 "The anionic parent, suffix or retained-name choice for this anion has not been verified (P-72.7, P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."
+            }
+            Self::CationParent => {
+                "Cites the cationic centre only in a substituent prefix, as in (1-methylpyridin-1-ium-4-yl)methanol. A cation is senior to neutral classes, so the preferred IUPAC name takes a cationic parent, as in 4-(hydroxymethyl)-1-methylpyridin-1-ium (P-41, P-73.1); ReShiki does not choose that parent yet."
             }
             Self::Phane => {
                 "The structure is a cyclophane: at least six nodes, two or more rings and a mancude ring. Cyclic phane names rank above fused, bridged fused and von Baeyer names, so the preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). ReShiki has not verified the numbering and citation order of its phane name."

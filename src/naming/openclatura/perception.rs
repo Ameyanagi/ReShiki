@@ -2464,6 +2464,10 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             continue;
         }
         if let Some(attach) = m.get_neighbors(n).iter().copied().find(|x| *x != c) {
+            // Isocyano has a terminal carbon; R–C≡N⁺–R (nitrilium) stays skeletal.
+            if m.degree(c) > 1 {
+                continue;
+            }
             groups.push(PerceivedGroup::new("isocyano", false, attach, [c, n]));
             consumed.extend([c, n]);
         } else {

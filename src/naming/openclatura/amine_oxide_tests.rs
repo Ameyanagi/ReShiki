@@ -618,7 +618,7 @@ fn amine_oxide_nitrones_keep_opposite_double_bond_stereo() {
         let actual = name(smiles).unwrap();
         assert_eq!(
             actual.text,
-            format!("(1{descriptor})-N-methylethanimine N-oxide")
+            format!("({descriptor})-N-methylethanimine N-oxide")
         );
         assert_eq!(actual.status, NameStatus::Preferred);
         let request = crate::naming::local::parse_request(&actual.text).unwrap();
