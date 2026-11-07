@@ -1502,6 +1502,15 @@ pub(crate) fn bond_segment(
     bond: &Bond,
     opacity: Option<&crate::rear_opacity::Paint>,
 ) -> Option<(Point, Point)> {
+    bond_segment_with_faces(&FaceIndex::new(doc), bond, opacity)
+}
+
+pub(crate) fn bond_segment_with_faces(
+    faces: &FaceIndex<'_>,
+    bond: &Bond,
+    opacity: Option<&crate::rear_opacity::Paint>,
+) -> Option<(Point, Point)> {
+    let doc = faces.doc();
     if !doc.bond_visible(bond.a, bond.b) {
         return None;
     }
@@ -1538,8 +1547,75 @@ pub(crate) fn bond_segment(
     } else {
         span
     };
-    // Unlike bond_frame, picking rejects a NaN visible span.
-    (span.along > 0.1).then_some((span.start, span.end))
+    // Keep bond_frame's existence gate, including picking's NaN rejection.
+    if span.along <= 0.1 || span.along.is_nan() {
+        return None;
+    }
+    if bond.order == 2 && !bond.projection && crate::bond_joins::centered_plain_double(faces, bond)
+    {
+        let shapes = |atom: &Atom, boxes: &[_]| {
+            if boxes.is_empty() {
+                vec![]
+            } else {
+                atom_label_ink_shapes(atom, doc)
+            }
+        };
+        let a_shapes = shapes(a, &a_boxes);
+        let b_shapes = shapes(b, &b_boxes);
+        let mut from = f32::INFINITY;
+        let mut to = f32::NEG_INFINITY;
+        for (first, last) in centered_double_rails(
+            a.position,
+            b.position,
+            [&a_shapes, &b_shapes],
+            &doc.drawing_style,
+        )
+        .into_iter()
+        .flatten()
+        {
+            let along = |p: Point| (p.x - a.position.x) * span.ux + (p.y - a.position.y) * span.uy;
+            from = from.min(along(first));
+            to = to.max(along(last));
+        }
+        return (to - from > 0.1).then(|| {
+            (
+                a.position.offset(span.ux * from, span.uy * from),
+                a.position.offset(span.ux * to, span.uy * to),
+            )
+        });
+    }
+    Some((span.start, span.end))
+}
+
+/// Plain centered rails and their picking envelope share the same label cuts.
+fn centered_double_rails(
+    a: Point,
+    z: Point,
+    [a_shapes, z_shapes]: [&[((Point, Point), f32)]; 2],
+    style: &crate::style::DrawingStyle,
+) -> [Option<(Point, Point)>; 2] {
+    let length = a.distance(z);
+    let (ux, uy) = ((z.x - a.x) / length, (z.y - a.y) / length);
+    let half = style.bond_length_world * style.bond_spacing_ratio * 0.5;
+    let margin = style.world(style.margin_width_pt) + style.line_width() * 0.5;
+    let trim = |origin: Point, base: Point, dx, dy, shapes: &[((Point, Point), f32)]| {
+        let end = rounded_label_end(origin, dx, dy, shapes, length, margin);
+        let mut far = (end.x - origin.x) * dx + (end.y - origin.y) * dy;
+        for &((lo, hi), _) in shapes {
+            // Label picking owns the unpadded boxes, both at the rail and at
+            // its backbone projection. Do not paint into those owned corners.
+            for point in [origin, base] {
+                let guard = label_box_end(point, dx, dy, lo, hi, length, 0.);
+                far = far.max((guard.x - point.x) * dx + (guard.y - point.y) * dy);
+            }
+        }
+        origin.offset(dx * far, dy * far)
+    };
+    [-half, half].map(|offset| {
+        let first = trim(a.offset(-uy * offset, ux * offset), a, ux, uy, a_shapes);
+        let last = trim(z.offset(-uy * offset, ux * offset), z, -ux, -uy, z_shapes);
+        ((last.x - first.x) * ux + (last.y - first.y) * uy > 0.1).then_some((first, last))
+    })
 }
 
 /// A label-trimmed segment: its ends, unit direction and visible length.
@@ -2833,8 +2909,23 @@ fn push_bond_rails(
         ny,
         rounded,
     } = frame;
-    let a_shapes = rounded.then(|| connector_shapes(scene, a.id));
-    let z_shapes = rounded.then(|| connector_shapes(scene, z.id));
+    // Centered doubles meet upright labels on two distinct rays. Starting
+    // from the clipped backbone would retain its empty box-corner gap even
+    // where a rail can reach the rounded glyph with the requested margin.
+    let centered = joins.centered(b) && !b.projection;
+    let a_shapes = (rounded || centered).then(|| connector_shapes(scene, a.id));
+    let z_shapes = (rounded || centered).then(|| connector_shapes(scene, z.id));
+    let centered_rails = centered.then(|| {
+        centered_double_rails(
+            a.position,
+            z.position,
+            [
+                a_shapes.as_deref().unwrap_or_default(),
+                z_shapes.as_deref().unwrap_or_default(),
+            ],
+            style,
+        )
+    });
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
     let inward = if b.order == 4 {
         automatic_double_side(faces, b).unwrap_or(1.)
@@ -2879,16 +2970,25 @@ fn push_bond_rails(
         } else {
             None
         };
-        let (first, last) = match projected.as_ref() {
-            Some(Some(rail)) => rail.points,
-            Some(None) => continue,
-            None => rail.points(start, end),
+        let (first, last) = if let Some(rails) = &centered_rails {
+            match rails.get(index).copied().flatten() {
+                Some(points) => points,
+                None => continue,
+            }
+        } else {
+            match projected.as_ref() {
+                Some(Some(rail)) => rail.points,
+                Some(None) => continue,
+                None => rail.points(start, end),
+            }
         };
         let available = (last.x - first.x) * ux + (last.y - first.y) * uy;
         if available <= 0.1 {
             continue;
         }
-        let first = if rounded {
+        let first = if centered {
+            first
+        } else if rounded {
             rounded_label_end(
                 first,
                 ux,
@@ -2910,7 +3010,9 @@ fn push_bond_rails(
                 style.world(style.margin_width_pt),
             )
         };
-        let last = if rounded {
+        let last = if centered {
+            last
+        } else if rounded {
             rounded_label_end(
                 last,
                 -ux,
