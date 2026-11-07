@@ -386,6 +386,22 @@ M  V30 4 2 3 5 CFG=2\nM  V30 5 1 4 6 CFG=3\n",
             .iter()
             .any(|b| matches!(b.stereo, 6 | 7))
     );
+    // A 3D participant whose XY projection still shows its axis imports.
+    let lifted = rxn(
+        "3D",
+        "M  V30 1 C 2.5 -1 0 0\nM  V30 2 C -1 1 1 0\nM  V30 3 C 0 0 0 0
+M  V30 4 C 2.5 1 0 0\nM  V30 5 C -1 -1 0 0\nM  V30 6 C 1.5 0 0 0\n",
+        "M  V30 1 1 3 2 CFG=1\nM  V30 2 2 1 6 CFG=0\nM  V30 3 1 6 3 CFG=1
+M  V30 4 2 3 5 CFG=2\nM  V30 5 1 4 6 CFG=3\n",
+    );
+    let read = super::reaction::read_rxn(&lifted)?;
+    assert!(read.agents[0].annotations.is_3d);
+    let code = axial_code(&read.agents[0].molecule)?;
+    let imported = engine
+        .request(Request::import("rxn", &lifted))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_visible_axis(imported.document.as_ref().unwrap(), &code)?;
     // Both ends' substituents project to one side of the axis in XY.
     let spatial = rxn(
         "3D",
