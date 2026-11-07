@@ -574,6 +574,19 @@ mod tests {
     }
 
     #[test]
+    fn isotopic_hydrazinecarboxylates_keep_the_formohydrazide_plan() {
+        // The contracted hydrazinecarboxylate parent has no carbon locant.
+        for (smiles, expected) in [
+            ("NN[13C](=O)OC", "1-methoxy(1-13C)formohydrazide"),
+            ("NN[13C](=O)O", "1-hydroxy(13C)formohydrazide"),
+        ] {
+            let name = name_smiles(smiles, IsotopeStyle::Iupac).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            verify(smiles, &name.text).unwrap();
+        }
+    }
+
+    #[test]
     fn isotopic_spiro_parent_uses_the_engine_locants_and_exact_graph() {
         let smiles = "[13CH2]1CCC2(CC1)CCCC2";
         let name = name_smiles(smiles, IsotopeStyle::Iupac).unwrap();

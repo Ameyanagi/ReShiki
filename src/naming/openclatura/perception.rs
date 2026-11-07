@@ -593,6 +593,29 @@ fn hydrazide_ns(m: &Molecule, c: usize, n: usize, cyclic: &AtomSet) -> Option<Ve
     {
         return None;
     }
+    // P-65.1.2.2.2: H2N-NH-CO-OR is hydrazinecarboxylic acid (or its ester or
+    // anion), not an O-substituted formohydrazide. The isotope adapter needs
+    // the formohydrazide locants, which the contracted parent name lacks.
+    let heavy = |a: usize| {
+        m.get_neighbors(a)
+            .iter()
+            .filter(|&&x| m.atoms[&x].symbol != "H")
+            .count()
+    };
+    let oxygen = |x: usize, order: usize| m.atoms[&x].symbol == "O" && m.bond_order(c, x) == order;
+    if !m.is_isotope_parent()
+        && heavy(n) == 2
+        && heavy(t) == 1
+        && m.get_neighbors(c).iter().any(|&x| oxygen(x, 2))
+        && m.get_neighbors(c).iter().any(|&x| {
+            oxygen(x, 1)
+                && m.get_neighbors(x)
+                    .iter()
+                    .all(|&y| y == c || m.atoms[&y].is_carbon())
+        })
+    {
+        return None;
+    }
     Some(vec![n, t])
 }
 fn is_nitro_n(m: &Molecule, n: usize, parent: usize) -> bool {
@@ -2970,6 +2993,8 @@ mod tests {
             ("NC(N)=O", "urea"),
             ("NC(N)=S", "thiourea"),
             ("CC(=O)NN", "hydrazide"),
+            ("NNC(=O)O", "carboxylic_acid"),
+            ("NNC(=O)OC", "ester"),
             ("CC(=N)N", "amidine"),
             ("NC(N)=N", "guanidine"),
             ("CC#N", "nitrile"),
