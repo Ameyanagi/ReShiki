@@ -311,3 +311,94 @@ fn binol_cleanup_retains_visible_axial_configuration() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+// RDKit atropisomer reference geometry/4327 (2D) and geometry/824 (3D), each
+// the agent of water to water (#1037).
+#[tokio::test]
+async fn rxn_imports_keep_2d_axes_and_refuse_flattened_3d_axes() -> anyhow::Result<()> {
+    use crate::engine::{LocalEngine, Request};
+
+    let rxn = |dimension: &str, atoms: &str, bonds: &str| {
+        let water = "$MOL\n\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000
+    0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\nM  END\n";
+        format!(
+            "$RXN\n\n\n\n  1  1  1\n{water}{water}$MOL\n\n                    {dimension}\n
+  0  0  0  0  0  0  0  0  0  0999 V3000
+M  V30 BEGIN CTAB\nM  V30 COUNTS 6 5 0 0 0\nM  V30 BEGIN ATOM\n{atoms}M  V30 END ATOM
+M  V30 BEGIN BOND\n{bonds}M  V30 END BOND\nM  V30 END CTAB\nM  END\n"
+        )
+    };
+    let engine = LocalEngine::in_process();
+    // The crossed double bond at the axis is drawn wavy; like RDKit's
+    // EITHERDOUBLE it must not hide the axis when the drawing is prepared.
+    let flat = rxn(
+        "2D",
+        "M  V30 1 C 2.5 -1 0 0\nM  V30 2 C -1 1 0 0\nM  V30 3 C 0 0 0 0
+M  V30 4 C 2.5 1 0 0\nM  V30 5 C -1 -1 0 0\nM  V30 6 C 1.5 0 0 0\n",
+        "M  V30 1 1 3 2 CFG=1\nM  V30 2 2 1 6 CFG=0\nM  V30 3 1 6 3 CFG=1
+M  V30 4 2 3 5 CFG=2\nM  V30 5 1 4 6 CFG=3\n",
+    );
+    assert_eq!(
+        axial_code(&super::reaction::read_rxn(&flat)?.agents[0].molecule)?,
+        "M"
+    );
+    let imported = engine
+        .request(Request::import("rxn", &flat))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let mut document = imported.document.unwrap();
+    assert!(
+        document
+            .bonds
+            .iter()
+            .any(|b| b.order == 2 && b.display == "wavy")
+    );
+    assert_visible_axis(&document, "M")?;
+    let cleaned = engine
+        .request(Request::molecule("clean", document.clone()))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_visible_axis(cleaned.document.as_ref().unwrap(), "M")?;
+    // A wavy single bond at an axis end still leaves the axis unknown.
+    let axis_ends: Vec<_> = document
+        .bonds
+        .iter()
+        .filter(|b| b.cip_label.as_deref() == Some("M"))
+        .flat_map(|b| [b.a, b.b])
+        .collect();
+    let plain = document
+        .bonds
+        .iter_mut()
+        .find(|b| {
+            b.order == 1
+                && b.display == "plain"
+                && b.cip_label.is_none()
+                && (axis_ends.contains(&b.a) || axis_ends.contains(&b.b))
+        })
+        .unwrap();
+    plain.display = "wavy".into();
+    assert!(
+        !document::prepare(&document)?
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .any(|b| matches!(b.stereo, 6 | 7))
+    );
+    // Both ends' substituents project to one side of the axis in XY.
+    let spatial = rxn(
+        "3D",
+        "M  V30 1 C 0.272056121724 2.5 -1 0\nM  V30 2 C 0.64164810781 -1 -1 0
+M  V30 3 C 0.0162909961425 2.5 1 0\nM  V30 4 C 0.469819084052 1.5 0 0
+M  V30 5 C 0.94431136875 -1 1 0\nM  V30 6 C 0.561261511328 0 0 0\n",
+        "M  V30 1 2 4 1 CFG=2\nM  V30 2 1 6 4 CFG=0\nM  V30 3 1 4 3 CFG=3
+M  V30 4 2 6 2 CFG=0\nM  V30 5 1 6 5 CFG=0\n",
+    );
+    axial_code(&super::reaction::read_rxn(&spatial)?.agents[0].molecule)?;
+    let error = engine
+        .request(Request::import("rxn", &spatial))
+        .await
+        .unwrap_err();
+    assert!(error.contains("Atropisomer axes in 3D"), "{error}");
+    Ok(())
+}
