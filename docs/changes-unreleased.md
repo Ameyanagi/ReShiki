@@ -1,6 +1,6 @@
 # Unreleased changes
 
-Under review: @Ameyanagi — rotating a centered carbonyl double bond no longer
+@Ameyanagi — rotating a centered carbonyl double bond no longer
 leaves an excessive gap to its O label. The longer visible rail tips remain
 mechanism-arrow targets, and small margins preserve label selection.
 [PR #1027](https://github.com/Ameyanagi/ReShiki/pull/1027).

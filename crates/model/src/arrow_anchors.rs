@@ -3,6 +3,7 @@
 use crate::{
     arrows::{ArrowStyle, Preset},
     document::{Arrow, Bond, Document, Point},
+    scene::projected_bonds::FaceIndex,
     scientific::{AtomMark, MarkKind},
     style::DEFAULT,
 };
@@ -347,6 +348,11 @@ fn pick_with_ink(
         + DEFAULT.world(style.bold_width_pt) / 2.
         + radius;
     let arcs = std::cell::OnceCell::new();
+    // Segments use the abbreviation view; rail sides retain the original
+    // chemical graph. Share their index whenever that view borrows the document.
+    let drawn_faces = FaceIndex::new(ink.drawn());
+    let original_faces = (!std::ptr::eq(doc, ink.drawn())).then(|| FaceIndex::new(doc));
+    let faces = original_faces.as_ref().unwrap_or(&drawn_faces);
     doc.bonds
         .iter()
         .enumerate()
@@ -376,7 +382,7 @@ fn pick_with_ink(
             if !(0.0..=1.).contains(&fraction) || offset.abs() > reach {
                 return None;
             }
-            let (start, end) = ink.segment(index)?;
+            let (start, end) = ink.segment(index, &drawn_faces)?;
             let from = dot(delta(start, pa), v) / length;
             let to = dot(delta(end, pa), v) / length;
             // Position along the drawn segment, measured from bond.a.
@@ -387,7 +393,7 @@ fn pick_with_ink(
                 && arcs
                     .get_or_init(|| crate::ring_arcs::uncut(doc))
                     .contains(bond.a, bond.b);
-            let distance = bond_ink_distance(doc, bond, arc, offset, along, drawn, radius * 0.7)?;
+            let distance = bond_ink_distance(faces, bond, arc, offset, along, drawn, radius * 0.7)?;
             ((from.min(to)..=from.max(to)).contains(&fraction)
                 && ink.label_hit(q, 0.).is_none()
                 && ink.bond(index, if bond.a == a { fraction } else { 1. - fraction }))
@@ -406,7 +412,7 @@ fn pick_with_ink(
 /// (offset, half width), with the secondary display on the second rail;
 /// a ring `arc` bond draws only its backbone.
 fn bond_ink_distance(
-    doc: &Document,
+    faces: &FaceIndex<'_>,
     bond: &Bond,
     arc: bool,
     offset: f32,
@@ -414,7 +420,7 @@ fn bond_ink_distance(
     drawn: f32,
     tolerance: f32,
 ) -> Option<f32> {
-    let style = &doc.drawing_style;
+    let style = &faces.doc().drawing_style;
     let s = style.bond_length_world * style.bond_spacing_ratio;
     let (line, bold) = (
         DEFAULT.world(style.line_width_pt),
@@ -464,8 +470,7 @@ fn bond_ink_distance(
         // Resolve an automatic side only near either possible rail.
         (2 | 7, _) => {
             distance(&[(-s, p.max(q)), (s, p.max(q))])?;
-            let rails =
-                crate::scene::bond_rails(&crate::scene::projected_bonds::FaceIndex::new(doc), bond);
+            let rails = crate::scene::bond_rails(faces, bond);
             let active: Vec<_> = rails
                 .iter()
                 .enumerate()

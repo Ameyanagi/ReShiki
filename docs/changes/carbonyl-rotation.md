@@ -11,6 +11,11 @@ small margins, the unpadded label boxes still own their corners, so a longer
 stroke cannot take clicks away from a label. Offset ring bonds, projected
 bonds, crossed doubles and non-plain styles keep their existing paths.
 
+Mechanism-arrow picking shares a lazy graph index across nearby candidates.
+When a two-sided abbreviation needs a separate drawing view, the original and
+remapped graphs each keep their own query-local index. Remote queries do not
+build either graph.
+
 ## Matched renderer comparison
 
 Before:
@@ -38,7 +43,10 @@ Rust 1.99.1 toolchain. These are application-renderer exports, not UI captures.
 - The new excessive-gap regression fails before the fix and passes afterward.
 - Four focused tests cover 15° rotation steps, reversed bond order, rounded
   and rectangular label ink, small margins, and selection of visible rail tips.
-- Model unit suite: 1,317 passed, 11 opt-in tests ignored.
+- A public-picking regression measures one graph construction with either one
+  or 32 overlapping automatic double-bond candidates, versus two and 64 before
+  index sharing. Remote queries construct no graph.
+- Model unit suite: 1,318 passed, 11 opt-in tests ignored.
 - Model all-target Clippy in release mode, full-workspace library/binary
   Clippy with all features, and Rust formatting pass.
 

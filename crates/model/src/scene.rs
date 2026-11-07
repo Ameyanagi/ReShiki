@@ -1502,6 +1502,15 @@ pub(crate) fn bond_segment(
     bond: &Bond,
     opacity: Option<&crate::rear_opacity::Paint>,
 ) -> Option<(Point, Point)> {
+    bond_segment_with_faces(&FaceIndex::new(doc), bond, opacity)
+}
+
+pub(crate) fn bond_segment_with_faces(
+    faces: &FaceIndex<'_>,
+    bond: &Bond,
+    opacity: Option<&crate::rear_opacity::Paint>,
+) -> Option<(Point, Point)> {
+    let doc = faces.doc();
     if !doc.bond_visible(bond.a, bond.b) {
         return None;
     }
@@ -1542,9 +1551,7 @@ pub(crate) fn bond_segment(
     if span.along <= 0.1 || span.along.is_nan() {
         return None;
     }
-    if bond.order == 2
-        && !bond.projection
-        && crate::bond_joins::centered_plain_double(&FaceIndex::new(doc), bond)
+    if bond.order == 2 && !bond.projection && crate::bond_joins::centered_plain_double(faces, bond)
     {
         let shapes = |atom: &Atom, boxes: &[_]| {
             if boxes.is_empty() {

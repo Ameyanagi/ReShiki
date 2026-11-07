@@ -3,6 +3,15 @@
 use crate::document::{Atom, Bond, Document, Point};
 use std::collections::HashMap;
 
+#[cfg(test)]
+thread_local! {
+    static CONSTRUCTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+#[cfg(test)]
+pub(super) fn construction_count() -> usize {
+    CONSTRUCTIONS.with(std::cell::Cell::get)
+}
+
 pub(crate) struct Graph<'d> {
     doc: &'d Document,
     atoms: HashMap<u64, &'d Atom>,
@@ -14,6 +23,8 @@ pub(crate) struct Graph<'d> {
 
 impl<'d> Graph<'d> {
     pub(crate) fn new(doc: &'d Document) -> Self {
+        #[cfg(test)]
+        CONSTRUCTIONS.with(|count| count.set(count.get() + 1));
         let mut atoms = HashMap::with_capacity(doc.atoms.len());
         for atom in &doc.atoms {
             atoms.entry(atom.id).or_insert(atom);
