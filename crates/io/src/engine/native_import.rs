@@ -96,6 +96,9 @@ struct Prepared {
     molecule: molecular::Molecule,
     document: Document,
     warnings: Vec<String>,
+    /// The molecule keeps a 3D MOL file's own XYZ, which state its stereo as
+    /// RDKit reads them, even where the drawing is a projection of them.
+    file_xyz: bool,
 }
 enum Preparation {
     Complete(Box<Prepared>),
@@ -153,13 +156,16 @@ pub async fn execute(
         molecule,
         document,
         mut warnings,
+        file_xyz,
     } = *prepared;
     let attachments = crate::attachments::present(&document);
     let generic = crate::generic::present(&document);
     let analysis = if molecule.state.graph.atoms.is_empty() || attachments || generic {
         None
     } else {
-        let projected = molfile::has_projected_coordinates(&document);
+        // Generated or projected XY must not define stereo the input left
+        // open (#909); a file's own XYZ may.
+        let projected = !file_xyz && molfile::has_projected_coordinates(&document);
         warnings.extend(native_response::identifier_notices(&molecule, projected));
         Some(native_response::analyze_prepared(Arc::new(molecule), projected, config).await?)
     };
@@ -236,11 +242,15 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             prepared
         }
         "mol" => {
-            let (document, molecule) = molfile::read(&text)?.display_document()?;
+            let imported = molfile::read(&text)?;
+            // A 3D file is never Haworth-restored, so the molecule keeps its XYZ.
+            let file_xyz = imported.annotations.is_3d;
+            let (document, molecule) = imported.display_document()?;
             Prepared {
                 molecule,
                 document,
                 warnings: Vec::new(),
+                file_xyz,
             }
         }
         "cdxml" | "cdx" => {
@@ -298,6 +308,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 molecule: imported.molecule,
                 document: imported.document,
                 warnings,
+                file_xyz: false,
             }
         }
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
@@ -357,6 +368,7 @@ fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {
         molecule,
         document,
         warnings: Vec::new(),
+        file_xyz: false,
     })
 }
 
@@ -433,6 +445,7 @@ fn finish_molecule(
         molecule,
         document,
         warnings: Vec::new(),
+        file_xyz: false,
     })
 }
 

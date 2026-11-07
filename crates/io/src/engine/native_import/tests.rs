@@ -572,6 +572,90 @@ async fn imported_butenes_retain_specified_or_unspecified_stereo_through_exports
     Ok(())
 }
 
+// RDKit's MolToInchi reads a MOL file's own XYZ; expected values are its output
+// (2026.03.6). The first input is RDKit's C[C@H]1CC[C@H](C)CC1 with out-of-plane Z.
+#[tokio::test]
+async fn mol_imports_give_inchi_their_own_xyz() -> anyhow::Result<()> {
+    const RING: &str = "
+     RDKit          2D
+
+  8  8  0  0  0  0  0  0  0  0999 V2000
+    3.0000    0.0000   -0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    1.5000   -0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.7500   -1.2990    0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.7500   -1.2990   -0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.5000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -3.0000    0.0000    0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.7500    1.2990   -0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.7500    1.2990    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+  2  1  1  1
+  2  3  1  0
+  3  4  1  0
+  4  5  1  0
+  5  6  1  6
+  5  7  1  0
+  7  8  1  0
+  8  2  1  0
+M  END
+";
+    let butene = |stereo: u8| {
+        format!(
+            "
+     RDKit          3D
+
+  4  3  0  0  0  0  0  0  0  0999 V2000
+    1.8942    0.1555   -0.0535 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.4521    0.2141   -0.4705 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.4317   -0.2179    0.4371 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.8978   -0.1863    0.0827 C   0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  1  0
+  2  3  2  {stereo}
+  3  4  1  0
+M  END
+"
+        )
+    };
+    // A 3D header with flat coordinates is still the file's own geometry.
+    const CUMULENE: &str = "
+     RDKit          3D
+
+  6  5  0  0  0  0  0  0  0  0999 V2000
+   -1.0000    1.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    1.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    2.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    3.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    4.0000   -1.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  1  0
+  2  3  2  0
+  3  4  2  0
+  4  5  2  0
+  5  6  1  0
+M  END
+";
+    let engine = crate::engine::LocalEngine::in_process();
+    for (text, expected) in [
+        (
+            CUMULENE.to_owned(),
+            "InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3/b4-3+",
+        ),
+        (
+            RING.to_owned(),
+            "InChI=1S/C8H16/c1-7-3-5-8(2)6-4-7/h7-8H,3-6H2,1-2H3/t7-,8?",
+        ),
+        (butene(0), "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3/b4-3+"),
+        // A crossed double bond stays unspecified with real XYZ too.
+        (butene(3), "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3"),
+    ] {
+        let imported = engine
+            .request(Request::import("mol", &text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(imported.analysis.unwrap().inchi, expected, "{text}");
+    }
+    Ok(())
+}
+
 const UNSPECIFIED_TRIENE_INCHI: &str = "InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3";
 
 #[tokio::test]
