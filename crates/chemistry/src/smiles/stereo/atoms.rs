@@ -13,9 +13,12 @@ impl Context<'_> {
         for a in 0..n {
             self.work.spend(1)?;
             let meta = at(&self.input.metadata.atoms, a)?;
-            if meta.chiral_tag == 5 && !*at(self.broken, a)? {
-                let terminals = crate::stereo::allene::terminals(&self.input.graph, a)
-                    .ok_or_else(|| invalid("Invalid allene stereochemistry"))?;
+            // Off an allene centre, tag 5 takes the tetrahedral path, which
+            // writes no winding for it, as RDKit does.
+            if meta.chiral_tag == 5
+                && !*at(self.broken, a)?
+                && let Some(terminals) = crate::stereo::allene::terminals(&self.input.graph, a)
+            {
                 put(
                     &mut permutations,
                     a,
