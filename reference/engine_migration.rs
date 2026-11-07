@@ -27,6 +27,8 @@ mod reaction_presentation;
 mod reference_mol;
 #[path = "support/reference_presentation.rs"]
 mod reference_presentation;
+#[path = "support/stated_ez_wedges.rs"]
+mod stated_ez_wedges;
 
 #[tokio::test]
 async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
@@ -265,6 +267,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
     let mut tag_wins = Vec::new();
+    let mut deferred = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let actual = local.execute(Request::import(format, &case.text)).await;
@@ -370,6 +373,11 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 if let Some(open) = &case.unspecified_ez {
                     unspecified_ez::adapt(open, &actual, &mut expected);
                 }
+                let doubles = stated_ez_wedges::double_bonds(format, &case.text);
+                if !doubles.is_empty() {
+                    stated_ez_wedges::adapt(&doubles, &actual, &mut expected);
+                    deferred.push(case.name.clone());
+                }
                 let expected = if format == "mol" {
                     let before = serde_json::to_value(&expected)?;
                     reference_mol::mol_source_xyz(expected, &case.text).inspect(|response| {
@@ -435,6 +443,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     }
     assert!(child.wait()?.success(), "Import reference failed");
     eprintln!("{format} coordinate-free wedge flags following the tag (#1044): {tag_wins:?}");
+    eprintln!("{format} stated E/Z beside a wedge flag, deferred (#1042): {deferred:?}");
     eprintln!(
         "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
