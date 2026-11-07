@@ -59,7 +59,6 @@ impl Drawing {
         if labels.len() != self.parts.len() {
             return Err(invalid("Reaction label participant count changed"));
         }
-        let read_axes = axes(self.parts.iter().map(|part| part.drawing.molecule()));
         let mut doc = Document::default();
         for (part, labels) in self.parts.into_iter().zip(labels) {
             let positions: Vec<_> = part.positions.into_iter().map(Position::point).collect();
@@ -87,36 +86,25 @@ impl Drawing {
         doc.reactions.push(self.reaction);
         layout_ink(&mut doc);
         doc.validate().map_err(invalid)?;
-        // A drawing stores axes only as wedges on its XY: a flattened 3D axis
-        // or a file wedge on a ring double bond can lose one or add another.
-        // Refuse rather than change them, as RXN import did before axes (#892).
-        if !read_axes.is_empty() && axes(std::iter::once(&document::prepare(&doc)?)) != read_axes {
-            return Err(invalid(
-                "The drawing cannot keep this reaction's atropisomer axes",
-            ));
-        }
         Ok(doc)
     }
 }
 
 /// Every axis (bond stereo 6/7) by its atom IDs.
-fn axes<'a>(molecules: impl Iterator<Item = &'a document::Molecule>) -> BTreeSet<(u64, u64, u8)> {
-    molecules
-        .flat_map(|molecule| {
-            let state = &molecule.state;
-            state
-                .graph
-                .bonds
-                .iter()
-                .zip(&state.metadata.bonds)
-                .filter(|(_, metadata)| matches!(metadata.stereo, 6 | 7))
-                .filter_map(|(bond, metadata)| {
-                    Some((
-                        *molecule.ids.get(bond.a)?,
-                        *molecule.ids.get(bond.b)?,
-                        metadata.stereo,
-                    ))
-                })
+fn axes(molecule: &document::Molecule) -> BTreeSet<(u64, u64, u8)> {
+    let state = &molecule.state;
+    state
+        .graph
+        .bonds
+        .iter()
+        .zip(&state.metadata.bonds)
+        .filter(|(_, metadata)| matches!(metadata.stereo, 6 | 7))
+        .filter_map(|(bond, metadata)| {
+            Some((
+                *molecule.ids.get(bond.a)?,
+                *molecule.ids.get(bond.b)?,
+                metadata.stereo,
+            ))
         })
         .collect()
 }
@@ -243,6 +231,19 @@ impl Builder<'_> {
                 attachments,
             )?
             .with_singlets(&source.annotations.singlets)?;
+            // A drawing stores axes only as wedges on its XY: a flattened 3D
+            // axis or a file wedge on a ring double bond can lose one or add
+            // another. Refuse rather than change them, as RXN import did
+            // before axes (#892).
+            let read = axes(drawing.molecule());
+            if !read.is_empty() {
+                let finished = drawing.clone().finish(drawing.labels()?)?;
+                if axes(&document::prepare(&finished)?) != read {
+                    return Err(invalid(
+                        "The drawing cannot keep this reaction's atropisomer axes",
+                    ));
+                }
+            }
             let mut positions: Vec<_> = molecule
                 .positions
                 .iter()
