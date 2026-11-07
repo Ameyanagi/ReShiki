@@ -188,7 +188,11 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
                     if axial_extension::accepted(
                         &case.name,
                         case.failure.as_deref(),
-                        &serde_json::to_value(&actual.molecule.state)?,
+                        "mol",
+                        &case.text,
+                        axial_extension::Checked::State(&serde_json::to_value(
+                            &actual.molecule.state,
+                        )?),
                     ) =>
                 {
                     None

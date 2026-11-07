@@ -317,11 +317,14 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                     } else if draft
                         .labels()
                         .and_then(|labels| draft.finish(labels))
-                        .ok()
-                        .and_then(|doc| reshiki::chemistry::document::prepare(&doc).ok())
-                        .and_then(|molecule| serde_json::to_value(&molecule.state).ok())
-                        .is_some_and(|state| {
-                            axial_extension::accepted(&case.name, case.failure.as_deref(), &state)
+                        .is_ok_and(|doc| {
+                            axial_extension::accepted(
+                                &case.name,
+                                case.failure.as_deref(),
+                                "rxn",
+                                &case.text,
+                                axial_extension::Checked::Document(&doc),
+                            )
                         })
                     {
                         Vec::new()

@@ -1,3 +1,6 @@
+#[path = "support/hydrogen_isotopes.rs"]
+#[allow(dead_code)]
+mod hydrogen_isotopes;
 use anyhow::Context;
 use reshiki::{
     document::{Annotation, Document, Point},
@@ -879,15 +882,6 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
     let (mut accepted, mut rejected, mut exact, mut invalid_inputs) = (0, 0, 0, 0);
     let mut failures = Vec::new();
     for (name, doc) in docs {
-        // #879 draws ²H/³H as D/T by default, which the original writer
-        // predates; D/T export has its own tests.
-        if doc
-            .atoms
-            .iter()
-            .any(|a| a.element == "H" && matches!(a.isotope, 2 | 3))
-        {
-            continue;
-        }
         let request = Request::molecule("export", doc.clone());
         // Both engine backends validate the Rust document before dispatch.
         // The direct Python function alone accepts some forbidden displays.
@@ -902,6 +896,11 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         }
         let expected = oracle.request(&request)?;
         let actual = drawing::write(&doc, drawing::Options::from(&request));
+        let actual = if hydrogen_isotopes::labelled(&doc) {
+            actual.map(|xml| hydrogen_isotopes::as_mass_numbers(&xml))
+        } else {
+            actual
+        };
         // #882 marks a polyhedral frame metal as "not a stereocentre" so
         // ChemDraw reads its wedges as projection; the original writer predates it.
         let actual = if name.starts_with("template/builtin:Coordination geometry/") {

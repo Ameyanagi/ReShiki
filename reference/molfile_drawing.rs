@@ -249,7 +249,11 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
                     if axial_extension::accepted(
                         &case.name,
                         case.failure.as_deref(),
-                        &serde_json::to_value(&drawing.molecule().state)?,
+                        "mol",
+                        &case.text,
+                        axial_extension::Checked::State(&serde_json::to_value(
+                            &drawing.molecule().state,
+                        )?),
                     ) =>
                 {
                     drawing

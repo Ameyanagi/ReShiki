@@ -1,5 +1,3 @@
-#[path = "support/unsupported_allene.rs"]
-mod unsupported_allene;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION, electronic::Hybridization, graph::Graph, kekulize::Direction, ranking::Metadata,
@@ -94,13 +92,8 @@ fn stereo_cleanup_matches_independent_rdkit() -> anyhow::Result<()> {
                 usize::from(expected["metadata"]["groups"] != original["metadata"]["groups"]);
         }
         let matches = match (&result, &case.expected) {
-            (Ok(actual), Some(expected)) => {
-                // The cleared tag also leaves its stereo groups; atrop-only
-                // cleanup never touches it and stays exact.
-                actual == expected
-                    || (case.operation != "atrop"
-                        && unsupported_allene::present(&case.before.graph, &case.before.metadata))
-            }
+            // The oracle clears tag 5 on non-allene atoms first (#892).
+            (Ok(actual), Some(expected)) => actual == expected,
             (Err(_), None) => true,
             _ => false,
         };

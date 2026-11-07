@@ -405,14 +405,15 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             }
             (Err(error), Some(_)) => Some(format!("Unexpected rejection: {error}")),
             (Ok(actual), None)
-                if actual
-                    .document
-                    .as_ref()
-                    .and_then(|doc| reshiki::chemistry::document::prepare(doc).ok())
-                    .and_then(|molecule| serde_json::to_value(&molecule.state).ok())
-                    .is_some_and(|state| {
-                        axial_extension::accepted(&case.name, case.failure.as_deref(), &state)
-                    }) =>
+                if actual.document.as_ref().is_some_and(|doc| {
+                    axial_extension::accepted(
+                        &case.name,
+                        case.failure.as_deref(),
+                        format,
+                        &case.text,
+                        axial_extension::Checked::Document(doc),
+                    )
+                }) =>
             {
                 accepted += 1;
                 None

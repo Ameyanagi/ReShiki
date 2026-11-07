@@ -145,7 +145,9 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
                     if axial_extension::accepted(
                         &case.name,
                         case.failure.as_deref(),
-                        &serde_json::to_value(actual)?,
+                        "rxn",
+                        &case.text,
+                        axial_extension::Checked::Reaction(&serde_json::to_value(actual)?),
                     ) =>
                 {
                     None

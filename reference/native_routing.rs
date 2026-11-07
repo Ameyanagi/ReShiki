@@ -1,6 +1,8 @@
 //! Real default dispatch in a subprocess whose Python worker records startup
 //! and rejects every request. Expected chemistry comes from the original worker
 //! in the parent; environment overrides never mutate the test runner process.
+#[path = "support/hydrogen_isotopes.rs"]
+mod hydrogen_isotopes;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
 use anyhow::Context;
@@ -47,6 +49,22 @@ impl Case {
         request.format = self.format.clone();
         request.text = self.text.clone();
         request.selected_ids = self.selected.clone();
+        request
+    }
+
+    /// #879: a ChemDraw export of a D/T drawing, compared in 2H/3H form.
+    fn dt_export(&self, format: &str) -> bool {
+        self.operation == "export"
+            && self.format.as_deref() == Some(format)
+            && hydrogen_isotopes::labelled(&self.document)
+    }
+
+    /// The native request: CDX of a D/T drawing uses the 2H/3H option.
+    fn native_request(&self) -> Request {
+        let mut request = self.request();
+        if self.dt_export("cdx") {
+            request.document = Some(hydrogen_isotopes::mass_numbers(&self.document));
+        }
         request
     }
 }
@@ -482,14 +500,15 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
         let mut failures = Vec::new();
         for (index, response) in actual {
             let case = cases.get(index).context("Invalid routing response index")?;
-            // #879 draws ²H/³H as D/T in ChemDraw exports, which the original
-            // writer predates; D/T export has its own tests.
-            if case.name == "[2H]O[3H]"
-                && case.operation == "export"
-                && matches!(case.format.as_deref(), Some("cdxml" | "cdx"))
-            {
-                continue;
-            }
+            let response = response.map(|mut r| {
+                if case.dt_export("cdxml") {
+                    r.output = r.output.map(|xml| hydrogen_isotopes::as_mass_numbers(&xml));
+                }
+                if case.dt_export("cdx") {
+                    r.document.iter_mut().for_each(hydrogen_isotopes::auto);
+                }
+                r
+            });
             let source = serde_json::to_value(&case.document)?;
             if let Err(error) = outcome(
                 response,
@@ -739,7 +758,7 @@ async fn routing_child() -> anyhow::Result<()> {
     if matches!(mode.as_str(), "native" | "lazy") {
         let mut responses = Vec::new();
         for (index, case) in cases.iter().enumerate() {
-            let request = case.request();
+            let request = case.native_request();
             let before = serde_json::to_value(&request)?;
             responses.push((index, local.execute(request.clone()).await));
             assert_eq!(before, serde_json::to_value(request)?);
@@ -748,7 +767,7 @@ async fn routing_child() -> anyhow::Result<()> {
         for index in concurrent_indices(&cases) {
             let case = cases.get(index).context("Missing concurrent case")?.clone();
             let local = local.clone();
-            tasks.spawn(async move { (index, local.execute(case.request()).await) });
+            tasks.spawn(async move { (index, local.execute(case.native_request()).await) });
         }
         while let Some(result) = tasks.join_next().await {
             responses.push(result?);

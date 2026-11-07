@@ -1,6 +1,8 @@
 //! Complete-response differential tests against the unchanged PythonEngine.
 //! Reference requests use Request -> Value -> JSON and JSON -> Value -> Response
 //! through the real engine transport, including both f32 conversion boundaries.
+#[path = "support/hydrogen_isotopes.rs"]
+mod hydrogen_isotopes;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
 use anyhow::Context;
@@ -105,6 +107,21 @@ async fn compare(
 ) -> anyhow::Result<bool> {
     let original = serde_json::to_value(&request)?;
     let expected = reference.execute(request.clone()).await;
+    // #879: a ChemDraw export of a D/T drawing is compared in 2H/3H form.
+    let dt = request.operation == "export"
+        && request
+            .document
+            .as_ref()
+            .is_some_and(hydrogen_isotopes::labelled);
+    let format = request.format.clone().filter(|_| dt);
+    let mut request = request;
+    if format.as_deref() == Some("cdx") {
+        request.document = request
+            .document
+            .as_ref()
+            .map(hydrogen_isotopes::mass_numbers);
+    }
+    let native = serde_json::to_value(&request)?;
     let request = Arc::new(request);
     let prepared = prepare(Arc::clone(&request)).await?;
     let before = prepared
@@ -114,7 +131,7 @@ async fn compare(
     let actual =
         native_response::build(Arc::clone(&request), prepared.clone(), config.clone()).await;
     anyhow::ensure!(
-        serde_json::to_value(&*request)? == original,
+        serde_json::to_value(&*request)? == native,
         "[request] Request changed"
     );
     anyhow::ensure!(
@@ -126,7 +143,14 @@ async fn compare(
         "[prepared] Prepared chemistry changed"
     );
     match (actual, expected) {
-        (Ok(a), Ok(e)) => {
+        (Ok(mut a), Ok(e)) => {
+            match format.as_deref() {
+                Some("cdxml") => {
+                    a.output = a.output.map(|xml| hydrogen_isotopes::as_mass_numbers(&xml));
+                }
+                Some("cdx") => a.document.iter_mut().for_each(hydrogen_isotopes::auto),
+                _ => {}
+            }
             equal_with_source(a, e, original.get("document"))?;
             Ok(true)
         }
@@ -250,13 +274,7 @@ async fn complete_responses_match_original_worker_for_molecules_and_exports() ->
         let (compared, mismatches) =
             operation_comparisons(&reference, &config, &document, &text).await;
         count += compared;
-        // #879 draws ²H/³H as D/T in ChemDraw exports, which the original
-        // writer predates; D/T export has its own tests. Other exports still compare.
-        failures.extend(mismatches.into_iter().filter(|m| {
-            !(text == "[2H]O[3H]"
-                && (m.starts_with("[2H]O[3H]: export/Some(\"cdxml\")")
-                    || m.starts_with("[2H]O[3H]: export/Some(\"cdx\")")))
-        }));
+        failures.extend(mismatches);
     }
     eprintln!("Compared {count} complete molecular responses with the original worker");
     reference_presentation::report_mismatches("native-response-molecular", &failures)

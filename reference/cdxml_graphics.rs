@@ -44,6 +44,7 @@ struct Case {
     images: bool,
     image_error: Option<String>,
     image_pixels: Vec<Pixels>,
+    unarrowed: Option<Value>,
 }
 fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
     match (actual, expected) {
@@ -150,6 +151,41 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             bounded += 1;
             continue;
         }
+        // #777: ReShiki reads an arrowed curve that the original worker
+        // refused. The same file without arrowheads gives the expected curve
+        // and bindings, and each curve's heads must match its source.
+        if let (Ok(actual), None, Some(unarrowed)) = (&actual, &case.expected, &case.unarrowed) {
+            let mut graphics = serde_json::to_value(&actual.graphics)?;
+            let mut heads = Vec::new();
+            for graphic in graphics.as_array_mut().into_iter().flatten() {
+                if let Some(h) = graphic.as_object_mut().and_then(|g| g.remove("heads")) {
+                    heads.push(serde_json::json!([h["head"], h["tail"]]));
+                }
+            }
+            let source: Vec<Value> = unarrowed["heads"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|pair| {
+                    let kind = |value: &Value| match value.as_str() {
+                        Some("Full") => "full",
+                        Some("HalfLeft") => "left",
+                        Some("HalfRight") => "right",
+                        _ => "none",
+                    };
+                    serde_json::json!([kind(&pair[0]), kind(&pair[1])])
+                })
+                .collect();
+            if let Some(error) = difference(&graphics, &unarrowed["graphics"], "arrowed") {
+                failures.push(format!("{}: {error}", case.name));
+            } else if serde_json::to_value(&actual.bindings)? != unarrowed["bindings"] {
+                failures.push(format!("{}: arrowed curve bindings", case.name));
+            } else if heads != source {
+                failures.push(format!("{}: heads {heads:?} != {source:?}", case.name));
+            }
+            arrowed += 1;
+            continue;
+        }
         let actual = match (actual, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
@@ -183,20 +219,6 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
                     ) =>
             {
                 rejected += 1;
-                continue;
-            }
-            // #777: an arrowed curve the original importer refused now becomes
-            // a pen path with heads. Its head geometry has its own tests.
-            (Ok(actual), None)
-                if case.error.as_deref() == Some(ARROWED)
-                    && actual.graphics.iter().any(|g| {
-                        g.heads.as_ref().is_some_and(|h| {
-                            h.head != reshiki::arrows::Head::None
-                                || h.tail != reshiki::arrows::Head::None
-                        })
-                    }) =>
-            {
-                arrowed += 1;
                 continue;
             }
             (Err(actual), _) => {
@@ -288,7 +310,12 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             .join("\n")
     );
     assert!(
-        accepted > 2000 && rejected > 800 && converted > 1500 && bounded > 100 && decoded >= 90
+        accepted > 2000
+            && rejected > 800
+            && converted > 1500
+            && bounded > 100
+            && decoded >= 90
+            && arrowed > 0
     );
     eprintln!(
         "{accepted} native successes, {rejected} exact errors, {arrowed} arrowed curves now accepted (#777), {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"

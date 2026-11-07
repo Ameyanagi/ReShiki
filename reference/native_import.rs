@@ -369,13 +369,15 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     .map(|error| error.to_string())
             }
             (Ok(Outcome::Complete(a)), None)
-                if a.document
-                    .as_ref()
-                    .and_then(|doc| reshiki::chemistry::document::prepare(doc).ok())
-                    .and_then(|molecule| serde_json::to_value(&molecule.state).ok())
-                    .is_some_and(|state| {
-                        axial_extension::accepted(&case.name, case.failure.as_deref(), &state)
-                    }) =>
+                if a.document.as_ref().is_some_and(|doc| {
+                    axial_extension::accepted(
+                        &case.name,
+                        case.failure.as_deref(),
+                        format,
+                        &case.text,
+                        axial_extension::Checked::Document(doc),
+                    )
+                }) =>
             {
                 accepted += 1;
                 None
