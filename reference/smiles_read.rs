@@ -74,7 +74,7 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
         let case: Case = serde_json::from_str(&line?)?;
         let result = smiles::read(&case.text);
         let failure = match (&result, &case.expected) {
-            (Ok(actual), Some(expected)) => {
+            (Ok(_), Some(expected)) => {
                 accepted += 1;
                 // RDKit drops E/Z that a wU/wD flag sits on, where `read`
                 // keeps it (#1042); compare RDKit's reading of the input.

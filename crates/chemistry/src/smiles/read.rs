@@ -496,8 +496,11 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
 /// flag begins at, it is then no tetrahedral centre, and neither atom has
 /// another single bond that the flag could help make a chiral axis.
 /// The flag also made its begin atom the bond's `a`; keep that order, so a
-/// reversed bond takes the opposite direction.
-fn keep_stated_alkene_directions(parsed: &mut Parsed, stated: &[(usize, Direction)]) -> Result<()> {
+/// reversed bond takes the opposite direction. Returns the restored bonds' ends.
+fn keep_stated_alkene_directions(
+    parsed: &mut Parsed,
+    stated: &[(usize, Direction)],
+) -> Result<Vec<[usize; 2]>> {
     let graph = &parsed.graph;
     let mut degree = vec![0usize; graph.atoms.len()];
     let mut doubles = vec![Vec::new(); graph.atoms.len()];
@@ -540,10 +543,13 @@ fn keep_stated_alkene_directions(parsed: &mut Parsed, stated: &[(usize, Directio
             restore.push((id, restored));
         }
     }
+    let mut ends = Vec::new();
     for (id, direction) in restore {
         put(&mut parsed.directions, id, direction)?;
+        let bond = at(&parsed.graph.bonds, id)?;
+        ends.push([bond.a, bond.b]);
     }
-    Ok(())
+    Ok(ends)
 }
 
 /// Read default SMILES/CXSMILES chemistry, retaining input conformers and name.
@@ -586,6 +592,7 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
         }
     }
     let mut annotations = Annotations::new(&parsed);
+    let mut restored = Vec::new();
     let name = if suffix.starts_with('|') {
         let topology = cx::Topology {
             atoms: parsed.graph.atoms.len(),
@@ -613,7 +620,7 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
             annotations.apply(&mut parsed, event)?;
         }
         if keep_stated_ez {
-            keep_stated_alkene_directions(&mut parsed, &stated)?;
+            restored = keep_stated_alkene_directions(&mut parsed, &stated)?;
         }
         cx::trim(suffix.get(extension.end..).ok_or(Error::Limit)?)
     } else {
@@ -667,6 +674,27 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
         stereo::CoordinateBounds::NativeImport,
     )?;
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
+    // Sanitization can turn the double bond single (Cl=O to [Cl+][O-]), and
+    // perception then leaves a restored direction alone; drop it, as the flag
+    // would have been dropped.
+    let state = &mut prepared.state;
+    for ends in restored {
+        let ends = ends.map(|old| kept_atoms.iter().position(|&id| id == old));
+        let Some(id) = state.graph.bonds.iter().position(|bond| {
+            ends == [Some(bond.a), Some(bond.b)] || ends == [Some(bond.b), Some(bond.a)]
+        }) else {
+            continue;
+        };
+        let bond = at(&state.graph.bonds, id)?;
+        if !state.graph.bonds.iter().any(|other| {
+            other.order == 2
+                && [other.a, other.b]
+                    .iter()
+                    .any(|&atom| atom == bond.a || atom == bond.b)
+        }) {
+            put(&mut state.directions, id, Direction::None)?;
+        }
+    }
     let mut dropped_cumulene_ez = false;
     for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {
         let [(a, _), (b, _)] = chain.ends;

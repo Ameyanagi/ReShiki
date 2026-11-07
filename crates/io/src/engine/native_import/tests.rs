@@ -1524,6 +1524,8 @@ async fn wedge_flags_keep_stated_alkene_stereo() -> anyhow::Result<()> {
             "InChI=1S/C2HF3/c3-1-2(4)5/h1H",
         ),
         ("C/C=C/C |wU:1.0,ctu:1|", "CC=CC", BUTENE),
+        // Sanitization leaves no double bond for the kept direction.
+        ("O/Cl=O |wU:1.0|", "[O-][Cl+]O", "InChI=1S/ClHO2/c2-1-3/h2H"),
         (
             "F/C(=C/F)C(Cl)=C/Br |wU:0.0,wU:4.4|",
             "FC=C(F)C(Cl)=CBr",
