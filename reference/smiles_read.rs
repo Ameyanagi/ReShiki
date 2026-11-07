@@ -8,9 +8,6 @@ use std::{
     process::{Command, Stdio},
 };
 
-#[path = "support/flagged_ez.rs"]
-mod flagged_ez;
-
 #[derive(Deserialize, Serialize)]
 struct Case {
     name: String,
@@ -79,11 +76,10 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
         let failure = match (&result, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
-                if flagged_ez::flagged("smiles", &case.text) {
-                    None
-                } else {
-                    difference(&serde_json::to_value(actual)?, expected, "molecule")
-                }
+                // RDKit drops E/Z that a wU/wD flag sits on, where `read`
+                // keeps it (#1042); compare RDKit's reading of the input.
+                let actual = smiles::read_dropping_flagged_ez(&case.text)?;
+                difference(&serde_json::to_value(actual)?, expected, "molecule")
             }
             (Err(_), None) => {
                 rejected += 1;

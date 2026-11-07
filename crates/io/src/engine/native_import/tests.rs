@@ -1469,9 +1469,10 @@ async fn wedge_flags_keep_stated_alkene_stereo() -> anyhow::Result<()> {
         Ok((analysis.smiles, analysis.inchi))
     };
     let dropped = smiles::read_dropping_flagged_ez;
+    // The whole prepared molecule, so a restore cannot change anything else.
     let stereo =
         |text: &str, read: fn(&str) -> std::result::Result<smiles::Imported, smiles::Error>| {
-            anyhow::Ok(serde_json::to_value(read(text)?.prepared.state.metadata)?)
+            anyhow::Ok(serde_json::to_value(read(text)?.prepared)?)
         };
     const FLUOROIMINE: &str = "InChI=1S/CH2FN/c2-1-3/h1,3H";
     const BUTENE: &str = "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3";
@@ -1513,8 +1514,16 @@ async fn wedge_flags_keep_stated_alkene_stereo() -> anyhow::Result<()> {
     }
     // The flag can mean a centre or an axis, the double-bond end has another
     // neighbour, or the double bond is cumulated: the flag still replaces the
-    // direction, as on main.
+    // direction, as on main. Where the double bond has no E/Z, or CX states
+    // it, the kept direction changes nothing.
     for (text, smiles, inchi) in [
+        ("C/C=C |wU:1.0|", "C=CC", "InChI=1S/C3H6/c1-3-2/h3H,1H2,2H3"),
+        (
+            "F/C=C(F)F |wU:1.0|",
+            "FC=C(F)F",
+            "InChI=1S/C2HF3/c3-1-2(4)5/h1H",
+        ),
+        ("C/C=C/C |wU:1.0,ctu:1|", "CC=CC", BUTENE),
         (
             "F/C(=C/F)C(Cl)=C/Br |wU:0.0,wU:4.4|",
             "FC=C(F)C(Cl)=CBr",

@@ -495,11 +495,9 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
 /// bond is not cumulated and neither atom carries a tag. Whichever atom the
 /// flag begins at, it is then no tetrahedral centre, and neither atom has
 /// another single bond that the flag could help make a chiral axis.
-fn keep_stated_alkene_directions(
-    parsed: &mut Parsed,
-    stated: &[crate::graph::Bond],
-    stated_directions: &[Direction],
-) -> Result<()> {
+/// The flag also made its begin atom the bond's `a`; keep that order, so a
+/// reversed bond takes the opposite direction.
+fn keep_stated_alkene_directions(parsed: &mut Parsed, stated: &[(usize, Direction)]) -> Result<()> {
     let graph = &parsed.graph;
     let mut degree = vec![0usize; graph.atoms.len()];
     let mut doubles = vec![Vec::new(); graph.atoms.len()];
@@ -520,27 +518,30 @@ fn keep_stated_alkene_directions(
             })
     };
     let mut restore = Vec::new();
-    for (id, ((bond, direction), stated_direction)) in graph
+    for (id, ((bond, direction), &(stated_a, stated_direction))) in graph
         .bonds
         .iter()
         .zip(&parsed.directions)
-        .zip(stated_directions)
+        .zip(stated)
         .enumerate()
     {
+        let restored = match (stated_direction, stated_a == bond.a) {
+            (Direction::Up, true) | (Direction::Down, false) => Direction::Up,
+            (Direction::Down, true) | (Direction::Up, false) => Direction::Down,
+            _ => continue,
+        };
         if bond.order == 1
             && matches!(direction, Direction::Wedge | Direction::Hash)
-            && matches!(stated_direction, Direction::Up | Direction::Down)
             && at(&parsed.metadata.atoms, bond.a)?.chiral_tag == 0
             && at(&parsed.metadata.atoms, bond.b)?.chiral_tag == 0
             && (*at(&degree, bond.a)? == 1 && alkene_end(bond.b)?
                 || *at(&degree, bond.b)? == 1 && alkene_end(bond.a)?)
         {
-            restore.push(id);
+            restore.push((id, restored));
         }
     }
-    for id in restore {
-        put(&mut parsed.graph.bonds, id, at(stated, id)?.clone())?;
-        put(&mut parsed.directions, id, *at(stated_directions, id)?)?;
+    for (id, direction) in restore {
+        put(&mut parsed.directions, id, direction)?;
     }
     Ok(())
 }
@@ -601,13 +602,18 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
                 .collect(),
         };
         let extension = cx::read(suffix, &topology)?;
-        let stated = parsed.graph.bonds.clone();
-        let stated_directions = parsed.directions.clone();
+        let stated: Vec<_> = parsed
+            .graph
+            .bonds
+            .iter()
+            .zip(&parsed.directions)
+            .map(|(bond, &direction)| (bond.a, direction))
+            .collect();
         for event in extension.events {
             annotations.apply(&mut parsed, event)?;
         }
         if keep_stated_ez {
-            keep_stated_alkene_directions(&mut parsed, &stated, &stated_directions)?;
+            keep_stated_alkene_directions(&mut parsed, &stated)?;
         }
         cx::trim(suffix.get(extension.end..).ok_or(Error::Limit)?)
     } else {
