@@ -153,22 +153,6 @@ pub fn audit_fusion_plan(
         ));
     }
     let audit = (|| -> Result<FusionAuditResult, String> {
-        let unresolved = unrepresented_component_indicated_hydrogens(
-            ast,
-            &specs,
-            indicated_hydrogens,
-            numbering,
-            derivative_state,
-        )?;
-        if !unresolved.is_empty() {
-            return Ok(result(
-                AuditStatus::Abstain,
-                paired_external_pi_consumption,
-                vec![format!(
-                    "polycomponent fusion has unrepresented intrinsic indicated-hydrogen sites: {unresolved:?}"
-                )],
-            ));
-        }
         let composition = audited_pin_composition_errors(
             mol,
             ast,
@@ -250,6 +234,7 @@ pub fn audit_fusion_plan(
         let carbon_candidates = intrinsic_carbon_candidate_atoms(ast, &specs, mol)?;
         let released = released_fusion_carbon_sites(mol, abstract_parent_graph, &carbon_candidates);
         let mut intrinsic_c_h = AtomSet::new();
+        let mut intrinsic_model = None;
         if !intrinsic_n_h.is_empty() || !carbon_candidates.is_empty() || !released.is_empty() {
             let expected = if intrinsic_n_h.is_empty() {
                 parent_bond_model(abstract_parent_graph)?
@@ -277,6 +262,25 @@ pub fn audit_fusion_plan(
                     "parent bond model does not preserve the proved intrinsic-hydrogen sites",
                 );
             }
+            intrinsic_model = Some(expected);
+        }
+        let unresolved = unrepresented_component_indicated_hydrogens(
+            ast,
+            &specs,
+            indicated_hydrogens,
+            numbering,
+            derivative_state,
+            &intrinsic_c_h,
+            intrinsic_model.as_ref(),
+        )?;
+        if !unresolved.is_empty() {
+            return Ok(result(
+                AuditStatus::Abstain,
+                paired_external_pi_consumption,
+                vec![format!(
+                    "polycomponent fusion has unrepresented intrinsic indicated-hydrogen sites: {unresolved:?}"
+                )],
+            ));
         }
         audit_bond_model(abstract_parent_graph, bond_model, &mut errors);
         audit_derivative_state(
@@ -359,6 +363,8 @@ fn unrepresented_component_indicated_hydrogens(
     cited: &[String],
     numbering: &FusionNumberingProof,
     state: &ParentDerivativeState,
+    intrinsic_c_h: &AtomSet,
+    intrinsic_model: Option<&ParentBondModel>,
 ) -> Result<Vec<(usize, String)>, String> {
     let consumed = super::component_hydrogen::component_hydrogen_consumption(ast, specs)?
         .map(|v| v.default_sites)
@@ -392,6 +398,116 @@ fn unrepresented_component_indicated_hydrogens(
         }
     }
     unresolved.sort();
+    if unresolved.is_empty() || !component_carbon_h_relocation_scope(ast, specs) {
+        return Ok(unresolved);
+    }
+    let Some(model) = intrinsic_model else {
+        return Ok(unresolved);
+    };
+    let cited_carbon: AtomSet = intrinsic_c_h
+        .iter()
+        .copied()
+        .filter(|a| locants.get(a).is_some_and(|l| cited.contains(l)))
+        .collect();
+    let mut domains = Vec::new();
+    let mut owned_targets = AtomSet::new();
+    for matched in &ast.component_occurrences {
+        // This proof releases the selected parent's carbon-H convention.
+        // Attached-component roles retain the existing representation checks.
+        if !ast.parent_occurrences.contains(&matched.occurrence_id)
+            || !unresolved.iter().any(|(o, _)| *o == matched.occurrence_id)
+        {
+            continue;
+        }
+        let spec = &specs[&matched.occurrence_id];
+        let original = component_atoms(spec);
+        let atoms = component_parent_atoms(spec)?;
+        let released: BTreeSet<_> = original
+            .iter()
+            .zip(&atoms)
+            .filter(|(a, b)| {
+                a.symbol == "C"
+                    && a.charge == 0
+                    && a.saturated
+                    && !b.saturated
+                    && spec.template.default_indicated_h.contains(&a.locant)
+            })
+            .map(|(a, _)| (matched.occurrence_id, a.locant.clone()))
+            .collect();
+        let input = matched.input_atom_by_locant();
+        let targets: AtomSet = input
+            .values()
+            .copied()
+            .filter(|a| cited_carbon.contains(a))
+            .collect();
+        if released.is_empty()
+            || targets.len() != released.len()
+            || targets.iter().any(|target| {
+                ast.component_occurrences
+                    .iter()
+                    .filter(|m| m.local_to_input_atom.iter().any(|(_, a)| a == target))
+                    .count()
+                    != 1
+            })
+        {
+            return Ok(unresolved);
+        }
+        let graph = component_graph(spec, &atoms);
+        let local_model = parent_bond_model(&graph)?;
+        if spec.template.mancude_double_bonds
+            != Some(local_model.maximum_non_cumulative_double_bonds)
+        {
+            return Ok(unresolved);
+        }
+        let capable = numbering::parent_pi_capable_atom_ids(&graph)?;
+        let local_targets: AtomSet = atoms
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| targets.contains(&input[&a.locant]))
+            .map(|(id, _)| id)
+            .collect();
+        let witnesses: Vec<BTreeMap<Edge, usize>> = local_model
+            .allowed_kekule_assignments
+            .iter()
+            .filter(|a| {
+                capable
+                    .difference(&a.paired_atoms())
+                    .copied()
+                    .collect::<AtomSet>()
+                    == local_targets
+            })
+            .map(|a| {
+                a.orders
+                    .iter()
+                    .map(|&(e, order)| {
+                        (
+                            normalize_edge(input[&atoms[e.0].locant], input[&atoms[e.1].locant]),
+                            order,
+                        )
+                    })
+                    .collect()
+            })
+            .collect();
+        owned_targets.extend(&targets);
+        domains.push((released, witnesses));
+    }
+    // Relocation preserves each occurrence's complete carbon-H role count.
+    // One completed maximum matching must reproduce every relocating local
+    // maximum, including shared-edge orders. No target can serve two occurrences.
+    if model.allowed_kekule_assignments.iter().any(|assignment| {
+        let orders: BTreeMap<_, _> = assignment.orders.iter().copied().collect();
+        owned_targets.is_disjoint(&assignment.paired_atoms())
+            && domains.iter().all(|(_, witnesses)| {
+                witnesses.iter().any(|local| {
+                    local
+                        .iter()
+                        .all(|(edge, order)| orders.get(edge) == Some(order))
+                })
+            })
+    }) {
+        let relocated: BTreeSet<_> = domains.into_iter().flat_map(|(sites, _)| sites).collect();
+        unresolved.retain(|site| !relocated.contains(site));
+    }
     Ok(unresolved)
 }
 fn component_role_errors(ast: &FusionNameAst, specs: &Specs) -> Vec<String> {
@@ -1317,7 +1433,7 @@ fn audit_component_pi_constraints(
         let atoms = if relocate {
             component_parent_atoms(spec)?
         } else {
-            spec.atoms().to_vec()
+            component_atoms(spec)
         };
         let input = matched.input_atom_by_locant();
         for atom in atoms {
@@ -2734,6 +2850,194 @@ mod tests {
         retained_graph_model::{RetainedGraphBondTemplate, RetainedGraphTemplate},
     };
     use super::*;
+
+    #[test]
+    fn carbon_hydrogen_relocation_rejects_omitted_and_swapped_citations() {
+        let registry = super::super::registry::fusion_component_registry();
+        for (smiles, correct, swapped) in [
+            ("C1C=Cc2cc3sccc3n12", "5", "7"),
+            ("C1C=Cn2c1cc1sccc12", "7", "5"),
+        ] {
+            let mol = super::super::super::graph_io::read_smiles(smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            let plan = super::super::planner::plan_fusion_parent(&mol, &atoms)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                plan.rendered_base_name,
+                format!("{correct}H-thieno[2,3-b]pyrrolizine")
+            );
+            assert_eq!(plan.indicated_hydrogens, [correct]);
+            assert!(plan.audit.confirmed(), "{:?}", plan.audit);
+            let specs = plan
+                .ast
+                .component_occurrences
+                .iter()
+                .map(|m| (m.occurrence_id, registry.spec_for_match(m).unwrap()))
+                .collect();
+            let intrinsic = locant_map(&plan.numbering)
+                .unwrap()
+                .into_iter()
+                .filter(|(_, l)| l == correct)
+                .map(|(a, _)| a)
+                .collect();
+            for cited in [Vec::new(), vec![swapped.to_string()]] {
+                let mut corrupt = plan.clone();
+                corrupt.indicated_hydrogens = cited;
+                assert!(
+                    !unrepresented_component_indicated_hydrogens(
+                        &corrupt.ast,
+                        &specs,
+                        &corrupt.indicated_hydrogens,
+                        &corrupt.numbering,
+                        &corrupt.derivative_state,
+                        &intrinsic,
+                        Some(&plan.bond_model),
+                    )
+                    .unwrap()
+                    .is_empty()
+                );
+                let result =
+                    audit_fusion_plan(&mol, &atoms, &corrupt, registry, "thieno[2,3-b]pyrrolizine")
+                        .unwrap();
+                assert!(!result.confirmed(), "{smiles}: {result:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn carbon_hydrogen_relocation_requires_local_ownership_and_matching() {
+        let registry = super::super::registry::fusion_component_registry();
+        let mol = super::super::super::graph_io::read_smiles("C1C=Cc2cc3sccc3n12").unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let plan = super::super::planner::plan_fusion_parent(&mol, &atoms)
+            .unwrap()
+            .unwrap();
+        let specs: Specs = plan
+            .ast
+            .component_occurrences
+            .iter()
+            .map(|m| (m.occurrence_id, registry.spec_for_match(m).unwrap()))
+            .collect();
+        let locants = locant_map(&plan.numbering).unwrap();
+        let target = *locants.iter().find(|(_, l)| l.as_str() == "5").unwrap().0;
+        let intrinsic = AtomSet::from([target]);
+        let unresolved = |ast: &FusionNameAst, specs: &Specs, model: &ParentBondModel| {
+            unrepresented_component_indicated_hydrogens(
+                ast,
+                specs,
+                &plan.indicated_hydrogens,
+                &plan.numbering,
+                &plan.derivative_state,
+                &intrinsic,
+                Some(model),
+            )
+            .unwrap()
+        };
+        assert!(unresolved(&plan.ast, &specs, &plan.bond_model).is_empty());
+        let mut attached = plan.ast.clone();
+        attached.parent_occurrences.clear();
+        assert!(!unresolved(&attached, &specs, &plan.bond_model).is_empty());
+
+        // Even a proved, cited target cannot discharge another occurrence's
+        // default role. Exchange it with a carbon belonging only to thiophene.
+        let mut foreign = plan.ast.clone();
+        let owner = foreign
+            .component_occurrences
+            .iter()
+            .position(|m| m.local_to_input_atom.iter().any(|(_, a)| *a == target))
+            .unwrap();
+        let owner_atoms: AtomSet = foreign.component_occurrences[owner]
+            .local_to_input_atom
+            .iter()
+            .map(|(_, a)| *a)
+            .collect();
+        let other = *locants
+            .keys()
+            .find(|a| !owner_atoms.contains(a) && mol.atoms[a].symbol == "C")
+            .unwrap();
+        for matched in &mut foreign.component_occurrences {
+            for (_, atom) in &mut matched.local_to_input_atom {
+                if *atom == target {
+                    *atom = other;
+                } else if *atom == other {
+                    *atom = target;
+                }
+            }
+        }
+        assert!(!unresolved(&foreign, &specs, &plan.bond_model).is_empty());
+
+        // A shared target would otherwise be reusable by a second occurrence.
+        let mut shared = plan.ast.clone();
+        let other_occurrence = if owner == 0 { 1 } else { 0 };
+        shared.component_occurrences[other_occurrence]
+            .local_to_input_atom
+            .push(("extra".into(), target));
+        assert!(!unresolved(&shared, &specs, &plan.bond_model).is_empty());
+
+        // The completed witness must restrict to the same local maximum.
+        let mut incompatible = plan.bond_model.clone();
+        for assignment in &mut incompatible.allowed_kekule_assignments {
+            for (_, order) in &mut assignment.orders {
+                *order = 1;
+            }
+        }
+        assert!(!unresolved(&plan.ast, &specs, &incompatible).is_empty());
+
+        // Keep both maxima at the declared budget while releasing two roles
+        // for one cited target: fixing C6 leaves a five-carbon pi path.
+        let mut wrong_count = specs.clone();
+        let occurrence = plan.ast.component_occurrences[owner].occurrence_id;
+        let spec = wrong_count.get_mut(&occurrence).unwrap();
+        spec.template.default_indicated_h.push("5".into());
+        spec.template.mancude_double_bonds = Some(2);
+        for atom in &mut spec.template.atoms {
+            if atom.locant == "5" {
+                atom.saturated = true;
+                atom.default_h = true;
+            } else if atom.locant == "6" {
+                atom.forced_single = true;
+            }
+        }
+        let original = component_atoms(spec);
+        let relaxed = component_parent_atoms(spec).unwrap();
+        for atoms in [&original, &relaxed] {
+            assert_eq!(
+                Some(
+                    parent_bond_model(&component_graph(spec, atoms))
+                        .unwrap()
+                        .maximum_non_cumulative_double_bonds
+                ),
+                spec.template.mancude_double_bonds
+            );
+        }
+        assert_eq!(
+            original
+                .iter()
+                .zip(&relaxed)
+                .filter(|(a, b)| a.saturated && !b.saturated)
+                .map(|(a, _)| a.locant.as_str())
+                .collect::<Vec<_>>(),
+            ["1", "5"]
+        );
+        let input = plan.ast.component_occurrences[owner].input_atom_by_locant();
+        assert_eq!(
+            input
+                .values()
+                .copied()
+                .filter(|a| {
+                    intrinsic.contains(a) && plan.indicated_hydrogens.contains(&locants[a])
+                })
+                .count(),
+            1
+        );
+        assert!(component_carbon_h_relocation_scope(&plan.ast, &wrong_count));
+        assert!(plan.ast.parent_occurrences.contains(&occurrence));
+        assert!(
+            unresolved(&plan.ast, &wrong_count, &plan.bond_model)
+                .contains(&(occurrence, "1".into()))
+        );
+    }
 
     fn fused_pair() -> (FusionNameAst, Specs) {
         let locants: Vec<_> = (1..=5).map(|n| n.to_string()).collect();

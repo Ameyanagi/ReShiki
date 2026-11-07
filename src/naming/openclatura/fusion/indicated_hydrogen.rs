@@ -85,12 +85,31 @@ pub(super) fn component_graph(
             .collect(),
     }
 }
+pub(super) fn component_atoms(spec: &FusionComponentSpec) -> Vec<RetainedGraphAtomTemplate> {
+    let mut atoms = spec.atoms().to_vec();
+    for atom in &mut atoms {
+        if atom.symbol == "N"
+            && atom.charge == 0
+            && spec
+                .bonds()
+                .iter()
+                .filter(|b| b.locants.0 == atom.locant || b.locants.1 == atom.locant)
+                .count()
+                == 3
+        {
+            atom.forced_single = true;
+        }
+    }
+    atoms
+}
 pub(super) fn component_parent_atoms(
     spec: &FusionComponentSpec,
 ) -> Result<Vec<RetainedGraphAtomTemplate>, String> {
-    let atoms = spec.atoms();
+    // A neutral trivalent bridgehead N donates its lone pair; it cannot
+    // supply a fourth bond when a component's carbon hydrogen is relocated.
+    let atoms = component_atoms(spec);
     let Some(declared) = spec.template.mancude_double_bonds else {
-        return Ok(atoms.to_vec());
+        return Ok(atoms);
     };
     let movable: BTreeSet<_> = atoms
         .iter()
@@ -105,7 +124,7 @@ pub(super) fn component_parent_atoms(
         .map(|a| a.locant.clone())
         .collect();
     if movable.is_empty() || spec.bonds().iter().any(|b| !pi_class(&b.bond_class)) {
-        return Ok(atoms.to_vec());
+        return Ok(atoms);
     }
     let relaxed: Vec<_> = atoms
         .iter()
@@ -118,12 +137,12 @@ pub(super) fn component_parent_atoms(
             a
         })
         .collect();
-    let original = parent_bond_model(&component_graph(spec, atoms))?;
+    let original = parent_bond_model(&component_graph(spec, &atoms))?;
     let model = parent_bond_model(&component_graph(spec, &relaxed))?;
     if original.maximum_non_cumulative_double_bonds != declared
         || model.maximum_non_cumulative_double_bonds != declared
     {
-        return Ok(atoms.to_vec());
+        return Ok(atoms);
     }
     let ids: AtomSet = atoms
         .iter()
@@ -136,7 +155,7 @@ pub(super) fn component_parent_atoms(
             .iter()
             .all(|(e, o)| *o == 1 || (!ids.contains(&e.0) && !ids.contains(&e.1)))
     }) {
-        return Ok(atoms.to_vec());
+        return Ok(atoms);
     }
     Ok(relaxed)
 }
@@ -262,7 +281,7 @@ pub(super) fn component_parent_graph(
         let atoms = if relocate_carbon_h {
             component_parent_atoms(spec)?
         } else {
-            spec.atoms().to_vec()
+            component_atoms(spec)
         };
         for a in atoms {
             let id = local[&a.locant];
@@ -755,6 +774,70 @@ pub(super) fn intrinsic_carbon_parent_model(
 mod tests {
     use super::super::super::molecule::{Atom, Bond};
     use super::*;
+
+    #[test]
+    fn bridgehead_donors_preserve_component_carbon_hydrogen_budgets() {
+        let registry = super::super::registry::fusion_component_registry();
+        for (name, budget) in [
+            ("1H-pyrrolizine", 3),
+            ("4H-quinolizine", 4),
+            ("2H-quinolizine", 4),
+            ("4H-pyrido[1,2-a]pyrimidine", 4),
+        ] {
+            let spec = registry.template_spec(name).unwrap();
+            let original = component_atoms(spec);
+            let relaxed = component_parent_atoms(spec).unwrap();
+            for atoms in [&original, &relaxed] {
+                let graph = component_graph(spec, atoms);
+                let model = parent_bond_model(&graph).unwrap();
+                assert_eq!(model.maximum_non_cumulative_double_bonds, budget, "{name}");
+                assert!(
+                    graph
+                        .atoms
+                        .iter()
+                        .any(|a| a.symbol == "N" && a.forced_single)
+                );
+            }
+            for locant in &spec.template.default_indicated_h {
+                assert!(original.iter().any(|a| a.locant == *locant && a.saturated));
+                assert!(relaxed.iter().any(|a| a.locant == *locant && !a.saturated));
+            }
+        }
+    }
+
+    #[test]
+    fn component_relaxation_preserves_fixed_roles_and_declared_maximum() {
+        let registry = super::super::registry::fusion_component_registry();
+        let mut spec = registry.template_spec("1H-pyrrolizine").unwrap().clone();
+        let carbon = spec
+            .template
+            .atoms
+            .iter()
+            .position(|a| a.locant == "1")
+            .unwrap();
+        spec.template.atoms[carbon].forced_single = true;
+        assert!(component_parent_atoms(&spec).unwrap()[carbon].saturated);
+        spec.template.atoms[carbon].forced_single = false;
+        spec.template.mancude_double_bonds = Some(2);
+        assert!(component_parent_atoms(&spec).unwrap()[carbon].saturated);
+
+        let mut spec = registry.template_spec("1H-pyrrolizine").unwrap().clone();
+        let nitrogen = spec
+            .template
+            .atoms
+            .iter()
+            .position(|a| a.symbol == "N")
+            .unwrap();
+        spec.template.atoms[nitrogen].charge = 1;
+        assert!(!component_atoms(&spec)[nitrogen].forced_single);
+        assert!(component_parent_atoms(&spec).unwrap()[carbon].saturated);
+        let pyridine = registry.get("pyridine").unwrap();
+        assert!(
+            component_atoms(&pyridine.spec)
+                .iter()
+                .all(|a| !a.forced_single)
+        );
+    }
 
     #[test]
     fn zwitterion_parent_hydrogen_requires_the_completed_parent_pi_maximum() {
