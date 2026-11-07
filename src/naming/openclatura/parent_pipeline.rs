@@ -853,14 +853,23 @@ mod tests {
 
     #[test]
     fn unregistered_retained_fusion_status_is_deferred_until_rendering() {
-        use super::super::{fusion::planner::plan_fusion_parent, graph_io::read_smiles};
-        let mol = read_smiles("c1ccc2c(c1)Nc1c(ccc3ccccc13)S2").unwrap();
+        use super::super::{
+            fusion::{model::FusionComponentMatch, planner::plan_fusion_parent},
+            graph_io::read_smiles,
+        };
+        let mol = read_smiles("C1C=Cc2cc3sccc3n12").unwrap();
         let atoms = mol.atoms.keys().copied().collect();
-        let plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
+        let mut plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
         assert_eq!(
             mol.name_status(),
             NameStatus::Unverified(NameReason::UnauditedPath)
         );
+        // A pyrrole parent bypasses the senior Table 2.8 pyrrolizine.
+        plan.ast.parent_occurrences = vec![0];
+        plan.ast.component_occurrences = vec![FusionComponentMatch {
+            spec_key: "pyrrole".into(),
+            ..Default::default()
+        }];
         let mut parts = AssemblyParts::new(1);
         parts.fusion_plan = Some(plan);
         mark_rendered_parent_status(&mol, &parts);

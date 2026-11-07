@@ -104,7 +104,7 @@ fn plan_uncached(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
         Err(error) => return rejected(error),
     };
     let face_model = typed_face_model(mol, &bounded);
-    let matches = match registry.match_face_model(&matching_parent, &face_model) {
+    let matches = match registry.match_faces(mol, &matching_parent, &face_model.faces, None) {
         Ok(matches) => matches,
         Err(error) => return rejected(error),
     };

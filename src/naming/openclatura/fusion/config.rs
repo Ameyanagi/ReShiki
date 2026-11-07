@@ -164,6 +164,8 @@ pub(super) struct FusionComponentRow {
     #[serde(default)]
     pub allow_as_peri_parent: bool,
     #[serde(default)]
+    pub parent_hydride_only: bool,
+    #[serde(default)]
     pub accepted_general_prefixes: Vec<String>,
     #[serde(default)]
     pub horizontal_ring_count: Option<usize>,
