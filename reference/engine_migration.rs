@@ -386,7 +386,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                     unspecified_ez::adapt(open, &actual, &mut expected);
                 }
                 if let Some(input) = &case.coordinate_wedges {
-                    coordinate_wedges::adapt(input, &actual, &mut expected);
+                    coordinate_wedges::adapt(&case.name, input, &actual, &mut expected);
                 }
                 if let Some(reading) = &case.molecule_reading {
                     molecule_reading::adapt(reading, &actual, &mut expected);

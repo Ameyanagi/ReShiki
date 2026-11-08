@@ -12,8 +12,10 @@ from engine.worker import handle
 
 if TYPE_CHECKING or __package__:
     from .smiles_read_reference import cases
+    from .valence_reference import ORDERS
 else:
     from smiles_read_reference import cases
+    from valence_reference import ORDERS
 
 
 def main():
@@ -74,6 +76,10 @@ def unspecified_ez(text):
     return dict(bonds=bonds, inchi=Chem.MolToInchi(mol), inchikey=Chem.MolToInchiKey(mol))
 
 
+# ReShiki's bond order codes (valence_reference.py) by RDKit bond type.
+CODES = {kind: code for code, kind in ORDERS.items()}
+
+
 def coordinate_wedges(text):
     """#1045: import drops input wedge flags before the fresh layout and wedges
     the molecule again from its stereo state. The original worker keeps the
@@ -100,8 +106,9 @@ def coordinate_wedges(text):
         inchikey=Chem.MolToInchiKey(mol),
         smiles=Chem.MolToSmiles(mol),
         kekule=[
-            [b.GetBeginAtomIdx(), b.GetEndAtomIdx(), int(b.GetBondTypeAsDouble())]
+            [b.GetBeginAtomIdx(), b.GetEndAtomIdx(), CODES[b.GetBondType()]]
             for b in kekule.GetBonds()
+            if b.GetBondType() in CODES
         ],
     )
 

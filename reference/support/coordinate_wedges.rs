@@ -5,9 +5,10 @@
 //! placement come from the actual response. The identifiers must equal the
 //! worker's, or else exactly RDKit's reading of the input itself. The worker
 //! also Kekulizes with the input wedges still set, which RDKit's Kekulize
-//! weighs; the bond orders may instead equal, as a whole, RDKit's Kekule form
-//! of the input with the wedges cleared (ZM374979_atropBad1). Partial mixes
-//! fail.
+//! weighs. Only for the two ZM374979_atropBad1 cases may the bond orders
+//! instead equal, as a whole, RDKit's Kekule form of the input with the
+//! wedges cleared; partial mixes fail, and every other input keeps the
+//! worker's bond orders exactly.
 //! Every other field is compared.
 use reshiki::engine::Response;
 
@@ -21,7 +22,13 @@ pub struct CoordinateWedges {
     kekule: Vec<[usize; 3]>,
 }
 
-pub fn adapt(input: &CoordinateWedges, actual: &Response, expected: &mut Response) {
+/// The cases whose Kekule form #1045 changes (RDKit source tree).
+const KEKULE: [&str; 2] = [
+    "source-cx/ZM374979_atropBad1.cxsmi/0",
+    "source-cx/ZM374979_atropBad1.cxsmi.expected.cxsmi/0",
+];
+
+pub fn adapt(name: &str, input: &CoordinateWedges, actual: &Response, expected: &mut Response) {
     if let (Some(a), Some(e)) = (&actual.document, expected.document.as_mut()) {
         for (a, e) in a.atoms.iter().zip(e.atoms.iter_mut()) {
             e.position = a.position;
@@ -42,7 +49,8 @@ pub fn adapt(input: &CoordinateWedges, actual: &Response, expected: &mut Respons
                 .find(|[p, q, _]| (*p, *q) == (x, y) || (*p, *q) == (y, x))
                 .map(|[_, _, order]| *order)
         };
-        let whole = a.bonds.len() == e.bonds.len()
+        let whole = KEKULE.contains(&name)
+            && a.bonds.len() == e.bonds.len()
             && a.bonds.len() == input.kekule.len()
             && a.bonds
                 .iter()
