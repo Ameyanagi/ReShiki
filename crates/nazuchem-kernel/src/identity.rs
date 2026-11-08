@@ -2,6 +2,7 @@
 // Origin: original
 // Source: ReShiki | crates/model/src/molecule_names.rs | 2df788dc456793c687b934afd6d4b317e3c73ef8
 // Changes: copy pure identity helpers onto kernel State and forward an explicit Budget.
+// Intentionally mirrored on different State types until ReShiki's chemistry and the kernel converge; kept in step by crates/model/src/molecule_names/identity_parity.rs.
 
 //! Canonical molecular identity, independent of document selection and captions.
 use crate::{self as chemistry, budget::Budget};
@@ -96,7 +97,7 @@ pub fn canonical_identity(
 /// The identity named by an unknown-configuration drawing. Clear only the
 /// explicitly unknown units; specified neighbouring stereocentres remain part
 /// of the identity checked by naming and generated captions.
-pub fn unspecified_unknown_stereo(
+fn unspecified_unknown_stereo(
     state: &chemistry::stereo::perception::State,
 ) -> chemistry::stereo::perception::State {
     use chemistry::kekulize::Direction;
@@ -135,7 +136,7 @@ pub fn unspecified_unknown_stereo(
 
 /// Unknown tetrahedral anchors can be explicit properties or the first
 /// endpoint of a native wavy single bond. Double-bond unknowns are separate.
-pub fn unknown_atom_units(state: &chemistry::stereo::perception::State) -> Vec<bool> {
+fn unknown_atom_units(state: &chemistry::stereo::perception::State) -> Vec<bool> {
     let mut unknown: Vec<_> = state
         .properties
         .atoms

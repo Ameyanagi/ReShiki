@@ -49,7 +49,7 @@ path = "crates/nazuchem-kernel/NOTICE"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
-  { project = "ReShiki/nazuchem", path = "crates/nazuchem-kernel/NOTICE", ref = "Phase A step 2 working tree (uncommitted)", license = "MIT OR Apache-2.0" },
+  { project = "ReShiki/nazuchem", path = "crates/nazuchem-kernel/NOTICE", ref = "327d32fed63a5b3df15b7b8dc5ab84a7c36e0865", license = "MIT OR Apache-2.0" },
 ]
 notes = "Phase A step 2 crate-local attribution and unresolved sort-policy notice. Phase A step 3 adds the pure identity, axis-marker and pseudoasymmetric-classifier scope with original ReShiki source pins."
 sha256 = "5e673728376b3b33598f1a544c1dcecfa4a10bfaab28a77e4189f44b0d7fbb22"
@@ -7186,7 +7186,7 @@ path = "crates/nazuchem-ir/Cargo.toml"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
-  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-ir/Cargo.toml", ref = "Phase A step 3 working tree (uncommitted)", license = "MIT OR Apache-2.0" },
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-ir/Cargo.toml", ref = "4f67fbcc24c3b6c10cb84e1ced567ad534e40e8b", license = "MIT OR Apache-2.0" },
 ]
 notes = "New Phase A step 3 shared-vocabulary crate metadata and source-history attribution; no structure IR or engine implementation."
 sha256 = "fcc93011598f889a30f62043c1218a9fb5242d5a8167559d1014ab7e68af6ac6"
@@ -7196,7 +7196,7 @@ path = "crates/nazuchem-ir/NOTICE"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
-  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-ir/NOTICE", ref = "Phase A step 3 working tree (uncommitted)", license = "MIT OR Apache-2.0" },
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-ir/NOTICE", ref = "4f67fbcc24c3b6c10cb84e1ced567ad534e40e8b", license = "MIT OR Apache-2.0" },
 ]
 notes = "New Phase A step 3 shared-vocabulary crate metadata and source-history attribution; no structure IR or engine implementation."
 sha256 = "a227c8e269721fb9c010d4ec287bddab4769c8251885b0e4b8baf5533e49e270"
@@ -7262,7 +7262,7 @@ path = "crates/model/src/molecule_names/identity_parity.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
-  { project = "Nazuchem/ReShiki", path = "crates/model/src/molecule_names/identity_parity.rs", ref = "Phase A step 3 working tree (uncommitted)", license = "MIT OR Apache-2.0" },
+  { project = "Nazuchem/ReShiki", path = "crates/model/src/molecule_names/identity_parity.rs", ref = "4f67fbcc24c3b6c10cb84e1ced567ad534e40e8b", license = "MIT OR Apache-2.0" },
   { project = "ReShiki", path = "crates/model/src/molecule_names.rs", ref = "381ac4164154afecf04bb4a89d8eef32eeb52190", license = "MIT OR Apache-2.0" },
   { project = "ReShiki", path = "crates/model/src/molecule_names/axis_markers.rs", ref = "2df788dc456793c687b934afd6d4b317e3c73ef8", license = "MIT OR Apache-2.0" },
   { project = "ReShiki", path = "crates/model/src/chemistry/document/atrop_tests.rs", ref = "feed38dc791ee59fb0b8c4b392a3f72c100a1be7", license = "MIT OR Apache-2.0" },

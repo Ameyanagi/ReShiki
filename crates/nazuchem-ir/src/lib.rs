@@ -156,7 +156,7 @@ impl NameReason {
                 "Uses a substitutive or ring-assembly name where the preferred name is not yet supported. This includes double-bond junctions and assemblies requiring skeletal-replacement or hydro prefixes (P-28, P-31.2.3.3.5, P-52.2.7)."
             }
             Self::LinearPhane => {
-                "The structure is a linear phane: at least four ring systems, two of them terminal, along a path of at least seven skeletal nodes. Its preferred IUPAC name is a phane name, such as 2,4,6-trioxa-1,7(1),3,5(1,4)-tetrabenzenaheptaphane, even where substitutive or multiplicative names exist (P-52.2.5.3). ReShiki does not yet generate linear phane names."
+                "The structure is a linear phane: at least four ring systems, two of them terminal, along a path of at least seven skeletal nodes. Its preferred IUPAC name is a phane name, such as 2,4,6-trioxa-1,7(1),3,5(1,4)-tetrabenzenaheptaphane, even where substitutive or multiplicative names exist (P-52.2.5.3). Linear phane names are not generated yet."
             }
             Self::VonBaeyerFusionFallback => {
                 "Uses a von Baeyer name, with skeletal replacement where needed, for a bridge-free ortho- or ortho- and peri-fused ring system with at least two rings of five or more members; preferred IUPAC names use fusion nomenclature, as in decahydronaphthalene rather than bicyclo[4.4.0]decane (P-52.2.4.4.2, P-31.1.4.2, P-31.2.3.3.2)."
@@ -228,10 +228,10 @@ impl NameReason {
                 "The anionic parent, suffix or retained-name choice for this anion has not been verified (P-72.7, P-72.2.2.2.1, P-72.2.2.2.2); for example, methoxide is preferred to methanolate."
             }
             Self::CationParent => {
-                "Cites the cationic centre only in a substituent prefix, as in (1-methylpyridin-1-ium-4-yl)methanol. A cation is senior to neutral classes, so the preferred IUPAC name takes a cationic parent, as in 4-(hydroxymethyl)-1-methylpyridin-1-ium (P-41, P-73.1); ReShiki does not choose that parent yet."
+                "Cites the cationic centre only in a substituent prefix, as in (1-methylpyridin-1-ium-4-yl)methanol. A cation is senior to neutral classes, so the preferred IUPAC name takes a cationic parent, as in 4-(hydroxymethyl)-1-methylpyridin-1-ium (P-41, P-73.1); this name does not choose that parent yet."
             }
             Self::Phane => {
-                "The structure is a cyclophane: at least six nodes, two or more rings and a mancude ring. Cyclic phane names rank above fused, bridged fused and von Baeyer names, so the preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). ReShiki has not verified the numbering and citation order of its phane name."
+                "The structure is a cyclophane: at least six nodes, two or more rings and a mancude ring. Cyclic phane names rank above fused, bridged fused and von Baeyer names, so the preferred IUPAC name is a phane name (P-52.2.5.1, P-52.2.5.2). The numbering and citation order of this phane name have not been verified."
             }
         }
     }

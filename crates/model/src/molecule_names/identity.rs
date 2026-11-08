@@ -2,6 +2,7 @@
 // Origin: original
 // Source: ReShiki | crates/model/src/molecule_names.rs | 2df788dc456793c687b934afd6d4b317e3c73ef8
 // Changes: extract chemistry-only identity helpers; document admission remains in molecule_names.rs.
+// Intentionally mirrored on different State types until ReShiki's chemistry and the kernel converge; kept in step by crates/model/src/molecule_names/identity_parity.rs.
 
 //! Canonical molecular identity, independent of document selection and captions.
 use super::{chemistry, encode_axis_markers};
