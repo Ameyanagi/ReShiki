@@ -3,6 +3,7 @@
 // Source: openclatura | src/openclatura/group_atom_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/component_group_rules.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/component_group_rules.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura parent preprocessing and atom roles with local external-chain carboxylic selection.
@@ -529,6 +530,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::external_carboxylic_chains_require_three_groups_on_one_principal_chain | adapted
+    // Source: ReShiki | src/naming/openclatura/component_group_rules.rs::tests::external_carboxylic_chains_require_three_groups_on_one_principal_chain
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn external_carboxylic_chains_require_three_groups_on_one_principal_chain() {
         for smiles in [
             "OC(=O)CC(=O)O",

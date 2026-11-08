@@ -59,17 +59,12 @@ pub struct Aromaticity {
 }
 
 // Provenance: fn at | adapted
-// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn at<T>(items: &[T], id: usize) -> Result<&T, String> {
     items
         .get(id)
         .ok_or_else(|| "Invalid aromaticity index".into())
 }
 // Provenance: fn element | adapted
-// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
 // Source: RDKit | Code/GraphMol/PeriodicTable.h::PeriodicTable::getDefaultValence
 // Source: RDKit | Code/GraphMol/PeriodicTable.h::PeriodicTable::getNouterElecs
 fn element(number: i32) -> Result<&'static Element, String> {
@@ -130,9 +125,6 @@ struct Topology<'a> {
     cyclic: Vec<bool>,
 }
 // Provenance: impl Topology | adapted
-// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::countAtomElec
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::getAtomDonorTypeArom
 // Source: RDKit | Code/GraphMol/PeriodicTable.h::PeriodicTable::moreElectroNegative
@@ -308,8 +300,6 @@ impl<'a> Topology<'a> {
 // Provenance: fn perceive | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 pub fn perceive(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -323,8 +313,6 @@ pub fn perceive(
 // Provenance: fn perceive_with_budget | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 pub fn perceive_with_budget(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -368,8 +356,6 @@ fn estimated_bytes(graph: &Graph, rings: &[Vec<usize>]) -> Option<usize> {
 // Provenance: fn run_with_budget | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn run_with_budget(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -410,8 +396,6 @@ fn run_with_budget(
 // Provenance: fn perceive_with_work | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn perceive_with_work(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -423,8 +407,6 @@ fn perceive_with_work(
 // Provenance: fn perceive_cached | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 pub(crate) fn perceive_cached(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -436,8 +418,6 @@ pub(crate) fn perceive_cached(
 
 // Provenance: fn perceive_cached_with_work | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn perceive_cached_with_work(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -523,8 +503,6 @@ fn perceive_cached_with_work(
 
 // Provenance: fn ring_neighbors | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::RingUtils::makeRingNeighborMap
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn ring_neighbors(
     rings: &[&[usize]],
     bond_count: usize,
@@ -565,8 +543,6 @@ fn ring_neighbors(
 // Provenance: fn connected | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::RingUtils::checkFused
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::RingUtils::pickFusedRings
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn connected(rings: &[usize], neighbors: &[Vec<usize>], work: &mut Work) -> Result<bool, String> {
     let root = *rings.first().ok_or("Missing ring combination")?;
     let mut stack = vec![root];
@@ -587,8 +563,6 @@ fn connected(rings: &[usize], neighbors: &[Vec<usize>], work: &mut Work) -> Resu
 // Provenance: fn huckel | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::applyHuckel
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::getMinMaxAtomElecs
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn huckel(atoms: &BTreeMap<usize, usize>, donors: &[Donor]) -> Result<bool, String> {
     let (mut low, mut high, mut any) = (0, 0, 0);
     for (&id, &count) in atoms {
@@ -618,9 +592,6 @@ fn huckel(atoms: &BTreeMap<usize, usize>, donors: &[Donor]) -> Result<bool, Stri
 }
 #[cfg(test)]
 // Provenance: fn next_combination | adapted
-// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 // Source: RDKit | Code/RDGeneral/types.cpp::RDKit::nextCombination
 fn next_combination(indices: &mut [usize], count: usize) -> Result<bool, String> {
     let length = indices.len();
@@ -638,8 +609,6 @@ fn next_combination(indices: &mut [usize], count: usize) -> Result<bool, String>
 // Provenance: fn mark_fused | adapted
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::applyHuckelToFused
 // Source: RDKit | Code/GraphMol/Aromaticity.cpp::markAtomsBondsArom
-// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn mark_fused(
     graph: &mut Graph,
     rings: &[&[usize]],
@@ -860,9 +829,7 @@ fn visit_connected(
 /// changes bond orders, e.g. the N-H in a pyridone. The prior counts must be from
 /// the same graph immediately before aromaticity perception.
 // Provenance: fn adjust_hydrogens | adapted
-// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
 // Source: RDKit | Code/GraphMol/MolOps.cpp::MolOps::adjustHs
-// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 pub fn adjust_hydrogens(graph: &Graph, previous: &[Valence]) -> Result<Graph, String> {
     if previous.len() != graph.atoms.len() {
         return Err("Hydrogen cache size changed".into());

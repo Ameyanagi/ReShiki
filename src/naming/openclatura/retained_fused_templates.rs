@@ -3,6 +3,12 @@
 // Source: openclatura | src/openclatura/retained_fused_templates.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Source: openclatura | src/openclatura/retained_graph_model.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_retained_macrocycles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_retained_fused_production.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_component_h_citation.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_parents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura retained graph registry/matcher and generated series adapted to typed Rust, with original topology-status and localized-pi safeguards.
@@ -1168,6 +1174,13 @@ mod tests {
         match_retained_graph_templates_with_options(&mol, &atoms, options)
     }
     #[test]
+    // Provenance: fn tests::registry_expands_all_declared_locanted_graphs | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::registry_expands_all_declared_locanted_graphs
+    // Source: openclatura | tests/roundtrip/test_retained_macrocycles.py::test_macrocycle_match_exposes_all_numbering_orientations
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_polyaphene_series_generates_standard_locant_graphs
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_higher_acene_series_generates_standard_locant_graphs
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn registry_expands_all_declared_locanted_graphs() {
         let templates = retained_graph_templates(true);
         assert!(templates.len() > 250);
@@ -1199,6 +1212,12 @@ mod tests {
         assert!(templates.iter().any(|t| t.name == "decaphene"));
     }
     #[test]
+    // Provenance: fn tests::retained_graphs_accept_kekule_forms_and_all_numberings | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::retained_graphs_accept_kekule_forms_and_all_numberings
+    // Source: openclatura | tests/unit/test_analysis.py::test_fused_and_polycyclic_retained_signatures_are_data_driven
+    // Source: openclatura | tests/unit/test_analysis.py::test_retained_fused_graph_templates_match_core_numbering_when_enabled_for_audit
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_graphs_accept_kekule_forms_and_all_numberings() {
         for (smiles, name, count) in [
             ("c1ccc2ccccc2c1", "naphthalene", 4),
@@ -1223,6 +1242,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::xanthene_congener_templates_keep_heteroatom_and_methylene_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::xanthene_congener_templates_keep_heteroatom_and_methylene_locants
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn xanthene_congener_templates_keep_heteroatom_and_methylene_locants() {
         for (smiles, name, symbol) in [
             ("O1c2ccccc2Cc2ccccc21", "xanthene", "O"),
@@ -1295,6 +1319,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::indicated_h_carbanions_keep_the_retained_parent_and_locant | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::indicated_h_carbanions_keep_the_retained_parent_and_locant
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_requested_fused_parent_name_is_invariant_to_atom_order
+    // Source: openclatura | tests/unit/test_fusion_component_h_citation.py::test_parent_citation_uses_declared_template_prefix_only
+    // Source: openclatura | tests/roundtrip/test_fused_parents.py::test_fused_parent_suite_pin_claims_are_explicit_and_evidence_backed
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn indicated_h_carbanions_keep_the_retained_parent_and_locant() {
         for (smiles, parent, locant) in [
             ("[CH-]1C=Cc2ccccc21", "1H-indene", "1"),
@@ -1360,6 +1391,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::exact_charges_and_graph_connectivity_are_not_relaxed | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::exact_charges_and_graph_connectivity_are_not_relaxed
+    // Source: openclatura | tests/unit/test_analysis.py::test_preferred_retained_output_names_preserve_exact_template_metadata
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn exact_charges_and_graph_connectivity_are_not_relaxed() {
         assert!(
             matches(
@@ -1379,6 +1415,11 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::retained_fused_names_do_not_erase_ring_triples_or_cumulated_doubles | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::retained_fused_names_do_not_erase_ring_triples_or_cumulated_doubles
+    // Source: openclatura | tests/unit/test_analysis.py::test_general_retained_ring_recognizer_uses_templates_only_for_fused_systems
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_fused_names_do_not_erase_ring_triples_or_cumulated_doubles() {
         for (smiles, legacy_name) in [
             ("C1=CC=C2C(=C1)C3=CC#CC=C3C2", None),
@@ -1443,6 +1484,11 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::decorated_nonaromatic_parent_requires_unambiguous_pi_state | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::decorated_nonaromatic_parent_requires_unambiguous_pi_state
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn decorated_nonaromatic_parent_requires_unambiguous_pi_state() {
         let mol = read_smiles("ClC1=CC=CC2=CC=CC=CC2=C1", &Default::default()).unwrap();
         let ring: AtomSet = mol
@@ -1474,6 +1520,13 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::retained_localized_pi_state_constrains_all_numbering_maps | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::retained_localized_pi_state_constrains_all_numbering_maps
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_requested_fused_parent_name_is_invariant_to_atom_order
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Source: openclatura | tests/roundtrip/test_fused_parents.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_localized_pi_state_constrains_all_numbering_maps() {
         for (smiles, expected) in [
             ("c1ccc2c(c1)-c1ccccc1-2", "biphenylene"),
@@ -1530,6 +1583,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::preferred_output_names_have_metadata_and_aliases_do_not | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_templates.rs::tests::preferred_output_names_have_metadata_and_aliases_do_not
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_parent_uses_data_backed_preferred_name
+    // Source: openclatura | tests/unit/test_analysis.py::test_no_bare_retained_alias_infers_a_canonical_hydride_tautomer
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn preferred_output_names_have_metadata_and_aliases_do_not() {
         assert!(retained_parent_metadata("2,3-dihydro-1H-indole").is_some());
         assert!(retained_parent_metadata("indoline").is_some());

@@ -231,7 +231,6 @@ pub(super) fn fusion_charge_operations(
 
 #[cfg(test)]
 // Provenance: mod tests | adapted
-// Source: openclatura | src/openclatura/fusion/charges.py::module scope (mapping uncertain)
 mod tests {
     use super::super::super::graph_io::read_smiles;
     use super::*;

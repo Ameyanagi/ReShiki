@@ -2,9 +2,11 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/ring_renderer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/ring_renderer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_human_descriptor.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
-// Changes: Adapted openclatura ring/von-Baeyer descriptor rendering and cycle-count decoding with original Rust regression tests.
+// Changes: Adapted openclatura ring/von-Baeyer descriptor rendering and cycle-count decoding with local Rust regression tests that include adapted upstream cases.
 // Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
 
 //! Data-backed P-23/P-24 ring descriptor rendering.
@@ -78,6 +80,12 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::descriptor_kinds_keep_their_distinct_naming_systems | adapted
+    // Source: ReShiki | src/naming/openclatura/ring_renderer.rs::tests::descriptor_kinds_keep_their_distinct_naming_systems
+    // Source: openclatura | tests/unit/test_analysis.py::test_ring_descriptor_rendering_is_registry_backed
+    // Source: openclatura | tests/integration/test_human_descriptor.py::test_systematic_bicyclic_parent_keeps_its_selected_descriptor
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn descriptor_kinds_keep_their_distinct_naming_systems() {
         assert_eq!(render_ring_descriptor("spiro", &[3, 5]), "spiro[3.5]");
         assert_eq!(

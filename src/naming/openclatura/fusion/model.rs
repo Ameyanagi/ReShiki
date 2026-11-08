@@ -56,7 +56,6 @@ pub struct BondAssignment {
 }
 impl BondAssignment {
     // Provenance: fn BondAssignment::paired_atoms | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     // Source: openclatura | src/openclatura/fusion/mancude.py::inline in _external_pi_parent_delta
     pub(super) fn paired_atoms(&self) -> AtomSet {
         self.orders
@@ -86,7 +85,6 @@ impl ParentBondModel {
             .collect()
     }
     // Provenance: fn ParentBondModel::pi_atoms | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     // Source: openclatura | src/openclatura/fusion/mancude.py::inline in _external_pi_parent_delta
     pub(super) fn pi_atoms(&self) -> BTreeSet<usize> {
         self.pi_eligible_edges
@@ -106,56 +104,48 @@ pub enum ComparisonKey {
 }
 impl Default for ComparisonKey {
     // Provenance: fn <ComparisonKey as Default>::default | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn default() -> Self {
         Self::Tuple(Vec::new())
     }
 }
 impl From<i32> for ComparisonKey {
     // Provenance: fn <ComparisonKey as From<i32>>::from | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: i32) -> Self {
         Self::Int(v as i64)
     }
 }
 impl From<i64> for ComparisonKey {
     // Provenance: fn <ComparisonKey as From<i64>>::from | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: i64) -> Self {
         Self::Int(v)
     }
 }
 impl From<usize> for ComparisonKey {
     // Provenance: fn <ComparisonKey as From<usize>>::from | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: usize) -> Self {
         Self::Int(v as i64)
     }
 }
 impl From<String> for ComparisonKey {
     // Provenance: fn <ComparisonKey as From<String>>::from | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: String) -> Self {
         Self::Str(v)
     }
 }
 impl From<&str> for ComparisonKey {
     // Provenance: fn <ComparisonKey as From<&str>>::from | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: &str) -> Self {
         Self::Str(v.into())
     }
 }
 impl From<Vec<i64>> for ComparisonKey {
     // Provenance: fn <ComparisonKey as From<Vec<i64>>>::from | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: Vec<i64>) -> Self {
         Self::Tuple(v.into_iter().map(Self::Int).collect())
     }
 }
 impl ComparisonKey {
     // Provenance: fn ComparisonKey::tuple | adapted
-    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     pub(super) fn tuple(values: impl IntoIterator<Item = ComparisonKey>) -> Self {
         Self::Tuple(values.into_iter().collect())
     }
@@ -439,7 +429,6 @@ pub struct FusionCitationPlan {
 // Provenance: impl FusionCitationPlan | adapted
 // Source: openclatura | src/openclatura/fusion/model.py::FusionCitationPlan.parent_occurrences
 // Source: openclatura | src/openclatura/fusion/model.py::FusionCitationPlan.from_tree
-// Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
 impl FusionCitationPlan {
     pub(super) fn parent_occurrences(&self) -> Vec<usize> {
         self.roots.iter().map(|r| r.occurrence_id).collect()

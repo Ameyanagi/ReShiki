@@ -2,6 +2,7 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/assembly_utils.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/assembly_utils.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura grammar helpers with local compound-locant and stereo-hyphen fixes.
@@ -127,6 +128,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::only_a_leading_stereo_descriptor_takes_a_hyphen | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_utils.rs::tests::only_a_leading_stereo_descriptor_takes_a_hyphen
+    // Source: openclatura | tests/unit/test_analysis.py::test_distinct_center_ligands_only_group_ligands_after_the_first
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn only_a_leading_stereo_descriptor_takes_a_hyphen() {
         assert!(needs_hyphen("methyl", "(1R,2E)-but-2-enyl"));
         assert!(needs_hyphen("methyl", "(5'E)-1'-butyl"));

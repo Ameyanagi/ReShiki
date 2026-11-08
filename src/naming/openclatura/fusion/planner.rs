@@ -2,6 +2,8 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/fusion/planner.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/fusion/planner.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/roundtrip/test_bridges.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_systematic_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura audited fusion planner with separate local benzo-parent planning, spiro entry and localized-pi refusal proof.
@@ -76,7 +78,6 @@ pub(in super::super) fn plan_fusion_parent_for_spiro(
 }
 
 // Provenance: fn rejected | adapted
-// Source: openclatura | src/openclatura/fusion/planner.py::module scope (mapping uncertain)
 fn rejected(error: String) -> PlanResult {
     if error.starts_with("openclatura:") && error.contains("not ported") {
         Err(error)
@@ -1002,7 +1003,6 @@ mod tests {
 
     #[test]
     // Provenance: fn tests::higher_order_components_preserve_intrinsic_numbering_and_identity | adapted
-    // Source: openclatura | src/openclatura/fusion/planner.py::module scope (mapping uncertain)
     fn higher_order_components_preserve_intrinsic_numbering_and_identity() {
         for (smiles, expected) in [
             (
@@ -1065,6 +1065,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::localized_nonaromatic_pi_alternatives_require_a_citation_witness | adapted
+    // Source: ReShiki | src/naming/openclatura/fusion/planner.rs::tests::localized_nonaromatic_pi_alternatives_require_a_citation_witness
+    // Source: openclatura | tests/roundtrip/test_bridges.py::test_roundtrip
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_multiple_indicated_hydrogens_are_graph_derived_and_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn localized_nonaromatic_pi_alternatives_require_a_citation_witness() {
         for text in [
             "C1=CC2=CC3=C(C=CN4CN=CCC34)C2=N1",

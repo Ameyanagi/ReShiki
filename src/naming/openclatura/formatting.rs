@@ -2,6 +2,9 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/formatting.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/formatting.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_stems.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_functional_rendering_regressions.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura fragment/multiplier formatting with local preferred-prefix and enclosure rules.
@@ -260,6 +263,11 @@ mod tests {
     use super::format_multiplier;
 
     #[test]
+    // Provenance: fn tests::simple_dec_prefixes_keep_basic_multipliers_and_parentheses | adapted
+    // Source: ReShiki | src/naming/openclatura/formatting.rs::tests::simple_dec_prefixes_keep_basic_multipliers_and_parentheses
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_starts_with_multiplier_true_positives
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn simple_dec_prefixes_keep_basic_multipliers_and_parentheses() {
         for (name, count, expected) in [
             ("decyl", 1, "decyl"),
@@ -273,6 +281,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::oxy_prefix_keeps_parent_hydride_acyl_enclosed | adapted
+    // Source: ReShiki | src/naming/openclatura/formatting.rs::tests::oxy_prefix_keeps_parent_hydride_acyl_enclosed
+    // Source: openclatura | tests/unit/test_stems.py::test_substituted_alkoxy_prefix_rejects_unrelated_branches
+    // Source: openclatura | tests/unit/test_functional_rendering_regressions.py::test_multiplier_preserves_ligand_boundaries
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_starts_with_multiplier_true_positives
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn oxy_prefix_keeps_parent_hydride_acyl_enclosed() {
         // P-16.5.1.4: (methanethioyl)oxy, as in (cyclohexanecarbonyl)sulfanyl (P-57.4).
         assert_eq!(

@@ -3,6 +3,14 @@
 // Source: openclatura | src/openclatura/assembly_spiro.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/spiro_assembly.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_retained_derivative_carbon_hydrogen.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_spiro_shared_parent_pipeline.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/arylGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_spiro_composed_parent_families.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_replacement_morphology.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura spiro component projection/priming with local locant bracketing and regression extensions.
@@ -39,7 +47,6 @@ pub struct SpiroAssembly {
 }
 impl SpiroAssembly {
     // Provenance: fn SpiroAssembly::new | adapted
-    // Source: openclatura | src/openclatura/assembly_spiro.py::module scope (mapping uncertain)
     // Source: openclatura | src/openclatura/spiro_assembly.py::SpiroAssembly
     pub fn new(side_locant: impl Into<String>, side_parent_name: impl Into<String>) -> Self {
         Self {
@@ -53,7 +60,6 @@ impl SpiroAssembly {
 
 // Provenance: fn prime_side_locant | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_prime_side_locant
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 pub fn prime_side_locant(locant: &str) -> String {
     let (base, annotation) = locant
         .find("lambda^")
@@ -69,7 +75,6 @@ pub fn prime_side_locant(locant: &str) -> String {
 }
 // Provenance: fn is_systematic_fusion | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::inline in spiro_assembly_from_parts
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn is_systematic_fusion(parts: &AssemblyParts) -> bool {
     parts
         .parent_hydride
@@ -80,7 +85,6 @@ fn is_systematic_fusion(parts: &AssemblyParts) -> bool {
 }
 // Provenance: fn side_replacement_prefixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_side_replacement_prefixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn side_replacement_prefixes(parts: &AssemblyParts) -> Vec<String> {
     let mut local = AssemblyParts::new(parts.parent_length);
     local.a_prefixes = parts
@@ -120,7 +124,6 @@ fn side_replacement_prefixes(parts: &AssemblyParts) -> Vec<String> {
 
 // Provenance: fn scope_spiro_oxo_hydrogens | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_scope_spiro_oxo_hydrogens
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn scope_spiro_oxo_hydrogens(parts: &mut AssemblyParts, junctions: &BTreeSet<String>) {
     if !is_systematic_fusion(parts) {
         return;
@@ -262,7 +265,6 @@ fn scope_spiro_oxo_hydrogens(parts: &mut AssemblyParts, junctions: &BTreeSet<Str
 
 // Provenance: fn project_locanted_hw_component | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_project_locanted_hw_component
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn project_locanted_hw_component(parts: &mut AssemblyParts) {
     if parts.retained_name.is_none()
         || !parts.is_ring
@@ -386,7 +388,6 @@ type ParentRenderer<'a> = &'a mut dyn FnMut(&mut AssemblyParts) -> Result<String
 /// Preserve the component-local proof before independently rendering its parent.
 // Provenance: fn spiro_assembly_from_parts | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::spiro_assembly_from_parts
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 pub fn spiro_assembly_from_parts(
     parts: &AssemblyParts,
     junction_locant: &str,
@@ -562,8 +563,6 @@ pub fn spiro_assembly_from_parts(
 }
 
 // Provenance: fn component_locant | adapted
-// Source: openclatura | src/openclatura/assembly_spiro.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn component_locant(text: &str, allow_prime: bool) -> bool {
     let digits = text.chars().take_while(|c| c.is_ascii_digit()).count();
     digits > 0
@@ -573,7 +572,6 @@ fn component_locant(text: &str, allow_prime: bool) -> bool {
 }
 // Provenance: fn drop_junction_indicated_hydrogen | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::drop_junction_indicated_hydrogen
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 pub fn drop_junction_indicated_hydrogen(name: &str, locant: &str) -> String {
     let Some((head, tail)) = name.split_once('-') else {
         return name.into();
@@ -600,7 +598,6 @@ pub fn drop_junction_indicated_hydrogen(name: &str, locant: &str) -> String {
 }
 // Provenance: fn spiro_component_sort_key | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::spiro_component_sort_key
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 pub fn spiro_component_sort_key(name: &str) -> (String, Vec<usize>) {
     let mut stripped = name.trim();
     while (stripped.starts_with('(') || stripped.starts_with('['))
@@ -649,7 +646,6 @@ pub fn spiro_component_sort_key(name: &str) -> (String, Vec<usize>) {
 }
 // Provenance: fn spiro_side_is_cited_first | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_spiro_side_is_cited_first
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn spiro_side_is_cited_first(parts: &AssemblyParts, side: &SpiroAssembly) -> bool {
     if side.continuation.is_some()
         || parts.is_spiro_component
@@ -677,7 +673,6 @@ fn spiro_side_is_cited_first(parts: &AssemblyParts, side: &SpiroAssembly) -> boo
 }
 // Provenance: fn reprime_side | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_rescope_spiro_side
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn reprime_side(side: &SpiroAssembly, prime: &str) -> SpiroAssembly {
     let mut side = side.clone();
     side.side_prime = prime.into();
@@ -702,7 +697,6 @@ fn reprime_side(side: &SpiroAssembly, prime: &str) -> SpiroAssembly {
 }
 // Provenance: fn prime_central_parts | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_prime_central_spiro_parts
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
     let prime = |l: &str| {
         if !keep_name_internals || l.starts_with(|c: char| c.is_ascii_digit()) {
@@ -798,7 +792,6 @@ fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
 }
 // Provenance: fn retire_parent_junction_hydrogen | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_retire_parent_junction_indicated_hydrogen
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn retire_parent_junction_hydrogen(parts: &mut AssemblyParts, junctions: &BTreeSet<String>) {
     parts.hydro_operations.retain(|o| {
         o.operation_kind != "indicated_hydrogen"
@@ -829,7 +822,6 @@ fn retire_parent_junction_hydrogen(parts: &mut AssemblyParts, junctions: &BTreeS
 }
 // Provenance: fn deduplicate_shared_replacements | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_deduplicate_shared_replacements
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn deduplicate_shared_replacements(parts: &mut AssemblyParts, side: &mut SpiroAssembly) {
     let Some(other) = &mut side.side_parts else {
         return;
@@ -946,7 +938,6 @@ const WITHIN_NAME: [&str; 11] = [
 ];
 // Provenance: fn is_replacement_prefix | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_is_replacement_prefix
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn is_replacement_prefix(name: &str) -> bool {
     let stem = MULTIPLIER_PREFIXES
         .iter()
@@ -956,7 +947,6 @@ fn is_replacement_prefix(name: &str) -> bool {
 }
 // Provenance: fn split_side_prefix_run | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_split_side_prefix_run
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn split_side_prefix_run(text: &str) -> Vec<(String, String)> {
     let segments: Vec<_> = text.split('-').collect();
     let mut starts = vec![];
@@ -989,7 +979,6 @@ fn split_side_prefix_run(text: &str) -> Vec<(String, String)> {
 }
 // Provenance: fn hoist_side_substituent_prefixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_hoist_side_substituent_prefixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn hoist_side_substituent_prefixes(
     parts: &mut AssemblyParts,
     mut side: SpiroAssembly,
@@ -1047,7 +1036,6 @@ fn hoist_side_substituent_prefixes(
 }
 // Provenance: fn normalize_spiro | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_normalize_spiro_assembly
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn normalize_spiro(mut side: SpiroAssembly) -> SpiroAssembly {
     if side.side_parts.is_none() {
         let extracted = extract_spiro_side_prefixes(&side.side_parent_name);
@@ -1060,7 +1048,6 @@ fn normalize_spiro(mut side: SpiroAssembly) -> SpiroAssembly {
 }
 // Provenance: fn split_spiro_substituents | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::split_spiro_substituents
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 pub fn split_spiro_substituents(parts: &mut AssemblyParts) -> Result<Vec<SpiroAssembly>, String> {
     let mut sides = vec![];
     let mut normal = vec![];
@@ -1137,7 +1124,6 @@ pub fn split_spiro_substituents(parts: &mut AssemblyParts) -> Result<Vec<SpiroAs
 
 // Provenance: fn parent_needs_parentheses | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_spiro_side_parent_needs_parentheses
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn parent_needs_parentheses(name: &str) -> bool {
     let bare = name.trim_start_matches(|c: char| c.is_ascii_digit() || c == ',' || c == '-');
     if ["bicyclo[", "tricyclo[", "tetracyclo["]
@@ -1181,7 +1167,6 @@ pub(super) fn spiro_component(name: &str) -> String {
 }
 // Provenance: fn side_name | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_spiro_side_name
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn side_name(name: &str) -> String {
     if let Some(bracketed) = locant_bracketed_component(name) {
         bracketed
@@ -1193,7 +1178,6 @@ fn side_name(name: &str) -> String {
 }
 // Provenance: fn retained_n_info | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_retained_saturated_n_ring_info
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn retained_n_info(parent: &str) -> Option<(usize, String)> {
     let ionic_by_neutral = &RULES.charges.retained_ionic_n_parents;
     let neutral = ionic_by_neutral.iter().find_map(|(neutral, ionic)| {
@@ -1218,7 +1202,6 @@ fn retained_n_info(parent: &str) -> Option<(usize, String)> {
 }
 // Provenance: fn side_locant | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_spiro_side_locant
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn side_locant(side: &SpiroAssembly, parent_name: &str) -> String {
     if side.side_parts.is_none()
         && side.side_locant == "1"
@@ -1231,7 +1214,6 @@ fn side_locant(side: &SpiroAssembly, parent_name: &str) -> String {
 }
 // Provenance: fn prime_side_suffixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_prime_side_suffixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn prime_side_suffixes(side: &SpiroAssembly) -> Vec<(String, String)> {
     side.side_suffixes
         .iter()
@@ -1245,7 +1227,6 @@ fn prime_side_suffixes(side: &SpiroAssembly) -> Vec<(String, String)> {
 }
 // Provenance: fn format_side_suffixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_format_side_suffixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn format_side_suffixes(suffixes: &[(String, String)]) -> String {
     let mut grouped: Vec<(&str, Vec<&str>)> = vec![];
     for (l, s) in suffixes {
@@ -1269,7 +1250,6 @@ fn format_side_suffixes(suffixes: &[(String, String)]) -> String {
 }
 // Provenance: fn suffix_run | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::inline in _merge_principal_and_side_suffixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn suffix_run(text: &str, allow_multiplier: bool) -> Option<(Vec<String>, &str)> {
     let (locants, word) = text.strip_prefix('-')?.split_once('-')?;
     if !locants
@@ -1286,7 +1266,6 @@ fn suffix_run(text: &str, allow_multiplier: bool) -> Option<(Vec<String>, &str)>
 }
 // Provenance: fn merge_terminal_and_side_suffixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_merge_terminal_and_side_suffixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn merge_terminal_and_side_suffixes(terminal: &str, side: &[(String, String)]) -> String {
     if side.is_empty() {
         return terminal.into();
@@ -1312,7 +1291,6 @@ fn merge_terminal_and_side_suffixes(terminal: &str, side: &[(String, String)]) -
 }
 // Provenance: fn merge_principal_and_side_suffixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_merge_principal_and_side_suffixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn merge_principal_and_side_suffixes(
     suffix: &str,
     side: Vec<(String, String)>,
@@ -1336,7 +1314,6 @@ fn merge_principal_and_side_suffixes(
 }
 // Provenance: fn replacement_head | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::inline in _prime_replacement_prefixes_for_primed_component
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn replacement_head(name: &str) -> Option<(&str, &str, &str)> {
     let (locants, rest) = name.split_once('-')?;
     if !locants.split(',').all(|l| component_locant(l, true)) {
@@ -1362,7 +1339,6 @@ fn replacement_head(name: &str) -> Option<(&str, &str, &str)> {
 }
 // Provenance: fn unprime_inline_replacement_prefix | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::unprime_inline_replacement_prefix
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 pub fn unprime_inline_replacement_prefix(name: &str) -> String {
     if let Some((locants, word, tail)) = replacement_head(name)
         && locants.contains('\'')
@@ -1374,14 +1350,12 @@ pub fn unprime_inline_replacement_prefix(name: &str) -> String {
 }
 // Provenance: fn spiro_names_components | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_spiro_names_its_components
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn spiro_names_components(core: &str) -> bool {
     core.find("spiro[")
         .is_some_and(|i| core[i + 6..].split(']').next().unwrap_or("").contains('\''))
 }
 // Provenance: fn prime_replacement_prefixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_prime_replacement_prefixes_for_primed_component
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn prime_replacement_prefixes(core: &str, prefixes: Vec<String>) -> Vec<String> {
     if !spiro_names_components(core) {
         return prefixes;
@@ -1409,7 +1383,6 @@ fn prime_replacement_prefixes(core: &str, prefixes: Vec<String>) -> Vec<String> 
 }
 // Provenance: fn prime_inline_replacement_prefixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_prime_inline_replacement_prefixes_for_primed_component
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn prime_inline_replacement_prefixes(core: &str) -> String {
     if let Some((locants, word, tail)) = replacement_head(core)
         && tail.starts_with("spiro[")
@@ -1430,7 +1403,6 @@ fn prime_inline_replacement_prefixes(core: &str) -> String {
 }
 // Provenance: fn format_dispiro_core | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_format_dispiro_core
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn format_dispiro_core(core: &str, terminal: &str, sides: &[SpiroAssembly]) -> String {
     let mut ordered: Vec<_> = sides.iter().collect();
     ordered.sort_by_key(|s| (parse_locant(&s.parent_locant), s.side_parent_name.clone()));
@@ -1481,7 +1453,6 @@ pub(super) struct SpiroCore {
 
 // Provenance: fn format_spiro_core | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::format_spiro_core
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 pub(super) fn format_spiro_core(
     stem: &str,
     unsat: &str,
@@ -1601,7 +1572,6 @@ struct ExtractedSide {
 
 // Provenance: fn extract_spiro_side_prefixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::extract_spiro_side_prefixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
     let mut normalized = side_name.trim().to_owned();
     if normalized.starts_with('(') && normalized.ends_with(')') {
@@ -1765,7 +1735,6 @@ fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
 }
 // Provenance: fn extract_side_suffixes | adapted
 // Source: openclatura | src/openclatura/assembly_spiro.py::_extract_side_suffixes
-// Source: openclatura | src/openclatura/spiro_assembly.py::module scope (mapping uncertain)
 fn extract_side_suffixes(name: &str) -> (String, Vec<(String, String)>) {
     let Some((left, word)) = name.rsplit_once('-') else {
         return (name.into(), vec![]);
@@ -1796,6 +1765,12 @@ fn extract_side_suffixes(name: &str) -> (String, Vec<(String, String)>) {
 mod tests {
     use super::*;
     #[test]
+    // Provenance: fn tests::component_order_ignores_hydrogenation_and_hydrogen_citations | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs::tests::component_order_ignores_hydrogenation_and_hydrogen_citations
+    // Source: openclatura | tests/unit/test_retained_derivative_carbon_hydrogen.py::test_declared_parent_hydrogen_and_oxo_added_hydrogen_have_separate_proofs
+    // Source: openclatura | tests/unit/test_analysis.py::test_invalid_ide_morphology_is_normalized
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn component_order_ignores_hydrogenation_and_hydrogen_citations() {
         assert_eq!(
             spiro_component_sort_key("4a,5,6,7,8,8a-hexahydro-1H-quinoxaline"),
@@ -1807,6 +1782,11 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::component_junction_retires_only_its_own_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs::tests::component_junction_retires_only_its_own_hydrogen
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_requested_fused_parent_name_is_invariant_to_atom_order
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn component_junction_retires_only_its_own_hydrogen() {
         assert_eq!(
             drop_junction_indicated_hydrogen("9H-fluorene", "9"),
@@ -1819,6 +1799,12 @@ mod tests {
         assert_eq!(prime_side_locant("2lambda^5"), "2'lambda^5");
     }
     #[test]
+    // Provenance: fn tests::suffixes_and_replacement_locants_share_completed_spiro_scope | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs::tests::suffixes_and_replacement_locants_share_completed_spiro_scope
+    // Source: openclatura | tests/unit/test_spiro_shared_parent_pipeline.py::test_typed_replacements_are_projected_from_parts_without_parsing
+    // Source: openclatura | tests/data/parser_xml_resources/arylGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn suffixes_and_replacement_locants_share_completed_spiro_scope() {
         let mut side = SpiroAssembly::new("4", "cyclopentane");
         side.parent_locant = "3".into();
@@ -1843,6 +1829,11 @@ mod tests {
         assert!(formatted.core.ends_with(']'));
     }
     #[test]
+    // Provenance: fn tests::spiro_suffix_merging_uses_numerical_suffix_elision | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs::tests::spiro_suffix_merging_uses_numerical_suffix_elision
+    // Source: openclatura | tests/unit/test_spiro_composed_parent_families.py::test_side_suffixes_group_same_kind_without_losing_component_primes
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn spiro_suffix_merging_uses_numerical_suffix_elision() {
         let ketones: Vec<_> = ["2", "3", "2'", "3'"]
             .into_iter()
@@ -1872,6 +1863,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::dispiro_replacements_keep_each_components_final_scope | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs::tests::dispiro_replacements_keep_each_components_final_scope
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/unit/test_replacement_morphology.py::test_skeletal_replacement_does_not_elide_terminal_a
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_hydrocarbon_uses_data_backed_preferred_name
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn dispiro_replacements_keep_each_components_final_scope() {
         let first = SpiroAssembly {
             parent_locant: "1".into(),
@@ -1891,6 +1889,11 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::side_prefix_projection_respects_nested_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs::tests::side_prefix_projection_respects_nested_locants
+    // Source: openclatura | tests/unit/test_spiro_shared_parent_pipeline.py::test_typed_replacements_are_projected_from_parts_without_parsing
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn side_prefix_projection_respects_nested_locants() {
         let extracted =
             extract_spiro_side_prefixes("(2R)-2-(2,6-difluorophenyl)-3-methylcyclopentane");
@@ -1906,6 +1909,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::benzoheterocycle_side_prefix_projection_preserves_parent_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs::tests::benzoheterocycle_side_prefix_projection_preserves_parent_locants
+    // Source: openclatura | tests/unit/test_analysis.py::test_spiro_side_parents_are_normalized_without_nested_or_parenthesized_polycycles
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn benzoheterocycle_side_prefix_projection_preserves_parent_locants() {
         for (input, expected, prefixes) in [
             (
@@ -1931,6 +1939,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_hydrogenation_aliases_keep_side_prefix_boundaries | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_spiro.rs::tests::retained_hydrogenation_aliases_keep_side_prefix_boundaries
+    // Source: openclatura | tests/unit/test_analysis.py::test_preferred_retained_output_names_preserve_exact_template_metadata
+    // Source: openclatura | tests/unit/test_analysis.py::test_spiro_side_parents_are_normalized_without_nested_or_parenthesized_polycycles
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_hydrogenation_aliases_keep_side_prefix_boundaries() {
         for (input, parent, prefix) in [
             ("5-methylindane", "indane", "5'-methyl"),

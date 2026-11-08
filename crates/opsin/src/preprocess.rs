@@ -128,7 +128,6 @@ fn normalize_cage_descriptors(input: &str) -> String {
 // Provenance: fn preprocess | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::preProcess
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::performMultiCharacterReplacements
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 pub fn preprocess(name: &str) -> Result<String, ParsingError> {
     // Java String.trim removes only characters <= U+0020.
     let name = name.trim_matches(|c| c <= '\u{20}');
@@ -218,7 +217,6 @@ pub fn preprocess(name: &str) -> Result<String, ParsingError> {
 // Provenance: fn superscript_digit_to_digit | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::superscriptDigitToDigit
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::isSuperscriptDigit
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn superscript_digit_to_digit(ch: char) -> Option<char> {
     Some(match ch {
         '\u{2070}' => '0',
@@ -232,7 +230,6 @@ fn superscript_digit_to_digit(ch: char) -> Option<char> {
 
 // Provenance: fn starts_with_sup_tag | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::inline in performMultiCharacterReplacements (case-insensitive sup-tag regionMatches)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn starts_with_sup_tag(remaining: &[char], tag: &str) -> bool {
     remaining.len() >= tag.len()
         && remaining
@@ -247,14 +244,12 @@ fn starts_with_sup_tag(remaining: &[char], tag: &str) -> bool {
 
 // Provenance: fn is_java_digit | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::inline in performMultiCharacterReplacements (Character.isDigit on previous UTF-16 code unit)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn is_java_digit(ch: char) -> bool {
     // Character.isDigit(charAt(i - 1)) observes a single UTF-16 code unit.
     ch as u32 <= 0xffff && JAVA_DECIMAL_DIGIT.is_match(ch.encode_utf8(&mut [0; 4]))
 }
 
 // Provenance: fn normalize_representation | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::convertNonAsciiAndNormaliseRepresentation
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::getReplacementForNonAsciiChar
 fn normalize_representation(input: &str) -> Result<String, ParsingError> {
@@ -299,7 +294,6 @@ fn normalize_representation(input: &str) -> Result<String, ParsingError> {
 
 // Provenance: fn dollar_greek | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::getReplacementForDollarGreek
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn dollar_greek(ch: char) -> Option<&'static str> {
     Some(match ch {
         'a' => "alpha",
@@ -315,7 +309,6 @@ fn dollar_greek(ch: char) -> Option<&'static str> {
 // Provenance: fn enclosed_greek | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::DOTENCLOSED_TO_DESIRED
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::XMLENTITY_TO_DESIRED
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn enclosed_greek(text: &str, dot: bool) -> Option<&'static str> {
     Some(match text {
         "alpha" => "alpha",

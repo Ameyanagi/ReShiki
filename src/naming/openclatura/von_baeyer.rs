@@ -4,6 +4,7 @@
 // Source: openclatura | src/openclatura/chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/von_baeyer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Source: openclatura | src/openclatura/graph_kernel.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Consolidated openclatura legacy/main-ring and independent von-Baeyer searches with original Rust Python-order adapter and local bounds/tests.
@@ -539,7 +540,6 @@ pub struct VonBaeyerCandidate {
 /// no reconstructable descriptor. Limits match upstream's bounded scope.
 // Provenance: fn find_von_baeyer_candidates | adapted
 // Source: openclatura | src/openclatura/von_baeyer.py::find_von_baeyer_candidates
-// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 pub fn find_von_baeyer_candidates(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -625,7 +625,6 @@ pub fn find_von_baeyer_candidates(
 
 // Provenance: fn simple_paths_between | adapted
 // Source: openclatura | src/openclatura/von_baeyer.py::_simple_paths_between
-// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 fn simple_paths_between(start: usize, end: usize, adj: &Adjacency) -> Vec<Vec<usize>> {
     let mut paths = Vec::new();
     let mut stack = vec![(start, vec![start])];
@@ -651,7 +650,6 @@ fn simple_paths_between(start: usize, end: usize, adj: &Adjacency) -> Vec<Vec<us
 
 // Provenance: fn build_candidate | adapted
 // Source: openclatura | src/openclatura/von_baeyer.py::inline in _build_candidates_for_decomposition
-// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 fn build_candidate(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -770,7 +768,6 @@ fn build_candidate(
 
 // Provenance: fn classify_secondary | adapted
 // Source: openclatura | src/openclatura/von_baeyer.py::_classify_secondary_bridges
-// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 fn classify_secondary(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -857,7 +854,6 @@ fn classify_secondary(
 
 // Provenance: fn component_path | adapted
 // Source: openclatura | src/openclatura/von_baeyer.py::_component_path
-// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 fn component_path(component: &AtomSet, first: usize, second: usize, edges: &EdgeSet) -> Vec<usize> {
     let adj = adjacency_from_edges(component, edges);
     let ends: AtomSet = component
@@ -917,6 +913,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::legacy_and_independent_search_offer_only_audited_parent_numberings | adapted
+    // Source: ReShiki | src/naming/openclatura/von_baeyer.rs::tests::legacy_and_independent_search_offer_only_audited_parent_numberings
+    // Source: openclatura | tests/unit/test_analysis.py::test_von_baeyer_polycycle_keeps_descriptor_source_numbering
+    // Source: openclatura | tests/unit/test_analysis.py::test_ring_descriptor_rendering_is_registry_backed
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn legacy_and_independent_search_offer_only_audited_parent_numberings() {
         let mol = read_smiles("C1NC23COC12C=CC3", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();

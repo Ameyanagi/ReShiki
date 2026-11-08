@@ -2,6 +2,7 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/fused_ion_templates.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/fused_ion_templates.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura fused-ion registry and graph-bound operation selection with local regression tests.
@@ -237,6 +238,12 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::n_oxide_consumes_only_the_graph_bound_oxide_and_charge | adapted
+    // Source: ReShiki | src/naming/openclatura/fused_ion_templates.rs::tests::n_oxide_consumes_only_the_graph_bound_oxide_and_charge
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage10_fused_ion_candidates_are_graph_operations_before_rendering
+    // Source: openclatura | tests/unit/test_analysis.py::test_graph_bound_n_substituted_amino_tokens_bind_ligands_precisely::branch_namer
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn n_oxide_consumes_only_the_graph_bound_oxide_and_charge() {
         let mut parts = AssemblyParts::new(10);
         parts.retained_name = Some("quinoline".into());
@@ -271,6 +278,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unproved_ion_rows_and_wrong_numbering_do_not_render | adapted
+    // Source: ReShiki | src/naming/openclatura/fused_ion_templates.rs::tests::unproved_ion_rows_and_wrong_numbering_do_not_render
+    // Source: openclatura | tests/unit/test_analysis.py::test_retained_fused_graph_template_data_file_validates_guarded_core_entries
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn unproved_ion_rows_and_wrong_numbering_do_not_render() {
         let mut parts = AssemblyParts::new(9);
         parts.retained_name = Some("1H-indole".into());

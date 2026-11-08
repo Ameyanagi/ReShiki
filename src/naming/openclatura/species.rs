@@ -1,6 +1,15 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
 // Source: ReShiki | src/naming/openclatura/species.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/exploratory/test_charge_representation_gaps.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_structural_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/arylGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/functionalTerms.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/nonCarboxylicAcids.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 //! Binary salt names and monatomic metal cations, outside the organic parent engine.
@@ -8,6 +17,8 @@ use super::{Name, component_namer::Derivation, molecule::Molecule, name_smiles_w
 use crate::naming::{IsotopeStyle, NameReason, NameStatus};
 use std::collections::BTreeMap;
 
+// Provenance: fn monatomic_cation | original
+// Source: ReShiki | src/naming/openclatura/species.rs::monatomic_cation
 pub(super) fn monatomic_cation(
     smiles: &str,
     in_salt: bool,
@@ -67,6 +78,8 @@ pub(super) fn monatomic_cation(
 }
 
 /// P-72.7: assess the anionic parent actually cited by the component pipeline.
+// Provenance: fn assess_anion_parent | original
+// Source: ReShiki | src/naming/openclatura/species.rs::assess_anion_parent
 pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     let Derivation::Plan {
         parent_atoms,
@@ -141,6 +154,8 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
 /// P-41, P-73.1: a cation is senior to every neutral class, so its parent must
 /// carry a cationic centre. A name that cites every cationic centre in a prefix,
 /// as in (1-methylpyridin-1-ium-4-yl)methanol, is not certified.
+// Provenance: fn assess_cation_parent | original
+// Source: ReShiki | src/naming/openclatura/species.rs::assess_cation_parent
 pub(super) fn assess_cation_parent(mol: &Molecule, derivation: &Derivation) {
     let Derivation::Plan {
         parent_atoms,
@@ -173,6 +188,8 @@ pub(super) fn assess_cation_parent(mol: &Molecule, derivation: &Derivation) {
 
 /// Nitro, N-oxide, azido, diazo and isocyano charges express neutral groups
 /// rather than ionic centres. A separate counter-ion does not cancel a real centre.
+// Provenance: fn neutral_group_atoms | original
+// Source: ReShiki | src/naming/openclatura/species.rs::neutral_group_atoms
 fn neutral_group_atoms(mol: &Molecule) -> std::collections::BTreeSet<usize> {
     super::perception::perceive_groups(mol)
         .into_iter()
@@ -212,6 +229,8 @@ type SaltIonKey = (String, Option<Vec<(bool, usize, String)>>);
 /// than hyphens, commas, primes and enclosing marks, and composite locants.
 /// Locants are compared only in names without enclosing marks, where every
 /// locant is a primary one (P-14.5).
+// Provenance: fn salt_ion_sort_key | original
+// Source: ReShiki | src/naming/openclatura/species.rs::salt_ion_sort_key
 fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
     // Enclosing brackets always hold parentheses; other brackets are descriptors.
     let descriptor_bracket = name
@@ -261,6 +280,8 @@ fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
     Some((letters, primary_locants.then_some(locants)))
 }
 
+// Provenance: fn name_salt | original
+// Source: ReShiki | src/naming/openclatura/species.rs::name_salt
 pub(super) fn name_salt(
     smiles: &str,
     style: IsotopeStyle,
@@ -380,6 +401,12 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::salt_ion_key_orders_letters_then_locants_and_declines_uncovered_spellings | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::salt_ion_key_orders_letters_then_locants_and_declines_uncovered_spellings
+    // Source: openclatura | tests/exploratory/test_charge_representation_gaps.py::test_wrong_charge_single_atoms_fail_honestly_instead_of_mislabeling
+    // Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn salt_ion_key_orders_letters_then_locants_and_declines_uncovered_spellings() {
         for (first, second) in [
             ("acetate", "4-methylbenzoate"),
@@ -412,6 +439,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::salt_ion_order_falls_back_for_uncovered_ions | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::salt_ion_order_falls_back_for_uncovered_ions
     fn salt_ion_order_falls_back_for_uncovered_ions() {
         for (smiles, expected) in [
             (
@@ -449,6 +478,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::mixed_salt_anion_spellings_preserve_status | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::mixed_salt_anion_spellings_preserve_status
     fn mixed_salt_anion_spellings_preserve_status() {
         for (smiles, expected, status) in [
             (
@@ -468,6 +499,8 @@ mod tests {
         }
     }
 
+    // Provenance: fn tests::assess_component | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::assess_component
     fn assess_component(smiles: &str) -> NameStatus {
         let mol = super::super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
@@ -486,6 +519,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anion_parent_assessment_uses_the_cited_derivation | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::anion_parent_assessment_uses_the_cited_derivation
     fn anion_parent_assessment_uses_the_cited_derivation() {
         for smiles in ["C[N+](C)(C)CC[O-]", "[NH3+]CC([NH3+])C[O-]"] {
             assert_eq!(
@@ -497,6 +532,14 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::neutral_charge_separated_groups_are_not_anionic_centres | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::neutral_charge_separated_groups_are_not_anionic_centres
+    // Source: openclatura | tests/unit/test_chalcogen_structural_roles.py::test_acyl_pseudohalides_use_the_complete_leaving_group_route
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrogen_chalcogenides_are_classified_before_rendering
+    // Source: openclatura | tests/unit/test_analysis.py::test_azinic_acid_is_not_named_as_a_nitro_compound
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrile_chalcogenides_use_zwitterion_priority_and_class_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn neutral_charge_separated_groups_are_not_anionic_centres() {
         for smiles in [
             "[O-][N+](=O)c1ccccc1",
@@ -513,6 +556,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::chosen_anionic_parents_keep_preferred_status | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::chosen_anionic_parents_keep_preferred_status
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_shared_chalcogen_ligand_classifier
+    // Source: openclatura | tests/data/parser_xml_resources/arylGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn chosen_anionic_parents_keep_preferred_status() {
         for smiles in [
             "[n-]1nnnc1C(=O)O",
@@ -533,6 +582,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::skeletal_anion_with_characteristic_cation_has_unsettled_suffix_order | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::skeletal_anion_with_characteristic_cation_has_unsettled_suffix_order
     fn skeletal_anion_with_characteristic_cation_has_unsettled_suffix_order() {
         for smiles in ["[NH3+]CC[CH-]C#N", "[NH3+][C-]1C=CC2=C1N=NO2"] {
             assert_eq!(
@@ -544,6 +595,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::tied_external_anionic_parents_remain_unverified | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::tied_external_anionic_parents_remain_unverified
     fn tied_external_anionic_parents_remain_unverified() {
         assert_eq!(
             assess_component("[n-]1ccc(c1)CCc1cc[n-]c1"),
@@ -552,6 +605,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_anion_assessment_requires_application_evidence | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::retained_anion_assessment_requires_application_evidence
+    // Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_anion_assessment_requires_application_evidence() {
         use super::super::assembly_parts::RetainedAnionName;
 
@@ -584,6 +642,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::sulfonium_ylide_status_follows_substituent_anions | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::sulfonium_ylide_status_follows_substituent_anions
     fn sulfonium_ylide_status_follows_substituent_anions() {
         for (smiles, expected, status) in [
             (
@@ -604,6 +664,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unsupported_anionic_parent_examples_still_decline | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::unsupported_anionic_parent_examples_still_decline
     fn unsupported_anionic_parent_examples_still_decline() {
         for smiles in ["[Na+].Oc1ccccc1-[n-]1cccc1", "[Na+].Oc1ccccc1-n1cccc1"] {
             assert!(
@@ -614,6 +676,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anionic_parents_precede_neutral_groups_and_roundtrip_complete_salts | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::anionic_parents_precede_neutral_groups_and_roundtrip_complete_salts
     fn anionic_parents_precede_neutral_groups_and_roundtrip_complete_salts() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected, status) in [
@@ -785,6 +849,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_alkoxide_parent_is_preferred | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::retained_alkoxide_parent_is_preferred
+    // Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_alkoxide_parent_is_preferred() {
         let name = super::super::name_smiles("C[O-]", &Default::default()).unwrap();
         assert_eq!(name.text, "methoxide");
@@ -792,6 +861,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::acid_anion_parent_precedes_the_neutral_acid | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::acid_anion_parent_precedes_the_neutral_acid
     fn acid_anion_parent_precedes_the_neutral_acid() {
         let name = super::super::name_smiles("O=C([O-])CCC(=O)O", &Default::default()).unwrap();
         assert_eq!(name.text, "3-carboxypropanoate");
@@ -799,6 +870,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::salt_inherits_retained_alkoxide_parent_preference | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::salt_inherits_retained_alkoxide_parent_preference
     fn salt_inherits_retained_alkoxide_parent_preference() {
         let name = super::super::name_smiles("[Na+].C[O-]", &Default::default()).unwrap();
         assert_eq!(name.text, "sodium methoxide");
@@ -806,6 +879,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::salt_inherits_the_preferred_acid_anion_parent | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::salt_inherits_the_preferred_acid_anion_parent
     fn salt_inherits_the_preferred_acid_anion_parent() {
         let name =
             super::super::name_smiles("[Na+].O=C([O-])CCC(=O)O", &Default::default()).unwrap();
@@ -814,6 +889,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::organic_ions_and_unaudited_inorganic_names_keep_their_status | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::organic_ions_and_unaudited_inorganic_names_keep_their_status
+    // Source: openclatura | tests/data/parser_xml_resources/functionalTerms.json::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Source: openclatura | tests/data/parser_xml_resources/nonCarboxylicAcids.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn organic_ions_and_unaudited_inorganic_names_keep_their_status() {
         for (smiles, expected, status) in [
             ("CC(=O)[O-]", "acetate", NameStatus::Preferred),
@@ -847,6 +929,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::balanced_salts_roundtrip_as_complete_graphs | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::balanced_salts_roundtrip_as_complete_graphs
+    // Source: openclatura | tests/unit/test_analysis.py::test_component_shortcuts_are_final_binding_audited
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn balanced_salts_roundtrip_as_complete_graphs() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected, status) in [
@@ -920,6 +1007,12 @@ mod tests {
     /// known departure is never masked by an unchecked ion (P-77.1.1, P-77.2.1).
     /// Retained anion spellings and salt order must preserve stronger departures.
     #[test]
+    // Provenance: fn tests::salt_status_is_the_strongest_ion_downgrade | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::salt_status_is_the_strongest_ion_downgrade
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Source: openclatura | tests/data/parser_xml_resources/arylGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn salt_status_is_the_strongest_ion_downgrade() {
         use NameReason::{BridgedFusedParent, Multiplicative, RingAssembly, UnauditedParent};
         use NameStatus::{NotPreferred, Preferred, Unverified};
@@ -1025,6 +1118,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::salt_inherits_the_strongest_ion_status | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::salt_inherits_the_strongest_ion_status
     fn salt_inherits_the_strongest_ion_status() {
         let name =
             super::super::name_smiles("[Na+].[Na+].[Cl-].C[O-]", &Default::default()).unwrap();
@@ -1036,6 +1131,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::monatomic_cations_are_certified_only_in_salts | adapted
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::monatomic_cations_are_certified_only_in_salts
+    // Source: openclatura | tests/unit/test_analysis.py::test_component_shortcuts_are_final_binding_audited
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn monatomic_cations_are_certified_only_in_salts() {
         for smiles in ["[Na+]", "[Fe+2]", "[Ca+2]"] {
             assert_eq!(
@@ -1058,6 +1158,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::mixtures_unbalanced_sets_and_zwitterions_are_refused | original
+    // Source: ReShiki | src/naming/openclatura/species.rs::tests::mixtures_unbalanced_sets_and_zwitterions_are_refused
     fn mixtures_unbalanced_sets_and_zwitterions_are_refused() {
         for smiles in [
             "C.C",

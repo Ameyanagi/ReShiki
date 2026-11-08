@@ -33,8 +33,6 @@ pub struct BuildState {
 }
 
 // Provenance: impl BuildState | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::module scope (mapping uncertain)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::BuildState
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::addWarning
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::addIsAmbiguous
@@ -84,7 +82,6 @@ impl BuildState {
 
 impl OmittedSpaceContext for BuildState {
     // Provenance: fn <BuildState as OmittedSpaceContext>::fragment_facts | adapted
-    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::module scope (mapping uncertain)
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java::getAtomForEachSubstitutableHydrogen
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java::substitutionWouldBeAmbiguous
     fn fragment_facts(&self, fragment: FragmentId) -> Result<FragmentFacts, ParsingError> {
@@ -122,8 +119,6 @@ impl OmittedSpaceContext for BuildState {
         })
     }
     // Provenance: fn <BuildState as OmittedSpaceContext>::clone_element | adapted
-    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::module scope (mapping uncertain)
-    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java::module scope (mapping uncertain)
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FragmentManager.java::cloneElement
     fn clone_element(
         &mut self,

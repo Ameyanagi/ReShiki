@@ -1,6 +1,13 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
 // Source: ReShiki | src/naming/openclatura/identity_validation.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/data/parser_xml_resources/heteroAtoms.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/wordRules.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/groupStemsAllowingInlineSuffixes.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 //! Input states that the plain-name renderers cannot preserve.
@@ -8,6 +15,8 @@ use super::molecule::Molecule;
 use super::perception::PerceivedGroup;
 use std::collections::BTreeSet;
 
+// Provenance: fn validate_principal_charge_roles | original
+// Source: ReShiki | src/naming/openclatura/identity_validation.rs::validate_principal_charge_roles
 pub fn validate_principal_charge_roles(
     groups: &[PerceivedGroup],
     key: Option<&str>,
@@ -29,6 +38,8 @@ pub fn validate_principal_charge_roles(
     Ok(())
 }
 
+// Provenance: fn validate_input | original
+// Source: ReShiki | src/naming/openclatura/identity_validation.rs::validate_input
 pub fn validate_input(mol: &Molecule) -> Result<(), String> {
     for (&idx, atom) in &mol.atoms {
         // Upstream divergence: elemental ion shortcuts require their exact charge and hydrogen state.
@@ -104,6 +115,8 @@ pub fn validate_input(mol: &Molecule) -> Result<(), String> {
 /// a mancude ring bond (RDKit's labels and the OPSIN reading of the same name
 /// differ). Decline a stereocentre whose ligand ranking, compared sphere by
 /// sphere, is decided or tied where that duplicate's element is ambiguous.
+// Provenance: fn validate_mancude_duplicate_ranking | original
+// Source: ReShiki | src/naming/openclatura/identity_validation.rs::validate_mancude_duplicate_ranking
 pub fn validate_mancude_duplicate_ranking(mol: &Molecule) -> Result<(), String> {
     const SPHERES: usize = 8;
     let z = |idx: usize| mol.atoms[&idx].element().map_or(0, |e| e.atomic_number);
@@ -195,6 +208,8 @@ mod tests {
     use crate::naming::openclatura::name_smiles;
 
     #[test]
+    // Provenance: fn tests::public_entry_declines_kekule_dependent_cip_ranks | original
+    // Source: ReShiki | src/naming/openclatura/identity_validation.rs::tests::public_entry_declines_kekule_dependent_cip_ranks
     fn public_entry_declines_kekule_dependent_cip_ranks() {
         for smiles in [
             "NC(N)[C@@H](C)c1ncncc1",
@@ -229,6 +244,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::public_entry_declines_unrepresented_charge_states | adapted
+    // Source: ReShiki | src/naming/openclatura/identity_validation.rs::tests::public_entry_declines_unrepresented_charge_states
+    // Source: openclatura | tests/data/parser_xml_resources/heteroAtoms.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn public_entry_declines_unrepresented_charge_states() {
         for smiles in [
             "[CH3+]",
@@ -255,6 +275,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::public_entry_declines_unrepresented_parent_elements_and_hydrogens | original
+    // Source: ReShiki | src/naming/openclatura/identity_validation.rs::tests::public_entry_declines_unrepresented_parent_elements_and_hydrogens
     fn public_entry_declines_unrepresented_parent_elements_and_hydrogens() {
         for smiles in [
             "[Tl]1CC1",
@@ -275,6 +297,15 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::public_entry_preserves_supported_charge_and_hydride_names | adapted
+    // Source: ReShiki | src/naming/openclatura/identity_validation.rs::tests::public_entry_preserves_supported_charge_and_hydride_names
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_group_13_14_central_atoms_have_a_parent_hydride
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_simple_chalcogen_analogues_are_named_from_graph_roles
+    // Source: openclatura | tests/data/parser_xml_resources/wordRules.json::<fixture data>
+    // Source: openclatura | tests/data/parser_xml_resources/groupStemsAllowingInlineSuffixes.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn public_entry_preserves_supported_charge_and_hydride_names() {
         for (smiles, expected) in [
             ("C", "methane"),

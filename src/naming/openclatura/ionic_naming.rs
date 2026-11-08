@@ -2,6 +2,8 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/ionic_naming.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/ionic_naming.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura ionic spelling logic reworked as structured anion preparation with local identity guards.
@@ -109,7 +111,6 @@ fn sites(
 
 /// Select the supported parent-anion operations before changing the neutral citation plan.
 // Provenance: fn prepare_anion_parent | adapted
-// Source: openclatura | src/openclatura/ionic_naming.py::module scope (mapping uncertain)
 pub(super) fn prepare_anion_parent(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -488,7 +489,6 @@ pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<S
 /// The accepted ammonio fallback cites its methylidene ligand on N while the
 /// ligand and its attachment graph are still available to the renderer.
 // Provenance: fn cationic_methylidene_fallback | adapted
-// Source: openclatura | src/openclatura/ionic_naming.py::module scope (mapping uncertain)
 pub(super) fn cationic_methylidene_fallback(
     mol: &Molecule,
     nitrogen: usize,
@@ -573,6 +573,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::external_ligands_cannot_lose_charge_or_chalcogen_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/ionic_naming.rs::tests::external_ligands_cannot_lose_charge_or_chalcogen_hydrogen
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_optional_charge_separation_collapses
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn external_ligands_cannot_lose_charge_or_chalcogen_hydrogen() {
         use super::super::graph_io::read_smiles;
         for smiles in ["[O-][SH]1c2ccc3cc1ccc3c2", "[N-]=C1CCCCC1"] {
@@ -597,6 +602,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::cationic_imino_spelling_uses_the_ligand_graph | adapted
+    // Source: ReShiki | src/naming/openclatura/ionic_naming.rs::tests::cationic_imino_spelling_uses_the_ligand_graph
+    // Source: openclatura | tests/unit/test_analysis.py::test_pyopsin_regression_names_preserve_cationic_imino_charge
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cationic_imino_spelling_uses_the_ligand_graph() {
         let mut mol = Molecule::new();
         for (idx, symbol, charge) in [(0, "N", 1), (1, "C", 0), (2, "N", 0), (3, "O", 0)] {

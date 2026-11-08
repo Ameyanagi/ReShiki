@@ -1,6 +1,8 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
 // Source: ReShiki | src/naming/openclatura/ring_assembly.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 //! Whole cyclic-system assemblies and their fixed component numbering (P-28).
@@ -38,6 +40,8 @@ struct Unit {
 
 /// A unit includes every cyclic atom connected by cyclic edges, including spiro
 /// connections. A bridge between two units is never part of either unit.
+// Provenance: fn cyclic_units | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::cyclic_units
 pub(super) fn cyclic_units(mol: &Molecule) -> Vec<AtomSet> {
     let edges: super::graph_kernel::EdgeSet =
         biconnected_edge_components(mol, &mol.atoms.keys().copied().collect())
@@ -49,6 +53,8 @@ pub(super) fn cyclic_units(mol: &Molecule) -> Vec<AtomSet> {
     connected_components(&atoms, &edges)
 }
 
+// Provenance: fn hydride | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::hydride
 fn hydride(mol: &Molecule, atoms: &AtomSet) -> Molecule {
     let mut unit = mol.subgraph(atoms);
     for (&idx, atom) in &mut unit.atoms {
@@ -69,6 +75,8 @@ fn hydride(mol: &Molecule, atoms: &AtomSet) -> Molecule {
 
 /// Visit exact hydride graph isomorphisms until the visitor accepts one.
 /// Aromatic bonds are compared independently of their Kekule localization.
+// Provenance: fn visit_hydride_isomorphisms | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::visit_hydride_isomorphisms
 fn visit_hydride_isomorphisms(
     left: &Molecule,
     right: &Molecule,
@@ -108,6 +116,8 @@ fn visit_hydride_isomorphisms(
         mol.get_bond(u, v)
             .map(|bond| if bond.is_aromatic { 4 } else { bond.order })
     };
+    // Provenance: fn visit_hydride_isomorphisms::matches | original
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::visit_hydride_isomorphisms::matches
     fn matches(
         left: &Molecule,
         right: &Molecule,
@@ -171,11 +181,15 @@ fn visit_hydride_isomorphisms(
     )
 }
 
+// Provenance: fn same_hydride | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::same_hydride
 fn same_hydride(left: &Molecule, right: &Molecule) -> bool {
     visit_hydride_isomorphisms(left, right, |_| true)
 }
 
 /// Compare parent skeletons independently of hydrogenation or substitution.
+// Provenance: fn same_parent_skeleton | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::same_parent_skeleton
 pub(super) fn same_parent_skeleton(mol: &Molecule, left: &AtomSet, right: &AtomSet) -> bool {
     if left.len() != right.len() {
         return false;
@@ -196,6 +210,8 @@ pub(super) fn same_parent_skeleton(mol: &Molecule, left: &AtomSet, right: &AtomS
     same_hydride(&skeleton(left), &skeleton(right))
 }
 
+// Provenance: fn identical_junctions | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::identical_junctions
 fn identical_junctions(mol: &Molecule, atoms: &[AtomSet]) -> Vec<(usize, usize, usize)> {
     let units: Vec<_> = atoms.iter().map(|a| hydride(mol, a)).collect();
     let owner: BTreeMap<_, _> = atoms
@@ -222,6 +238,8 @@ fn identical_junctions(mol: &Molecule, atoms: &[AtomSet]) -> Vec<(usize, usize, 
 
 /// Includes unsupported assemblies so successful renderings can account for
 /// exactly the junctions for which a preferred assembly name was produced.
+// Provenance: fn assembly_junctions | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::assembly_junctions
 pub(super) fn assembly_junctions(mol: &Molecule) -> AtomSet {
     let atoms = cyclic_units(mol);
     let mut junctions: AtomSet = identical_junctions(mol, &atoms)
@@ -263,6 +281,8 @@ pub(super) fn assembly_junctions(mol: &Molecule) -> AtomSet {
     junctions
 }
 
+// Provenance: fn indicated_hydride_key | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::indicated_hydride_key
 fn indicated_hydride_key(unit: &Molecule) -> Option<(String, usize, usize)> {
     let systems = super::chains::find_ring_systems(unit, &AtomSet::new()).ok()?;
     let path = systems.first()?.paths.first()?;
@@ -302,6 +322,8 @@ fn indicated_hydride_key(unit: &Molecule) -> Option<(String, usize, usize)> {
     ))
 }
 
+// Provenance: fn resolve_unit | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::resolve_unit
 fn resolve_unit(mol: &Molecule, atoms: &AtomSet, system: &RingSystem) -> Option<Unit> {
     let unit = hydride(mol, atoms);
     if unit
@@ -426,6 +448,8 @@ fn resolve_unit(mol: &Molecule, atoms: &AtomSet, system: &RingSystem) -> Option<
     })
 }
 
+// Provenance: fn decorated | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::decorated
 fn decorated(locant: &str, unit: usize, count: usize) -> String {
     if count == 2 {
         let digits = locant.bytes().take_while(u8::is_ascii_digit).count();
@@ -440,6 +464,8 @@ fn decorated(locant: &str, unit: usize, count: usize) -> String {
     }
 }
 
+// Provenance: fn path_assembly | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::path_assembly
 fn path_assembly(
     mol: &Molecule,
     path: &[usize],
@@ -604,6 +630,8 @@ fn path_assembly(
 }
 
 /// Every simple path through a tree of units, starting at `current`.
+// Provenance: fn walk | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::walk
 fn walk(
     current: usize,
     edges: &[(usize, usize, usize)],
@@ -627,6 +655,8 @@ fn walk(
     }
 }
 
+// Provenance: fn discover_ring_assemblies | original
+// Source: ReShiki | src/naming/openclatura/ring_assembly.rs::discover_ring_assemblies
 pub(super) fn discover_ring_assemblies(
     mol: &Molecule,
     systems: &[RingSystem],
@@ -745,6 +775,8 @@ mod tests {
     use super::super::{chains::find_ring_systems, graph_io::read_smiles};
     use super::*;
 
+    // Provenance: fn tests::assemblies | original
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::assemblies
     fn assemblies(smiles: &str) -> Vec<RingAssembly> {
         let mol = read_smiles(smiles, &Default::default()).unwrap();
         let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
@@ -755,6 +787,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::identical_whole_hydrides_supply_fixed_assembly_numberings | adapted
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::identical_whole_hydrides_supply_fixed_assembly_numberings
+    // Source: openclatura | tests/unit/test_analysis.py::test_biphenyl_is_graph_selected_not_exact_name_rewritten
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn identical_whole_hydrides_supply_fixed_assembly_numberings() {
         for (smiles, name, size) in [
             ("Oc1ccccc1-c1ccccc1O", "1,1'-biphenyl", 12),
@@ -788,6 +825,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::three_unit_junctions_use_composite_locants | original
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::three_unit_junctions_use_composite_locants
     fn three_unit_junctions_use_composite_locants() {
         for (smiles, name) in [
             (
@@ -810,6 +849,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::branched_assembly_keeps_every_longest_parent_atom_set | original
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::branched_assembly_keeps_every_longest_parent_atom_set
     fn branched_assembly_keeps_every_longest_parent_atom_set() {
         let candidates = assemblies("c1ccccc1-c1cc(-c2ccccc2)cc(-c2ccccc2)c1");
         let longest: Vec<_> = candidates
@@ -826,6 +867,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::pyrrole_indicated_hydrogen_is_recomputed_at_junctions | original
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::pyrrole_indicated_hydrogen_is_recomputed_at_junctions
     fn pyrrole_indicated_hydrogen_is_recomputed_at_junctions() {
         let carbon_linked = assemblies("c1c[nH]c(c1)-c1ccc[nH]1");
         assert_eq!(carbon_linked.len(), 1, "{carbon_linked:?}");
@@ -838,6 +881,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::nonidentical_and_unsupported_assemblies_do_not_become_candidates | original
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::nonidentical_and_unsupported_assemblies_do_not_become_candidates
     fn nonidentical_and_unsupported_assemblies_do_not_become_candidates() {
         for smiles in [
             "C1CCC(CC1)c1ccccc1",
@@ -853,6 +898,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::relocated_indicated_hydrogen_keeps_unsupported_assembly_status | original
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::relocated_indicated_hydrogen_keeps_unsupported_assembly_status
     fn relocated_indicated_hydrogen_keeps_unsupported_assembly_status() {
         use crate::naming::{NameReason, NameStatus};
         for (smiles, expected) in [
@@ -883,6 +930,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::assembly_units_keep_their_parent_choice_status | adapted
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::assembly_units_keep_their_parent_choice_status
+    // Source: openclatura | tests/unit/test_analysis.py::test_biphenyl_is_graph_selected_not_exact_name_rewritten
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn assembly_units_keep_their_parent_choice_status() {
         use crate::naming::{NameReason, NameStatus};
         for (smiles, text, status) in [
@@ -904,6 +956,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::seven_unit_components_remain_unsupported_in_recursive_fragments | original
+    // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::seven_unit_components_remain_unsupported_in_recursive_fragments
     fn seven_unit_components_remain_unsupported_in_recursive_fragments() {
         let mol = read_smiles(
             "c1ccccc1-c1ccc(-c2ccc(-c3ccc(-c4ccc(-c5ccc(-c6ccccc6)cc5)cc4)cc3)cc2)cc1",

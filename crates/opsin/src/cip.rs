@@ -65,7 +65,6 @@ pub struct CipSequenceRules<'a> {
 }
 
 // Provenance: impl CipSequenceRules | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::getNeighbouringAtomsInCipOrder
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::getNeighbouringAtomsInCipOrderIgnoringGivenNeighbour
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::compare

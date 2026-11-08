@@ -2,9 +2,10 @@
 
 Rust files carry exact opening SPDX/Origin/Source headers. Every function in a
 mixed file belongs to an explicitly marked function or enclosing module/impl
-region; a more specific assignment overrides the region. Other files are checked
-byte for byte with SHA-256. The scanner locates declarations and their comments;
-it does not interpret bodies or attempt to infer upstream ancestry.
+region; a more specific assignment overrides the region. Each region records all
+of its function descendants so new functions require an explicit ledger decision.
+Other files are checked byte for byte with SHA-256. The scanner locates declarations
+and their comments; it does not interpret bodies or attempt to infer upstream ancestry.
 """
 
 import argparse
@@ -49,6 +50,7 @@ RUST_TOKEN = re.compile(
 RAW_LITERAL = re.compile(r'(?:br|cr|r)(#*)"')
 CHAR_LITERAL = re.compile(r"'(?:\\(?:[^\n]|u\{[^}]*\})|[^'\\\n])'")
 ORIGINS = {"original", "port", "copy", "adapted", "mixed", "data"}
+MODULE_SCOPE_SYMBOL = "module scope (mapping uncertain)"
 # These owner-deferred files are the only legacy-format exceptions. Pin both
 # source bytes and canonical ledger contents so the exception cannot spread or
 # silently accommodate changes to unresolved provenance.
@@ -356,12 +358,16 @@ def source_identities(
     return identities
 
 
-def correct_marker(prelude: str, part: dict, identity: str) -> bool:
-    """Match the local identity, classification, and every source symbol exactly."""
+def correct_marker(
+    prelude: str, part: dict, identity: str, inherited_sources: set[tuple[str, ...]]
+) -> bool:
+    """Match every specific source; module mappings may inherit validated headers."""
     markers = comment_fields(prelude, "Provenance")
     if markers != [f"{identity} | {part.get('origin')}"]:
         return False
-    sources = source_identities(part.get("sources"), ("project", "path", "symbol"), unique=False)
+    sources = source_identities(
+        part.get("sources"), ("project", "path", "ref", "symbol"), unique=False
+    )
     if sources is None:
         return False
     # File Source headers before the marker are a separate namespace.
@@ -371,8 +377,71 @@ def correct_marker(prelude: str, part: dict, identity: str) -> bool:
         index for index, comment in enumerate(comments) if comment.startswith("// Provenance:")
     )
     marker_sources = comment_fields("\n".join(comments[marker_index + 1 :]), "Source")
-    expected = {f"{project} | {path}::{symbol}" for project, path, symbol in sources}
-    return Counter(marker_sources) == Counter(expected)
+    expected = {f"{project} | {path}::{symbol}" for project, path, _, symbol in sources}
+    required = {
+        f"{project} | {path}::{symbol}"
+        for project, path, ref, symbol in sources
+        if symbol != MODULE_SCOPE_SYMBOL or (project, path, ref) not in inherited_sources
+    }
+    actual = Counter(marker_sources)
+    return (
+        all(count == 1 for count in actual.values())
+        and required.issubset(actual)
+        and actual.keys() <= expected
+    )
+
+
+def check_region_members(
+    path: str, part: dict, by_identity: dict[str, list[RustItem]], items: list[RustItem]
+) -> list[str]:
+    """Require an exact inventory for each lexical mod/impl assignment in a part."""
+    regions = {
+        identity
+        for identity in part["items"]
+        if isinstance(identity, str) and identity.startswith(("mod ", "impl "))
+    }
+    members = part.get("members", {})
+    if not isinstance(members, dict):
+        return [f"{path}: part members must be a table keyed by exact mod/impl identities"]
+    errors = [
+        f"{path}: members inventory key {identity!r} has no mod/impl item in this part"
+        for identity in members.keys() - regions
+    ]
+    for identity in sorted(regions):
+        inventory = members.get(identity)
+        if not isinstance(inventory, list) or any(
+            not isinstance(member, str) or not re.fullmatch(r"fn \S(?:.*\S)?", member)
+            for member in inventory
+        ):
+            errors.append(
+                f"{path}: region {identity!r} requires a members inventory of exact fn identities"
+            )
+            continue
+        recorded = Counter(inventory)
+        if any(count > 1 for count in recorded.values()):
+            errors.append(f"{path}: region {identity!r} members inventory contains duplicates")
+        matches = by_identity.get(identity, [])
+        if len(matches) > 1:
+            errors.append(f"{path}: region {identity!r} has an ambiguous Rust declaration identity")
+        for region in matches:
+            actual = Counter(
+                item.identity
+                for item in items
+                if item.kind == "fn" and any(items[index] is region for index in item.ancestors)
+            )
+            missing = sorted((actual - recorded).elements())
+            stale = sorted((recorded - actual).elements())
+            if missing:
+                errors.append(
+                    f"{path}:{region.line}: region {identity!r} members inventory missing "
+                    + ", ".join(repr(member) for member in missing)
+                )
+            if stale:
+                errors.append(
+                    f"{path}:{region.line}: region {identity!r} members inventory has stale "
+                    + ", ".join(repr(member) for member in stale)
+                )
+    return errors
 
 
 def ledger_entry_digest(entry: dict) -> str:
@@ -430,7 +499,10 @@ def check_rust(path: str, text: str, entry: dict) -> list[str]:
                 f"{path}: opening // Source: headers must match every ledger project, path and ref"
             )
     if entry.get("origin") != "mixed":
+        if comment_fields(text, "Provenance"):
+            errors.append(f"{path}: // Provenance: markers require mixed-file origin and parts")
         return errors
+    inherited_sources = set(sources) if sources is not None and not errors else set()
 
     try:
         items = rust_items(text)
@@ -465,6 +537,7 @@ def check_rust(path: str, text: str, entry: dict) -> list[str]:
         if not isinstance(part_items, list) or not part_items:
             errors.append(f"{path}: mixed-file part requires nonempty items")
             continue
+        errors.extend(check_region_members(path, part, by_identity, items))
         for identity in part_items:
             if not isinstance(identity, str) or not re.fullmatch(
                 r"(?:fn|mod|impl) \S(?:.*\S)?", identity
@@ -483,10 +556,10 @@ def check_rust(path: str, text: str, entry: dict) -> list[str]:
                     f"{path}: ledger item {identity!r} has no Rust declaration with that exact identity"
                 )
             for item in matches:
-                if not correct_marker(item.prelude, part, identity):
+                if not correct_marker(item.prelude, part, identity, inherited_sources):
                     errors.append(
                         f"{path}:{item.line}: {identity} missing {part.get('origin')!r} "
-                        "provenance marker matching exact local identity and all ledger source symbols"
+                        "provenance marker matching exact local identity and required ledger source symbols"
                     )
     for item in items:
         if item.identity in assigned:

@@ -2,6 +2,7 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/principal_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/principal_groups.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/roundtrip/test_acids.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura principal-group partition/suffix attachment with original skeletal-anion demotion and neutral-amide candidate policies.
@@ -463,6 +464,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::skeletal_anion_demotion_keeps_cationic_suffixes_and_added_hydrogen_boundary | adapted
+    // Source: ReShiki | src/naming/openclatura/principal_groups.rs::tests::skeletal_anion_demotion_keeps_cationic_suffixes_and_added_hydrogen_boundary
+    // Source: openclatura | tests/roundtrip/test_acids.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn skeletal_anion_demotion_keeps_cationic_suffixes_and_added_hydrogen_boundary() {
         use super::super::graph_io::read_smiles;
         for (smiles, key) in [

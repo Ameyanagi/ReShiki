@@ -36,6 +36,7 @@ LOCAL = {
     "ref": "local-v1",
     "symbol": "local_name",
 }
+MODULE_SOURCE = {**SOURCE, "symbol": "module scope (mapping uncertain)"}
 
 
 def header(origin="original", sources=None):
@@ -56,7 +57,11 @@ def marker(identity, origin="adapted", sources=None):
 
 def toml_value(value):
     if isinstance(value, dict):
-        return "{ " + ", ".join(f"{key} = {toml_value(item)}" for key, item in value.items()) + " }"
+        return (
+            "{ "
+            + ", ".join(f"{json.dumps(key)} = {toml_value(item)}" for key, item in value.items())
+            + " }"
+        )
     if isinstance(value, list):
         return "[" + ", ".join(toml_value(item) for item in value) + "]"
     return json.dumps(value)
@@ -143,6 +148,29 @@ class ProvenanceTests(unittest.TestCase):
         (self.root / "naming/lib.rs").write_text(HEADER + "fn revised() {}", encoding="utf-8")
         self.assertEqual(self.check(), [])
 
+    def test_region_member_tables_round_trip_through_the_ledger(self):
+        self.add_file(
+            "naming/mixed.rs",
+            MIXED_HEADER
+            + marker("mod tests")
+            + "mod tests { fn check() {} }\n"
+            + marker("impl Fixture")
+            + "impl Fixture { fn build() {} }\n",
+            origin="mixed",
+            parts=[
+                {
+                    "items": ["mod tests", "impl Fixture"],
+                    "origin": "adapted",
+                    "sources": [SOURCE],
+                    "members": {
+                        "mod tests": ["fn tests::check"],
+                        "impl Fixture": ["fn Fixture::build"],
+                    },
+                }
+            ],
+        )
+        self.assertEqual(self.check(), [])
+
     def test_missing_invalid_and_duplicate_ledger_entries_fail(self):
         self.assertIn("cannot read provenance ledger", check_provenance(self.root)[0])
         (self.root / LEDGER_NAME).write_text("not valid toml", encoding="utf-8")
@@ -225,13 +253,16 @@ class ProvenanceTests(unittest.TestCase):
 
 
 class RustBoundaryTests(unittest.TestCase):
-    def entry(self, items, origin="adapted", sources=None):
+    def entry(self, items, origin="adapted", sources=None, members=None):
         sources = [SOURCE] if sources is None else sources
+        part = {"items": items, "origin": origin, "sources": sources}
+        if members is not None:
+            part["members"] = members
         return {
             "origin": "mixed",
             "license": "MIT",
             "sources": sources,
-            "parts": [{"items": items, "origin": origin, "sources": sources}],
+            "parts": [part],
         }
 
     def test_each_origin_requires_its_correct_marker_and_recorded_source(self):
@@ -297,6 +328,61 @@ class RustBoundaryTests(unittest.TestCase):
             "// Provenance: fn x | adapted\n",
         ):
             self.assertTrue(check_rust("x.rs", text + extra + "fn x() {}", entry))
+
+    def test_module_scope_sources_inherit_exact_validated_header_refs(self):
+        sources = [SOURCE, MODULE_SOURCE]
+        entry = self.entry(["fn x"], sources=sources)
+        entry["sources"] = [SOURCE]
+        text = MIXED_HEADER + marker("fn x") + "fn x() {}"
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+        explicit = MIXED_HEADER + marker("fn x", sources=sources) + "fn x() {}"
+        self.assertEqual(check_rust("x.rs", explicit, entry), [])
+        # Inheritance never removes a function-specific symbol or tolerates extras.
+        for invalid in (
+            text.replace("// Source: upstream | upstream/source.py::upstream_name\n", ""),
+            explicit.replace("::upstream_name", "::wrong_specific_symbol"),
+            explicit.replace("::module scope (mapping uncertain)", "::wrong_module_symbol"),
+            text.replace("fn x()", marker("fn x") + "fn x()"),
+            explicit.replace(
+                "fn x()", "// Source: upstream | upstream/source.py::upstream_name\nfn x()"
+            ),
+            explicit.replace(
+                "fn x()",
+                "// Source: upstream | upstream/source.py::module scope (mapping uncertain)\nfn x()",
+            ),
+        ):
+            with self.subTest(text=invalid):
+                self.assertTrue(check_rust("x.rs", invalid, entry))
+
+    def test_only_module_scope_sources_need_no_function_source_lines(self):
+        entry = self.entry(["fn x"], sources=[MODULE_SOURCE])
+        text = MIXED_HEADER + marker("fn x", sources=[]) + "fn x() {}"
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+        for invalid in (
+            text.replace("upstream/source.py | v1", "upstream/source.py | WRONG_REF"),
+            text.replace("upstream/source.py | v1", "another/source.py | v1"),
+            text.replace("// Source: upstream | upstream/source.py | v1\n", ""),
+            text.replace("// SPDX-License-Identifier: MIT\n", ""),
+        ):
+            with self.subTest(text=invalid):
+                errors = check_rust("x.rs", invalid, entry)
+                self.assertTrue(any("opening" in error for error in errors))
+                self.assertTrue(any("provenance marker" in error for error in errors))
+
+    def test_module_scope_inheritance_rejects_wrong_or_unrelated_ledger_source_refs(self):
+        text = MIXED_HEADER + marker("fn x", sources=[]) + "fn x() {}"
+        for change in ({"ref": "v2"}, {"path": "elsewhere.py"}, {"project": "other"}):
+            with self.subTest(change=change):
+                entry = self.entry(["fn x"], sources=[{**MODULE_SOURCE, **change}])
+                entry["sources"] = [SOURCE]
+                errors = check_rust("x.rs", text, entry)
+                self.assertTrue(any("part sources must also occur" in error for error in errors))
+                self.assertTrue(any("provenance marker" in error for error in errors))
+        # Each pin behind a shared marker symbol must be in the validated header.
+        entry = self.entry(["fn x"], sources=[MODULE_SOURCE, {**MODULE_SOURCE, "ref": "v2"}])
+        both_refs = header("mixed", entry["sources"]) + marker("fn x", sources=[]) + "fn x() {}"
+        self.assertEqual(check_rust("x.rs", both_refs, entry), [])
+        self.assertTrue(check_rust("x.rs", text, entry))
 
     def test_marker_cannot_leak_from_previous_function(self):
         text = MIXED_HEADER + marker("fn x") + "fn x() {}\nfn y() {}"
@@ -373,6 +459,81 @@ pub(crate) async fn real<'a>(value: &'a str) {
         self.assertTrue(
             any("fn 未帰属 has no mixed-file provenance assignment" in e for e in errors)
         )
+
+    def test_upstream_test_injected_into_original_region_requires_an_inventory_decision(self):
+        repository = Path(__file__).resolve().parents[1]
+        path = "src/naming/openclatura/principal_suffixes.rs"
+        ledger = tomllib.loads((repository / LEDGER_NAME).read_text(encoding="utf-8"))
+        entry = next(item for item in ledger["file"] if item["path"] == path)
+        text = (repository / path).read_text(encoding="utf-8")
+        self.assertEqual(check_rust(path, text, entry), [])
+        region = next(item for item in rust_items(text) if item.identity == "mod tests")
+        region_part = next(part for part in entry["parts"] if "mod tests" in part["items"])
+        self.assertEqual(region_part["origin"], "original")
+        identity = "fn tests::upstream_template_positions"
+        # Rust rendition of the expectations in upstream tests/unit/test_analysis.py
+        # ::test_principal_suffixes_render_programmatically_from_template_positions.
+        # It is checker input only; neither this Rust nor upstream Python is executed.
+        injection = """
+    #[test]
+    fn upstream_template_positions() {
+        for (key, count, expected) in [
+            ("carboxylic_acid", 1, "oic acid"),
+            ("carboxylic_acid", 2, "dioic acid"),
+            ("carboxylic_acid", 3, "trioic acid"),
+            ("acid_chloride", 2, "dioyl dichloride"),
+            ("acid_chloride", 3, "trioyl trichloride"),
+            ("hydrazone", 2, "dione dihydrazone"),
+            ("hydrazone", 3, "trione trihydrazone"),
+        ] {
+            let rule = RULES.functional_groups.get(key).unwrap();
+            assert_eq!(render_principal_suffix(rule, count), expected);
+        }
+    }
+"""
+        changed = text[: region.end - 1] + injection + text[region.end - 1 :]
+        errors = check_rust(path, changed, entry)
+        self.assertTrue(
+            any("members inventory missing" in error and identity in error for error in errors)
+        )
+        upstream = next(source for source in entry["sources"] if source["project"] == "openclatura")
+        test_source = {
+            **upstream,
+            "path": "tests/unit/test_analysis.py",
+            "symbol": "test_principal_suffixes_render_programmatically_from_template_positions",
+        }
+        entry = deepcopy(entry)
+        source_fields = ("project", "path", "ref")
+        if not any(
+            all(source[field] == test_source[field] for field in source_fields)
+            for source in entry["sources"]
+        ):
+            entry["sources"].append(test_source)
+            changed = changed.replace(
+                "// Origin: mixed\n",
+                "// Origin: mixed\n"
+                + f"// Source: openclatura | {test_source['path']} | {test_source['ref']}\n",
+                1,
+            )
+        entry["parts"].append({"items": [identity], "origin": "adapted", "sources": [test_source]})
+        changed = changed.replace(
+            "    #[test]\n    fn upstream_template_positions()",
+            marker(identity, sources=[test_source])
+            + "    #[test]\n    fn upstream_template_positions()",
+            1,
+        )
+        # An explicit fn override still must appear in every enclosing region's inventory.
+        errors = check_rust(path, changed, entry)
+        self.assertTrue(
+            any("members inventory missing" in error and identity in error for error in errors)
+        )
+        region_part = next(part for part in entry["parts"] if "mod tests" in part["items"])
+        region_part["members"]["mod tests"].append(identity)
+        self.assertEqual(check_rust(path, changed, entry), [])
+        missing_specific_source = changed.replace(
+            f"// Source: openclatura | {test_source['path']}::{test_source['symbol']}\n", ""
+        )
+        self.assertTrue(check_rust(path, missing_specific_source, entry))
 
     def test_unicode_identifier_boundaries_and_rust_directional_whitespace(self):
         text = (
@@ -494,13 +655,26 @@ pub(crate) async fn real<'a>(value: &'a str) {
             + marker("fn tests::inner::special")
             + "fn special() {}\n}\n}\n"
         )
-        entry = self.entry(["mod tests"], "original", [LOCAL])
+        entry = self.entry(
+            ["mod tests"],
+            "original",
+            [LOCAL],
+            members={
+                "mod tests": [
+                    "fn tests::setup",
+                    "fn tests::setup::nested",
+                    "fn tests::inner::Fixture::build",
+                    "fn tests::inner::special",
+                ]
+            },
+        )
         entry["sources"] = [SOURCE, LOCAL]
         entry["parts"].append(
             {
                 "items": ["impl tests::inner::Fixture", "fn tests::inner::special"],
                 "origin": "adapted",
                 "sources": [SOURCE],
+                "members": {"impl tests::inner::Fixture": ["fn tests::inner::Fixture::build"]},
             }
         )
         self.assertEqual(check_rust("x.rs", text, entry), [])
@@ -513,14 +687,118 @@ pub(crate) async fn real<'a>(value: &'a str) {
 
     def test_region_markers_require_exact_lexical_scope_and_ledger_identity(self):
         text = MIXED_HEADER + marker("mod tests") + "mod tests { fn inside() {} }\nfn outside() {}"
-        errors = check_rust("x.rs", text, self.entry(["mod tests"]))
+        entry = self.entry(["mod tests"], members={"mod tests": ["fn tests::inside"]})
+        errors = check_rust("x.rs", text, entry)
         self.assertEqual(len(errors), 1)
         self.assertIn("fn outside has no mixed-file", errors[0])
         for item in ("mod wrong", "impl tests", "fn inside"):
             with self.subTest(item=item):
                 self.assertTrue(check_rust("x.rs", text, self.entry([item])))
         external = MIXED_HEADER + marker("mod tests") + "mod tests;\nfn outside() {}"
-        self.assertTrue(check_rust("x.rs", external, self.entry(["mod tests"])))
+        self.assertTrue(
+            check_rust("x.rs", external, self.entry(["mod tests"], members={"mod tests": []}))
+        )
+
+    def test_region_members_require_well_formed_complete_unique_inventories(self):
+        text = MIXED_HEADER + marker("mod tests") + "mod tests { fn inside() {} }"
+        for members in (
+            None,
+            [],
+            "fn tests::inside",
+            {},
+            {"mod tests": None},
+            {"mod tests": "fn tests::inside"},
+            {"mod tests": [None]},
+            {"mod tests": [["fn tests::inside"]]},
+            {"mod tests": ["mod tests"]},
+            {"mod tests": ["fn "]},
+            {"mod tests": ["fn tests::inside", "fn tests::inside"]},
+            {"mod tests": []},
+            {"mod tests": ["fn tests::inside", "fn tests::removed"]},
+            {"mod tests": ["fn tests::inside"], "mod stale": []},
+            {"mod tests": ["fn tests::inside"], "fn tests::inside": []},
+        ):
+            with self.subTest(members=members):
+                entry = self.entry(["mod tests"])
+                entry["parts"][0]["members"] = members
+                errors = check_rust("x.rs", text, entry)
+                self.assertTrue(any("members" in error for error in errors))
+        entry = self.entry(["mod tests"])
+        self.assertTrue(any("members" in error for error in check_rust("x.rs", text, entry)))
+
+    def test_inventory_keys_must_belong_to_regions_in_the_same_part(self):
+        text = (
+            MIXED_HEADER
+            + marker("mod tests")
+            + "mod tests { fn inside() {} }\n"
+            + marker("fn outside")
+            + "fn outside() {}"
+        )
+        entry = self.entry(["mod tests"], members={"mod tests": ["fn tests::inside"]})
+        entry["parts"].append(
+            {
+                "items": ["fn outside"],
+                "origin": "adapted",
+                "sources": [SOURCE],
+                "members": {"mod tests": ["fn tests::inside"]},
+            }
+        )
+        errors = check_rust("x.rs", text, entry)
+        self.assertTrue(any("has no mod/impl item in this part" in error for error in errors))
+        entry["parts"][1].pop("members")
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+
+    def test_nested_regions_each_inventory_all_lexical_function_descendants(self):
+        text = (
+            MIXED_HEADER
+            + marker("mod tests")
+            + "mod tests {\n"
+            + marker("impl tests::Fixture")
+            + "impl Fixture { fn build() { fn nested() {} } }\n}"
+        )
+        descendants = ["fn tests::Fixture::build", "fn tests::Fixture::build::nested"]
+        entry = self.entry(
+            ["mod tests", "impl tests::Fixture"],
+            members={"mod tests": descendants.copy(), "impl tests::Fixture": descendants.copy()},
+        )
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+        for region in ("mod tests", "impl tests::Fixture"):
+            with self.subTest(region=region):
+                changed = deepcopy(entry)
+                changed["parts"][0]["members"][region].remove(descendants[-1])
+                errors = check_rust("x.rs", text, changed)
+                self.assertEqual(len(errors), 1)
+                self.assertIn(f"region {region!r} members inventory missing", errors[0])
+
+    def test_moving_or_removing_a_region_member_leaves_a_stale_inventory(self):
+        text = MIXED_HEADER + marker("mod tests") + "mod tests { fn inside() {} }"
+        entry = self.entry(["mod tests"], members={"mod tests": ["fn tests::inside"]})
+        for changed in (
+            text.replace("fn inside() {}", ""),
+            text.replace("mod tests { fn inside() {} }", "mod tests {}\nfn inside() {}"),
+        ):
+            with self.subTest(text=changed):
+                errors = check_rust("x.rs", changed, entry)
+                self.assertTrue(any("members inventory has stale" in error for error in errors))
+
+    def test_duplicate_rust_region_and_function_identities_fail_closed(self):
+        text = MIXED_HEADER + marker("mod tests") + "mod tests { fn same() {} fn same() {} }"
+        entry = self.entry(["mod tests"], members={"mod tests": ["fn tests::same"]})
+        errors = check_rust("x.rs", text, entry)
+        self.assertTrue(any("members inventory missing" in error for error in errors))
+        text = (
+            MIXED_HEADER
+            + marker("impl Fixture")
+            + "impl Fixture { fn first() {} }\n"
+            + marker("impl Fixture")
+            + "impl Fixture { fn second() {} }"
+        )
+        entry = self.entry(
+            ["impl Fixture"],
+            members={"impl Fixture": ["fn Fixture::first", "fn Fixture::second"]},
+        )
+        errors = check_rust("x.rs", text, entry)
+        self.assertTrue(any("ambiguous Rust declaration identity" in error for error in errors))
 
     def test_own_function_assignment_does_not_cover_nested_functions(self):
         text = MIXED_HEADER + marker("fn outer") + "fn outer() { fn nested() {} }"
@@ -553,7 +831,9 @@ pub(crate) async fn real<'a>(value: &'a str) {
             + marker("fn tests::x", "original")
             + "fn x() {} }"
         )
-        errors = check_rust("x.rs", text, self.entry(["mod tests"]))
+        errors = check_rust(
+            "x.rs", text, self.entry(["mod tests"], members={"mod tests": ["fn tests::x"]})
+        )
         self.assertTrue(any("provenance marker has no exact ledger item" in e for e in errors))
 
     def test_scope_metadata_tracks_modules_impls_nested_functions_and_boundaries(self):
@@ -624,6 +904,37 @@ pub(crate) async fn real<'a>(value: &'a str) {
             ),
             [],
         )
+
+    def test_nonmixed_files_cannot_add_region_markers_without_mixed_file_parts(self):
+        entry = {"origin": "original", "license": "MIT", "sources": [SOURCE]}
+        text = HEADER + marker("mod tests", "original") + "mod tests { fn imported_case() {} }"
+        errors = check_rust("x.rs", text, entry)
+        self.assertTrue(
+            any("markers require mixed-file origin and parts" in error for error in errors)
+        )
+        # A parts table alone cannot enable regions under a wholly-original header.
+        entry["parts"] = [
+            {
+                "items": ["mod tests"],
+                "origin": "original",
+                "sources": [SOURCE],
+                "members": {"mod tests": ["fn tests::imported_case"]},
+            }
+        ]
+        self.assertTrue(check_rust("x.rs", text, entry))
+        # Only actual line-comment fields count; examples inside Rust literals or
+        # block comments do not turn a nonmixed file into a region assignment.
+        for lookalike in (
+            "/*\n" + marker("mod tests", "original") + "*/\n",
+            'const EXAMPLE: &str = "// Provenance: mod tests | original";\n',
+            'const EXAMPLE: &str = r#"\n' + marker("mod tests", "original") + '"#;\n',
+            '#[doc = r"// Provenance: mod tests | original"]\n',
+        ):
+            with self.subTest(lookalike=lookalike):
+                self.assertEqual(
+                    check_rust("x.rs", HEADER + lookalike + "mod tests { fn local() {} }", entry),
+                    [],
+                )
 
 
 if __name__ == "__main__":

@@ -28,8 +28,6 @@ pub(super) struct Spec {
 }
 impl Spec {
     // Provenance: fn Spec::sorter | adapted
-    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
     // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::inline in Rules::add (rule->setSorter(new Sort(d_rules)))
     pub fn sorter(self) -> Scope {
         if self.isolated {
@@ -39,9 +37,6 @@ impl Spec {
         }
     }
     // Provenance: fn Spec::replacement | adapted
-    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     pub fn replacement(self, reference: Descriptor) -> Scope {
         if self.isolated {
             Scope::Only(Self { reference, ..self })
@@ -55,9 +50,6 @@ impl Spec {
 }
 impl Scope {
     // Provenance: fn Scope::count | adapted
-    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     fn count(self) -> usize {
         match self {
             Self::Composite | Self::Only(_) => 1,
@@ -66,9 +58,6 @@ impl Scope {
         }
     }
     // Provenance: fn Scope::spec | adapted
-    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     fn spec(self, index: usize, rules: &Rules) -> Result<Spec, Error> {
         match self {
             Self::Only(spec) if index == 0 => Ok(spec),
@@ -211,9 +200,6 @@ pub(super) enum Step {
     Call(Frame, Frame),
 }
 // Provenance: impl Frame | adapted
-// Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
-// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
 // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::Sort::prioritize
 // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::Sort::compareSubstituents
 // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::Sort::getGroups
@@ -470,10 +456,8 @@ impl Frame {
 }
 impl Sequence {
     // Provenance: fn Sequence::step | adapted
-    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
     // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::SequenceRule::recursiveCompare
     // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::SequenceRule::areUpEdges
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     fn step(mut self, ctx: &mut Context<'_, '_>, input: Option<Value>) -> Result<Step, Error> {
         match self.phase {
             Phase::Start => {
@@ -558,10 +542,8 @@ impl Sequence {
         Ok(Step::Again(Frame::Sequence(self)))
     }
     // Provenance: fn Sequence::sort_a | adapted
-    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
     // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::inline in SequenceRule::recursiveCompare (a-side shallow/deep sort calls)
     // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::SequenceRule::sort
-    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     fn sort_a(mut self, deep: bool) -> Step {
         self.phase = Phase::SortA(deep);
         let child = Frame::sort(

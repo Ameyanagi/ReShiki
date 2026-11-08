@@ -2,6 +2,12 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/namer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_acids.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/arylSubstituents.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura recursive substituent pipeline with local scope, status and acid attachment preservation.
@@ -882,6 +888,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::public_naming_bounds_recursion_on_a_two_mebibyte_stack | adapted
+    // Source: ReShiki | src/naming/openclatura/namer.rs::tests::public_naming_bounds_recursion_on_a_two_mebibyte_stack
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn public_naming_bounds_recursion_on_a_two_mebibyte_stack() {
         std::thread::Builder::new()
             .stack_size(2 * 1024 * 1024)
@@ -921,6 +932,18 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::recursive_substituent_names_preserve_attachment_and_boundary | adapted
+    // Source: ReShiki | src/naming/openclatura/namer.rs::tests::recursive_substituent_names_preserve_attachment_and_boundary
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_is_substituted_alkyl_ligand
+    // Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_recursive_substituent_tree_tokens_keep_nested_scopes_local
+    // Source: openclatura | tests/unit/test_analysis.py::test_postprocessing_updates_binding_terms
+    // Source: openclatura | tests/unit/test_analysis.py::test_linear_polyspiro_ring_systems_use_dispiro_parent_not_partial_spiro
+    // Source: openclatura | tests/roundtrip/test_acids.py::test_roundtrip
+    // Source: openclatura | tests/data/parser_xml_resources/arylSubstituents.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn recursive_substituent_names_preserve_attachment_and_boundary() -> Result<(), String> {
         let methyl = read_smiles("C", &Default::default())?;
         assert_eq!(

@@ -20,9 +20,7 @@ use super::{
 use crate::naming::{NameReason, NameStatus};
 
 // Provenance: fn sites | adapted
-// Source: openclatura | src/openclatura/special_cases.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/charge_pair_roles.py::_classify_charge_pair
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn sites(mol: &Molecule) -> Vec<(usize, usize)> {
     mol.atoms
         .iter()
@@ -54,8 +52,6 @@ fn sites(mol: &Molecule) -> Vec<(usize, usize)> {
 
 // Provenance: fn name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::nitrogen_chalcogenide_result
-// Source: openclatura | src/openclatura/charge_pair_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 pub(super) fn name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Name>, String> {
     let sites = sites(mol);
     let [(n, ch)] = sites.as_slice() else {

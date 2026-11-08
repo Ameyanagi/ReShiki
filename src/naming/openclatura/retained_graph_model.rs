@@ -60,7 +60,6 @@ pub struct RetainedGraphAtomTemplate {
 impl RetainedGraphAtomTemplate {
     // Provenance: fn RetainedGraphAtomTemplate::resolved_pi_capacity | adapted
     // Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphAtomTemplate.resolved_pi_capacity
-    // Source: openclatura | src/openclatura/retained_fused_templates.py::module scope (mapping uncertain)
     pub fn resolved_pi_capacity(&self) -> usize {
         if self.saturated || self.forced_single {
             return 0;
@@ -99,10 +98,8 @@ pub struct RetainedGraphTemplate {
 }
 // Provenance: impl RetainedGraphTemplate | adapted
 // Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphTemplate.atom_by_locant
-// Source: openclatura | src/openclatura/retained_fused_templates.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphTemplate.indicated_hydrogen_count
 // Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphTemplate.output_name
-// Source: openclatura | src/openclatura/retained_graph_model.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/retained_fused_templates.py::retained_parent_metadata
 impl RetainedGraphTemplate {
     pub fn atom_by_locant(&self) -> BTreeMap<String, RetainedGraphAtomTemplate> {

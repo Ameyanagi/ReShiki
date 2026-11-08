@@ -104,10 +104,7 @@ pub struct Structure {
 }
 
 // Provenance: impl Structure | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java::getExtendedSmiles
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java::module scope (mapping uncertain)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::writeExtendedSmilesLayer
 impl Structure {
     /// Semantic CXSMILES retains atom labels, enhanced stereo and polymers.
@@ -151,10 +148,6 @@ pub struct Parser {
 }
 
 // Provenance: impl Parser | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::module scope (mapping uncertain)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java::module scope (mapping uncertain)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java::module scope (mapping uncertain)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::getInstance
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::NameToStructure
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::parseWord

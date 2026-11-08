@@ -40,8 +40,6 @@ pub struct SubstituentItem {
 impl SubstituentItem {
     // Provenance: fn SubstituentItem::new | adapted
     // Source: openclatura | src/openclatura/assembly_parts.py::SubstituentItem
-    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
-    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     pub fn new(name: impl Into<String>, locants: Vec<String>) -> Self {
         Self {
             name: name.into(),
@@ -70,8 +68,6 @@ pub struct PrincipalGroupItem {
 impl PrincipalGroupItem {
     // Provenance: fn PrincipalGroupItem::new | adapted
     // Source: openclatura | src/openclatura/assembly_parts.py::PrincipalGroupItem
-    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
-    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     pub fn new(key: impl Into<String>, locants: Vec<String>) -> Self {
         Self {
             key: key.into(),
@@ -193,8 +189,6 @@ pub struct AssemblyParts {
 impl Default for AssemblyParts {
     // Provenance: fn <AssemblyParts as Default>::default | adapted
     // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts
-    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
-    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     fn default() -> Self {
         Self::new(0)
     }
@@ -210,8 +204,6 @@ impl AssemblyParts {
 
     // Provenance: fn AssemblyParts::new | adapted
     // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts
-    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
-    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     pub fn new(parent_length: usize) -> Self {
         Self {
             parent_length,
@@ -282,8 +274,6 @@ impl AssemblyParts {
 
     // Provenance: fn AssemblyParts::is_simple_ring | adapted
     // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts fields is_ring/is_bicycle/is_spiro/is_polycycle
-    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
-    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     pub fn is_simple_ring(&self) -> bool {
         self.is_ring && !self.is_bicycle && !self.is_spiro && !self.is_polycycle
     }

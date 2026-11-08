@@ -2,9 +2,11 @@
 // Origin: mixed
 // Source: OPSIN | opsin-inchi/src/test/resources/uk/ac/cam/ch/wwmm/opsin/phanes.txt | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
 // Source: ReShiki | src/naming/openclatura/phane/tests.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright 2017 Daniel Lowe
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
-// Changes: Original Rust phane test harness with explicit OPSIN phane-oracle fixture selectors and assertions.
+// Changes: Original Rust phane test harness with explicit OPSIN phane-oracle fixture selectors and assertions. Adapted openclatura control cases are marked below.
 // Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
 
 use super::*;
@@ -99,8 +101,11 @@ fn cyclic_phane_names_reconstruct_exactly() -> Result<(), String> {
 }
 
 #[test]
-// Provenance: fn declines_out_of_scope_graphs | original
+// Provenance: fn declines_out_of_scope_graphs | adapted
 // Source: ReShiki | src/naming/openclatura/phane/tests.rs::declines_out_of_scope_graphs
+// Source: openclatura | tests/unit/test_analysis.py::test_biphenyl_is_graph_selected_not_exact_name_rewritten
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn declines_out_of_scope_graphs() -> Result<(), String> {
     for smiles in [
         "CC1Cc2ccc(cc2)CCc2ccc1cc2",
@@ -158,7 +163,6 @@ fn failed_ordinary_name_falls_back_to_unverified_phane() -> Result<(), String> {
 
 #[test]
 // Provenance: fn names_independent_upstream_inchi_graphs | mixed
-// Source: OPSIN | opsin-inchi/src/test/resources/uk/ac/cam/ch/wwmm/opsin/phanes.txt::module scope (mapping uncertain)
 // Source: ReShiki | src/naming/openclatura/phane/tests.rs::names_independent_upstream_inchi_graphs
 fn names_independent_upstream_inchi_graphs() -> Result<(), String> {
     let seven = "1(1,3),4(1,4)-dibenzenacycloheptaphane";

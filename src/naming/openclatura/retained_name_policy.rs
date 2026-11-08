@@ -2,6 +2,7 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/retained_name_policy.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/retained_name_policy.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Adapted openclatura retained-parent spelling/hydrogenation policies with local serde/debug glue and regression tests.
@@ -226,6 +227,11 @@ mod tests {
     use crate::naming::{NameReason, NameStatus, verify_identity};
 
     #[test]
+    // Provenance: fn tests::selected_hydrogen_replaces_the_source_parent_descriptor | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::tests::selected_hydrogen_replaces_the_source_parent_descriptor
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage10_fused_ion_template_registry_is_data_backed_and_gated
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn selected_hydrogen_replaces_the_source_parent_descriptor() {
         assert_eq!(
             super::render_retained_hydrogen_state("1H-indole", &[], Some(&["2".into()])),
@@ -246,6 +252,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::benzoheterocycle_locants_survive_substitution_fusion_and_spiro | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::tests::benzoheterocycle_locants_survive_substitution_fusion_and_spiro
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage3_retained_fused_pin_forms_and_indicated_hydrogens_are_validated
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn benzoheterocycle_locants_survive_substitution_fusion_and_spiro() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected, status) in [
@@ -362,6 +373,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_parent_indicated_hydrogen_survives_replacement | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::tests::retained_parent_indicated_hydrogen_survives_replacement
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage3_retained_fused_pin_forms_and_indicated_hydrogens_are_validated
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_parent_indicated_hydrogen_survives_replacement() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [

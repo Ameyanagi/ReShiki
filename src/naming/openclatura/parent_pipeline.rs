@@ -3,6 +3,13 @@
 // Source: openclatura | src/openclatura/parent_pipeline.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Source: openclatura | src/openclatura/audit/relative_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_systematic_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_descriptor.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_polycycles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fused_bonds.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura parent planning adapted to native graph/CIP with original rendered-parent status policy and ring-face parity proof.
@@ -925,6 +932,12 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::selected_retained_templates_keep_their_preference_status | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::selected_retained_templates_keep_their_preference_status
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_retained_complete_system_matrix_precedes_systematic_fusion
+    // Source: openclatura | tests/unit/test_analysis.py::test_gonane_retained_stereo_requires_only_the_configurations_implied_by_the_parent
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn selected_retained_templates_keep_their_preference_status() {
         for (name, expected) in [
             (
@@ -961,6 +974,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unregistered_retained_fusion_status_is_deferred_until_rendering | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::unregistered_retained_fusion_status_is_deferred_until_rendering
+    // Source: openclatura | tests/unit/test_fusion_descriptor.py::test_third_order_intermediate_component_citation_is_opsin_compatible
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn unregistered_retained_fusion_status_is_deferred_until_rendering() {
         use super::super::{
             fusion::{model::FusionComponentMatch, planner::plan_fusion_parent},
@@ -1037,6 +1055,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls
+    // Source: openclatura | tests/roundtrip/test_polycycles.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls() {
         for (smiles, text, status) in [
             (
@@ -1062,6 +1085,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::rendered_units_veto_unaudited_parent_choices | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::rendered_units_veto_unaudited_parent_choices
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Source: openclatura | tests/unit/test_locant_elision.py::test_nonconstitutional_and_unsupported_parent_locants_are_unchanged
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn rendered_units_veto_unaudited_parent_choices() {
         for (smiles, text, status) in [
             (
@@ -1214,6 +1243,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::relative_ring_fallback_is_explicitly_not_preferred | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::relative_ring_fallback_is_explicitly_not_preferred
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_flipped_parent_relative_stereo_binding_is_not_confirmed
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn relative_ring_fallback_is_explicitly_not_preferred() {
         let mut mol =
             super::super::graph_io::read_smiles("C[C@H]1C[C@@H](C)C1", &Default::default())
@@ -1242,6 +1276,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::spiro_parents_keep_descriptor_numbering_and_internal_bond_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::spiro_parents_keep_descriptor_numbering_and_internal_bond_locants
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn spiro_parents_keep_descriptor_numbering_and_internal_bond_locants() {
         for (smiles, expected) in [
             ("C1CCC2(CC1)CCCC2", "spiro[4.5]decane"),

@@ -5,6 +5,9 @@
 // Source: ReShiki | src/naming/openclatura/fusion/faces.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Source: openclatura | tests/unit/test_fusion_faces.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | tests/unit/test_fusion_larger_carbon_bicycle.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fused_bonds.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_systematic_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_polycycles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura chordless-face enumeration/auditing with a local bridge-free fused-parent eligibility proof and enlarged benzoheterobicycle applicability.
@@ -41,7 +44,6 @@ impl GraphCycle {
     }
 }
 // Provenance: fn canonical_cycle | adapted
-// Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/graph_kernel.py::canonical_cycle
 pub fn canonical_cycle(atoms: &[usize]) -> Vec<usize> {
     let mut best = None;
@@ -62,13 +64,11 @@ pub fn canonical_cycle(atoms: &[usize]) -> Vec<usize> {
     best.unwrap_or_default()
 }
 // Provenance: fn cycle_edges | adapted
-// Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/graph_kernel.py::cycle_edges
 pub fn cycle_edges(atoms: &[usize]) -> EdgeSet {
     cycle_edge_iter(atoms).collect()
 }
 // Provenance: fn cycle_edge_iter | adapted
-// Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/graph_kernel.py::inline in cycle_edges
 pub(super) fn cycle_edge_iter(cycle: &[usize]) -> impl Iterator<Item = Edge> + '_ {
     cycle
@@ -337,7 +337,6 @@ fn enumerate_from_start(
     )
 }
 // Provenance: fn edges_from_adjacency | adapted
-// Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
 fn edges_from_adjacency(atoms: &AtomSet, adj: &BTreeMap<usize, AtomSet>) -> EdgeSet {
     atoms
         .iter()
@@ -813,7 +812,6 @@ fn independent_face_sets(
     budget: &mut Budget,
 ) -> Result<Vec<Vec<usize>>, String> {
     // Provenance: fn independent_face_sets::insert_basis | adapted
-    // Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
     // Source: openclatura | src/openclatura/graph_kernel.py::gf2_basis_insert
     fn insert_basis(basis: &[EdgeSet], mut mask: EdgeSet) -> Option<Vec<EdgeSet>> {
         for row in basis {
@@ -999,8 +997,13 @@ mod tests {
     }
 
     #[test]
-    // Provenance: fn tests::bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems | original
+    // Provenance: fn tests::bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems | adapted
     // Source: ReShiki | src/naming/openclatura/fusion/faces.rs::tests::bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_issue_89_retained_fused_hydrocarbon_precedes_systematic_fusion
+    // Source: openclatura | tests/roundtrip/test_polycycles.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems() {
         for (smiles, expected) in [
             // Bond orders and heteroatoms do not change the topology proof.

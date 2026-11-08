@@ -12,9 +12,7 @@ use super::*;
 // Source: RDKit | Code/GraphMol/Chirality.cpp::is_regular_h
 // Source: RDKit | Code/GraphMol/Chirality.cpp::Chirality::detail::has_protium_neighbor
 // Source: RDKit | Code/GraphMol/FindStereo.cpp::Chirality::detail::isAtomPotentialTetrahedralCenter
-// Source: RDKit | Code/GraphMol/Chirality.cpp::module scope (mapping uncertain)
 // Source: RDKit | Code/GraphMol/Chirality.cpp::isAtomPotentialChiralCenter
-// Source: RDKit | Code/GraphMol/FindStereo.cpp::module scope (mapping uncertain)
 // Source: RDKit | Code/GraphMol/Chirality.cpp::assignAtomChiralCodes
 impl Context {
     /// An H or ¹H with one neighbour and nothing else attached: the same CIP

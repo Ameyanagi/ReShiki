@@ -2716,7 +2716,6 @@ fn omit_attached_locants(
 // Provenance: mod tests | adapted
 // Source: openclatura | tests/unit/test_fusion_descriptor.py::_component_graph
 // Source: openclatura | tests/unit/test_fusion_descriptor.py::test_identical_leaf_components_form_one_primed_multiplicative_group
-// Source: openclatura | src/openclatura/fusion/descriptor.py::module scope (mapping uncertain)
 // Source: openclatura | tests/unit/test_fusion_descriptor.py::test_polycomponent_tree_orders_attached_components_by_seniority
 // Source: openclatura | tests/unit/test_fusion_descriptor.py::test_multiplicative_interfaces_use_typed_component_automorphism_orbits
 // Source: openclatura | tests/integration/test_systematic_fusion.py::test_systematic_fusion_round_trips_through_opsin

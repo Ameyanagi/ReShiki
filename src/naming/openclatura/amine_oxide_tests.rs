@@ -1,6 +1,9 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
 // Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 use super::name_smiles;
@@ -106,12 +109,16 @@ const CHALCOGEN_ANALOGUES: &[Case] = &[
     ),
 ];
 
+// Provenance: fn name | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::name
 fn name(smiles: &str) -> Result<super::Name, String> {
     // Match the CLI boundary for the audit matrix; the atom-order test below
     // also exercises the naming pipeline directly without canonicalizing first.
     name_smiles(&canonical_smiles(smiles)?, &Default::default())
 }
 
+// Provenance: fn assert_case | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::assert_case
 fn assert_case((row, smiles, expected, status): Case) {
     let actual = name(smiles).unwrap_or_else(|error| panic!("{row}: {smiles}: {error}"));
     assert_eq!(
@@ -122,6 +129,11 @@ fn assert_case((row, smiles, expected, status): Case) {
 }
 
 #[test]
+// Provenance: fn amine_oxide_functional_class_matrix | adapted
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_functional_class_matrix
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrogen_chalcogenides_are_classified_before_rendering
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn amine_oxide_functional_class_matrix() {
     for &case in FUNCTIONAL_CLASS_CASES {
         assert_case(case);
@@ -129,6 +141,11 @@ fn amine_oxide_functional_class_matrix() {
 }
 
 #[test]
+// Provenance: fn amine_chalcogen_analogues_use_locanted_functional_class_names | adapted
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_chalcogen_analogues_use_locanted_functional_class_names
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrogen_chalcogenide_citation_route_preserves_whole_parent
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn amine_chalcogen_analogues_use_locanted_functional_class_names() {
     for &case in CHALCOGEN_ANALOGUES {
         assert_case(case);
@@ -136,6 +153,8 @@ fn amine_chalcogen_analogues_use_locanted_functional_class_names() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_zwitterionic_fallbacks_are_not_preferred | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_zwitterionic_fallbacks_are_not_preferred
 fn amine_oxide_zwitterionic_fallbacks_are_not_preferred() {
     // A senior suffix elsewhere, an oxide in a substituent, N-bound hydrogen,
     // an adjacent ring nitrogen, and multiple sites remain coverage limits.
@@ -191,6 +210,8 @@ fn amine_oxide_zwitterionic_fallbacks_are_not_preferred() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_functional_class_keeps_neutral_assessment | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_functional_class_keeps_neutral_assessment
 fn amine_oxide_functional_class_keeps_neutral_assessment() {
     for case in [
         (
@@ -211,6 +232,8 @@ fn amine_oxide_functional_class_keeps_neutral_assessment() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_keeps_source_stereo_alternatives | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_keeps_source_stereo_alternatives
 fn amine_oxide_keeps_source_stereo_alternatives() {
     for (smiles, primary, expected, reason) in [
         (
@@ -260,6 +283,8 @@ fn amine_oxide_keeps_source_stereo_alternatives() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_neutral_candidates_restore_source_status | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_neutral_candidates_restore_source_status
 fn amine_oxide_neutral_candidates_restore_source_status() {
     // A detached neutral result has its own assessment. Neither a successful
     // neutral proof nor a declined parent choice may certify the source graph.
@@ -319,6 +344,14 @@ fn amine_oxide_neutral_candidates_restore_source_status() {
 }
 
 #[test]
+// Provenance: fn amine_oxides_preserve_other_charge_and_retained_name_families | adapted
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxides_preserve_other_charge_and_retained_name_families
+// Source: openclatura | tests/unit/test_analysis.py::test_stage10_retained_fused_n_oxide_uses_generic_opsin_grammar_renderer
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrile_chalcogenides_use_zwitterion_priority_and_class_names
+// Source: openclatura | tests/unit/test_analysis.py::test_azinic_acid_is_not_named_as_a_nitro_compound
+// Source: openclatura | tests/unit/test_analysis.py::test_an_azoxy_chain_is_a_diazene_oxide
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn amine_oxides_preserve_other_charge_and_retained_name_families() {
     for case in [
         (
@@ -393,6 +426,8 @@ fn amine_oxides_preserve_other_charge_and_retained_name_families() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_nitrogen_stereocentres_remain_rejected | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_nitrogen_stereocentres_remain_rejected
 fn amine_oxide_nitrogen_stereocentres_remain_rejected() {
     for smiles in ["CC[N@+](C)([O-])c1ccccc1", "CC[N@@+](C)([O-])c1ccccc1"] {
         let error = name(smiles).unwrap_err();
@@ -404,6 +439,8 @@ fn amine_oxide_nitrogen_stereocentres_remain_rejected() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_unknown_stereo_does_not_certify_zwitterionic_alternatives | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_unknown_stereo_does_not_certify_zwitterionic_alternatives
 fn amine_oxide_unknown_stereo_does_not_certify_zwitterionic_alternatives() {
     let smiles = "[O-][n+]1ccc([CH:900001](F)Cl)cc1";
     let actual = name_smiles(smiles, &Default::default()).unwrap();
@@ -436,6 +473,11 @@ fn amine_oxide_unknown_stereo_does_not_certify_zwitterionic_alternatives() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_names_and_statuses_are_independent_of_atom_order | adapted
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_names_and_statuses_are_independent_of_atom_order
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrogen_chalcogenides_are_classified_before_rendering
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn amine_oxide_names_and_statuses_are_independent_of_atom_order() {
     for (smiles, permutations) in [
         (
@@ -481,6 +523,8 @@ fn amine_oxide_names_and_statuses_are_independent_of_atom_order() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_ambiguous_ring_locants_remain_unverified | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_ambiguous_ring_locants_remain_unverified
 fn amine_oxide_ambiguous_ring_locants_remain_unverified() {
     // Neutral pyrazine numbering can choose either equivalent nitrogen first.
     // Its oxide locant is outside this adapter's certification scope.
@@ -512,6 +556,12 @@ fn amine_oxide_ambiguous_ring_locants_remain_unverified() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_functional_class_names_round_trip | adapted
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_functional_class_names_round_trip
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrogen_chalcogenides_are_classified_before_rendering
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrogen_chalcogenide_citation_route_preserves_whole_parent
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn amine_oxide_functional_class_names_round_trip() {
     for &(row, smiles, expected, _) in FUNCTIONAL_CLASS_CASES.iter().chain(CHALCOGEN_ANALOGUES) {
         let actual = name(smiles).unwrap();
@@ -530,6 +580,8 @@ fn amine_oxide_functional_class_names_round_trip() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_functional_class_names_preserve_remote_carbon_stereo | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_functional_class_names_preserve_remote_carbon_stereo
 fn amine_oxide_functional_class_names_preserve_remote_carbon_stereo() {
     let mut names = Vec::new();
     let mut identities = Vec::new();
@@ -571,6 +623,8 @@ fn amine_oxide_functional_class_names_preserve_remote_carbon_stereo() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_keeps_source_carbon_stereo_when_neutral_priorities_reverse | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_keeps_source_carbon_stereo_when_neutral_priorities_reverse
 fn amine_oxide_keeps_source_carbon_stereo_when_neutral_priorities_reverse() {
     for (smiles, neutral, descriptor, neutral_descriptor) in [
         (
@@ -615,6 +669,8 @@ fn amine_oxide_keeps_source_carbon_stereo_when_neutral_priorities_reverse() {
 }
 
 #[test]
+// Provenance: fn amine_oxide_nitrones_keep_opposite_double_bond_stereo | original
+// Source: ReShiki | src/naming/openclatura/amine_oxide_tests.rs::amine_oxide_nitrones_keep_opposite_double_bond_stereo
 fn amine_oxide_nitrones_keep_opposite_double_bond_stereo() {
     for (smiles, descriptor) in [("C/C=[N+](/C)[O-]", "Z"), ("C/C=[N+](\\C)[O-]", "E")] {
         let mol = super::graph_io::read_smiles(smiles, &Default::default()).unwrap();

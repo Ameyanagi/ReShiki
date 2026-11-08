@@ -4,6 +4,8 @@
 // Source: ReShiki | src/naming/openclatura/parent_selection.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Source: openclatura | src/openclatura/component_namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Inherited parent scoring/candidate pipeline with original anion, ring-assembly and exchanged-arm stereochemical preference extensions.
@@ -907,7 +909,6 @@ fn prefer_assembly_substituent_citation(
 }
 
 // Provenance: fn ring_kind | adapted
-// Source: openclatura | src/openclatura/parent_selection.py::module scope (mapping uncertain)
 fn ring_kind(system: &RingSystem) -> usize {
     // P-44.2.2.2: spiro, cyclic phane, fused, bridged fused,
     // nonfused bridged, linear phane, assembly.
@@ -1349,6 +1350,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::perceived_anionic_suffix_atoms_are_counted_once | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_selection.rs::tests::perceived_anionic_suffix_atoms_are_counted_once
+    // Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn perceived_anionic_suffix_atoms_are_counted_once() {
         for smiles in [
             "C[O-]",
@@ -1378,6 +1384,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_selection.rs::tests::neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrile_chalcogenides_use_zwitterion_priority_and_class_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre() {
         let mol = read_smiles("CC#[N+][O-]", &Default::default()).unwrap();
         let groups = super::super::perception::perceive_groups(&mol);

@@ -1,11 +1,24 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
 // Source: ReShiki | src/naming/openclatura/salt_anion_spelling_tests.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_wrappers.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 use crate::naming::{NameReason, NameStatus};
 
 #[test]
+// Provenance: fn salt_anion_spelling_matrix | adapted
+// Source: ReShiki | src/naming/openclatura/salt_anion_spelling_tests.rs::salt_anion_spelling_matrix
+// Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json::<fixture data>
+// Source: openclatura | tests/unit/test_fusion_wrappers.py::test_bridge_wrapper_composes_with_shared_parent_derivative_operations
+// Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+// Source: openclatura | tests/unit/test_audit_reconstruction.py::test_self_audit_confirms_modelled_names
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn salt_anion_spelling_matrix() {
     // Retained ion spelling and salt ordering share the public naming pipeline
     // with the P-72.7 parent-choice rules.

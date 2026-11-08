@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
 // Origin: mixed
 // Source: openclatura | src/openclatura/component_namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/spiro_subgraph.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/component_namer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura component decision pipeline with local derivation, isotope and spiro projection adapters.
@@ -194,8 +197,11 @@ enum ComponentResult {
     Plan(Box<ParentAssemblyPlan>, AtomSet, BTreeSet<Edge>),
 }
 
-// Provenance: fn build_spiro_component_parts | original
+// Provenance: fn build_spiro_component_parts | adapted
+// Source: openclatura | src/openclatura/spiro_subgraph.py::plan_graph_spiro_side
 // Source: ReShiki | src/naming/openclatura/component_namer.rs::build_spiro_component_parts
+// Changes: return ParentAssemblyPlan directly instead of capturing it before rendering;
+// wrap the shared pipeline in a candidate transaction and add prioritize_junction control.
 pub(super) fn build_spiro_component_parts(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -840,6 +846,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::external_carboxylic_parent_fallbacks_keep_dioic_names | adapted
+    // Source: ReShiki | src/naming/openclatura/component_namer.rs::tests::external_carboxylic_parent_fallbacks_keep_dioic_names
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn external_carboxylic_parent_fallbacks_keep_dioic_names() {
         for (smiles, expected) in [
             ("OC(=O)CC(=O)O", "propanedioic acid"),
@@ -887,6 +898,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::charged_retained_fallback_requires_citable_donor_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/component_namer.rs::tests::charged_retained_fallback_requires_citable_donor_hydrogen
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage10_retained_fused_ring_n_charge_uses_graph_operation_renderer
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn charged_retained_fallback_requires_citable_donor_hydrogen() {
         for smiles in ["C1=N[NH2+]c2ccccc21", "C1=Nc2ccccc2[NH2+]1"] {
             assert!(

@@ -3,6 +3,12 @@
 // Source: openclatura | src/openclatura/graph_io.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/small_ring_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/graph_io.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_read_smiles_kekulization.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fused_bonds.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_systematic_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_polycycles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura graph semantics adapted to the local chemistry kernel with additional admission checks.
@@ -461,6 +467,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::identity_and_stage_guards_precede_graph_conversion | adapted
+    // Source: ReShiki | src/naming/openclatura/graph_io.rs::tests::identity_and_stage_guards_precede_graph_conversion
+    // Source: openclatura | tests/unit/test_read_smiles_kekulization.py::test_read_smiles_refuses_an_aromatic_ring_without_a_kekule_structure
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn identity_and_stage_guards_precede_graph_conversion() {
         for text in [
             "",
@@ -493,6 +504,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::pure_spiro_blocks_are_admitted | adapted
+    // Source: ReShiki | src/naming/openclatura/graph_io.rs::tests::pure_spiro_blocks_are_admitted
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn pure_spiro_blocks_are_admitted() {
         for text in [
             "C1CCC2(CC1)CCCC2",
@@ -506,6 +522,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::polycyclic_blocks_are_admitted_only_when_fusion_abstains | adapted
+    // Source: ReShiki | src/naming/openclatura/graph_io.rs::tests::polycyclic_blocks_are_admitted_only_when_fusion_abstains
+    // Source: openclatura | tests/unit/test_analysis.py::test_fused_and_polycyclic_retained_signatures_are_data_driven
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_bridged_parent_explicitly_abstains_from_ordinary_fusion_nomenclature
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn polycyclic_blocks_are_admitted_only_when_fusion_abstains() {
         for text in [
             "C1CC2CCC1C2",            // norbornane: SSSR rings share a longer path.
@@ -523,6 +545,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::fusion_blocks_are_admitted_for_audited_parent_selection | adapted
+    // Source: ReShiki | src/naming/openclatura/graph_io.rs::tests::fusion_blocks_are_admitted_for_audited_parent_selection
+    // Source: openclatura | tests/unit/test_fusion_numbering.py::test_parent_bond_model_accepts_input_kekule_assignment
+    // Source: openclatura | tests/roundtrip/test_polycycles.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn fusion_blocks_are_admitted_for_audited_parent_selection() {
         for text in [
             "C1CCC2CCCCC2C1",  // decalin.

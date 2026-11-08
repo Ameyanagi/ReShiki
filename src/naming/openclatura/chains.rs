@@ -3,6 +3,9 @@
 // Source: openclatura | src/openclatura/chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/canonical_ranks.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/chains.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_canonical_ranks.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura chain/ring enumeration plus Morgan ranks from a second upstream module.
@@ -880,6 +883,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::carbon_paths_keep_only_maximal_leaf_to_leaf_walks | adapted
+    // Source: ReShiki | src/naming/openclatura/chains.rs::tests::carbon_paths_keep_only_maximal_leaf_to_leaf_walks
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn carbon_paths_keep_only_maximal_leaf_to_leaf_walks() {
         let mol = read_smiles("CCC(C)CC", &Default::default()).unwrap();
         let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
@@ -919,6 +927,11 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::cutting_a_ring_breaks_its_cycle_membership | adapted
+    // Source: ReShiki | src/naming/openclatura/chains.rs::tests::cutting_a_ring_breaks_its_cycle_membership
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_spiro_side_that_is_not_a_ring_abstains
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cutting_a_ring_breaks_its_cycle_membership() {
         let mol = read_smiles("C1CCCCC1", &Default::default()).unwrap();
         assert!(get_cyclic_atoms(&mol, &AtomSet::from([0])).is_empty());
@@ -1064,6 +1077,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::aromatic_morgan_ranks_preserve_ring_symmetry | adapted
+    // Source: ReShiki | src/naming/openclatura/chains.rs::tests::aromatic_morgan_ranks_preserve_ring_symmetry
+    // Source: openclatura | tests/unit/test_canonical_ranks.py::test_subgraph_ranks_ignore_atoms_outside_the_selected_parent
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn aromatic_morgan_ranks_preserve_ring_symmetry() {
         let mol = read_smiles("c1ccccc1", &Default::default()).unwrap();
         assert_eq!(
@@ -1101,6 +1119,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::public_naming_bounds_exhaustive_branched_chain_search | adapted
+    // Source: ReShiki | src/naming/openclatura/chains.rs::tests::public_naming_bounds_exhaustive_branched_chain_search
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn public_naming_bounds_exhaustive_branched_chain_search() {
         use super::super::name_smiles;
         use std::time::{Duration, Instant};

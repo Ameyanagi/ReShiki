@@ -4,6 +4,11 @@
 // Source: openclatura | src/openclatura/hantzsch_widman.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/rules/retained.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Source: openclatura | src/openclatura/namer_config.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.golden.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_rules_tables.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_bridges.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/arylGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Consolidated openclatura retained-ring matching and Hantzsch-Widman generation, adapted to pure native per-ring specs and local tests.
@@ -50,8 +55,6 @@ static SPECS: LazyLock<Vec<MonocycleSpec>> = LazyLock::new(|| {
 });
 
 // Provenance: fn monocycle_spec_for_name | adapted
-// Source: openclatura | src/openclatura/rules/retained.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/namer_config.py::_monocycle_spec
 fn monocycle_spec_for_name(name: &str) -> Option<MonocycleSpec> {
     SPECS.iter().find(|spec| spec.name == name).cloned()
@@ -62,14 +65,12 @@ fn monocycle_spec_for_name(name: &str) -> Option<MonocycleSpec> {
 /// the name instead of making one molecule's result depend on earlier calls.
 // Provenance: fn generated_spec_for_name | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::inline in _generated_monocycle_name
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn generated_spec_for_name(mol: &Molecule, path: &[usize], name: &str) -> Option<MonocycleSpec> {
     hw_spec_for_ring(mol, path).filter(|spec| spec.name == name)
 }
 
 // Provenance: fn get_retained_ring | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::get_retained_ring
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 pub fn get_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
     if !is_monocycle(mol, path) {
         return match_fused_templates(mol, path);
@@ -113,7 +114,6 @@ pub fn get_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch
 /// Retained parents selected before descriptor discovery by template capability.
 // Provenance: fn get_pre_descriptor_retained_ring | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::get_pre_descriptor_retained_ring
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 pub fn get_pre_descriptor_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
     use super::super::retained_fused_templates::{
         MatchOptions, match_retained_graph_templates_with_options,
@@ -151,7 +151,6 @@ pub fn get_pre_descriptor_retained_ring(mol: &Molecule, path: &[usize]) -> Optio
 }
 // Provenance: fn match_fused_templates | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_match_fused_templates
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn match_fused_templates(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
     use super::super::retained_fused_templates::match_retained_graph_templates;
     let ring: AtomSet = path.iter().copied().collect();
@@ -179,8 +178,6 @@ fn match_fused_templates(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch
 }
 
 // Provenance: fn is_monocycle | adapted
-// Source: openclatura | src/openclatura/rules/retained.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn is_monocycle(mol: &Molecule, path: &[usize]) -> bool {
     if path.len() < 3 {
         return false;
@@ -201,7 +198,6 @@ fn is_monocycle(mol: &Molecule, path: &[usize]) -> bool {
 
 // Provenance: fn count_double_bonds_in_ring | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_count_double_bonds_in_ring
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 pub fn count_double_bonds_in_ring(mol: &Molecule, path: &[usize]) -> usize {
     if path.is_empty() {
         return 0;
@@ -214,7 +210,6 @@ pub fn count_double_bonds_in_ring(mol: &Molecule, path: &[usize]) -> usize {
 
 // Provenance: fn no_cumulated_double_bonds | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_has_no_cumulated_double_bonds
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn no_cumulated_double_bonds(mol: &Molecule, path: &[usize]) -> bool {
     let ring: AtomSet = path.iter().copied().collect();
     path.iter().all(|&idx| {
@@ -228,7 +223,6 @@ fn no_cumulated_double_bonds(mol: &Molecule, path: &[usize]) -> bool {
 
 // Provenance: fn match_monocycle_spec | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_match_monocycle_spec
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn match_monocycle_spec(
     mol: &Molecule,
     path: &[usize],
@@ -286,7 +280,6 @@ fn match_monocycle_spec(
 
 // Provenance: fn sorted | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::inline in _match_monocycle_spec
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn sorted(values: &[usize]) -> Vec<usize> {
     let mut values = values.to_vec();
     values.sort();
@@ -294,7 +287,6 @@ fn sorted(values: &[usize]) -> Vec<usize> {
 }
 // Provenance: fn hetero_positions | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::inline in _hetero_distance_multiset
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn hetero_positions(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     path.iter()
         .enumerate()
@@ -303,7 +295,6 @@ fn hetero_positions(mol: &Molecule, path: &[usize]) -> Vec<usize> {
 }
 // Provenance: fn hetero_distances | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_hetero_distance_multiset
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn hetero_distances(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     let positions = hetero_positions(mol, path);
     let mut result = Vec::new();
@@ -318,7 +309,6 @@ fn hetero_distances(mol: &Molecule, path: &[usize]) -> Vec<usize> {
 }
 // Provenance: fn chalcogen_distances | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_chalcogen_nitrogen_distance_multiset
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn chalcogen_distances(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     let mut result = Vec::new();
     for (i, _) in path
@@ -340,7 +330,6 @@ fn chalcogen_distances(mol: &Molecule, path: &[usize]) -> Vec<usize> {
 }
 // Provenance: fn hetero_gaps | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_hetero_gaps
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn hetero_gaps(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     let p = hetero_positions(mol, path);
     if p.len() < 3 {
@@ -358,7 +347,6 @@ fn hetero_gaps(mol: &Molecule, path: &[usize]) -> Vec<usize> {
 }
 // Provenance: fn hetero_gap_cycle | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_hetero_gap_cycle
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn hetero_gap_cycle(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     let gaps = hetero_gaps(mol, path);
     let reverse: Vec<_> = gaps.iter().rev().copied().collect();
@@ -381,7 +369,6 @@ fn hetero_gap_cycle(mol: &Molecule, path: &[usize]) -> Vec<usize> {
 /// preference order and its bond-count gate before generating an HW fallback.
 // Provenance: fn match_monocycle_templates | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_match_monocycle_templates
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn match_monocycle_templates(mol: &Molecule, path: &[usize], doubles: usize) -> Option<String> {
     if !no_cumulated_double_bonds(mol, path) {
         return None;
@@ -688,7 +675,6 @@ fn needs_lambda(mol: &Molecule, idx: usize) -> bool {
 
 // Provenance: fn generated_monocycle | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_generated_monocycle
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn generated_monocycle(mol: &Molecule, path: &[usize], doubles: usize) -> Option<String> {
     let spec = hw_spec_for_ring(mol, path)?;
     if doubles == spec.double_bonds
@@ -711,7 +697,6 @@ pub struct HydroPlan {
 
 // Provenance: fn mancude_monocycle_hydro_plan | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::mancude_monocycle_hydro_plan
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 pub fn mancude_monocycle_hydro_plan(
     mol: &Molecule,
     path: &[usize],
@@ -727,7 +712,6 @@ pub fn mancude_monocycle_hydro_plan(
 
 // Provenance: fn mancude_hydro_plan | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::mancude_hydro_plan
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 pub fn mancude_hydro_plan(
     mol: &Molecule,
     path: &[usize],
@@ -786,7 +770,6 @@ pub fn mancude_hydro_plan(
 
 // Provenance: fn is_saturated_ring_site | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::_ring_bonds_all_single
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 pub fn is_saturated_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
     let bonds: Vec<_> = mol
         .get_neighbors(idx)
@@ -832,7 +815,6 @@ pub fn cites_indicated_hydrogen(mol: &Molecule, path: &[usize], name: Option<&st
 
 // Provenance: fn parent_metadata | adapted
 // Source: openclatura | src/openclatura/rules/retained.py::parent_metadata
-// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 pub fn parent_metadata(name: &str) -> Option<super::super::assembly_parts::RetainedParentMetadata> {
     super::super::retained_fused_templates::retained_parent_metadata(name)
 }
@@ -849,6 +831,14 @@ mod tests {
         get_retained_ring(&mol, &ring[0].paths[0]).map(|r| r.name)
     }
     #[test]
+    // Provenance: fn tests::retained_and_hw_monocycles_have_source_spellings | adapted
+    // Source: ReShiki | src/naming/openclatura/rules/retained.rs::tests::retained_and_hw_monocycles_have_source_spellings
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Source: openclatura | tests/unit/test_rules_tables.py::test_oxadiazoles_and_thiadiazoles_use_their_retained_names
+    // Source: openclatura | tests/roundtrip/test_bridges.py::test_roundtrip
+    // Source: openclatura | tests/data/parser_xml_resources/arylGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_and_hw_monocycles_have_source_spellings() {
         for (smiles, name) in [
             ("n1ccccc1", "pyridine"),
@@ -862,6 +852,11 @@ mod tests {
         }
     }
     #[test]
+    // Provenance: fn tests::retained_cages_match_connectivity_and_all_numberings | adapted
+    // Source: ReShiki | src/naming/openclatura/rules/retained.rs::tests::retained_cages_match_connectivity_and_all_numberings
+    // Source: openclatura | tests/unit/test_analysis.py::test_fused_and_polycyclic_retained_signatures_are_data_driven
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_cages_match_connectivity_and_all_numberings() {
         for (smiles, name, numberings) in [
             ("C1C2CC3CC1CC(C2)C3", "adamantane", 24),
@@ -891,6 +886,11 @@ mod tests {
         }
     }
     #[test]
+    // Provenance: fn tests::partly_saturated_parent_reports_hydro_positions | adapted
+    // Source: ReShiki | src/naming/openclatura/rules/retained.rs::tests::partly_saturated_parent_reports_hydro_positions
+    // Source: openclatura | tests/unit/test_analysis.py::test_simple_monocyclic_retained_ring_specs_are_data_driven
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn partly_saturated_parent_reports_hydro_positions() {
         let mol = read_smiles("N1CCC=CC1", &Default::default()).unwrap();
         let ring = find_ring_systems(&mol, &AtomSet::new()).unwrap();

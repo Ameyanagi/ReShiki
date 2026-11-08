@@ -1,6 +1,10 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
 // Source: ReShiki | src/naming/openclatura/radical_ions.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_describer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 //! Bounded recovery of the closed-shell parent for descriptive radical-ion names.
@@ -25,6 +29,8 @@ const UNSUPPORTED: &str =
 /// becomes a double bond. More distant resonance searches, multiple charges,
 /// and multiple unpaired electrons deliberately remain outside this heuristic.
 /// `None` leaves ordinary ions and neutral radicals to their own naming paths.
+// Provenance: fn recover | original
+// Source: ReShiki | src/naming/openclatura/radical_ions.rs::recover
 pub(in crate::naming) fn recover(
     smiles: &str,
     budget: &nazuchem_kernel::budget::Budget,
@@ -117,6 +123,8 @@ pub(in crate::naming) fn recover(
 
 /// Sanitize a detached candidate and prove that no implicit hydrogen, radical,
 /// charge or atom edit was introduced while producing ordinary neutral SMILES.
+// Provenance: fn closed_shell_parent | original
+// Source: ReShiki | src/naming/openclatura/radical_ions.rs::closed_shell_parent
 fn closed_shell_parent(
     source: &State,
     graph: &Graph,
@@ -187,6 +195,8 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::radical_ion_recovery_preserves_decoded_biaryl_configuration | original
+    // Source: ReShiki | src/naming/openclatura/radical_ions.rs::tests::radical_ion_recovery_preserves_decoded_biaryl_configuration
     fn radical_ion_recovery_preserves_decoded_biaryl_configuration() {
         let input = "Oc1ccc(C[N+](C)C)c[c:900004]1-[c:900004]1ccccc1O";
         let (neutral, suffix) = recover(input, &Default::default()).unwrap().unwrap();
@@ -214,6 +224,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::localized_radical_ion_pairs_recover_only_the_missing_pi_bond | adapted
+    // Source: ReShiki | src/naming/openclatura/radical_ions.rs::tests::localized_radical_ion_pairs_recover_only_the_missing_pi_bond
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn localized_radical_ion_pairs_recover_only_the_missing_pi_bond() {
         for (ion, expected, suffix) in [
             ("[CH2+][CH2]", "C=C", "radical cation"),
@@ -238,6 +253,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::same_atom_recovery_removes_only_charge_and_radical | adapted
+    // Source: ReShiki | src/naming/openclatura/radical_ions.rs::tests::same_atom_recovery_removes_only_charge_and_radical
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn same_atom_recovery_removes_only_charge_and_radical() {
         for (ion, expected, suffix) in [
             ("[NH3+]", "N", "radical cation"),
@@ -257,6 +277,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph | original
+    // Source: ReShiki | src/naming/openclatura/radical_ions.rs::tests::neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph
     fn neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph() {
         let parser = opsin::Parser::new().unwrap();
         for ion in [
@@ -280,6 +302,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::recovery_does_not_add_hydrogen_or_search_remote_resonance_forms | adapted
+    // Source: ReShiki | src/naming/openclatura/radical_ions.rs::tests::recovery_does_not_add_hydrogen_or_search_remote_resonance_forms
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn recovery_does_not_add_hydrogen_or_search_remote_resonance_forms() {
         for ion in [
             "[CH2+]C[CH2]",     // Radical and cation are not adjacent.
@@ -302,6 +329,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::drawn_localized_benzene_radical_cation_recovers_benzene | adapted
+    // Source: ReShiki | src/naming/openclatura/radical_ions.rs::tests::drawn_localized_benzene_radical_cation_recovers_benzene
+    // Source: openclatura | tests/integration/test_describer.py::test_describe_handles_benzene_without_functional_group
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn drawn_localized_benzene_radical_cation_recovers_benzene() {
         use crate::document::{Document, Point};
         let mut document = Document::default();

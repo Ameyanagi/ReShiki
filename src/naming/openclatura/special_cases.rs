@@ -6,9 +6,20 @@
 // Source: openclatura | src/openclatura/component_namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/chalcogen_vocabulary.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/special_cases.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/exploratory/test_group14_ether_ligand_parent_selection.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_substituents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_replacement_parents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_oxyacids.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_role_models.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_principal_group_breadth.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_polyoxide_chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/functionalTerms.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_all_chalcogen_acyl_regressions.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
-// Changes: Large openclatura shortcut/ligand/functional-class adaptation, consolidated across role modules, with original shortcut safety/certification extensions and tests.
+// Changes: Large openclatura shortcut/ligand/functional-class adaptation, consolidated across role modules, with local shortcut safety/certification extensions and tests that include adapted upstream cases.
 // Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
 
 //! Whole-component shortcuts from Openclatura's `special_cases.py`.
@@ -95,10 +106,6 @@ fn branch_name(
 
 // Provenance: fn single_atom_component_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::single_atom_component_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 pub(super) fn single_atom_component_name(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -170,10 +177,6 @@ type SmallParentSpec<'a> = (
 );
 // Provenance: fn small_signature | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_small_inorganic_signature
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn small_signature(mol: &Molecule, atoms: &AtomSet) -> SmallSignature {
     let mut atom_sig: Vec<_> = atoms
         .iter()
@@ -198,10 +201,6 @@ fn small_signature(mol: &Molecule, atoms: &AtomSet) -> SmallSignature {
 
 // Provenance: fn small_inorganic_parent_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::small_inorganic_parent_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn small_inorganic_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
     if !(2..=9).contains(&atoms.len())
         || atoms
@@ -355,10 +354,6 @@ fn small_inorganic_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String
 
 // Provenance: fn carbon_ligand_atoms | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_carbon_ligand_atoms
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn carbon_ligand_atoms(mol: &Molecule, atoms: &AtomSet, root: usize, central: usize) -> AtomSet {
     let mut found = AtomSet::new();
     let mut queue = VecDeque::from([root]);
@@ -382,10 +377,6 @@ fn carbon_ligand_atoms(mol: &Molecule, atoms: &AtomSet, root: usize, central: us
 
 // Provenance: fn carbon_path | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_carbon_path_between
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn carbon_path(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -421,10 +412,6 @@ fn carbon_path(
 
 // Provenance: fn alkyl_ligand_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_alkyl_ligand_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn alkyl_ligand_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -460,10 +447,6 @@ fn alkyl_ligand_name(
 
 // Provenance: fn systematic_alkyl_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_systematic_alkyl_ligand_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> Result<String, String> {
     let _depth = mol.enter_naming()?;
     if atoms.len() == 1 {
@@ -537,10 +520,6 @@ fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> Result
 
 // Provenance: fn ligand_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_phosphorus_ligand_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn ligand_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -633,10 +612,6 @@ fn azine_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<[AzineSide; 2]> {
 
 // Provenance: fn is_amidino_carbon | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_is_amidino_carbon
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn is_amidino_carbon(mol: &Molecule, carbon: usize, nitrogen: usize) -> bool {
     let others: Vec<_> = mol
         .get_neighbors(carbon)
@@ -652,10 +627,6 @@ fn is_amidino_carbon(mol: &Molecule, carbon: usize, nitrogen: usize) -> bool {
 
 // Provenance: fn hydrazone_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::inline in simple_azine_parent_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn hydrazone_name(
     mol: &Molecule,
     carbon: usize,
@@ -697,10 +668,6 @@ fn hydrazone_name(
 /// anhydride elsewhere in a ligand can choose the whole-component citation.
 // Provenance: fn simple_azine_parent_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::simple_azine_parent_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     for sides in azine_roles(mol, atoms) {
         let status = mol.name_status();
@@ -857,10 +824,6 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
 
 // Provenance: fn ordered_simple_ring | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_ordered_simple_ring
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn ordered_simple_ring(mol: &Molecule, atoms: &AtomSet) -> Vec<usize> {
     if atoms.len() < 3
         || atoms.iter().any(|i| {
@@ -906,10 +869,6 @@ fn ordered_simple_ring(mol: &Molecule, atoms: &AtomSet) -> Vec<usize> {
 
 // Provenance: fn simple_cycle_unsaturation_locants | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_simple_cycle_unsaturation_locants
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn simple_cycle_unsaturation_locants(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     path.iter()
         .enumerate()
@@ -921,10 +880,6 @@ fn simple_cycle_unsaturation_locants(mol: &Molecule, path: &[usize]) -> Vec<usiz
 
 // Provenance: fn simple_replacement_cycle_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_simple_replacement_cycle_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn simple_replacement_cycle_name(mol: &Molecule, path: &[usize]) -> String {
     let mut hetero = BTreeMap::<(usize, String), Vec<usize>>::new();
     for (offset, atom) in path.iter().enumerate() {
@@ -980,10 +935,6 @@ fn simple_replacement_cycle_name(mol: &Molecule, path: &[usize]) -> String {
 
 // Provenance: fn carbonyl_side_locant_sort_key | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_retained_locant_sort_key
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn carbonyl_side_locant_sort_key(locant: &str) -> (usize, &str) {
     let digits: String = locant.chars().take_while(char::is_ascii_digit).collect();
     (digits.parse().unwrap_or(999), locant)
@@ -991,10 +942,6 @@ fn carbonyl_side_locant_sort_key(locant: &str) -> (usize, &str) {
 
 // Provenance: fn carbaldehyde_side_ring | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_carbaldehyde_side_ring
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn carbaldehyde_side_ring(mol: &Molecule, side: &AzineSide) -> Option<(AtomSet, usize)> {
     if !side.atoms.contains(&side.carbon) || !mol.atoms[&side.carbon].is_carbon() {
         return None;
@@ -1018,10 +965,6 @@ fn carbaldehyde_side_ring(mol: &Molecule, side: &AzineSide) -> Option<(AtomSet, 
 
 // Provenance: fn carbonyl_equivalent_side_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_carbonyl_equivalent_side_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn carbonyl_equivalent_side_name(
     mol: &Molecule,
     side: &AzineSide,
@@ -1040,10 +983,6 @@ fn carbonyl_equivalent_side_name(
 
 // Provenance: fn carbonyl_equivalent_side_name_unchecked | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_carbonyl_equivalent_side_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn carbonyl_equivalent_side_name_unchecked(
     mol: &Molecule,
     side: &AzineSide,
@@ -1194,10 +1133,6 @@ fn carbonyl_equivalent_side_name_unchecked(
 
 // Provenance: fn simple_carbonyl_side_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_simple_carbonyl_side_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn simple_carbonyl_side_name(
     mol: &Molecule,
     side: &AzineSide,
@@ -1307,10 +1242,6 @@ fn simple_carbonyl_side_name(
 
 // Provenance: fn sulfoxide_parent_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::sulfoxide_parent_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let sulfurs: Vec<_> = atoms
         .iter()
@@ -1390,10 +1321,6 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
 
 // Provenance: fn has_principal_group | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_has_principal_group
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn has_principal_group(mol: &Molecule, atoms: &AtomSet) -> bool {
     perceive_groups(mol)
         .iter()
@@ -1401,10 +1328,6 @@ fn has_principal_group(mol: &Molecule, atoms: &AtomSet) -> bool {
 }
 // Provenance: fn competing_principal_group | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_has_principal_group
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn competing_principal_group(mol: &Molecule, atoms: &AtomSet, central: usize) -> bool {
     perceive_groups(mol).iter().any(|g| {
         g.is_principal_candidate
@@ -1416,10 +1339,6 @@ fn competing_principal_group(mol: &Molecule, atoms: &AtomSet, central: usize) ->
 
 // Provenance: fn terminal_ligand_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_terminal_ligand_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn terminal_ligand_name(mol: &Molecule, idx: usize) -> String {
     // Upstream divergence: neutral terminal prefixes do not represent formal charge or atom stereo.
     if mol.atoms[&idx].charge != 0 || mol.atoms[&idx].has_stereo() {
@@ -1437,10 +1356,6 @@ fn terminal_ligand_name(mol: &Molecule, idx: usize) -> String {
 
 // Provenance: fn central_ligand_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_central_ligand_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn central_ligand_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1481,10 +1396,6 @@ fn central_ligand_name(
 
 // Provenance: fn simple_central_parent_hydride_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::simple_central_parent_hydride_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn simple_central_parent_hydride_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1799,10 +1710,6 @@ fn oxo_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<OxoRole> {
 }
 // Provenance: fn matching_oxo_spec | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_matching_oxoacid_spec
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn matching_oxo_spec<'a>(mol: &Molecule, role: &OxoRole) -> Option<&'a serde_json::Value>
 where
     'static: 'a,
@@ -1832,10 +1739,6 @@ where
 }
 // Provenance: fn oxoacid_parent_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::oxoacid_parent_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn oxoacid_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
     let roles = oxo_roles(mol, atoms);
     if roles.len() != 1 {
@@ -1861,10 +1764,6 @@ fn oxoacid_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
 }
 // Provenance: fn modifier_phrase | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_ester_modifier_phrase
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn modifier_phrase(names: &[String], safe: bool) -> String {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for name in names {
@@ -1886,10 +1785,6 @@ fn modifier_phrase(names: &[String], safe: bool) -> String {
 }
 // Provenance: fn ester_modifier_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_ester_modifier_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn ester_modifier_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1905,10 +1800,6 @@ fn ester_modifier_name(
 }
 // Provenance: fn oxoacid_ester_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::oxoacid_ester_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn oxoacid_ester_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2077,10 +1968,6 @@ fn oxoacid_ester_name(
 // Provenance: fn organophosphorus_acid_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::organophosphinic_acid_result
 // Source: openclatura | src/openclatura/special_cases.py::organophosphonic_acid_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn organophosphorus_acid_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2210,10 +2097,6 @@ fn organophosphorus_acid_name(
 
 // Provenance: fn organoboronic_acid_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::organoboronic_acid_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn organoboronic_acid_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2280,10 +2163,6 @@ fn organoboronic_acid_name(
 
 // Provenance: fn connected_branches | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_connected_branches
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn connected_branches(mol: &Molecule, atoms: &AtomSet) -> Vec<AtomSet> {
     let mut branches = Vec::new();
     let mut seen = AtomSet::new();
@@ -2308,10 +2187,6 @@ fn connected_branches(mol: &Molecule, atoms: &AtomSet) -> Vec<AtomSet> {
 }
 // Provenance: fn ordered_backbone | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_ordered_backbone_chain
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn ordered_backbone(mol: &Molecule, atoms: &AtomSet) -> Option<Vec<usize>> {
     let degrees: BTreeMap<_, _> = atoms
         .iter()
@@ -2356,10 +2231,6 @@ fn ordered_backbone(mol: &Molecule, atoms: &AtomSet) -> Option<Vec<usize>> {
 }
 // Provenance: fn chain_oxide_oxygens | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_chain_oxide_oxygens
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn chain_oxide_oxygens(
     mol: &Molecule,
     chain: &[usize],
@@ -2394,10 +2265,6 @@ fn chain_oxide_oxygens(
 }
 // Provenance: fn homonuclear_backbone | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_homonuclear_backbone
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn homonuclear_backbone(mol: &Molecule, atoms: &AtomSet) -> Option<(String, Vec<usize>)> {
     let mut candidates = Vec::new();
     let symbols: BTreeSet<_> = atoms.iter().map(|i| mol.atoms[i].symbol.clone()).collect();
@@ -2465,10 +2332,6 @@ fn homonuclear_backbone(mol: &Molecule, atoms: &AtomSet) -> Option<(String, Vec<
 }
 // Provenance: fn same_element_parent_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_same_element_parent_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn same_element_parent_name(symbol: &str, length: usize, orders: &[usize]) -> Option<String> {
     let parent = RULES.components.mononuclear_parent_hydrides.get(symbol)?;
     if length < 2 || !parent.ends_with("ane") {
@@ -2504,10 +2367,6 @@ fn same_element_parent_name(symbol: &str, length: usize, orders: &[usize]) -> Op
 }
 // Provenance: fn locanted_ligand_prefix | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_locanted_ligand_prefix
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn locanted_ligand_prefix(items: &[(usize, String)]) -> String {
     let mut counts: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (loc, name) in items {
@@ -2533,10 +2392,6 @@ fn locanted_ligand_prefix(items: &[(usize, String)]) -> String {
 }
 // Provenance: fn homonuclear_chain_parent_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::homonuclear_chain_parent_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn homonuclear_chain_parent_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2730,10 +2585,6 @@ fn homonuclear_chain_parent_name(
 
 // Provenance: fn nitrogen_ligands | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_urea_n_ligand_names
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn nitrogen_ligands(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2777,10 +2628,6 @@ fn nitrogen_ligands(
 }
 // Provenance: fn hydroxyurea_parent_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::hydroxyurea_parent_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let centers: Vec<_> = atoms
         .iter()
@@ -2894,10 +2741,6 @@ fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
 }
 // Provenance: fn sulfamic_acid_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::sulfamic_acid_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn sulfamic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let cyclic = get_cyclic_atoms(mol, &AtomSet::new());
     let mut centers = Vec::new();
@@ -2973,10 +2816,6 @@ fn sulfamic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
 }
 // Provenance: fn azinic_acid_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::azinic_acid_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn azinic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let mut centers = Vec::new();
     for &n in atoms {
@@ -3045,10 +2884,6 @@ fn azinic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, S
 
 // Provenance: fn phosphane_borane_zwitterion_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::phosphane_borane_zwitterion_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn phosphane_borane_zwitterion_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -3119,10 +2954,6 @@ fn phosphane_borane_zwitterion_name(
 
 // Provenance: fn sulfonium_ylide_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::sulfonium_ylide_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let sulfurs: Vec<_> = atoms
         .iter()
@@ -3243,10 +3074,6 @@ fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String
 
 // Provenance: fn nitrogen_chalcogenide_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::nitrogen_chalcogenide_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn nitrogen_chalcogenide_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -3331,10 +3158,6 @@ fn nitrogen_chalcogenide_name(
 
 // Provenance: fn peroxide_linkage_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::peroxide_linkage_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn peroxide_linkage_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     use super::nomenclature::section;
     let is_chalcogen = |i: usize| {
@@ -3448,19 +3271,11 @@ fn peroxide_linkage_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
 
 // Provenance: fn anhydride_half_atoms | adapted
 // Source: openclatura | src/openclatura/special_cases.py::_anhydride_half_atoms
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn anhydride_half_atoms(mol: &Molecule, start: usize, bridge: &AtomSet) -> AtomSet {
     subgraph_component(mol, start, bridge)
 }
 // Provenance: fn anhydride_half_name | adapted
 // Source: openclatura | src/openclatura/special_cases.py::anhydride_half_name
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 fn anhydride_half_name(mol: &Molecule, start: usize, bridge: &AtomSet) -> Result<String, String> {
     let mut atoms = anhydride_half_atoms(mol, start, bridge);
     let mut fragment = mol.subgraph(&atoms);
@@ -3531,10 +3346,6 @@ fn anhydride_class_name(mol: &Molecule, path: &[usize]) -> Option<String> {
 }
 // Provenance: fn try_name_anhydride_component | adapted
 // Source: openclatura | src/openclatura/special_cases.py::try_name_anhydride_component_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 pub(super) fn try_name_anhydride_component(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -3693,10 +3504,6 @@ fn structural_replacement_parent_name(
 
 // Provenance: fn structural_replacement_parent_result | adapted
 // Source: openclatura | src/openclatura/special_cases.py::structural_replacement_parent_result
-// Source: openclatura | src/openclatura/nitrogen_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/oxoacid_roles.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/component_namer.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::module scope (mapping uncertain)
 pub(super) fn structural_replacement_parent_result(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -3884,6 +3691,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::single_atom_hydrides_require_complete_hydrogen_count | adapted
+    // Source: ReShiki | src/naming/openclatura/special_cases.rs::tests::single_atom_hydrides_require_complete_hydrogen_count
+    // Source: openclatura | tests/exploratory/test_group14_ether_ligand_parent_selection.py::test_a_genuine_principal_group_elsewhere_still_blocks_the_hydride_parent
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn single_atom_hydrides_require_complete_hydrogen_count() {
         let mut mol = Molecule::new();
         let atom = Atom::new(0, "Si");
@@ -3897,6 +3709,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::graph_shortcuts_preserve_ligand_and_oxygen_roles | adapted
+    // Source: ReShiki | src/naming/openclatura/special_cases.rs::tests::graph_shortcuts_preserve_ligand_and_oxygen_roles
+    // Source: openclatura | tests/unit/test_analysis.py::test_oxoacid_ester_suffixes_are_role_template_backed
+    // Source: openclatura | tests/roundtrip/test_substituents.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn graph_shortcuts_preserve_ligand_and_oxygen_roles() {
         assert_eq!(special("CS(C)=O"), None);
         assert_eq!(
@@ -4010,6 +3828,16 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::shortcut_certificates_require_audited_ligands | adapted
+    // Source: ReShiki | src/naming/openclatura/special_cases.rs::tests::shortcut_certificates_require_audited_ligands
+    // Source: openclatura | tests/unit/test_analysis.py::test_group_13_14_central_atoms_have_a_parent_hydride
+    // Source: openclatura | tests/roundtrip/test_replacement_parents.py::test_roundtrip
+    // Source: openclatura | tests/unit/test_analysis.py::test_nitrogen_chain_roles_make_cyclic_hydrazines_prefixes
+    // Source: openclatura | tests/roundtrip/test_oxyacids.py::test_roundtrip
+    // Source: openclatura | tests/roundtrip/test_role_models.py::test_roundtrip
+    // Source: openclatura | tests/roundtrip/test_principal_group_breadth.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn shortcut_certificates_require_audited_ligands() {
         for (smiles, expected, certified) in [
             ("CP(C)(C)=O", "trimethyl-lambda5-phosphanone", true),
@@ -4204,6 +4032,14 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::homonuclear_parent_keeps_chain_and_substituent_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/special_cases.rs::tests::homonuclear_parent_keeps_chain_and_substituent_locants
+    // Source: openclatura | tests/unit/test_polyoxide_chains.py::test_the_other_heteroatom_chains_are_unchanged
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_peroxide_linkages_preserve_both_chalcogen_sites
+    // Source: openclatura | tests/data/parser_xml_resources/functionalTerms.json::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_nitrogen_chain_roles_make_cyclic_hydrazines_prefixes
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn homonuclear_parent_keeps_chain_and_substituent_locants() {
         assert_eq!(special("CSSC").as_deref(), Some("1,2-dimethyldisulfane"));
         for (smiles, expected) in [("SS", "disulfane"), ("SSS", "trisulfane")] {
@@ -4228,6 +4064,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anhydride_halves_use_acid_citation_suffixes | adapted
+    // Source: ReShiki | src/naming/openclatura/special_cases.rs::tests::anhydride_halves_use_acid_citation_suffixes
+    // Source: openclatura | tests/unit/test_all_chalcogen_acyl_regressions.py::test_reported_name_regressions
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_anhydride_bridges_and_acyl_sites_are_independent
+    // Source: openclatura | tests/unit/test_analysis.py::test_anhydride_shortcut_binds_acid_halves_and_core_separately
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anhydride_halves_use_acid_citation_suffixes() {
         for (smiles, expected) in [
             ("CC(=O)OC(C)=O", "acetic anhydride"),
@@ -4243,6 +4086,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anhydride_certificate_counts_linkages_within_the_component | adapted
+    // Source: ReShiki | src/naming/openclatura/special_cases.rs::tests::anhydride_certificate_counts_linkages_within_the_component
+    // Source: openclatura | tests/unit/test_analysis.py::test_anhydride_shortcut_binds_acid_halves_and_core_separately
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anhydride_certificate_counts_linkages_within_the_component() {
         use super::super::principal_groups::{component_groups, component_principal_key};
 
@@ -4289,6 +4137,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::peroxol_suffix_defers_only_for_a_senior_heteroatom_chain | adapted
+    // Source: ReShiki | src/naming/openclatura/special_cases.rs::tests::peroxol_suffix_defers_only_for_a_senior_heteroatom_chain
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_peroxol_table_is_order_sensitive
+    // Source: openclatura | tests/unit/test_polyoxide_chains.py::test_oxygen_chains_do_not_displace_a_senior_heteroatom_chain
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn peroxol_suffix_defers_only_for_a_senior_heteroatom_chain() {
         for (smiles, expected, chain_wins) in [
             ("COO", "methaneperoxol", false),

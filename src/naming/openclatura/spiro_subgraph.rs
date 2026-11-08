@@ -4,6 +4,7 @@
 // Source: openclatura | src/openclatura/subgraph_tools.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/spiro_subgraph.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura graph-backed spiro projection consolidated with moved branch helpers, plus original heterogeneous-junction and multiple-attachment safeguards.
@@ -196,8 +197,6 @@ pub fn spiro_side_component(
 }
 // Provenance: fn polycyclic_side_core | adapted
 // Source: openclatura | src/openclatura/spiro_subgraph.py::_polycyclic_side_core
-// Source: openclatura | src/openclatura/subgraph_tools.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/namer.py::module scope (mapping uncertain)
 pub fn polycyclic_side_core(
     mol: &Molecule,
     side_atoms: &AtomSet,
@@ -214,8 +213,6 @@ pub fn polycyclic_side_core(
 }
 // Provenance: fn has_retained_fused_parent | adapted
 // Source: openclatura | src/openclatura/spiro_subgraph.py::_has_retained_fused_parent
-// Source: openclatura | src/openclatura/subgraph_tools.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/namer.py::module scope (mapping uncertain)
 fn has_retained_fused_parent(mol: &Molecule, core: &AtomSet) -> bool {
     super::retained_fused_templates::match_retained_graph_templates(mol, core, true)
         .iter()
@@ -223,8 +220,6 @@ fn has_retained_fused_parent(mol: &Molecule, core: &AtomSet) -> bool {
 }
 // Provenance: fn project_spiro_side_molecule | adapted
 // Source: openclatura | src/openclatura/spiro_subgraph.py::_project_spiro_side_molecule
-// Source: openclatura | src/openclatura/subgraph_tools.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/namer.py::module scope (mapping uncertain)
 fn project_spiro_side_molecule(mol: &Molecule, side_atoms: &AtomSet, junction: usize) -> Molecule {
     let mut side = mol.subgraph(side_atoms);
     let atom = &mol.atoms[&junction];
@@ -247,8 +242,6 @@ fn project_spiro_side_molecule(mol: &Molecule, side_atoms: &AtomSet, junction: u
 }
 // Provenance: fn plan_graph_spiro_side | adapted
 // Source: openclatura | src/openclatura/spiro_subgraph.py::plan_graph_spiro_side
-// Source: openclatura | src/openclatura/subgraph_tools.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/namer.py::module scope (mapping uncertain)
 pub fn plan_graph_spiro_side(
     mol: &Molecule,
     side_atoms: &AtomSet,
@@ -261,8 +254,6 @@ pub fn plan_graph_spiro_side(
 
 // Provenance: fn graph_spiro_side | adapted
 // Source: openclatura | src/openclatura/spiro_subgraph.py::plan_graph_spiro_side
-// Source: openclatura | src/openclatura/subgraph_tools.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/namer.py::module scope (mapping uncertain)
 fn graph_spiro_side(
     mol: &Molecule,
     side_atoms: &AtomSet,
@@ -367,8 +358,6 @@ fn graph_spiro_side(
 }
 // Provenance: fn plan_substituted_fusion_spiro_side | adapted
 // Source: openclatura | src/openclatura/spiro_subgraph.py::plan_substituted_fusion_spiro_side
-// Source: openclatura | src/openclatura/subgraph_tools.py::module scope (mapping uncertain)
-// Source: openclatura | src/openclatura/namer.py::module scope (mapping uncertain)
 pub fn plan_substituted_fusion_spiro_side(
     mol: &Molecule,
     side_atoms: &AtomSet,
@@ -423,6 +412,12 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::graph_sides_keep_bridged_parent_names_and_side_group_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/spiro_subgraph.rs::tests::graph_sides_keep_bridged_parent_names_and_side_group_locants
+    // Source: openclatura | tests/unit/test_analysis.py::test_pyopsin_regression_names_use_parseable_spiro_and_formamido_forms
+    // Source: openclatura | tests/unit/test_analysis.py::test_mixed_spiro_bicyclo_side_suffixes_and_replacement_locants_are_component_scoped
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn graph_sides_keep_bridged_parent_names_and_side_group_locants() {
         for (smiles, expected) in [
             (

@@ -3,6 +3,7 @@
 // Source: openclatura | src/openclatura/retained_fused_production.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/retained_fused_production.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Source: openclatura | src/openclatura/namer_config.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Adapted openclatura retained-parent production/derivative gate with native suffix-H integration and local regression tests.
@@ -400,7 +401,6 @@ pub fn added_hydrogen_is_citable(mol: &Molecule, m: &RetainedGraphTemplateMatch)
     surplus <= 0 || surplus % 2 == 0 || indicated_h_retained_name(&m.template.name)
 }
 // Provenance: fn indicated_h_retained_name | adapted
-// Source: openclatura | src/openclatura/retained_fused_production.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/namer_config.py::_indicated_h_retained_names
 fn indicated_h_retained_name(name: &str) -> bool {
     // The source set combines explicit monocycle names with the declared
@@ -477,6 +477,11 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::anthracene_and_phenanthrene_admit_retained_derivatives | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_fused_production.rs::tests::anthracene_and_phenanthrene_admit_retained_derivatives
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage3_retained_fused_pin_forms_and_indicated_hydrogens_are_validated
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anthracene_and_phenanthrene_admit_retained_derivatives() {
         for (smiles, parent, principal) in [
             ("c1ccc2cc3ccccc3cc2c1", "anthracene", None),

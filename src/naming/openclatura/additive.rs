@@ -5,6 +5,19 @@
 // Source: openclatura | src/openclatura/fusion/mancude.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/fusion/indicated_hydrogen.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/retained_derivative_hydrogen.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_retained_fused_production.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_intrinsic_h_suffix.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_carbon_h_oxo_composition.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_component_h_citation.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fusion_hydrogenation_regressions.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fusion_bridge_derivatives.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_parent_hydride_handoff.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_retained_parent_precedence_and_order.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_parents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura hydrogen-role collection extended by local complete-parent suffix/lambda proofs.
@@ -1509,6 +1522,12 @@ fn apply_suffix_hydrogens(
 // Source: ReShiki | src/naming/openclatura/additive.rs::tests
 mod tests {
     #[test]
+    // Provenance: fn tests::ring_ketone_numbering_compares_suffix_before_added_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::ring_ketone_numbering_compares_suffix_before_added_hydrogen
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_hydrocarbon_uses_data_backed_preferred_name
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn ring_ketone_numbering_compares_suffix_before_added_hydrogen() {
         use crate::naming::{NameStatus, verify_identity};
         let parser = opsin::Parser::new().unwrap();
@@ -1567,6 +1586,18 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::suffix_hydrogen_names_are_preferred_and_round_trip | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::suffix_hydrogen_names_are_preferred_and_round_trip
+    // Source: openclatura | tests/unit/test_fusion_intrinsic_h_suffix.py::test_fused_heteroketone_does_not_duplicate_indicated_h
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_imide_route_marker_preserves_retained_fused_parent
+    // Source: openclatura | tests/unit/test_fusion_carbon_h_oxo_composition.py::test_carbon_h_oxo_grammar_and_public_names_roundtrip_exactly
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_self_audit_confirms_modelled_names
+    // Source: openclatura | tests/unit/test_fusion_component_h_citation.py::test_indene_fusion_citation_and_bindings_are_atom_order_invariant
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_hydrocarbon_uses_data_backed_preferred_name
+    // Source: openclatura | tests/roundtrip/test_fusion_hydrogenation_regressions.py::test_hydro_metadata_survives_recursive_carbon_branch_assembly
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn suffix_hydrogen_names_are_preferred_and_round_trip() {
         use crate::naming::{NameStatus, verify_identity};
         let parser = opsin::Parser::new().unwrap();
@@ -1716,6 +1747,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::bridge_oxo_composition_does_not_invent_hydrogenation | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::bridge_oxo_composition_does_not_invent_hydrogenation
+    // Source: openclatura | tests/roundtrip/test_fusion_bridge_derivatives.py::test_bridge_oxo_operation_not_counted_twice_as_hydrogenation
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn bridge_oxo_composition_does_not_invent_hydrogenation() {
         assert_eq!(
             super::super::name_smiles("C12C(C=C(C3=CC=CC=C13)O2)=O", &Default::default())
@@ -1726,6 +1762,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_derivatives_use_bond_consistent_hydrogen_states | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::retained_derivatives_use_bond_consistent_hydrogen_states
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_parent_uses_data_backed_preferred_name
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_derivatives_use_bond_consistent_hydrogen_states() {
         for (smiles, expected) in [
             // The generic external-pi fallback does not own suffix or
@@ -1750,6 +1791,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::supplied_retained_bond_model_collects_hydrogenated_edges | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::supplied_retained_bond_model_collects_hydrogenated_edges
+    // Source: openclatura | tests/unit/test_parent_hydride_handoff.py::test_parent_hydride_handoff_preserves_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn supplied_retained_bond_model_collects_hydrogenated_edges() {
         use super::super::fusion::numbering::{parent_bond_graph, parent_bond_model};
         use super::*;
@@ -1783,6 +1829,14 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_fused_hydrogen_roles_keep_source_ordering | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::retained_fused_hydrogen_roles_keep_source_ordering
+    // Source: openclatura | tests/unit/test_analysis.py::test_caffeine_uses_the_retained_purine_dione_parent
+    // Source: openclatura | tests/unit/test_retained_parent_precedence_and_order.py::test_the_symmetric_tie_gives_the_first_cited_prefix_the_low_locant
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_hydrocarbon_uses_data_backed_preferred_name
+    // Source: openclatura | tests/roundtrip/test_fused_parents.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_fused_hydrogen_roles_keep_source_ordering() {
         for (smiles, expected) in [
             ("C1CC2=CC=CC=C2C1", "2,3-dihydro-1H-indene"),
@@ -1819,6 +1873,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [

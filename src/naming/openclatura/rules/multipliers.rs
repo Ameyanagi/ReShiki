@@ -4,6 +4,11 @@
 // Source: ReShiki | src/naming/openclatura/rules/multipliers.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Source: openclatura | src/openclatura/principal_suffixes.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/rules/elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/suffixRules.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/suffixes.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/carboxylicAcids.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_spiro_composed_parent_families.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Inherited openclatura numerical-term constants/generation plus original suffix-specific elision and compound-anion multiplication.
@@ -131,6 +136,16 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::suffix_multiplier_elides_a_only_before_a_or_o | adapted
+    // Source: ReShiki | src/naming/openclatura/rules/multipliers.rs::tests::suffix_multiplier_elides_a_only_before_a_or_o
+    // Source: openclatura | tests/data/parser_xml_resources/suffixRules.json::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_suffix_unsaturation_and_charge_operations_emit_precise_tokens
+    // Source: openclatura | tests/unit/test_analysis.py::test_repeated_grouped_locants_use_following_structural_scope
+    // Source: openclatura | tests/unit/test_analysis.py::test_principal_suffixes_render_programmatically_from_template_positions
+    // Source: openclatura | tests/data/parser_xml_resources/suffixes.json::<fixture data>
+    // Source: openclatura | tests/data/parser_xml_resources/carboxylicAcids.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn suffix_multiplier_elides_a_only_before_a_or_o() {
         for (ending, expected) in [
             ("amine", "tetramine"),
@@ -149,6 +164,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::suffix_multiplier_handles_single_and_larger_counts | adapted
+    // Source: ReShiki | src/naming/openclatura/rules/multipliers.rs::tests::suffix_multiplier_handles_single_and_larger_counts
+    // Source: openclatura | tests/unit/test_spiro_composed_parent_families.py::test_side_suffixes_group_same_kind_without_losing_component_primes
+    // Source: openclatura | tests/unit/test_analysis.py::test_name_assembly_binds_every_final_token_to_graph_metadata
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn suffix_multiplier_handles_single_and_larger_counts() {
         for (count, ending, expected) in [
             (1, "one", "one"),

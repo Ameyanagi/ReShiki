@@ -40,7 +40,6 @@ impl Default for Frame {
     // Provenance: fn <Frame as Default>::default | adapted
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::StackFrame.StackFrame(Atom,int)
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::inline in ParserInstance.parseSmiles (new StackFrame(null, 1))
-    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
     fn default() -> Self {
         Self {
             atom: None,
@@ -53,7 +52,6 @@ impl Default for Frame {
 impl Frame {
     // Provenance: fn Frame::branch | adapted
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::StackFrame.StackFrame(StackFrame)
-    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
     fn branch(&self) -> Self {
         Self {
             atom: self.atom,
@@ -66,7 +64,6 @@ impl Frame {
 
 // Provenance: fn organic | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::organicAtoms
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn organic(symbol: &str) -> bool {
     matches!(
         symbol,
@@ -75,7 +72,6 @@ fn organic(symbol: &str) -> bool {
 }
 // Provenance: fn aromatic | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::aromaticAtoms
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn aromatic(symbol: &str) -> bool {
     matches!(
         symbol,
@@ -88,7 +84,6 @@ fn aromatic(symbol: &str) -> bool {
 /// matching the upstream ordering.
 // Provenance: fn build_fragment | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::build
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 pub fn build_fragment(
     graph: &mut Graph,
     smiles: &str,
@@ -107,7 +102,6 @@ pub fn build_fragment(
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::ParserInstance.ParserInstance
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::ParserInstance.parseSmiles
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::build
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn build_fragment_inner(
     graph: &mut Graph,
     smiles: &str,
@@ -331,7 +325,6 @@ fn build_fragment_inner(
 // Provenance: fn connect_atom | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::inline in ParserInstance.processOrganicAtom (connect/reset tail)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::inline in ParserInstance.processBracketedAtom (connect/reset tail)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn connect_atom(graph: &mut Graph, frame: &mut Frame, atom: AtomId) -> Result<(), GraphError> {
     if let Some(previous) = frame.atom {
         let bond = graph.add_bond(previous, atom, frame.order)?;
@@ -347,7 +340,6 @@ fn connect_atom(graph: &mut Graph, frame: &mut Frame, atom: AtomId) -> Result<()
 
 // Provenance: fn number | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::inline in ParserInstance.processBracketedAtom (numeric field scans)
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn number(bytes: &[u8], index: &mut usize) -> Result<Option<u32>, GraphError> {
     let start = *index;
     while *index < bytes.len() && bytes[*index].is_ascii_digit() {
@@ -366,7 +358,6 @@ fn number(bytes: &[u8], index: &mut usize) -> Result<Option<u32>, GraphError> {
 // Provenance: fn parse_bracket | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::ParserInstance.processBracketedAtom
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::ParserInstance.processTetrahedralStereochemistry
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn parse_bracket(
     graph: &mut Graph,
     fragment: FragmentId,
@@ -491,7 +482,6 @@ fn parse_bracket(
 
 // Provenance: fn label_fragment | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::processLabelling
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn label_fragment(graph: &mut Graph, fragment: FragmentId, labels: &str) -> Result<(), GraphError> {
     let atoms = graph.fragment(fragment).atoms.clone();
     match labels {
@@ -536,7 +526,6 @@ fn label_fragment(graph: &mut Graph, fragment: FragmentId, labels: &str) -> Resu
 
 // Provenance: fn verify_atom_parities | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::verifyAndTakeIntoAccountLonePairsInAtomParities
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn verify_atom_parities(graph: &mut Graph, fragment: FragmentId) -> Result<(), GraphError> {
     let atoms = graph.fragment(fragment).atoms.clone();
     for (index, atom) in atoms.iter().copied().enumerate() {
@@ -585,7 +574,6 @@ fn verify_atom_parities(graph: &mut Graph, fragment: FragmentId) -> Result<(), G
 
 // Provenance: fn add_bond_stereo | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::addBondStereoElements
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn add_bond_stereo(graph: &mut Graph, fragment: FragmentId) -> Result<(), GraphError> {
     let bonds = graph.fragment(fragment).bonds.clone();
     for central in &bonds {
@@ -646,7 +634,6 @@ fn add_bond_stereo(graph: &mut Graph, fragment: FragmentId) -> Result<(), GraphE
 
 // Provenance: fn setup_atom_valency | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::setupAtomValency
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::module scope (mapping uncertain)
 fn setup_atom_valency(graph: &mut Graph, atom: AtomId) -> Result<(), GraphError> {
     let a = graph.atom(atom).clone();
     let hydrogen = a.properties.smiles_hydrogen_count.unwrap();
@@ -711,7 +698,6 @@ fn setup_atom_valency(graph: &mut Graph, atom: AtomId) -> Result<(), GraphError>
 /// resolved before export. Finalized radicals retain out atoms in upstream;
 /// their explicit valence, rather than the out-atom metadata, encodes radicals.
 // Provenance: fn write_semantic_cxsmiles | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::generateExtendedSmiles
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::writeSmiles
 pub fn write_semantic_cxsmiles(
@@ -800,7 +786,6 @@ struct Writer<'a> {
 }
 
 // Provenance: impl Writer | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::SMILESWriter
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::isSmilesImplicitProton
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::traverseMolecule
@@ -1555,7 +1540,6 @@ impl<'a> Writer<'a> {
 }
 
 // Provenance: fn join_indices | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::inline in writeExtendedSmilesLayer (comma-separated enhanced-stereo group indices)
 fn join_indices(indices: &[usize]) -> String {
     indices
@@ -1565,7 +1549,6 @@ fn join_indices(indices: &[usize]) -> String {
         .join(",")
 }
 // Provenance: fn escape_label | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::escapeExtendedSmilesLabel
 fn escape_label(label: &str) -> String {
     // Java's original escape routine operates on UTF-16 code units.

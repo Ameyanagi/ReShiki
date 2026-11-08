@@ -1,6 +1,13 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
 // Source: ReShiki | src/naming/openclatura/radical_naming.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fuzz/test_ligand_parentheses.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/exploratory/test_charge_representation_gaps.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 //! Neutral radicals whose subtractive P-71 names have exact parser identities.
@@ -15,10 +22,14 @@ use super::{
     molecule::{Atom, AtomSet, Bond, Molecule},
 };
 
+// Provenance: fn unsupported | original
+// Source: ReShiki | src/naming/openclatura/radical_naming.rs::unsupported
 fn unsupported() -> String {
     "openclatura: this neutral radical's parent or characteristic group is not supported".into()
 }
 
+// Provenance: fn name_radical | original
+// Source: ReShiki | src/naming/openclatura/radical_naming.rs::name_radical
 pub(super) fn name_radical(mol: &Molecule) -> Result<Option<Name>, String> {
     let centers: Vec<_> = mol
         .atoms
@@ -74,6 +85,8 @@ pub(super) fn name_radical(mol: &Molecule) -> Result<Option<Name>, String> {
 }
 
 /// Only hydrocarbons and a carbonyl at the free carbon are audited here.
+// Provenance: fn carbon_parent | original
+// Source: ReShiki | src/naming/openclatura/radical_naming.rs::carbon_parent
 fn carbon_parent(mol: &Molecule, root: usize, allow_acyl: bool) -> bool {
     let carbon_degree = |id| {
         mol.get_neighbors(id)
@@ -110,6 +123,8 @@ fn carbon_parent(mol: &Molecule, root: usize, allow_acyl: bool) -> bool {
 
 /// An excluded virtual parent makes the free valence indistinguishable from
 /// the attachment bond already handled by alkyl/alkylidene and acyl naming.
+// Provenance: fn substituent_radical | original
+// Source: ReShiki | src/naming/openclatura/radical_naming.rs::substituent_radical
 fn substituent_radical(mol: &Molecule, root: usize, order: usize) -> Result<String, String> {
     let mut attached = mol.clone();
     for atom in attached.atoms.values_mut() {
@@ -134,6 +149,8 @@ fn substituent_radical(mol: &Molecule, root: usize, order: usize) -> Result<Stri
     })
 }
 
+// Provenance: fn amine_radical | original
+// Source: ReShiki | src/naming/openclatura/radical_naming.rs::amine_radical
 fn amine_radical(mol: &Molecule, root: usize, electrons: usize) -> Result<String, String> {
     let atom = &mol.atoms[&root];
     if mol.atoms.len() == 1 {
@@ -177,6 +194,8 @@ fn amine_radical(mol: &Molecule, root: usize, electrons: usize) -> Result<String
     ))
 }
 
+// Provenance: fn chalcogen_radical | original
+// Source: ReShiki | src/naming/openclatura/radical_naming.rs::chalcogen_radical
 fn chalcogen_radical(mol: &Molecule, root: usize) -> Result<String, String> {
     let atom = &mol.atoms[&root];
     if mol.atoms.len() == 1 {
@@ -255,6 +274,8 @@ fn chalcogen_radical(mol: &Molecule, root: usize) -> Result<String, String> {
 /// The two independent free valences must both receive explicit locants.
 /// This path supports unbranched saturated chains, saturated monocycles and
 /// benzene; a branch or further characteristic group needs a richer assembly.
+// Provenance: fn carbon_diyl | original
+// Source: ReShiki | src/naming/openclatura/radical_naming.rs::carbon_diyl
 fn carbon_diyl(mol: &Molecule) -> Result<String, String> {
     if mol
         .atoms
@@ -322,6 +343,8 @@ mod tests {
     use super::*;
     use crate::naming::{NameReason, NameStatus};
 
+    // Provenance: fn tests::roundtrip | original
+    // Source: ReShiki | src/naming/openclatura/radical_naming.rs::tests::roundtrip
     fn roundtrip(smiles: &str, expected: &str) -> Result<(), String> {
         let mol = super::super::graph_io::read_smiles(smiles, &Default::default())?;
         let name = name_radical(&mol)?.ok_or("Expected radical name")?;
@@ -350,6 +373,14 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::carbon_monoradicals_and_single_center_diradicals_roundtrip | adapted
+    // Source: ReShiki | src/naming/openclatura/radical_naming.rs::tests::carbon_monoradicals_and_single_center_diradicals_roundtrip
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_is_substituted_alkyl_ligand
+    // Source: openclatura | tests/unit/test_analysis.py::test_rooted_alkyl_ligands_are_derived_as_systematic_substituents
+    // Source: openclatura | tests/unit/test_analysis.py::test_is_composite_prefix
+    // Source: openclatura | tests/unit/test_analysis.py::test_acetyloxy_substituent_tokens_bind_the_acyl_and_the_ester_oxygen
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn carbon_monoradicals_and_single_center_diradicals_roundtrip() -> Result<(), String> {
         for (smiles, name) in [
             ("[CH3]", "methyl"),
@@ -373,6 +404,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::separate_radical_centers_roundtrip_with_lowest_locants | original
+    // Source: ReShiki | src/naming/openclatura/radical_naming.rs::tests::separate_radical_centers_roundtrip_with_lowest_locants
     fn separate_radical_centers_roundtrip_with_lowest_locants() -> Result<(), String> {
         for (smiles, name) in [
             ("[CH2][CH2]", "ethane-1,2-diyl"),
@@ -387,6 +420,15 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::heteroatom_radicals_use_p71_forms_and_roundtrip | adapted
+    // Source: ReShiki | src/naming/openclatura/radical_naming.rs::tests::heteroatom_radicals_use_p71_forms_and_roundtrip
+    // Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_is_composite_prefix
+    // Source: openclatura | tests/fuzz/test_ligand_parentheses.py::branched_functional_center_pairs
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_neutral_chalcogen_radical_is_not_hydrogen_bearing
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_all_peroxy_acyl_site_combinations_have_typed_graph_descriptors
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn heteroatom_radicals_use_p71_forms_and_roundtrip() -> Result<(), String> {
         for (smiles, name) in [
             ("[NH2]", "azanyl"),
@@ -413,6 +455,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unsupported_radicals_never_reach_closed_shell_naming | adapted
+    // Source: ReShiki | src/naming/openclatura/radical_naming.rs::tests::unsupported_radicals_never_reach_closed_shell_naming
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Source: openclatura | tests/exploratory/test_charge_representation_gaps.py::test_bare_hydrogen_less_atoms_are_not_named_as_their_hydride
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn unsupported_radicals_never_reach_closed_shell_naming() -> Result<(), String> {
         for smiles in [
             "[CH2+]",

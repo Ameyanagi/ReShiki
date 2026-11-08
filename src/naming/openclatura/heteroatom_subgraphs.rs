@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
 // Origin: mixed
 // Source: openclatura | src/openclatura/heteroatom_subgraphs.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/heteroatom_substituent_specs.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/oxoacid_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/hypervalent_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/nitrogen_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/heterocumulene_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/heteroatom_subgraphs.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura heteroatom recursive renderer consolidated across role modules with local charge/acyl extensions.
@@ -483,8 +485,13 @@ fn carbonyl_like_fragment(
     })
 }
 
-// Provenance: fn is_sulfonamido_oxygen_ligand | original
+// Provenance: fn is_sulfonamido_oxygen_ligand | adapted
+// Source: openclatura | src/openclatura/namer.py::_acylamino_amido_prefix::_amide_acyl
 // Source: ReShiki | src/naming/openclatura/heteroatom_subgraphs.rs::is_sulfonamido_oxygen_ligand
+// Ancestry uncertain: conservatively attribute the shared sulfonamide predicate,
+// already present in the Rust port; history does not prove mechanical extraction.
+// Changes: require neutral O-N(H), nitrogen degree two, sulfur degree four, neutral
+// hydrogen-free terminal oxos, and single O-N, N-S and S-carbon ligand bonds.
 fn is_sulfonamido_oxygen_ligand(mol: &Molecule, oxygen: usize, nitrogen: usize) -> bool {
     let atom = &mol.atoms[&nitrogen];
     if mol.atoms[&oxygen].charge != 0
@@ -1607,7 +1614,6 @@ pub fn name_heteroatom_subgraph(
 }
 
 // Provenance: fn terminal_azido | adapted
-// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/nitrogen_roles.py::terminal_n3_substituent_role
 fn terminal_azido(
     mol: &Molecule,
@@ -1853,6 +1859,11 @@ mod tests {
     use crate::naming::{NameReason, NameStatus};
 
     #[test]
+    // Provenance: fn tests::cationic_nitrogen_prefixes_distinguish_unsubstituted_nitrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/heteroatom_subgraphs.rs::tests::cationic_nitrogen_prefixes_distinguish_unsubstituted_nitrogen
+    // Source: openclatura | tests/unit/test_analysis.py::test_a_zwitterion_keeps_the_anion_as_the_suffix
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cationic_nitrogen_prefixes_distinguish_unsubstituted_nitrogen() -> Result<(), String> {
         for (smiles, start, upstream, expected, status) in [
             (

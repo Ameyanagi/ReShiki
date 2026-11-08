@@ -1278,7 +1278,6 @@ pub(in super::super) fn parent_derivative_state(
 
 #[cfg(test)]
 // Provenance: mod tests | adapted
-// Source: openclatura | src/openclatura/fusion/mancude.py::module scope (mapping uncertain)
 // Source: openclatura | tests/unit/test_fusion_pi_redistribution.py::_model
 // Source: openclatura | tests/unit/test_fusion_pi_redistribution.py::test_alternating_path_hydrogenation_is_not_specific_to_polycarbon_parent
 mod tests {

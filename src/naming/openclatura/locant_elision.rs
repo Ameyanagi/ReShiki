@@ -2,6 +2,12 @@
 // Origin: mixed
 // Source: openclatura | src/openclatura/locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/locant_elision.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.golden.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/groupStemsAllowingInlineSuffixes.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_directed_entry_layout.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura decorated-graph elision search extended by local capacity, stereo and ester equivalence proofs.
@@ -166,8 +172,11 @@ fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
         substituent_capacity,
     })
 }
-// Provenance: fn labels_match | original
+// Provenance: fn labels_match | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_has_parent_set_automorphism_mapping
 // Source: ReShiki | src/naming/openclatura/locant_elision.rs::labels_match
+// Changes: extract the node-label and bond-order compatibility predicate into a
+// Rust helper over the local Graph representation and normalized edge keys.
 fn labels_match(g: &Graph, p: &[usize]) -> bool {
     (0..g.nodes.len()).all(|i| g.nodes[i] == g.nodes[p[i]])
         && g.edges
@@ -1206,6 +1215,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::acid_prefix_elision_requires_proven_ester_site_equivalence | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::acid_prefix_elision_requires_proven_ester_site_equivalence
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_is_substituted_alkyl_ligand
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn acid_prefix_elision_requires_proven_ester_site_equivalence() {
         let mut parts = parent(3, false, false);
         parts.parent_atom_hydrogens_by_locant =
@@ -1259,6 +1273,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::single_ester_acid_component_omits_only_redundant_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::single_ester_acid_component_omits_only_redundant_locants
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn single_ester_acid_component_omits_only_redundant_locants() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
@@ -1324,6 +1343,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unsaturated_parent_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::unsaturated_parent_locants
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/data/parser_xml_resources/groupStemsAllowingInlineSuffixes.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn unsaturated_parent_locants() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
@@ -1383,6 +1408,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::cumulene_locant_elision_controls | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::cumulene_locant_elision_controls
+    // Source: openclatura | tests/unit/test_locant_elision.py::test_simple_ring_and_chain_unsaturation_can_elide_unique_locants
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cumulene_locant_elision_controls() {
         for (smiles, expected) in [
             ("C=C=C=C", "butatriene"),
@@ -1434,6 +1465,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::parents_without_suffixes_omit_locants_only_when_no_isomer_exists | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::parents_without_suffixes_omit_locants_only_when_no_isomer_exists
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn parents_without_suffixes_omit_locants_only_when_no_isomer_exists() {
         // P-14.3.4.4, P-14.3.4.5; issue #949.
         for (smiles, expected) in [
@@ -1491,6 +1527,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::stereo_equivalence_uses_path_and_ring_automorphisms | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::stereo_equivalence_uses_path_and_ring_automorphisms
+    // Source: openclatura | tests/unit/test_fusion_directed_entry_layout.py::test_directed_entry_congeners_roundtrip_without_core_name_lookups
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn stereo_equivalence_uses_path_and_ring_automorphisms() {
         for (n, ring, candidates) in [(401, false, vec![1, 401]), (32, true, (1..=32).collect())] {
             let mut parts = parent(n, ring, false);

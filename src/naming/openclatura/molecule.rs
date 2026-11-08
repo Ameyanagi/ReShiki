@@ -8,6 +8,8 @@
 // Source: openclatura | src/openclatura/fusion/construction_order.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/heteroatom_subgraphs.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/canonical_ranks.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_qm9_gate.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/benchmarks/test_build_pubchem_hf_corpus.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura graph model extended with local budget, status, alternatives and speculative rollback.
@@ -694,6 +696,11 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::name_status_is_shared_and_keeps_the_first_strongest_reason | adapted
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::tests::name_status_is_shared_and_keeps_the_first_strongest_reason
+    // Source: openclatura | tests/unit/test_qm9_gate.py::test_result_cardinality_is_strict
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn name_status_is_shared_and_keeps_the_first_strongest_reason() {
         let mol = super::super::graph_io::read_smiles("CCO", &Default::default()).unwrap();
         let fragment = mol.subgraph(&AtomSet::from([0, 1]));
@@ -733,6 +740,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::discarded_candidates_restore_stereo_alternatives | adapted
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::tests::discarded_candidates_restore_stereo_alternatives
+    // Source: openclatura | tests/benchmarks/test_build_pubchem_hf_corpus.py::test_sample_candidates_is_deterministic_unique_and_excludes_canonical_smiles
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn discarded_candidates_restore_stereo_alternatives() {
         let mol = super::super::graph_io::read_smiles("CCO", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();

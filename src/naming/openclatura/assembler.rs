@@ -3,6 +3,16 @@
 // Source: openclatura | src/openclatura/assembler.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: openclatura | src/openclatura/name_postprocessing.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Source: ReShiki | src/naming/openclatura/assembler.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_component_citation_policy.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_component_h_citation.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_qm9_gate.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.golden.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_fusion_charged_migration.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura plain-name renderer with local status assessment and completed-parent output boundaries.
@@ -108,7 +118,6 @@ pub(super) fn mark_assembled_name(mol: &super::molecule::Molecule, parts: &Assem
 }
 
 // Provenance: fn apply_data_postprocessing | adapted
-// Source: openclatura | src/openclatura/assembler.py::module scope (mapping uncertain)
 // Source: openclatura | src/openclatura/name_postprocessing.py::apply_data_postprocessing
 fn apply_data_postprocessing(name: &str) -> String {
     let mut name = name.to_owned();
@@ -126,7 +135,6 @@ fn apply_data_postprocessing(name: &str) -> String {
 // Provenance: fn post_process_name | adapted
 // Source: openclatura | src/openclatura/assembler.py::_post_process_name
 // Source: openclatura | src/openclatura/assembler.py::post_process_name
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 pub fn post_process_name(name: &str) -> String {
     let name = apply_data_postprocessing(name)
         .replace("iminoamino", "diazenyl")
@@ -140,7 +148,6 @@ struct IndicatedHydrogenRun<'a> {
 
 // Provenance: fn indicated_run | adapted
 // Source: openclatura | src/openclatura/assembler.py::inline in _respell_indicated_hydrogen
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 fn indicated_run(text: &str) -> Option<IndicatedHydrogenRun<'_>> {
     let (run, remainder) = text.split_once('-')?;
     let locants = run
@@ -160,7 +167,6 @@ fn indicated_run(text: &str) -> Option<IndicatedHydrogenRun<'_>> {
 /// Saturation beyond the retained hydride's quota is added H or a hydro prefix.
 // Provenance: fn normalize_indicated_hydrogen_quota | adapted
 // Source: openclatura | src/openclatura/assembler.py::_normalize_indicated_hydrogen_quota
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> String {
     let Some(quota) = super::additive::parent_indicated_hydrogen_quota(parts) else {
         return core.into();
@@ -321,7 +327,6 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
 
 // Provenance: fn respell_indicated_hydrogen | adapted
 // Source: openclatura | src/openclatura/assembler.py::_respell_indicated_hydrogen
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 fn respell_indicated_hydrogen(text: &str, respelled: &BTreeSet<String>) -> Option<String> {
     let run = indicated_run(text)?;
     let remaining = run
@@ -339,7 +344,6 @@ fn respell_indicated_hydrogen(text: &str, respelled: &BTreeSet<String>) -> Optio
 
 // Provenance: fn add_indicated_hydrogen_prefix | adapted
 // Source: openclatura | src/openclatura/assembler.py::_add_indicated_hydrogen_prefix
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (String, bool) {
     let mut core = normalize_indicated_hydrogen_quota(parts, core);
     let mut cites_locants = indicated_run(&core).is_some();
@@ -447,7 +451,6 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> (Stri
 }
 // Provenance: fn move_added_hydrogen | adapted
 // Source: openclatura | src/openclatura/assembler.py::_move_added_hydrogen_to_suffix
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 fn move_added_hydrogen(parts: &AssemblyParts, core: &str, suffix: &str) -> (String, String) {
     let added: BTreeSet<_> = parts
         .hydro_operations
@@ -518,7 +521,6 @@ fn move_added_hydrogen(parts: &AssemblyParts, core: &str, suffix: &str) -> (Stri
 }
 // Provenance: fn add_stereo | adapted
 // Source: openclatura | src/openclatura/assembler.py::_add_stereo_prefix
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 fn add_stereo(parts: &AssemblyParts, word: &str, cites_locants: bool) -> String {
     let mut features = vec![];
     for feature in &parts.stereo_features {
@@ -559,7 +561,6 @@ fn add_stereo(parts: &AssemblyParts, word: &str, cites_locants: bool) -> String 
 }
 // Provenance: fn add_front_modifiers | adapted
 // Source: openclatura | src/openclatura/assembler.py::_add_front_modifiers
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     if parts.front_modifiers.is_empty() {
         return word.into();
@@ -615,7 +616,6 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
 }
 // Provenance: fn assemble_name_raw | adapted
 // Source: openclatura | src/openclatura/assembler.py::assemble_name_raw
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
     assemble_name_with_parent(parts).map(|(name, _)| name)
 }
@@ -623,7 +623,6 @@ pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
 /// Keep the rendered parent boundary for isotope descriptor placement.
 // Provenance: fn assemble_name_with_parent | adapted
 // Source: openclatura | src/openclatura/assembler.py::assemble_name_raw
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 pub(super) fn assemble_name_with_parent(
     parts: &mut AssemblyParts,
 ) -> Result<(String, String), String> {
@@ -703,7 +702,6 @@ pub(super) fn assemble_completed_parent(
 
 // Provenance: fn finish_name_with_parent | adapted
 // Source: openclatura | src/openclatura/assembler.py::assemble_name_raw
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 fn finish_name_with_parent(
     parts: &mut AssemblyParts,
     core: String,
@@ -742,7 +740,6 @@ fn finish_name_with_parent(
 #[cfg(test)]
 // Provenance: fn assemble_name | adapted
 // Source: openclatura | src/openclatura/assembler.py::assemble_name
-// Source: openclatura | src/openclatura/name_postprocessing.py::module scope (mapping uncertain)
 pub fn assemble_name(parts: &mut AssemblyParts) -> Result<String, String> {
     assemble_name_raw(parts).map(|n| post_process_name(&n))
 }
@@ -758,6 +755,11 @@ mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::ester_front_modifiers_use_prefix_citation_order | adapted
+    // Source: ReShiki | src/naming/openclatura/assembler.rs::tests::ester_front_modifiers_use_prefix_citation_order
+    // Source: openclatura | tests/unit/test_analysis.py::test_tree_builders_share_schema_without_mutable_defaults
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn ester_front_modifiers_use_prefix_citation_order() {
         let mut parts = AssemblyParts::new(4);
         parts.front_modifiers = vec!["2-methoxyethyl".into(), "ethyl".into()];
@@ -780,6 +782,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_names_preserve_fusion_and_spiro_components | adapted
+    // Source: ReShiki | src/naming/openclatura/assembler.rs::tests::retained_names_preserve_fusion_and_spiro_components
+    // Source: openclatura | tests/unit/test_fusion_component_citation_policy.py::test_report_family_citations_and_public_names_roundtrip_exactly
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_names_preserve_fusion_and_spiro_components() {
         for (smiles, expected) in [
             ("O1C=CC2=CC=CC2=C1", "cyclopenta[c]pyran"),
@@ -820,6 +827,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::standalone_pyrans_cite_indicated_hydrogen_after_substitution | adapted
+    // Source: ReShiki | src/naming/openclatura/assembler.rs::tests::standalone_pyrans_cite_indicated_hydrogen_after_substitution
+    // Source: openclatura | tests/unit/test_fusion_component_h_citation.py::test_parent_citation_uses_declared_template_prefix_only
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn standalone_pyrans_cite_indicated_hydrogen_after_substitution() {
         for (smiles, expected) in [
             ("O1CC=CC=C1", "2H-pyran"),
@@ -841,6 +853,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::stereo_locant_omission_preserves_configurations | adapted
+    // Source: ReShiki | src/naming/openclatura/assembler.rs::tests::stereo_locant_omission_preserves_configurations
+    // Source: openclatura | tests/unit/test_analysis.py::test_locanted_ez_stereo_token_binds_to_double_bond_scope
+    // Source: openclatura | tests/roundtrip/test_stereo.py::test_roundtrip
+    // Source: openclatura | tests/unit/test_qm9_gate.py::test_matched_status_cannot_bypass_exact_comparison
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn stereo_locant_omission_preserves_configurations() {
         let canonical_inner_junction =
             crate::naming::canonical_smiles("C1CCC[C@H]2C3CCCCC3CCC12").unwrap();
@@ -1022,6 +1041,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::competing_amide_suffixes_keep_the_attachment_nitrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/assembler.rs::tests::competing_amide_suffixes_keep_the_attachment_nitrogen
+    // Source: openclatura | tests/unit/test_analysis.py::test_diacyl_nitrogen_keeps_the_amino_parent_and_its_enclosing_marks
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn competing_amide_suffixes_keep_the_attachment_nitrogen() {
         for (smiles, expected, status) in [
             (
@@ -1096,6 +1120,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::substituted_monocycles_cite_principal_suffix_locant_one | adapted
+    // Source: ReShiki | src/naming/openclatura/assembler.rs::tests::substituted_monocycles_cite_principal_suffix_locant_one
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Source: openclatura | tests/unit/test_locant_elision.py::test_simple_ring_and_chain_unsaturation_can_elide_unique_locants
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_self_audit_confirms_modelled_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn substituted_monocycles_cite_principal_suffix_locant_one() {
         for (smiles, expected) in [
             ("O[C@H]1[C@H](C)CCCC1", "(1R,2R)-2-methylcyclohexan-1-ol"),
@@ -1160,6 +1191,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::systematic_fusion_suffixes_preserve_intrinsic_added_and_hydro_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/assembler.rs::tests::systematic_fusion_suffixes_preserve_intrinsic_added_and_hydro_hydrogen
+    // Source: openclatura | tests/integration/test_fusion_charged_migration.py::test_default_charge_parent_preserves_graph_after_reordering
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn systematic_fusion_suffixes_preserve_intrinsic_added_and_hydro_hydrogen() {
         for (smiles, expected) in [
             (
@@ -1221,6 +1257,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::element_locanted_dynamic_suffix_keeps_separator_and_parent_vowel | adapted
+    // Source: ReShiki | src/naming/openclatura/assembler.rs::tests::element_locanted_dynamic_suffix_keeps_separator_and_parent_vowel
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_peroxol_table_is_order_sensitive
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn element_locanted_dynamic_suffix_keeps_separator_and_parent_vowel() {
         for (first, terminal, expected) in [
             ("Se", "O", "methane-SeO-selenoperoxol"),

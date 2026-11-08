@@ -209,7 +209,6 @@ pub enum StereochemistryError {
 }
 impl fmt::Display for StereochemistryError {
     // Provenance: fn <StereochemistryError as fmt::Display>::fmt | adapted
-    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryException.java::StereochemistryException(String)
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingException.java::StructureBuildingException(String)
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -221,7 +220,6 @@ impl fmt::Display for StereochemistryError {
 impl std::error::Error for StereochemistryError {}
 impl From<CipOrderingError> for StereochemistryError {
     // Provenance: fn <StereochemistryError as From<CipOrderingError>>::from | adapted
-    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryException.java::StereochemistryException(Throwable)
     fn from(e: CipOrderingError) -> Self {
         Self::Uninterpretable(e.to_string())
@@ -229,7 +227,6 @@ impl From<CipOrderingError> for StereochemistryError {
 }
 impl From<GraphError> for StereochemistryError {
     // Provenance: fn <StereochemistryError as From<GraphError>>::from | adapted
-    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
     // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingException.java::StructureBuildingException(Throwable)
     fn from(e: GraphError) -> Self {
         Self::StructureBuilding(e.to_string())
@@ -237,13 +234,11 @@ impl From<GraphError> for StereochemistryError {
 }
 type Result<T = ()> = std::result::Result<T, StereochemistryError>;
 // Provenance: fn structure | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingException.java::StructureBuildingException(String)
 fn structure<T>(s: impl Into<String>) -> Result<T> {
     Err(StereochemistryError::StructureBuilding(s.into()))
 }
 // Provenance: fn stereo | adapted
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryException.java::StereochemistryException(String)
 fn stereo<T>(s: impl Into<String>) -> Result<T> {
     Err(StereochemistryError::Uninterpretable(s.into()))
@@ -271,7 +266,6 @@ pub struct StereochemistryHandler<'a> {
 }
 // Provenance: impl StereochemistryHandler | adapted
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::StereochemistryHandler
-// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in assignStereoCentre (alternative fragments plus reversed descendant groups)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in assignStereoBond (alternative fragments plus reversed descendant groups)
 // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in assignCisTransOnRing (alternative fragments plus reversed descendant groups)
