@@ -256,16 +256,33 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
                         )?),
                     ) =>
                 {
-                    match drawing.labels().and_then(|labels| drawing.finish(labels)) {
+                    // Finish as the app's MOL import does, restoring the
+                    // file's depth: a 3D file is drawn as a projection.
+                    let finished = drawing.labels().and_then(|labels| {
+                        drawing.finish_with(labels, |doc| match &imported {
+                            Ok(source) => source.restore_xyz(doc),
+                            Err(_) => Ok(()),
+                        })
+                    });
+                    match finished {
                         Err(error) => {
                             Some(format!("Accepted axial drawing did not finish: {error}"))
                         }
+                        // Known limitation in 0.14.0: the finished drawing may
+                        // lose an axis the reader perceived. A 3D or nonzero-z
+                        // file is drawn as a projection, which keeps no wedges
+                        // (#1057); a crossed double bond at an axis end hides
+                        // the axis (#1064); so can a file wedge on a ring bond
+                        // (rings/c1ccccc1/C=C/c1ccccc1/True/4 and True/38).
+                        // The app then shows no M/P for it. Every axis the
+                        // drawing keeps must still match RDKit's exactly,
+                        // label included, and none may be added or inverted.
                         Ok(doc) => (!axial_extension::accepted(
                             &case.name,
                             case.failure.as_deref(),
                             "mol",
                             &case.text,
-                            axial_extension::Checked::Document(&doc),
+                            axial_extension::Checked::MolDocument(&doc),
                         ))
                         .then(|| "Accepted axial drawing changed an axis or its label".into()),
                     }

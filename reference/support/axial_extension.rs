@@ -23,12 +23,14 @@ use std::{
 };
 
 /// What the test checked: one molecular state, an RXN reader result with
-/// `reactants`/`products`/`agents`, or a finished document.
+/// `reactants`/`products`/`agents`, a finished document, or a finished MOL
+/// drawing, which may lose an axis but never add, invert or relabel one.
 #[allow(dead_code)]
 pub enum Checked<'a> {
     State(&'a Value),
     Reaction(&'a Value),
     Document(&'a Document),
+    MolDocument(&'a Document),
 }
 
 type Axis = (usize, usize, u64, Option<String>);
@@ -74,13 +76,17 @@ pub fn accepted(
                     .zip(&expected)
                     .all(|(state, axes_)| axes(state).is_some_and(|actual| &actual == axes_))
         }
-        Checked::Document(doc) => in_document(doc, &expected).unwrap_or(false),
+        Checked::Document(doc) => in_document(doc, &expected, false).unwrap_or(false),
+        Checked::MolDocument(doc) => in_document(doc, &expected, true).unwrap_or(false),
     }
 }
 
 /// Map each RDKit molecule's atoms onto the prepared document state: a
 /// reaction participant lists its atoms in document order, as `write_rxn` does.
-fn in_document(doc: &Document, expected: &[BTreeSet<Axis>]) -> Option<bool> {
+/// With `may_lose`, the drawing may keep only some of the expected axes: each
+/// axis it keeps must be expected, with the same winding and label, and each
+/// M/P label it shows must be an expected axis's own label.
+fn in_document(doc: &Document, expected: &[BTreeSet<Axis>], may_lose: bool) -> Option<bool> {
     let molecule = document::prepare(doc).ok()?;
     let state_index: HashMap<u64, usize> = molecule
         .ids
@@ -112,23 +118,34 @@ fn in_document(doc: &Document, expected: &[BTreeSet<Axis>]) -> Option<bool> {
     if molecules.len() != expected.len() {
         return Some(false);
     }
-    let mut wanted = BTreeSet::new();
+    // Each expected axis with the label the returned drawing shows on its bond.
+    let mut shown = Vec::new();
     for (atoms, axes_) in molecules.iter().zip(expected) {
         for (a, b, stereo, label) in axes_ {
             let (a, b) = (*atoms.get(*a)?, *atoms.get(*b)?);
-            // The returned drawing's own label on that bond must agree too.
             let bond = doc
                 .bonds
                 .iter()
                 .find(|bond| (bond.a, bond.b) == (a, b) || (bond.a, bond.b) == (b, a))?;
-            if bond.cip_label != *label {
-                return Some(false);
-            }
             let (a, b) = (*state_index.get(&a)?, *state_index.get(&b)?);
-            wanted.insert((a.min(b), a.max(b), *stereo, label.clone()));
+            let axis = (a.min(b), a.max(b), *stereo, label.clone());
+            shown.push((axis, bond.cip_label.clone()));
         }
     }
-    Some(axes(&serde_json::to_value(&molecule.state).ok()?)? == wanted)
+    let wanted: BTreeSet<_> = shown.iter().map(|(axis, _)| axis.clone()).collect();
+    let actual = axes(&serde_json::to_value(&molecule.state).ok()?)?;
+    if !may_lose {
+        return Some(shown.iter().all(|(axis, label)| *label == axis.3) && actual == wanted);
+    }
+    let axial = |label: &Option<String>| matches!(label.as_deref(), Some("M" | "P"));
+    Some(
+        actual.is_subset(&wanted)
+            && shown.iter().all(|(axis, label)| {
+                *label == axis.3 || (!actual.contains(axis) && label.is_none())
+            })
+            && doc.bonds.iter().filter(|b| axial(&b.cip_label)).count()
+                == shown.iter().filter(|(_, label)| axial(label)).count(),
+    )
 }
 
 /// Every axis of a state, labelled by the native CIP labeler.

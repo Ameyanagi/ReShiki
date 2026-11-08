@@ -458,3 +458,73 @@ M  V30 15 2 4 10 CFG=0
     );
     Ok(())
 }
+
+// RDKit atropisomer reference case geometry/1160 as a 3D file: the diene
+// C=C(C)-C(C)=C with an M axis on its central bond.
+const DIENE_3D: &str = "axial stereo reference
+                    3D
+
+  0  0  0  0  0  0  0  0  0  0999 V3000
+M  V30 BEGIN CTAB
+M  V30 COUNTS 6 5 0 0 0
+M  V30 BEGIN ATOM
+M  V30 1 C 0.117334601365 -2.5 1 0
+M  V30 2 C 0.620467223097 1 -1 0
+M  V30 3 C -0.802032661105 -1.5 0 0
+M  V30 4 C -0.841446086872 -2.5 -1 0
+M  V30 5 C -0.463377035522 1 1 0
+M  V30 6 C -0.857724979162 0 0 0
+M  V30 END ATOM
+M  V30 BEGIN BOND
+M  V30 1 2 4 3 CFG=0
+M  V30 2 1 3 6 CFG=3
+M  V30 3 2 2 6 CFG=3
+M  V30 4 1 5 6 CFG=0
+M  V30 5 1 3 1 CFG=3
+M  V30 END BOND
+M  V30 END CTAB
+M  END
+";
+
+// A 3D drawing is a projection that keeps no wedges, so it cannot keep the
+// axis (#1057). 0.14.0 opens the structure and drops the axis: after the
+// app's label refresh, nothing shows an M or P.
+#[tokio::test]
+async fn mol_3d_axis_opens_the_structure_without_an_axis() -> anyhow::Result<()> {
+    use crate::{
+        atom_labels::refresh::Refresh,
+        engine::{LocalEngine, Request},
+    };
+
+    assert_eq!(axial_code(&molfile::read(DIENE_3D)?.molecule)?, "M");
+    let response = LocalEngine::in_process()
+        .request(Request::import("mol", DIENE_3D))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(response.analysis.unwrap().smiles, "C=C(C)C(=C)C");
+    let mut doc = response.document.unwrap();
+    // The import may still show the reader's own label, never another one.
+    assert!(
+        doc.bonds
+            .iter()
+            .all(|bond| matches!(bond.cip_label.as_deref(), None | Some("M")))
+    );
+    let prepared = document::prepare(&doc)?;
+    assert!(
+        prepared
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .all(|bond| !matches!(bond.stereo, 6 | 7))
+    );
+    Refresh::calculate(&doc, &Default::default())
+        .map_err(anyhow::Error::msg)?
+        .apply(&mut doc);
+    assert!(
+        doc.bonds
+            .iter()
+            .all(|bond| !matches!(bond.cip_label.as_deref(), Some("M" | "P")))
+    );
+    Ok(())
+}
