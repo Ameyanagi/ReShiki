@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-2-Clause AND (MIT OR Apache-2.0)
+// Origin: mixed adaptation of SiMolecule centres with ledger-marked local functions; source paths and pins follow.
+//   SiMolecule centres, core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java @ d4b2ca46228bdf8814ff0c1f00465be4085af8c9.
+//   ReShiki, crates/chemistry/src/stereo/cip/tests.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (c) 2020 John Mayfield
+// Changes: Rust adaptation; ledger-marked local functions; pass explicit default import budgets; format affected calls.
+
 // Copied from crates/chemistry/src/stereo/cip/tests.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: pass explicit default import budgets; format affected calls
 use super::*;
 use crate::{
@@ -8,6 +15,7 @@ use crate::{
     stereo::perception::Properties,
 };
 
+// Original nazuchem code (not in SiMolecule centres).
 fn chain(n: usize) -> anyhow::Result<State> {
     let graph = Graph {
         atoms: vec![
@@ -38,6 +46,7 @@ fn chain(n: usize) -> anyhow::Result<State> {
     })
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn rejects_malformed_graph_caches_and_indices() -> anyhow::Result<()> {
     let valid = chain(4)?;
@@ -77,6 +86,7 @@ fn rejects_malformed_graph_caches_and_indices() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn deep_chain_is_iterative_and_preserves_the_input() -> anyhow::Result<()> {
     let mut input = chain(100_000)?;
@@ -92,6 +102,7 @@ fn deep_chain_is_iterative_and_preserves_the_input() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn partial_bond_returns_a_typed_error_without_changing_the_input() -> anyhow::Result<()> {
     let mut input = chain(2)?;
@@ -107,6 +118,7 @@ fn partial_bond_returns_a_typed_error_without_changing_the_input() -> anyhow::Re
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn negative_mancude_fractions_average_the_complete_part_independent_of_order() -> anyhow::Result<()>
 {
@@ -144,6 +156,7 @@ fn negative_mancude_fractions_average_the_complete_part_independent_of_order() -
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn equivalent_cyclopentadienide_axis_ligands_do_not_receive_helicity() -> anyhow::Result<()> {
     let mut state = crate::smiles::read(
@@ -169,6 +182,7 @@ fn equivalent_cyclopentadienide_axis_ligands_do_not_receive_helicity() -> anyhow
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn complete_labeling_bounds_retained_graphs_and_selection_without_partial_edits()
 -> anyhow::Result<()> {
@@ -196,6 +210,7 @@ fn complete_labeling_bounds_retained_graphs_and_selection_without_partial_edits(
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn complete_labeling_without_centers_preserves_large_graph_and_uninitialized_rings()
 -> anyhow::Result<()> {
@@ -208,6 +223,7 @@ fn complete_labeling_without_centers_preserves_large_graph_and_uninitialized_rin
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn long_stereo_chain_labels_every_center() -> anyhow::Result<()> {
     // 400 centres once exhausted the storage of graphs retained for all centres.
@@ -229,6 +245,7 @@ fn long_stereo_chain_labels_every_center() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 fn allene_state(text: &str, center: usize, permutation: u32) -> anyhow::Result<State> {
     let mut state = crate::smiles::read(text, &crate::budget::Budget::default())?
         .prepared
@@ -238,6 +255,7 @@ fn allene_state(text: &str, center: usize, permutation: u32) -> anyhow::Result<S
     Ok(state)
 }
 
+// Adapted from core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java::extended_tetrahedral_labels_the_central_atom_with_exact_helicity (local Rust boundary; exact upstream function mapping not recorded).
 #[test]
 fn extended_tetrahedral_labels_the_central_atom_with_exact_helicity() -> anyhow::Result<()> {
     // Centres ExtendedTetrahedral LEFT=1/RIGHT=2 maps priority-ordered
@@ -274,6 +292,7 @@ fn extended_tetrahedral_labels_the_central_atom_with_exact_helicity() -> anyhow:
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn extended_tetrahedral_identical_terminal_ligands_clear_the_label() -> anyhow::Result<()> {
     for (text, center) in [("CC(C)=C=CC", 3), ("FC(F)=C=C(Cl)Br", 3)] {
@@ -289,6 +308,7 @@ fn extended_tetrahedral_identical_terminal_ligands_clear_the_label() -> anyhow::
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn extended_tetrahedral_survives_bond_order_and_endpoint_permutations() -> anyhow::Result<()> {
     let original = allene_state("FC(Cl)=C=C(I)Br", 3, 1)?;
@@ -321,6 +341,7 @@ fn extended_tetrahedral_survives_bond_order_and_endpoint_permutations() -> anyho
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn extended_tetrahedral_labels_an_auxiliary_center_after_rerooting() -> anyhow::Result<()> {
     use configuration::Configuration;
@@ -350,6 +371,7 @@ fn extended_tetrahedral_labels_an_auxiliary_center_after_rerooting() -> anyhow::
     Ok(())
 }
 
+// Original nazuchem code (not in SiMolecule centres).
 #[test]
 fn extended_tetrahedral_uses_pseudo_helicity_for_one_enantiomorphic_pair() -> anyhow::Result<()> {
     let state = allene_state("C([C@H](F)Cl)([C@@H](F)Cl)=C=C(I)Br", 7, 1)?;

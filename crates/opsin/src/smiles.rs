@@ -1,3 +1,17 @@
+// SPDX-License-Identifier: MIT
+// Origin: mixed adaptation of OPSIN with ledger-marked local functions; source paths and pins follow.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   ReShiki, crates/opsin/src/smiles.rs @ 89f30ab6d32736a8beccf3bab9c355c68f178f00.
+//   ReShiki, crates/opsin/src/smiles.rs @ 2df788dc456793c687b934afd6d4b317e3c73ef8.
+//   ReShiki, crates/opsin/src/smiles.rs @ 1e2ada3e92b99b1487058f5a4031799d41c27645.
+//   ReShiki, crates/opsin/src/smiles.rs @ 2fb808b58e5f572709ea335de644e6f5df406852.
+//   ReShiki, crates/opsin/src/smiles.rs @ cc6840eb98c18b3d6d10151b18df174675be1170.
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
+
 //! OPSIN resource SMILES dialect and semantic serialization foundations.
 //!
 //! Translated from SMILESFragmentBuilder and SMILESWriter in OPSIN 2.9.0,
@@ -661,6 +675,7 @@ pub fn write_semantic_cxsmiles(
 
 /// Serializes principal-parent locants alongside the same semantic CXSMILES,
 /// following the writer's traversal rather than construction atom order.
+// Original nazuchem code (not in OPSIN).
 pub fn write_semantic_cxsmiles_with_locants(
     graph: &Graph,
     fragment: FragmentId,
@@ -677,6 +692,7 @@ pub fn write_semantic_cxsmiles_with_locants(
 }
 
 /// Axes and locants are projected through a single SMILES traversal.
+// Original nazuchem code (not in OPSIN).
 pub fn write_semantic_cxsmiles_with_locants_and_axes(
     graph: &Graph,
     fragment: FragmentId,

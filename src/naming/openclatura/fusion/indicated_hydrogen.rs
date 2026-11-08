@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted from upstream code.
+//   openclatura 0.4.3, src/openclatura/fusion/indicated_hydrogen.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/fusion/planner.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Changes: Openclatura component pi-budget and intrinsic carbon-H algorithms, with local candidate/neutral-parent/suffix adaptations.
+
 //! Component pi budgets and completed-system intrinsic hydrogen witnesses.
 use super::super::{
     locants::retained_locant_sort_key as locant_key,

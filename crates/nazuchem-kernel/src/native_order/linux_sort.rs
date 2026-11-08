@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: NOASSERTION
+// Origin: ReShiki reproduction of the Linux reference sort policy; underlying implementation ancestry and licence remain unresolved.
+//   ReShiki, crates/chemistry/src/native_order/linux_sort.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Changes: Rust adaptation; checked indexing and an explicit range stack reproduce the pinned reference comparison policy.
+// Unresolved: History proves local introduction, but neither the header nor licenses/stdlib/NOTICE establishes whether source was consulted or independently reproduced from observations.
+
 //! Preserve equal-priority traversal order in the pinned Linux reference.
 //!
 //! Median-of-three introsort, a 16-element insertion cutoff, and a heap fallback

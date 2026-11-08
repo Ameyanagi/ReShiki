@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/chemistry/src/rings/tests.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+
 // Copied from crates/chemistry/src/rings/tests.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: use the crate-local byte-preserved ring fixture
 use super::*;
 use crate::graph::{Atom, Bond};

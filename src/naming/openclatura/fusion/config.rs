@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted from upstream code.
+//   openclatura 0.4.3, src/openclatura/fusion/config.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Changes: Openclatura policy/search/ring-shape schema adapted to typed serde configuration.
+
 //! Checked-in fusion policy, search limits, and intrinsic ring shapes.
 use serde::Deserialize;
 use std::sync::LazyLock;

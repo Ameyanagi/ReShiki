@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/additive.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura hydrogen-role collection extended by local complete-parent suffix/lambda proofs.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Indicated and additive hydrogen for retained parents.
 use super::{
     assembly_parts::{AssemblyParts, HydroOperation},
@@ -12,6 +20,7 @@ type Site = (String, usize);
 /// The bridge-prefix oxo composition is known to choose different added-H
 /// locants for equivalent input atom orders. Keep this uncertainty on that
 /// rendered route rather than all retained or additive-hydrogen parents.
+// Original nazuchem code (not in openclatura 0.4.3): fn has_atom_order_sensitive_bridge_hydrogen
 pub(super) fn has_atom_order_sensitive_bridge_hydrogen(parts: &AssemblyParts) -> bool {
     parts
         .parent_hydride
@@ -29,6 +38,7 @@ pub(super) fn has_atom_order_sensitive_bridge_hydrogen(parts: &AssemblyParts) ->
         })
 }
 
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn parent_indicated_hydrogen_quota)
 pub fn parent_indicated_hydrogen_quota(parts: &AssemblyParts) -> Option<usize> {
     let plan = if let Some(parent) = &parts.parent_hydride {
         parent
@@ -55,6 +65,7 @@ pub fn parent_indicated_hydrogen_quota(parts: &AssemblyParts) -> Option<usize> {
         .map(|metadata| metadata.indicated_hydrogen_count)
 }
 
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn name_indicated_hydrogen_locants)
 pub fn name_indicated_hydrogen_locants(name: Option<&str>) -> BTreeSet<String> {
     let Some((run, _)) = name.and_then(|s| s.split_once('-')) else {
         return BTreeSet::new();
@@ -71,6 +82,7 @@ pub fn name_indicated_hydrogen_locants(name: Option<&str>) -> BTreeSet<String> {
     locants.unwrap_or_default()
 }
 
+// Adapted from src/openclatura/additive.py::add_indicated_hydrogens (adapted; local fn operation)
 fn operation(key: &str, sites: &[Site]) -> HydroOperation {
     HydroOperation {
         key: key.into(),
@@ -84,6 +96,7 @@ fn operation(key: &str, sites: &[Site]) -> HydroOperation {
         ..Default::default()
     }
 }
+// Adapted from src/openclatura/additive.py::add_indicated_hydrogens (adapted; local fn add_citations)
 fn add_citations(parts: &mut AssemblyParts, key: &str, sites: &[Site]) {
     for site in sites {
         parts.indicated_hydrogens.push(site.0.clone());
@@ -92,10 +105,12 @@ fn add_citations(parts: &mut AssemblyParts, key: &str, sites: &[Site]) {
             .push(operation(key, std::slice::from_ref(site)));
     }
 }
+// Adapted from src/openclatura/additive.py::add_indicated_hydrogens (adapted; local fn sort_sites)
 fn sort_sites(sites: &mut [Site]) {
     sites.sort_by_key(|s| parse_locant(&s.0));
 }
 
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn ring_bonds)
 fn ring_bonds<'a>(mol: &'a Molecule, idx: usize, ring: &AtomSet) -> Vec<&'a super::molecule::Bond> {
     mol.get_neighbors(idx)
         .iter()
@@ -103,6 +118,7 @@ fn ring_bonds<'a>(mol: &'a Molecule, idx: usize, ring: &AtomSet) -> Vec<&'a supe
         .filter_map(|&n| mol.get_bond(idx, n))
         .collect()
 }
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn saturated_ring_site)
 fn saturated_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
     let bonds = ring_bonds(mol, idx, ring);
     !bonds.is_empty()
@@ -113,6 +129,7 @@ fn saturated_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
             .filter(|n| !ring.contains(n))
             .all(|&n| mol.get_bond(idx, n).is_none_or(|b| b.order <= 1))
 }
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn exocyclic_double_bond_site)
 fn exocyclic_double_bond_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
     let bonds = ring_bonds(mol, idx, ring);
     mol.atoms[&idx].is_carbon()
@@ -124,6 +141,7 @@ fn exocyclic_double_bond_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> boo
             .filter(|n| !ring.contains(n))
             .any(|&n| mol.get_bond(idx, n).is_some_and(|b| b.order == 2))
 }
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn oxo_ring_site)
 fn oxo_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
     exocyclic_double_bond_site(mol, idx, ring)
         && mol
@@ -135,6 +153,7 @@ fn oxo_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
                     && mol.get_bond(idx, n).is_some_and(|b| b.order == 2)
             })
 }
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn respell_indicated_hydrogen)
 fn respell_indicated_hydrogen(name: &str, sites: &BTreeSet<String>) -> String {
     if name_indicated_hydrogen_locants(Some(name)).is_empty() {
         return name.into();
@@ -153,6 +172,7 @@ fn respell_indicated_hydrogen(name: &str, sites: &BTreeSet<String>) -> String {
             .join(",")
     )
 }
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn fold_stem_hydro_prefix)
 fn fold_stem_hydro_prefix(parts: &mut AssemblyParts, locants: &BTreeMap<usize, String>) {
     let Some(name) = parts.retained_name.as_deref() else {
         return;
@@ -199,6 +219,7 @@ fn fold_stem_hydro_prefix(parts: &mut AssemblyParts, locants: &BTreeMap<usize, S
     (op.locants, op.atom_ids) = merged.into_iter().unzip();
     parts.retained_name = Some(rest.into());
 }
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn declared_split)
 fn declared_split(
     pool: &[Site],
     defaults: &BTreeSet<String>,
@@ -224,6 +245,7 @@ fn declared_split(
     sort_sites(&mut surplus);
     Some((held, surplus))
 }
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn relocate_preferred_hydrogenation)
 fn relocate_preferred_hydrogenation(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -250,6 +272,7 @@ fn relocate_preferred_hydrogenation(
 }
 
 /// Collect hydrogen roles after the retained graph and its numbering are proved.
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn add_indicated_hydrogens)
 pub fn add_indicated_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -275,6 +298,7 @@ pub fn add_indicated_hydrogens(
     validate_retained_hydrogen_sites(mol, parts)
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn validate_retained_hydrogen_sites
 fn validate_retained_hydrogen_sites(mol: &Molecule, parts: &AssemblyParts) -> Result<(), String> {
     let Some(metadata) = parts
         .retained_parent_metadata
@@ -313,6 +337,7 @@ fn validate_retained_hydrogen_sites(mol: &Molecule, parts: &AssemblyParts) -> Re
     Ok(())
 }
 
+// Adapted from src/openclatura/additive.py::add_indicated_hydrogens (adapted; local fn collect_indicated_hydrogens)
 fn collect_indicated_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -699,6 +724,7 @@ fn collect_indicated_hydrogens(
     Ok(())
 }
 
+// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn recast_ring_ketone_hydrogens)
 fn recast_ring_ketone_hydrogens(parts: &mut AssemblyParts, locants: &BTreeMap<usize, String>) {
     if parts
         .parent_hydride
@@ -770,6 +796,7 @@ fn recast_ring_ketone_hydrogens(parts: &mut AssemblyParts, locants: &BTreeMap<us
     }
 }
 
+// Adapted from src/openclatura/additive.py::add_indicated_hydrogens (adapted; local fn add_proved_parent_hydrogens)
 fn add_proved_parent_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -887,6 +914,7 @@ fn add_proved_parent_hydrogens(
 
 // P-58.2.3.1.1: relocate intrinsic indicated H to suffix sites before
 // assigning residual hydro prefixes, preserving the parent's hydrogen quota.
+// Original nazuchem code (not in openclatura 0.4.3): fn suffix_hydrogen_citations
 fn suffix_hydrogen_citations(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -932,6 +960,7 @@ fn suffix_hydrogen_citations(
         .collect()
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn suffix_hydrogen_rank
 fn suffix_hydrogen_rank(
     indicated: &[String],
     suffix: &BTreeSet<String>,
@@ -980,6 +1009,7 @@ type SuffixHydrogenState = (
     super::fusion::mancude::ParentDerivativeState,
 );
 
+// Original nazuchem code (not in openclatura 0.4.3): fn systematic_suffix_hydrogen_state
 pub(super) fn systematic_suffix_hydrogen_state(
     mol: &Molecule,
     plan: &super::fusion::model::FusionParentPlan,
@@ -1019,6 +1049,7 @@ pub(super) fn systematic_suffix_hydrogen_state(
     )
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn parent_pi_atoms
 fn parent_pi_atoms(model: &super::fusion::model::ParentBondModel) -> AtomSet {
     // Atoms that can never carry a parent double bond are inherently
     // saturated, not movable indicated-H sites (e.g. carbon between two O).
@@ -1035,6 +1066,7 @@ fn parent_pi_atoms(model: &super::fusion::model::ParentBondModel) -> AtomSet {
         .collect()
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn graph_suffix_hydrogen_state
 pub(super) fn graph_suffix_hydrogen_state(
     mol: &Molecule,
     graph: &super::fusion::model::FusionGraph,
@@ -1123,6 +1155,7 @@ pub(super) fn graph_suffix_hydrogen_state(
         .map(|(_, indicated, model, state)| (indicated, model, state)))
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn apply_parent_hydrogen_state
 fn apply_parent_hydrogen_state(
     parts: &mut AssemblyParts,
     indicated: Vec<String>,
@@ -1169,6 +1202,7 @@ fn apply_parent_hydrogen_state(
     parts.parent_derivative_state = Some(state);
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn apply_lambda_parent_hydrogens
 fn apply_lambda_parent_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -1239,6 +1273,7 @@ fn apply_lambda_parent_hydrogens(
     Ok(true)
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn retained_suffix_hydrogen_state
 pub(super) fn retained_suffix_hydrogen_state(
     mol: &Molecule,
     template: &super::retained_graph_model::RetainedGraphTemplate,
@@ -1286,6 +1321,7 @@ pub(super) fn retained_suffix_hydrogen_state(
         .map(|(_, indicated, model, state)| (indicated, model, state)))
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn apply_suffix_hydrogens
 fn apply_suffix_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -1433,6 +1469,7 @@ fn apply_suffix_hydrogens(
 
 #[cfg(test)]
 mod tests {
+    // Original nazuchem code (not in openclatura 0.4.3): fn ring_ketone_numbering_compares_suffix_before_added_hydrogen
     #[test]
     fn ring_ketone_numbering_compares_suffix_before_added_hydrogen() {
         use crate::naming::{NameStatus, verify_identity};
@@ -1491,6 +1528,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn suffix_hydrogen_names_are_preferred_and_round_trip
     #[test]
     fn suffix_hydrogen_names_are_preferred_and_round_trip() {
         use crate::naming::{NameStatus, verify_identity};
@@ -1620,6 +1658,7 @@ mod tests {
         assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn projected_spiro_components_keep_unverified_hydrogen_fallback
     #[test]
     fn projected_spiro_components_keep_unverified_hydrogen_fallback() {
         let smiles = "CC1C2C(C(=O)N(C2=O)C3=CC=CC=C3OC)C4(N1)C5=CC=CC=C5N(C4=O)CCBr";
@@ -1640,6 +1679,7 @@ mod tests {
         crate::naming::verify_identity(smiles, &reconstructed).unwrap();
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn bridge_oxo_composition_does_not_invent_hydrogenation
     #[test]
     fn bridge_oxo_composition_does_not_invent_hydrogenation() {
         assert_eq!(
@@ -1650,6 +1690,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_derivatives_use_bond_consistent_hydrogen_states
     #[test]
     fn retained_derivatives_use_bond_consistent_hydrogen_states() {
         for (smiles, expected) in [
@@ -1674,6 +1715,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn supplied_retained_bond_model_collects_hydrogenated_edges
     #[test]
     fn supplied_retained_bond_model_collects_hydrogenated_edges() {
         use super::super::fusion::numbering::{parent_bond_graph, parent_bond_model};
@@ -1707,6 +1749,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_fused_hydrogen_roles_keep_source_ordering
     #[test]
     fn retained_fused_hydrogen_roles_keep_source_ordering() {
         for (smiles, expected) in [
@@ -1743,6 +1786,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants
     #[test]
     fn xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants() {
         let parser = opsin::Parser::new().unwrap();

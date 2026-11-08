@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted from OPSIN; source paths and pins follow.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryTest.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   ReShiki, crates/opsin/tests/stereochemistry_handler.rs @ 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9.
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 //! Graph-stage tests derived from OPSIN StereochemistryHandler and the
 //! StereochemistryTest fixtures. No external executable is used.
 use opsin::build_state::BuildState;

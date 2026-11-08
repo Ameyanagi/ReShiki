@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted from RDKit; source paths and pins follow.
+//   RDKit 2026.03.6, Code/GraphMol/Kekulize.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/Atom.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   ReShiki, crates/chemistry/src/kekulize.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
+// Copyright (C) 2001-2024.
+// Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 //! Bounded Kekulé bond assignment from RDKit Kekulize.cpp (2026.03.6).
 //! Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 //! Early-element classification from Atom.cpp, Copyright (C) 2001-2024.

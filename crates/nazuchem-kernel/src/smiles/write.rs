@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted from RDKit; source paths and pins follow.
+//   RDKit 2026.03.6, Code/GraphMol/SmilesParse/SmilesWrite.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   ReShiki, crates/chemistry/src/smiles/write.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
+// Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 //! Plain molecular SMILES from RDKit SmilesWrite.cpp (2026.03.6).
 //! Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.

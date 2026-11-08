@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/chemistry/src/stereo/cumulene.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+
 //! Odd cumulene chains with distinguishable ligands at both ends.
 // Copied unchanged from crates/chemistry/src/stereo/cumulene.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3
 use super::{at, double_bond_directions, perception, perception::State};

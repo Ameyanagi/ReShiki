@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Origin: mixed adaptation of OPSIN with ledger-marked local functions; source paths and pins follow.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   ReShiki, crates/opsin/src/build_state.rs @ 777cdd3f98dfb955e165b17e352d3ce6da768b0c.
+//   ReShiki, crates/opsin/src/build_state.rs @ 89f30ab6d32736a8beccf3bab9c355c68f178f00.
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
+
 //! Per-name state shared by OPSIN construction passes.
 use crate::{
     Budget, OpsinWarning, ParseOptions, ParsingError, WarningKind,
@@ -26,6 +37,7 @@ impl BuildState {
         Self::with_budget(options, Budget::default())
     }
     /// Create interpretation state with the host's chemistry budget.
+    // Original nazuchem code (not in OPSIN).
     pub fn with_budget(options: ParseOptions, budget: Budget) -> Self {
         Self {
             budget,

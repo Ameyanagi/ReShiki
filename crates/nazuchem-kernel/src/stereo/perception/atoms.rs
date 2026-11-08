@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: BSD-3-Clause AND (MIT OR Apache-2.0)
+// Origin: mixed adaptation of RDKit with ledger-marked local functions; source paths and pins follow.
+//   RDKit 2026.03.6, Code/GraphMol/Chirality.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/FindStereo.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   ReShiki, crates/chemistry/src/stereo/perception/atoms.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (c) 2006-2015, Rational Discovery LLC, Greg Landrum, and Julie Penzotti and others
+// Changes: Rust adaptation; ledger-marked local functions; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 // Copied unchanged from crates/chemistry/src/stereo/perception/atoms.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3
 use super::*;
 impl Context {
@@ -5,6 +13,7 @@ impl Context {
     /// ligand as an implicit H (P-92.3), whatever the bond type (single,
     /// dative or CX hydrogen bond). Charge is no sequence-rule criterion; a
     /// bridging hydride or an H carrying another H continues the ligand.
+    // Original nazuchem code (not in RDKit).
     pub(super) fn terminal_hydrogen(&self, atom: usize) -> Result<bool, String> {
         let a = at(&self.state.graph.atoms, atom)?;
         Ok(a.atomic_number == 1
@@ -14,6 +23,7 @@ impl Context {
     }
 
     // FindStereo.cpp::isAtomPotentialTetrahedralCenter (2026.03.6).
+    // Adapted from Code/GraphMol/Chirality.cpp and Code/GraphMol/FindStereo.cpp::Context::potential_tetrahedral (local Rust boundary; exact upstream function mapping not recorded).
     pub(super) fn potential_tetrahedral(
         &mut self,
         i: usize,
@@ -65,6 +75,7 @@ impl Context {
             _ => Ok(false),
         }
     }
+    // Adapted from Code/GraphMol/Chirality.cpp and Code/GraphMol/FindStereo.cpp::Context::legal_center (local Rust boundary; exact upstream function mapping not recorded).
     pub(super) fn legal_center(&mut self, i: usize, work: &mut Work) -> Result<bool, String> {
         let atom = at(&self.state.graph.atoms, i)?.clone();
         let mut degree = 0;
@@ -112,6 +123,7 @@ impl Context {
             _ => Ok(false),
         }
     }
+    // Adapted from Code/GraphMol/Chirality.cpp and Code/GraphMol/FindStereo.cpp::Context::assign_atoms (local Rust boundary; exact upstream function mapping not recorded).
     pub(super) fn assign_atoms(
         &mut self,
         possible: bool,
@@ -186,6 +198,7 @@ impl Context {
     }
 }
 
+// Original nazuchem code (not in RDKit).
 fn permutation_odd(order: &[(u32, usize)], work: &mut Work) -> Result<bool, String> {
     let mut tree = vec![0u32; order.len() + 1];
     let mut odd = false;

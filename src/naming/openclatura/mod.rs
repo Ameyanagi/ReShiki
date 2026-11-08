@@ -1,4 +1,13 @@
-//! Native Rust port of openclatura 0.4.3 (MIT), plain-name pipeline.
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/namer.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/engine.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Port entry sequence surrounded by local naming routes, assessment, result types and alternatives.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
+//! Plain-name pipeline that began as a port of openclatura 0.4.3, extended in ReShiki.
 //! Attribution and license terms are in `licenses/openclatura/`.
 //!
 //! Supports chains, monocycles, retained and systematic fused parents, pure
@@ -110,6 +119,7 @@ pub(super) struct Verification {
 }
 
 #[cfg(test)]
+// Original nazuchem code (not in openclatura 0.4.3): fn name_smiles
 pub(super) fn name_smiles(
     smiles: &str,
     budget: &nazuchem_kernel::budget::Budget,
@@ -117,6 +127,7 @@ pub(super) fn name_smiles(
     name_smiles_with_style(smiles, crate::naming::IsotopeStyle::Iupac, budget)
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn name_smiles_with_style
 pub(super) fn name_smiles_with_style(
     smiles: &str,
     style: crate::naming::IsotopeStyle,
@@ -155,6 +166,7 @@ pub(super) fn name_smiles_with_style(
 
 /// The name with Ra/Sa for M/P in every locanted stereodescriptor group, such
 /// as (1M,2R) -> (1Ra,2R); descriptor groups are innermost parentheses.
+// Original nazuchem code (not in openclatura 0.4.3): fn general_axial_name
 fn general_axial_name(text: &str) -> Option<String> {
     let mut out = String::with_capacity(text.len() + 4);
     let mut rest = text;
@@ -197,6 +209,7 @@ fn general_axial_name(text: &str) -> Option<String> {
     (out != text).then_some(out)
 }
 
+// Adapted from src/openclatura/namer.py::name_smiles, src/openclatura/namer.py::name_component (adapted; local fn name_routes)
 fn name_routes(
     smiles: &str,
     style: crate::naming::IsotopeStyle,
@@ -344,6 +357,7 @@ fn name_routes(
 }
 
 /// Keep the isotope parent on the ordinary engine's existing validation path.
+// Original nazuchem code (not in openclatura 0.4.3): fn validate_parent
 pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
     ionic_naming::validate_heteroatom_oxo_charge_states(mol)?;
     // Upstream divergence: nitrogen stereocentres and ring stereocentres with a
@@ -367,6 +381,7 @@ pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
     Ok(())
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn assess_derivation
 fn assess_derivation(mol: &molecule::Molecule, derivation: &component_namer::Derivation) {
     species::assess_anion_parent(mol, derivation);
     species::assess_cation_parent(mol, derivation);
@@ -412,6 +427,7 @@ fn assess_derivation(mol: &molecule::Molecule, derivation: &component_namer::Der
 /// compound locants, counts as a level (P-16.5.4.1.3), and a mark that would
 /// directly follow or precede one of the same kind moves up a level
 /// (P-16.5.4.1.5).
+// Original nazuchem code (not in openclatura 0.4.3): fn nest_enclosing_marks
 pub(super) fn nest_enclosing_marks(name: &str) -> String {
     // Per open group: its start, the deepest counted level inside it, and the
     // levels of counted groups that start right after it opens and end right
@@ -484,6 +500,7 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
 /// counts as a unit, which can only overcount heterounits such as -SiH2-O-SiH2-;
 /// terminal B, Al, Ga, In, Tl, Si, Ge, Sn, Pb, P, As, Sb and Bi count too (P-51.4.1.4). Only the cited
 /// principal group's atoms are excluded.
+// Original nazuchem code (not in openclatura 0.4.3): fn requires_skeletal_replacement
 fn requires_skeletal_replacement(
     mol: &molecule::Molecule,
     derivation: &component_namer::Derivation,
@@ -547,6 +564,7 @@ fn requires_skeletal_replacement(
 /// P-51.1.5 / P-51.3.1: multiply identical senior parents, including all
 /// substituents, suffixes and their attachment positions. P-15.3 permits an
 /// asymmetric central group, but its concatenated arms must be identical.
+// Original nazuchem code (not in openclatura 0.4.3): fn has_multiplicative_pin
 fn has_multiplicative_pin(
     mol: &molecule::Molecule,
     derivation: &component_namer::Derivation,
@@ -655,6 +673,7 @@ fn has_multiplicative_pin(
     false
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn multiplicative_bond
 fn multiplicative_bond(
     mol: &molecule::Molecule,
     u: usize,
@@ -666,6 +685,7 @@ fn multiplicative_bond(
 
 /// A rooted graph proof preserves complete parent units and configuration
 /// (P-51.3.1, P-45.6.2), rather than comparing unrooted hydrides or global ranks.
+// Original nazuchem code (not in openclatura 0.4.3): fn identical_multiplicative_branches
 fn identical_multiplicative_branches(
     mol: &molecule::Molecule,
     left: &molecule::AtomSet,
@@ -716,6 +736,7 @@ fn identical_multiplicative_branches(
             )
         })
         .collect();
+    // Original nazuchem code (not in openclatura 0.4.3): fn identical_multiplicative_branches::matches
     fn matches(
         mol: &molecule::Molecule,
         candidates: &BTreeMap<usize, Vec<usize>>,
@@ -758,6 +779,7 @@ fn identical_multiplicative_branches(
 /// cannot number. Systems compare as parent hydrides, so
 /// substituents count as hydrogen; different systems keep the substitutive
 /// PIN, cyclohexylbenzene (P-61.2.2).
+// Original nazuchem code (not in openclatura 0.4.3): fn has_ring_assembly
 fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
     ring_assembly::assembly_junctions(mol)
         .iter()
@@ -767,6 +789,7 @@ fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
 /// Removing or adding a hydron does not change the parent hydride, so a
 /// pyrrolide joined to a pyrrole still has a ring assembly parent (P-28,
 /// P-72.2.2.1, P-73.1).
+// Original nazuchem code (not in openclatura 0.4.3): fn has_anionic_ring_assembly
 fn has_anionic_ring_assembly(mol: &molecule::Molecule) -> bool {
     if mol.atoms.values().all(|atom| atom.charge != -1) {
         return false;
@@ -791,6 +814,7 @@ fn has_anionic_ring_assembly(mol: &molecule::Molecule) -> bool {
 /// Count nonbonding electrons on the main-group elements that can carry
 /// tetrahedral tags. Attached hydrogens also consume bonding electrons:
 /// a three-neighbour Si–H centre has four bonds and no lone pair.
+// Original nazuchem code (not in openclatura 0.4.3): fn has_nonbonding_pair
 fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
     let outer_electrons = match atom.symbol.as_str() {
         "C" | "Si" | "Ge" | "Sn" | "Pb" => 4,
@@ -810,6 +834,7 @@ mod tests {
     use super::{name_smiles, nest_enclosing_marks};
     use std::io::Write;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn naming_routes_use_the_supplied_reservation_policy
     #[test]
     fn naming_routes_use_the_supplied_reservation_policy() {
         let budget =
@@ -822,6 +847,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn symmetric_azine_ylidene_spelling_keeps_unaudited_status
     #[test]
     fn symmetric_azine_ylidene_spelling_keeps_unaudited_status() {
         use crate::naming::{NameReason, NameStatus};
@@ -847,6 +873,7 @@ mod tests {
         assert!(name_smiles("C/C=N/N=C\\C", &Default::default()).is_err());
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn azine_spelling_preserves_alkene_control
     #[test]
     fn azine_spelling_preserves_alkene_control() {
         let name = name_smiles("C/C=C/C", &Default::default()).unwrap();
@@ -854,6 +881,7 @@ mod tests {
         assert_eq!(name.status, crate::naming::NameStatus::Preferred);
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn alkoxy_contractions_preserve_parent_components
     #[test]
     fn alkoxy_contractions_preserve_parent_components() {
         for (smiles, expected) in [
@@ -896,6 +924,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn skeletal_replacement_counts_heterounits_and_the_cited_group
     #[test]
     fn skeletal_replacement_counts_heterounits_and_the_cited_group() {
         for (smiles, required) in [
@@ -923,6 +952,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn allow_list_status_matrix
     #[test]
     fn allow_list_status_matrix() {
         use crate::naming::{NameReason, NameStatus};
@@ -1244,6 +1274,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn axial_general_names_leave_nuclide_groups_alone
     #[test]
     fn axial_general_names_leave_nuclide_groups_alone() {
         assert_eq!(
@@ -1258,6 +1289,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn axial_general_alternatives_cover_ordinary_unknown_isotope_and_salt_paths
     #[test]
     fn axial_general_alternatives_cover_ordinary_unknown_isotope_and_salt_paths() {
         use crate::naming::{NameReason, NameStatus};
@@ -1308,6 +1340,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn complete_senior_parents_need_multiplicative_pin_status_and_round_trip
     #[test]
     fn complete_senior_parents_need_multiplicative_pin_status_and_round_trip() {
         use crate::naming::{NameReason, NameStatus};
@@ -1358,6 +1391,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn multiplicative_pin_accepts_simple_cores_and_identical_concatenated_arms
     #[test]
     fn multiplicative_pin_accepts_simple_cores_and_identical_concatenated_arms() {
         for smiles in [
@@ -1383,6 +1417,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn senior_structural_hydrides_keep_preferred_names
     #[test]
     fn senior_structural_hydrides_keep_preferred_names() {
         for (smiles, expected) in [
@@ -1404,6 +1439,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn multiplicative_pin_requires_identical_complete_rooted_senior_units
     #[test]
     fn multiplicative_pin_requires_identical_complete_rooted_senior_units() {
         for smiles in [
@@ -1438,6 +1474,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn unequal_or_junior_multiplicative_units_keep_preferred_names_and_round_trip
     #[test]
     fn unequal_or_junior_multiplicative_units_keep_preferred_names_and_round_trip() {
         for (smiles, expected) in [
@@ -1465,6 +1502,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn anhydride_names_need_acid_halves
     #[test]
     fn anhydride_names_need_acid_halves() {
         // Upstream names this "2-(((hydroxy)(thioxo)methyl)sulfanyl)acetonitrile
@@ -1476,6 +1514,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn enclosing_marks_nest_by_what_they_enclose
     #[test]
     fn enclosing_marks_nest_by_what_they_enclose() {
         for (smiles, expected) in [
@@ -1540,6 +1579,7 @@ mod tests {
     }
 
     /// The P-16.5.4 examples, given as the namer writes them before nesting.
+    // Original nazuchem code (not in openclatura 0.4.3): fn enclosing_marks_follow_the_blue_book_examples
     #[test]
     fn enclosing_marks_follow_the_blue_book_examples() {
         for (enclosed, expected) in [
@@ -1577,6 +1617,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn controls_keep_their_names_and_preference_status
     #[test]
     fn controls_keep_their_names_and_preference_status() {
         use crate::naming::NameStatus;
@@ -1785,6 +1826,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn ring_assemblies_are_preferred_numbered_parents_and_round_trip
     #[test]
     fn ring_assemblies_are_preferred_numbered_parents_and_round_trip() {
         use crate::naming::NameStatus;
@@ -1875,6 +1917,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn linear_phane_assemblies_keep_nonpreferred_status_and_round_trip
     #[test]
     fn linear_phane_assemblies_keep_nonpreferred_status_and_round_trip() {
         use crate::naming::{NameReason, NameStatus};
@@ -1951,6 +1994,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn linear_phane_status_respects_functional_class_components_and_round_trips
     #[test]
     fn linear_phane_status_respects_functional_class_components_and_round_trips() {
         use crate::naming::{NameReason, NameStatus};
@@ -2017,6 +2061,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn linear_phane_status_respects_oxoacid_ester_components_and_round_trips
     #[test]
     fn linear_phane_status_respects_oxoacid_ester_components_and_round_trips() {
         use crate::naming::{NameReason, NameStatus};
@@ -2100,6 +2145,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn substituent_amine_sulfide_is_cited_as_a_prefix
     #[test]
     fn substituent_amine_sulfide_is_cited_as_a_prefix() {
         use crate::naming::{NameReason, NameStatus};
@@ -2119,6 +2165,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn tied_ring_assemblies_choose_the_senior_component_and_round_trip
     #[test]
     fn tied_ring_assemblies_choose_the_senior_component_and_round_trip() {
         let smiles = "C1(C3CC4CCC34)C(C5CC5C6CC6C7CC7C8CC8)C2CCC12";
@@ -2137,6 +2184,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn unsupported_ring_assembly_keeps_substitutive_name_and_status
     #[test]
     fn unsupported_ring_assembly_keeps_substitutive_name_and_status() {
         let name = name_smiles("C1CCC(=C2CCCC2)C1", &Default::default()).unwrap();
@@ -2147,6 +2195,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn composite_quaterpyridine_and_assembly_substituent_locants_round_trip
     #[test]
     fn composite_quaterpyridine_and_assembly_substituent_locants_round_trip() {
         for expected in [
@@ -2178,6 +2227,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn symmetric_polyspiro_assembly_junctions_use_every_equivalent_numbering
     #[test]
     fn symmetric_polyspiro_assembly_junctions_use_every_equivalent_numbering() {
         // P-24.2.2 fixes each dispiro parent numbering; P-28.2.1 then gives
@@ -2208,6 +2258,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn locanted_assembly_hydrides_are_enclosed_for_two_through_six_units
     #[test]
     fn locanted_assembly_hydrides_are_enclosed_for_two_through_six_units() {
         // P-28.2.1 and P-16.5 separate the component's locants from those
@@ -2250,6 +2301,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn fused_heterocycle_assemblies_keep_parent_locants_and_indicated_hydrogen
     #[test]
     fn fused_heterocycle_assemblies_keep_parent_locants_and_indicated_hydrogen() {
         for (smiles, expected) in [
@@ -2290,6 +2342,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn preferred_von_baeyer_controls_do_not_report_fusion_fallback
     #[test]
     fn preferred_von_baeyer_controls_do_not_report_fusion_fallback() {
         use crate::naming::NameStatus;
@@ -2314,6 +2367,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn pheno_fusion_components_choose_preferred_parents_and_round_trip
     #[test]
     fn pheno_fusion_components_choose_preferred_parents_and_round_trip() {
         use crate::naming::NameStatus;
@@ -2375,6 +2429,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn pheno_fusion_derivatives_preserve_main_names_and_statuses
     #[test]
     fn pheno_fusion_derivatives_preserve_main_names_and_statuses() {
         use crate::naming::{NameReason, NameStatus};
@@ -2480,6 +2535,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn fusion_retained_component_controls_remain_preferred
     #[test]
     fn fusion_retained_component_controls_remain_preferred() {
         use crate::naming::NameStatus;
@@ -2511,6 +2567,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips
     #[test]
     fn fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips() {
         use crate::naming::NameStatus;
@@ -2565,6 +2622,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn fusion_registered_carbazole_keeps_existing_layout_status
     #[test]
     fn fusion_registered_carbazole_keeps_existing_layout_status() {
         use crate::naming::{NameReason, NameStatus};
@@ -2578,6 +2636,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn known_departures_keep_their_names_and_report_the_rule_family
     #[test]
     fn known_departures_keep_their_names_and_report_the_rule_family() {
         use crate::naming::{NameReason as R, NameStatus};
@@ -2740,6 +2799,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn unchecked_paths_keep_their_names_and_report_the_uncertainty
     #[test]
     fn unchecked_paths_keep_their_names_and_report_the_uncertainty() {
         use crate::naming::{NameReason as R, NameStatus};
@@ -2798,6 +2858,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_and_systematic_fused_parents_follow_parent_precedence
     #[test]
     fn retained_and_systematic_fused_parents_follow_parent_precedence() {
         for (smiles, expected) in [
@@ -2826,6 +2887,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn angular_oxazole_thiazole_acetic_acid_round_trips
     #[test]
     fn angular_oxazole_thiazole_acetic_acid_round_trips() {
         let smiles = "O=C(O)Cc1nc2ccc3ocnc3c2s1";
@@ -2843,6 +2905,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_parents_and_substituents_follow_oracle_names
     #[test]
     fn spiro_parents_and_substituents_follow_oracle_names() {
         for (smiles, expected) in [
@@ -2870,6 +2933,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn unsupported_spiro_topologies_decline
     #[test]
     fn unsupported_spiro_topologies_decline() {
         for smiles in [
@@ -2884,6 +2948,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn declines_unrendered_group_and_attachment_features
     #[test]
     fn declines_unrendered_group_and_attachment_features() {
         for smiles in [
@@ -2908,6 +2973,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn tetrahedral_group_four_ring_hydrides_have_no_lone_pair
     #[test]
     fn tetrahedral_group_four_ring_hydrides_have_no_lone_pair() {
         for element in ["Si", "Ge", "Sn"] {
@@ -2928,6 +2994,7 @@ mod tests {
 
     #[test]
     #[ignore = "development parity against the external openclatura oracle TSV"]
+    // Original nazuchem code (not in openclatura 0.4.3): fn parity_file
     fn parity_file() {
         let path = std::env::var("OPENCLATURA_PARITY").expect("OPENCLATURA_PARITY TSV path");
         let out =

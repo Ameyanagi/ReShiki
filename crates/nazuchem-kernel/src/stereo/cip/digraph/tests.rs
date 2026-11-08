@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/chemistry/src/stereo/cip/digraph/tests.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+
 // Copied from crates/chemistry/src/stereo/cip/digraph/tests.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: pass an explicit default preparation budget
 use super::*;
 use crate::{

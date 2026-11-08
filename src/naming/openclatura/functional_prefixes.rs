@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/functional_prefixes.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/chalcogen_vocabulary.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura characteristic-prefix handlers consolidated into a Rust dispatcher.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Characteristic groups cited as prefixes, in upstream registry order.
 use super::{
     assembly_parts::{RenderedSubstituentName, SubstituentItem},
@@ -19,12 +28,14 @@ pub struct PrefixContext<'a> {
     pub sub_exclude: &'a AtomSet,
 }
 
+// Adapted from src/openclatura/functional_prefixes.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn chalcogen_term)
 fn chalcogen_term(element: &str, field: &str) -> Result<&'static str, String> {
     super::nomenclature::section("chalcogen_elements")[element][field]
         .as_str()
         .ok_or_else(|| format!("openclatura: {element} {field} not ported"))
 }
 
+// Adapted from src/openclatura/functional_prefixes.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn element_ligand)
 fn element_ligand(branch: RenderedSubstituentName, element: &str) -> Result<String, String> {
     // Upstream divergence: amidooxy contractions change the attachment of N-acyl aminooxy ligands.
     let plain = strip_outer_parentheses(&branch.text);
@@ -42,6 +53,7 @@ fn element_ligand(branch: RenderedSubstituentName, element: &str) -> Result<Stri
     ))
 }
 
+// Adapted from src/openclatura/chalcogen_vocabulary.py::central_linkage_prefix (adapted; local fn central_linkage_prefix)
 fn central_linkage_prefix(group: &PerceivedGroup) -> Option<&'static str> {
     let descriptor = group.descriptor.as_ref()?;
     let element = descriptor.central_element.as_deref()?;
@@ -56,6 +68,7 @@ fn central_linkage_prefix(group: &PerceivedGroup) -> Option<&'static str> {
         .as_str()
 }
 
+// Adapted from src/openclatura/functional_prefixes.py::ester_prefix_handler, src/openclatura/functional_prefixes.py::central_ester_prefix_handler (adapted; local fn descriptor_ester_prefix)
 fn descriptor_ester_prefix(
     context: &PrefixContext<'_>,
     group: &PerceivedGroup,
@@ -102,6 +115,7 @@ fn descriptor_ester_prefix(
     )))
 }
 
+// Adapted from src/openclatura/functional_prefixes.py::central_chalcogen_linkage_prefix_handler (adapted; local fn central_chalcogen_linkage_prefix)
 fn central_chalcogen_linkage_prefix(
     context: &PrefixContext<'_>,
     group: &PerceivedGroup,
@@ -167,6 +181,7 @@ fn central_chalcogen_linkage_prefix(
     ))
 }
 
+// Adapted from src/openclatura/functional_prefixes.py::amidine_prefix_handler, src/openclatura/functional_prefixes.py::hydrazide_prefix_handler, src/openclatura/functional_prefixes.py::hydrazine_prefix_handler (adapted; local fn nitrogen_group_prefix)
 fn nitrogen_group_prefix(
     context: &PrefixContext<'_>,
     group: &PerceivedGroup,
@@ -268,6 +283,7 @@ fn nitrogen_group_prefix(
     Ok(format!("({stereo}{prefixes}{base})"))
 }
 
+// Adapted from src/openclatura/functional_prefixes.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn ester_prefix_from_group)
 pub fn ester_prefix_from_group(
     mol: &Molecule,
     group: &PerceivedGroup,
@@ -296,6 +312,7 @@ pub fn ester_prefix_from_group(
     Ok(format!("({}{suffix})", branch.into_oxy_prefix()))
 }
 
+// Adapted from src/openclatura/functional_prefixes.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn amide_prefix_from_group)
 pub fn amide_prefix_from_group(
     mol: &Molecule,
     group: &PerceivedGroup,
@@ -330,6 +347,7 @@ pub fn amide_prefix_from_group(
     ))
 }
 
+// Adapted from src/openclatura/functional_prefixes.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn prefix_from_group)
 pub fn prefix_from_group(
     context: &PrefixContext<'_>,
     group: &PerceivedGroup,
@@ -489,6 +507,7 @@ pub fn prefix_from_group(
     })
 }
 
+// Adapted from src/openclatura/functional_prefixes.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn collect_component_prefix_substituents)
 pub fn collect_component_prefix_substituents(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -557,6 +576,7 @@ pub fn collect_component_prefix_substituents(
 mod tests {
     use super::super::name_smiles;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key
     #[test]
     fn acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key() {
         for (smiles, derivative, expected) in [
@@ -584,6 +604,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn external_acid_groups_are_cited_before_recursive_parent_assembly
     #[test]
     fn external_acid_groups_are_cited_before_recursive_parent_assembly() {
         for (smiles, expected) in [
@@ -615,6 +636,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn unsubstituted_aminium_prefix_uses_azaniumyl
     #[test]
     fn unsubstituted_aminium_prefix_uses_azaniumyl() {
         let mol = super::super::graph_io::read_smiles("C[NH3+]", &Default::default()).unwrap();
@@ -637,6 +659,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn peroxy_ester_prefix_encloses_only_complex_ligands
     #[test]
     fn peroxy_ester_prefix_encloses_only_complex_ligands() {
         for (smiles, expected) in [
@@ -660,6 +683,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn peroxy_carbamate_keeps_competing_ester_prefix_route
     #[test]
     fn peroxy_carbamate_keeps_competing_ester_prefix_route() {
         assert_eq!(

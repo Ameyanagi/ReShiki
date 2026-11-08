@@ -22,3 +22,24 @@ Licensed under MIT; see LICENSE in this directory.
 
 The adapted source, copied registries, and derived fixtures retain their MIT
 terms and are not represented as original dual-licensed ReShiki material.
+
+Scope clarification from the Phase A provenance audit:
+src/naming/openclatura/ began as a port of openclatura 0.4.3, extended in
+ReShiki. The introductory source description above records that lineage;
+the current JSON registries include both copied and locally adapted data,
+and source modules also contain separately identified local implementations.
+PROVENANCE-nazuchem.toml and Rust source/function headers record those
+boundaries, upstream paths and pins. OPSIN-derived data retains its own
+source/version statements; not every underlying generation revision is known.
+
+src/naming/openclatura/python_int_set.rs additionally adapts CPython 3.12
+Objects/setobject.c under Python-2.0. Its exact patch/commit is unresolved;
+see licenses/cpython/LICENSE and licenses/cpython/NOTICE for the complete
+licence/history and the source-pin qualification. It is not asserted to be
+original code or covered solely by openclatura's MIT grant.
+
+The retained IUPAC table data/bluebook/p25_retained.tsv remains NOASSERTION
+pending the owner's reuse-permission decision. The PubChem-derived
+tests/fixtures/s2n/bakeoff_corpus.tsv is test-only, excluded from packages,
+and remains NOASSERTION pending the owner's source-terms decision. The MIT
+statement above does not grant rights to these unresolved materials.

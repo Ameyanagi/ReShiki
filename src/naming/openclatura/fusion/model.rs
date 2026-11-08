@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/fusion/model.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura fused-graph/proof/citation types and methods, with a local standalone-benzo value/rendering extension.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Small graph values used by retained-parent bond-state proofs.
 pub use super::super::graph_kernel::{Edge, EdgeSet, normalize_edge};
 use super::super::molecule::AtomSet;
@@ -196,6 +204,7 @@ pub struct BenzoParentName {
     pub stem: String,
 }
 impl BenzoParentName {
+    // Original nazuchem code (not in openclatura 0.4.3): fn BenzoParentName::render
     pub(super) fn render(&self, lambda: &[super::valence::FusionLambdaDescriptor]) -> String {
         // P-25.6 inserts lambda into the P-25.2.2.4 heteroatom locant set.
         let locants = self

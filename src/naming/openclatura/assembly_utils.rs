@@ -1,4 +1,13 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/assembly_utils.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura grammar helpers with local compound-locant and stereo-hyphen fixes.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Small grammar utilities shared by the plain-name formatters.
+// Adapted from src/openclatura/assembly_utils.py (adapted; upstream function mapping not recorded; local fn parse_locant)
 pub fn parse_locant(text: &str) -> (u8, usize, String) {
     let before = text.split('(').next().unwrap_or(text);
     let digit_count = before.bytes().take_while(u8::is_ascii_digit).count();
@@ -41,6 +50,7 @@ pub fn parse_locant(text: &str) -> (u8, usize, String) {
     }
     (0, 0, text.to_owned())
 }
+// Adapted from src/openclatura/assembly_utils.py (adapted; upstream function mapping not recorded; local fn needs_hyphen)
 pub fn needs_hyphen(left: &str, right: &str) -> bool {
     if left.is_empty() || right.is_empty() {
         return false;
@@ -71,6 +81,7 @@ pub fn needs_hyphen(left: &str, right: &str) -> bool {
             })
         })
 }
+// Ported from src/openclatura/assembly_utils.py (port; upstream function mapping not recorded; local fn is_fully_enclosed)
 pub fn is_fully_enclosed(text: &str) -> bool {
     if !text.starts_with('(') || !text.ends_with(')') {
         return false;
@@ -96,6 +107,7 @@ pub fn is_fully_enclosed(text: &str) -> bool {
 mod tests {
     use super::{needs_hyphen, parse_locant};
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn assembly_locants_compare_primes_and_superscripts_numerically
     #[test]
     fn assembly_locants_compare_primes_and_superscripts_numerically() {
         let mut primed = ["2'", "1'", "2", "1"];
@@ -109,6 +121,7 @@ mod tests {
         assert_eq!(composite, ["1^2", "1^10", "2^1", "2^2"]);
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn only_a_leading_stereo_descriptor_takes_a_hyphen
     #[test]
     fn only_a_leading_stereo_descriptor_takes_a_hyphen() {
         assert!(needs_hyphen("methyl", "(1R,2E)-but-2-enyl"));

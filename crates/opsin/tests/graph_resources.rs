@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/opsin/tests/graph_resources.rs @ 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9.
+//   Data/API context: OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+// Copyright 2017 Daniel Lowe
+
 //! Exercise the pinned resource dialect, rather than a hand-picked subset of
 //! generic SMILES. This is frozen OPSIN main XML in the crate, never a runtime
 //! upstream checkout or network resource.

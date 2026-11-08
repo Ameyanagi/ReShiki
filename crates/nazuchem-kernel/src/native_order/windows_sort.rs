@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Origin: adapted from Microsoft STL; source paths and pins follow.
+//   Microsoft STL, stl/inc/algorithm @ vs-2022-17.13 / MSVC 14.43.34808.
+//   ReShiki, crates/chemistry/src/native_order/windows_sort.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (c) Microsoft Corporation.
+// Changes: Rust adaptation; integer keys, checked indexing and an explicit range stack.
+
 //! Adapted from Microsoft's STL algorithm header, MSVC 14.43.
 //! Copyright (c) Microsoft Corporation.
 //! Apache-2.0 WITH LLVM-exception; see licenses/stdlib/msvc-LICENSE.

@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/assembly_spiro.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/spiro_assembly.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura spiro component projection/priming with local locant bracketing and regression extensions.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Graph-numbered spiro components and their plain-name projection.
 use super::{
     additive::name_indicated_hydrogen_locants,
@@ -28,6 +37,7 @@ pub struct SpiroAssembly {
     pub same_size_components: bool,
 }
 impl SpiroAssembly {
+    // Adapted from src/openclatura/spiro_assembly.py::SpiroAssembly (adapted; local fn SpiroAssembly::new)
     pub fn new(side_locant: impl Into<String>, side_parent_name: impl Into<String>) -> Self {
         Self {
             side_locant: side_locant.into(),
@@ -38,6 +48,7 @@ impl SpiroAssembly {
     }
 }
 
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn prime_side_locant)
 pub fn prime_side_locant(locant: &str) -> String {
     let (base, annotation) = locant
         .find("lambda^")
@@ -51,6 +62,7 @@ pub fn prime_side_locant(locant: &str) -> String {
         }
     )
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn is_systematic_fusion)
 fn is_systematic_fusion(parts: &AssemblyParts) -> bool {
     parts
         .parent_hydride
@@ -59,6 +71,7 @@ fn is_systematic_fusion(parts: &AssemblyParts) -> bool {
             parent.is_systematic_fusion()
         })
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn side_replacement_prefixes)
 fn side_replacement_prefixes(parts: &AssemblyParts) -> Vec<String> {
     let mut local = AssemblyParts::new(parts.parent_length);
     local.a_prefixes = parts
@@ -96,6 +109,7 @@ fn side_replacement_prefixes(parts: &AssemblyParts) -> Vec<String> {
     }
 }
 
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn scope_spiro_oxo_hydrogens)
 fn scope_spiro_oxo_hydrogens(parts: &mut AssemblyParts, junctions: &BTreeSet<String>) {
     if !is_systematic_fusion(parts) {
         return;
@@ -235,6 +249,7 @@ fn scope_spiro_oxo_hydrogens(parts: &mut AssemblyParts, junctions: &BTreeSet<Str
     }
 }
 
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn project_locanted_hw_component)
 fn project_locanted_hw_component(parts: &mut AssemblyParts) {
     if parts.retained_name.is_none()
         || !parts.is_ring
@@ -356,6 +371,7 @@ fn project_locanted_hw_component(parts: &mut AssemblyParts) {
 type ParentRenderer<'a> = &'a mut dyn FnMut(&mut AssemblyParts) -> Result<String, String>;
 
 /// Preserve the component-local proof before independently rendering its parent.
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn spiro_assembly_from_parts)
 pub fn spiro_assembly_from_parts(
     parts: &AssemblyParts,
     junction_locant: &str,
@@ -530,6 +546,7 @@ pub fn spiro_assembly_from_parts(
     Ok(Some(result))
 }
 
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn component_locant)
 fn component_locant(text: &str, allow_prime: bool) -> bool {
     let digits = text.chars().take_while(|c| c.is_ascii_digit()).count();
     digits > 0
@@ -537,6 +554,7 @@ fn component_locant(text: &str, allow_prime: bool) -> bool {
             .chars()
             .all(|c| c.is_ascii_lowercase() || (allow_prime && c == '\''))
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn drop_junction_indicated_hydrogen)
 pub fn drop_junction_indicated_hydrogen(name: &str, locant: &str) -> String {
     let Some((head, tail)) = name.split_once('-') else {
         return name.into();
@@ -561,6 +579,7 @@ pub fn drop_junction_indicated_hydrogen(name: &str, locant: &str) -> String {
         format!("{}-{tail}", remaining.join(","))
     }
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn spiro_component_sort_key)
 pub fn spiro_component_sort_key(name: &str) -> (String, Vec<usize>) {
     let mut stripped = name.trim();
     while (stripped.starts_with('(') || stripped.starts_with('['))
@@ -607,6 +626,7 @@ pub fn spiro_component_sort_key(name: &str) -> (String, Vec<usize>) {
     }
     (stripped.to_lowercase(), locants)
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn spiro_side_is_cited_first)
 fn spiro_side_is_cited_first(parts: &AssemblyParts, side: &SpiroAssembly) -> bool {
     if side.continuation.is_some()
         || parts.is_spiro_component
@@ -632,6 +652,7 @@ fn spiro_side_is_cited_first(parts: &AssemblyParts, side: &SpiroAssembly) -> boo
     }
     spiro_component_sort_key(&side.side_parent_name) < spiro_component_sort_key(&parent_name)
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn reprime_side)
 fn reprime_side(side: &SpiroAssembly, prime: &str) -> SpiroAssembly {
     let mut side = side.clone();
     side.side_prime = prime.into();
@@ -654,6 +675,7 @@ fn reprime_side(side: &SpiroAssembly, prime: &str) -> SpiroAssembly {
     }
     side
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn prime_central_parts)
 fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
     let prime = |l: &str| {
         if !keep_name_internals || l.starts_with(|c: char| c.is_ascii_digit()) {
@@ -747,6 +769,7 @@ fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
         .map(|l| prime(l))
         .collect();
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn retire_parent_junction_hydrogen)
 fn retire_parent_junction_hydrogen(parts: &mut AssemblyParts, junctions: &BTreeSet<String>) {
     parts.hydro_operations.retain(|o| {
         o.operation_kind != "indicated_hydrogen"
@@ -775,6 +798,7 @@ fn retire_parent_junction_hydrogen(parts: &mut AssemblyParts, junctions: &BTreeS
         parent.parent_name = parent.base_name().map(respell);
     }
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn deduplicate_shared_replacements)
 fn deduplicate_shared_replacements(parts: &mut AssemblyParts, side: &mut SpiroAssembly) {
     let Some(other) = &mut side.side_parts else {
         return;
@@ -889,6 +913,7 @@ const MULTIPLIER_PREFIXES: [&str; 5] = ["di", "tri", "tetra", "penta", "hexa"];
 const WITHIN_NAME: [&str; 11] = [
     "en", "yn", "yl", "ylidene", "ylidyne", "ol", "one", "al", "amine", "oic", "carbo",
 ];
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn is_replacement_prefix)
 fn is_replacement_prefix(name: &str) -> bool {
     let stem = MULTIPLIER_PREFIXES
         .iter()
@@ -896,6 +921,7 @@ fn is_replacement_prefix(name: &str) -> bool {
         .unwrap_or(name);
     RULES.assembly.replacement_prefix_order.contains_key(stem)
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn split_side_prefix_run)
 fn split_side_prefix_run(text: &str) -> Vec<(String, String)> {
     let segments: Vec<_> = text.split('-').collect();
     let mut starts = vec![];
@@ -926,6 +952,7 @@ fn split_side_prefix_run(text: &str) -> Vec<(String, String)> {
         .map(|w| (segments[w[0]].into(), segments[w[0] + 1..w[1]].join("-")))
         .collect()
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn hoist_side_substituent_prefixes)
 fn hoist_side_substituent_prefixes(
     parts: &mut AssemblyParts,
     mut side: SpiroAssembly,
@@ -981,6 +1008,7 @@ fn hoist_side_substituent_prefixes(
         .map(|s| Box::new(hoist_side_substituent_prefixes(parts, *s)));
     side
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn normalize_spiro)
 fn normalize_spiro(mut side: SpiroAssembly) -> SpiroAssembly {
     if side.side_parts.is_none() {
         let extracted = extract_spiro_side_prefixes(&side.side_parent_name);
@@ -991,6 +1019,7 @@ fn normalize_spiro(mut side: SpiroAssembly) -> SpiroAssembly {
     }
     side
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn split_spiro_substituents)
 pub fn split_spiro_substituents(parts: &mut AssemblyParts) -> Result<Vec<SpiroAssembly>, String> {
     let mut sides = vec![];
     let mut normal = vec![];
@@ -1065,6 +1094,7 @@ pub fn split_spiro_substituents(parts: &mut AssemblyParts) -> Result<Vec<SpiroAs
     Ok(sides)
 }
 
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn parent_needs_parentheses)
 fn parent_needs_parentheses(name: &str) -> bool {
     let bare = name.trim_start_matches(|c: char| c.is_ascii_digit() || c == ',' || c == '-');
     if ["bicyclo[", "tricyclo[", "tetracyclo["]
@@ -1089,6 +1119,7 @@ fn parent_needs_parentheses(name: &str) -> bool {
 }
 /// P-24.5.3: locants that belong to a component name, as in 1,3-benzodioxole,
 /// are enclosed in square brackets: spiro[[1,3]benzodioxole-2,1'-cyclopentane].
+// Original nazuchem code (not in openclatura 0.4.3): fn locant_bracketed_component
 fn locant_bracketed_component(name: &str) -> Option<String> {
     let (locants, stem) = name.split_once('-')?;
     (locants
@@ -1099,9 +1130,11 @@ fn locant_bracketed_component(name: &str) -> Option<String> {
         && !stem.contains("hydro"))
     .then(|| format!("[{locants}]{stem}"))
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn spiro_component
 pub(super) fn spiro_component(name: &str) -> String {
     locant_bracketed_component(name).unwrap_or_else(|| name.into())
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn side_name)
 fn side_name(name: &str) -> String {
     if let Some(bracketed) = locant_bracketed_component(name) {
         bracketed
@@ -1111,6 +1144,7 @@ fn side_name(name: &str) -> String {
         name.into()
     }
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn retained_n_info)
 fn retained_n_info(parent: &str) -> Option<(usize, String)> {
     let ionic_by_neutral = &RULES.charges.retained_ionic_n_parents;
     let neutral = ionic_by_neutral.iter().find_map(|(neutral, ionic)| {
@@ -1133,6 +1167,7 @@ fn retained_n_info(parent: &str) -> Option<(usize, String)> {
     };
     Some((size, explicit))
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn side_locant)
 fn side_locant(side: &SpiroAssembly, parent_name: &str) -> String {
     if side.side_parts.is_none()
         && side.side_locant == "1"
@@ -1143,6 +1178,7 @@ fn side_locant(side: &SpiroAssembly, parent_name: &str) -> String {
     }
     side.side_locant.clone()
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn prime_side_suffixes)
 fn prime_side_suffixes(side: &SpiroAssembly) -> Vec<(String, String)> {
     side.side_suffixes
         .iter()
@@ -1154,6 +1190,7 @@ fn prime_side_suffixes(side: &SpiroAssembly) -> Vec<(String, String)> {
         })
         .collect()
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn format_side_suffixes)
 fn format_side_suffixes(suffixes: &[(String, String)]) -> String {
     let mut grouped: Vec<(&str, Vec<&str>)> = vec![];
     for (l, s) in suffixes {
@@ -1175,6 +1212,7 @@ fn format_side_suffixes(suffixes: &[(String, String)]) -> String {
         })
         .collect()
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn suffix_run)
 fn suffix_run(text: &str, allow_multiplier: bool) -> Option<(Vec<String>, &str)> {
     let (locants, word) = text.strip_prefix('-')?.split_once('-')?;
     if !locants
@@ -1189,6 +1227,7 @@ fn suffix_run(text: &str, allow_multiplier: bool) -> Option<(Vec<String>, &str)>
     })?;
     Some((locants, word))
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn merge_terminal_and_side_suffixes)
 fn merge_terminal_and_side_suffixes(terminal: &str, side: &[(String, String)]) -> String {
     if side.is_empty() {
         return terminal.into();
@@ -1212,6 +1251,7 @@ fn merge_terminal_and_side_suffixes(terminal: &str, side: &[(String, String)]) -
         format_side_suffixes(&other)
     )
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn merge_principal_and_side_suffixes)
 fn merge_principal_and_side_suffixes(
     suffix: &str,
     side: Vec<(String, String)>,
@@ -1233,6 +1273,7 @@ fn merge_principal_and_side_suffixes(
         other,
     )
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn replacement_head)
 fn replacement_head(name: &str) -> Option<(&str, &str, &str)> {
     let (locants, rest) = name.split_once('-')?;
     if !locants.split(',').all(|l| component_locant(l, true)) {
@@ -1256,6 +1297,7 @@ fn replacement_head(name: &str) -> Option<(&str, &str, &str)> {
         .find(|word| rest.starts_with(word.as_str()))?;
     Some((locants, &rest[..word.len()], &rest[word.len()..]))
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn unprime_inline_replacement_prefix)
 pub fn unprime_inline_replacement_prefix(name: &str) -> String {
     if let Some((locants, word, tail)) = replacement_head(name)
         && locants.contains('\'')
@@ -1265,10 +1307,12 @@ pub fn unprime_inline_replacement_prefix(name: &str) -> String {
         name.into()
     }
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn spiro_names_components)
 fn spiro_names_components(core: &str) -> bool {
     core.find("spiro[")
         .is_some_and(|i| core[i + 6..].split(']').next().unwrap_or("").contains('\''))
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn prime_replacement_prefixes)
 fn prime_replacement_prefixes(core: &str, prefixes: Vec<String>) -> Vec<String> {
     if !spiro_names_components(core) {
         return prefixes;
@@ -1294,6 +1338,7 @@ fn prime_replacement_prefixes(core: &str, prefixes: Vec<String>) -> Vec<String> 
         })
         .collect()
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn prime_inline_replacement_prefixes)
 fn prime_inline_replacement_prefixes(core: &str) -> String {
     if let Some((locants, word, tail)) = replacement_head(core)
         && tail.starts_with("spiro[")
@@ -1312,6 +1357,7 @@ fn prime_inline_replacement_prefixes(core: &str) -> String {
         core.into()
     }
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn format_dispiro_core)
 fn format_dispiro_core(core: &str, terminal: &str, sides: &[SpiroAssembly]) -> String {
     let mut ordered: Vec<_> = sides.iter().collect();
     ordered.sort_by_key(|s| (parse_locant(&s.parent_locant), s.side_parent_name.clone()));
@@ -1360,6 +1406,7 @@ pub(super) struct SpiroCore {
     pub(super) suffix: String,
 }
 
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn format_spiro_core)
 pub(super) fn format_spiro_core(
     stem: &str,
     unsat: &str,
@@ -1477,6 +1524,7 @@ struct ExtractedSide {
     stereo: Vec<(String, String)>,
 }
 
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn extract_spiro_side_prefixes)
 fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
     let mut normalized = side_name.trim().to_owned();
     if normalized.starts_with('(') && normalized.ends_with(')') {
@@ -1638,6 +1686,7 @@ fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
         stereo,
     }
 }
+// Adapted from src/openclatura/assembly_spiro.py, src/openclatura/spiro_assembly.py (adapted; upstream function mapping not recorded; local fn extract_side_suffixes)
 fn extract_side_suffixes(name: &str) -> (String, Vec<(String, String)>) {
     let Some((left, word)) = name.rsplit_once('-') else {
         return (name.into(), vec![]);
@@ -1665,6 +1714,7 @@ fn extract_side_suffixes(name: &str) -> (String, Vec<(String, String)>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Original nazuchem code (not in openclatura 0.4.3): fn component_order_ignores_hydrogenation_and_hydrogen_citations
     #[test]
     fn component_order_ignores_hydrogenation_and_hydrogen_citations() {
         assert_eq!(
@@ -1676,6 +1726,7 @@ mod tests {
                 > spiro_component_sort_key("imidazolidine")
         );
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn component_junction_retires_only_its_own_hydrogen
     #[test]
     fn component_junction_retires_only_its_own_hydrogen() {
         assert_eq!(
@@ -1688,6 +1739,7 @@ mod tests {
         );
         assert_eq!(prime_side_locant("2lambda^5"), "2'lambda^5");
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn suffixes_and_replacement_locants_share_completed_spiro_scope
     #[test]
     fn suffixes_and_replacement_locants_share_completed_spiro_scope() {
         let mut side = SpiroAssembly::new("4", "cyclopentane");
@@ -1712,6 +1764,7 @@ mod tests {
         assert_eq!(formatted.suffix, "-2,2'-dione");
         assert!(formatted.core.ends_with(']'));
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_suffix_merging_uses_numerical_suffix_elision
     #[test]
     fn spiro_suffix_merging_uses_numerical_suffix_elision() {
         let ketones: Vec<_> = ["2", "3", "2'", "3'"]
@@ -1741,6 +1794,7 @@ mod tests {
         assert!(other.is_empty());
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn dispiro_replacements_keep_each_components_final_scope
     #[test]
     fn dispiro_replacements_keep_each_components_final_scope() {
         let first = SpiroAssembly {
@@ -1760,6 +1814,7 @@ mod tests {
             "1-sila-1''-germadispiro[cyclopropane-2,1'-(2,3-dihydro-1H-indene)-2',2''-cyclobutane]"
         );
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn side_prefix_projection_respects_nested_locants
     #[test]
     fn side_prefix_projection_respects_nested_locants() {
         let extracted =
@@ -1775,6 +1830,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn benzoheterocycle_side_prefix_projection_preserves_parent_locants
     #[test]
     fn benzoheterocycle_side_prefix_projection_preserves_parent_locants() {
         for (input, expected, prefixes) in [
@@ -1800,6 +1856,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_hydrogenation_aliases_keep_side_prefix_boundaries
     #[test]
     fn retained_hydrogenation_aliases_keep_side_prefix_boundaries() {
         for (input, parent, prefix) in [

@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki budget API; Cancellation is adapted from original ReShiki process-heap policy.
+//   Nazuchem/ReShiki, crates/nazuchem-kernel/src/budget.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+//   ReShiki, crates/process-heap/src/policy.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+
 //! Host-supplied limits for molecular perception.
 //!
 //! The default is unbounded. Hosts may inject their own reservation accounting;

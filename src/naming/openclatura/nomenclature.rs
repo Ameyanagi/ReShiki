@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted from upstream code.
+//   openclatura 0.4.3, src/openclatura/nomenclature.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/naming_data.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/chalcogen_vocabulary.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Changes: Openclatura registry types, family/capability derivation and immutable JSON lookup adapted to Rust.
+// Unresolved: Small Rust JSON conversion helpers have no one-to-one upstream function boundary; adapted records their role in the copied registry/schema rather than asserting literal function translation.
+
 //! Nomenclature tables transcribed from Openclatura's checked-in rule registry.
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};

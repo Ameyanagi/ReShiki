@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/component_modifiers.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura ester/N-substituent logic split into collected state with local late-numbering modifiers.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Ester alcohol fragments and principal-group N substituents.
 use super::{
     assembly_parts::{AssemblyParts, SubstituentItem},
@@ -30,6 +38,7 @@ pub struct ComponentFrontModifiers {
 }
 
 impl ComponentFrontModifiers {
+    // Original nazuchem code (not in openclatura 0.4.3): fn ComponentFrontModifiers::acid_isotopes
     pub fn acid_isotopes(&self, source: Option<&Molecule>) -> Vec<(usize, String, u16)> {
         source
             .filter(|_| self.mixed_diester)
@@ -54,6 +63,7 @@ impl ComponentFrontModifiers {
             })
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn ComponentFrontModifiers::numbering_modifiers
     pub fn numbering_modifiers(&self) -> BTreeMap<usize, String> {
         if self.mixed_diester {
             self.modifiers
@@ -65,6 +75,7 @@ impl ComponentFrontModifiers {
         }
     }
 
+    // Adapted from src/openclatura/component_modifiers.py::add_component_front_modifiers (adapted; local fn ComponentFrontModifiers::add_to_parts)
     pub fn add_to_parts(
         &self,
         mol: &Molecule,
@@ -90,6 +101,7 @@ impl ComponentFrontModifiers {
     }
 }
 
+// Adapted from src/openclatura/component_modifiers.py::add_component_front_modifiers (adapted; local fn collect_component_front_modifiers)
 pub fn collect_component_front_modifiers(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -209,6 +221,7 @@ pub struct NumberingNSubstituents {
 }
 
 impl NumberingNSubstituents {
+    // Original nazuchem code (not in openclatura 0.4.3): fn NumberingNSubstituents::numbering_modifiers
     pub fn numbering_modifiers(&self) -> BTreeMap<usize, Vec<String>> {
         let mut names: BTreeMap<_, Vec<_>> = self
             .sites
@@ -226,6 +239,7 @@ impl NumberingNSubstituents {
         names
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn NumberingNSubstituents::add_to_parts
     pub fn add_to_parts(
         mut self,
         parts: &mut AssemblyParts,
@@ -253,6 +267,7 @@ impl NumberingNSubstituents {
 /// Precollect ordinary amine/amide branches without detaching their nitrogen
 /// labels from the corresponding parent carbon. Other nitrogen suffix systems
 /// retain their specialized local ordering below.
+// Original nazuchem code (not in openclatura 0.4.3): fn collect_numbering_n_substituents
 pub fn collect_numbering_n_substituents(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -310,6 +325,7 @@ pub fn collect_numbering_n_substituents(
     }))
 }
 
+// Adapted from src/openclatura/component_modifiers.py::_nitrogen_alphabetical_rank (adapted; local fn nitrogen_rank)
 fn nitrogen_rank(
     mol: &Molecule,
     n: usize,
@@ -338,6 +354,7 @@ fn nitrogen_rank(
     })
 }
 
+// Adapted from src/openclatura/component_modifiers.py::n_substituent_locant (adapted; local fn n_substituent_locant)
 pub fn n_substituent_locant(
     key: &str,
     group_count: usize,
@@ -365,6 +382,7 @@ pub fn n_substituent_locant(
     format!("N{}", "'".repeat(primes))
 }
 
+// Adapted from src/openclatura/component_modifiers.py::add_component_n_substituents (adapted; local fn add_component_n_substituents)
 pub fn add_component_n_substituents(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -522,6 +540,7 @@ mod tests {
     use super::*;
     use crate::naming::openclatura::graph_io::read_smiles;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn mixed_diester_collection_requires_two_fully_esterified_acid_sites
     #[test]
     fn mixed_diester_collection_requires_two_fully_esterified_acid_sites() {
         for (smiles, omitted_center, expected) in [
@@ -540,6 +559,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn nitrogen_ranking_discards_provisional_branch_status
     #[test]
     fn nitrogen_ranking_discards_provisional_branch_status() {
         let mol = read_smiles("NC(=O)NS(=O)(=O)CC(=O)O", &Default::default()).unwrap();

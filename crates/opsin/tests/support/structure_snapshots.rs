@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/opsin/tests/support/structure_snapshots.rs @ 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9.
+
 use opsin::{
     Structure,
     graph::{AtomId, BondStereoValue, StereoGroupType, StereoReference},

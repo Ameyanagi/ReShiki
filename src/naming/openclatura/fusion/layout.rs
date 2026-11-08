@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/fusion/layout.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingNumberer.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+// Copyright (c) 2026 lamalab-org
+// Copyright 2017 Daniel Lowe
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura exact intrinsic-layout and OPSIN-compatibility layout port, plus a separate local parser-numbering refusal gate.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Exact integer intrinsic fused-ring layouts and parser compatibility witnesses.
 use super::super::{
     graph_kernel::normalize_edge, locants::retained_locant_sort_key, molecule::AtomSet,
@@ -1834,6 +1844,7 @@ pub fn opsin_construction_atom_order(
     Some(result)
 }
 /// Whether the face topology lies within the independently certified parser-numbering tier.
+// Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn parser_numbering_is_supported
 pub fn parser_numbering_is_supported(model: &FaceModel) -> bool {
     // Upstream divergence: a plane embedding does not certify OPSIN's construction-dependent perimeter.
     // Coupled large rings or a large ring with three fusion ports need more proof.
@@ -2509,6 +2520,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn coupled_and_branched_large_rings_need_an_extra_parser_witness
     #[test]
     fn coupled_and_branched_large_rings_need_an_extra_parser_witness() {
         use crate::naming::openclatura::molecule::{Atom, Bond, Molecule};

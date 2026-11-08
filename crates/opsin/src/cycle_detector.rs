@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Origin: port of OPSIN; source paths and pins follow.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CycleDetector.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CycleDetector.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+// Copyright 2017 Daniel Lowe
+
 //! OPSIN 2.9.0 CycleDetector, commit b91b610af5ab07560fedb20730d7aef46bb2bca0.
 //! MIT, Daniel Lowe and contributors. Chain compression and traversal order
 //! follow the original source; paths exclude both their start and end atoms.

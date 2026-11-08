@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted from upstream code.
+//   openclatura 0.4.3, src/openclatura/fusion/rules.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/retained_fused_templates.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Changes: Openclatura fusion eligibility/seniority/interface identity rules, with rewritten graph automorphism adapter and local seniority/multiplier adjustments.
+
 //! Pure fusion eligibility, component identity, and chemical seniority.
 use super::super::{
     locants::{LocantKey, retained_locant_sort_key as locant_key},

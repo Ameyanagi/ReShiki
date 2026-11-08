@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/fusion/descriptor.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura component-cover/descriptor/citation planner with substantial local benzo-component and alphabetical-citation extensions.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Bounded, graph-proved systematic fusion citations and pure rendering.
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -335,6 +343,7 @@ impl Iterator for FusionNameAstIter<'_> {
     }
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn benzoheterocycle_candidates
 fn benzoheterocycle_candidates(
     mol: &Molecule,
     original: &Candidate,
@@ -1362,6 +1371,7 @@ fn join_preference_key(join: &FusionJoin, side_rank: usize) -> JoinKey {
 /// FR-4.5(a-d) / P-25.3.4.2.4(a-d) compare each complete locant tier
 /// before considering the next one. Sets retain repeated locants, and numeric
 /// locants retain multiplicative primes. FR-4.6 omission happens in rendering.
+// Original nazuchem code (not in openclatura 0.4.3): fn first_order_locant_key
 fn first_order_locant_key(
     citation_order: &[usize],
     joins: &BTreeMap<usize, FusionJoin>,
@@ -1410,6 +1420,7 @@ fn first_order_locant_key(
         attached_locants_citation,
     }
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn higher_order_locant_key
 fn higher_order_locant_key(
     citation_order: &[usize],
     joins: &BTreeMap<usize, FusionJoin>,
@@ -2154,6 +2165,7 @@ struct FusionPrefixCitationKey {
     indacene_markers: Vec<String>,
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn fusion_prefix_citation_key
 fn fusion_prefix_citation_key(prefix: &str) -> FusionPrefixCitationKey {
     let mut key = FusionPrefixCitationKey::default();
     let (prefix, marker) = prefix
@@ -2203,6 +2215,7 @@ fn fusion_prefix_citation_key(prefix: &str) -> FusionPrefixCitationKey {
     key
 }
 
+// Adapted from src/openclatura/fusion/descriptor.py (adapted; upstream function mapping not recorded; local fn fusion_group_multiplier)
 fn fusion_group_multiplier(
     group: &FusionMultiplicityGroup,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -2220,6 +2233,7 @@ fn fusion_group_multiplier(
 
 /// Finalize FR-3.6 order before scope validation, priming, and rendering. Each
 /// branch is compared as a whole, after ordering its own attached components.
+// Original nazuchem code (not in openclatura 0.4.3): fn order_citation_tree
 fn order_citation_tree(
     node: &mut FusionCitationNode,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -2282,6 +2296,7 @@ fn order_citation_tree(
     key
 }
 
+// Adapted from src/openclatura/fusion/descriptor.py (adapted; upstream function mapping not recorded; local fn add_citation_prime_depths)
 fn add_citation_prime_depths(
     node: &FusionCitationNode,
     order: usize,

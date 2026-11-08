@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/retained_fused_templates.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   ReShiki, src/naming/openclatura/retained_fused_templates.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura retained graph registry/matcher and generated series adapted to typed Rust, with original topology-status and localized-pi safeguards.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Shared graph registry and exact, topology-indexed retained-parent matching.
 use super::{
     assembly_parts::RetainedParentMetadata,
@@ -97,10 +106,12 @@ pub(super) struct RetainedGraphTemplateData {
     #[serde(default)]
     pre_descriptor_selection: bool,
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn neutral_kekule_equivalent
 fn neutral_kekule_equivalent() -> String {
     "neutral_kekule_equivalent".into()
 }
 impl RetainedGraphTemplateData {
+    // Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn RetainedGraphTemplateData::set_family_defaults)
     fn set_family_defaults(&mut self, family: &str) {
         self.family.get_or_insert_with(|| family.into());
         self.charge_policy.get_or_insert_with(|| "exact".into());
@@ -144,6 +155,7 @@ static MACROCYCLE_DATA: LazyLock<MacrocycleGraphData> = LazyLock::new(|| {
     }
     data
 });
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn retained_graph_template_rows)
 pub(super) fn retained_graph_template_rows() -> impl Iterator<Item = &'static RetainedGraphRow> {
     GRAPH_DATA
         .parents
@@ -211,6 +223,7 @@ static TOPOLOGY_INDEX: LazyLock<BTreeMap<TopologyKey, Vec<usize>>> = LazyLock::n
     }
     index
 });
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn retained_graph_templates)
 pub fn retained_graph_templates(include_disabled: bool) -> &'static [RetainedGraphTemplate] {
     if include_disabled {
         &ALL_TEMPLATES
@@ -218,6 +231,7 @@ pub fn retained_graph_templates(include_disabled: bool) -> &'static [RetainedGra
         &ENABLED_TEMPLATES
     }
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn retained_parent_metadata)
 pub fn retained_parent_metadata(name: &str) -> Option<RetainedParentMetadata> {
     ALL_TEMPLATES
         .iter()
@@ -225,6 +239,7 @@ pub fn retained_parent_metadata(name: &str) -> Option<RetainedParentMetadata> {
         .or_else(|| ALL_TEMPLATES.iter().find(|t| t.output_name() == name))
         .map(RetainedGraphTemplate::metadata)
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn retained_graph_template_from_data)
 fn retained_graph_template_from_data(row: &RetainedGraphRow) -> RetainedGraphTemplate {
     let data = &row.template;
     RetainedGraphTemplate {
@@ -261,6 +276,7 @@ fn retained_graph_template_from_data(row: &RetainedGraphRow) -> RetainedGraphTem
         pre_descriptor_selection: data.pre_descriptor_selection,
     }
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn molecule_graph_topology_key)
 pub(super) fn molecule_graph_topology_key(mol: &Molecule, atoms: &AtomSet) -> TopologyKey {
     let degrees: BTreeMap<_, _> = atoms
         .iter()
@@ -294,6 +310,7 @@ pub(super) fn molecule_graph_topology_key(mol: &Molecule, atoms: &AtomSet) -> To
     }
     key
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn retained_graph_template_topology_key)
 pub(super) fn retained_graph_template_topology_key(t: &RetainedGraphTemplate) -> TopologyKey {
     let mut degrees: BTreeMap<_, usize> = t.locants.iter().map(|l| (l, 0)).collect();
     for b in &t.bonds {
@@ -316,6 +333,7 @@ pub(super) fn retained_graph_template_topology_key(t: &RetainedGraphTemplate) ->
     }
     key
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn match_retained_graph_templates)
 pub fn match_retained_graph_templates(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -330,6 +348,7 @@ pub fn match_retained_graph_templates(
         },
     )
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn match_retained_graph_templates_with_options)
 pub fn match_retained_graph_templates_with_options(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -446,18 +465,21 @@ pub fn match_retained_graph_templates_with_options(
     matches
 }
 
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn is_saturated_site)
 pub fn is_saturated_site(mol: &Molecule, atom: usize, ring: &AtomSet) -> bool {
     mol.get_neighbors(atom)
         .iter()
         .filter(|n| ring.contains(n))
         .all(|&n| mol.get_bond(atom, n).is_none_or(|b| b.order == 1))
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn is_retained_oxo_site)
 pub fn is_retained_oxo_site(mol: &Molecule, atom: usize) -> bool {
     mol.atoms[&atom].symbol == "C"
         && mol.get_neighbors(atom).iter().any(|n| {
             mol.atoms[n].symbol == "O" && mol.get_bond(atom, *n).is_some_and(|b| b.order == 2)
         })
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn relocatable_atom_by_locant)
 pub fn relocatable_atom_by_locant(
     t: &RetainedGraphTemplate,
 ) -> BTreeMap<String, RetainedGraphAtomTemplate> {
@@ -487,6 +509,7 @@ pub fn relocatable_atom_by_locant(
         })
         .collect()
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn atom_matches)
 fn atom_matches(
     mol: &Molecule,
     idx: usize,
@@ -547,6 +570,7 @@ fn atom_matches(
 }
 /// Element-labelled graph maps for fusion status checks, independent of the
 /// complete retained parent's bond orders, hydrogenation and charge state.
+// Original nazuchem code (not in openclatura 0.4.3): fn match_retained_graph_template_topology_maps
 pub(super) fn match_retained_graph_template_topology_maps(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -601,6 +625,7 @@ pub(super) fn match_retained_graph_template_topology_maps(
         .map(|a| t.locants.iter().cloned().zip(a).collect())
         .collect()
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn match_retained_graph_template_maps_with_options)
 pub(super) fn match_retained_graph_template_maps_with_options(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -783,7 +808,9 @@ pub(super) fn match_retained_graph_template_maps_with_options(
         })
         .collect()
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn has_localized_alternating_4n_cycle
 fn has_localized_alternating_4n_cycle(mol: &Molecule, atoms: &AtomSet) -> bool {
+    // Original nazuchem code (not in openclatura 0.4.3): fn has_localized_alternating_4n_cycle::search
     fn search(
         mol: &Molecule,
         atoms: &AtomSet,
@@ -828,6 +855,7 @@ fn has_localized_alternating_4n_cycle(mol: &Molecule, atoms: &AtomSet) -> bool {
         .any(|&start| search(mol, atoms, &mut vec![start], 2, false, &mut remaining))
 }
 
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn relocated_indicated_h)
 fn relocated_indicated_h(
     mol: &Molecule,
     t: &RetainedGraphTemplate,
@@ -866,6 +894,7 @@ fn relocated_indicated_h(
     Some(movable)
 }
 #[allow(clippy::too_many_arguments)]
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn collect_assignments)
 fn collect_assignments(
     mol: &Molecule,
     t: &RetainedGraphTemplate,
@@ -975,6 +1004,7 @@ struct RetainedSeriesMember {
     #[serde(default = "default_true")]
     derivative_production_enabled: bool,
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn default_true
 fn default_true() -> bool {
     true
 }
@@ -982,6 +1012,7 @@ fn default_true() -> bool {
     clippy::expect_used,
     reason = "Immutable checked-in retained series data"
 )]
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn generated_series_template)
 fn generated_series_template(family: &str, count: usize) -> RetainedGraphTemplate {
     static SERIES: LazyLock<RetainedSeriesData> = LazyLock::new(|| {
         serde_json::from_str(include_str!("data/retained_fused_series.json"))
@@ -1041,6 +1072,7 @@ fn generated_series_template(family: &str, count: usize) -> RetainedGraphTemplat
         ..Default::default()
     }
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn higher_acene_locant_graph)
 fn higher_acene_locant_graph(count: usize) -> (Vec<String>, Vec<(String, String)>) {
     let left: Vec<_> = (4..count + 3).map(|n| format!("{n}a")).collect();
     let right_start = count + 6;
@@ -1059,6 +1091,7 @@ fn higher_acene_locant_graph(count: usize) -> (Vec<String>, Vec<(String, String)
     edges.extend(left.into_iter().rev().zip(right));
     (locants, edges)
 }
+// Adapted from src/openclatura/retained_fused_templates.py (adapted; upstream function mapping not recorded; local fn polyaphene_locant_graph)
 fn polyaphene_locant_graph(count: usize) -> (Vec<String>, Vec<(String, String)>) {
     let maximum = 2 * count + 4;
     let omitted = (count + 7) / 2;
@@ -1096,11 +1129,13 @@ fn polyaphene_locant_graph(count: usize) -> (Vec<String>, Vec<(String, String)>)
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
+    // Original nazuchem code (not in openclatura 0.4.3): fn matches
     fn matches(smiles: &str, options: MatchOptions<'_>) -> Vec<RetainedGraphTemplateMatch> {
         let mol = read_smiles(smiles, &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         match_retained_graph_templates_with_options(&mol, &atoms, options)
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn registry_expands_all_declared_locanted_graphs
     #[test]
     fn registry_expands_all_declared_locanted_graphs() {
         let templates = retained_graph_templates(true);
@@ -1132,6 +1167,7 @@ mod tests {
         assert!(templates.iter().any(|t| t.name == "tetracene"));
         assert!(templates.iter().any(|t| t.name == "decaphene"));
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_graphs_accept_kekule_forms_and_all_numberings
     #[test]
     fn retained_graphs_accept_kekule_forms_and_all_numberings() {
         for (smiles, name, count) in [
@@ -1156,6 +1192,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn xanthene_congener_templates_keep_heteroatom_and_methylene_locants
     #[test]
     fn xanthene_congener_templates_keep_heteroatom_and_methylene_locants() {
         for (smiles, name, symbol) in [
@@ -1179,6 +1216,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn added_phenanthroline_isomers_have_exact_retained_graphs
     #[test]
     fn added_phenanthroline_isomers_have_exact_retained_graphs() {
         let parser = opsin::Parser::new().unwrap();
@@ -1228,6 +1266,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn indicated_h_carbanions_keep_the_retained_parent_and_locant
     #[test]
     fn indicated_h_carbanions_keep_the_retained_parent_and_locant() {
         for (smiles, parent, locant) in [
@@ -1278,6 +1317,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn indicated_h_carbanion_admission_does_not_relax_other_charge_states
     #[test]
     fn indicated_h_carbanion_admission_does_not_relax_other_charge_states() {
         for smiles in [
@@ -1293,6 +1333,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn exact_charges_and_graph_connectivity_are_not_relaxed
     #[test]
     fn exact_charges_and_graph_connectivity_are_not_relaxed() {
         assert!(
@@ -1312,6 +1353,7 @@ mod tests {
             Some("indane")
         );
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_fused_names_do_not_erase_ring_triples_or_cumulated_doubles
     #[test]
     fn retained_fused_names_do_not_erase_ring_triples_or_cumulated_doubles() {
         for (smiles, legacy_name) in [
@@ -1376,6 +1418,7 @@ mod tests {
             Ok("2-ethynylnaphthalene")
         );
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn decorated_nonaromatic_parent_requires_unambiguous_pi_state
     #[test]
     fn decorated_nonaromatic_parent_requires_unambiguous_pi_state() {
         let mol = read_smiles("ClC1=CC=CC2=CC=CC=CC2=C1", &Default::default()).unwrap();
@@ -1407,6 +1450,7 @@ mod tests {
             Some("naphthalene")
         );
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_localized_pi_state_constrains_all_numbering_maps
     #[test]
     fn retained_localized_pi_state_constrains_all_numbering_maps() {
         for (smiles, expected) in [
@@ -1463,6 +1507,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn preferred_output_names_have_metadata_and_aliases_do_not
     #[test]
     fn preferred_output_names_have_metadata_and_aliases_do_not() {
         assert!(retained_parent_metadata("2,3-dihydro-1H-indole").is_some());

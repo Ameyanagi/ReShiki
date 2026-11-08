@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code.
+//   ReShiki, src/naming/openclatura/heterospiro.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! P-24.5: hydrogen and suffix composition of two different spiro components.
 use super::{
     assembly_parts::{AssemblyParts, HydroOperation},

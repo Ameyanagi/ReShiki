@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted from RDKit; source paths and pins follow.
+//   RDKit 2026.03.6, Code/GraphMol/Chirality.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/QueryOps.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   ReShiki, crates/chemistry/src/stereo/perception/cycles.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (C) 2003-2024 Greg Landrum and RDKit contributors.
+// Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 //! Ring stereo relationships from Chirality.cpp and bridgehead queries from
 //! QueryOps.cpp, Copyright (C) 2003-2024 Greg Landrum and RDKit contributors.
 // Copied unchanged from crates/chemistry/src/stereo/perception/cycles.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3

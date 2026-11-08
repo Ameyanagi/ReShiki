@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/ring_parent.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   ReShiki, src/naming/openclatura/ring_parent.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura audited ring-parent handoff with original ring-assembly constructor and local wrapper-hydrogen divergence.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Audited parent-hydride handoff for fusion, replacement and composition.
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -38,6 +47,7 @@ pub struct RingParent {
 }
 
 impl RingParent {
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::new)
     fn new(kind: ParentHydrideKind, atoms: AtomSet) -> Self {
         Self {
             kind,
@@ -55,6 +65,7 @@ impl RingParent {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn RingParent::from_ring_assembly
     pub(super) fn from_ring_assembly(
         atoms: AtomSet,
         assembly: super::ring_assembly::RingAssembly,
@@ -70,6 +81,7 @@ impl RingParent {
         Ok(parent)
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::from_retained_locant_maps)
     pub(super) fn from_retained_locant_maps(
         atoms: AtomSet,
         maps: Vec<BTreeMap<usize, String>>,
@@ -88,6 +100,7 @@ impl RingParent {
         Ok(parent)
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::from_fusion_plan)
     pub(super) fn from_fusion_plan(plan: FusionParentPlan) -> Result<Self, String> {
         if !plan.audit.confirmed() {
             return Err("openclatura: fusion parent requires a confirmed audit".into());
@@ -117,6 +130,7 @@ impl RingParent {
         Ok(parent)
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::from_fusion_wrapper)
     pub(super) fn from_fusion_wrapper(plan: BridgedFusionWrapperPlan) -> Result<Self, String> {
         if !plan.audit_ok {
             return Err("openclatura: bridged fusion parent requires a confirmed audit".into());
@@ -148,6 +162,7 @@ impl RingParent {
         Ok(parent)
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::into_skeletal_replacement_fusion)
     pub(super) fn into_skeletal_replacement_fusion(
         mut self,
         replacement_atom_ids: Vec<usize>,
@@ -166,18 +181,22 @@ impl RingParent {
         Ok(self)
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::is_systematic_fusion)
     pub(super) fn is_systematic_fusion(&self) -> bool {
         self.kind == ParentHydrideKind::SystematicFusion
     }
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::is_skeletal_replacement_fusion)
     pub(super) fn is_skeletal_replacement_fusion(&self) -> bool {
         self.kind == ParentHydrideKind::SkeletalReplacementFusion
     }
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::is_fusion_parent)
     pub(super) fn is_fusion_parent(&self) -> bool {
         !matches!(
             self.kind,
             ParentHydrideKind::Retained | ParentHydrideKind::RingAssembly
         )
     }
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::uses_fusion_plan)
     pub(super) fn uses_fusion_plan(&self) -> bool {
         self.fusion_plan.is_some()
             && matches!(
@@ -186,6 +205,7 @@ impl RingParent {
             )
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::audit_ok)
     pub(super) fn audit_ok(&self) -> bool {
         match self.kind {
             ParentHydrideKind::BridgedFusion => self
@@ -221,6 +241,7 @@ impl RingParent {
         }
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::base_name)
     pub(super) fn base_name(&self) -> Option<&str> {
         if self.is_skeletal_replacement_fusion()
             && let Some(state) = &self.replacement_fusion_state
@@ -241,6 +262,7 @@ impl RingParent {
             })
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::bond_model)
     pub(super) fn bond_model(&self) -> Option<&ParentBondModel> {
         self.replacement_fusion_state
             .as_ref()
@@ -254,6 +276,7 @@ impl RingParent {
             .or_else(|| self.fusion_plan.as_ref().map(|p| &p.bond_model))
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::derivative_state)
     pub(super) fn derivative_state(&self) -> Option<&ParentDerivativeState> {
         self.replacement_fusion_state
             .as_ref()
@@ -266,6 +289,7 @@ impl RingParent {
             })
     }
 
+    // Adapted from src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn RingParent::proof_locant_maps)
     pub(super) fn proof_locant_maps(&self) -> Vec<BTreeMap<usize, String>> {
         if let Some(plan) = &self.fusion_plan {
             return plan.numbering.string_input_locant_maps();

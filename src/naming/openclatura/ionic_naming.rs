@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/ionic_naming.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura ionic spelling logic reworked as structured anion preparation with local identity guards.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Graph-backed ionic spelling changes from upstream `ionic_naming.py`.
 use super::{
     assembly_parts::{AnionSuffix, AssemblyParts},
@@ -16,6 +24,7 @@ struct ChargeSite {
 }
 
 /// Admit oxo protonation only where the naming grammar preserves its charge.
+// Original nazuchem code (not in openclatura 0.4.3): fn validate_heteroatom_oxo_charge_states
 pub(super) fn validate_heteroatom_oxo_charge_states(mol: &Molecule) -> Result<(), String> {
     for (&id, atom) in &mol.atoms {
         // Upstream divergence: neutral imine suffixes do not encode a terminal
@@ -70,6 +79,7 @@ pub(super) fn validate_heteroatom_oxo_charge_states(mol: &Molecule) -> Result<()
     Ok(())
 }
 
+// Adapted from src/openclatura/ionic_naming.py::parent_charge_sites (adapted; local fn sites)
 fn sites(
     mol: &Molecule,
     path: &[usize],
@@ -95,6 +105,7 @@ fn sites(
 }
 
 /// Select the supported parent-anion operations before changing the neutral citation plan.
+// Adapted from src/openclatura/ionic_naming.py (adapted; upstream function mapping not recorded; local fn prepare_anion_parent)
 pub(super) fn prepare_anion_parent(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -176,6 +187,7 @@ pub(super) fn prepare_anion_parent(
 }
 
 /// Reject parent charges the assembled name does not cite.
+// Original nazuchem code (not in openclatura 0.4.3): fn validate_anionic_parent
 pub(super) fn validate_anionic_parent(
     mol: &Molecule,
     path: &[usize],
@@ -221,6 +233,7 @@ pub(super) fn validate_anionic_parent(
     Ok(())
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn validate_retained_chalcogen_cation_pi_state
 fn validate_retained_chalcogen_cation_pi_state(
     mol: &Molecule,
     path: &[usize],
@@ -275,6 +288,7 @@ fn validate_retained_chalcogen_cation_pi_state(
     Ok(())
 }
 
+// Adapted from src/openclatura/ionic_naming.py::apply_ring_parent_nitrogen_zwitterion_stack, src/openclatura/ionic_naming.py::_is_unsaturated_ring_parent (adapted; local fn ring_nitrogen_zwitterion)
 fn ring_nitrogen_zwitterion(
     mol: &Molecule,
     parts: &AssemblyParts,
@@ -311,6 +325,7 @@ fn ring_nitrogen_zwitterion(
         })
 }
 
+// Adapted from src/openclatura/ionic_naming.py::_charged_nitrogens_are_adjacent_or_conjugated (adapted; local fn adjacent_or_conjugated)
 fn adjacent_or_conjugated(mol: &Molecule, parent: &AtomSet, anion: usize, cation: usize) -> bool {
     if mol.get_neighbors(anion).contains(&cation) {
         return true;
@@ -340,11 +355,13 @@ fn adjacent_or_conjugated(mol: &Molecule, parent: &AtomSet, anion: usize, cation
     false
 }
 
+// Adapted from src/openclatura/ionic_naming.py (adapted; upstream function mapping not recorded; local fn word_boundary)
 fn word_boundary(text: &str, end: usize) -> bool {
     text.get(end..)
         .and_then(|s| s.chars().next())
         .is_none_or(|c| !c.is_alphanumeric() && c != '_')
 }
+// Adapted from src/openclatura/ionic_naming.py (adapted; upstream function mapping not recorded; local fn ascii_left_boundary)
 fn ascii_left_boundary(text: &str, start: usize) -> bool {
     start == 0
         || text
@@ -353,6 +370,7 @@ fn ascii_left_boundary(text: &str, start: usize) -> bool {
             .is_none_or(|b| !b.is_ascii_alphanumeric())
 }
 
+// Adapted from src/openclatura/ionic_naming.py (adapted; upstream function mapping not recorded; local fn nitrogen_has_carbon_double)
 fn nitrogen_has_carbon_double(mol: &Molecule, idx: usize) -> Option<usize> {
     mol.get_neighbors(idx).iter().copied().find(|&n| {
         mol.atoms.get(&n).is_some_and(|a| a.is_carbon())
@@ -360,6 +378,7 @@ fn nitrogen_has_carbon_double(mol: &Molecule, idx: usize) -> Option<usize> {
     })
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn belongs_to_parent_scope
 fn belongs_to_parent_scope(name: &str, position: usize) -> bool {
     let mut scope = name;
     let mut scope_start = 0;
@@ -383,6 +402,7 @@ fn belongs_to_parent_scope(name: &str, position: usize) -> bool {
     depth == 0
 }
 
+// Adapted from src/openclatura/ionic_naming.py (adapted; upstream function mapping not recorded; local fn apply_cationic_imino_parent_prefixes)
 pub(super) fn apply_cationic_imino_parent_prefixes(
     name: &str,
     mol: &Molecule,
@@ -430,6 +450,7 @@ pub(super) fn apply_cationic_imino_parent_prefixes(
     Ok(updated)
 }
 
+// Adapted from src/openclatura/ionic_naming.py (adapted; upstream function mapping not recorded; local fn apply_cationic_imino_names)
 pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<String, String> {
     let first = mol
         .atoms
@@ -451,6 +472,7 @@ pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<S
 
 /// The accepted ammonio fallback cites its methylidene ligand on N while the
 /// ligand and its attachment graph are still available to the renderer.
+// Adapted from src/openclatura/ionic_naming.py (adapted; upstream function mapping not recorded; local fn cationic_methylidene_fallback)
 pub(super) fn cationic_methylidene_fallback(
     mol: &Molecule,
     nitrogen: usize,
@@ -484,6 +506,7 @@ mod tests {
     use super::super::molecule::{Atom, Bond};
     use super::*;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_chalcogen_cations_need_a_proved_ring_pi_state
     #[test]
     fn retained_chalcogen_cations_need_a_proved_ring_pi_state() {
         for (smiles, expected) in [
@@ -513,6 +536,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn neutral_oxo_prefixes_cannot_consume_protonated_noncarbon_oxo
     #[test]
     fn neutral_oxo_prefixes_cannot_consume_protonated_noncarbon_oxo() {
         use super::super::graph_io::read_smiles;
@@ -532,6 +556,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn external_ligands_cannot_lose_charge_or_chalcogen_hydrogen
     #[test]
     fn external_ligands_cannot_lose_charge_or_chalcogen_hydrogen() {
         use super::super::graph_io::read_smiles;
@@ -556,6 +581,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn cationic_imino_spelling_uses_the_ligand_graph
     #[test]
     fn cationic_imino_spelling_uses_the_ligand_graph() {
         let mut mol = Molecule::new();
@@ -630,6 +656,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn parent_imino_charge_preserves_the_nested_neutral_imine
     #[test]
     fn parent_imino_charge_preserves_the_nested_neutral_imine() {
         assert_eq!(

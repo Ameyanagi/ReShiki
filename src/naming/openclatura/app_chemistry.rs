@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code.
+//   ReShiki, src/naming/openclatura/app_chemistry.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! Plain-data adapters for identity helpers retained by ReShiki in Phase A.
 use crate::naming::kernel_bridge;
 use nazuchem_kernel::stereo::perception::State;

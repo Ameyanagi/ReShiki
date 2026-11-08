@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted from OPSIN; source paths and pins follow.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereoAnalyser.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/AmbiguityChecker.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   OPSIN 2.9.0, opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryTest.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   ReShiki, crates/opsin/tests/graph_stereo_oracle.rs @ 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9.
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 //! Frozen complete graph snapshots from the pinned OPSIN 2.9.0 dev oracle.
 //! MIT Daniel Lowe/contributors; source b91b610af5ab07560fedb20730d7aef46bb2bca0.
 //! Maven jar SHA256 627ee5da4af551f9c4d1d766f545eb7cf519a344776e0bb677247a47abac0252.

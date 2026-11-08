@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/graph_kernel.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura iterative graph blocks and connected components with local Rust tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Undirected graph blocks ported from Python `graph_kernel.py`.
 use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
@@ -6,10 +14,12 @@ use super::molecule::{AtomSet, Molecule};
 pub type Edge = (usize, usize);
 pub type EdgeSet = BTreeSet<Edge>;
 
+// Ported from src/openclatura/graph_kernel.py (port; upstream function mapping not recorded; local fn normalize_edge)
 pub fn normalize_edge(first: usize, second: usize) -> Edge {
     (first.min(second), first.max(second))
 }
 
+// Ported from src/openclatura/graph_kernel.py (port; upstream function mapping not recorded; local fn adjacency_from_edges)
 pub fn adjacency_from_edges(nodes: &AtomSet, edges: &EdgeSet) -> BTreeMap<usize, AtomSet> {
     let mut adjacency: BTreeMap<_, _> = nodes.iter().map(|&node| (node, AtomSet::new())).collect();
     for &(first, second) in edges {
@@ -19,6 +29,7 @@ pub fn adjacency_from_edges(nodes: &AtomSet, edges: &EdgeSet) -> BTreeMap<usize,
     adjacency
 }
 
+// Ported from src/openclatura/graph_kernel.py (port; upstream function mapping not recorded; local fn connected_components)
 pub fn connected_components(nodes: &AtomSet, edges: &EdgeSet) -> Vec<AtomSet> {
     let adjacency = adjacency_from_edges(nodes, edges);
     let mut seen = AtomSet::new();
@@ -48,6 +59,7 @@ pub fn connected_components(nodes: &AtomSet, edges: &EdgeSet) -> Vec<AtomSet> {
 /// One-edge bridge blocks are retained; spiro blocks share their articulation
 /// atom, while fused and bridged rings remain one cyclic block. The iterative
 /// Tarjan walk and final block ordering follow upstream `graph_kernel.py`.
+// Ported from src/openclatura/graph_kernel.py (port; upstream function mapping not recorded; local fn biconnected_edge_components)
 pub fn biconnected_edge_components(mol: &Molecule, nodes: &AtomSet) -> Vec<EdgeSet> {
     let adjacency: BTreeMap<usize, Vec<usize>> = nodes
         .iter()
@@ -136,6 +148,7 @@ mod tests {
     use super::super::molecule::{Atom, Bond};
     use super::*;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn graph
     fn graph(edges: &[Edge]) -> Molecule {
         let mut mol = Molecule::new();
         for atom in edges.iter().flat_map(|&(u, v)| [u, v]).collect::<AtomSet>() {
@@ -147,6 +160,7 @@ mod tests {
         mol
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn blocks_keep_bridge_edges_and_spiro_articulations
     #[test]
     fn blocks_keep_bridge_edges_and_spiro_articulations() {
         let mol = graph(&[
@@ -172,6 +186,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn fused_and_bridged_cycles_remain_one_block
     #[test]
     fn fused_and_bridged_cycles_remain_one_block() {
         for edges in [

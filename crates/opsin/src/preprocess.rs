@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT
+// Origin: mixed adaptation of OPSIN with ledger-marked local functions; source paths and pins follow.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   ReShiki, crates/opsin/src/preprocess.rs @ d9859a4d1dbdae0e25ebf9a5201f963677c73b19.
+//   ReShiki, crates/opsin/src/preprocess.rs @ bfce35014e5c5a0062ea26a3381a883c5acc829d.
+//   ReShiki, crates/opsin/src/preprocess.rs @ 6d484c42972f340cfdb104f87022d97f8a2d18fe.
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
+
 //! `PreProcessor` and the normalization portion of `StringTools`, OPSIN 2.9.0.
 //! Phane superscript handling: upstream main, 42e87ac6.
 use crate::ParsingError;
@@ -21,6 +33,7 @@ static CAGE_LOCANT_DESCRIPTORS: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Cage locant descriptors")
 });
 
+// Original nazuchem code (not in OPSIN).
 fn normalize_cage_descriptors(input: &str) -> String {
     input
         .split(' ')

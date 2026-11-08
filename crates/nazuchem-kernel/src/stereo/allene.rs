@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/chemistry/src/stereo/allene.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+
 //! Three-atom allene axes. Carrier order follows graph bond insertion order,
 //! with an implicit or bracket hydrogen last at each terminal carbon.
 // Copied unchanged from crates/chemistry/src/stereo/allene.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3

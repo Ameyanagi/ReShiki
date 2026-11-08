@@ -1,3 +1,17 @@
+// SPDX-License-Identifier: MIT
+// Origin: mixed adaptation of OPSIN with ledger-marked local functions; source paths and pins follow.
+//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ d9859a4d1dbdae0e25ebf9a5201f963677c73b19.
+//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ 0d10886c93f6f7aa673f4179739143986d392a01.
+//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ 2df788dc456793c687b934afd6d4b317e3c73ef8.
+//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ bfce35014e5c5a0062ea26a3381a883c5acc829d.
+//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ 8f3723b357bf1b701c65676e9db08e2d410f0211.
+//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ d9b9bafe8f8c9d3d24b6233c14682d63b58269b2.
+//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ f4342c00aa4a4f0705dbe6776acf4c110f113117.
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
+
 //! Application of OPSIN stereochemical descriptors to the completed graph.
 //! Port of `StereochemistryHandler.java`, OPSIN 2.9.0,
 //! b91b610af5ab07560fedb20730d7aef46bb2bca0; MIT, Daniel Lowe and contributors.
@@ -42,6 +56,7 @@ struct CageStereochemistry {
 }
 
 impl BicyclicCage {
+    // Original nazuchem code (not in OPSIN).
     fn find(graph: &Graph, fragment: FragmentId) -> Option<Self> {
         for longest in [2, 3] {
             let count = longest + 5;
@@ -117,6 +132,7 @@ impl BicyclicCage {
         }
         None
     }
+    // Original nazuchem code (not in OPSIN).
     fn substituent(&self, graph: &Graph, index: usize) -> Option<AtomId> {
         if index == 0 || index == self.bridgehead {
             return None;
@@ -135,6 +151,7 @@ impl BicyclicCage {
             .collect();
         (heavy.len() == 1).then(|| heavy[0])
     }
+    // Original nazuchem code (not in OPSIN).
     fn parity(
         &self,
         graph: &Graph,
@@ -465,6 +482,7 @@ impl<'a> StereochemistryHandler<'a> {
         self.cage_stereo_groups.clear();
         Ok(())
     }
+    // Original nazuchem code (not in OPSIN).
     fn cage_scope_is_single_group(
         &self,
         requested_group_kinds: &BTreeSet<StereoGroupType>,
@@ -528,6 +546,7 @@ impl<'a> StereochemistryHandler<'a> {
     }
     /// Collect all relative descriptors in a common template frame before
     /// existing parities on that frame choose its mirror.
+    // Original nazuchem code (not in OPSIN).
     fn assign_cage_stereochemistry(&mut self, id: NodeId) -> Result {
         let value = self.attr(id, VALUE_ATR);
         let locant = self.attribute(id, LOCANT_ATR);
@@ -604,6 +623,7 @@ impl<'a> StereochemistryHandler<'a> {
             "Endo/exo/syn/anti is supported only for substituted bicyclo[2.2.1]heptane and bicyclo[3.2.1]octane cages",
         )
     }
+    // Original nazuchem code (not in OPSIN).
     fn resolve_cage_stereochemistry(&mut self, cage: &mut CageStereochemistry) -> Result {
         let mut mirror = None;
         let existing_group = cage
@@ -651,6 +671,7 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
+    // Original nazuchem code (not in OPSIN).
     fn cage_owning_fragment(&self, id: NodeId) -> Result<Option<FragmentId>> {
         let mut scope = self.parent(id)?;
         if self.arena[scope].attribute(LOCANT_ATR).is_none()
@@ -694,6 +715,7 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(None)
     }
+    // Original nazuchem code (not in OPSIN).
     fn apply_cage_stereo_groups(&mut self) -> Result {
         let cages = std::mem::take(&mut self.cage_stereo_groups);
         let (mut racemic_number, mut relative_number) = (0, 0);
@@ -774,6 +796,7 @@ impl<'a> StereochemistryHandler<'a> {
         self.cage_stereo_groups = cages;
         Ok(())
     }
+    // Original nazuchem code (not in OPSIN).
     fn cage_has_distinct_mirror(&self, frame: &[AtomId]) -> Result<bool> {
         let mut graph = self.graph().clone();
         let fragment = graph.atom(frame[0]).fragment;
@@ -971,6 +994,7 @@ impl<'a> StereochemistryHandler<'a> {
             Ok(false)
         }
     }
+    // Original nazuchem code (not in OPSIN).
     fn resolve_pseudo_stereo_centres(&mut self) -> Result {
         for (atom, expected) in &self.pseudo_stereo_centres {
             let labels = crate::modern_cip::atom_labels(self.graph())?;
@@ -1008,6 +1032,7 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
+    // Original nazuchem code (not in OPSIN).
     fn assign_axial_stereo(&mut self, id: NodeId) -> Result {
         let value = self.attr(id, VALUE_ATR);
         let descriptor = match value.as_str() {
@@ -1516,6 +1541,7 @@ impl<'a> StereochemistryHandler<'a> {
             self.arena.to_xml(id)
         ))
     }
+    // Original nazuchem code (not in OPSIN).
     fn find_coupled_unknown_candidates(&mut self) -> Result {
         let (mut native, indices) = crate::modern_cip::state(self.graph())?;
         // stereogenic_units consumes a ring cache; the CIP adapter leaves it empty.
@@ -1545,6 +1571,7 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
+    // Original nazuchem code (not in OPSIN).
     fn seeded_coupled_labels(
         &self,
         candidates: &BTreeSet<AtomId>,
@@ -1567,6 +1594,7 @@ impl<'a> StereochemistryHandler<'a> {
         }
         crate::modern_cip::atom_labels(&seeded)
     }
+    // Original nazuchem code (not in OPSIN).
     fn validate_coupled_unknown_centre(&self, centre: &UnknownStereoCentre) -> Result {
         let mut visited = BTreeSet::new();
         let mut pending = vec![centre.atom];
@@ -1597,6 +1625,7 @@ impl<'a> StereochemistryHandler<'a> {
             stereo("Could not confirm coupled pseudoasymmetric stereochemistry")
         }
     }
+    // Original nazuchem code (not in OPSIN).
     fn resolve_unknown_stereo_centres(&mut self) -> Result {
         self.unknown_stereo_reservations.clear();
         let mut centres = std::mem::take(&mut self.unknown_stereo_centres);
@@ -1633,6 +1662,7 @@ impl<'a> StereochemistryHandler<'a> {
             centres = accepted;
         }
     }
+    // Original nazuchem code (not in OPSIN).
     fn validate_unknown_stereo_centre(&mut self, centre: &UnknownStereoCentre) -> Result {
         let atom = centre.atom;
         if self.coupled_unknown_candidates.contains(&atom) {

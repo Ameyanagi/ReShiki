@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+// Origin: port of upstream code.
+//   openclatura 0.4.3, src/openclatura/retained_specs.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+
 //! Retained parent attachment spelling and locant policy.
 use super::nomenclature::section;
 #[derive(Clone, Debug)]

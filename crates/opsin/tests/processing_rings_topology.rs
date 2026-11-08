@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted from OPSIN; source paths and pins follow.
+//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentProcessor.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//   ReShiki, crates/opsin/tests/processing_rings_topology.rs @ 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9.
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 // Source-grounded ring-assembly, spiro and fused-ring bridge topology fixtures
 // for ComponentProcessor.java, OPSIN 2.9.0 b91b610af5ab07560fedb20730d7aef46bb2bca0.
 // Uses only Rust graph construction and the ported processing phases.

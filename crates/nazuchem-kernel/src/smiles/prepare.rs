@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted from RDKit; source paths and pins follow.
+//   RDKit 2026.03.6, Code/GraphMol/SmilesParse/SmilesParse.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/MolOps.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   ReShiki, crates/chemistry/src/smiles/prepare.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (c) 2006-2015, Rational Discovery LLC, Greg Landrum, and Julie Penzotti and others
+// Changes: Rust adaptation; forward an explicit borrowed Budget through preparation and sanitization.
+
 // Copied from crates/chemistry/src/smiles/prepare.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: forward an explicit borrowed Budget through preparation and sanitization
 use super::{Error, Parsed, Result, parse_inner};
 use crate::budget::Budget;

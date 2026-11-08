@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/fusion/faces.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura chordless-face enumeration/auditing with a local bridge-free fused-parent eligibility proof and enlarged benzoheterobicycle applicability.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Bounded, graph-native chordless-face proofs. No drawing coordinates are read.
 use super::{
     config::fusion_nomenclature_config,
@@ -473,6 +481,7 @@ pub fn cached_bounded_face_model(
 /// FR-1.1.1/FR-1.2 additionally require adjacent constituent rings to share
 /// exactly two atoms and one bond. A shared path of two or more bonds is a
 /// bridge, even when a bounded-face model can be found for it.
+// Original nazuchem code (not in openclatura 0.4.3): fn bridge_free_fusion_parent_eligible
 pub fn bridge_free_fusion_parent_eligible(mol: &Molecule, atoms: &AtomSet) -> bool {
     if let Some(proof) = bicyclo_proof(atoms, &edges_within_atoms(mol, atoms)) {
         // A zero-length bridge is the single shared bond. The two remaining
@@ -929,6 +938,7 @@ mod tests {
         assert!(select_bounded_face_model(&theta, &atoms).unwrap().is_none());
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems
     #[test]
     fn bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems() {
         for (smiles, expected) in [
@@ -1008,6 +1018,7 @@ mod tests {
         assert_eq!(bounded.outer_boundary.atoms.len(), 14);
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit
     #[test]
     fn benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit() {
         let parser = opsin::Parser::new().unwrap();

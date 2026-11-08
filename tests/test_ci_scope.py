@@ -44,6 +44,24 @@ class CheckScopeTests(unittest.TestCase):
                 self.assertTrue(needs_geometry(["src/app.rs", path]))
         self.assertTrue(needs_geometry(None))
 
+    def test_provenance_inputs_always_run_repository_python_checks(self):
+        for path in (
+            "PROVENANCE-nazuchem.toml",
+            "scripts/check_provenance.py",
+            "tests/test_check_provenance.py",
+            "crates/nazuchem-kernel/src/lib.rs",
+            "crates/nazuchem-kernel/licenses/rdkit/LICENSE",
+            "crates/opsin/resources/new.xml",
+            "crates/opsin/NOTICE",
+            "src/naming/openclatura/new.rs",
+            "src/naming/openclatura/data/new.json",
+            "src/naming/catalog/data.json",
+            "tests/fixtures/s2n/baseline.tsv",
+            "tests/fixtures/openclatura/graph_oracle.json",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(needs_native(["docs/development.md", path]))
+
     def test_rename_retains_deleted_source_and_handles_unusual_names(self):
         event = {"pull_request": {"base": {"sha": "a" * 40}}}
         with patch("scripts.ci_scope.subprocess.check_output") as git:

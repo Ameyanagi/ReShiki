@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/fusion/charges.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura charge restoration and operation construction, with a separate local protonated-donor guard.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Formal charge operations bound to completed fusion parent atoms.
 use super::super::{
     locants::retained_locant_sort_key as locant_key,
@@ -91,6 +99,7 @@ pub(super) fn protonated_pi_nitrogen_atoms(mol: &Molecule, graph: &FusionGraph) 
         .collect()
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn has_unproved_protonated_junction_donor
 fn has_unproved_protonated_junction_donor(mol: &Molecule, atoms: &AtomSet) -> bool {
     if !mol
         .bonds
@@ -227,6 +236,7 @@ mod tests {
         .unwrap()
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn protonated_donor_citation_cannot_hide_a_reduced_carbon_junction
     #[test]
     fn protonated_donor_citation_cannot_hide_a_reduced_carbon_junction() {
         for smiles in [
@@ -271,6 +281,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn mixed_donors_require_a_joint_protonation_pi_and_hydrogen_proof
     #[test]
     fn mixed_donors_require_a_joint_protonation_pi_and_hydrogen_proof() {
         for smiles in [

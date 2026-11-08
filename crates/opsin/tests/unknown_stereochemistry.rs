@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/opsin/tests/unknown_stereochemistry.rs @ bfce35014e5c5a0062ea26a3381a883c5acc829d.
+
 use opsin::{ParseOptions, Parser, Status, WarningKind};
 
 fn canonical(smiles: &str) -> String {

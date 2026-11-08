@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/retained_fused_production.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   ReShiki, src/naming/openclatura/retained_fused_production.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura retained-parent production/derivative gate with native suffix-H integration and local regression tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Retained fused-parent production gate and derivative admission policies.
 use super::{
     additive::retained_suffix_hydrogen_state,
@@ -40,6 +49,7 @@ pub struct ProductionRetainedFusedParent {
     pub metadata: RetainedParentMetadata,
 }
 #[allow(clippy::too_many_arguments)]
+// Adapted from src/openclatura/retained_fused_production.py::production_retained_fused_parent (adapted; local fn production_retained_fused_parent)
 pub fn production_retained_fused_parent(
     mol: &Molecule,
     parent_path: &[usize],
@@ -298,11 +308,13 @@ pub fn production_retained_fused_parent(
         metadata,
     }))
 }
+// Adapted from src/openclatura/retained_fused_production.py (adapted; upstream function mapping not recorded; local fn listed)
 fn listed(key: &str, value: &str) -> bool {
     GATE[key]
         .as_array()
         .is_some_and(|rows| rows.iter().any(|v| v.as_str() == Some(value)))
 }
+// Adapted from src/openclatura/retained_fused_production.py::ProductionRetainedFusedParent.eligible (adapted; local fn eligible)
 fn eligible(
     mol: &Molecule,
     parent_atoms: &AtomSet,
@@ -353,6 +365,7 @@ fn eligible(
     }
     Ok(admitted)
 }
+// Adapted from src/openclatura/retained_fused_production.py::_added_hydrogen_is_citable (adapted; local fn added_hydrogen_is_citable)
 pub fn added_hydrogen_is_citable(mol: &Molecule, m: &RetainedGraphTemplateMatch) -> bool {
     let by = m.template.atom_by_locant();
     let mut positions = 0usize;
@@ -379,6 +392,7 @@ pub fn added_hydrogen_is_citable(mol: &Molecule, m: &RetainedGraphTemplateMatch)
         saturated as isize - (m.template.indicated_hydrogen_count() as isize - excluded as isize);
     surplus <= 0 || surplus % 2 == 0 || indicated_h_retained_name(&m.template.name)
 }
+// Adapted from src/openclatura/retained_fused_production.py (adapted; upstream function mapping not recorded; local fn indicated_h_retained_name)
 fn indicated_h_retained_name(name: &str) -> bool {
     // The source set combines explicit monocycle names with the declared
     // indicated_hydrogen_name column; no inference from an alias is needed.
@@ -387,6 +401,7 @@ fn indicated_h_retained_name(name: &str) -> bool {
         .iter()
         .any(|row| row.indicated_hydrogen_name.as_deref() == Some(name))
 }
+// Adapted from src/openclatura/retained_fused_production.py::_has_mancude_unsaturation (adapted; local fn has_mancude_unsaturation)
 fn has_mancude_unsaturation(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -420,6 +435,7 @@ fn has_mancude_unsaturation(
         .count()
         >= expected + carbonyls
 }
+// Adapted from src/openclatura/retained_fused_production.py::_saturation_is_hydro_citable (adapted; local fn saturation_is_hydro_citable)
 fn saturation_is_hydro_citable(mol: &Molecule, m: &RetainedGraphTemplateMatch) -> bool {
     if m.template.mancude_double_bonds.is_none() {
         return false;
@@ -447,6 +463,7 @@ mod tests {
     };
     use super::*;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn anthracene_and_phenanthrene_admit_retained_derivatives
     #[test]
     fn anthracene_and_phenanthrene_admit_retained_derivatives() {
         for (smiles, parent, principal) in [

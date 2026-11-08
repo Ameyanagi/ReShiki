@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted from RDKit; source paths and pins follow.
+//   RDKit 2026.03.6, Code/GraphMol/Chirality.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/MolOps.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/Atropisomers.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   ReShiki, crates/chemistry/src/stereo.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors;
+// Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
+// Changes: Rust adaptation; forward an explicit borrowed Budget through axis validation to aromaticity.
+
 //! Stereo cleanup from RDKit Chirality.cpp, MolOps.cpp and Atropisomers.cpp.
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors;
 //! Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.

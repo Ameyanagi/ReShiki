@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code.
+//   ReShiki, src/naming/openclatura/species.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! Binary salt names and monatomic metal cations, outside the organic parent engine.
 use super::{Name, component_namer::Derivation, molecule::Molecule, name_smiles_with_style};
 use crate::naming::{IsotopeStyle, NameReason, NameStatus};

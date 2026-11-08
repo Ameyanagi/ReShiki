@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/ring_renderer.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   ReShiki, src/naming/openclatura/ring_renderer.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura ring/von-Baeyer descriptor rendering and cycle-count decoding with original Rust regression tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Data-backed P-23/P-24 ring descriptor rendering.
 use super::nomenclature::section;
 use super::rules::multipliers;
@@ -6,6 +15,7 @@ use super::rules::multipliers;
     clippy::expect_used,
     reason = "Ring descriptor kinds come from the checked-in registry."
 )]
+// Adapted from src/openclatura/ring_renderer.py (adapted; upstream function mapping not recorded; local fn render_ring_descriptor)
 pub fn render_ring_descriptor(kind: &str, descriptor_numbers: &[usize]) -> String {
     let template = section("ring_descriptor_templates")[kind]
         .as_str()
@@ -19,10 +29,12 @@ pub fn render_ring_descriptor(kind: &str, descriptor_numbers: &[usize]) -> Strin
 }
 
 /// The bridge count is one less than the number of independent cycles.
+// Adapted from src/openclatura/ring_renderer.py (adapted; upstream function mapping not recorded; local fn render_von_baeyer_descriptor)
 pub fn render_von_baeyer_descriptor(bridge_count: usize, descriptor_body: &str) -> String {
     format!("{}{descriptor_body}", von_baeyer_kind(bridge_count + 1))
 }
 
+// Adapted from src/openclatura/ring_renderer.py (adapted; upstream function mapping not recorded; local fn von_baeyer_kind)
 pub fn von_baeyer_kind(cycle_count: usize) -> String {
     section("polycycle_prefixes")[cycle_count.saturating_sub(1).to_string()]
         .as_str()
@@ -32,6 +44,7 @@ pub fn von_baeyer_kind(cycle_count: usize) -> String {
         )
 }
 
+// Adapted from src/openclatura/ring_renderer.py (adapted; upstream function mapping not recorded; local fn von_baeyer_cycle_count)
 pub fn von_baeyer_cycle_count(descriptor: Option<&str>) -> Option<usize> {
     let prefix = descriptor?.split_once("cyclo[")?.0;
     let rendered_prefix = format!("{prefix}cyclo");
@@ -48,6 +61,7 @@ pub fn von_baeyer_cycle_count(descriptor: Option<&str>) -> Option<usize> {
         .or_else(|| (2..=1000).find(|&count| multipliers::basic(count) == prefix))
 }
 
+// Adapted from src/openclatura/ring_renderer.py (adapted; upstream function mapping not recorded; local fn is_von_baeyer_descriptor)
 pub fn is_von_baeyer_descriptor(descriptor: Option<&str>) -> bool {
     von_baeyer_cycle_count(descriptor).is_some_and(|count| count >= 3)
 }
@@ -56,6 +70,7 @@ pub fn is_von_baeyer_descriptor(descriptor: Option<&str>) -> bool {
 mod tests {
     use super::*;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn descriptor_kinds_keep_their_distinct_naming_systems
     #[test]
     fn descriptor_kinds_keep_their_distinct_naming_systems() {
         assert_eq!(render_ring_descriptor("spiro", &[3, 5]), "spiro[3.5]");

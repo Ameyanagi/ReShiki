@@ -1,9 +1,19 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   OPSIN main, opsin-inchi/src/test/resources/uk/ac/cam/ch/wwmm/opsin/phanes.txt @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   ReShiki, src/naming/openclatura/phane/tests.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright 2017 Daniel Lowe
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Original Rust phane test harness with explicit OPSIN phane-oracle fixture selectors and assertions.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 use super::*;
 use crate::naming::{NameReason, NameStatus, openclatura::graph_io, verify_identity};
 
 const PARA: &str = "C1Cc2ccc(cc2)CCc2ccc1cc2";
 const META: &str = "C1Cc2cccc(c2)CCc2cccc1c2";
 
+// Original nazuchem code (not in OPSIN): fn round_trip
 fn round_trip(smiles: &str, name: &str) -> Result<(), String> {
     let parsed = opsin::Parser::new()
         .map_err(|e| e.to_string())?
@@ -23,6 +33,7 @@ fn round_trip(smiles: &str, name: &str) -> Result<(), String> {
     verify_identity(smiles, &actual)
 }
 
+// Original nazuchem code (not in OPSIN): fn fixture_smiles
 fn fixture_smiles(name: &str) -> Result<String, String> {
     let inchi = include_str!("../../../../crates/opsin/tests/fixtures/upstream-inchi/phanes.txt")
         .lines()
@@ -33,6 +44,7 @@ fn fixture_smiles(name: &str) -> Result<String, String> {
     crate::naming::kernel_bridge::smiles_from_inchi(inchi)
 }
 
+// Original nazuchem code (not in OPSIN): fn cyclic_phane_names_reconstruct_exactly
 #[test]
 fn cyclic_phane_names_reconstruct_exactly() -> Result<(), String> {
     for (smiles, expected) in [
@@ -83,6 +95,7 @@ fn cyclic_phane_names_reconstruct_exactly() -> Result<(), String> {
     Ok(())
 }
 
+// Original nazuchem code (not in OPSIN): fn declines_out_of_scope_graphs
 #[test]
 fn declines_out_of_scope_graphs() -> Result<(), String> {
     for smiles in [
@@ -113,6 +126,7 @@ fn declines_out_of_scope_graphs() -> Result<(), String> {
     Ok(())
 }
 
+// Original nazuchem code (not in OPSIN): fn mixed_attachment_sets_follow_amplificant_seniority
 #[test]
 fn mixed_attachment_sets_follow_amplificant_seniority() -> Result<(), String> {
     // Pyridine/benzene/pyridine/pyridine/benzene/pyridine, each separated by CH2.
@@ -126,6 +140,7 @@ fn mixed_attachment_sets_follow_amplificant_seniority() -> Result<(), String> {
     round_trip(smiles, expected)
 }
 
+// Original nazuchem code (not in OPSIN): fn failed_ordinary_name_falls_back_to_unverified_phane
 #[test]
 fn failed_ordinary_name_falls_back_to_unverified_phane() -> Result<(), String> {
     let named = super::super::name_smiles(PARA, &Default::default())?;
@@ -135,6 +150,7 @@ fn failed_ordinary_name_falls_back_to_unverified_phane() -> Result<(), String> {
     round_trip(PARA, &named.text)
 }
 
+// Adapted from opsin-inchi/src/test/resources/uk/ac/cam/ch/wwmm/opsin/phanes.txt (mixed; OPSIN oracle fixture selectors and assertions in original Rust harness; local fn names_independent_upstream_inchi_graphs)
 #[test]
 fn names_independent_upstream_inchi_graphs() -> Result<(), String> {
     let seven = "1(1,3),4(1,4)-dibenzenacycloheptaphane";
@@ -155,6 +171,7 @@ fn names_independent_upstream_inchi_graphs() -> Result<(), String> {
     Ok(())
 }
 
+// Original nazuchem code (not in OPSIN): fn ordinary_names_with_phane_alternatives_are_never_preferred
 #[test]
 fn ordinary_names_with_phane_alternatives_are_never_preferred() -> Result<(), String> {
     for smiles in [META] {

@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/component_namer.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura component decision pipeline with local derivation, isotope and spiro projection adapters.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! The plain-name component pipeline, retaining upstream decision order.
 use super::{
     assembly_parts::SubstituentItem,
@@ -34,6 +42,7 @@ use super::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+// Adapted from src/openclatura/component_namer.py (adapted; upstream function mapping not recorded; local fn name_component)
 pub(super) fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Result<String, String> {
     name_component_with_citation(mol, component_atoms, None, None).map(|name| name.text)
 }
@@ -53,6 +62,7 @@ pub(super) enum Derivation {
 }
 
 impl Derivation {
+    // Original nazuchem code (not in openclatura 0.4.3): fn Derivation::component_splits
     pub(super) fn component_splits(&self) -> &BTreeSet<Edge> {
         match self {
             Self::Plan {
@@ -71,6 +81,7 @@ pub(super) struct ComponentName {
     pub derivation: Derivation,
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn name_component_with_citation
 pub(super) fn name_component_with_citation(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -121,6 +132,7 @@ pub(super) struct IsotopeParentName {
     pub derivation: Derivation,
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn name_component_with_atom_locants
 pub(super) fn name_component_with_atom_locants(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -177,6 +189,7 @@ enum ComponentResult {
     Plan(Box<ParentAssemblyPlan>, AtomSet, BTreeSet<Edge>),
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn build_spiro_component_parts
 pub(super) fn build_spiro_component_parts(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -208,6 +221,7 @@ pub(super) fn build_spiro_component_parts(
 }
 
 /// Apply the same shortcut precedence when auditing competing parent choices.
+// Adapted from src/openclatura/component_namer.py (adapted; upstream function mapping not recorded; local fn structural_parent)
 pub(super) fn structural_parent(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -246,6 +260,7 @@ pub(super) fn structural_parent(
     })
 }
 
+// Adapted from src/openclatura/component_namer.py::name_component (adapted; local fn component_pipeline)
 fn component_pipeline(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -636,6 +651,7 @@ fn component_pipeline(
     ))
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn render_component_parent
 pub(super) fn render_component_parent(
     mol: &Molecule,
     parts: &mut super::assembly_parts::AssemblyParts,
@@ -645,6 +661,7 @@ pub(super) fn render_component_parent(
     render_component_and_parent(mol, parts, numbered, locants).map(|(name, _)| name)
 }
 
+// Adapted from src/openclatura/component_namer.py (adapted; upstream function mapping not recorded; local fn render_component_and_parent)
 fn render_component_and_parent(
     mol: &Molecule,
     parts: &mut super::assembly_parts::AssemblyParts,
@@ -702,6 +719,7 @@ fn render_component_and_parent(
 }
 
 #[allow(clippy::too_many_arguments)]
+// Adapted from src/openclatura/component_namer.py::collect_component_branch_substituents (adapted; local fn collect_component_branch_substituents)
 fn collect_component_branch_substituents(
     mol: &Molecule,
     path: &[usize],
@@ -770,6 +788,7 @@ fn collect_component_branch_substituents(
 
 #[cfg(test)]
 mod tests {
+    // Original nazuchem code (not in openclatura 0.4.3): fn external_carboxylic_parent_names_keep_multiplicities_and_maximize_groups
     #[test]
     fn external_carboxylic_parent_names_keep_multiplicities_and_maximize_groups() {
         for (smiles, expected) in [
@@ -808,6 +827,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn external_carboxylic_parent_fallbacks_keep_dioic_names
     #[test]
     fn external_carboxylic_parent_fallbacks_keep_dioic_names() {
         for (smiles, expected) in [
@@ -828,6 +848,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn branched_acid_without_three_groups_on_one_chain_is_not_tricarboxylic
     #[test]
     fn branched_acid_without_three_groups_on_one_chain_is_not_tricarboxylic() {
         let name =
@@ -835,6 +856,7 @@ mod tests {
         assert!(!name.text.contains("tricarboxylic"));
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn external_carboxylates_with_another_anion_keep_the_old_parent
     #[test]
     fn external_carboxylates_with_another_anion_keep_the_old_parent() {
         // Any anionic centre outside the suffix keeps main's carbonyl-inclusive
@@ -847,6 +869,7 @@ mod tests {
         assert_eq!(name.text, "3-carboxylato-3-oxidopentanedioate");
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn isotope_labelled_tricarboxylic_acid_keeps_the_ordinary_parent
     #[test]
     fn isotope_labelled_tricarboxylic_acid_keeps_the_ordinary_parent() {
         let name = super::super::name_smiles("O[13C](=O)CC(O)(CC(=O)O)C(=O)O", &Default::default())
@@ -855,6 +878,7 @@ mod tests {
         assert!(!matches!(name.status, crate::naming::NameStatus::Preferred));
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn charged_retained_fallback_requires_citable_donor_hydrogen
     #[test]
     fn charged_retained_fallback_requires_citable_donor_hydrogen() {
         for smiles in ["C1=N[NH2+]c2ccccc21", "C1=Nc2ccccc2[NH2+]1"] {

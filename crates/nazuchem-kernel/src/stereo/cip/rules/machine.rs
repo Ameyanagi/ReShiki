@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: BSD-3-Clause AND (MIT OR Apache-2.0)
+// Origin: mixed adaptation of RDKit with ledger-marked local functions; source paths and pins follow.
+//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/Sort.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rules.h @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   ReShiki, crates/chemistry/src/stereo/cip/rules/machine.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (c) 2006-2015, Rational Discovery LLC, Greg Landrum, and Julie Penzotti and others
+// Changes: Rust adaptation; ledger-marked local functions; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 //! Explicit continuations for native recursive comparison and insertion sort.
 //! No Rust call-stack depth depends on molecular depth.
 // Copied unchanged from crates/chemistry/src/stereo/cip/rules/machine.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3
@@ -69,6 +78,7 @@ pub(super) enum Value {
     Groups(Vec<Vec<usize>>),
 }
 impl Value {
+    // Original nazuchem code (not in RDKit).
     fn storage(&self) -> usize {
         match self {
             Self::Number(_) => 0,
@@ -79,21 +89,25 @@ impl Value {
         }
     }
 }
+// Original nazuchem code (not in RDKit).
 fn group_storage(groups: &Vec<Vec<usize>>) -> usize {
     groups.capacity() * 3 + groups.iter().map(Vec::capacity).sum::<usize>()
 }
+// Original nazuchem code (not in RDKit).
 pub(super) fn number(value: Option<Value>) -> Result<i8, Error> {
     match value {
         Some(Value::Number(n)) => Ok(n),
         _ => Err(invalid("Missing comparison result")),
     }
 }
+// Original nazuchem code (not in RDKit).
 pub(super) fn sorted(value: Option<Value>) -> Result<Vec<usize>, Error> {
     match value {
         Some(Value::Sorted(s)) => Ok(s.edges),
         _ => Err(invalid("Missing sorted edges")),
     }
 }
+// Original nazuchem code (not in RDKit).
 pub(super) fn at<T: Copy>(values: &[T], index: usize) -> Result<T, Error> {
     values
         .get(index)
@@ -234,6 +248,7 @@ impl Frame {
             waiting: false,
         }
     }
+    // Original nazuchem code (not in RDKit).
     fn storage(&self) -> usize {
         match self {
             Self::Sort(s) => s.edges.capacity(),
@@ -247,6 +262,7 @@ impl Frame {
             _ => 0,
         }
     }
+    // Adapted from Code/GraphMol/CIPLabeler/Sort.cpp and Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp and Code/GraphMol/CIPLabeler/rules/Rules.h::Frame::step (local Rust boundary; exact upstream function mapping not recorded).
     fn step(
         self,
         rules: &Rules,
@@ -423,6 +439,7 @@ impl Frame {
     }
 }
 impl Sequence {
+    // Adapted from Code/GraphMol/CIPLabeler/Sort.cpp and Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp and Code/GraphMol/CIPLabeler/rules/Rules.h::Sequence::step (local Rust boundary; exact upstream function mapping not recorded).
     fn step(mut self, ctx: &mut Context<'_, '_>, input: Option<Value>) -> Result<Step, Error> {
         match self.phase {
             Phase::Start => {
@@ -506,6 +523,7 @@ impl Sequence {
         }
         Ok(Step::Again(Frame::Sequence(self)))
     }
+    // Adapted from Code/GraphMol/CIPLabeler/Sort.cpp and Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp and Code/GraphMol/CIPLabeler/rules/Rules.h::Sequence::sort_a (local Rust boundary; exact upstream function mapping not recorded).
     fn sort_a(mut self, deep: bool) -> Step {
         self.phase = Phase::SortA(deep);
         let child = Frame::sort(
@@ -523,6 +541,7 @@ pub(super) struct Machine {
     storage: usize,
 }
 impl Machine {
+    // Original nazuchem code (not in RDKit).
     fn push(&mut self, frame: Frame) -> Result<(), Error> {
         self.storage = self
             .storage
@@ -534,6 +553,7 @@ impl Machine {
         self.stack.push(frame);
         Ok(())
     }
+    // Original nazuchem code (not in RDKit).
     pub(super) fn run(
         rules: &Rules,
         ctx: &mut Context<'_, '_>,

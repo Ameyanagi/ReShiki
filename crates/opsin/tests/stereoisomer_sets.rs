@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/opsin/tests/stereoisomer_sets.rs @ 82d110bdf311502cdb3b3b4fc74827d613c2768a.
+
 use std::collections::BTreeSet;
 
 use nazuchem_kernel::smiles::stereoisomers;

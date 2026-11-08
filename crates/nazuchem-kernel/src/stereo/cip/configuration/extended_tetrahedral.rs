@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-2-Clause
+// Origin: adapted from SiMolecule centres; source paths and pins follow.
+//   SiMolecule centres, core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java @ d4b2ca46228bdf8814ff0c1f00465be4085af8c9.
+//   ReShiki, crates/chemistry/src/stereo/cip/configuration/extended_tetrahedral.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (c) 2020 John Mayfield
+// Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 //! Extended-tetrahedral labeling adapted from SiMolecule centres
 //! config/ExtendedTetrahedral.java, revision d4b2ca46228bdf8814ff0c1f00465be4085af8c9.
 //

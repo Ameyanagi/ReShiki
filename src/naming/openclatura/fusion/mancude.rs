@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/fusion/mancude.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura parent bond-state and hydrogen derivative proofs, extended by local protonated-H and suffix-composition entry points.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Compare observed bonding with an exhaustive parent-hydride bond model.
 use super::super::{
     assembly_parts::HydroOperation,
@@ -236,6 +244,7 @@ pub(super) fn has_complete_saturated_hydrogenation(
             .all(|(e, o)| *o == 1 || (*o == 2 && edges.contains(e)))
 }
 /// A charged sigma N citation must preserve ring pi count and hydrogen sites.
+// Original nazuchem code (not in openclatura 0.4.3): fn protonated_hydrogenation_is_complete
 pub(super) fn protonated_hydrogenation_is_complete(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -816,6 +825,7 @@ fn external_pi_parent_delta(
 
 /// Compose oxo suffix sites before assigning added and residual hydro hydrogen.
 /// Preserve the complete proof, including any required pi redistribution.
+// Original nazuchem code (not in openclatura 0.4.3): fn suffix_hydrogen_state
 pub(in super::super) fn suffix_hydrogen_state(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -828,6 +838,7 @@ pub(in super::super) fn suffix_hydrogen_state(
     external_pi_parent_state(mol, atoms, model, suffix, locants, false, true)
 }
 
+// Adapted from src/openclatura/fusion/mancude.py (adapted; upstream function mapping not recorded; local fn external_pi_parent_state)
 fn external_pi_parent_state(
     mol: &Molecule,
     atoms: &AtomSet,

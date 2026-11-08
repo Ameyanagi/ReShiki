@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/fusion/planner.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura audited fusion planner with separate local benzo-parent planning, spiro entry and localized-pi refusal proof.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Audited systematic fusion planning in upstream candidate and rule order.
 use super::super::{
     locants::retained_locant_sort_key as locant_key,
@@ -55,6 +63,7 @@ pub fn plan_fusion_parent(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
 
 /// Component-local indicated H cannot discard a valid lower spiro junction.
 /// This context is kept outside the ordinary isolated-parent plan cache.
+// Original nazuchem code (not in openclatura 0.4.3): fn plan_fusion_parent_for_spiro
 pub(in super::super) fn plan_fusion_parent_for_spiro(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -402,6 +411,7 @@ pub(super) fn plan_numbered_candidate(
     Ok(Some(plan))
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn plan_benzoheterocycle
 fn plan_benzoheterocycle(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -850,6 +860,7 @@ fn standard_valence_parent(mol: &Molecule, atoms: &AtomSet) -> bool {
 // alternating 4n cycle with a nonaromatic bond can retain its skeleton and
 // hydrogens while reconstructing a different localized double-bond arrangement.
 // Aromatic endpoints do not make an explicit inter-ring bond aromatic.
+// Original nazuchem code (not in openclatura 0.4.3): fn unresolved_localized_pi_cycle
 fn unresolved_localized_pi_cycle(
     mol: &Molecule,
     model: &ParentBondModel,
@@ -1010,6 +1021,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn protonated_fused_citations_preserve_carbon_hydrogenation
     #[test]
     fn protonated_fused_citations_preserve_carbon_hydrogenation() {
         for smiles in [
@@ -1029,6 +1041,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn localized_nonaromatic_pi_alternatives_require_a_citation_witness
     #[test]
     fn localized_nonaromatic_pi_alternatives_require_a_citation_witness() {
         for text in [

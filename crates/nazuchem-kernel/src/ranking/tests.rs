@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/chemistry/src/ranking/tests.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+
 // Copied from crates/chemistry/src/ranking/tests.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: omit host allocation measurement and pass an explicit default import budget
 use super::*;
 use crate::graph::{Atom, Bond};

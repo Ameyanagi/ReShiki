@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/retained_name_policy.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   ReShiki, src/naming/openclatura/retained_name_policy.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura retained-parent spelling/hydrogenation policies with local serde/debug glue and regression tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Preferred retained spellings and explicitly declared hydrogenation policies.
 use super::{formatting::format_multiplier, locants::retained_locant_sort_key as parse_locant};
 use serde::{Deserialize, de::IgnoredAny};
@@ -14,6 +23,7 @@ pub struct RetainedHydrogenationPolicy {
     pub indicated_hydrogen_locants: Vec<String>,
 }
 impl RetainedHydrogenationPolicy {
+    // Adapted from src/openclatura/retained_name_policy.py (adapted; upstream function mapping not recorded; local fn RetainedHydrogenationPolicy::relocated)
     pub fn relocated(&self, suffix_locants: &BTreeSet<String>) -> Self {
         let mut moved: Vec<_> = self
             .hydro_locants
@@ -41,6 +51,7 @@ impl RetainedHydrogenationPolicy {
             indicated_hydrogen_locants: moved,
         }
     }
+    // Adapted from src/openclatura/retained_name_policy.py::render (adapted; local fn RetainedHydrogenationPolicy::parent_name)
     pub(super) fn parent_name(&self) -> String {
         let mut parent = self.base_parent.as_str();
         if let Some((prefix, rest)) = parent.split_once('-')
@@ -63,6 +74,7 @@ impl RetainedHydrogenationPolicy {
             )
         }
     }
+    // Adapted from src/openclatura/retained_name_policy.py::render (adapted; local fn RetainedHydrogenationPolicy::render_with_parent)
     pub(super) fn render_with_parent(&self, parent: &str) -> String {
         format!(
             "{}-{}{}{parent}",
@@ -75,6 +87,7 @@ impl RetainedHydrogenationPolicy {
             },
         )
     }
+    // Adapted from src/openclatura/retained_name_policy.py (adapted; upstream function mapping not recorded; local fn RetainedHydrogenationPolicy::render)
     pub fn render(&self) -> String {
         self.render_with_parent(&self.parent_name())
     }
@@ -95,6 +108,7 @@ pub struct RetainedParentNamePolicy {
 }
 
 impl std::fmt::Debug for RetainedParentNamePolicy {
+    // Original nazuchem code (not in openclatura 0.4.3): fn RetainedParentNamePolicy::fmt
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("RetainedParentNamePolicy")
@@ -114,10 +128,12 @@ struct RetainedParentNamePolicyData {
     _bluebook_rule: IgnoredAny,
     parents: Vec<RetainedParentNamePolicy>,
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn all_contexts
 fn all_contexts() -> Vec<String> {
     vec!["all".into()]
 }
 impl RetainedParentNamePolicy {
+    // Adapted from src/openclatura/retained_name_policy.py (adapted; upstream function mapping not recorded; local fn RetainedParentNamePolicy::output_name)
     pub fn output_name(&self, context: &str) -> String {
         self.context_names.get(context).cloned().unwrap_or_else(|| {
             if self
@@ -148,12 +164,15 @@ static POLICIES: LazyLock<Vec<RetainedParentNamePolicy>> = LazyLock::new(|| {
     }
     rows
 });
+// Adapted from src/openclatura/retained_name_policy.py (adapted; upstream function mapping not recorded; local fn retained_parent_name_policies)
 pub fn retained_parent_name_policies() -> &'static [RetainedParentNamePolicy] {
     &POLICIES
 }
+// Adapted from src/openclatura/retained_name_policy.py (adapted; upstream function mapping not recorded; local fn retained_parent_name_policy)
 pub fn retained_parent_name_policy(name: &str) -> Option<&'static RetainedParentNamePolicy> {
     POLICIES.iter().find(|p| p.template_name == name)
 }
+// Adapted from src/openclatura/retained_name_policy.py (adapted; upstream function mapping not recorded; local fn retained_parent_output_name)
 pub fn retained_parent_output_name(
     name: &str,
     context: &str,
@@ -164,6 +183,7 @@ pub fn retained_parent_output_name(
         retained_parent_name_policy(name).map_or_else(|| name.into(), |p| p.output_name(context));
     render_retained_hydrogen_state(&name, default_indicated_h, indicated_h)
 }
+// Adapted from src/openclatura/retained_name_policy.py (adapted; upstream function mapping not recorded; local fn render_retained_hydrogen_state)
 pub fn render_retained_hydrogen_state(
     name: &str,
     default_indicated_h: &[String],
@@ -194,6 +214,7 @@ pub fn render_retained_hydrogen_state(
 mod tests {
     use crate::naming::{NameReason, NameStatus, verify_identity};
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn selected_hydrogen_replaces_the_source_parent_descriptor
     #[test]
     fn selected_hydrogen_replaces_the_source_parent_descriptor() {
         assert_eq!(
@@ -214,6 +235,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn benzoheterocycle_locants_survive_substitution_fusion_and_spiro
     #[test]
     fn benzoheterocycle_locants_survive_substitution_fusion_and_spiro() {
         let parser = opsin::Parser::new().unwrap();
@@ -330,6 +352,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn retained_parent_indicated_hydrogen_survives_replacement
     #[test]
     fn retained_parent_indicated_hydrogen_survives_replacement() {
         let parser = opsin::Parser::new().unwrap();
@@ -379,6 +402,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn recursive_benzo_policy_preserves_other_retained_substituents
     #[test]
     fn recursive_benzo_policy_preserves_other_retained_substituents() {
         for (smiles, expected) in [

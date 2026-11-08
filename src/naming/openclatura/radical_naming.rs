@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code.
+//   ReShiki, src/naming/openclatura/radical_naming.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! Neutral radicals whose subtractive P-71 names have exact parser identities.
 //!
 //! https://iupac.qmul.ac.uk/BlueBook/P7.html, P-71.2.1–P-71.3.4.

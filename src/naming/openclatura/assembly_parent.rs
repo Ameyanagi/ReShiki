@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/assembly_parent.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura retained/stem/tail renderer with local ion, assembly and preferred-parent extensions.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Parent stems, unsaturation and principal/substituent tails.
 use super::{
     assembly_charge::{
@@ -15,6 +23,7 @@ use super::{
     spelling,
 };
 
+// Adapted from src/openclatura/assembly_parent.py::RETAINED_FUNCTIONAL_PARENTS (adapted; local fn functional_ring_parent)
 fn functional_ring_parent(name: &str, key: &str) -> Option<String> {
     if name != "benzene" {
         return None;
@@ -58,10 +67,12 @@ fn functional_ring_parent(name: &str, key: &str) -> Option<String> {
     }
     None
 }
+// Adapted from src/openclatura/assembly_parent.py::halide_word (adapted; local fn halide_word)
 fn halide_word(key: &str) -> Option<&'static str> {
     let suffix = RULES.functional_groups.get(key)?.suffix.as_deref()?;
     suffix.strip_prefix("oyl ")
 }
+// Adapted from src/openclatura/assembly_parent.py::_retained_chain_parent (adapted; local fn retained_chain_name)
 fn retained_chain_name(length: usize, key: &str, count: usize) -> Option<String> {
     if let Some(name) =
         RULES
@@ -125,6 +136,7 @@ fn retained_chain_name(length: usize, key: &str, count: usize) -> Option<String>
     }
     None
 }
+// Adapted from src/openclatura/assembly_parent.py::_absorbed_retained_chain_branch (adapted; local fn absorbed_chain_branch)
 fn absorbed_chain_branch(
     parts: &AssemblyParts,
     key: &str,
@@ -170,6 +182,7 @@ fn absorbed_chain_branch(
     text.strip_suffix("amino")
         .map(|prefix| (format!("{prefix}{word}"), 0))
 }
+// Adapted from src/openclatura/assembly_parent.py::promote_benzene_retained_name (adapted; local fn promote_retained_hydride_name)
 pub fn promote_retained_hydride_name(parts: &mut AssemblyParts) {
     // P-31.1.2.1 permits acetylene only for unmodified, neutral HC≡CH.
     if !parts.is_ring
@@ -263,6 +276,7 @@ pub fn promote_retained_hydride_name(parts: &mut AssemblyParts) {
 }
 /// Select the retained anion parent before promotion so a missed application
 /// remains visible to the derivation assessor.
+// Original nazuchem code (not in openclatura 0.4.3): fn select_retained_anion_name
 pub fn select_retained_anion_name(parts: &mut AssemblyParts) {
     let Some(group) = parts.principal_group.as_ref() else {
         return;
@@ -320,6 +334,7 @@ pub fn select_retained_anion_name(parts: &mut AssemblyParts) {
         }
     }
 }
+// Adapted from src/openclatura/assembly_parent.py::promote_retained_functional_parent (adapted; local fn promote_retained_functional_parent)
 pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(), String> {
     let Some(group) = parts.principal_group.as_ref() else {
         return Ok(());
@@ -445,6 +460,7 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(
     }
     Ok(())
 }
+// Adapted from src/openclatura/assembly_parent.py::substituent_attachment_kind (adapted; local fn substituent_attachment_kind)
 fn substituent_attachment_kind(parts: &AssemblyParts) -> &'static str {
     match parts.attachment_order {
         3 => "triple",
@@ -453,6 +469,7 @@ fn substituent_attachment_kind(parts: &AssemblyParts) -> &'static str {
         _ => "single",
     }
 }
+// Adapted from src/openclatura/assembly_parent.py::promote_acyl_substituent_name (adapted; local fn promote_acyl_substituent_name)
 pub fn promote_acyl_substituent_name(parts: &mut AssemblyParts) {
     if !parts.is_substituent
         || parts.is_acyl_substituent
@@ -499,6 +516,7 @@ pub fn promote_acyl_substituent_name(parts: &mut AssemblyParts) {
     parts.acyl_infix = infix;
     parts.substituents.remove(index);
 }
+// Adapted from src/openclatura/assembly_parent.py::promote_carbamimidoyl_substituent_name (adapted; local fn promote_carbamimidoyl)
 fn promote_carbamimidoyl(parts: &mut AssemblyParts) {
     if !parts.is_substituent
         || parts.retained_substituent_name.is_some()
@@ -572,6 +590,7 @@ fn promote_carbamimidoyl(parts: &mut AssemblyParts) {
     }
     parts.substituents.clear();
 }
+// Adapted from src/openclatura/assembly_parent.py::promote_retained_substituent_name (adapted; local fn promote_retained_substituent_name)
 pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
     promote_carbamimidoyl(parts);
     if !parts.is_substituent
@@ -628,6 +647,7 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
         parts.substituents.remove(0);
     }
 }
+// Adapted from src/openclatura/assembly_parent.py::parent_stem_and_terminal (adapted; local fn parent_stem_and_terminal)
 pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String), String> {
     if let Some(parent) = parts
         .parent_hydride
@@ -813,6 +833,7 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
     ))
 }
 
+// Adapted from src/openclatura/assembly_parent.py (adapted; upstream function mapping not recorded; local fn split_parent_terminal)
 fn split_parent_terminal(name: &str) -> (String, String) {
     if let Some(stem) = name.strip_suffix('e') {
         (stem.into(), "e".into())
@@ -820,6 +841,7 @@ fn split_parent_terminal(name: &str) -> (String, String) {
         (name.into(), String::new())
     }
 }
+// Adapted from src/openclatura/assembly_parent.py::format_unsaturations (adapted; local fn format_unsaturations)
 pub fn format_unsaturations(
     parts: &AssemblyParts,
     stem: &str,
@@ -858,6 +880,7 @@ pub fn format_unsaturations(
     }
     (stem, pieces.concat(), cites_locants)
 }
+// Adapted from src/openclatura/assembly_parent.py::always_print_substituent_locant (adapted; local fn always_print_substituent_locant)
 pub fn always_print_substituent_locant(parts: &AssemblyParts) -> bool {
     if parts.isotope_explicit_locants {
         return true;
@@ -901,6 +924,7 @@ pub(super) struct ParentTail {
     pub(super) cites_locants: bool,
 }
 
+// Adapted from src/openclatura/assembly_parent.py::format_substituent_tail (adapted; local fn format_substituent_tail)
 pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> ParentTail {
     let kind = substituent_attachment_kind(parts);
     let mut suffix = RULES.assembly.substituent_attachment_suffixes[kind].clone();
@@ -1065,6 +1089,7 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
         cites_locants: cites_locants || attachment_cites_locants || charge_cites_locants,
     }
 }
+// Adapted from src/openclatura/assembly_parent.py (adapted; upstream function mapping not recorded; local fn sole_group_redundant)
 pub(super) fn sole_group_redundant(parts: &AssemblyParts) -> bool {
     if parts
         .substituents
@@ -1085,6 +1110,7 @@ pub(super) fn sole_group_redundant(parts: &AssemblyParts) -> bool {
     }
     !parts.is_substituent && parts.parent_length == 2
 }
+// Adapted from src/openclatura/assembly_parent.py (adapted; upstream function mapping not recorded; local fn suffix_modifiers)
 fn suffix_modifiers(parts: &AssemblyParts) -> String {
     let mut grouped = std::collections::BTreeMap::new();
     for m in &parts.principal_suffix_modifiers {
@@ -1117,6 +1143,7 @@ fn suffix_modifiers(parts: &AssemblyParts) -> String {
         })
         .collect()
 }
+// Adapted from src/openclatura/assembly_parent.py::format_principal_suffix (adapted; local fn format_principal_suffix)
 pub fn format_principal_suffix(
     parts: &AssemblyParts,
     terminal: &str,
@@ -1194,6 +1221,7 @@ pub fn format_principal_suffix(
         cites_locants || modifier_cites_locants,
     ))
 }
+// Adapted from src/openclatura/assembly_parent.py (adapted; upstream function mapping not recorded; local fn redundant_unsaturation)
 fn redundant_unsaturation(parts: &AssemblyParts) -> bool {
     if parts.isotope_explicit_locants {
         return false;
@@ -1216,6 +1244,7 @@ fn redundant_unsaturation(parts: &AssemblyParts) -> bool {
         && parts.principal_group.is_none()
         && parts.parent_charges.is_empty()
 }
+// Adapted from src/openclatura/assembly_parent.py::format_parent_tail (adapted; local fn format_parent_tail)
 pub(super) fn format_parent_tail(
     parts: &AssemblyParts,
     stem: &str,
@@ -1276,6 +1305,7 @@ pub(super) fn format_parent_tail(
     })
 }
 
+// Original nazuchem code (not in openclatura 0.4.3): fn assembly_suffix_stem
 fn assembly_suffix_stem(parts: &AssemblyParts, elide: bool) -> String {
     let name = parts.retained_name.as_deref().unwrap_or_default();
     if elide {
@@ -1294,6 +1324,7 @@ mod tests {
     use super::super::assembly_parts::{SubstituentItem, UnsaturationItem};
     use super::*;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn methylbenzene_parts
     fn methylbenzene_parts(locants: &[&str]) -> AssemblyParts {
         let mut parts = AssemblyParts::new(6);
         parts.is_ring = true;
@@ -1309,6 +1340,7 @@ mod tests {
         parts
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn methylbenzene_retained_names_follow_ring_separation
     #[test]
     fn methylbenzene_retained_names_follow_ring_separation() {
         for (locants, expected) in [
@@ -1338,6 +1370,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn methylbenzene_retained_names_require_plain_methyl_substitution
     #[test]
     fn methylbenzene_retained_names_require_plain_methyl_substitution() {
         for locants in [vec!["1", "2", "3"], vec!["1", "3", "5"]] {
@@ -1372,6 +1405,7 @@ mod tests {
         assert_eq!(parts.substituents.len(), 2);
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn methylbenzene_retained_names_exclude_functional_ionic_and_isotope_parents
     #[test]
     fn methylbenzene_retained_names_exclude_functional_ionic_and_isotope_parents() {
         use super::super::assembly_parts::{ParentChargeItem, PrincipalGroupItem};
@@ -1420,6 +1454,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn acetylene_is_reserved_for_the_unmodified_parent
     #[test]
     fn acetylene_is_reserved_for_the_unmodified_parent() {
         for (smiles, expected) in [
@@ -1443,6 +1478,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn rendered_parent
     fn rendered_parent(parts: &AssemblyParts) -> String {
         let (stem, terminal) = parent_stem_and_terminal(parts).unwrap();
         let tail = if parts.is_substituent {
@@ -1456,6 +1492,7 @@ mod tests {
         )
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn anion_composition_preserves_the_full_hydride_until_each_join
     #[test]
     fn anion_composition_preserves_the_full_hydride_until_each_join() {
         use super::super::assembly_parts::{AnionSuffix, PrincipalGroupItem};
@@ -1483,6 +1520,7 @@ mod tests {
         assert_eq!(rendered_parent(&parts), "propan-1-id-3-aminium");
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn anion_substituents_keep_full_hydrides_and_elide_before_attachment
     #[test]
     fn anion_substituents_keep_full_hydrides_and_elide_before_attachment() {
         use super::super::assembly_parts::AnionSuffix;
@@ -1509,6 +1547,7 @@ mod tests {
         assert_eq!(rendered_parent(&parts), "benzenidyl");
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn anion_charge_stacks_cite_cations_first_and_keep_cation_only_spelling
     #[test]
     fn anion_charge_stacks_cite_cations_first_and_keep_cation_only_spelling() {
         use super::super::assembly_parts::{AnionSuffix, ParentChargeItem};
@@ -1555,6 +1594,7 @@ mod tests {
         assert_eq!(rendered_parent(&parts), "piperazine-1,4-diium");
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn cation_suffixes_keep_e_before_multipliers_and_elide_before_ium
     #[test]
     fn cation_suffixes_keep_e_before_multipliers_and_elide_before_ium() {
         use super::super::assembly_parts::ParentChargeItem;
@@ -1580,6 +1620,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn anilinium_absorbs_one_aminium_group_and_keeps_substituent_locants
     #[test]
     fn anilinium_absorbs_one_aminium_group_and_keeps_substituent_locants() {
         use super::super::assembly_parts::{PrincipalGroupItem, SubstituentItem};
@@ -1610,6 +1651,7 @@ mod tests {
         assert_eq!(rendered_parent(&parts), "benzene-1,4-bis(aminium)");
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_composition_keeps_attachment_and_parent_unsaturation_locants
     #[test]
     fn spiro_composition_keeps_attachment_and_parent_unsaturation_locants() {
         use super::super::assembly_parts::UnsaturationItem;

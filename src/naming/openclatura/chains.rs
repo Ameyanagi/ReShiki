@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/chains.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/canonical_ranks.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura chain/ring enumeration plus Morgan ranks from a second upstream module.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Carbon-chain enumeration and audited ring systems from Python `chains.py`.
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -34,11 +43,13 @@ pub struct PolycycleDescriptorCandidate {
 }
 
 impl PolycycleDescriptorCandidate {
+    // Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn PolycycleDescriptorCandidate::descriptor_allowed)
     pub fn descriptor_allowed(&self) -> bool {
         !self.is_von_baeyer || !self.numberings.is_empty()
     }
 }
 
+// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn audited_von_baeyer_numberings)
 fn audited_von_baeyer_numberings(
     descriptor: &str,
     paths: &[Vec<usize>],
@@ -54,6 +65,7 @@ fn audited_von_baeyer_numberings(
 
 /// Preserve every reconstructable numbering of the first accepted descriptor,
 /// so heteroatom, unsaturation and substituent rules settle its orientation.
+// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn polyspiro_or_von_baeyer_candidate)
 pub fn polyspiro_or_von_baeyer_candidate(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -187,6 +199,7 @@ pub fn polyspiro_or_von_baeyer_candidate(
     }
 }
 
+// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn first_retained_path)
 fn first_retained_path(mol: &Molecule, paths: &[Vec<usize>]) -> Option<Vec<usize>> {
     paths
         .iter()
@@ -196,6 +209,7 @@ fn first_retained_path(mol: &Molecule, paths: &[Vec<usize>]) -> Option<Vec<usize
 
 /// Cycle membership in the induced graph. This deliberately tests membership,
 /// rather than using the 2-core (which can also contain bridges between rings).
+// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn get_cyclic_atoms)
 pub fn get_cyclic_atoms(mol: &Molecule, exclude_atoms: &AtomSet) -> AtomSet {
     let valid: AtomSet = mol
         .atoms
@@ -213,6 +227,7 @@ pub fn get_cyclic_atoms(mol: &Molecule, exclude_atoms: &AtomSet) -> AtomSet {
         .collect()
 }
 
+// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn find_all_carbon_paths)
 pub fn find_all_carbon_paths(
     mol: &Molecule,
     exclude_atoms: &AtomSet,
@@ -288,6 +303,7 @@ struct RingBlock {
 }
 
 /// Ring blocks and spiro merging in upstream `find_ring_systems` order.
+// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn find_ring_systems)
 pub fn find_ring_systems(
     mol: &Molecule,
     exclude_atoms: &AtomSet,
@@ -556,6 +572,7 @@ pub fn find_ring_systems(
     Ok(merge_polyspiro_ring_systems(mol, systems))
 }
 
+// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn confirmed_fusion_numbering_paths)
 fn confirmed_fusion_numbering_paths(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -578,6 +595,7 @@ fn confirmed_fusion_numbering_paths(
         .collect())
 }
 
+// Adapted from src/openclatura/chains.py::_fallback_monospiro_or_bicyclo_system (adapted; local fn fallback_bicyclo_paths)
 fn fallback_bicyclo_paths(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -675,6 +693,7 @@ fn fallback_bicyclo_paths(
 
 /// Keep upstream's final overlap merge for ring systems split around a
 /// multi-spiro parent. Separate cycles connected by a bridge never overlap.
+// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn merge_polyspiro_ring_systems)
 fn merge_polyspiro_ring_systems(mol: &Molecule, systems: Vec<RingSystem>) -> Vec<RingSystem> {
     let mut result = Vec::new();
     let mut seen = BTreeSet::new();
@@ -726,6 +745,7 @@ fn merge_polyspiro_ring_systems(mol: &Molecule, systems: Vec<RingSystem>) -> Vec
     result
 }
 
+// Ported from src/openclatura/canonical_ranks.py::_order (port; local fn ranking_order)
 fn ranking_order(mol: &Molecule, u: usize, v: usize) -> usize {
     match mol.get_bond(u, v) {
         None => 0,
@@ -734,6 +754,7 @@ fn ranking_order(mol: &Molecule, u: usize, v: usize) -> usize {
     }
 }
 
+// Ported from src/openclatura/canonical_ranks.py::_ranks_from_invariants (port; local fn rank_invariants)
 fn rank_invariants<T: Ord>(invariants: BTreeMap<usize, T>) -> BTreeMap<usize, usize> {
     let ordering: BTreeMap<&T, usize> = invariants
         .values()
@@ -749,6 +770,7 @@ fn rank_invariants<T: Ord>(invariants: BTreeMap<usize, T>) -> BTreeMap<usize, us
 }
 
 /// Python's Morgan equivalence ranks, including aromatic-order normalization.
+// Ported from src/openclatura/canonical_ranks.py::canonical_ranks (port; local fn canonical_ranks)
 pub fn canonical_ranks(mol: &Molecule, atom_ids: Option<&AtomSet>) -> BTreeMap<usize, usize> {
     let all_atoms;
     let atoms = match atom_ids {
@@ -825,6 +847,7 @@ mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn symmetric_diamide_numbering_breaks_endpoint_ties_by_citation
     #[test]
     fn symmetric_diamide_numbering_breaks_endpoint_ties_by_citation() {
         let smiles = "C1CCC(CC1)NC(=O)CCC(=O)NC2=NN=C3N2C=CC=C3";
@@ -841,6 +864,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn carbon_paths_keep_only_maximal_leaf_to_leaf_walks
     #[test]
     fn carbon_paths_keep_only_maximal_leaf_to_leaf_walks() {
         let mol = read_smiles("CCC(C)CC", &Default::default()).unwrap();
@@ -862,6 +886,7 @@ mod tests {
             3
         );
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn ring_atoms_are_removed_from_chain_enumeration
     #[test]
     fn ring_atoms_are_removed_from_chain_enumeration() {
         let mol = read_smiles("CCC1CCCCC1", &Default::default()).unwrap();
@@ -880,12 +905,14 @@ mod tests {
             vec![2]
         );
     }
+    // Original nazuchem code (not in openclatura 0.4.3): fn cutting_a_ring_breaks_its_cycle_membership
     #[test]
     fn cutting_a_ring_breaks_its_cycle_membership() {
         let mol = read_smiles("C1CCCCC1", &Default::default()).unwrap();
         assert!(get_cyclic_atoms(&mol, &AtomSet::from([0])).is_empty());
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn separate_ring_systems_follow_upstream_block_and_walk_order
     #[test]
     fn separate_ring_systems_follow_upstream_block_and_walk_order() {
         let mol = read_smiles("C1(C2CCC2)CCC1", &Default::default()).unwrap();
@@ -906,6 +933,7 @@ mod tests {
         assert_eq!(remaining[0].paths, vec![vec![1, 2, 3, 4]]);
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn linking_chain_atoms_are_not_cyclic
     #[test]
     fn linking_chain_atoms_are_not_cyclic() {
         let mol = read_smiles("C1(CC2CCC2)CCC1", &Default::default()).unwrap();
@@ -919,6 +947,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn pure_spiro_merging_preserves_separate_ring_systems
     #[test]
     fn pure_spiro_merging_preserves_separate_ring_systems() {
         let mol = read_smiles("C1CC1CC2CC23CC3", &Default::default()).unwrap();
@@ -950,6 +979,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn dispiro_is_one_complete_descriptor_parent
     #[test]
     fn dispiro_is_one_complete_descriptor_parent() {
         let mol = read_smiles("C1CC2(C1)CCC1(CC2)CC1", &Default::default()).unwrap();
@@ -965,6 +995,7 @@ mod tests {
         assert!(systems[0].paths.iter().all(|path| path.len() == 11));
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn larger_spiro_fallback_exposes_a_component_for_graph_composition
     #[test]
     fn larger_spiro_fallback_exposes_a_component_for_graph_composition() {
         let mol = read_smiles("C1CC12CC23CC34CC4", &Default::default()).unwrap();
@@ -984,6 +1015,7 @@ mod tests {
 
     #[test]
     #[ignore = "development topology parity against installed Python oracle TSV"]
+    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_topology_parity_file
     fn spiro_topology_parity_file() {
         let path = std::env::var("OPENCLATURA_TOPOLOGY").expect("OPENCLATURA_TOPOLOGY TSV path");
         let input = std::fs::read_to_string(path).expect("read topology oracle");
@@ -1025,6 +1057,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn aromatic_morgan_ranks_preserve_ring_symmetry
     #[test]
     fn aromatic_morgan_ranks_preserve_ring_symmetry() {
         let mol = read_smiles("c1ccccc1", &Default::default()).unwrap();
@@ -1037,6 +1070,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn bicyclo_bridge_ties_preserve_secondary_unsaturation_locants
     #[test]
     fn bicyclo_bridge_ties_preserve_secondary_unsaturation_locants() {
         for (smiles, expected) in [
@@ -1062,6 +1096,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn public_naming_bounds_exhaustive_branched_chain_search
     #[test]
     fn public_naming_bounds_exhaustive_branched_chain_search() {
         use super::super::name_smiles;

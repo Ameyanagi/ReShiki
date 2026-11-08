@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: ReShiki kernel-root extraction; inherited RDKit attribution is retained pending per-type origin confirmation.
+//   ReShiki, crates/chemistry/src/lib.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+//   RDKit 2026.03.6, Code/GraphMol/MolProps.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+//   RDKit 2026.03.6, Code/GraphMol/Atom.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+// Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
+// Unresolved: Inherited BSD attribution is stale/overbroad for the reduced root; author should confirm intended per-type origin before replacing it with an original-code header.
+
 //! Molecular preparation, drawing reconstruction and properties in safe Rust.
 //!
 //! Migrated operations use local sanitization and stereo perception. Remaining

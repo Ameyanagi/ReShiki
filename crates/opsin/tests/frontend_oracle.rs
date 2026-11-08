@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/opsin/tests/frontend_oracle.rs @ 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9.
+//   ReShiki, crates/opsin/tests/fixtures/parse-tree-golden.jsonl.gz @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+//   Data/API context: OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Parser.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+//   Data/API context: OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SortParses.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
+// Copyright 2017 Daniel Lowe
+
 //! Frozen Parser + SortParses output from the pinned upstream implementation.
 //! Test execution, decompression and parsing are entirely native Rust.
 use flate2::read::GzDecoder;

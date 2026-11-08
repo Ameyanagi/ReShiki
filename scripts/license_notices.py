@@ -64,7 +64,16 @@ def consolidated_notices(root, metadata):
         for field in ("license", "license_file", "source", "repository", "homepage", "authors"):
             if package.get(field):
                 index.append(f"  {field}: {json.dumps(package[field], ensure_ascii=False)}\n")
-        if package.get("id") in workspace and package.get("license") == "MIT OR Apache-2.0":
+        # The repository root uses the separately collected project/source terms.
+        # Other workspace crates may carry incorporated material even when their
+        # manifest still uses the original-code expression. Never skip those texts.
+        project_root = source.resolve() == root.resolve()
+        files = [] if project_root else list(notice_files(source))
+        if (
+            package.get("id") in workspace
+            and package.get("license") == "MIT OR Apache-2.0"
+            and not files
+        ):
             index.append(
                 "  Original workspace crate: see LICENSE, LICENSE-MIT, LICENSE-APACHE and NOTICE.\n"
             )
@@ -73,7 +82,8 @@ def consolidated_notices(root, metadata):
             index.append(
                 "  Separately licensed workspace component: complete terms follow below.\n"
             )
-        files = list(notice_files(source))
+        if project_root:
+            files = list(notice_files(source))
         for candidate, relative in files:
             record(f"{key}/{relative.as_posix()}", candidate.read_bytes())
         supplement = supplements.get(key)

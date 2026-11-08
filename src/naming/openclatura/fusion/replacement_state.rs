@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+// Origin: port of upstream code.
+//   openclatura 0.4.3, src/openclatura/fusion/replacement_state.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+
 //! Joint pi and hydrogen proof after replacement of a carbon fusion parent.
 use super::super::{
     locants::retained_locant_sort_key as locant_key,

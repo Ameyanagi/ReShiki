@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original nazuchem/ReShiki code.
+//   ReShiki, src/naming/openclatura/radical_ions.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! Bounded recovery of the closed-shell parent for descriptive radical-ion names.
 //!
 //! RC-85.1 permits a neutral parent's name followed by `radical cation` or

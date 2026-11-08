@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+// Origin: port of upstream code.
+//   openclatura 0.4.3, src/openclatura/fusion/citation_pi.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Copyright (c) 2026 lamalab-org
+
 //! Construction-order witnesses for an uncompletable citation pi assignment.
 use super::super::{locants::retained_locant_sort_key as locant_key, molecule::AtomSet};
 use super::model::*;

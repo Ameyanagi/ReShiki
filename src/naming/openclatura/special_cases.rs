@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/special_cases.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/nitrogen_roles.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/oxoacid_roles.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/component_namer.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/chalcogen_vocabulary.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   ReShiki, src/naming/openclatura/special_cases.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Large openclatura shortcut/ligand/functional-class adaptation, consolidated across role modules, with original shortcut safety/certification extensions and tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Whole-component shortcuts from Openclatura's `special_cases.py`.
 //!
 //! Matching is graph based; bindings and audit-only metadata are omitted from
@@ -25,15 +38,19 @@ use crate::naming::{NameReason, NameStatus};
 const SHORTCUT_STEREO_ERROR: &str =
     "openclatura: shortcut cannot preserve configured stereochemistry";
 
+// Original nazuchem code (not in openclatura 0.4.3): fn set
 fn set<const N: usize>(atoms: [usize; N]) -> AtomSet {
     atoms.into_iter().collect()
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn all_atoms
 fn all_atoms(mol: &Molecule) -> AtomSet {
     mol.atoms.keys().copied().collect()
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn outside
 fn outside(mol: &Molecule, atoms: &AtomSet) -> AtomSet {
     all_atoms(mol).difference(atoms).copied().collect()
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn require_stereo_free_core
 fn require_stereo_free_core(mol: &Molecule, atoms: &AtomSet) -> Result<(), String> {
     // Upstream divergence: manually spelled shortcut cores must not discard configured atom or bond stereo.
     if atoms.iter().any(|&idx| mol.atoms[&idx].has_stereo())
@@ -46,9 +63,11 @@ fn require_stereo_free_core(mol: &Molecule, atoms: &AtomSet) -> Result<(), Strin
     }
     Ok(())
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn center_ligands
 fn center_ligands(names: &[String]) -> String {
     format_center_ligands_by(names, substituent_sort_key)
 }
+// Original nazuchem code (not in openclatura 0.4.3): fn branch_name
 fn branch_name(
     mol: &Molecule,
     component: &AtomSet,
@@ -61,6 +80,7 @@ fn branch_name(
     name_subgraph_with_upstream(mol, root, &exclude, Some(upstream))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn single_atom_component_name)
 pub(super) fn single_atom_component_name(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -130,6 +150,7 @@ type SmallParentSpec<'a> = (
     &'a [(&'a str, i32)],
     &'a [(&'a str, &'a str, usize)],
 );
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn small_signature)
 fn small_signature(mol: &Molecule, atoms: &AtomSet) -> SmallSignature {
     let mut atom_sig: Vec<_> = atoms
         .iter()
@@ -152,6 +173,7 @@ fn small_signature(mol: &Molecule, atoms: &AtomSet) -> SmallSignature {
     }
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn small_inorganic_parent_name)
 fn small_inorganic_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
     if !(2..=9).contains(&atoms.len())
         || atoms
@@ -303,6 +325,7 @@ fn small_inorganic_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String
     None
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn carbon_ligand_atoms)
 fn carbon_ligand_atoms(mol: &Molecule, atoms: &AtomSet, root: usize, central: usize) -> AtomSet {
     let mut found = AtomSet::new();
     let mut queue = VecDeque::from([root]);
@@ -324,6 +347,7 @@ fn carbon_ligand_atoms(mol: &Molecule, atoms: &AtomSet, root: usize, central: us
     found
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn carbon_path)
 fn carbon_path(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -357,6 +381,7 @@ fn carbon_path(
     Ok(Vec::new())
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn alkyl_ligand_name)
 fn alkyl_ligand_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -390,6 +415,7 @@ fn alkyl_ligand_name(
     systematic_alkyl_name(mol, &carbons, root)
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn systematic_alkyl_name)
 fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> Result<String, String> {
     let _depth = mol.enter_naming()?;
     if atoms.len() == 1 {
@@ -461,6 +487,7 @@ fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> Result
     Ok(format!("{prefix}{parent}"))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn ligand_name)
 fn ligand_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -486,6 +513,7 @@ struct AzineSide {
 
 /// The graph roles from `nitrogen_roles.azine_roles`: the two carbon sides
 /// must partition the component after the C=N-N=C nitrogens are blocked.
+// Adapted from src/openclatura/nitrogen_roles.py::azine_roles (adapted; local fn azine_roles)
 fn azine_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<[AzineSide; 2]> {
     let mut roles = Vec::new();
     for &n1 in atoms {
@@ -549,6 +577,7 @@ fn azine_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<[AzineSide; 2]> {
     roles
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn is_amidino_carbon)
 fn is_amidino_carbon(mol: &Molecule, carbon: usize, nitrogen: usize) -> bool {
     let others: Vec<_> = mol
         .get_neighbors(carbon)
@@ -562,6 +591,7 @@ fn is_amidino_carbon(mol: &Molecule, carbon: usize, nitrogen: usize) -> bool {
             .all(|n| mol.atoms[n].symbol == "N" && mol.bond_order(carbon, *n) == 1)
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn hydrazone_name)
 fn hydrazone_name(
     mol: &Molecule,
     carbon: usize,
@@ -601,6 +631,7 @@ fn hydrazone_name(
 /// Port of the ordered `simple_azine_parent_name` shortcut. In particular,
 /// substituted amidino sides use their recursively named ylidenes before an
 /// anhydride elsewhere in a ligand can choose the whole-component citation.
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn simple_azine_parent_name)
 fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     for sides in azine_roles(mol, atoms) {
         let status = mol.name_status();
@@ -755,6 +786,7 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
     Ok(None)
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn ordered_simple_ring)
 fn ordered_simple_ring(mol: &Molecule, atoms: &AtomSet) -> Vec<usize> {
     if atoms.len() < 3
         || atoms.iter().any(|i| {
@@ -798,6 +830,7 @@ fn ordered_simple_ring(mol: &Molecule, atoms: &AtomSet) -> Vec<usize> {
     }
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn simple_cycle_unsaturation_locants)
 fn simple_cycle_unsaturation_locants(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     path.iter()
         .enumerate()
@@ -807,6 +840,7 @@ fn simple_cycle_unsaturation_locants(mol: &Molecule, path: &[usize]) -> Vec<usiz
         .collect()
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn simple_replacement_cycle_name)
 fn simple_replacement_cycle_name(mol: &Molecule, path: &[usize]) -> String {
     let mut hetero = BTreeMap::<(usize, String), Vec<usize>>::new();
     for (offset, atom) in path.iter().enumerate() {
@@ -860,11 +894,13 @@ fn simple_replacement_cycle_name(mol: &Molecule, path: &[usize]) -> String {
     )
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn carbonyl_side_locant_sort_key)
 fn carbonyl_side_locant_sort_key(locant: &str) -> (usize, &str) {
     let digits: String = locant.chars().take_while(char::is_ascii_digit).collect();
     (digits.parse().unwrap_or(999), locant)
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn carbaldehyde_side_ring)
 fn carbaldehyde_side_ring(mol: &Molecule, side: &AzineSide) -> Option<(AtomSet, usize)> {
     if !side.atoms.contains(&side.carbon) || !mol.atoms[&side.carbon].is_carbon() {
         return None;
@@ -886,6 +922,7 @@ fn carbaldehyde_side_ring(mol: &Molecule, side: &AzineSide) -> Option<(AtomSet, 
     (neighbors.len() == 1).then(|| (ring, neighbors[0]))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn carbonyl_equivalent_side_name)
 fn carbonyl_equivalent_side_name(
     mol: &Molecule,
     side: &AzineSide,
@@ -902,6 +939,7 @@ fn carbonyl_equivalent_side_name(
     Ok(name)
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn carbonyl_equivalent_side_name_unchecked)
 fn carbonyl_equivalent_side_name_unchecked(
     mol: &Molecule,
     side: &AzineSide,
@@ -1050,6 +1088,7 @@ fn carbonyl_equivalent_side_name_unchecked(
     simple_carbonyl_side_name(mol, side, as_ylidene)
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn simple_carbonyl_side_name)
 fn simple_carbonyl_side_name(
     mol: &Molecule,
     side: &AzineSide,
@@ -1157,6 +1196,7 @@ fn simple_carbonyl_side_name(
     })
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn sulfoxide_parent_name)
 fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let sulfurs: Vec<_> = atoms
         .iter()
@@ -1234,11 +1274,13 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
     Ok(Some(format!("({stereo})-{} sulfoxide", ligands.join(" "))))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn has_principal_group)
 fn has_principal_group(mol: &Molecule, atoms: &AtomSet) -> bool {
     perceive_groups(mol)
         .iter()
         .any(|g| g.is_principal_candidate && atoms.contains(&g.attachment_carbon))
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn competing_principal_group)
 fn competing_principal_group(mol: &Molecule, atoms: &AtomSet, central: usize) -> bool {
     perceive_groups(mol).iter().any(|g| {
         g.is_principal_candidate
@@ -1248,6 +1290,7 @@ fn competing_principal_group(mol: &Molecule, atoms: &AtomSet, central: usize) ->
     })
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn terminal_ligand_name)
 fn terminal_ligand_name(mol: &Molecule, idx: usize) -> String {
     // Upstream divergence: neutral terminal prefixes do not represent formal charge or atom stereo.
     if mol.atoms[&idx].charge != 0 || mol.atoms[&idx].has_stereo() {
@@ -1263,6 +1306,7 @@ fn terminal_ligand_name(mol: &Molecule, idx: usize) -> String {
     }
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn central_ligand_name)
 fn central_ligand_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1301,6 +1345,7 @@ fn central_ligand_name(
     }
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn simple_central_parent_hydride_name)
 fn simple_central_parent_hydride_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1536,15 +1581,18 @@ struct OxoRole {
     ligands: Vec<OxoLigand>,
 }
 impl OxoRole {
+    // Adapted from src/openclatura/oxoacid_roles.py::CentralOxoRole.count (adapted; local fn OxoRole::count)
     fn count(&self, role: OxoLigandRole) -> usize {
         self.ligands.iter().filter(|l| l.role == role).count()
     }
+    // Adapted from src/openclatura/oxoacid_roles.py (adapted; upstream function mapping not recorded; local fn OxoRole::core)
     fn core(&self) -> AtomSet {
         std::iter::once(self.central)
             .chain(self.ligands.iter().map(|l| l.oxygen))
             .collect()
     }
 }
+// Adapted from src/openclatura/oxoacid_roles.py::central_oxo_roles (adapted; local fn oxo_roles)
 fn oxo_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<OxoRole> {
     let mut roles = Vec::new();
     for &central in atoms {
@@ -1607,6 +1655,7 @@ fn oxo_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<OxoRole> {
     }
     roles
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn matching_oxo_spec)
 fn matching_oxo_spec<'a>(mol: &Molecule, role: &OxoRole) -> Option<&'a serde_json::Value>
 where
     'static: 'a,
@@ -1634,6 +1683,7 @@ where
                     .is_none_or(|c| c.as_i64() == Some(i64::from(atom.charge)))
         })
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn oxoacid_parent_name)
 fn oxoacid_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
     let roles = oxo_roles(mol, atoms);
     if roles.len() != 1 {
@@ -1657,6 +1707,7 @@ fn oxoacid_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
     };
     spec[field].as_str().map(str::to_owned)
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn modifier_phrase)
 fn modifier_phrase(names: &[String], safe: bool) -> String {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for name in names {
@@ -1676,6 +1727,7 @@ fn modifier_phrase(names: &[String], safe: bool) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn ester_modifier_name)
 fn ester_modifier_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1689,6 +1741,7 @@ fn ester_modifier_name(
     }
     alkyl_ligand_name(mol, atoms, root, oxygen)
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn oxoacid_ester_name)
 fn oxoacid_ester_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1854,6 +1907,7 @@ fn oxoacid_ester_name(
     })
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn organophosphorus_acid_name)
 fn organophosphorus_acid_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1981,6 +2035,7 @@ fn organophosphorus_acid_name(
     }))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn organoboronic_acid_name)
 fn organoboronic_acid_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2045,6 +2100,7 @@ fn organoboronic_acid_name(
     }))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn connected_branches)
 fn connected_branches(mol: &Molecule, atoms: &AtomSet) -> Vec<AtomSet> {
     let mut branches = Vec::new();
     let mut seen = AtomSet::new();
@@ -2067,6 +2123,7 @@ fn connected_branches(mol: &Molecule, atoms: &AtomSet) -> Vec<AtomSet> {
     }
     branches
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn ordered_backbone)
 fn ordered_backbone(mol: &Molecule, atoms: &AtomSet) -> Option<Vec<usize>> {
     let degrees: BTreeMap<_, _> = atoms
         .iter()
@@ -2109,6 +2166,7 @@ fn ordered_backbone(mol: &Molecule, atoms: &AtomSet) -> Option<Vec<usize>> {
     }
     Some(chain)
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn chain_oxide_oxygens)
 fn chain_oxide_oxygens(
     mol: &Molecule,
     chain: &[usize],
@@ -2141,6 +2199,7 @@ fn chain_oxide_oxygens(
     }
     (!oxides.is_empty()).then_some(oxides)
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn homonuclear_backbone)
 fn homonuclear_backbone(mol: &Molecule, atoms: &AtomSet) -> Option<(String, Vec<usize>)> {
     let mut candidates = Vec::new();
     let symbols: BTreeSet<_> = atoms.iter().map(|i| mol.atoms[i].symbol.clone()).collect();
@@ -2206,6 +2265,7 @@ fn homonuclear_backbone(mol: &Molecule, atoms: &AtomSet) -> Option<(String, Vec<
     }
     Some((symbol, ordered_backbone(mol, &connected)?))
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn same_element_parent_name)
 fn same_element_parent_name(symbol: &str, length: usize, orders: &[usize]) -> Option<String> {
     let parent = RULES.components.mononuclear_parent_hydrides.get(symbol)?;
     if length < 2 || !parent.ends_with("ane") {
@@ -2239,6 +2299,7 @@ fn same_element_parent_name(symbol: &str, length: usize, orders: &[usize]) -> Op
         format!("{stem}-{}-{ending}", unsaturated[0].0 + 1)
     })
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn locanted_ligand_prefix)
 fn locanted_ligand_prefix(items: &[(usize, String)]) -> String {
     let mut counts: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (loc, name) in items {
@@ -2262,6 +2323,7 @@ fn locanted_ligand_prefix(items: &[(usize, String)]) -> String {
         .collect::<Vec<_>>()
         .join("-")
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn homonuclear_chain_parent_name)
 fn homonuclear_chain_parent_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2453,6 +2515,7 @@ fn homonuclear_chain_parent_name(
     Ok(Some(name))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn nitrogen_ligands)
 fn nitrogen_ligands(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2494,6 +2557,7 @@ fn nitrogen_ligands(
     ligands.sort_by(|a, b| a.1.cmp(&b.1));
     Ok(Some(ligands))
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn hydroxyurea_parent_name)
 fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let centers: Vec<_> = atoms
         .iter()
@@ -2605,6 +2669,7 @@ fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
     prefixes.push("N'-hydroxy".into());
     Ok(Some(format!("{}urea", prefixes.join("-"))))
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn sulfamic_acid_name)
 fn sulfamic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let cyclic = get_cyclic_atoms(mol, &AtomSet::new());
     let mut centers = Vec::new();
@@ -2678,6 +2743,7 @@ fn sulfamic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
     let names: Vec<_> = ligands.into_iter().map(|(_, n)| n).collect();
     Ok(Some(format!("{}sulfamic acid", center_ligands(&names))))
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn azinic_acid_name)
 fn azinic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let mut centers = Vec::new();
     for &n in atoms {
@@ -2744,6 +2810,7 @@ fn azinic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, S
     }))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn phosphane_borane_zwitterion_name)
 fn phosphane_borane_zwitterion_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -2812,6 +2879,7 @@ fn phosphane_borane_zwitterion_name(
     )))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn sulfonium_ylide_name)
 fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let sulfurs: Vec<_> = atoms
         .iter()
@@ -2930,6 +2998,7 @@ fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String
     Ok(Some(format!("({prefix}){parent}")))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn nitrogen_chalcogenide_name)
 fn nitrogen_chalcogenide_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -3012,6 +3081,7 @@ fn nitrogen_chalcogenide_name(
     }))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn peroxide_linkage_name)
 fn peroxide_linkage_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     use super::nomenclature::section;
     let is_chalcogen = |i: usize| {
@@ -3123,9 +3193,11 @@ fn peroxide_linkage_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
     Ok(Some(format!("{phrase} {class}")))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn anhydride_half_atoms)
 fn anhydride_half_atoms(mol: &Molecule, start: usize, bridge: &AtomSet) -> AtomSet {
     subgraph_component(mol, start, bridge)
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn anhydride_half_name)
 fn anhydride_half_name(mol: &Molecule, start: usize, bridge: &AtomSet) -> Result<String, String> {
     let mut atoms = anhydride_half_atoms(mol, start, bridge);
     let mut fragment = mol.subgraph(&atoms);
@@ -3144,6 +3216,7 @@ fn anhydride_half_name(mol: &Molecule, start: usize, bridge: &AtomSet) -> Result
     )
     .map(|name| name.text)
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py::anhydride_class_name (adapted; local fn anhydride_class_name)
 fn anhydride_class_name(mol: &Molecule, path: &[usize]) -> Option<String> {
     use super::nomenclature::section;
     let elements: Vec<_> = path[1..path.len() - 1]
@@ -3192,6 +3265,7 @@ fn anhydride_class_name(mol: &Molecule, path: &[usize]) -> Option<String> {
             .replace("{replacement}", &replacement),
     )
 }
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn try_name_anhydride_component)
 pub(super) fn try_name_anhydride_component(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -3289,6 +3363,7 @@ pub(super) struct StructuralParentName {
 }
 
 impl StructuralParentName {
+    // Original nazuchem code (not in openclatura 0.4.3): fn StructuralParentName::ordinary
     pub(super) fn ordinary(name: String) -> Self {
         Self {
             name,
@@ -3299,6 +3374,7 @@ impl StructuralParentName {
     }
 }
 
+// Adapted from src/openclatura/component_namer.py::_blocking_suffix_defers_to_chain_parent (adapted; local fn blocking_suffix_defers_to_chain_parent)
 pub(super) fn blocking_suffix_defers_to_chain_parent(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -3334,6 +3410,7 @@ pub(super) fn blocking_suffix_defers_to_chain_parent(
 }
 
 #[cfg(test)]
+// Original nazuchem code (not in openclatura 0.4.3): fn structural_replacement_parent_name
 fn structural_replacement_parent_name(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -3341,6 +3418,7 @@ fn structural_replacement_parent_name(
     Ok(structural_replacement_parent_result(mol, atoms)?.map(|result| result.name))
 }
 
+// Adapted from src/openclatura/special_cases.py, src/openclatura/nitrogen_roles.py, src/openclatura/oxoacid_roles.py, src/openclatura/component_namer.py, src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn structural_replacement_parent_result)
 pub(super) fn structural_replacement_parent_result(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -3407,11 +3485,13 @@ mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn special
     fn special(smiles: &str) -> Option<String> {
         let mol = read_smiles(smiles, &Default::default()).unwrap();
         structural_replacement_parent_name(&mol, &all_atoms(&mol)).unwrap()
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn discarded_shortcut_candidates_restore_the_previous_status
     #[test]
     fn discarded_shortcut_candidates_restore_the_previous_status() {
         let mol = read_smiles("CC[S@](C)=O", &Default::default()).unwrap();
@@ -3440,6 +3520,7 @@ mod tests {
         assert_eq!(mol.name_status(), previous);
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn functional_class_splits_follow_only_selected_component_names
     #[test]
     fn functional_class_splits_follow_only_selected_component_names() {
         use super::super::{
@@ -3525,6 +3606,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn single_atom_hydrides_require_complete_hydrogen_count
     #[test]
     fn single_atom_hydrides_require_complete_hydrogen_count() {
         let mut mol = Molecule::new();
@@ -3538,6 +3620,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn graph_shortcuts_preserve_ligand_and_oxygen_roles
     #[test]
     fn graph_shortcuts_preserve_ligand_and_oxygen_roles() {
         assert_eq!(special("CS(C)=O"), None);
@@ -3556,6 +3639,7 @@ mod tests {
         assert_eq!(special("CB(O)O").as_deref(), Some("methylboronic acid"));
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn chalcogen_onium_hydrides_use_preferred_systematic_parents
     #[test]
     fn chalcogen_onium_hydrides_use_preferred_systematic_parents() {
         for (smiles, expected) in [
@@ -3592,6 +3676,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn chalcogen_onium_shortcut_declines_rings_and_other_ionic_centers
     #[test]
     fn chalcogen_onium_shortcut_declines_rings_and_other_ionic_centers() {
         for smiles in [
@@ -3640,6 +3725,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn mononuclear_hydrides_enclose_later_repeated_simple_ligands
     #[test]
     fn mononuclear_hydrides_enclose_later_repeated_simple_ligands() {
         for (smiles, expected) in [
@@ -3651,6 +3737,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn shortcut_certificates_require_audited_ligands
     #[test]
     fn shortcut_certificates_require_audited_ligands() {
         for (smiles, expected, certified) in [
@@ -3693,6 +3780,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn alkyl_shortcuts_decline_unrendered_ligand_stereo
     #[test]
     fn alkyl_shortcuts_decline_unrendered_ligand_stereo() {
         for smiles in [
@@ -3720,6 +3808,7 @@ mod tests {
         assert!(right.starts_with("(R)-") || right.starts_with("(S)-"));
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn manual_azine_shortcuts_decline_unrendered_atom_and_bond_stereo
     #[test]
     fn manual_azine_shortcuts_decline_unrendered_atom_and_bond_stereo() {
         for smiles in [
@@ -3736,6 +3825,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn charged_alkyl_ligands_are_not_rendered_as_neutral
     #[test]
     fn charged_alkyl_ligands_are_not_rendered_as_neutral() {
         for smiles in ["C[CH-]P(=O)(O)O", "C[CH-]B(O)O", "C[CH-]S(C)=O"] {
@@ -3746,6 +3836,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn public_naming_bounds_shortcut_alkyl_path_search
     #[test]
     fn public_naming_bounds_shortcut_alkyl_path_search() {
         use std::time::{Duration, Instant};
@@ -3769,6 +3860,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn phosphorus_functional_parents_keep_their_own_ligand_grouping
     #[test]
     fn phosphorus_functional_parents_keep_their_own_ligand_grouping() {
         for (smiles, expected) in [
@@ -3780,6 +3872,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn azine_shortcut_uses_symmetric_carbonyl_and_ring_side_roles
     #[test]
     fn azine_shortcut_uses_symmetric_carbonyl_and_ring_side_roles() {
         for (smiles, expected) in [
@@ -3804,6 +3897,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn azine_unsaturation_requires_order_independent_locants
     #[test]
     fn azine_unsaturation_requires_order_independent_locants() {
         for smiles in [
@@ -3829,6 +3923,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn substituted_amidino_azine_precedes_a_ligand_anhydride
     #[test]
     fn substituted_amidino_azine_precedes_a_ligand_anhydride() {
         let smiles = "CC(=O)OC(=O)N(/C(N)=N/N=C=O)C(C)C";
@@ -3845,6 +3940,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn homonuclear_parent_keeps_chain_and_substituent_locants
     #[test]
     fn homonuclear_parent_keeps_chain_and_substituent_locants() {
         assert_eq!(special("CSSC").as_deref(), Some("1,2-dimethyldisulfane"));
@@ -3869,6 +3965,7 @@ mod tests {
         );
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn anhydride_halves_use_acid_citation_suffixes
     #[test]
     fn anhydride_halves_use_acid_citation_suffixes() {
         for (smiles, expected) in [
@@ -3884,6 +3981,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn anhydride_certificate_counts_linkages_within_the_component
     #[test]
     fn anhydride_certificate_counts_linkages_within_the_component() {
         use super::super::principal_groups::{component_groups, component_principal_key};
@@ -3930,6 +4028,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn peroxol_suffix_defers_only_for_a_senior_heteroatom_chain
     #[test]
     fn peroxol_suffix_defers_only_for_a_senior_heteroatom_chain() {
         for (smiles, expected, chain_wins) in [

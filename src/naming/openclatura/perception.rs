@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
+//   openclatura 0.4.3, src/openclatura/perception.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/chalcogen_roles.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/chalcogen_vocabulary.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   openclatura 0.4.3, src/openclatura/nitrogen_roles.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+//   ReShiki, src/naming/openclatura/perception.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Consolidated openclatura functional-group, chalcogen and nitrogen-role adaptation with stricter local state checks and local regression tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Structural functional-group detectors in the same priority order as Openclatura.
 use super::molecule::{AtomSet, Molecule};
 use super::nomenclature::{
@@ -42,6 +54,7 @@ pub struct FunctionalGroupDescriptor {
     pub shared_atoms: Vec<usize>,
 }
 impl FunctionalGroupDescriptor {
+    // Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn FunctionalGroupDescriptor::atom_ids)
     pub fn atom_ids(&self) -> AtomSet {
         self.centers
             .iter()
@@ -57,6 +70,7 @@ impl FunctionalGroupDescriptor {
             )
             .collect()
     }
+    // Adapted from src/openclatura/chalcogen_roles.py (adapted; upstream function mapping not recorded; local fn FunctionalGroupDescriptor::ligands_with_role)
     pub fn ligands_with_role(&self, role: LigandRole) -> Vec<&ChalcogenLigand> {
         self.ligands.iter().filter(|l| l.role == role).collect()
     }
@@ -72,6 +86,7 @@ pub struct PerceivedGroup {
     pub resolved_rule: Option<FunctionalGroupRule>,
 }
 impl PerceivedGroup {
+    // Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn PerceivedGroup::new)
     pub fn new(
         key: impl Into<String>,
         principal: bool,
@@ -89,14 +104,17 @@ impl PerceivedGroup {
             ..Self::default()
         }
     }
+    // Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn PerceivedGroup::atom_ids)
     pub fn atom_ids(&self) -> AtomSet {
         let mut s = self.atoms_involved.clone();
         s.insert(self.attachment_carbon);
         s
     }
+    // Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn PerceivedGroup::prefix)
     pub fn prefix(&self) -> Option<&str> {
         self.resolved_rule.as_ref()?.prefix.as_deref()
     }
+    // Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn PerceivedGroup::atoms_without_attachment)
     fn atoms_without_attachment(&self) -> impl Iterator<Item = usize> + '_ {
         self.atoms_involved
             .iter()
@@ -104,6 +122,7 @@ impl PerceivedGroup {
             .copied()
     }
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn desc_group)
 fn desc_group(
     key: String,
     rule: Option<FunctionalGroupRule>,
@@ -118,12 +137,15 @@ fn desc_group(
     }
     g
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn is_chalcogen)
 fn is_chalcogen(s: &str) -> bool {
     matches!(s, "O" | "S" | "Se" | "Te" | "Po")
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn is_halogen)
 fn is_halogen(s: &str) -> bool {
     matches!(s, "F" | "Cl" | "Br" | "I")
 }
+// Adapted from src/openclatura/chalcogen_roles.py (adapted; upstream function mapping not recorded; local fn classify_chalcogen_ligand)
 pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Option<ChalcogenLigand> {
     let atom = m.atoms.get(&a)?;
     if !is_chalcogen(&atom.symbol) {
@@ -174,6 +196,7 @@ pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Optio
         attachment_atom: attachment,
     })
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn terminal_double)
 fn terminal_double(m: &Molecule, c: usize, used: &AtomSet) -> Option<ChalcogenLigand> {
     let ds = m
         .get_neighbors(c)
@@ -184,6 +207,7 @@ fn terminal_double(m: &Molecule, c: usize, used: &AtomSet) -> Option<ChalcogenLi
         .collect::<Vec<_>>();
     (ds.len() == 1).then(|| ds[0].clone())
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn cyclic_atoms)
 fn cyclic_atoms(m: &Molecule) -> AtomSet {
     // An edge is cyclic exactly when its endpoints remain connected without it.
     let mut out = AtomSet::new();
@@ -207,6 +231,7 @@ fn cyclic_atoms(m: &Molecule) -> AtomSet {
     }
     out
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn connected_without)
 fn connected_without(m: &Molecule, start: usize, target: usize, blocked: &AtomSet) -> bool {
     let mut seen = blocked.clone();
     seen.insert(start);
@@ -223,6 +248,7 @@ fn connected_without(m: &Molecule, start: usize, target: usize, blocked: &AtomSe
     }
     false
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn closes_ring)
 fn closes_ring(m: &Molecule, c: usize, hetero: usize, double: usize, cyclic: &AtomSet) -> bool {
     let mut seen = AtomSet::from([c, double]);
     let mut todo = VecDeque::from([hetero]);
@@ -238,6 +264,7 @@ fn closes_ring(m: &Molecule, c: usize, hetero: usize, double: usize, cyclic: &At
     }
     false
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn external_attachment)
 fn external_attachment(m: &Molecule, c: usize, cyclic: &AtomSet) -> (usize, bool) {
     let rings = m
         .get_neighbors(c)
@@ -251,6 +278,7 @@ fn external_attachment(m: &Molecule, c: usize, cyclic: &AtomSet) -> (usize, bool
         (c, false)
     }
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn descriptor)
 fn descriptor(
     family: &str,
     derivative: &str,
@@ -269,11 +297,13 @@ fn descriptor(
         ..Default::default()
     }
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn rank)
 fn rank(element: &str) -> i64 {
     section("chalcogen_elements")[element]["rank"]
         .as_i64()
         .unwrap_or(4)
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn infix)
 fn infix(elements: &[String]) -> String {
     let mut es = elements
         .iter()
@@ -300,12 +330,14 @@ fn infix(elements: &[String]) -> String {
         })
         .collect()
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn template)
 fn template(name: &str, values: &[(&str, String)]) -> String {
     format_template(
         section("chalcogen_templates")[name].as_str().unwrap_or(""),
         values,
     )
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn format_template)
 fn format_template(t: &str, values: &[(&str, String)]) -> String {
     let mut result = t.to_owned();
     for (k, v) in values {
@@ -313,6 +345,7 @@ fn format_template(t: &str, values: &[(&str, String)]) -> String {
     }
     result
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn simple_key)
 fn simple_key(family: &str, derivative: &str, element: &str, external: bool) -> Option<String> {
     section("chalcogen_simple_group_keys")
         .as_array()?
@@ -327,6 +360,7 @@ fn simple_key(family: &str, derivative: &str, element: &str, external: bool) -> 
         .as_str()
         .map(str::to_owned)
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn dynamic_rule)
 fn dynamic_rule(
     key: &str,
     policy: &serde_json::Value,
@@ -344,6 +378,7 @@ fn dynamic_rule(
     r.suffix_multiplier_positions = vec![0];
     r
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn resolve_acyl)
 fn resolve_acyl(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGroupRule>) {
     let double = &d.ligands[0];
     let single = d.ligands.get(1);
@@ -467,6 +502,7 @@ fn resolve_acyl(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGrou
     }
     (key, Some(r))
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn peroxo_infix)
 fn peroxo_infix(a: &str, b: &str) -> String {
     if a == "O" && b == "O" {
         return template("peroxo", &[]);
@@ -488,6 +524,7 @@ fn peroxo_infix(a: &str, b: &str) -> String {
         template("replaced_peroxo", &[("replacement", replacement)])
     }
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn resolve_peroxy)
 fn resolve_peroxy(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGroupRule>) {
     let ds = &d.ligands;
     let es = ds.iter().map(|l| l.element.clone()).collect::<Vec<_>>();
@@ -565,6 +602,7 @@ fn resolve_peroxy(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGr
     );
     (key, Some(r))
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn hydrazide_ns)
 fn hydrazide_ns(m: &Molecule, c: usize, n: usize, cyclic: &AtomSet) -> Option<Vec<usize>> {
     if cyclic.contains(&n) || m.atoms[&n].charge != 0 {
         return None;
@@ -618,6 +656,7 @@ fn hydrazide_ns(m: &Molecule, c: usize, n: usize, cyclic: &AtomSet) -> Option<Ve
     }
     Some(vec![n, t])
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn is_nitro_n)
 fn is_nitro_n(m: &Molecule, n: usize, parent: usize) -> bool {
     if m.atoms[&n].symbol != "N" || m.atoms[&n].total_h_count != 0 {
         return false;
@@ -633,6 +672,7 @@ fn is_nitro_n(m: &Molecule, n: usize, parent: usize) -> bool {
             .iter()
             .all(|&x| m.atoms[&x].symbol == "O" && m.degree(x) == 1)
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn urea_ns)
 fn urea_ns(m: &Molecule, c: usize, ns: &[usize], cyclic: &AtomSet) -> Option<Vec<usize>> {
     if cyclic.contains(&c) || ns.len() != 2 || m.degree(c) != 3 {
         return None;
@@ -653,6 +693,7 @@ fn urea_ns(m: &Molecule, c: usize, ns: &[usize], cyclic: &AtomSet) -> Option<Vec
     ns.sort();
     Some(ns)
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn plain_amine_n)
 fn plain_amine_n(m: &Molecule, n: usize, c: usize, cyclic: &AtomSet) -> bool {
     !cyclic.contains(&n)
         && m.atoms[&n].charge == 0
@@ -667,6 +708,7 @@ fn plain_amine_n(m: &Molecule, n: usize, c: usize, cyclic: &AtomSet) -> bool {
                     }))
         })
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn amidine)
 fn amidine(
     m: &Molecule,
     c: usize,
@@ -717,11 +759,13 @@ fn amidine(
         atoms,
     ))
 }
+// Adapted from src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn has_multiple)
 fn has_multiple(m: &Molecule, a: usize, allowed: &AtomSet) -> bool {
     m.get_neighbors(a)
         .iter()
         .any(|&n| !allowed.contains(&n) && m.atoms[&n].symbol != "H" && m.bond_order(a, n) > 1)
 }
+// Adapted from src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn amidino_tail)
 fn amidino_tail(m: &Molecule, n: usize, allowed: &AtomSet) -> AtomSet {
     for &c in m.get_neighbors(n) {
         if allowed.contains(&c) || !m.atoms[&c].is_carbon() || m.bond_order(n, c) != 2 {
@@ -739,6 +783,7 @@ fn amidino_tail(m: &Molecule, n: usize, allowed: &AtomSet) -> AtomSet {
     }
     AtomSet::new()
 }
+// Adapted from src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn terminal_imino)
 fn terminal_imino(m: &Molecule, n: usize, allowed: &AtomSet) -> bool {
     m.get_neighbors(n).iter().any(|&c| {
         !allowed.contains(&c)
@@ -750,6 +795,7 @@ fn terminal_imino(m: &Molecule, n: usize, allowed: &AtomSet) -> bool {
                     .all(|&x| x == n || m.atoms[&x].symbol == "H"))
     })
 }
+// Adapted from src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn hydrazone_key_attachment)
 fn hydrazone_key_attachment(
     m: &Molecule,
     c: usize,
@@ -795,6 +841,7 @@ fn hydrazone_key_attachment(
     };
     (key.into(), attach)
 }
+// Adapted from src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn nitrogen_chain_roles)
 fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> Vec<PerceivedGroup> {
     let mut roles = Vec::new();
     let mut blocked = consumed.clone();
@@ -999,6 +1046,7 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
     });
     roles
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn carbonyl_group)
 fn carbonyl_group(
     c: usize,
     attachment: usize,
@@ -1022,6 +1070,7 @@ fn carbonyl_group(
         ),
     ))
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn acyl_group)
 fn acyl_group(
     m: &Molecule,
     c: usize,
@@ -1270,6 +1319,7 @@ fn acyl_group(
     let (key, rule) = resolve_acyl(&desc);
     Some(vec![desc_group(key, rule, attachment, atoms, desc)])
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn leaving_descriptor)
 fn leaving_descriptor(kind: &str, atoms: Vec<usize>) -> LeavingGroupDescriptor {
     LeavingGroupDescriptor {
         kind: kind.into(),
@@ -1277,6 +1327,7 @@ fn leaving_descriptor(kind: &str, atoms: Vec<usize>) -> LeavingGroupDescriptor {
         atom_ids: atoms,
     }
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn pseudohalide_group)
 fn pseudohalide_group(
     m: &Molecule,
     c: usize,
@@ -1372,6 +1423,7 @@ fn pseudohalide_group(
     let (key, rule) = resolve_acyl(&d);
     Some(desc_group(key, rule, attach, atoms, d))
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn cyclic_imide)
 fn cyclic_imide(
     m: &Molecule,
     n: usize,
@@ -1423,6 +1475,7 @@ fn cyclic_imide(
     );
     Some(desc_group(key, Some(rule), cs[0], atoms, d))
 }
+// Adapted from src/openclatura/chalcogen_roles.py (adapted; upstream function mapping not recorded; local fn is_complete_acyl_end)
 fn is_complete_acyl_end(m: &Molecule, center: usize, double: usize, linkage: usize) -> bool {
     let atom = &m.atoms[&center];
     if !atom.is_carbon()
@@ -1468,6 +1521,7 @@ fn is_complete_acyl_end(m: &Molecule, center: usize, double: usize, linkage: usi
 }
 
 /// Characteristic groups named with an anionic suffix or prefix (P-72.2.2).
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn is_anionic_group_key)
 pub(super) fn is_anionic_group_key(key: &str) -> bool {
     matches!(
         key,
@@ -1475,6 +1529,7 @@ pub(super) fn is_anionic_group_key(key: &str) -> bool {
     )
 }
 
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn anhydride_groups)
 fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
     let mut groups = Vec::new();
     let mut seen = BTreeSet::new();
@@ -1605,6 +1660,7 @@ fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
     }
     groups
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn central_group)
 fn central_group(
     m: &Molecule,
     c: usize,
@@ -1755,6 +1811,7 @@ fn central_group(
     let (key, rule) = resolve_central(&d)?;
     Some(desc_group(key, rule, anchor, group_atoms, d))
 }
+// Adapted from src/openclatura/chalcogen_vocabulary.py (adapted; upstream function mapping not recorded; local fn resolve_central)
 fn resolve_central(d: &FunctionalGroupDescriptor) -> Option<(String, Option<FunctionalGroupRule>)> {
     let central = d.central_element.as_deref()?;
     let doubles = d
@@ -1931,6 +1988,7 @@ fn resolve_central(d: &FunctionalGroupDescriptor) -> Option<(String, Option<Func
     let rule = dynamic_rule(&key, policy, Some(prefix), Some(suffix), seniority, true);
     Some((key, Some(rule)))
 }
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn composable_groups)
 fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     let mut result = Vec::new();
     for b in m.bonds.values() {
@@ -2032,6 +2090,7 @@ fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     result
 }
 /// Perceive characteristic groups. Detector order and atom consumption follow Python.
+// Adapted from src/openclatura/perception.py, src/openclatura/chalcogen_roles.py, src/openclatura/chalcogen_vocabulary.py, src/openclatura/nitrogen_roles.py (adapted; upstream function mapping not recorded; local fn perceive_groups)
 pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     let mut groups = composable_groups(m);
     let mut consumed = AtomSet::new();
@@ -2833,6 +2892,7 @@ mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn unrecomputed_lambda_parent_hydrogens_are_unverified
     #[test]
     fn unrecomputed_lambda_parent_hydrogens_are_unverified() {
         use crate::naming::{NameReason, NameStatus};
@@ -2853,6 +2913,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes
     #[test]
     fn cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes() {
         use crate::naming::{NameStatus, verify_identity};
@@ -2976,6 +3037,7 @@ mod tests {
         }
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn cyano_chalcogen_ligands_do_not_consume_a_ring_skeleton
     #[test]
     fn cyano_chalcogen_ligands_do_not_consume_a_ring_skeleton() {
         for (smiles, expected) in [("CSC#N", "thiocyanato"), ("COC#N", "cyanato")] {
@@ -2987,6 +3049,7 @@ mod tests {
         assert!(groups.iter().all(|group| group.key != "thiocyanato"));
     }
 
+    // Original nazuchem code (not in openclatura 0.4.3): fn detects_group_priority_and_exocyclic_attachment
     #[test]
     fn detects_group_priority_and_exocyclic_attachment() {
         for (smiles, key) in [

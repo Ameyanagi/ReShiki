@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
+//   ReShiki, crates/opsin/tests/parent_locants.rs @ 89f30ab6d32736a8beccf3bab9c355c68f178f00.
+
 use std::collections::BTreeSet;
 
 use opsin::{
