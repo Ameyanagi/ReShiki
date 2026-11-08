@@ -53,6 +53,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("opsin", "carbohydrates"): 0,
     ("opsin", "carbohydrates_configuration"): 0,
     ("opsin", "chalcogen_acid_locants"): 0,
+    ("opsin", "chemistry_budget"): 0,
     ("opsin", "cip_ordering"): 0,
     ("opsin", "components_micro_syntax"): 0,
     ("opsin", "components_oracle"): 0,

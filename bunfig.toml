@@ -8,6 +8,7 @@ ignorePatterns = [
   "output/**",
   "assets/**",
   "tests/fixtures/**",
+  "crates/nazuchem-kernel/tests/fixtures/**",
   "src/naming/openclatura/data/**",
   "crates/model/src/chemistry/abbreviations/catalog.json",
   "docs/agent-reference.md",
