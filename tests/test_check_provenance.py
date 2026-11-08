@@ -109,7 +109,7 @@ class ProvenanceTests(unittest.TestCase):
             lines.append("[[file]]")
             for key, value in entry.items():
                 lines.append(f"{key} = {toml_value(value)}")
-        (self.root / LEDGER_NAME).write_text("\n".join(lines), encoding="utf-8")
+        (self.root / LEDGER_NAME).write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
     def check(self):
         self.write_ledger()
@@ -126,7 +126,7 @@ class ProvenanceTests(unittest.TestCase):
             with self.subTest(path=path):
                 target = self.root / path
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text("new file", encoding="utf-8")
+                target.write_text("new file", encoding="utf-8", newline="\n")
                 self.assertIn(f"{path}: missing ledger entry", self.check())
                 target.unlink()
 
@@ -145,7 +145,9 @@ class ProvenanceTests(unittest.TestCase):
         self.assertTrue(any("SHA-256 mismatch" in e for e in self.check()))
 
     def test_rust_body_changes_are_not_hashed(self):
-        (self.root / "naming/lib.rs").write_text(HEADER + "fn revised() {}", encoding="utf-8")
+        (self.root / "naming/lib.rs").write_text(
+            HEADER + "fn revised() {}", encoding="utf-8", newline="\n"
+        )
         self.assertEqual(self.check(), [])
 
     def test_region_member_tables_round_trip_through_the_ledger(self):
@@ -173,9 +175,9 @@ class ProvenanceTests(unittest.TestCase):
 
     def test_missing_invalid_and_duplicate_ledger_entries_fail(self):
         self.assertIn("cannot read provenance ledger", check_provenance(self.root)[0])
-        (self.root / LEDGER_NAME).write_text("not valid toml", encoding="utf-8")
+        (self.root / LEDGER_NAME).write_text("not valid toml", encoding="utf-8", newline="\n")
         self.assertIn("cannot read provenance ledger", check_provenance(self.root)[0])
-        (self.root / LEDGER_NAME).write_text("schema_version = 2", encoding="utf-8")
+        (self.root / LEDGER_NAME).write_text("schema_version = 2", encoding="utf-8", newline="\n")
         self.assertIn("expected [[file]]", check_provenance(self.root)[0])
         self.entries.append(self.entries[0])
         self.assertIn("naming/lib.rs: duplicate ledger entry", self.check())
@@ -246,7 +248,7 @@ class ProvenanceTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(main(["--root", str(self.root)]), 0)
         self.assertIn("match the ledger", output.getvalue())
-        (self.root / "fixtures/corpus.tsv").write_text("changed", encoding="utf-8")
+        (self.root / "fixtures/corpus.tsv").write_text("changed", encoding="utf-8", newline="\n")
         with contextlib.redirect_stderr(io.StringIO()) as output:
             self.assertEqual(main(["--root", str(self.root)]), 1)
         self.assertIn("fixtures/corpus.tsv: SHA-256 mismatch", output.getvalue())
