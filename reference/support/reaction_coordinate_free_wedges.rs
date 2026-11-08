@@ -34,10 +34,15 @@ pub fn adapt(flags: &[(usize, usize)], actual: &Response, expected: &mut Respons
     // Only an invented centre: each flag names an existing atom and bond, a
     // wedge starts at that atom in the drawing (CX bond numbers follow the
     // text, not the drawing), and the actual SMILES gains stereo marks.
+    // Stereocentres in the analysis SMILES: bracket atoms carrying @ or @@.
     let marks = |r: &Response| {
-        r.analysis
-            .as_ref()
-            .map_or(0, |a| a.smiles.matches('@').count())
+        r.analysis.as_ref().map_or(0, |a| {
+            a.smiles
+                .split('[')
+                .skip(1)
+                .filter(|atom| atom.split(']').next().is_some_and(|a| a.contains('@')))
+                .count()
+        })
     };
     let invented = marks(actual) > marks(expected)
         && actual.document.as_ref().is_some_and(|doc| {

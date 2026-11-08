@@ -129,28 +129,25 @@ def emit(
                 image_error=image_error,
                 image_pixels=image_pixels,
                 unarrowed=unarrowed,
-                shaded_or_doubled=shaded_or_doubled(root),
+                shaded_or_doubled=shaded_or_doubled(root, scale, first_id, claimed),
             )
         )
     )
 
 
-def shaded_or_doubled(root):
-    """#777: whether a curve still has the original's non-arrowhead refusal
-    (reference/engine/graphics_exchange.py `curve`)."""
+def shaded_or_doubled(root, scale, first_id, claimed):
+    """#777: whether the original reader still refuses the file once every
+    curve's arrowheads are removed, i.e. for shading or doubling."""
+    root = copy.deepcopy(root)
     for el in root.iter("curve"):
-        if el.get("SupersededBy") is not None:
-            continue
-        try:
-            flags = int(el.get("CurveType", "0"))
-        except ValueError:
-            return False
-        if (
-            flags & ~(1 | 2 | 4 | 128)
-            or el.get("FillType", "None") not in ("None", "Solid", "Unspecified")
-            or el.get("LineType", "Solid") not in ("Solid", "Dashed", "Bold")
-        ):
-            return True
+        for k in ARROWHEADS:
+            el.attrib.pop(k, None)
+    elements = list(root.iter())
+    objects = {elements[i]: [1000 + i] for i in claimed}
+    try:
+        graphics_exchange.read_graphics(root, scale, first_id, objects, local_pictures=True)
+    except (ValueError, KeyError, OverflowError) as error:
+        return str(error) == "Arrowed, shaded or doubled CDXML curves are not supported yet"
     return False
 
 
