@@ -17,6 +17,8 @@ type TestResult = anyhow::Result<()>;
 
 #[path = "support/coordinate_free_wedges.rs"]
 mod coordinate_free_wedges;
+#[path = "support/coordinate_wedges.rs"]
+mod coordinate_wedges;
 #[path = "support/longest_lived_mass.rs"]
 mod longest_lived_mass;
 #[path = "support/molfile_restrictions.rs"]
@@ -244,6 +246,8 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         generic: Option<serde_json::Value>,
         generic_extension: Option<serde_json::Value>,
         unspecified_ez: Option<unspecified_ez::UnspecifiedEz>,
+        #[serde(default)]
+        coordinate_wedges: Option<coordinate_wedges::CoordinateWedges>,
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
@@ -374,6 +378,9 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 accepted += 1;
                 if let Some(open) = &case.unspecified_ez {
                     unspecified_ez::adapt(open, &actual, &mut expected);
+                }
+                if let Some(input) = &case.coordinate_wedges {
+                    coordinate_wedges::adapt(input, &actual, &mut expected);
                 }
                 let doubles = stated_ez_wedges::double_bonds(format, &case.text);
                 if !doubles.is_empty() {

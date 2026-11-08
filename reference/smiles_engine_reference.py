@@ -39,6 +39,7 @@ def main():
                     expected=expected,
                     failure=failure,
                     unspecified_ez=unspecified_ez(text) if expected else None,
+                    coordinate_wedges=coordinate_wedges(text) if expected else None,
                 )
             )
         )
@@ -71,6 +72,25 @@ def unspecified_ez(text):
         mol.GetBondWithIdx(i).SetStereo(Chem.BondStereo.STEREONONE)
     mol.RemoveAllConformers()
     return dict(bonds=bonds, inchi=Chem.MolToInchi(mol), inchikey=Chem.MolToInchiKey(mol))
+
+
+def coordinate_wedges(text):
+    """#1045: import drops input wedge flags before the fresh layout and wedges
+    the molecule again from its stereo state. The original worker keeps the
+    flags on its new layout, where they can describe other stereo. RDKit's
+    reading of the input itself gives the identifiers."""
+    _, *cx = text.strip().split(maxsplit=1)
+    cx = cx[0] if cx else ""
+    if "(" not in cx or not any(flag in cx for flag in ("wU:", "wD:")):
+        return None
+    mol = Chem.MolFromSmiles(text)
+    if mol is None:
+        return None
+    return dict(
+        inchi=Chem.MolToInchi(mol),
+        inchikey=Chem.MolToInchiKey(mol),
+        smiles=Chem.MolToSmiles(mol),
+    )
 
 
 def wedge_flags(text):
