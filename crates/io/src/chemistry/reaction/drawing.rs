@@ -231,19 +231,6 @@ impl Builder<'_> {
                 attachments,
             )?
             .with_singlets(&source.annotations.singlets)?;
-            // A drawing stores axes only as wedges on its XY: a flattened 3D
-            // axis or a file wedge on a ring double bond can lose one or add
-            // another. Refuse rather than change them, as RXN import did
-            // before axes (#892).
-            let read = axes(drawing.molecule());
-            if !read.is_empty() {
-                let finished = drawing.clone().finish(drawing.labels()?)?;
-                if axes(&document::prepare(&finished)?) != read {
-                    return Err(invalid(
-                        "The drawing cannot keep this reaction's atropisomer axes",
-                    ));
-                }
-            }
             let mut positions: Vec<_> = molecule
                 .positions
                 .iter()
@@ -287,6 +274,20 @@ impl Builder<'_> {
             }
             for p in &mut positions {
                 p.shift(x - lo, -cy);
+            }
+            // A drawing stores axes only as wedges on its XY: a flattened 3D
+            // axis or a file wedge on a ring double bond can lose one or add
+            // another. Refuse rather than change them, as RXN import did
+            // before axes (#892).
+            let read = axes(drawing.molecule());
+            if !read.is_empty() {
+                let points: Vec<_> = positions.iter().map(|p| p.point()).collect();
+                let finished = drawing.clone().finish_at(drawing.labels()?, &points)?;
+                if axes(&document::prepare(&finished)?) != read {
+                    return Err(invalid(
+                        "The drawing cannot keep this reaction's atropisomer axes",
+                    ));
+                }
             }
             reaction.participants_mut(role).push(Participant {
                 atoms: molecule.ids,

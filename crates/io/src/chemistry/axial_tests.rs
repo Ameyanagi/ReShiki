@@ -411,7 +411,10 @@ M  V30 5 C 0.94431136875 -1 1 0\nM  V30 6 C 0.561261511328 0 0 0\n",
         "M  V30 1 2 4 1 CFG=2\nM  V30 2 1 6 4 CFG=0\nM  V30 3 1 4 3 CFG=3
 M  V30 4 2 6 2 CFG=0\nM  V30 5 1 6 5 CFG=0\n",
     );
-    axial_code(&super::reaction::read_rxn(&spatial)?.agents[0].molecule)?;
+    let read = super::reaction::read_rxn(&spatial)?;
+    axial_code(&read.agents[0].molecule)?;
+    // The RXN reader's drawing step itself refuses, as live comparisons expect.
+    assert!(read.drawing().is_err());
     let error = engine
         .request(Request::import("rxn", &spatial))
         .await
@@ -468,6 +471,7 @@ M  V30 15 2 4 10 CFG=0
             .count(),
         1
     );
+    assert!(read.drawing().is_err());
     let error = engine
         .request(Request::import("rxn", &ring_wedge))
         .await
