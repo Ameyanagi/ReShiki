@@ -1,6 +1,7 @@
 //! Test-only measurements; Phase 2 changes only `namer` below.
 mod generator;
 mod metamorphic;
+mod worker_snapshot;
 
 use std::{
     collections::{BTreeMap, HashMap},
