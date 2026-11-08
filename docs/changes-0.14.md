@@ -210,11 +210,13 @@ contributor is named.
   [#868](https://github.com/Ameyanagi/ReShiki/issues/868).
 - **Axial chirality and steroid α/β.** Wedged biaryl axes and allenes are
   perceived and labelled (M) or (P) and kept through MOL and CDXML; allenes
-  also keep it in SMILES and InChI.
+  also keep it in SMILES and InChI. A pasted SMILES or InChI whose drawing
+  would lose an atropisomer axis is refused rather than drawn without it.
   **Axial descriptors** can show Ra/Sa instead. Double bonds between ligands of
   opposite chirality show (seqCis) or (seqTrans). **Steroid α/β** labels the
   ring centres of a gonane nucleus 3β, 5α, … in place of R/S.
   [#892](https://github.com/Ameyanagi/ReShiki/pull/892),
+  [#1063](https://github.com/Ameyanagi/ReShiki/pull/1063),
   [#872](https://github.com/Ameyanagi/ReShiki/pull/872),
   [#893](https://github.com/Ameyanagi/ReShiki/pull/893).
 - **Stereo checks.** **Check drawing** reports reversed, ineffective,
@@ -227,6 +229,15 @@ contributor is named.
   a stereocentre. **Four-substituent stereocentres: wedge + hash pair** in
   Drawing style draws generated structures with a wedge and a hash.
   [#793](https://github.com/Ameyanagi/ReShiki/pull/793).
+- **CXSMILES wedge flags.** A SMILES that carries wedge flags imports as the
+  stereoisomer it states. Without coordinates the `@`/`@@` tags decide the
+  configuration and the flags only shape the drawing, so the drawing, name,
+  SMILES and InChI agree. Reaction SMILES keep the E/Z they state with `/` and
+  `\`, and a 3D MOL file's InChI comes from its own coordinates.
+  [#1045](https://github.com/Ameyanagi/ReShiki/pull/1045),
+  [#1050](https://github.com/Ameyanagi/ReShiki/pull/1050),
+  [#1051](https://github.com/Ameyanagi/ReShiki/pull/1051),
+  [#1058](https://github.com/Ameyanagi/ReShiki/pull/1058).
 - **Singlet and triplet carbenes and nitrenes** keep their spin state through
   MOL, CDXML and `.rsk`.
   [#878](https://github.com/Ameyanagi/ReShiki/pull/878).
@@ -473,6 +484,16 @@ contributor is named.
   unverified ([issues #928](https://github.com/Ameyanagi/ReShiki/issues/928),
   [#953](https://github.com/Ameyanagi/ReShiki/issues/953),
   [#966](https://github.com/Ameyanagi/ReShiki/issues/966)).
+- **Stereochemistry:**
+  - A CXSMILES wedge flag on a bond written with `/` or `\` drops the E/Z the
+    SMILES states ([issue #1042](https://github.com/Ameyanagi/ReShiki/issues/1042)).
+  - A reaction SMILES wedge flag without coordinates can add a stereocentre the
+    input does not state ([issue #1048](https://github.com/Ameyanagi/ReShiki/issues/1048)).
+  - MOL files open with an atropisomer axis only where the 2D drawing can keep
+    it; 3D files and axes next to a crossed or ring double bond open without
+    the axis ([issues #1057](https://github.com/Ameyanagi/ReShiki/issues/1057),
+    [#1064](https://github.com/Ameyanagi/ReShiki/issues/1064)). RXN files with
+    such an axis are refused.
 - **Crystals:** after Repeat 2 × 2 × 2, rock salt's automatic view can still
   overlap Na and Cl labels; Look along c keeps them apart
   ([issue #614](https://github.com/Ameyanagi/ReShiki/issues/614)).
