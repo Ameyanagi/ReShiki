@@ -1,5 +1,7 @@
 //! Assemble imported participants without changing their chemistry or conformers.
 use super::{Error, Imported, document, invalid, molfile};
+use std::collections::BTreeSet;
+
 use crate::{
     atom_labels::HydrogenPosition,
     document::{Annotation, Arrow, Document, Point},
@@ -86,6 +88,25 @@ impl Drawing {
         doc.validate().map_err(invalid)?;
         Ok(doc)
     }
+}
+
+/// Every axis (bond stereo 6/7) by its atom IDs.
+fn axes(molecule: &document::Molecule) -> BTreeSet<(u64, u64, u8)> {
+    let state = &molecule.state;
+    state
+        .graph
+        .bonds
+        .iter()
+        .zip(&state.metadata.bonds)
+        .filter(|(_, metadata)| matches!(metadata.stereo, 6 | 7))
+        .filter_map(|(bond, metadata)| {
+            Some((
+                *molecule.ids.get(bond.a)?,
+                *molecule.ids.get(bond.b)?,
+                metadata.stereo,
+            ))
+        })
+        .collect()
 }
 
 /// Labels exist only after participant chemistry finishes. Arrange the final
@@ -253,6 +274,20 @@ impl Builder<'_> {
             }
             for p in &mut positions {
                 p.shift(x - lo, -cy);
+            }
+            // A drawing stores axes only as wedges on its XY: a flattened 3D
+            // axis or a file wedge on a ring double bond can lose one or add
+            // another. Refuse rather than change them, as RXN import did
+            // before axes (#892).
+            let read = axes(drawing.molecule());
+            if !read.is_empty() {
+                let points: Vec<_> = positions.iter().map(|p| p.point()).collect();
+                let finished = drawing.clone().finish_at(drawing.labels()?, &points)?;
+                if axes(&document::prepare(&finished)?) != read {
+                    return Err(invalid(
+                        "The drawing cannot keep this reaction's atropisomer axes",
+                    ));
+                }
             }
             reaction.participants_mut(role).push(Participant {
                 atoms: molecule.ids,
