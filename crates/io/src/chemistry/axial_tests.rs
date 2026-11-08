@@ -312,8 +312,9 @@ fn binol_cleanup_retains_visible_axial_configuration() -> anyhow::Result<()> {
     Ok(())
 }
 
-// RDKit atropisomer reference geometry/4327 (2D), geometry/824 (3D) and
-// rings/c1ccccc1/C=C/c1ccccc1/False/34, each the agent of water to water (#1037).
+// RDKit atropisomer reference geometry/4327 (2D, with and without its crossed
+// double bond), geometry/824 (3D) and rings/c1ccccc1/C=C/c1ccccc1/False/34,
+// each the agent of water to water (#1037).
 #[tokio::test]
 async fn rxn_imports_keep_axes_or_refuse_ones_the_drawing_changes() -> anyhow::Result<()> {
     use crate::engine::{LocalEngine, Request};
@@ -330,15 +331,17 @@ M  V30 BEGIN BOND\n{bonds}M  V30 END BOND\nM  V30 END CTAB\nM  END\n"
         )
     };
     let engine = LocalEngine::in_process();
-    // The crossed double bond at the axis is drawn wavy; like RDKit's
-    // EITHERDOUBLE it must not hide the axis when the drawing is prepared.
-    let flat = rxn(
-        "2D",
-        "M  V30 1 C 2.5 -1 0 0\nM  V30 2 C -1 1 0 0\nM  V30 3 C 0 0 0 0
-M  V30 4 C 2.5 1 0 0\nM  V30 5 C -1 -1 0 0\nM  V30 6 C 1.5 0 0 0\n",
-        "M  V30 1 1 3 2 CFG=1\nM  V30 2 2 1 6 CFG=0\nM  V30 3 1 6 3 CFG=1
-M  V30 4 2 3 5 CFG=2\nM  V30 5 1 4 6 CFG=3\n",
-    );
+    let atoms = "M  V30 1 C 2.5 -1 0 0\nM  V30 2 C -1 1 0 0\nM  V30 3 C 0 0 0 0
+M  V30 4 C 2.5 1 0 0\nM  V30 5 C -1 -1 0 0\nM  V30 6 C 1.5 0 0 0\n";
+    let bonds = |crossed: u8| {
+        format!(
+            "M  V30 1 1 3 2 CFG=1\nM  V30 2 2 1 6 CFG=0\nM  V30 3 1 6 3 CFG=1
+M  V30 4 2 3 5 CFG={crossed}\nM  V30 5 1 4 6 CFG=3\n"
+        )
+    };
+    // Without the crossed double bond the drawn wedges keep the axis,
+    // through Clean Up too.
+    let flat = rxn("2D", atoms, &bonds(0));
     assert_eq!(
         axial_code(&super::reaction::read_rxn(&flat)?.agents[0].molecule)?,
         "M"
@@ -347,52 +350,25 @@ M  V30 4 2 3 5 CFG=2\nM  V30 5 1 4 6 CFG=3\n",
         .request(Request::import("rxn", &flat))
         .await
         .map_err(anyhow::Error::msg)?;
-    let mut document = imported.document.unwrap();
-    assert!(
-        document
-            .bonds
-            .iter()
-            .any(|b| b.order == 2 && b.display == "wavy")
-    );
+    let document = imported.document.unwrap();
     assert_visible_axis(&document, "M")?;
     let cleaned = engine
-        .request(Request::molecule("clean", document.clone()))
+        .request(Request::molecule("clean", document))
         .await
         .map_err(anyhow::Error::msg)?;
     assert_visible_axis(cleaned.document.as_ref().unwrap(), "M")?;
-    // A wavy single bond at an axis end still leaves the axis unknown.
-    let axis_ends: Vec<_> = document
-        .bonds
-        .iter()
-        .filter(|b| b.cip_label.as_deref() == Some("M"))
-        .flat_map(|b| [b.a, b.b])
-        .collect();
-    let plain = document
-        .bonds
-        .iter_mut()
-        .find(|b| {
-            b.order == 1
-                && b.display == "plain"
-                && b.cip_label.is_none()
-                && (axis_ends.contains(&b.a) || axis_ends.contains(&b.b))
-        })
-        .unwrap();
-    plain.display = "wavy".into();
-    assert!(
-        !document::prepare(&document)?
-            .state
-            .metadata
-            .bonds
-            .iter()
-            .any(|b| matches!(b.stereo, 6 | 7))
-    );
+    // The crossed double bond at the axis is drawn wavy, which hides the axis
+    // when the drawing is prepared (#1053), so the reaction is refused.
+    let crossed = rxn("2D", atoms, &bonds(2));
+    let read = super::reaction::read_rxn(&crossed)?;
+    assert_eq!(axial_code(&read.agents[0].molecule)?, "M");
+    assert!(read.drawing().is_err());
     // A 3D participant whose XY projection still shows its axis imports.
     let lifted = rxn(
         "3D",
         "M  V30 1 C 2.5 -1 0 0\nM  V30 2 C -1 1 1 0\nM  V30 3 C 0 0 0 0
 M  V30 4 C 2.5 1 0 0\nM  V30 5 C -1 -1 0 0\nM  V30 6 C 1.5 0 0 0\n",
-        "M  V30 1 1 3 2 CFG=1\nM  V30 2 2 1 6 CFG=0\nM  V30 3 1 6 3 CFG=1
-M  V30 4 2 3 5 CFG=2\nM  V30 5 1 4 6 CFG=3\n",
+        &bonds(0),
     );
     let read = super::reaction::read_rxn(&lifted)?;
     assert!(read.agents[0].annotations.is_3d);
