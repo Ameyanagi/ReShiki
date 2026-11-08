@@ -1,4 +1,6 @@
 //! Compare the migrated application path with the unmodified abbreviation worker.
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     chemistry::abbreviations,
@@ -62,9 +64,12 @@ async fn compare(
     request: Request,
 ) -> anyhow::Result<Option<Document>> {
     let original = request.document.clone();
-    let expected = reference.execute(request.clone()).await;
+    let mut expected = reference.execute(request.clone()).await;
     let actual = local.execute(request.clone()).await;
     anyhow::ensure!(request.document == original, "Caller document changed");
+    if let (Ok(actual), Ok(expected)) = (&actual, &mut expected) {
+        unspecified_ez(reference, &request, actual, expected).await?;
+    }
     match (actual, expected) {
         (Ok(actual), Ok(expected)) => {
             let result = actual.document.clone();
@@ -86,8 +91,73 @@ async fn compare(
     }
 }
 
+/// #909: a group's double bond that its SMILES leaves without E/Z stays
+/// unspecified instead of taking E/Z from the inserted layout. Clear exactly
+/// those bonds in the expectation and let the worker analyze that drawing,
+/// with each such bond drawn crossed (unknown), for the expected identifiers.
+async fn unspecified_ez(
+    reference: &PythonEngine,
+    request: &Request,
+    actual: &Response,
+    expected: &mut Response,
+) -> anyhow::Result<()> {
+    let presets = abbreviations::presets()?;
+    let Some(preset) = presets
+        .iter()
+        .find(|p| request.text.as_deref() == Some(p.label.as_str()))
+    else {
+        return Ok(());
+    };
+    let (Some(actual), Some(document)) = (&actual.document, expected.document.as_mut()) else {
+        return Ok(());
+    };
+    if preset.smiles.contains(['/', '\\']) || actual.bonds.len() != document.bonds.len() {
+        return Ok(());
+    }
+    // Only bonds of the inserted group, whose atoms the request did not hold.
+    let original: std::collections::HashSet<_> = request
+        .document
+        .iter()
+        .flat_map(|doc| doc.atoms.iter().map(|a| a.id))
+        .collect();
+    let mut crossed = document.clone();
+    let mut open = false;
+    for ((a, e), c) in actual
+        .bonds
+        .iter()
+        .zip(&mut document.bonds)
+        .zip(&mut crossed.bonds)
+    {
+        if a.order == 2
+            && !original.contains(&a.a)
+            && !original.contains(&a.b)
+            && a.stereo_authoritative
+            && a.stereo.is_none()
+            && !e.stereo_authoritative
+        {
+            e.stereo = None;
+            e.stereo_atoms.clear();
+            e.cip_label = None;
+            e.stereo_authoritative = true;
+            c.stereo = None;
+            c.stereo_atoms.clear();
+            c.display = "wavy".into();
+            open = true;
+        }
+    }
+    if open {
+        expected.analysis = reference
+            .execute(Request::molecule("analyze", crossed))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .analysis;
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn all_presets_preserve_complete_app_responses_selection_and_undo() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut cases = 0;
@@ -170,6 +240,7 @@ async fn all_presets_preserve_complete_app_responses_selection_and_undo() -> any
 #[tokio::test]
 async fn concurrent_detection_keeps_each_selection_and_label_with_its_drawing() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut tasks = tokio::task::JoinSet::new();
@@ -210,6 +281,7 @@ fn replacement(document: Document, selection: Vec<u64>, label: &str) -> Request 
 
 #[tokio::test]
 async fn replacement_preserves_full_responses_geometry_selection_and_undo() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut cases = 0;
@@ -317,6 +389,7 @@ async fn replacement_preserves_full_responses_geometry_selection_and_undo() -> a
 
 #[tokio::test]
 async fn concurrent_replacement_keeps_geometry_and_selection_separate() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut tasks = tokio::task::JoinSet::new();
@@ -365,6 +438,7 @@ impl ChemistryEngine for Recorder {
 #[tokio::test]
 async fn replacement_runs_before_the_backend_and_errors_never_publish_edits() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     let recorder = Recorder::default();
     let local = LocalEngine::with_backend(recorder.clone());
     let mut doc = Document::default();
@@ -415,6 +489,7 @@ async fn replacement_runs_before_the_backend_and_errors_never_publish_edits() ->
 
 #[tokio::test]
 async fn detection_runs_before_the_backend_and_invalid_requests_are_atomic() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let mut doc = Document::default();
     let n = doc.add_atom("N", Point::new(0., 0.));
     let o = doc.add_atom("O", Point::new(42., 0.));

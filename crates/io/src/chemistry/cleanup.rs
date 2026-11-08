@@ -430,11 +430,12 @@ impl Prepared {
                 &part.fixed,
                 self.options.orientation() == Orientation::Keep,
             )?;
-            if part.fixed.len() < 2 {
+            let refine = molecular::refine();
+            if part.fixed.len() < 2 && refine {
                 let pivot = part.fixed.keys().next().copied();
                 super::layout_refinement::straighten(&part.molecule.state, &mut layout, pivot);
             }
-            if part.fixed.is_empty() {
+            if part.fixed.is_empty() && refine {
                 match self.options.orientation() {
                     Orientation::Keep => {}
                     Orientation::Free => super::layout_refinement::conventional_orientation(

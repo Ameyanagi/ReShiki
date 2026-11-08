@@ -405,22 +405,26 @@ fn coordinates(
             // Native public Compute2DCoords defaults. Cleanup explicitly opts in
             // to templates, while original import calls supply no such option.
             use_ring_templates: false,
+            // RDKit 2026.09.1's path angle expansion (#735) is a refinement.
+            path_angle_expansion: molecular::refine(),
             ..depict::Options::default()
         },
     )?;
     let positions = template_retry::improve(state, &ranks, conformer.positions, 1.5);
     let mut layout = chain_layout::improve(state, &ranks, positions);
-    chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
-    // Input wedge flags are read against these coordinates, so a reflection
-    // would invert them (#1037). Rotation and translation keep their meaning.
-    if !state
-        .directions
-        .iter()
-        .any(|d| matches!(d, Direction::Wedge | Direction::Hash))
-    {
-        chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
+    if molecular::refine() {
+        chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
+        // Input wedge flags are read against these coordinates, so a reflection
+        // would invert them (#1037). Rotation and translation keep their meaning.
+        if !state
+            .directions
+            .iter()
+            .any(|d| matches!(d, Direction::Wedge | Direction::Hash))
+        {
+            chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
+        }
+        chemistry::layout_refinement::arrange_components(state, &mut layout.positions);
     }
-    chemistry::layout_refinement::arrange_components(state, &mut layout.positions);
     Ok(layout)
 }
 

@@ -293,3 +293,28 @@ fn deep_chain_is_iterative_and_group_expansion_is_bounded() -> TestResult {
     assert_eq!(serde_json::to_value(&input)?, before);
     Ok(())
 }
+
+#[test]
+fn cleanup_keeps_allene_winding_only_on_an_allene_centre() -> TestResult {
+    // A raw tag 5 on an atom that is not an allene centre is cleared, as RDKit
+    // does; a supported allene keeps its winding.
+    let mut lone = crate::smiles::prepare("C")?.state;
+    lone.metadata.atoms[0].chiral_tag = 5;
+    lone.metadata.atoms[0].chiral_permutation = Some(1);
+    assert_eq!(
+        perceive(&lone, options())
+            .map_err(anyhow::Error::msg)?
+            .metadata
+            .atoms[0]
+            .chiral_tag,
+        0
+    );
+    let allene = crate::smiles::prepare("OC=[C@AL1]=CF")?.state;
+    let perceived = perceive(&allene, options()).map_err(anyhow::Error::msg)?;
+    assert_eq!(perceived.metadata.atoms[2].chiral_tag, 5);
+    assert_eq!(
+        perceived.metadata.atoms[2].chiral_permutation,
+        allene.metadata.atoms[2].chiral_permutation
+    );
+    Ok(())
+}

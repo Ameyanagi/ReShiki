@@ -49,6 +49,7 @@ fn complete_pipeline_matches_independent_rdkit() -> anyhow::Result<()> {
             (Ok(actual), Some(expected)) => {
                 retried += usize::from(actual.canonical_retry);
                 changed += usize::from(serde_json::to_value(&actual.graph)? != before[0]);
+                // The oracle clears tag 5 on non-allene atoms first (#892).
                 serde_json::to_value(actual)? == *expected
             }
             (Err(_), None) => true,

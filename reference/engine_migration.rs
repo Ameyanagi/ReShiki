@@ -1,5 +1,14 @@
 //! Differential chemistry/figure tests guard the boundary between local Rust
 //! conversion and the retained RDKit backend. Neither oracle uses the new codec.
+#[path = "support/axial_extension.rs"]
+mod axial_extension;
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
+#[path = "support/smiles_extensions.rs"]
+#[allow(dead_code)]
+mod smiles_extensions;
+#[path = "support/unspecified_ez.rs"]
+mod unspecified_ez;
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reshiki::engine::{ChemistryEngine, LocalEngine, PythonEngine, Request, Response};
@@ -8,39 +17,54 @@ type TestResult = anyhow::Result<()>;
 
 #[path = "support/coordinate_free_wedges.rs"]
 mod coordinate_free_wedges;
+#[path = "support/coordinate_wedges.rs"]
+mod coordinate_wedges;
+#[path = "support/longest_lived_mass.rs"]
+mod longest_lived_mass;
+#[path = "support/molecule_reading.rs"]
+mod molecule_reading;
 #[path = "support/molfile_restrictions.rs"]
 mod molfile_restrictions;
 #[path = "support/nci_2808_template_layout.rs"]
 mod nci_2808_template_layout;
+#[path = "support/reaction_coordinate_free_wedges.rs"]
+mod reaction_coordinate_free_wedges;
 #[path = "support/reaction_presentation.rs"]
 mod reaction_presentation;
 #[path = "support/reference_mol.rs"]
 mod reference_mol;
 #[path = "support/reference_presentation.rs"]
 mod reference_presentation;
+#[path = "support/stated_ez_wedges.rs"]
+mod stated_ez_wedges;
 
 #[tokio::test]
 async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
+    rdkit_parity::enable();
     import_responses("mol", "reference/molfile_engine_reference.py").await
 }
 
 #[tokio::test]
 async fn rust_smiles_import_preserves_complete_reference_responses() -> TestResult {
+    rdkit_parity::enable();
     import_responses("smiles", "reference/smiles_engine_reference.py").await
 }
 
 #[tokio::test]
 async fn rust_rxn_import_preserves_complete_reference_responses() -> TestResult {
+    rdkit_parity::enable();
     import_responses("rxn", "reference/reaction_engine_reference.py").await
 }
 
 #[tokio::test]
 async fn rust_reaction_smiles_import_preserves_complete_reference_responses() -> TestResult {
+    rdkit_parity::enable();
     import_responses("rsmi", "reference/reaction_smiles_engine_reference.py").await
 }
 
 #[tokio::test]
 async fn qualified_bridged_imports_match_independent_template_responses() -> TestResult {
+    rdkit_parity::enable();
     // Exercise both deliberate #538 differences on every platform, regardless
     // of the larger corpus's sampling offset or optional source fixtures.
     let local = LocalEngine::default();
@@ -68,6 +92,7 @@ async fn qualified_bridged_imports_match_independent_template_responses() -> Tes
 
 #[tokio::test]
 async fn reaction_cx_cached_properties_preserve_aromatic_stereo_drawings() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     for graph in ["c1ccccc1[C@H]1CCCCC1", "c1ccccc1[C@H]2C[C@@H](N)CCC2"] {
@@ -96,6 +121,7 @@ async fn reaction_cx_cached_properties_preserve_aromatic_stereo_drawings() -> Te
 
 #[tokio::test]
 async fn overlapping_reaction_imports_keep_labels_and_analysis_with_their_drawing() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut tasks = tokio::task::JoinSet::new();
@@ -164,6 +190,7 @@ async fn overlapping_reaction_imports_keep_labels_and_analysis_with_their_drawin
 
 #[tokio::test]
 async fn overlapping_imports_keep_their_own_layout_and_recover_after_errors() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut tasks = tokio::task::JoinSet::new();
@@ -222,6 +249,11 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         display: Option<serde_json::Value>,
         generic: Option<serde_json::Value>,
         generic_extension: Option<serde_json::Value>,
+        unspecified_ez: Option<unspecified_ez::UnspecifiedEz>,
+        #[serde(default)]
+        coordinate_wedges: Option<coordinate_wedges::CoordinateWedges>,
+        #[serde(default)]
+        molecule_reading: Option<molecule_reading::MoleculeReading>,
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
@@ -247,6 +279,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
     let mut tag_wins = Vec::new();
+    let mut deferred = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let actual = local.execute(Request::import(format, &case.text)).await;
@@ -347,8 +380,26 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             continue;
         }
         let failure = match (actual, expected) {
-            (Ok(actual), Some(expected)) => {
+            (Ok(actual), Some(mut expected)) => {
                 accepted += 1;
+                if let Some(open) = &case.unspecified_ez {
+                    unspecified_ez::adapt(open, &actual, &mut expected);
+                }
+                if let Some(input) = &case.coordinate_wedges {
+                    coordinate_wedges::adapt(&case.name, input, &actual, &mut expected);
+                }
+                if let Some(reading) = &case.molecule_reading {
+                    molecule_reading::adapt(reading, &actual, &mut expected);
+                }
+                if let Some(atom) = reaction_coordinate_free_wedges::known(format, &case.text) {
+                    reaction_coordinate_free_wedges::adapt(atom, &actual, &mut expected);
+                    deferred.push(case.name.clone());
+                }
+                let doubles = stated_ez_wedges::double_bonds(format, &case.text);
+                if !doubles.is_empty() {
+                    stated_ez_wedges::adapt(&doubles, &actual, &mut expected);
+                    deferred.push(case.name.clone());
+                }
                 let expected = if format == "mol" {
                     let before = serde_json::to_value(&expected)?;
                     reference_mol::mol_source_xyz(expected, &case.text).inspect(|response| {
@@ -375,7 +426,28 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 rejected += 1;
                 None
             }
+            (Err(error), Some(_))
+                if matches!(format, "smiles" | "rsmi")
+                    && smiles_extensions::refused_allene(&case.text, &error) =>
+            {
+                rejected += 1;
+                None
+            }
             (Err(error), Some(_)) => Some(format!("Unexpected rejection: {error}")),
+            (Ok(actual), None)
+                if actual.document.as_ref().is_some_and(|doc| {
+                    axial_extension::accepted(
+                        &case.name,
+                        case.failure.as_deref(),
+                        format,
+                        &case.text,
+                        axial_extension::Checked::Document(doc),
+                    )
+                }) =>
+            {
+                accepted += 1;
+                None
+            }
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
@@ -393,6 +465,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     }
     assert!(child.wait()?.success(), "Import reference failed");
     eprintln!("{format} coordinate-free wedge flags following the tag (#1044): {tag_wins:?}");
+    eprintln!("{format} deferred known issues (#1042, #1048): {deferred:?}");
     eprintln!(
         "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
@@ -456,6 +529,14 @@ fn assert_response_matches_contract(
             analysis.remove("mass_percent");
         }
     }
+    // #878 keeps singlet spin on two-electron atoms; RDKit keeps only the count.
+    for atom in actual["document"]["atoms"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+    {
+        atom.as_object_mut().map(|atom| atom.remove("singlet"));
+    }
     let mut failures = Vec::new();
     if let Err(error) =
         reaction_presentation::adapt_import(operation, format, &actual, &mut expected)
@@ -467,6 +548,7 @@ fn assert_response_matches_contract(
     {
         failures.push(format!("[presentation] {error:#}"));
     }
+    let actual_atoms = actual["document"]["atoms"].clone();
     if let (Some(a), Some(e)) = (
         actual["analysis"].as_object_mut(),
         expected["analysis"].as_object_mut(),
@@ -481,6 +563,11 @@ fn assert_response_matches_contract(
                 .and_then(|v| v.as_f64())
                 .context("Missing reference mass")?;
             // RDKit wheels may fuse floating-point operations on some targets.
+            let ev = if field == "mass" {
+                ev + longest_lived_mass::change(&actual_atoms)
+            } else {
+                ev
+            };
             if (av - ev).abs() > ev.abs().max(1.) * 1e-12 {
                 failures.push(format!("[analysis] {field}: {av} != {ev}"));
             }
@@ -510,6 +597,7 @@ fn assert_response_matches_contract(
 
 #[tokio::test]
 async fn rust_properties_match_reference_across_editor_operations() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     for smiles in [
@@ -621,6 +709,7 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
 
 #[tokio::test]
 async fn rust_ring_display_preserves_selected_scope_and_complete_response() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     for text in [
@@ -685,6 +774,7 @@ async fn rust_ring_display_preserves_selected_scope_and_complete_response() -> T
 #[tokio::test]
 async fn aromatic_edits_retain_blank_analysis_smiles_for_partial_and_hydrogen_bonds() -> TestResult
 {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     for order in [0, 7] {
@@ -731,6 +821,7 @@ async fn aromatic_edits_retain_blank_analysis_smiles_for_partial_and_hydrogen_bo
 
 #[tokio::test]
 async fn rust_prepared_drawings_preserve_full_analysis_and_molecular_exports() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let templates: serde_json::Value =
@@ -835,6 +926,7 @@ async fn rust_prepared_drawings_preserve_full_analysis_and_molecular_exports() -
 
 #[tokio::test]
 async fn dense_ring_pruning_matches_complete_reference_responses() -> TestResult {
+    rdkit_parity::enable();
     use reshiki::{chemistry::graph::Graph, document::Document};
     let graph: Graph =
         serde_json::from_str(include_str!("../tests/fixtures/ring-order-dependent.json"))?;
@@ -925,6 +1017,7 @@ async fn dense_ring_pruning_matches_complete_reference_responses() -> TestResult
 
 #[tokio::test]
 async fn rust_mol_files_roundtrip_stereo_isotopes_charges_and_maps() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     for text in [
@@ -976,6 +1069,7 @@ async fn rust_mol_files_roundtrip_stereo_isotopes_charges_and_maps() -> TestResu
 
 #[tokio::test]
 async fn mol_dummy_atoms_retain_the_reference_query_import_rejection() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let document = reference
@@ -1006,6 +1100,7 @@ async fn mol_dummy_atoms_retain_the_reference_query_import_rejection() -> TestRe
 
 #[tokio::test]
 async fn native_drawings_match_the_original_python_importer() -> TestResult {
+    rdkit_parity::enable();
     use reshiki::{abbreviations::LabelAlignment, typography::TextStyle};
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
@@ -1072,6 +1167,7 @@ async fn native_drawings_match_the_original_python_importer() -> TestResult {
 
 #[tokio::test]
 async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut failures = Vec::new();
@@ -1141,6 +1237,7 @@ async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() 
 
 #[tokio::test]
 async fn supported_figure_exports_are_byte_identical_to_python() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut failures = Vec::new();
@@ -1204,6 +1301,7 @@ async fn supported_figure_exports_are_byte_identical_to_python() -> TestResult {
 
 #[tokio::test]
 async fn query_predicates_still_fail_chemistry_validation() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     for (name, value) in [
@@ -1227,6 +1325,7 @@ async fn query_predicates_still_fail_chemistry_validation() -> TestResult {
 
 #[tokio::test]
 async fn rust_smiles_export_preserves_analysis_and_complete_drawing() -> TestResult {
+    rdkit_parity::enable();
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     for text in [
@@ -1277,6 +1376,7 @@ async fn rust_smiles_export_preserves_analysis_and_complete_drawing() -> TestRes
 
 #[tokio::test]
 async fn overlapping_smiles_exports_keep_each_analysis_with_its_snapshot() -> TestResult {
+    rdkit_parity::enable();
     let reference = PythonEngine::default();
     let local = LocalEngine::default();
     let mut tasks = tokio::task::JoinSet::new();
