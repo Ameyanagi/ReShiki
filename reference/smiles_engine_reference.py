@@ -86,10 +86,23 @@ def coordinate_wedges(text):
     mol = Chem.MolFromSmiles(text)
     if mol is None:
         return None
+    # RDKit's Kekulize weighs wedged bonds; with the input wedges cleared, as
+    # #1045 import does, it gives the Kekule form ReShiki draws.
+    kekule = Chem.Mol(mol)
+    for bond in kekule.GetBonds():
+        bond.SetBondDir(Chem.BondDir.NONE)
+    try:
+        Chem.Kekulize(kekule, clearAromaticFlags=True)
+    except (ValueError, RuntimeError):
+        kekule = Chem.Mol()
     return dict(
         inchi=Chem.MolToInchi(mol),
         inchikey=Chem.MolToInchiKey(mol),
         smiles=Chem.MolToSmiles(mol),
+        kekule=[
+            [b.GetBeginAtomIdx(), b.GetEndAtomIdx(), int(b.GetBondTypeAsDouble())]
+            for b in kekule.GetBonds()
+        ],
     )
 
 
