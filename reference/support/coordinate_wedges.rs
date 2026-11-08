@@ -5,8 +5,9 @@
 //! placement come from the actual response. The identifiers must equal the
 //! worker's, or else exactly RDKit's reading of the input itself. The worker
 //! also Kekulizes with the input wedges still set, which RDKit's Kekulize
-//! weighs; a bond's Kekule order may differ only where it equals RDKit's
-//! Kekule form of the input with the wedges cleared (ZM374979_atropBad1).
+//! weighs; the bond orders may instead equal, as a whole, RDKit's Kekule form
+//! of the input with the wedges cleared (ZM374979_atropBad1). Partial mixes
+//! fail.
 //! Every other field is compared.
 use reshiki::engine::Response;
 
@@ -25,6 +26,8 @@ pub fn adapt(input: &CoordinateWedges, actual: &Response, expected: &mut Respons
         for (a, e) in a.atoms.iter().zip(e.atoms.iter_mut()) {
             e.position = a.position;
         }
+        // A Kekule difference is accepted only as a whole: every bond order
+        // equals RDKit's Kekule form of the input with the wedges cleared.
         let index: std::collections::HashMap<u64, usize> = a
             .atoms
             .iter()
@@ -39,11 +42,13 @@ pub fn adapt(input: &CoordinateWedges, actual: &Response, expected: &mut Respons
                 .find(|[p, q, _]| (*p, *q) == (x, y) || (*p, *q) == (y, x))
                 .map(|[_, _, order]| *order)
         };
-        for (a, e) in a.bonds.iter().zip(e.bonds.iter_mut()) {
-            if a.order != e.order
-                && matches!((a.order, e.order), (1, 2) | (2, 1))
-                && kekule(a.a, a.b) == Some(usize::from(a.order))
-            {
+        let whole = a.bonds.len() == e.bonds.len()
+            && a.bonds.len() == input.kekule.len()
+            && a.bonds
+                .iter()
+                .all(|b| kekule(b.a, b.b) == Some(usize::from(b.order)));
+        if whole {
+            for (a, e) in a.bonds.iter().zip(e.bonds.iter_mut()) {
                 e.order = a.order;
             }
         }
