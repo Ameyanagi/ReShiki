@@ -19,6 +19,8 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
 #[cfg(test)]
 mod allene_tests;
+#[cfg(test)]
+mod atrop_tests;
 pub(super) mod chain_layout;
 pub(super) mod template_retry;
 #[cfg(test)]
@@ -433,11 +435,56 @@ fn finish_molecule(
     let labels = drawing.labels()?;
     let document = drawing.finish(labels)?;
     document.validate().map_err(Error::Document)?;
+    // An axis end reads a wedge from a neighbouring centre as its own, as
+    // RDKit does, so some fresh layouts' wedges hide an axis (#1056). Refuse
+    // such a drawing, as the reference refuses atropisomer bond stereo,
+    // rather than silently lose the axis.
+    // A drawing that cannot be prepared again (named dummy atoms) keeps
+    // main's behaviour.
+    let expected = axes(&molecule)?;
+    if !expected.is_empty()
+        && let Ok(read) = molecular::prepare(&document)
+        && expected
+            .iter()
+            .any(|axis| !axes(&read).is_ok_and(|read| read.contains(axis)))
+    {
+        return Err(molecular::Error::WedgeAssignment(
+            "The wedges in this layout cannot show the atropisomer axis next to a wedged stereocentre"
+                .into(),
+        )
+        .into());
+    }
     Ok(Prepared {
         molecule,
         document,
         warnings: Vec::new(),
     })
+}
+
+/// Atropisomer axes by stable atom IDs.
+fn axes(molecule: &molecular::Molecule) -> Result<Vec<(u64, u64, u8)>, Error> {
+    let id = |atom: usize| {
+        molecule
+            .ids
+            .get(atom)
+            .copied()
+            .ok_or_else(|| Error::Document("Missing atom ID".into()))
+    };
+    let mut axes = Vec::new();
+    for (bond, meta) in molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&molecule.state.metadata.bonds)
+    {
+        if matches!(meta.stereo, 6 | 7) {
+            let (a, b) = (id(bond.a)?, id(bond.b)?);
+            axes.push((a.min(b), a.max(b), meta.stereo));
+        }
+    }
+    axes.sort_unstable();
+    Ok(axes)
 }
 
 fn prepare_inchi(

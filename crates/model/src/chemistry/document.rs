@@ -272,7 +272,8 @@ fn build(document: &Document) -> Result<Input, Error> {
 }
 
 /// Restore explicit winding, sanitize, read drawing geometry and assign the
-/// reference's legacy stereo. Full CIP labeling and identifiers are separate.
+/// reference's legacy stereo. Full CIP labeling
+/// (beyond keeping allene windings that have an axis) and identifiers are separate.
 /// Errors retain their stage/cause; the original document is never changed.
 pub fn prepare(document: &Document) -> Result<Molecule, Error> {
     if crate::generic::present(document) {
