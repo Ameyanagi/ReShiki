@@ -56,11 +56,13 @@ The maintainer runs these on a manual **Release builds** run of the merged
 
 - [ ] **Release build:** a manual **Release builds** run passes on all six
       platforms and does not publish.
-- [ ] **Focus after closing reviews:** in the release build, close Clean up,
+- [x] **Focus after closing reviews:** in the release build, close Clean up,
       3D preview, atom label, Name import preview, Structure import, reaction
       mapping proposal and assistant review with Enter and separately with Esc
       (Apply/Discard where those keys are unavailable). After each close,
-      Delete or Cmd+Z acts on the drawing without a click.
+      Delete or Cmd+Z acts on the drawing without a click. Passed for every
+      panel except assistant review, which was not checked; see
+      [Focus after closing reviews](#focus-after-closing-reviews).
 - [ ] **macOS app (Apple Silicon and Intel):** the DMG opens, the app reports
       0.14.0, draws and names a molecule with its status tag, imports a salt by
       name, inserts a Fischer projection and converts it to wedges, shows a 3D
@@ -81,6 +83,72 @@ The maintainer runs these on a manual **Release builds** run of the merged
 - [ ] **Compatibility:** a plain drawing saved by 0.14.0 opens in 0.13.1; a
       drawing with a generated 3D model saved by 0.14.0 is refused by 0.13.1
       with the request to update; a drawing saved by 0.13.1 opens in 0.14.0.
+
+## Focus after closing reviews
+
+Checked on 8 November 2026 with a release build (`cargo build --release`) of
+the release branch at `1ebfcbdd`, on macOS ARM64, in an app bundle whose
+`RESHIKI_DATA_DIR` pointed at an empty folder. Each case started with part of
+the drawing selected. After the panel closed, the next keys were Delete and
+then Cmd+Z, with no click in between. Each pair of screenshots shows the
+drawing after Delete and after Cmd+Z.
+
+| Panel                     | Closed with                    | Delete acted | Cmd+Z acted | Screenshots                                                                                                                                                     |
+| ------------------------- | ------------------------------ | ------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clean up preview          | Enter                          | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/01-cleanup-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/01-cleanup-enter.jpg)                   |
+| Clean up preview          | Esc                            | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/01-cleanup-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/01-cleanup-esc.jpg)                       |
+| 3D preview                | Enter                          | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/02-3d-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/02-3d-enter.jpg)                             |
+| 3D preview                | Esc                            | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/02-3d-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/02-3d-esc.jpg)                                 |
+| Atom label editor         | Enter                          | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/03-atom-label-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/03-atom-label-enter.jpg)             |
+| Atom label editor         | Esc                            | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/03-atom-label-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/03-atom-label-esc.jpg)                 |
+| Name import preview       | Enter in the name field        | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/04-name-import-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/04-name-import-enter.jpg)           |
+| Name import preview       | Esc in the name field          | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/04-name-import-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/04-name-import-esc.jpg)               |
+| Structure import          | **Insert** (Enter adds a line) | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/05-structure-import-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/05-structure-import-enter.jpg) |
+| Structure import          | Esc in the structure field     | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/05-structure-import-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/05-structure-import-esc.jpg)     |
+| Reaction mapping proposal | Enter on **Apply maps**        | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/06-reaction-mapping-enter-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/06-reaction-mapping-enter.jpg) |
+| Reaction mapping proposal | **Discard** (no Esc shortcut)  | yes          | yes         | [Delete](images/release-0.14.0/focus-restore/06-reaction-mapping-esc-delete.jpg) · [Cmd+Z](images/release-0.14.0/focus-restore/06-reaction-mapping-esc.jpg)     |
+
+Name and Structure import are sidebar panels: Enter, **Insert** and Esc return
+keyboard focus to the drawing and leave the sidebar open with its draft.
+Assistant review was not checked because it needs live assistant credentials;
+the automated `review_close_returns_focus_*` tests cover its local buttons.
+
+![After closing the Clean up preview with Esc, Delete removed the selected ethanol](images/release-0.14.0/focus-restore/01-cleanup-esc-delete.jpg)
+
+![Cmd+Z then restored it, with "History restored" in the status bar](images/release-0.14.0/focus-restore/01-cleanup-esc.jpg)
+
+![After discarding the atom-map proposal, Cmd+Z restored the deleted reaction](images/release-0.14.0/focus-restore/06-reaction-mapping-esc.jpg)
+
+## Live RDKit reference suite
+
+The complete live reference tests gate publication in `release.yml`. The
+weekly run had failed since 5 October 2026 because the engine changed after
+0.13.1 without a live run ([issue #1037](https://github.com/Ameyanagi/ReShiki/issues/1037)).
+Before the tag, the regressions were fixed and the intended changes were
+compared narrowly:
+
+- **Fixed:** wedge-flagged SMILES keep their stereoisomer
+  ([#1045](https://github.com/Ameyanagi/ReShiki/pull/1045)); `@`/`@@` tags
+  decide wedge flags without coordinates
+  ([#1050](https://github.com/Ameyanagi/ReShiki/pull/1050)); reaction SMILES
+  keep stated E/Z ([#1051](https://github.com/Ameyanagi/ReShiki/pull/1051));
+  3D MOL InChI uses the file's coordinates
+  ([#1058](https://github.com/Ameyanagi/ReShiki/pull/1058)); RXN, allene, tag
+  and atropisomer axis fixes
+  ([#1059](https://github.com/Ameyanagi/ReShiki/pull/1059),
+  [#1062](https://github.com/Ameyanagi/ReShiki/pull/1062),
+  [#1063](https://github.com/Ameyanagi/ReShiki/pull/1063)).
+- **Intended changes compared against the RDKit-parity result:**
+  [#1047](https://github.com/Ameyanagi/ReShiki/pull/1047) and
+  [#1065](https://github.com/Ameyanagi/ReShiki/pull/1065).
+- **Known issues kept as exact case lists:**
+  [#1042](https://github.com/Ameyanagi/ReShiki/issues/1042) and
+  [#1048](https://github.com/Ameyanagi/ReShiki/issues/1048); see
+  [Known limits](changes-0.14.md#known-limits).
+
+The complete suite then ran on the release branch on macOS ARM64, Linux x64
+and Windows x64:
+[run 42465554525](https://github.com/Ameyanagi/ReShiki/actions/runs/42465554525).
 
 ## After the release
 
