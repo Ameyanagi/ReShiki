@@ -755,7 +755,7 @@ mod tests {
                 "2H-spiro[[1]benzofuran-3,1'-cyclopentane]",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             if !expected.contains("spiro") {
                 assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
@@ -778,7 +778,7 @@ mod tests {
             ("C1=C[Te]C=CC1", "4H-telluropyran"),
             ("CC1(C)C=COC=C1", "4,4-dimethyl-4H-pyran"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
         }
@@ -839,7 +839,7 @@ mod tests {
             ),
             ("C[C@H](O)c1ccccc1", "(1S)-1-phenylethan-1-ol"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -867,7 +867,7 @@ mod tests {
                 "N-[3-(azepane-1-sulfonyl)-4-methylphenyl]-1-[(thiophen-2-yl)carbonyl]piperidine-2-carboxamide",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
@@ -899,7 +899,7 @@ mod tests {
             ),
         ] {
             let input = crate::naming::canonical_smiles(smiles).unwrap();
-            let name = super::super::name_smiles(&input).unwrap();
+            let name = super::super::name_smiles(&input, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
@@ -950,7 +950,7 @@ mod tests {
             ),
         ] {
             let input = crate::naming::canonical_smiles(smiles).unwrap();
-            let name = super::super::name_smiles(&input).unwrap();
+            let name = super::super::name_smiles(&input, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -1000,7 +1000,7 @@ mod tests {
             ),
         ] {
             let input = crate::naming::canonical_smiles(smiles).unwrap();
-            let name = super::super::name_smiles(&input).unwrap();
+            let name = super::super::name_smiles(&input, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -1025,7 +1025,7 @@ mod tests {
                 "formaldehyde (1E)-2-methylpropylidenehydrazone",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
@@ -1088,7 +1088,7 @@ mod tests {
             ("C1=CCCCC1", "cyclohexene"),
             ("CC1=CCCCC1", "1-methylcyclohex-1-ene"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -1120,7 +1120,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),
@@ -1146,7 +1146,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),

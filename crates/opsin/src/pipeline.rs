@@ -2,7 +2,7 @@
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 
 use crate::{
-    OpsinResult, OpsinWarning, ParseOptions, ParsingError, Status, Structure,
+    Budget, OpsinResult, OpsinWarning, ParseOptions, ParsingError, Status, Structure,
     build_state::BuildState,
     component_generator::{ComponentGenerationContext, process_components},
     component_processor, frontend,
@@ -12,7 +12,12 @@ use crate::{
     structure_builder,
 };
 
-pub(crate) fn parse(resources: &Resources, input: &str, options: &ParseOptions) -> OpsinResult {
+pub(crate) fn parse(
+    resources: &Resources,
+    input: &str,
+    options: &ParseOptions,
+    budget: &Budget,
+) -> OpsinResult {
     let mut result = OpsinResult {
         status: Status::Failure,
         input: input.to_owned(),
@@ -39,7 +44,7 @@ pub(crate) fn parse(resources: &Resources, input: &str, options: &ParseOptions) 
     sort_parses(&mut candidates);
     let mut first_warning = None;
     for mut candidate in candidates {
-        match interpret_candidate(resources, &mut candidate, *options) {
+        match interpret_candidate(resources, &mut candidate, *options, budget) {
             Ok((structure, warnings)) if warnings.is_empty() => {
                 result.status = Status::Success;
                 result.message.clear();
@@ -69,8 +74,9 @@ fn interpret_candidate(
     resources: &Resources,
     tree: &mut ParseTree,
     options: ParseOptions,
+    budget: &Budget,
 ) -> Result<(Structure, Vec<OpsinWarning>), ParsingError> {
-    let mut state = BuildState::new(options);
+    let mut state = BuildState::with_budget(options, budget.clone());
     let mut generation = ComponentGenerationContext {
         options,
         warnings: Vec::new(),

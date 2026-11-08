@@ -5,7 +5,7 @@ use crate::naming::{NameReason, NameStatus};
 fn ion_spelling_matrix() {
     // Only unsubstituted cationic N prefixes use azaniumyl/azaniumylidene.
     // Substituted N keeps the accepted ammonio/iminio alternative and CationPrefix.
-    let parser = opsin::Parser::new().unwrap();
+    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
     let mut failures = Vec::new();
     for (row, smiles, expected, status) in [
         (
@@ -240,7 +240,7 @@ fn ion_spelling_matrix() {
     ] {
         let result = (|| {
             let canonical = crate::naming::canonical_smiles(smiles)?;
-            let actual = name_smiles(&canonical)?;
+            let actual = name_smiles(&canonical, &crate::naming::kernel_budget())?;
             println!("{row}\t{}\t{:?}", actual.text, actual.status);
             if (actual.text.as_str(), actual.status) != (expected, status) {
                 return Err(format!(

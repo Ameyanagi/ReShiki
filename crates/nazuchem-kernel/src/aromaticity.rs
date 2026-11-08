@@ -1,0 +1,789 @@
+//! RDKit's default aromaticity model on a graph and its symmetric SSSR rings.
+//! Adapted from Aromaticity.cpp and MolOps.cpp (2026.03.6).
+//! Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
+//! Relative electronegativity: Copyright (C) 2001-2011 Rational Discovery LLC.
+//! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
+// Copied from crates/chemistry/src/aromaticity.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: inject borrowed Budget and local cancellation/reservation support instead of host capability detection; support optional timeout
+use super::{
+    ELEMENTS, Element,
+    graph::{Graph, Valence, pi_electron_count},
+};
+use crate::budget::{Budget, Cancellation, MIB};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
+
+#[cfg(test)]
+mod tests;
+
+/// Estimated working memory per atom.
+const BYTES_PER_ATOM: usize = 128;
+/// Estimated working memory per bond.
+const BYTES_PER_BOND: usize = 64;
+/// Estimated working memory per atom slot in the supplied rings.
+const BYTES_PER_RING_SLOT: usize = 32;
+/// Estimated working memory per supplied ring.
+const BYTES_PER_RING: usize = 128;
+/// Fixed working-memory allowance for aromaticity perception.
+const BASE_ESTIMATE: usize = 8 * MIB;
+/// Additional headroom held by the process reservation.
+const RESERVATION_OVERHEAD: usize = 16 * MIB;
+/// Work units between cancellation and deadline checks.
+const CHECK_INTERVAL_UNITS: usize = 1024;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Donor {
+    None,
+    Vacant,
+    One,
+    Two,
+    Any,
+}
+
+pub struct Aromaticity {
+    pub graph: Graph,
+    pub aromatic_rings: usize,
+}
+
+fn at<T>(items: &[T], id: usize) -> Result<&T, String> {
+    items
+        .get(id)
+        .ok_or_else(|| "Invalid aromaticity index".into())
+}
+fn element(number: i32) -> Result<&'static Element, String> {
+    usize::try_from(number)
+        .ok()
+        .and_then(|i| ELEMENTS.get(i))
+        .ok_or_else(|| "Invalid effective aromatic atomic number".into())
+}
+struct Work {
+    remaining: usize,
+    checkpoint: usize,
+    deadline: Option<Instant>,
+    cancellation: Cancellation,
+}
+impl Work {
+    fn units(remaining: usize) -> Self {
+        Self {
+            remaining,
+            checkpoint: 0,
+            deadline: None,
+            cancellation: Cancellation::default(),
+        }
+    }
+    fn check(&self) -> Result<(), String> {
+        if self.cancellation.is_cancelled() {
+            return Err("Aromaticity calculation cancelled".into());
+        }
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Err(
+                "Aromaticity time budget exceeded; chemistry analysis is incomplete".into(),
+            );
+        }
+        Ok(())
+    }
+    fn spend(&mut self, amount: usize) -> Result<(), String> {
+        self.remaining = self
+            .remaining
+            .checked_sub(amount)
+            .ok_or("Aromaticity work limit exceeded")?;
+        self.checkpoint = self.checkpoint.saturating_add(amount);
+        if self.checkpoint >= CHECK_INTERVAL_UNITS {
+            self.checkpoint = 0;
+            self.check()?;
+        }
+        Ok(())
+    }
+}
+struct Topology<'a> {
+    graph: &'a Graph,
+    valences: Vec<Valence>,
+    neighbors: Vec<Vec<(usize, usize)>>,
+    ring_bonds: Vec<Vec<usize>>,
+    cyclic: Vec<bool>,
+}
+impl<'a> Topology<'a> {
+    fn new(
+        graph: &'a Graph,
+        rings: &[Vec<usize>],
+        cache: Option<&[Valence]>,
+    ) -> Result<Self, String> {
+        let valences = graph.cached_valences(cache)?;
+        let mut neighbors = vec![Vec::new(); graph.atoms.len()];
+        let mut pairs = HashMap::new();
+        for (id, bond) in graph.bonds.iter().enumerate() {
+            for (a, b) in [(bond.a, bond.b), (bond.b, bond.a)] {
+                neighbors
+                    .get_mut(a)
+                    .ok_or("Missing aromaticity endpoint")?
+                    .push((b, id));
+            }
+            pairs.insert((bond.a.min(bond.b), bond.a.max(bond.b)), id);
+        }
+        let mut cyclic = vec![false; graph.bonds.len()];
+        let mut ring_bonds = Vec::new();
+        let mut total = 0usize;
+        for ring in rings {
+            total = total
+                .checked_add(ring.len())
+                .ok_or("Aromaticity ring limit exceeded")?;
+            if ring.len() < 3
+                || total > 2_000_000
+                || ring.iter().collect::<HashSet<_>>().len() != ring.len()
+            {
+                return Err("Invalid aromaticity ring data".into());
+            }
+            let mut bonds = Vec::new();
+            for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+                let &bond = pairs
+                    .get(&(a.min(b), a.max(b)))
+                    .ok_or("Missing aromaticity ring bond")?;
+                *cyclic.get_mut(bond).ok_or("Missing cyclic bond")? = true;
+                bonds.push(bond);
+            }
+            ring_bonds.push(bonds);
+        }
+        Ok(Self {
+            graph,
+            valences,
+            neighbors,
+            ring_bonds,
+            cyclic,
+        })
+    }
+    fn electrons(&self, id: usize) -> Result<i32, String> {
+        let atom = at(&self.graph.atoms, id)?;
+        let valence = at(&self.valences, id)?;
+        let adjacent = at(&self.neighbors, id)?;
+        let mut zero_bonds = 0;
+        for &(_, bond) in adjacent {
+            zero_bonds += usize::from(at(&self.graph.bonds, bond)?.twice_contribution(id) == 0);
+        }
+        pi_electron_count(atom, valence, adjacent.len(), zero_bonds)
+    }
+    fn donor(&self, id: usize) -> Result<Donor, String> {
+        let atom = at(&self.graph.atoms, id)?;
+        let mut external = None;
+        let mut cyclic_multiple = false;
+        let mut degree = at(&self.neighbors, id)?.len() as i32 + i32::from(atom.explicit_hydrogens);
+        for &(other, bond) in at(&self.neighbors, id)? {
+            let contribution = at(&self.graph.bonds, bond)?.twice_contribution(id);
+            if contribution == 0 {
+                degree -= 1;
+            }
+            if contribution >= 4 {
+                if *at(&self.cyclic, bond)? {
+                    cyclic_multiple = true;
+                } else if external.is_none() {
+                    external = Some(other);
+                }
+            }
+        }
+        if atom.atomic_number == 0 {
+            return Ok(if cyclic_multiple {
+                Donor::One
+            } else {
+                Donor::Any
+            });
+        }
+        let mut electrons = self.electrons(id)?;
+        if electrons < 0 {
+            return Ok(Donor::None);
+        }
+        if electrons == 0 {
+            return Ok(if external.is_some() {
+                Donor::Vacant
+            } else if cyclic_multiple {
+                Donor::One
+            } else {
+                Donor::None
+            });
+        }
+        if let Some(other) = external {
+            let number = at(&self.graph.atoms, other)?.atomic_number;
+            let other_outer = element(i32::from(number))?.outer_electrons;
+            let outer = element(i32::from(atom.atomic_number))?.outer_electrons;
+            if other_outer > outer || other_outer == outer && number < atom.atomic_number {
+                electrons -= 1;
+            }
+            return Ok(if electrons == 0 {
+                Donor::Vacant
+            } else if electrons % 2 == 1 {
+                Donor::One
+            } else {
+                Donor::Two
+            });
+        }
+        if electrons == 1 {
+            return Ok(
+                if at(&self.valences, id)?.explicit_valence as i32 != degree {
+                    Donor::One
+                } else if atom.charge == 1 {
+                    Donor::Vacant
+                } else {
+                    Donor::None
+                },
+            );
+        }
+        Ok(if electrons % 2 == 1 {
+            Donor::One
+        } else {
+            Donor::Two
+        })
+    }
+    fn candidate(&self, id: usize, donor: Donor) -> Result<bool, String> {
+        let atom = at(&self.graph.atoms, id)?;
+        let number = atom.atomic_number;
+        if (number > 18 && !matches!(number, 34 | 52)) || donor == Donor::None {
+            return Ok(false);
+        }
+        let valence = at(&self.valences, id)?;
+        let default = *element(i32::from(number))?
+            .valences
+            .first()
+            .ok_or("Missing default valence")?;
+        if default > 0 {
+            let effective = *element(i32::from(number) - i32::from(atom.charge))?
+                .valences
+                .first()
+                .ok_or("Missing effective valence")?;
+            if valence.explicit_valence as i32 + valence.implicit_hydrogens as i32 > effective {
+                return Ok(false);
+            }
+        }
+        if atom.radical_electrons != 0 && (number != 6 || atom.charge != 0) {
+            return Ok(false);
+        }
+        let adjacent = at(&self.neighbors, id)?;
+        if valence.explicit_valence as i32 - adjacent.len() as i32 > 1 {
+            let mut multiple = 0;
+            for &(_, bond) in adjacent {
+                multiple += usize::from(matches!(at(&self.graph.bonds, bond)?.order, 2 | 3));
+            }
+            if multiple > 1 {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
+
+/// Perceive the default aromaticity model without changing explicit H counts.
+/// Ring order is significant for shared atoms in macrocycles, matching RDKit.
+pub fn perceive(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    budget: &Budget,
+) -> Result<Aromaticity, String> {
+    perceive_with_budget(graph, rings, Cancellation::default(), budget)
+}
+
+/// Complete perception under an immutable operational budget. Exhaustion or
+/// cancellation never returns a partially perceived graph.
+pub fn perceive_with_budget(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    cancellation: Cancellation,
+    budget: &Budget,
+) -> Result<Aromaticity, String> {
+    run_with_budget(graph, rings, None, budget, cancellation)
+}
+
+fn estimated_bytes(graph: &Graph, rings: &[Vec<usize>]) -> Option<usize> {
+    let ring_slots = rings
+        .iter()
+        .try_fold(0usize, |sum, ring| sum.checked_add(ring.len()))?;
+    graph
+        .atoms
+        .len()
+        .checked_mul(BYTES_PER_ATOM)
+        .and_then(|n| {
+            graph
+                .bonds
+                .len()
+                .checked_mul(BYTES_PER_BOND)
+                .and_then(|b| n.checked_add(b))
+        })
+        .and_then(|n| {
+            ring_slots
+                .checked_mul(BYTES_PER_RING_SLOT)
+                .and_then(|r| n.checked_add(r))
+        })
+        .and_then(|n| {
+            rings
+                .len()
+                .checked_mul(BYTES_PER_RING)
+                .and_then(|r| n.checked_add(r))
+        })
+        .and_then(|n| n.checked_add(BASE_ESTIMATE))
+}
+
+fn run_with_budget(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    cache: Option<&[Valence]>,
+    budget: &Budget,
+    cancellation: Cancellation,
+) -> Result<Aromaticity, String> {
+    let estimated = estimated_bytes(graph, rings).ok_or("Aromaticity memory estimate overflow")?;
+    if estimated > budget.heap_bytes() {
+        return Err(
+            "Aromaticity estimated memory budget exceeded; chemistry analysis is incomplete".into(),
+        );
+    }
+    let reserved_bytes = estimated
+        .checked_add(RESERVATION_OVERHEAD)
+        .ok_or("Aromaticity reservation size overflow")?;
+    if reserved_bytes > budget.reservation_ceiling() {
+        return Err(
+            "Insufficient available memory for aromaticity calculation; chemistry analysis is incomplete"
+                .into(),
+        );
+    }
+    let _reservation = budget.try_reserve(reserved_bytes).ok_or(
+        "Aromaticity calculation resources are busy; retry after other calculations finish",
+    )?;
+    let mut work = Work::units(budget.work_units());
+    work.deadline = budget
+        .analysis_timeout()
+        .and_then(|timeout| Instant::now().checked_add(timeout));
+    work.cancellation = cancellation;
+    work.check()?;
+    let result = perceive_cached_with_work(graph, rings, cache, &mut work)?;
+    work.check()?;
+    Ok(result)
+}
+
+#[cfg(test)]
+fn perceive_with_work(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    work: &mut Work,
+) -> Result<Aromaticity, String> {
+    perceive_cached_with_work(graph, rings, None, work)
+}
+
+pub(crate) fn perceive_cached(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    cache: &[Valence],
+    budget: &Budget,
+) -> Result<Aromaticity, String> {
+    run_with_budget(graph, rings, Some(cache), budget, Cancellation::default())
+}
+
+fn perceive_cached_with_work(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    cache: Option<&[Valence]>,
+    work: &mut Work,
+) -> Result<Aromaticity, String> {
+    let topology = Topology::new(graph, rings, cache)?;
+    let mut donors = vec![Donor::None; graph.atoms.len()];
+    let mut seen = vec![false; graph.atoms.len()];
+    let mut allowed = vec![false; graph.atoms.len()];
+    let mut candidates = Vec::new();
+    let mut bonds = Vec::new();
+    for (index, ring) in rings.iter().enumerate() {
+        let (mut all_allowed, mut all_dummy) = (true, true);
+        for &id in ring {
+            work.spend(1)?;
+            let atom = at(&graph.atoms, id)?;
+            all_dummy &= atom.atomic_number == 0;
+            if !*at(&seen, id)? {
+                let adjacent = at(&topology.neighbors, id)?;
+                work.spend(adjacent.len() * 4 + 1)?;
+                let mut donor = topology.donor(id)?;
+                if donor == Donor::Two
+                    && ring.len() >= 9
+                    && matches!(atom.atomic_number, 8 | 16)
+                    && adjacent.len() == 2
+                    && atom.charge == 0
+                {
+                    let mut has_multiple = false;
+                    for &(_, bond) in adjacent {
+                        has_multiple |= matches!(at(&graph.bonds, bond)?.order, 2 | 3);
+                    }
+                    if !has_multiple {
+                        donor = Donor::None;
+                    }
+                }
+                *donors.get_mut(id).ok_or("Missing donor atom")? = donor;
+                *allowed.get_mut(id).ok_or("Missing candidate atom")? =
+                    topology.candidate(id, donor)?;
+                *seen.get_mut(id).ok_or("Missing visited atom")? = true;
+            }
+            all_allowed &= *at(&allowed, id)?;
+        }
+        if all_allowed && !all_dummy {
+            candidates.push(ring.as_slice());
+            bonds.push(at(&topology.ring_bonds, index)?.as_slice());
+        }
+    }
+    let neighbors = ring_neighbors(&bonds, graph.bonds.len(), work)?;
+    let mut result = graph.clone();
+    let mut visited = vec![false; candidates.len()];
+    let mut aromatic_rings = 0;
+    for root in 0..candidates.len() {
+        if *at(&visited, root)? {
+            continue;
+        }
+        let mut stack = vec![root];
+        let mut fused = Vec::new();
+        while let Some(ring) = stack.pop() {
+            work.spend(1)?;
+            if *at(&visited, ring)? {
+                continue;
+            }
+            *visited.get_mut(ring).ok_or("Missing fused ring")? = true;
+            fused.push(ring);
+            stack.extend(at(&neighbors, ring)?.iter().rev().copied());
+        }
+        aromatic_rings += mark_fused(
+            &mut result,
+            &candidates,
+            &bonds,
+            &neighbors,
+            &fused,
+            &donors,
+            work,
+        )?;
+    }
+    Ok(Aromaticity {
+        graph: result,
+        aromatic_rings,
+    })
+}
+
+fn ring_neighbors(
+    rings: &[&[usize]],
+    bond_count: usize,
+    work: &mut Work,
+) -> Result<Vec<Vec<usize>>, String> {
+    let mut members = vec![Vec::new(); bond_count];
+    for (id, ring) in rings.iter().enumerate().filter(|(_, r)| r.len() <= 24) {
+        for &bond in *ring {
+            members.get_mut(bond).ok_or("Missing ring edge")?.push(id);
+        }
+    }
+    let mut overlap = BTreeMap::<(usize, usize), usize>::new();
+    for containing in members {
+        for (i, &a) in containing.iter().enumerate() {
+            for &b in containing.iter().skip(i + 1) {
+                work.spend(1)?;
+                *overlap.entry((a, b)).or_default() += 1;
+                if overlap.len() > 1_000_000 {
+                    return Err("Aromaticity ring neighbor limit exceeded".into());
+                }
+            }
+        }
+    }
+    let mut neighbors = vec![Vec::new(); rings.len()];
+    for ((a, b), count) in overlap {
+        if count == 1 {
+            neighbors.get_mut(a).ok_or("Missing ring neighbor")?.push(b);
+            neighbors.get_mut(b).ok_or("Missing ring neighbor")?.push(a);
+        }
+    }
+    for list in &mut neighbors {
+        list.sort_unstable();
+    }
+    Ok(neighbors)
+}
+
+#[cfg(test)]
+fn connected(rings: &[usize], neighbors: &[Vec<usize>], work: &mut Work) -> Result<bool, String> {
+    let root = *rings.first().ok_or("Missing ring combination")?;
+    let mut stack = vec![root];
+    let mut seen = HashSet::new();
+    while let Some(id) = stack.pop() {
+        if !seen.insert(id) {
+            continue;
+        }
+        for &other in at(neighbors, id)? {
+            work.spend(1)?;
+            if rings.contains(&other) && !seen.contains(&other) {
+                stack.push(other);
+            }
+        }
+    }
+    Ok(seen.len() == rings.len())
+}
+fn huckel(atoms: &BTreeMap<usize, usize>, donors: &[Donor]) -> Result<bool, String> {
+    let (mut low, mut high, mut any) = (0, 0, 0);
+    for (&id, &count) in atoms {
+        if count > 2 {
+            continue;
+        }
+        let (l, h) = match at(donors, id)? {
+            Donor::None | Donor::Vacant => (0, 0),
+            Donor::One => (1, 1),
+            Donor::Two => (2, 2),
+            Donor::Any => {
+                any += 1;
+                (1, 2)
+            }
+        };
+        if any > 1 {
+            return Ok(false);
+        }
+        low += l;
+        high += h;
+    }
+    Ok(if high >= 6 {
+        low + (6 - low % 4) % 4 <= high
+    } else {
+        high == 2
+    })
+}
+#[cfg(test)]
+fn next_combination(indices: &mut [usize], count: usize) -> Result<bool, String> {
+    let length = indices.len();
+    for i in (0..length).rev() {
+        if *at(indices, i)? < count - length + i {
+            let first = *at(indices, i)? + 1;
+            for (offset, value) in indices.iter_mut().skip(i).enumerate() {
+                *value = first + offset;
+            }
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+fn mark_fused(
+    graph: &mut Graph,
+    rings: &[&[usize]],
+    bonds: &[&[usize]],
+    neighbors: &[Vec<usize>],
+    fused: &[usize],
+    donors: &[Donor],
+    work: &mut Work,
+) -> Result<usize, String> {
+    let mut total_bonds = HashSet::new();
+    for &ring in fused {
+        total_bonds.extend(at(bonds, ring)?.iter().copied());
+    }
+    let mut done = HashSet::new();
+    let mut aromatic = HashSet::new();
+    // Retain RDKit's six-ring combination limit and its two-ring cap for
+    // systems larger than 300 rings. A separate work budget bounds all cases.
+    let maximum = fused.len().min(if fused.len() > 300 { 2 } else { 6 });
+    let mut local_neighbors = None;
+    for size in 1..=maximum {
+        if done.len() >= total_bonds.len() {
+            break;
+        }
+        // Build local adjacency only after the complete singleton level and its
+        // stop check. Indices are fused DFS positions, never global ring IDs.
+        if size > 1 && local_neighbors.is_none() {
+            let positions: HashMap<_, _> = fused
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(position, ring)| (ring, position))
+                .collect();
+            work.spend(fused.len())?;
+            let mut local = Vec::with_capacity(fused.len());
+            for &ring in fused {
+                let adjacent = at(neighbors, ring)?;
+                work.spend(adjacent.len().saturating_mul(12).saturating_add(1))?;
+                let mut list = adjacent
+                    .iter()
+                    .map(|id| {
+                        positions
+                            .get(id)
+                            .copied()
+                            .ok_or_else(|| "Missing fused neighbor".to_owned())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                list.sort_unstable();
+                local.push(list);
+            }
+            local_neighbors = Some(local);
+        }
+        let mut evaluate = |combination: &[usize], work: &mut Work| {
+            let current = combination
+                .iter()
+                .map(|&i| at(fused, i).copied())
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut atom_count = BTreeMap::new();
+            for &ring in &current {
+                let atoms = at(rings, ring)?;
+                work.spend(atoms.len())?;
+                for &atom in *atoms {
+                    *atom_count.entry(atom).or_default() += 1;
+                }
+            }
+            if huckel(&atom_count, donors)? {
+                let mut bond_count = BTreeMap::<usize, usize>::new();
+                for &ring in &current {
+                    for &bond in *at(bonds, ring)? {
+                        *bond_count.entry(bond).or_default() += 1;
+                    }
+                }
+                for (id, count) in bond_count {
+                    if count != 1 {
+                        continue;
+                    }
+                    let bond = graph.bonds.get_mut(id).ok_or("Missing aromatic bond")?;
+                    bond.aromatic = true;
+                    if matches!(bond.order, 1 | 2) {
+                        bond.order = 4;
+                        for atom in [bond.a, bond.b] {
+                            graph
+                                .atoms
+                                .get_mut(atom)
+                                .ok_or("Missing aromatic atom")?
+                                .aromatic = true;
+                        }
+                    }
+                    done.insert(id);
+                }
+                aromatic.extend(current);
+            }
+            Ok(())
+        };
+        if size == 1 {
+            for index in 0..fused.len() {
+                work.spend(1)?;
+                evaluate(&[index], work)?;
+            }
+        } else {
+            connected_combinations(
+                local_neighbors
+                    .as_deref()
+                    .ok_or("Missing fused adjacency")?,
+                size,
+                work,
+                &mut evaluate,
+            )?;
+        }
+    }
+    Ok(aromatic.len())
+}
+
+/// Emit connected sorted subsets in the original exhaustive lexicographic
+/// order. Disconnected sorted prefixes remain allowed: 0--2--1 must emit
+/// [0,1,2]. Weighted reachability only prunes impossible completions.
+fn connected_combinations(
+    neighbors: &[Vec<usize>],
+    size: usize,
+    work: &mut Work,
+    emit: &mut impl FnMut(&[usize], &mut Work) -> Result<(), String>,
+) -> Result<(), String> {
+    if size == 0 || size > neighbors.len() {
+        return Ok(());
+    }
+    if size == 2 {
+        for (a, adjacent) in neighbors.iter().enumerate() {
+            for &b in adjacent {
+                work.spend(1)?;
+                if b > a {
+                    emit(&[a, b], work)?;
+                }
+            }
+        }
+        return Ok(());
+    }
+    for root in 0..=neighbors.len() - size {
+        visit_connected(&mut vec![root], size, neighbors, work, emit)?;
+    }
+    Ok(())
+}
+
+fn visit_connected(
+    prefix: &mut Vec<usize>,
+    size: usize,
+    neighbors: &[Vec<usize>],
+    work: &mut Work,
+    emit: &mut impl FnMut(&[usize], &mut Work) -> Result<(), String>,
+) -> Result<(), String> {
+    work.spend(neighbors.len().saturating_add(1))?;
+    let remaining = size
+        .checked_sub(prefix.len())
+        .ok_or("Invalid connected prefix")?;
+    let &root = prefix.first().ok_or("Missing connected root")?;
+    let &last = prefix.last().ok_or("Missing connected prefix")?;
+    let mut distances = vec![usize::MAX; neighbors.len()];
+    *distances
+        .get_mut(root)
+        .ok_or("Missing connected root distance")? = 0;
+    let mut queue = VecDeque::from([(root, 0usize)]);
+    while let Some((id, distance)) = queue.pop_front() {
+        work.spend(1)?;
+        if *at(&distances, id)? != distance {
+            continue;
+        }
+        for &other in at(neighbors, id)? {
+            work.spend(1)?;
+            let selected = prefix.contains(&other);
+            if other <= last && !selected {
+                continue;
+            }
+            let next = distance.saturating_add(usize::from(!selected));
+            let old = distances
+                .get_mut(other)
+                .ok_or("Missing connected neighbor distance")?;
+            if next <= remaining && next < *old {
+                *old = next;
+                if selected {
+                    queue.push_front((other, next));
+                } else {
+                    queue.push_back((other, next));
+                }
+            }
+        }
+    }
+    for &id in prefix.iter() {
+        if *at(&distances, id)? > remaining {
+            return Ok(());
+        }
+    }
+    if remaining == 0 {
+        return emit(prefix, work);
+    }
+    work.spend(neighbors.len())?;
+    let choices: Vec<_> = distances
+        .iter()
+        .enumerate()
+        .filter_map(|(id, &distance)| (id > last && distance <= remaining).then_some(id))
+        .collect();
+    if choices.len() < remaining {
+        return Ok(());
+    }
+    for other in choices {
+        if neighbors.len() - other < remaining {
+            break;
+        }
+        prefix.push(other);
+        visit_connected(prefix, size, neighbors, work, emit)?;
+        prefix.pop();
+    }
+    Ok(())
+}
+
+/// Preserve hydrogens that disappear from the implicit cache when aromaticity
+/// changes bond orders, e.g. the N-H in a pyridone. The prior counts must be from
+/// the same graph immediately before aromaticity perception.
+pub fn adjust_hydrogens(graph: &Graph, previous: &[Valence]) -> Result<Graph, String> {
+    if previous.len() != graph.atoms.len() {
+        return Err("Hydrogen cache size changed".into());
+    }
+    let current = graph.provisional_valences()?;
+    let mut result = graph.clone();
+    for ((atom, now), before) in result.atoms.iter_mut().zip(current).zip(previous) {
+        let lost = before
+            .implicit_hydrogens
+            .saturating_sub(now.implicit_hydrogens);
+        atom.explicit_hydrogens = u32::from(atom.explicit_hydrogens)
+            .checked_add(lost)
+            .and_then(|h| u8::try_from(h).ok())
+            .ok_or("Adjusted hydrogen count exceeds supported range")?;
+    }
+    Ok(result)
+}

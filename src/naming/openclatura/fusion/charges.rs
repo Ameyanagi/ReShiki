@@ -235,7 +235,7 @@ mod tests {
             "C[NH+]1C2C=CC=CC2C2=C1CCC=C2",
             "[NH2+]1C2C=CC=CC2C2=C1CCC=C2",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atoms = largest_ring_block(&mol);
             let graph = FusionGraph {
                 atoms: atoms
@@ -263,7 +263,7 @@ mod tests {
             "[NH2+]1CCC2=CC=CC=C2C1",
             "O=C1[CH-]NC2=C1C[NH+](C)C2",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert!(
                 !has_unproved_protonated_junction_donor(&mol, &largest_ring_block(&mol)),
                 "{smiles}"
@@ -278,7 +278,7 @@ mod tests {
             "[NH2+]1CCC2=C(C1)SC=C2",
             "C[NH+]1CCC2=C(C1)OC=C2",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert!(
                 has_unproved_protonated_junction_donor(&mol, &largest_ring_block(&mol)),
                 "{smiles}"
@@ -290,7 +290,7 @@ mod tests {
             "C1=C[NH+]=CC2=C1SC=C2",
             "C[NH+]1CCC2=CC=CC=C2C1",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert!(
                 !has_unproved_protonated_junction_donor(&mol, &largest_ring_block(&mol)),
                 "{smiles}"
@@ -300,7 +300,7 @@ mod tests {
 
     #[test]
     fn deprotonation_restores_matching_view_and_preserves_charge_evidence() {
-        let mol = read_smiles("c1ccc2[n-]ccc2c1").unwrap();
+        let mol = read_smiles("c1ccc2[n-]ccc2c1", &crate::naming::kernel_budget()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let parent = fusion_component_charge_parent(&mol, &atoms).unwrap();
         let nitrogen = *mol.atoms.iter().find(|(_, a)| a.symbol == "N").unwrap().0;

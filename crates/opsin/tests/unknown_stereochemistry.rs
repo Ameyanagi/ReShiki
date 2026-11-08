@@ -1,8 +1,8 @@
 use opsin::{ParseOptions, Parser, Status, WarningKind};
 
 fn canonical(smiles: &str) -> String {
-    let imported = reshiki_chemistry::smiles::read(smiles).unwrap();
-    reshiki_chemistry::smiles::write::write(&imported.prepared.state, Default::default())
+    let imported = nazuchem_kernel::smiles::read(smiles, &Default::default()).unwrap();
+    nazuchem_kernel::smiles::write::write(&imported.prepared.state, Default::default())
         .unwrap()
         .text
 }
@@ -105,8 +105,8 @@ fn coupled_lowercase_rs_controls_keep_their_distinct_configurations() {
             );
         }
         let smiles = structure.semantic_cxsmiles().unwrap();
-        let native = reshiki_chemistry::smiles::read(&smiles).unwrap();
-        let labels = reshiki_chemistry::stereo::cip::label::assign(
+        let native = nazuchem_kernel::smiles::read(&smiles, &Default::default()).unwrap();
+        let labels = nazuchem_kernel::stereo::cip::label::assign(
             &native.prepared.state,
             &Default::default(),
         )

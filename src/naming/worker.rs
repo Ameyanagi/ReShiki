@@ -128,7 +128,8 @@ fn parse(name: String, generation: bool) -> Result<Response, String> {
         "Enter a chemical name of at most 2048 bytes without control characters",
     )?;
     // Grammar initialization is inside the bounded native allocator, never a foreign runtime.
-    let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget())
+        .map_err(|error| error.to_string())?;
     let mut options = opsin::ParseOptions::strict();
     options.allow_radicals = generation;
     let result = parser.parse(&name, &options);
@@ -224,12 +225,16 @@ pub fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
             smiles,
             isotope_style,
         } if protocol == PROTOCOL && profile == openclatura::PROFILE => {
-            let result = openclatura::name_smiles_with_style(&smiles, isotope_style)
-                .and_then(|name| {
-                    check_name(&name.text, "the name exceeds the supported length")?;
-                    Ok(name)
-                })
-                .map_err(|reason| format!("This structure can't be named locally yet: {reason}"));
+            let result = openclatura::name_smiles_with_style(
+                &smiles,
+                isotope_style,
+                &crate::naming::kernel_budget(),
+            )
+            .and_then(|name| {
+                check_name(&name.text, "the name exceeds the supported length")?;
+                Ok(name)
+            })
+            .map_err(|reason| format!("This structure can't be named locally yet: {reason}"));
             Ok(Response::Generate(Generated {
                 protocol: PROTOCOL,
                 profile: openclatura::PROFILE.into(),

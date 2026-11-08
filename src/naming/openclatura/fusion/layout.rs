@@ -2411,7 +2411,7 @@ mod tests {
     };
     #[test]
     fn hexagonal_bicycle_retains_all_preferred_reflections() {
-        let mol = read_smiles("c1ccc2ccccc2c1").unwrap();
+        let mol = read_smiles("c1ccc2ccccc2c1", &crate::naming::kernel_budget()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
         let model = typed_face_model(&mol, &bounded);
@@ -2441,7 +2441,7 @@ mod tests {
     }
     #[test]
     fn preferred_geometry_preserves_atom_permutation_independence() {
-        let mol = read_smiles("c1ccc2cc3ccccc3cc2c1").unwrap();
+        let mol = read_smiles("c1ccc2cc3ccccc3cc2c1", &crate::naming::kernel_budget()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
         let model = typed_face_model(&mol, &bounded);
@@ -2485,6 +2485,7 @@ mod tests {
     fn two_port_macrocycle_retains_the_source_orientation_witness() {
         let mol = read_smiles(
             "C=C(C)[C@H]1CC[C@@]23O[C@@H]2[C@@H](C/C(C)=C2/C(=O)C=C(C)[C@@]2(O)CC1)OC3=O",
+            &crate::naming::kernel_budget(),
         )
         .unwrap();
         let atoms = AtomSet::from([3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 16, 17, 19, 21, 22]);

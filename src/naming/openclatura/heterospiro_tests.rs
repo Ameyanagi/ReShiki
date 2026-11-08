@@ -191,7 +191,7 @@ const CONTROLS: &[Case] = &[
 fn assert_names_and_statuses(cases: &[Case]) {
     let mut failures = Vec::new();
     for &(row, smiles, expected, status) in cases {
-        match name_smiles(smiles) {
+        match name_smiles(smiles, &crate::naming::kernel_budget()) {
             Ok(actual) if (actual.text.as_str(), actual.status) == (expected, status) => {}
             Ok(actual) => failures.push(format!(
                 "{row}: {smiles}: expected {expected} ({status:?}), got {} ({:?})",
@@ -257,7 +257,7 @@ fn heterospiro_atom_ids_do_not_choose_junction_hydrogen_or_prime_scope() {
                 .filter(|case| case.0 == "corrected benzimidazole"),
         );
     for &(row, smiles, expected, status) in cases {
-        let source = graph_io::read_smiles(smiles).unwrap();
+        let source = graph_io::read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         let ids: Vec<_> = source.atoms.keys().copied().collect();
         let mut reversed = ids.clone();
         reversed.reverse();
@@ -306,7 +306,8 @@ fn heterospiro_aromatic_and_kekule_inputs_have_the_same_name_and_status() {
             crate::naming::canonical_smiles(aromatic).unwrap(),
             "{row}: equivalent test inputs"
         );
-        let actual = name_smiles(kekule).unwrap_or_else(|error| panic!("{row}: {error}"));
+        let actual = name_smiles(kekule, &crate::naming::kernel_budget())
+            .unwrap_or_else(|error| panic!("{row}: {error}"));
         assert_eq!(actual.text, expected, "{row}: {kekule}");
         assert_eq!(actual.status, status, "{row}: {}", actual.text);
     }
@@ -368,7 +369,7 @@ fn heterospiro_hydrogen_and_suffixes_on_both_components() {
 
 fn assert_names_statuses_and_structures(cases: &[Case]) {
     assert_names_and_statuses(cases);
-    let parser = opsin::Parser::new().unwrap();
+    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
     for &(row, smiles, expected, _) in cases {
         let parsed = parser.parse(expected, &opsin::ParseOptions::strict());
         assert_eq!(

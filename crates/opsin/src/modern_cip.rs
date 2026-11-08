@@ -2,7 +2,7 @@
 //! The OPSIN constitutional rules remain the fast path for ordinary R/S.
 use crate::graph::{AtomId, BondStereoValue, Graph, StereoReference};
 use crate::stereochemistry_handler::StereochemistryError;
-use reshiki_chemistry::{
+use nazuchem_kernel::{
     electronic::Hybridization,
     graph::{Atom, Bond, Graph as CipGraph},
     kekulize::Direction,
@@ -117,10 +117,10 @@ mod tests {
 
     #[test]
     fn mancude_names_preserve_the_named_configuration() {
-        use reshiki_chemistry::smiles;
+        use nazuchem_kernel::smiles;
 
         let canonical = |text: &str| {
-            let imported = smiles::read(text).unwrap();
+            let imported = smiles::read(text, &Default::default()).unwrap();
             smiles::write::write(&imported.prepared.state, Default::default())
                 .unwrap()
                 .text

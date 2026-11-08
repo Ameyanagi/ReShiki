@@ -530,7 +530,7 @@ mod tests {
             ("CCOC(=O)C(C(=O)OC)C(=O)OC", None, false),
             ("CCOC(=O)C(CCOC(=O)C)C(=O)OC", Some(9), false),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let mut groups = super::super::perception::perceive_groups(&mol);
             groups.retain(|group| Some(group.attachment_carbon) != omitted_center);
             let collected =
@@ -542,7 +542,7 @@ mod tests {
 
     #[test]
     fn nitrogen_ranking_discards_provisional_branch_status() {
-        let mol = read_smiles("NC(=O)NS(=O)(=O)CC(=O)O").unwrap();
+        let mol = read_smiles("NC(=O)NS(=O)(=O)CC(=O)O", &crate::naming::kernel_budget()).unwrap();
         let exclude = AtomSet::from([0, 1, 2]);
         let mut blocked = exclude.clone();
         blocked.insert(3);

@@ -1,9 +1,9 @@
 //! Rigid cage descriptors must define the bridgeheads and the substituted atom.
 use std::collections::{BTreeMap, BTreeSet};
 
+use nazuchem_kernel::smiles;
 use opsin::graph::StereoGroupType;
 use opsin::{ParseOptions, Parser, Status, Structure, WarningKind};
-use reshiki_chemistry::smiles;
 
 fn parse(name: &str) -> Structure {
     let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
@@ -25,7 +25,7 @@ fn assert_group_scope_refused(name: &str) {
 }
 
 fn canonical(text: &str) -> String {
-    let imported = smiles::read(text).unwrap();
+    let imported = smiles::read(text, &Default::default()).unwrap();
     smiles::write::write(&imported.prepared.state, Default::default())
         .unwrap()
         .text
@@ -388,7 +388,7 @@ fn explicit_cage_groups_cover_both_bridgeheads_and_the_described_atom() {
         let written = structure.semantic_cxsmiles().unwrap();
         assert_eq!(written, format!("{A} |{extension}|"), "{name}");
         if kind == StereoGroupType::Relative {
-            let imported = smiles::read(&written).unwrap();
+            let imported = smiles::read(&written, &Default::default()).unwrap();
             let groups = &imported.prepared.state.metadata.groups;
             assert_eq!(groups.len(), 1, "{name}: {written}");
             assert_eq!(groups[0].kind, 1, "{name}");
@@ -485,7 +485,9 @@ fn single_cage_groups_allow_simple_ring_substituents() {
                 format!("{kind}:1,2,3,4"),
                 "{name}"
             );
-            let members = smiles::stereoisomers(&structure.semantic_cxsmiles().unwrap()).unwrap();
+            let members =
+                smiles::stereoisomers(&structure.semantic_cxsmiles().unwrap(), &Default::default())
+                    .unwrap();
             assert_eq!(members.len(), 2, "{name}");
         }
     }
@@ -594,7 +596,7 @@ fn absolute_cip_outside_the_frame_preserves_both_cage_diastereomers() {
             canonical(representative),
             "{name}: {written}"
         );
-        let imported = smiles::read(&written).unwrap();
+        let imported = smiles::read(&written, &Default::default()).unwrap();
         let groups = &imported.prepared.state.metadata.groups;
         assert_eq!(groups.len(), 1, "{name}: {written}");
         assert_eq!(groups[0].kind, 1);
@@ -816,7 +818,9 @@ fn explicit_groups_crossing_the_cage_frame_preserve_their_correlations() {
             expected_groups,
             "{name}"
         );
-        let members = smiles::stereoisomers(&structure.semantic_cxsmiles().unwrap()).unwrap();
+        let members =
+            smiles::stereoisomers(&structure.semantic_cxsmiles().unwrap(), &Default::default())
+                .unwrap();
         let independent_groups = expected_groups
             .split(';')
             .filter(|group| !group.starts_with("Absolute:"))

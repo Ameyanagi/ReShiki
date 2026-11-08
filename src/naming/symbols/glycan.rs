@@ -683,7 +683,7 @@ mod tests {
 
     #[test]
     fn all_supported_glycosyl_and_parent_forms_build_in_real_opsin() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
         for symbol in [
             "Glc", "Gal", "Man", "Fru", "Rib", "dRib", "Xyl", "Fuc", "Rha", "GlcNAc", "GalNAc",
             "GlcA", "Neu5Ac",
@@ -726,7 +726,7 @@ mod tests {
     /// independently of OPSIN's glycosyl-name expansion and atom traversal.
     #[test]
     fn real_glycans_match_independently_written_stereochemical_graphs() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
         for (input, expected) in [
             (
                 "Gal(b1-4)Glc",

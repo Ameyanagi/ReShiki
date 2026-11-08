@@ -828,13 +828,13 @@ mod tests {
     #[test]
     fn symmetric_diamide_numbering_breaks_endpoint_ties_by_citation() {
         let smiles = "C1CCC(CC1)NC(=O)CCC(=O)NC2=NN=C3N2C=CC=C3";
-        let mol = read_smiles(smiles).unwrap();
+        let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         assert_eq!(
             find_all_carbon_paths(&mol, &AtomSet::new()).unwrap(),
             vec![vec![11, 10, 9, 7]],
         );
         assert_eq!(
-            super::super::name_smiles(smiles)
+            super::super::name_smiles(smiles, &crate::naming::kernel_budget())
                 .map(|name| name.text)
                 .as_deref(),
             Ok("N-cyclohexyl-N'-([1,2,4]triazolo[4,3-a]pyridin-3-yl)butanediamide"),
@@ -843,7 +843,7 @@ mod tests {
 
     #[test]
     fn carbon_paths_keep_only_maximal_leaf_to_leaf_walks() {
-        let mol = read_smiles("CCC(C)CC").unwrap();
+        let mol = read_smiles("CCC(C)CC", &crate::naming::kernel_budget()).unwrap();
         let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
         assert_eq!(
             paths,
@@ -864,7 +864,7 @@ mod tests {
     }
     #[test]
     fn ring_atoms_are_removed_from_chain_enumeration() {
-        let mol = read_smiles("CCC1CCCCC1").unwrap();
+        let mol = read_smiles("CCC1CCCCC1", &crate::naming::kernel_budget()).unwrap();
         let excluded = AtomSet::new();
         assert_eq!(get_cyclic_atoms(&mol, &excluded).len(), 6);
         assert_eq!(
@@ -882,13 +882,13 @@ mod tests {
     }
     #[test]
     fn cutting_a_ring_breaks_its_cycle_membership() {
-        let mol = read_smiles("C1CCCCC1").unwrap();
+        let mol = read_smiles("C1CCCCC1", &crate::naming::kernel_budget()).unwrap();
         assert!(get_cyclic_atoms(&mol, &AtomSet::from([0])).is_empty());
     }
 
     #[test]
     fn separate_ring_systems_follow_upstream_block_and_walk_order() {
-        let mol = read_smiles("C1(C2CCC2)CCC1").unwrap();
+        let mol = read_smiles("C1(C2CCC2)CCC1", &crate::naming::kernel_budget()).unwrap();
         let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(
             systems
@@ -908,7 +908,7 @@ mod tests {
 
     #[test]
     fn linking_chain_atoms_are_not_cyclic() {
-        let mol = read_smiles("C1(CC2CCC2)CCC1").unwrap();
+        let mol = read_smiles("C1(CC2CCC2)CCC1", &crate::naming::kernel_budget()).unwrap();
         assert_eq!(
             get_cyclic_atoms(&mol, &AtomSet::new()),
             AtomSet::from([0, 2, 3, 4, 5, 6, 7, 8])
@@ -921,7 +921,7 @@ mod tests {
 
     #[test]
     fn pure_spiro_merging_preserves_separate_ring_systems() {
-        let mol = read_smiles("C1CC1CC2CC23CC3").unwrap();
+        let mol = read_smiles("C1CC1CC2CC23CC3", &crate::naming::kernel_budget()).unwrap();
         let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(systems.len(), 2);
         assert_eq!(systems[0].atoms, AtomSet::from([0, 1, 2]));
@@ -952,7 +952,7 @@ mod tests {
 
     #[test]
     fn dispiro_is_one_complete_descriptor_parent() {
-        let mol = read_smiles("C1CC2(C1)CCC1(CC2)CC1").unwrap();
+        let mol = read_smiles("C1CC2(C1)CCC1(CC2)CC1", &crate::naming::kernel_budget()).unwrap();
         let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(systems.len(), 1);
         assert!(systems[0].is_polycycle);
@@ -967,7 +967,7 @@ mod tests {
 
     #[test]
     fn larger_spiro_fallback_exposes_a_component_for_graph_composition() {
-        let mol = read_smiles("C1CC12CC23CC34CC4").unwrap();
+        let mol = read_smiles("C1CC12CC23CC34CC4", &crate::naming::kernel_budget()).unwrap();
         let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(systems.len(), 1);
         assert!(systems[0].is_polycycle);
@@ -979,7 +979,10 @@ mod tests {
                 .iter()
                 .all(|atom| systems[0].atoms.contains(atom))
         );
-        assert!(super::super::name_smiles("C1CC12CC23CC34CC4").is_err());
+        assert!(
+            super::super::name_smiles("C1CC12CC23CC34CC4", &crate::naming::kernel_budget())
+                .is_err()
+        );
     }
 
     #[test]
@@ -990,7 +993,7 @@ mod tests {
         let mut differences = Vec::new();
         for (index, line) in input.lines().enumerate() {
             let (smiles, expected) = line.split_once('\t').expect("SMILES and topology JSON");
-            let mol = read_smiles(smiles)
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget())
                 .unwrap_or_else(|error| panic!("row {index}: {smiles}: {error}"));
             let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
             let actual = serde_json::Value::Array(
@@ -1027,7 +1030,7 @@ mod tests {
 
     #[test]
     fn aromatic_morgan_ranks_preserve_ring_symmetry() {
-        let mol = read_smiles("c1ccccc1").unwrap();
+        let mol = read_smiles("c1ccccc1", &crate::naming::kernel_budget()).unwrap();
         assert_eq!(
             canonical_ranks(&mol, None)
                 .values()
@@ -1054,7 +1057,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected)
@@ -1071,18 +1074,21 @@ mod tests {
         for depth in 1..=8 {
             tree = format!("C({tree}){tree}");
             if depth == 3 {
-                assert!(name_smiles(&tree).is_ok(), "supported 15-carbon tree");
+                assert!(
+                    name_smiles(&tree, &crate::naming::kernel_budget()).is_ok(),
+                    "supported 15-carbon tree"
+                );
             }
         }
         let started = Instant::now();
         assert_eq!(
-            name_smiles(&tree).map(|name| name.text),
+            name_smiles(&tree, &crate::naming::kernel_budget()).map(|name| name.text),
             Err("openclatura: naming complexity limit exceeded".into())
         );
         assert!(started.elapsed() < Duration::from_secs(10));
-        assert!(name_smiles(&"C".repeat(100)).is_ok());
+        assert!(name_smiles(&"C".repeat(100), &crate::naming::kernel_budget()).is_ok());
         assert_eq!(
-            name_smiles("CCC(C)CC").map(|name| name.text),
+            name_smiles("CCC(C)CC", &crate::naming::kernel_budget()).map(|name| name.text),
             Ok("3-methylpentane".into())
         );
     }

@@ -318,7 +318,7 @@ mod tests {
     use crate::naming::{NameReason, NameStatus};
 
     fn roundtrip(smiles: &str, expected: &str) -> Result<(), String> {
-        let mol = super::super::graph_io::read_smiles(smiles)?;
+        let mol = super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget())?;
         let name = name_radical(&mol)?.ok_or("Expected radical name")?;
         assert_eq!(name.text, expected, "{smiles}");
         assert_eq!(
@@ -326,7 +326,7 @@ mod tests {
             NameStatus::Unverified(NameReason::UnauditedPath),
             "{smiles}"
         );
-        let parsed = opsin::Parser::new()
+        let parsed = opsin::Parser::with_budget(crate::naming::kernel_budget())
             .map_err(|error| error.to_string())?
             .parse(
                 &name.text,
@@ -423,9 +423,12 @@ mod tests {
             "C[CH]CC(C)C",
             "[CH]1C2CCCCC2CC1",
         ] {
-            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget()).is_err(),
+                "{smiles}"
+            );
         }
-        let closed = super::super::graph_io::read_smiles("CCC")?;
+        let closed = super::super::graph_io::read_smiles("CCC", &crate::naming::kernel_budget())?;
         assert!(name_radical(&closed)?.is_none());
         Ok(())
     }

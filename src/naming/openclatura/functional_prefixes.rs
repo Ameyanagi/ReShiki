@@ -563,7 +563,8 @@ mod tests {
             ("CC(=O)[O-]", "anion", "carboxylato"),
             ("COC(=O)c1ccccc1", "ester", "(methoxycarbonyl)"),
         ] {
-            let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+            let mol = super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget())
+                .unwrap();
             let group = super::super::perception::perceive_groups(&mol)
                 .into_iter()
                 .find(|g| {
@@ -607,13 +608,20 @@ mod tests {
         ] {
             // Exercise the same canonical input boundary as the CLI.
             let canonical = crate::naming::canonical_smiles(smiles).unwrap();
-            assert_eq!(name_smiles(&canonical).unwrap().text, expected, "{smiles}");
+            assert_eq!(
+                name_smiles(&canonical, &crate::naming::kernel_budget())
+                    .unwrap()
+                    .text,
+                expected,
+                "{smiles}"
+            );
         }
     }
 
     #[test]
     fn unsubstituted_aminium_prefix_uses_azaniumyl() {
-        let mol = super::super::graph_io::read_smiles("C[NH3+]").unwrap();
+        let mol = super::super::graph_io::read_smiles("C[NH3+]", &crate::naming::kernel_budget())
+            .unwrap();
         let group = super::super::perception::perceive_groups(&mol)
             .into_iter()
             .find(|group| group.key == "aminium")
@@ -642,7 +650,7 @@ mod tests {
                 "[(propan-2-yl)peroxycarbonyl]acetic acid",
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
@@ -659,9 +667,12 @@ mod tests {
     #[test]
     fn peroxy_carbamate_keeps_competing_ester_prefix_route() {
         assert_eq!(
-            name_smiles("COOC(=O)N1[C@H](C=O)CC[C@H]1C(=O)O")
-                .map(|name| name.text)
-                .as_deref(),
+            name_smiles(
+                "COOC(=O)N1[C@H](C=O)CC[C@H]1C(=O)O",
+                &crate::naming::kernel_budget()
+            )
+            .map(|name| name.text)
+            .as_deref(),
             Ok("(2S,5S)-5-formyl-1-[(methoxyoxy)carbonyl]pyrrolidine-2-carboxylic acid")
         );
     }

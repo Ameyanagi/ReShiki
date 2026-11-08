@@ -3408,13 +3408,13 @@ mod tests {
     use super::*;
 
     fn special(smiles: &str) -> Option<String> {
-        let mol = read_smiles(smiles).unwrap();
+        let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         structural_replacement_parent_name(&mol, &all_atoms(&mol)).unwrap()
     }
 
     #[test]
     fn discarded_shortcut_candidates_restore_the_previous_status() {
-        let mol = read_smiles("CC[S@](C)=O").unwrap();
+        let mol = read_smiles("CC[S@](C)=O", &crate::naming::kernel_budget()).unwrap();
         let atoms = all_atoms(&mol);
         let previous = NameStatus::Unverified(NameReason::UnauditedParent);
         mol.mark_name(previous);
@@ -3445,7 +3445,11 @@ mod tests {
         use super::super::{
             component_namer::name_component_with_citation, phane::has_linear_skeleton,
         };
-        let mol = read_smiles("O=C(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1").unwrap();
+        let mol = read_smiles(
+            "O=C(Oc1ccc(Oc2ccccc2)cc1)Oc1ccc(Oc2ccccc2)cc1",
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         let atoms = all_atoms(&mol);
         let expected = "bis(4-phenoxyphenyl) carbonate";
         let trial = structural_replacement_parent_result(&mol, &atoms)
@@ -3482,7 +3486,7 @@ mod tests {
                 2,
             ),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atoms = all_atoms(&mol);
             for fail in [false, true] {
                 let discarded: Result<Option<()>, String> = mol.candidate(|| {
@@ -3576,13 +3580,13 @@ mod tests {
             ("C[O+](C)CC(=O)O", "(carboxymethyl)di(methyl)oxidanium"),
             ("C[O+](C)C(C)=O", "acetyldi(methyl)oxidanium"),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let result = simple_central_parent_hydride_name(&mol, &all_atoms(&mol))
                 .unwrap()
                 .unwrap();
             assert_eq!(result.name, expected, "{smiles}");
             assert!(result.certified, "{smiles}");
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
         }
@@ -3598,7 +3602,7 @@ mod tests {
             "C[S+](C)C[O-]",
             "C[S+](C)CCCCCC[N+](C)(C)C",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert!(
                 simple_central_parent_hydride_name(&mol, &all_atoms(&mol))
                     .unwrap()
@@ -3607,7 +3611,7 @@ mod tests {
             );
         }
         for radical_center in [0, 1] {
-            let mut mol = read_smiles("C[S+](C)C").unwrap();
+            let mut mol = read_smiles("C[S+](C)C", &crate::naming::kernel_budget()).unwrap();
             mol.atoms
                 .get_mut(&radical_center)
                 .unwrap()
@@ -3627,7 +3631,9 @@ mod tests {
             ("C[N+](C)(C)C", "N,N,N-trimethylmethanaminium"),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles).unwrap().text,
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget())
+                    .unwrap()
+                    .text,
                 expected,
                 "{smiles}"
             );
@@ -3678,7 +3684,7 @@ mod tests {
             ),
             ("NN", "hydrazine", false),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let result = structural_replacement_parent_result(&mol, &all_atoms(&mol))
                 .unwrap()
                 .unwrap();
@@ -3698,13 +3704,17 @@ mod tests {
             "CCC[C@H](C)[S@@](C)=O",
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles).unwrap_err(),
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap_err(),
                 "openclatura: shortcut cannot preserve configured stereochemistry",
                 "{smiles}"
             );
         }
-        let left = super::super::name_smiles("C[S@](=O)CC").unwrap().text;
-        let right = super::super::name_smiles("C[S@@](=O)CC").unwrap().text;
+        let left = super::super::name_smiles("C[S@](=O)CC", &crate::naming::kernel_budget())
+            .unwrap()
+            .text;
+        let right = super::super::name_smiles("C[S@@](=O)CC", &crate::naming::kernel_budget())
+            .unwrap()
+            .text;
         assert_ne!(left, right);
         assert!(left.starts_with("(R)-") || left.starts_with("(S)-"));
         assert!(right.starts_with("(R)-") || right.starts_with("(S)-"));
@@ -3719,14 +3729,20 @@ mod tests {
             "C/C=N/N=CCC",
             "C/C=N/N=C\\C",
         ] {
-            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget()).is_err(),
+                "{smiles}"
+            );
         }
     }
 
     #[test]
     fn charged_alkyl_ligands_are_not_rendered_as_neutral() {
         for smiles in ["C[CH-]P(=O)(O)O", "C[CH-]B(O)O", "C[CH-]S(C)=O"] {
-            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget()).is_err(),
+                "{smiles}"
+            );
         }
     }
 
@@ -3740,12 +3756,16 @@ mod tests {
         }
         let started = Instant::now();
         assert_eq!(
-            super::super::name_smiles(&format!("P(=O)(O)(O){tree}")).map(|name| name.text),
+            super::super::name_smiles(
+                &format!("P(=O)(O)(O){tree}"),
+                &crate::naming::kernel_budget()
+            )
+            .map(|name| name.text),
             Err("openclatura: naming complexity limit exceeded".into())
         );
         assert!(started.elapsed() < Duration::from_secs(10));
         assert_eq!(
-            super::super::name_smiles("CCC(CC)P(=O)(O)O")
+            super::super::name_smiles("CCC(CC)P(=O)(O)O", &crate::naming::kernel_budget())
                 .map(|name| name.text)
                 .as_deref(),
             Ok("pentan-3-ylphosphonic acid")
@@ -3776,7 +3796,7 @@ mod tests {
             ),
             ("C1CCCCC1=NN=C", "formaldehyde cyclohexylidenehydrazone"),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let actual =
                 super::super::component_namer::name_component(&mol, &all_atoms(&mol)).unwrap();
             assert_eq!(
@@ -3796,14 +3816,14 @@ mod tests {
             "C#CCC=NN=CCCC",
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles).unwrap_err(),
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap_err(),
                 "openclatura: azine unsaturation depends on upstream set ordering",
                 "{smiles}"
             );
         }
         for smiles in ["CCCC=NN=CC=CC", "CC=CC=NN=CCCC"] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok("butanal but-2-ene-1-ylidenehydrazone"),
@@ -3815,7 +3835,7 @@ mod tests {
     #[test]
     fn substituted_amidino_azine_precedes_a_ligand_anhydride() {
         let smiles = "CC(=O)OC(=O)N(/C(N)=N/N=C=O)C(C)C";
-        let mol = read_smiles(smiles).unwrap();
+        let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         let atoms = all_atoms(&mol);
         let expected = "1-((E)-(((acetyloxy)carbonyl)(propan-2-yl)amino)(amino)methylidene)-2-(oxomethylidene)hydrazine";
         assert_eq!(
@@ -3832,7 +3852,7 @@ mod tests {
     fn homonuclear_parent_keeps_chain_and_substituent_locants() {
         assert_eq!(special("CSSC").as_deref(), Some("1,2-dimethyldisulfane"));
         for (smiles, expected) in [("SS", "disulfane"), ("SSS", "trisulfane")] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(
                 homonuclear_chain_parent_name(&mol, &all_atoms(&mol))
                     .unwrap()
@@ -3860,7 +3880,7 @@ mod tests {
             ("CCC(=S)OSC(=S)CC", "propanethioic thioperoxyanhydride"),
             ("CC(=S)OC(C)=S", "ethanethioic anhydride"),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let actual =
                 super::super::component_namer::name_component(&mol, &all_atoms(&mol)).unwrap();
             assert_eq!(actual, expected, "{smiles}");
@@ -3881,7 +3901,7 @@ mod tests {
                 false,
             ),
         ] {
-            let fragment = read_smiles(smiles).unwrap();
+            let fragment = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atom_offset = mol.atoms.keys().max().map_or(0, |idx| idx + 1);
             let bond_offset = mol.bonds.keys().max().map_or(0, |idx| idx + 1);
             let mut atoms = AtomSet::new();
@@ -3927,7 +3947,7 @@ mod tests {
                 true,
             ),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atoms = all_atoms(&mol);
             let groups = super::super::principal_groups::component_groups(&mol, &atoms);
             let key = super::super::principal_groups::component_principal_key(&mol, &groups, false);

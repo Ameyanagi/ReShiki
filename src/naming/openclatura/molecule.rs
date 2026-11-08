@@ -583,7 +583,8 @@ mod tests {
 
     #[test]
     fn name_status_is_shared_and_keeps_the_first_strongest_reason() {
-        let mol = super::super::graph_io::read_smiles("CCO").unwrap();
+        let mol =
+            super::super::graph_io::read_smiles("CCO", &crate::naming::kernel_budget()).unwrap();
         let fragment = mol.subgraph(&AtomSet::from([0, 1]));
         assert_eq!(
             mol.name_status(),
@@ -622,7 +623,8 @@ mod tests {
 
     #[test]
     fn discarded_candidates_restore_stereo_alternatives() {
-        let mol = super::super::graph_io::read_smiles("CCO").unwrap();
+        let mol =
+            super::super::graph_io::read_smiles("CCO", &crate::naming::kernel_budget()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let _: Option<()> = mol
             .candidate(|| {
@@ -714,7 +716,7 @@ mod tests {
                 "(R)-chlorofluoroacetic acetic anhydride",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();

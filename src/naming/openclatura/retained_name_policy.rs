@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn benzoheterocycle_locants_survive_substitution_fusion_and_spiro() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
         for (smiles, expected, status) in [
             // The spelling policy must not fix H1: oxo reconstruction and
             // strict retained matches derive the hydrogen state from the graph.
@@ -308,7 +308,7 @@ mod tests {
                 NameStatus::Preferred,
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
             for candidate in std::iter::once(name.text.as_str()).chain(
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn retained_parent_indicated_hydrogen_survives_replacement() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
         for (smiles, expected) in [
             ("O1COc2ccccc21", "2H-1,3-benzodioxole"),
             ("O=Cc1ccc2OCOc2c1", "2H-1,3-benzodioxole-5-carbaldehyde"),
@@ -346,7 +346,7 @@ mod tests {
             ("c1ccc2[nH]cnc2c1", "1H-1,3-benzimidazole"),
             ("Cn1cnc2ccccc21", "1-methyl-1H-1,3-benzimidazole"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             for candidate in std::iter::once(name.text.as_str()).chain(
@@ -370,7 +370,8 @@ mod tests {
         // follows the linear-phane rule and is pinned in the audit fixture.
         assert_eq!(
             super::super::name_smiles(
-                r"C1=CC=C(C=C1)COC2=CC\3=C(C=C2)NN/C3=C\4/N=C5C=CC(=CC5=N4)NCCCN6C=CN=C6"
+                r"C1=CC=C(C=C1)COC2=CC\3=C(C=C2)NN/C3=C\4/N=C5C=CC(=CC5=N4)NCCCN6C=CN=C6",
+                &crate::naming::kernel_budget()
             )
             .unwrap()
             .text,
@@ -398,7 +399,7 @@ mod tests {
                 "3-(6,7-dimethoxyindan-1-yl)-2-methylbutanamide",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
         }
     }

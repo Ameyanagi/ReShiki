@@ -1072,7 +1072,8 @@ mod tests {
         super::super::molecule::AtomSet,
         Vec<usize>,
     ) {
-        let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+        let mol =
+            super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let sites = mol
             .atoms
@@ -1193,13 +1194,13 @@ mod tests {
     #[test]
     fn long_stereogenic_chain_keeps_its_locants() {
         let smiles = format!("{}[C@H](F)Cl", "C".repeat(400));
-        let name = super::super::name_smiles(&smiles).unwrap();
+        let name = super::super::name_smiles(&smiles, &crate::naming::kernel_budget()).unwrap();
         assert_eq!(name.text, "(1R)-1-chloro-1-fluorohentetractane");
     }
 
     #[test]
     fn single_ester_acid_component_omits_only_redundant_locants() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
         for (smiles, expected) in [
             ("FCC(=O)OC", "methyl fluoroacetate"),
             ("FC(F)C(=O)OC", "methyl difluoroacetate"),
@@ -1231,7 +1232,8 @@ mod tests {
             ("O=C(O)[C@H](F)Cl", "(R)-chlorofluoroacetic acid"),
         ] {
             let canonical = crate::naming::canonical_smiles(smiles).unwrap();
-            let name = super::super::name_smiles(&canonical).unwrap();
+            let name =
+                super::super::name_smiles(&canonical, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -1248,12 +1250,14 @@ mod tests {
             let actual = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
             crate::naming::verify_identity(smiles, &actual).unwrap();
         }
-        let input = reshiki_chemistry::smiles::read("C[C@H](CC)OC(=O)[C@H](F)Cl").unwrap();
-        let labeled = reshiki_chemistry::stereo::cip::label::assign(
-            &input.prepared.state,
-            &Default::default(),
+        let input = nazuchem_kernel::smiles::read(
+            "C[C@H](CC)OC(=O)[C@H](F)Cl",
+            &crate::naming::kernel_budget(),
         )
         .unwrap();
+        let labeled =
+            nazuchem_kernel::stereo::cip::label::assign(&input.prepared.state, &Default::default())
+                .unwrap();
         for atom in [1, 7] {
             assert_eq!(
                 labeled.state.properties.atoms[atom].cip_code.as_deref(),
@@ -1264,7 +1268,7 @@ mod tests {
 
     #[test]
     fn unsaturated_parent_locants() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
         for (smiles, expected) in [
             ("FC=C=C=CCl", "1-chloro-4-fluorobuta-1,2,3-triene"),
             ("ClC=C=C=C", "chlorobutatriene"),
@@ -1297,7 +1301,7 @@ mod tests {
             ("CC(F)=C", "2-fluoroprop-1-ene"),
             ("ClC1=C(Cl)C1Cl", "1,2,3-trichlorocycloprop-1-ene"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -1353,7 +1357,7 @@ mod tests {
             ("CC1=CCCCC1", "1-methylcyclohex-1-ene"),
             ("C1=CCCCC1", "cyclohexene"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             if smiles == "[2H]C=C=C=C" {
                 assert!(matches!(
@@ -1368,7 +1372,8 @@ mod tests {
                 );
             }
         }
-        let error = super::super::name_smiles("F/C=C=C=C/Cl").unwrap_err();
+        let error =
+            super::super::name_smiles("F/C=C=C=C/Cl", &crate::naming::kernel_budget()).unwrap_err();
         assert!(error.contains("cumulene E/Z"), "{error}");
     }
 
@@ -1419,7 +1424,7 @@ mod tests {
                 "1,1,3,4,4,4-hexachlorobuta-1,2-diene",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,

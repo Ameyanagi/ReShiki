@@ -741,7 +741,7 @@ mod tests {
     use super::*;
 
     fn assemblies(smiles: &str) -> Vec<RingAssembly> {
-        let mol = read_smiles(smiles).unwrap();
+        let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let mut candidates = discover_ring_assemblies(&mol, &systems);
         let longest = candidates.iter().map(|a| a.ring_count).max().unwrap_or(0);
@@ -843,7 +843,7 @@ mod tests {
         ] {
             assert!(assemblies(smiles).is_empty(), "{smiles}");
         }
-        let mol = read_smiles("C1CCCC1=C1CCCC1").unwrap();
+        let mol = read_smiles("C1CCCC1=C1CCCC1", &crate::naming::kernel_budget()).unwrap();
         assert_eq!(assembly_junctions(&mol).len(), 1);
     }
 
@@ -860,10 +860,10 @@ mod tests {
                 "4-(1H-azepin-4-yl)-3H-azepine",
             ),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert!(assemblies(smiles).is_empty(), "{smiles}");
             assert_eq!(assembly_junctions(&mol).len(), 1, "{smiles}");
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -872,7 +872,7 @@ mod tests {
             );
         }
         for smiles in ["C1CCC(CC1)c1ccccc1", "c1ccc(cc1)-c1ccncc1"] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert!(assembly_junctions(&mol).is_empty(), "{smiles}");
         }
     }
@@ -892,7 +892,7 @@ mod tests {
                 NameStatus::Unverified(NameReason::UnauditedParent),
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, text, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
         }
@@ -900,9 +900,11 @@ mod tests {
 
     #[test]
     fn seven_unit_components_remain_unsupported_in_recursive_fragments() {
-        let mol =
-            read_smiles("c1ccccc1-c1ccc(-c2ccc(-c3ccc(-c4ccc(-c5ccc(-c6ccccc6)cc5)cc4)cc3)cc2)cc1")
-                .unwrap();
+        let mol = read_smiles(
+            "c1ccccc1-c1ccc(-c2ccc(-c3ccc(-c4ccc(-c5ccc(-c6ccccc6)cc5)cc4)cc3)cc2)cc1",
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         let all = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(all.len(), 7);
         assert!(discover_ring_assemblies(&mol, &all).is_empty());

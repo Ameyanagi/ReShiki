@@ -19,7 +19,21 @@ fn complete(app: &mut App, ticket: LocantsTicket, numbers: HashMap<u64, String>)
 
 #[test]
 fn iupac_locants_keep_naphthalene_fusion_numbers_in_one_undo_step() {
-    let parser = opsin::Parser::new().unwrap();
+    let parser = opsin::Parser::with_budget({
+        let policy = reshiki_process_heap::policy::Capabilities::detect().resolve();
+        opsin::Budget::new(
+            policy.heap_bytes(),
+            policy.work_units(),
+            Some(policy.analysis_timeout()),
+            policy.reservation_ceiling(),
+            move |bytes| {
+                policy
+                    .try_reserve(bytes)
+                    .map(|guard| Box::new(guard) as Box<dyn Send + Sync>)
+            },
+        )
+    })
+    .unwrap();
     let parsed = parser.parse("naphthalene", &opsin::ParseOptions::strict());
     let (smiles, atoms) = parsed
         .structure

@@ -2858,7 +2858,9 @@ mod tests {
             ("C1C=Cc2cc3sccc3n12", "5", "7"),
             ("C1C=Cn2c1cc1sccc12", "7", "5"),
         ] {
-            let mol = super::super::super::graph_io::read_smiles(smiles).unwrap();
+            let mol =
+                super::super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget())
+                    .unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let plan = super::super::planner::plan_fusion_parent(&mol, &atoms)
                 .unwrap()
@@ -2908,7 +2910,11 @@ mod tests {
     #[test]
     fn carbon_hydrogen_relocation_requires_local_ownership_and_matching() {
         let registry = super::super::registry::fusion_component_registry();
-        let mol = super::super::super::graph_io::read_smiles("C1C=Cc2cc3sccc3n12").unwrap();
+        let mol = super::super::super::graph_io::read_smiles(
+            "C1C=Cc2cc3sccc3n12",
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let plan = super::super::planner::plan_fusion_parent(&mol, &atoms)
             .unwrap()

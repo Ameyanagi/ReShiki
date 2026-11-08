@@ -53,6 +53,7 @@ pub use api::{
     InitializationError, OpsinResult, OpsinWarning, ParseOptions, ParsingError, SerializationError,
     Status, WarningKind,
 };
+pub use nazuchem_kernel::budget::Budget;
 use std::sync::{Arc, OnceLock};
 
 pub const UPSTREAM_VERSION: &str = "3.0-SNAPSHOT";
@@ -123,16 +124,26 @@ impl Structure {
 #[derive(Debug, Clone)]
 pub struct Parser {
     pub(crate) resources: Arc<resources::Resources>,
+    budget: Budget,
 }
 
 impl Parser {
+    /// Initialize a parser with an unbounded chemistry budget.
+    /// Hosts that limit chemistry analysis should use [`Self::with_budget`].
     pub fn new() -> Result<Self, InitializationError> {
+        Self::with_budget(Budget::default())
+    }
+
+    /// Initialize a parser using the host's chemistry limits and reservation hook.
+    /// The budget is shared by clones and applied independently to each analysis.
+    pub fn with_budget(budget: Budget) -> Result<Self, InitializationError> {
         static RESOURCES: OnceLock<Result<Arc<resources::Resources>, InitializationError>> =
             OnceLock::new();
         Ok(Self {
             resources: RESOURCES
                 .get_or_init(|| resources::Resources::new().map(Arc::new))
                 .clone()?,
+            budget,
         })
     }
 
@@ -177,6 +188,6 @@ impl Parser {
     }
 
     pub fn parse(&self, name: &str, options: &ParseOptions) -> OpsinResult {
-        pipeline::parse(&self.resources, name, options)
+        pipeline::parse(&self.resources, name, options, &self.budget)
     }
 }

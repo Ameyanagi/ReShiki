@@ -238,7 +238,7 @@ fn issue_946_parent_controls_keep_their_existing_names() {
         ),
     ] {
         // The bounded P-44.4.1.12.2 rule excludes two-centre or unspecified arms.
-        let name = openclatura::name_smiles(smiles).unwrap();
+        let name = openclatura::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         assert_eq!(name.text, expected, "{smiles}");
         assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
         let request = local::verification_request(&name.text).unwrap();
@@ -663,7 +663,7 @@ fn unknown_document_identity_keeps_known_stereo_and_only_internal_maps() {
         .filter_map(|atom| (atom.map_number != 0).then_some(atom.map_number))
         .collect();
     assert_eq!(maps, [900_001]);
-    let name = openclatura::name_smiles(&marked).unwrap();
+    let name = openclatura::name_smiles(&marked, &crate::naming::kernel_budget()).unwrap();
     assert_eq!(name.text, "(3R)-3-chlorobutan-2-ol");
     assert_eq!(name.omitted_stereo, ["2"]);
     assert_eq!(name.alternatives[0].name, "(2Ξ,3R)-3-chlorobutan-2-ol");
@@ -685,17 +685,23 @@ fn undefined_document_units_only_enter_the_explicit_unknown_input() {
         assert_eq!(identity.naming_smiles, None);
         assert_eq!(identity.generation_smiles(&expected), expected);
         assert!(
-            openclatura::name_smiles(identity.generation_smiles(&expected))
-                .unwrap()
-                .alternatives
-                .iter()
-                .all(|name| !name.name.contains(['Ξ', 'ξ']))
+            openclatura::name_smiles(
+                identity.generation_smiles(&expected),
+                &crate::naming::kernel_budget()
+            )
+            .unwrap()
+            .alternatives
+            .iter()
+            .all(|name| !name.name.contains(['Ξ', 'ξ']))
         );
         identity.write_unknown_stereo = true;
         let marked = identity.generation_smiles(&expected);
         assert_eq!(canonical_smiles(marked).unwrap(), expected);
         assert_eq!(
-            openclatura::name_smiles(marked).unwrap().alternatives[0].name,
+            openclatura::name_smiles(marked, &crate::naming::kernel_budget())
+                .unwrap()
+                .alternatives[0]
+                .name,
             explicit
         );
     }
@@ -837,13 +843,13 @@ fn explicit_unknown_input_combines_wavy_and_undefined_units() {
     let expected = canonical_smiles("CC(O)C(Cl)C").unwrap();
     assert_eq!(identity.smiles, expected);
     let legacy = identity.generation_smiles(&expected).to_owned();
-    let original = openclatura::name_smiles(&legacy).unwrap();
+    let original = openclatura::name_smiles(&legacy, &crate::naming::kernel_budget()).unwrap();
     assert_eq!(original.omitted_units, 1);
     assert_eq!(original.alternatives[0].name, "(2Ξ)-3-chlorobutan-2-ol");
     identity.write_unknown_stereo = true;
     let marked = identity.generation_smiles(&expected);
     assert_eq!(canonical_smiles(marked).unwrap(), expected);
-    let explicit = openclatura::name_smiles(marked).unwrap();
+    let explicit = openclatura::name_smiles(marked, &crate::naming::kernel_budget()).unwrap();
     assert_eq!(explicit.omitted_units, 2);
     assert_eq!(explicit.alternatives[0].name, "(2Ξ,3Ξ)-3-chlorobutan-2-ol");
     identity.write_unknown_stereo = false;
@@ -861,7 +867,11 @@ fn crossed_and_either_alkenes_preserve_unknown_bond_markers() {
         }
         let identity = document_identity(&doc).unwrap();
         assert_eq!(identity.smiles, "CC=CC");
-        let name = openclatura::name_smiles(identity.naming_smiles.as_deref().unwrap()).unwrap();
+        let name = openclatura::name_smiles(
+            identity.naming_smiles.as_deref().unwrap(),
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         assert_eq!(name.omitted_stereo, ["2=3"]);
         assert_eq!(name.alternatives[0].name, "(2Ξ)-but-2-ene");
     }
@@ -901,7 +911,10 @@ async fn iupac_audit_cases() {
                 .await?;
             let identity = document_identity(&response.document.ok_or("no document")?)?;
             let expected = canonical_smiles(&identity.smiles)?;
-            let name = openclatura::name_smiles(identity.generation_smiles(&expected))?;
+            let name = openclatura::name_smiles(
+                identity.generation_smiles(&expected),
+                &crate::naming::kernel_budget(),
+            )?;
             let (parser_name, target) = name
                 .verification
                 .as_ref()

@@ -9,6 +9,7 @@
 
 mod additive;
 mod amine_oxides;
+mod app_chemistry;
 mod assembler;
 mod assembly_charge;
 mod assembly_parent;
@@ -109,15 +110,19 @@ pub(super) struct Verification {
 }
 
 #[cfg(test)]
-pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
-    name_smiles_with_style(smiles, crate::naming::IsotopeStyle::Iupac)
+pub(super) fn name_smiles(
+    smiles: &str,
+    budget: &nazuchem_kernel::budget::Budget,
+) -> Result<Name, String> {
+    name_smiles_with_style(smiles, crate::naming::IsotopeStyle::Iupac, budget)
 }
 
 pub(super) fn name_smiles_with_style(
     smiles: &str,
     style: crate::naming::IsotopeStyle,
+    budget: &nazuchem_kernel::budget::Budget,
 ) -> Result<Name, String> {
-    let mut name = name_routes(smiles, style)?;
+    let mut name = name_routes(smiles, style, budget)?;
     // A radical-ion name is verified through its neutral parent only.
     if name.verification.is_some() {
         return Ok(name);
@@ -192,19 +197,23 @@ fn general_axial_name(text: &str) -> Option<String> {
     (out != text).then_some(out)
 }
 
-fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name, String> {
-    if let Some(name) = unknown_stereo::name_smiles(smiles, style)? {
+fn name_routes(
+    smiles: &str,
+    style: crate::naming::IsotopeStyle,
+    budget: &nazuchem_kernel::budget::Budget,
+) -> Result<Name, String> {
+    if let Some(name) = unknown_stereo::name_smiles(smiles, style, budget)? {
         return Ok(name);
     }
     let canonical = super::canonical_smiles(smiles)?;
     if canonical.contains('.') {
-        return species::name_salt(&canonical, style);
+        return species::name_salt(&canonical, style, budget);
     }
-    if let Some(name) = species::monatomic_cation(&canonical, false)? {
+    if let Some(name) = species::monatomic_cation(&canonical, false, budget)? {
         return Ok(name);
     }
-    if let Some((neutral, suffix)) = radical_ions::recover(&canonical)? {
-        let name = name_smiles_with_style(&neutral, style)?;
+    if let Some((neutral, suffix)) = radical_ions::recover(&canonical, budget)? {
+        let name = name_smiles_with_style(&neutral, style, budget)?;
         return Ok(Name {
             text: format!("{} {suffix}", name.text),
             status: crate::naming::NameStatus::NotPreferred(crate::naming::NameReason::RadicalIon),
@@ -217,9 +226,9 @@ fn name_routes(smiles: &str, style: crate::naming::IsotopeStyle) -> Result<Name,
             }),
         });
     }
-    let mol = graph_io::read_smiles(smiles)?;
+    let mol = graph_io::read_smiles(smiles, budget)?;
     if mol.atoms.values().any(|atom| atom.isotope.is_some()) {
-        return isotope_naming::name_smiles(smiles, style);
+        return isotope_naming::name_smiles(smiles, style, budget);
     }
     // Match upstream require_validated_chalcogens before any shortcut can consume Po.
     if mol.atoms.values().any(|atom| atom.symbol == "Po") {
@@ -802,6 +811,18 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn naming_routes_use_the_supplied_reservation_policy() {
+        let budget =
+            nazuchem_kernel::budget::Budget::new(usize::MAX, usize::MAX, None, usize::MAX, |_| {
+                None
+            });
+        for smiles in ["CCO", "[13CH3]CO", "[Na+].[Cl-]", "C[N+](C)C"] {
+            let error = name_smiles(smiles, &budget).unwrap_err();
+            assert!(error.contains("resources are busy"), "{smiles}: {error}");
+        }
+    }
+
+    #[test]
     fn symmetric_azine_ylidene_spelling_keeps_unaudited_status() {
         use crate::naming::{NameReason, NameStatus};
 
@@ -815,7 +836,7 @@ mod tests {
             ("CC(C)=NN=C(C)C", "di(propan-2-ylidene)hydrazine"),
             ("CCCCCCCCCC=NN=CCCCCCCCCC", "di(decylidene)hydrazine"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -823,12 +844,12 @@ mod tests {
                 "{smiles}"
             );
         }
-        assert!(name_smiles("C/C=N/N=C\\C").is_err());
+        assert!(name_smiles("C/C=N/N=C\\C", &crate::naming::kernel_budget()).is_err());
     }
 
     #[test]
     fn azine_spelling_preserves_alkene_control() {
-        let name = name_smiles("C/C=C/C").unwrap();
+        let name = name_smiles("C/C=C/C", &crate::naming::kernel_budget()).unwrap();
         assert_eq!(name.text, "(2E)-but-2-ene");
         assert_eq!(name.status, crate::naming::NameStatus::Preferred);
     }
@@ -867,7 +888,13 @@ mod tests {
             ("ClCCOC(=O)CC(=O)O", "(2-chloroethoxycarbonyl)acetic acid"),
             ("CC(C)CO[SiH2]C", "methyl(2-methylpropoxy)silane"),
         ] {
-            assert_eq!(name_smiles(smiles).unwrap().text, expected, "{smiles}");
+            assert_eq!(
+                name_smiles(smiles, &crate::naming::kernel_budget())
+                    .unwrap()
+                    .text,
+                expected,
+                "{smiles}"
+            );
         }
     }
 
@@ -885,7 +912,8 @@ mod tests {
             ("COCOCOCC(=O)NCC(=O)O", true),
             ("CC(=O)NCC(=O)NCC(=O)NCC(=O)NCC(=O)O", true),
         ] {
-            let mol = super::graph_io::read_smiles(smiles).unwrap();
+            let mol =
+                super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let component =
                 super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
@@ -1212,7 +1240,8 @@ mod tests {
             ),
             ("[O-]c1ccccc1", "phenoxide", NameStatus::Preferred),
         ] {
-            let name = name_smiles(smiles).unwrap_or_else(|error| panic!("{smiles}: {error}"));
+            let name = name_smiles(smiles, &crate::naming::kernel_budget())
+                .unwrap_or_else(|error| panic!("{smiles}: {error}"));
             assert_eq!(name.text, expected_name, "{smiles}");
             assert_eq!(name.status, expected_status, "{smiles}: {}", name.text);
         }
@@ -1254,7 +1283,8 @@ mod tests {
                     false,
                 ),
             ] {
-                let name = name_smiles(&input).unwrap_or_else(|e| panic!("{input}: {e}"));
+                let name = name_smiles(&input, &crate::naming::kernel_budget())
+                    .unwrap_or_else(|e| panic!("{input}: {e}"));
                 assert!(name.text.contains(descriptor), "{input}: {}", name.text);
                 let expected = name.text.replace(descriptor, general);
                 let alternative = name
@@ -1312,7 +1342,7 @@ mod tests {
             ),
             ("c1ccccc1Cc2ccc(Cc3ccccc3)cc2", "1,4-dibenzylbenzene"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -1344,7 +1374,8 @@ mod tests {
             "CC(c1ccccc1)Cc1ccccc1",
             "O=C(O)c1ccc(OCCOc2ccc(C(=O)O)cc2)cc1",
         ] {
-            let mol = super::graph_io::read_smiles(smiles).unwrap();
+            let mol =
+                super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let name =
                 super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
@@ -1367,7 +1398,7 @@ mod tests {
             ("B(c1ccccc1)(c1ccccc1)c1ccccc1", "triphenylborane"),
             ("N(c1ccccc1)c1ccccc1", "N-phenylaniline"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -1399,7 +1430,8 @@ mod tests {
             "O=C1CCC(C2CCC(=O)CC2)CC1",
             "c1ccc(-c2ccc(-c3ccccc3)cc2)cc1",
         ] {
-            let mol = super::graph_io::read_smiles(smiles).unwrap();
+            let mol =
+                super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let name =
                 super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
@@ -1419,7 +1451,7 @@ mod tests {
             ("c1ccccc1Oc2ccc(Oc3ccccc3)nc2", "2,5-diphenoxypyridine"),
             ("C1CCC(CC1)c1ccccc1", "cyclohexylbenzene"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -1442,7 +1474,10 @@ mod tests {
     fn anhydride_names_need_acid_halves() {
         // Upstream names this "2-(((hydroxy)(thioxo)methyl)sulfanyl)acetonitrile
         // 4-methylbenzoic thioanhydride", which OPSIN reads as two compounds.
-        let name = name_smiles("Cc1ccc(C(=O)SC(=S)SCC#N)cc1");
+        let name = name_smiles(
+            "Cc1ccc(C(=O)SC(=S)SCC#N)cc1",
+            &crate::naming::kernel_budget(),
+        );
         assert!(
             !matches!(&name, Ok(name) if name.text.contains("anhydride")),
             "{name:?}"
@@ -1496,7 +1531,7 @@ mod tests {
                 "N-[(7R,7aS)-5,6,7,7a-tetrahydro-1H-pyrrolo[1,2-a]imidazol-7-yl]acetamide",
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             if expected.ends_with("acetic acid") {
                 let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -1737,7 +1772,7 @@ mod tests {
             ("c1ccc(cc1)-c1ccccc1", "1,1'-biphenyl"),
             ("C1CCC(CC1)c1ccccc1", "cyclohexylbenzene"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let status = match smiles {
                 "SS" | "SSS" => NameStatus::Unverified(crate::naming::NameReason::UnauditedPath),
@@ -1833,7 +1868,7 @@ mod tests {
             ("C1CCC(CC1)c1ccccc1", "cyclohexylbenzene"),
             ("c1ccc(cc1)-c1ccncc1", "4-phenylpyridine"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -1909,7 +1944,7 @@ mod tests {
                 NameStatus::Preferred,
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -1975,7 +2010,7 @@ mod tests {
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -2058,7 +2093,7 @@ mod tests {
                 NameStatus::NotPreferred(NameReason::LinearPhane),
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -2076,9 +2111,11 @@ mod tests {
     #[test]
     fn substituent_amine_sulfide_is_cited_as_a_prefix() {
         use crate::naming::{NameReason, NameStatus};
-        let name =
-            name_smiles("O=P(Oc1ccc(Oc2ccccc2)cc1)(Oc1ccccc1)Oc1ccc(Oc2ccc([N+](C)(C)[S-])cc2)cc1")
-                .unwrap();
+        let name = name_smiles(
+            "O=P(Oc1ccc(Oc2ccccc2)cc1)(Oc1ccccc1)Oc1ccc(Oc2ccc([N+](C)(C)[S-])cc2)cc1",
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         // P-62.5 names only a parent amine; this N-sulfide is a prefix (#947).
         assert_eq!(
             name.text,
@@ -2093,7 +2130,7 @@ mod tests {
     #[test]
     fn tied_ring_assemblies_choose_the_senior_component_and_round_trip() {
         let smiles = "C1(C3CC4CCC34)C(C5CC5C6CC6C7CC7C8CC8)C2CCC12";
-        let name = name_smiles(smiles).unwrap();
+        let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         assert_eq!(
             name.text,
             "3-([1^1,2^1:2^2,3^1:3^2,4^1-quatercyclopropan]-1^2-yl)-2,2'-bi(bicyclo[2.2.0]hexane)"
@@ -2110,7 +2147,7 @@ mod tests {
 
     #[test]
     fn unsupported_ring_assembly_keeps_substitutive_name_and_status() {
-        let name = name_smiles("C1CCC(=C2CCCC2)C1").unwrap();
+        let name = name_smiles("C1CCC(=C2CCCC2)C1", &crate::naming::kernel_budget()).unwrap();
         assert_eq!(name.text, "cyclopentylidenecyclopentane");
         assert_eq!(
             name.status,
@@ -2143,7 +2180,7 @@ mod tests {
             let request = crate::naming::local::parse_request(expected).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
             let parsed = crate::naming::local::parse_result(expected, &reply).unwrap();
-            let name = name_smiles(&parsed.smiles).unwrap();
+            let name = name_smiles(&parsed.smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected);
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
         }
@@ -2160,7 +2197,7 @@ mod tests {
             "C1(C2C3(CC43CC4)C2)C2(C1)CC12CC1",
             "C1CC21CC21CC1C1CC21C1(CC1)C2",
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, "1,1'-bi(dispiro[2.0.2.1]heptane)", "{smiles}");
             assert_eq!(
                 name.status,
@@ -2184,7 +2221,7 @@ mod tests {
         // P-28.2.1 and P-16.5 separate the component's locants from those
         // identifying the junctions, independently of the unit multiplier.
         let smiles = "C1(OCCOC1)C1COCCO1";
-        let name = name_smiles(smiles).unwrap();
+        let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         assert_eq!(name.text, "2,2'-bi(1,4-dioxane)");
         assert_eq!(name.status, crate::naming::NameStatus::Preferred);
         let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -2204,7 +2241,7 @@ mod tests {
             let request = crate::naming::local::parse_request(expected).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
             let parsed = crate::naming::local::parse_result(expected, &reply).unwrap();
-            let name = name_smiles(&parsed.smiles).unwrap();
+            let name = name_smiles(&parsed.smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected);
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -2231,7 +2268,7 @@ mod tests {
                 "1H,1'H-3,3'-biindole",
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -2274,7 +2311,7 @@ mod tests {
             // A retained fused parent bypasses the fallback assessment.
             ("c1ccc2ccccc2c1", "naphthalene"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -2288,14 +2325,7 @@ mod tests {
     #[test]
     fn pheno_fusion_components_choose_preferred_parents_and_round_trip() {
         use crate::naming::NameStatus;
-        use reshiki_chemistry::inchi::{generator, kernel};
-        let inchi = |smiles: &str| {
-            let state = reshiki_chemistry::smiles::prepare(smiles).unwrap().state;
-            let input = kernel::Molecule::prepare(&state, None).unwrap();
-            let output = generator::generate_in_process(&input).unwrap();
-            assert!(output.status.is_success(), "{smiles}: {}", output.message);
-            output.inchi
-        };
+        let inchi = crate::naming::kernel_bridge::inchi_from_smiles;
         for (smiles, expected) in [
             (
                 "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2",
@@ -2342,7 +2372,7 @@ mod tests {
                 "7,14-dihydro[1,4]benzothiazino[2,3-b]phenoxazine",
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -2452,7 +2482,7 @@ mod tests {
                 NameStatus::Preferred,
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
         }
@@ -2483,7 +2513,7 @@ mod tests {
             ("O1C=CC2=NC=3C(C=C21)=COC3", "difuro[3,2-b:3',4'-e]pyridine"),
             ("c1ccc2c(c1)oc1ccccc12", "dibenzofuran"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
         }
@@ -2528,7 +2558,7 @@ mod tests {
             // are 1,2,3,3a,10a,10,9a,9,8,7,6,5,4 (P-25.3.3).
             ("S1C=CC=2C1=CC1=CC=CCN1C2", "6H-thieno[2,3-b]quinolizine"),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
@@ -2548,7 +2578,11 @@ mod tests {
         use crate::naming::{NameReason, NameStatus};
         // Carbazole is registered, but this first-order fusion still uses an
         // OPSIN-entry layout; its existing numbering status remains unverified.
-        let name = name_smiles("c1ccc2c(c1)ccc1c2[nH]c2ccccc12").unwrap();
+        let name = name_smiles(
+            "c1ccc2c(c1)ccc1c2[nH]c2ccccc12",
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         assert_eq!(name.text, "11H-benzo[a]carbazole");
         assert_eq!(
             name.status,
@@ -2701,7 +2735,7 @@ mod tests {
                 R::Multiplicative,
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::NotPreferred(reason), "{smiles}");
             if expected.ends_with("acetic acid") || expected.ends_with("formic acid") {
@@ -2759,7 +2793,7 @@ mod tests {
                 R::OpsinFusionLayout,
             ),
         ] {
-            let name = name_smiles(smiles).unwrap();
+            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Unverified(reason), "{smiles}");
             if expected.ends_with("acetic acid") {
@@ -2789,13 +2823,15 @@ mod tests {
             ("C1OCC2COCC12", "tetrahydro-1H,3H-furo[3,4-c]furan"),
         ] {
             assert_eq!(
-                name_smiles(smiles).map(|name| name.text).as_deref(),
+                name_smiles(smiles, &crate::naming::kernel_budget())
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );
         }
         assert_eq!(
-            name_smiles("C1CCC2(C1)Oc1ccccc1O2")
+            name_smiles("C1CCC2(C1)Oc1ccccc1O2", &crate::naming::kernel_budget())
                 .map(|name| name.text)
                 .as_deref(),
             Ok("spiro[[1,3]benzodioxole-2,1'-cyclopentane]"),
@@ -2805,7 +2841,9 @@ mod tests {
     #[test]
     fn angular_oxazole_thiazole_acetic_acid_round_trips() {
         let smiles = "O=C(O)Cc1nc2ccc3ocnc3c2s1";
-        let name = name_smiles(smiles).unwrap().text;
+        let name = name_smiles(smiles, &crate::naming::kernel_budget())
+            .unwrap()
+            .text;
         assert_eq!(
             name,
             "([1,3]thiazolo[5,4-e][1,3]benzoxazol-7-yl)acetic acid"
@@ -2837,7 +2875,9 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                name_smiles(smiles).map(|name| name.text).as_deref(),
+                name_smiles(smiles, &crate::naming::kernel_budget())
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );
@@ -2851,7 +2891,10 @@ mod tests {
             "S123(CC1)(CC2)CC3",
             "C1CCC2(CC1)CCCC2.C",
         ] {
-            assert!(name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                name_smiles(smiles, &crate::naming::kernel_budget()).is_err(),
+                "{smiles}"
+            );
         }
     }
 
@@ -2872,7 +2915,10 @@ mod tests {
             "C[As@]1CCCC1C",
             "C[S@+]1CCCC1C",
         ] {
-            assert!(name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                name_smiles(smiles, &crate::naming::kernel_budget()).is_err(),
+                "{smiles}"
+            );
         }
     }
 
@@ -2880,11 +2926,14 @@ mod tests {
     fn tetrahedral_group_four_ring_hydrides_have_no_lone_pair() {
         for element in ["Si", "Ge", "Sn"] {
             let smiles = format!("C[{element}@H]1CCCC1F");
-            assert!(name_smiles(&smiles).is_ok(), "{smiles}");
+            assert!(
+                name_smiles(&smiles, &crate::naming::kernel_budget()).is_ok(),
+                "{smiles}"
+            );
         }
         for smiles in ["C[P@]1CCCC1F", "C[As@]1CCCC1F", "C[S@+]1CCCC1F"] {
             assert_eq!(
-                name_smiles(smiles).unwrap_err(),
+                name_smiles(smiles, &crate::naming::kernel_budget()).unwrap_err(),
                 "openclatura: N and ring lone-pair stereocentres are not validated",
                 "{smiles}",
             );
@@ -2907,7 +2956,7 @@ mod tests {
             if std::env::var_os("OPENCLATURA_PARITY_VERBOSE").is_some() {
                 eprintln!("parity row {index}: {smiles}");
             }
-            match name_smiles(smiles) {
+            match name_smiles(smiles, &crate::naming::kernel_budget()) {
                 Ok(actual) if actual.text == expected => exact += 1,
                 Ok(actual) => {
                     different += 1;

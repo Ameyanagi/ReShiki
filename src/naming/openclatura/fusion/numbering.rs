@@ -1185,7 +1185,11 @@ mod tests {
 
     #[test]
     fn fully_tied_numberings_preserve_source_layout_enumeration() {
-        let mol = super::super::super::graph_io::read_smiles("N1CCC2C(C1)C[NH2+]CC2").unwrap();
+        let mol = super::super::super::graph_io::read_smiles(
+            "N1CCC2C(C1)C[NH2+]CC2",
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let faces = super::super::faces::select_bounded_face_model(&mol, &atoms)
             .unwrap()

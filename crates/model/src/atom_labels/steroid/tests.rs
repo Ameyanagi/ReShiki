@@ -15,9 +15,22 @@ fn named(name: &str) -> (Document, HashMap<String, u64>) {
     } else {
         name
     };
-    let result = opsin::Parser::new()
-        .unwrap()
-        .parse(source, &opsin::ParseOptions::strict());
+    let result = opsin::Parser::with_budget({
+        let policy = reshiki_process_heap::policy::Capabilities::detect().resolve();
+        opsin::Budget::new(
+            policy.heap_bytes(),
+            policy.work_units(),
+            Some(policy.analysis_timeout()),
+            policy.reservation_ceiling(),
+            move |bytes| {
+                policy
+                    .try_reserve(bytes)
+                    .map(|guard| Box::new(guard) as Box<dyn Send + Sync>)
+            },
+        )
+    })
+    .unwrap()
+    .parse(source, &opsin::ParseOptions::strict());
     assert_eq!(
         result.status,
         opsin::Status::Success,

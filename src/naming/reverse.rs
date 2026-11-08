@@ -81,7 +81,8 @@ pub(super) fn parse_response(bytes: &[u8], smiles: &str) -> Result<openclatura::
             "Local name generation returned an invalid neutral parent name",
         )
         .map_err(Error::Worker)?;
-        let recovered = openclatura::recover_radical_ion(smiles).map_err(Error::Worker)?;
+        let recovered = openclatura::recover_radical_ion(smiles, &crate::naming::kernel_budget())
+            .map_err(Error::Worker)?;
         let Some((neutral, suffix)) = recovered else {
             return Err(Error::Worker(
                 "A neutral-parent verification target requires a recoverable radical ion".into(),

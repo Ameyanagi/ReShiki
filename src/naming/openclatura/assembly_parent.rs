@@ -1429,7 +1429,7 @@ mod tests {
             ("C#Cc1ccccc1", "ethynylbenzene"),
             ("C=C", "ethene"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -1438,7 +1438,7 @@ mod tests {
             );
         }
         for smiles in ["[13CH]#C", "[2H]C#C", "[C]#C", "[C-]#C"] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert!(!name.text.contains("acetylene"), "{smiles}: {}", name.text);
         }
     }

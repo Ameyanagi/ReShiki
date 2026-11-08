@@ -4,7 +4,7 @@ use crate::naming::{NameReason, NameStatus};
 fn salt_anion_spelling_matrix() {
     // Retained ion spelling and salt ordering share the public naming pipeline
     // with the P-72.7 parent-choice rules.
-    let parser = opsin::Parser::new().unwrap();
+    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
     let mut failures = Vec::new();
     for (row, smiles, expected, status) in [
         (
@@ -231,7 +231,7 @@ fn salt_anion_spelling_matrix() {
         ),
     ] {
         let result = crate::naming::canonical_smiles(smiles)
-            .and_then(|canonical| super::name_smiles(&canonical));
+            .and_then(|canonical| super::name_smiles(&canonical, &crate::naming::kernel_budget()));
         let actual = match result {
             Ok(actual) => actual,
             Err(error) => {

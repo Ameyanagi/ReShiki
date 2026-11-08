@@ -16,7 +16,7 @@
 //! hydrogen construction stage as OPSIN when hydrogen participation is needed.
 
 use crate::graph::{Atom, AtomId, Element, Graph};
-use reshiki_chemistry::stereo::cip::Fraction;
+use nazuchem_kernel::stereo::cip::Fraction;
 use std::cell::OnceCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, VecDeque};

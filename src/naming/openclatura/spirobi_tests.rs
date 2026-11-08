@@ -212,7 +212,8 @@ const UNCONVERTED_BOUNDARIES: &[Case] = &[
 #[test]
 fn spirobi_matrix_names_and_statuses() {
     for &(row, smiles, expected, status) in MATRIX {
-        let actual = name_smiles(smiles).unwrap_or_else(|error| panic!("{row}: {error}"));
+        let actual = name_smiles(smiles, &crate::naming::kernel_budget())
+            .unwrap_or_else(|error| panic!("{row}: {error}"));
         assert_eq!(actual.text, expected, "{row}: {smiles}");
         assert_eq!(actual.status, status, "{row}: {}", actual.text);
     }
@@ -221,7 +222,8 @@ fn spirobi_matrix_names_and_statuses() {
 #[test]
 fn spirobi_controls_keep_names_and_statuses() {
     for &(row, smiles, expected, status) in CONTROLS {
-        let actual = name_smiles(smiles).unwrap_or_else(|error| panic!("{row}: {error}"));
+        let actual = name_smiles(smiles, &crate::naming::kernel_budget())
+            .unwrap_or_else(|error| panic!("{row}: {error}"));
         assert_eq!(actual.text, expected, "{row}: {smiles}");
         assert_eq!(actual.status, status, "{row}: {}", actual.text);
     }
@@ -232,7 +234,8 @@ fn spirobi_suffixes_are_elided_but_remain_unverified() {
     // One -ol elides the parent terminal e; multiplied -diol retains it.
     // Correct text alone does not certify principal-suffix spirobi naming.
     for &(row, smiles, expected, status) in SUFFIX_BOUNDARIES {
-        let actual = name_smiles(smiles).unwrap_or_else(|error| panic!("{row}: {error}"));
+        let actual = name_smiles(smiles, &crate::naming::kernel_budget())
+            .unwrap_or_else(|error| panic!("{row}: {error}"));
         assert_eq!(actual.text, expected, "{row}: {smiles}");
         assert_eq!(actual.status, status, "{row}: {}", actual.text);
     }
@@ -241,7 +244,8 @@ fn spirobi_suffixes_are_elided_but_remain_unverified() {
 #[test]
 fn spirobi_scope_boundaries_keep_generic_spiro_names() {
     for &(row, smiles, expected, status) in UNCONVERTED_BOUNDARIES {
-        let actual = name_smiles(smiles).unwrap_or_else(|error| panic!("{row}: {error}"));
+        let actual = name_smiles(smiles, &crate::naming::kernel_budget())
+            .unwrap_or_else(|error| panic!("{row}: {error}"));
         assert_eq!(actual.text, expected, "{row}: {smiles}");
         assert_eq!(actual.status, status, "{row}: {}", actual.text);
     }
@@ -249,7 +253,7 @@ fn spirobi_scope_boundaries_keep_generic_spiro_names() {
 
 #[test]
 fn spirobi_target_names_reconstruct_matrix_graphs() {
-    let parser = opsin::Parser::new().unwrap();
+    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
     for &(row, smiles, expected, _) in MATRIX
         .iter()
         .chain(CONTROLS)
@@ -335,7 +339,7 @@ fn spirobi_atom_ids_do_not_choose_component_priming() {
     for &(row, smiles, expected, status) in MATRIX.iter().filter(|case| {
         ["D1", "D3", "D4", "D10"].contains(&case.0) || case.0.starts_with("unsaturation-")
     }) {
-        let source = graph_io::read_smiles(smiles).unwrap();
+        let source = graph_io::read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         let ids: Vec<_> = source.atoms.keys().copied().collect();
         let mut reversed = ids.clone();
         reversed.reverse();
@@ -367,7 +371,7 @@ fn spirobi_atom_ids_do_not_choose_component_priming() {
 
 #[test]
 fn spirobi_mixed_unsaturation_elides_in_citation_order() {
-    let parser = opsin::Parser::new().unwrap();
+    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
     for expected in [
         "2,2'-spirobi[bicyclo[5.2.1]decane]-5,5'-dien-3-yne",
         "2,2'-spirobi[bicyclo[5.2.1]decan]-3-en-5,5'-diyne",
@@ -375,7 +379,7 @@ fn spirobi_mixed_unsaturation_elides_in_citation_order() {
         let parsed = parser.parse(expected, &opsin::ParseOptions::strict());
         assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
         let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
-        let source = graph_io::read_smiles(&smiles).unwrap();
+        let source = graph_io::read_smiles(&smiles, &crate::naming::kernel_budget()).unwrap();
         let ids: Vec<_> = source.atoms.keys().copied().collect();
         for reverse in [false, true] {
             let molecule = relabel(&source, &ids, reverse);

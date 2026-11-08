@@ -1097,7 +1097,7 @@ mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
     fn matches(smiles: &str, options: MatchOptions<'_>) -> Vec<RetainedGraphTemplateMatch> {
-        let mol = read_smiles(smiles).unwrap();
+        let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         match_retained_graph_templates_with_options(&mol, &atoms, options)
     }
@@ -1164,7 +1164,7 @@ mod tests {
             ("[Se]1c2ccccc2Cc2ccccc21", "9H-selenoxanthene", "Se"),
             ("[Te]1c2ccccc2Cc2ccccc21", "9H-telluroxanthene", "Te"),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let rows = matches(smiles, MatchOptions::default());
             assert_eq!(rows.len(), 2, "{smiles}");
             for row in rows {
@@ -1181,7 +1181,7 @@ mod tests {
 
     #[test]
     fn added_phenanthroline_isomers_have_exact_retained_graphs() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
         for (smiles, expected, nitrogen_locants) in [
             ("c1nccc2ccc3ccncc3c12", "2,9-phenanthroline", ["2", "9"]),
             ("c1cncc2ccc3ncccc3c12", "3,7-phenanthroline", ["3", "7"]),
@@ -1201,7 +1201,7 @@ mod tests {
                     .collect();
                 assert_eq!(actual, nitrogen_locants.into_iter().collect());
             }
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
             for candidate in std::iter::once(&name.text).chain(
@@ -1234,7 +1234,7 @@ mod tests {
             ("[CH-]1C=Cc2ccccc21", "1H-indene", "1"),
             ("[CH-]1c2ccccc2-c2ccccc21", "9H-fluorene", "9"),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let charged = *mol
                 .atoms
                 .iter()
@@ -1267,7 +1267,8 @@ mod tests {
                 smiles.to_owned(),
                 crate::naming::canonical_smiles(smiles).unwrap(),
             ] {
-                let name = super::super::name_smiles(&input).unwrap();
+                let name =
+                    super::super::name_smiles(&input, &crate::naming::kernel_budget()).unwrap();
                 assert_eq!(name.text, expected, "{smiles} via {input}");
                 assert_eq!(
                     name.status,
@@ -1344,16 +1345,22 @@ mod tests {
                     "{smiles}"
                 );
             }
-            let name = super::super::name_smiles(smiles);
+            let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget());
             if let Some(expected) = legacy_name {
                 assert_eq!(name.unwrap().text, expected);
             } else {
                 assert!(name.is_err(), "{smiles}");
             }
         }
-        assert!(super::super::name_smiles("C1=CC=C2C(=C1)C3=CC#CC=C3C2(CCO)CCO").is_err());
+        assert!(
+            super::super::name_smiles(
+                "C1=CC=C2C(=C1)C3=CC#CC=C3C2(CCO)CCO",
+                &crate::naming::kernel_budget()
+            )
+            .is_err()
+        );
 
-        let mol = read_smiles("C#Cc1ccc2ccccc2c1").unwrap();
+        let mol = read_smiles("C#Cc1ccc2ccccc2c1", &crate::naming::kernel_budget()).unwrap();
         let ring = mol
             .atoms
             .iter()
@@ -1367,7 +1374,7 @@ mod tests {
             Some("naphthalene")
         );
         assert_eq!(
-            super::super::name_smiles("C#Cc1ccc2ccccc2c1")
+            super::super::name_smiles("C#Cc1ccc2ccccc2c1", &crate::naming::kernel_budget())
                 .map(|name| name.text)
                 .as_deref(),
             Ok("2-ethynylnaphthalene")
@@ -1375,7 +1382,7 @@ mod tests {
     }
     #[test]
     fn decorated_nonaromatic_parent_requires_unambiguous_pi_state() {
-        let mol = read_smiles("ClC1=CC=CC2=CC=CC=CC2=C1").unwrap();
+        let mol = read_smiles("ClC1=CC=CC2=CC=CC=CC2=C1", &crate::naming::kernel_budget()).unwrap();
         let ring: AtomSet = mol
             .atoms
             .iter()
@@ -1390,7 +1397,8 @@ mod tests {
             Some("heptalene")
         );
 
-        let aromatic = read_smiles("ClC1=CC=CC2=CC=CC=C12").unwrap();
+        let aromatic =
+            read_smiles("ClC1=CC=CC2=CC=CC=C12", &crate::naming::kernel_budget()).unwrap();
         let ring: AtomSet = aromatic
             .atoms
             .iter()
@@ -1411,7 +1419,7 @@ mod tests {
             ("c1ccc2c(c1)-c1ccccc1-c1ccccc1-c1ccccc1-2", "tetraphenylene"),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &crate::naming::kernel_budget())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected)
@@ -1424,7 +1432,7 @@ mod tests {
             "C1=CC2=C(CC1)C1=C2CCC=C1",
             "C1=CC2=c3ccccc3=C2CC1",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let ring = mol
                 .atoms
                 .iter()
@@ -1453,9 +1461,12 @@ mod tests {
         // A numbering that exchanges these localized bonds must not turn a
         // position-3 substituent into position 1 on the cited indacene parent.
         assert_eq!(
-            super::super::name_smiles("ClC1=c2cc3c(cc2C=C1)=CC=C3")
-                .map(|name| name.text)
-                .as_deref(),
+            super::super::name_smiles(
+                "ClC1=c2cc3c(cc2C=C1)=CC=C3",
+                &crate::naming::kernel_budget()
+            )
+            .map(|name| name.text)
+            .as_deref(),
             Ok("3-chloros-indacene")
         );
     }

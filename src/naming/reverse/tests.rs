@@ -739,7 +739,7 @@ async fn unverified_unknown_alternative_cannot_replace_the_primary_or_its_notice
     let mut identity = super::super::document_identity(&document).unwrap();
     identity.write_unknown_stereo = true;
     let input = identity.generation_smiles(&identity.smiles);
-    let mut candidate = openclatura::name_smiles(input).unwrap();
+    let mut candidate = openclatura::name_smiles(input, &crate::naming::kernel_budget()).unwrap();
     candidate.alternatives[0].name = "(2Ξ,3S)-3-chlorobutan-2-ol".into();
     let record = reconstruct(
         &identity,

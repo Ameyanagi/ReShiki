@@ -1,6 +1,6 @@
 //! Per-name state shared by OPSIN construction passes.
 use crate::{
-    OpsinWarning, ParseOptions, ParsingError, WarningKind,
+    Budget, OpsinWarning, ParseOptions, ParsingError, WarningKind,
     fragment_manager::FragmentManager,
     graph::{AtomId, FragmentId, Graph, GraphError},
     parse_tree::{Arena, NodeId},
@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct BuildState {
+    pub(crate) budget: Budget,
     pub options: ParseOptions,
     pub fragment_manager: FragmentManager,
     pub xml_suffix_map: BTreeMap<NodeId, Vec<FragmentId>>,
@@ -20,8 +21,14 @@ pub struct BuildState {
 }
 
 impl BuildState {
+    /// Create interpretation state with an unbounded chemistry budget.
     pub fn new(options: ParseOptions) -> Self {
+        Self::with_budget(options, Budget::default())
+    }
+    /// Create interpretation state with the host's chemistry budget.
+    pub fn with_budget(options: ParseOptions, budget: Budget) -> Self {
         Self {
+            budget,
             options,
             fragment_manager: FragmentManager::new(),
             xml_suffix_map: BTreeMap::new(),

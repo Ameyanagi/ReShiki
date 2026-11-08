@@ -869,7 +869,7 @@ mod tests {
 
     #[test]
     fn legacy_and_independent_search_offer_only_audited_parent_numberings() {
-        let mol = read_smiles("C1NC23COC12C=CC3").unwrap();
+        let mol = read_smiles("C1NC23COC12C=CC3", &crate::naming::kernel_budget()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let edges = edges_within_atoms(&mol, &atoms);
         let candidate =
@@ -928,7 +928,7 @@ mod tests {
                 "tetracyclo[5.2.1.1^{2,4}.0^{3,6}]",
             ),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let system = super::super::chains::find_ring_systems(&mol, &AtomSet::new())
                 .unwrap()
                 .into_iter()

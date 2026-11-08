@@ -8,6 +8,24 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+mod kernel_bridge;
+
+/// Preserve ReShiki's operational limits and shared reservation accounting.
+pub(crate) fn kernel_budget() -> nazuchem_kernel::budget::Budget {
+    let budget = reshiki_process_heap::policy::Capabilities::detect().resolve();
+    nazuchem_kernel::budget::Budget::new(
+        budget.heap_bytes(),
+        budget.work_units(),
+        Some(budget.analysis_timeout()),
+        budget.reservation_ceiling(),
+        move |bytes| {
+            budget
+                .try_reserve(bytes)
+                .map(|guard| Box::new(guard) as Box<dyn Send + Sync>)
+        },
+    )
+}
+
 mod catalog;
 pub use catalog::VERSION as ALIAS_CATALOG_VERSION;
 pub use catalog::{Alias, AliasSource, aliases_for_smiles};

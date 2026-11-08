@@ -476,7 +476,11 @@ mod tests {
 
     #[test]
     fn carbonization_preserves_graph_and_adjusts_sigma_donor_hydrogens() {
-        let mol = read_smiles("C1[C@@H]2C[C@@H]3C[C@H]1N[C@H](C2)S3").unwrap();
+        let mol = read_smiles(
+            "C1[C@@H]2C[C@@H]3C[C@H]1N[C@H](C2)S3",
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let replacements: Vec<_> = mol
             .atoms
@@ -525,7 +529,7 @@ mod tests {
             "N1=C2C3=C(N=NC3=N1)N=N2",
             "N1=C2C3=C(N=NC3=N1)C=C2",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let (ast, topology, sizes) =
                 prohibited_pairwise_citation(&mol, &atoms).unwrap().unwrap();
@@ -544,7 +548,11 @@ mod tests {
 
     #[test]
     fn heteroadamantane_restores_heteroatoms_on_the_retained_carbon_parent() {
-        let mol = read_smiles("C1[C@@H]2C[C@@H]3C[C@H]1N[C@H](C2)S3").unwrap();
+        let mol = read_smiles(
+            "C1[C@@H]2C[C@@H]3C[C@H]1N[C@H](C2)S3",
+            &crate::naming::kernel_budget(),
+        )
+        .unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let plan = plan_third_component_fusion_parent(&mol, &atoms)
             .unwrap()
@@ -567,7 +575,8 @@ mod tests {
             "FC1=CC=2C3=C1N=NC3=NN2",
         ] {
             assert_eq!(
-                super::super::super::name_smiles(smiles).unwrap_err(),
+                super::super::super::name_smiles(smiles, &crate::naming::kernel_budget())
+                    .unwrap_err(),
                 "openclatura: localized nonaromatic fused pi state not ported"
             );
         }
@@ -581,7 +590,7 @@ mod tests {
             "C1OCC2COCC12",
             "C1=CCSC2SC=NC2=C1",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             assert!(
                 plan_third_component_fusion_parent(&mol, &atoms)
