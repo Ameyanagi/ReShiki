@@ -2768,6 +2768,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nazuchem-ir"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "nazuchem-kernel"
 version = "0.1.0"
 dependencies = [
@@ -3906,6 +3913,7 @@ dependencies = [
  "iced_winit",
  "image",
  "js-sys",
+ "nazuchem-ir",
  "nazuchem-kernel",
  "open",
  "opsin",
@@ -4083,6 +4091,7 @@ dependencies = [
  "i_overlay",
  "iced_core",
  "image",
+ "nazuchem-kernel",
  "opsin",
  "png 0.17.16",
  "reshiki-chemistry",

@@ -7,7 +7,7 @@
 
 //! P-24.3 spirobi forms, numbering, certification, and reconstruction.
 use super::{component_namer, graph_io, molecule::Molecule, name_smiles};
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 use std::collections::BTreeMap;
 
 type Case = (&'static str, &'static str, &'static str, NameStatus);

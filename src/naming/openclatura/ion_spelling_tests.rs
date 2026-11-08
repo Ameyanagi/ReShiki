@@ -11,7 +11,7 @@
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 use super::name_smiles;
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 
 #[test]
 // Provenance: fn ion_spelling_matrix | adapted

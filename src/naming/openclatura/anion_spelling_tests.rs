@@ -7,7 +7,7 @@
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 use super::name_smiles;
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 
 // Provenance: fn name | original
 // Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::name

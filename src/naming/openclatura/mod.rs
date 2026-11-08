@@ -56,7 +56,6 @@
 
 mod additive;
 mod amine_oxides;
-mod app_chemistry;
 mod assembler;
 mod assembly_charge;
 mod assembly_parent;
@@ -140,8 +139,8 @@ pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
 #[serde(deny_unknown_fields)]
 pub(super) struct Name {
     pub text: String,
-    pub status: crate::naming::NameStatus,
-    pub alternatives: Vec<crate::naming::AlternativeName>,
+    pub status: nazuchem_ir::NameStatus,
+    pub alternatives: Vec<nazuchem_ir::AlternativeName>,
     pub omitted_stereo: Vec<String>,
     pub omitted_units: usize,
     #[serde(default)]
@@ -164,14 +163,14 @@ pub(super) fn name_smiles(
     smiles: &str,
     budget: &nazuchem_kernel::budget::Budget,
 ) -> Result<Name, String> {
-    name_smiles_with_style(smiles, crate::naming::IsotopeStyle::Iupac, budget)
+    name_smiles_with_style(smiles, nazuchem_ir::IsotopeStyle::Iupac, budget)
 }
 
 // Provenance: fn name_smiles_with_style | original
 // Source: ReShiki | src/naming/openclatura/mod.rs::name_smiles_with_style
 pub(super) fn name_smiles_with_style(
     smiles: &str,
-    style: crate::naming::IsotopeStyle,
+    style: nazuchem_ir::IsotopeStyle,
     budget: &nazuchem_kernel::budget::Budget,
 ) -> Result<Name, String> {
     let mut name = name_routes(smiles, style, budget)?;
@@ -194,10 +193,10 @@ pub(super) fn name_smiles_with_style(
             .iter()
             .any(|existing| existing.name == text)
         {
-            name.alternatives.push(crate::naming::AlternativeName {
+            name.alternatives.push(nazuchem_ir::AlternativeName {
                 name: text,
-                status: crate::naming::NameStatus::NotPreferred(
-                    crate::naming::NameReason::AxialAlternative,
+                status: nazuchem_ir::NameStatus::NotPreferred(
+                    nazuchem_ir::NameReason::AxialAlternative,
                 ),
             });
         }
@@ -256,7 +255,7 @@ fn general_axial_name(text: &str) -> Option<String> {
 // Source: openclatura | src/openclatura/namer.py::name_component
 fn name_routes(
     smiles: &str,
-    style: crate::naming::IsotopeStyle,
+    style: nazuchem_ir::IsotopeStyle,
     budget: &nazuchem_kernel::budget::Budget,
 ) -> Result<Name, String> {
     if let Some(name) = unknown_stereo::name_smiles(smiles, style, budget)? {
@@ -273,7 +272,7 @@ fn name_routes(
         let name = name_smiles_with_style(&neutral, style, budget)?;
         return Ok(Name {
             text: format!("{} {suffix}", name.text),
-            status: crate::naming::NameStatus::NotPreferred(crate::naming::NameReason::RadicalIon),
+            status: nazuchem_ir::NameStatus::NotPreferred(nazuchem_ir::NameReason::RadicalIon),
             alternatives: vec![],
             omitted_stereo: vec![],
             omitted_units: 0,
@@ -311,9 +310,7 @@ fn name_routes(
                 return phane.map_or(Err(error), |text| {
                     Ok(Name {
                         text,
-                        status: crate::naming::NameStatus::Unverified(
-                            crate::naming::NameReason::Phane,
-                        ),
+                        status: nazuchem_ir::NameStatus::Unverified(nazuchem_ir::NameReason::Phane),
                         alternatives: vec![],
                         omitted_stereo: vec![],
                         omitted_units: 0,
@@ -324,15 +321,15 @@ fn name_routes(
         };
     assess_derivation(&mol, &component.derivation);
     // Preserve already certified fused oxide templates, including isoquinoline 2-oxide.
-    if mol.name_status() != crate::naming::NameStatus::Preferred
+    if mol.name_status() != nazuchem_ir::NameStatus::Preferred
         && let Some(name) = oxide
     {
         return Ok(name);
     }
     let text = component.text;
     if phane.is_some() {
-        mol.mark_name(crate::naming::NameStatus::NotPreferred(
-            crate::naming::NameReason::Phane,
+        mol.mark_name(nazuchem_ir::NameStatus::NotPreferred(
+            nazuchem_ir::NameReason::Phane,
         ));
     }
     let status = mol.name_status();
@@ -347,13 +344,13 @@ fn name_routes(
         if let Ok(alternative) = alternative
             && alternative != text
         {
-            alternatives.push(crate::naming::AlternativeName {
+            alternatives.push(nazuchem_ir::AlternativeName {
                 name: nest_enclosing_marks(&alternative),
-                status: crate::naming::NameStatus::NotPreferred(
+                status: nazuchem_ir::NameStatus::NotPreferred(
                     if mol.has_benzo_fusion_alternative() {
-                        crate::naming::NameReason::BenzoFusion
+                        nazuchem_ir::NameReason::BenzoFusion
                     } else {
-                        crate::naming::NameReason::HigherOrderFusion
+                        nazuchem_ir::NameReason::HigherOrderFusion
                     },
                 ),
             });
@@ -364,10 +361,10 @@ fn name_routes(
         if let Ok(relative) = component_namer::name_component(&mol, &components[0])
             && relative != text
         {
-            alternatives.push(crate::naming::AlternativeName {
+            alternatives.push(nazuchem_ir::AlternativeName {
                 name: nest_enclosing_marks(&relative),
-                status: crate::naming::NameStatus::NotPreferred(
-                    crate::naming::NameReason::RelativeRingStereo,
+                status: nazuchem_ir::NameStatus::NotPreferred(
+                    nazuchem_ir::NameReason::RelativeRingStereo,
                 ),
             });
         }
@@ -378,17 +375,17 @@ fn name_routes(
         if let Ok(relative) = component_namer::name_component(&mol, &components[0])
             && relative != text
         {
-            alternatives.push(crate::naming::AlternativeName {
+            alternatives.push(nazuchem_ir::AlternativeName {
                 name: nest_enclosing_marks(&relative),
-                status: crate::naming::NameStatus::NotPreferred(
-                    crate::naming::NameReason::EndoExoStereo,
+                status: nazuchem_ir::NameStatus::NotPreferred(
+                    nazuchem_ir::NameReason::EndoExoStereo,
                 ),
             });
         }
     }
-    alternatives.extend(phane.map(|name| crate::naming::AlternativeName {
+    alternatives.extend(phane.map(|name| nazuchem_ir::AlternativeName {
         name,
-        status: crate::naming::NameStatus::Unverified(crate::naming::NameReason::Phane),
+        status: nazuchem_ir::NameStatus::Unverified(nazuchem_ir::NameReason::Phane),
     }));
     Ok(Name {
         text: nest_enclosing_marks(&text),
@@ -433,21 +430,21 @@ fn assess_derivation(mol: &molecule::Molecule, derivation: &component_namer::Der
     species::assess_cation_parent(mol, derivation);
     // P-51.3.2 / P-52.2.5.3: mandatory phane nomenclature takes precedence.
     if phane::has_linear_skeleton(mol, derivation.component_splits()) {
-        mol.mark_name(crate::naming::NameStatus::NotPreferred(
-            crate::naming::NameReason::LinearPhane,
+        mol.mark_name(nazuchem_ir::NameStatus::NotPreferred(
+            nazuchem_ir::NameReason::LinearPhane,
         ));
     } else if has_ring_assembly(mol) || has_anionic_ring_assembly(mol) {
-        mol.mark_name(crate::naming::NameStatus::NotPreferred(
-            crate::naming::NameReason::RingAssembly,
+        mol.mark_name(nazuchem_ir::NameStatus::NotPreferred(
+            nazuchem_ir::NameReason::RingAssembly,
         ));
     } else if has_multiplicative_pin(mol, derivation) {
-        mol.mark_name(crate::naming::NameStatus::NotPreferred(
-            crate::naming::NameReason::Multiplicative,
+        mol.mark_name(nazuchem_ir::NameStatus::NotPreferred(
+            nazuchem_ir::NameReason::Multiplicative,
         ));
     }
     if requires_skeletal_replacement(mol, derivation) {
-        mol.mark_name(crate::naming::NameStatus::Unverified(
-            crate::naming::NameReason::UnauditedParent,
+        mol.mark_name(nazuchem_ir::NameStatus::Unverified(
+            nazuchem_ir::NameReason::UnauditedParent,
         ));
     }
     if matches!(
@@ -912,7 +909,7 @@ mod tests {
 
     #[test]
     fn symmetric_azine_ylidene_spelling_keeps_unaudited_status() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
 
         for (smiles, expected) in [
             ("C/C=N/N=C/C", "(1E,2E)-diethylidenehydrazine"),
@@ -944,7 +941,7 @@ mod tests {
     fn azine_spelling_preserves_alkene_control() {
         let name = name_smiles("C/C=C/C", &Default::default()).unwrap();
         assert_eq!(name.text, "(2E)-but-2-ene");
-        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+        assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
     }
 
     #[test]
@@ -1051,7 +1048,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn allow_list_status_matrix() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         for (smiles, expected_name, expected_status) in [
             ("CCO", "ethanol", NameStatus::Preferred),
             ("CC(=O)O", "acetic acid", NameStatus::Preferred),
@@ -1386,7 +1383,7 @@ mod tests {
 
     #[test]
     fn axial_general_alternatives_cover_ordinary_unknown_isotope_and_salt_paths() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         for (marker, descriptor, general) in [(900_004, 'M', "Ra"), (900_008, 'P', "Sa")] {
             for (input, unknown) in [
                 (
@@ -1436,7 +1433,7 @@ mod tests {
 
     #[test]
     fn complete_senior_parents_need_multiplicative_pin_status_and_round_trip() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         // P-16.5.4 Fig. 1.3(f) and P-15.3.2.1: the first central group is
         // asymmetric; the second has a cyclic assembly between equal arms.
         for (smiles, expected) in [
@@ -1527,11 +1524,7 @@ mod tests {
         ] {
             let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
         }
     }
 
@@ -1585,11 +1578,7 @@ mod tests {
         ] {
             let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
             let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
@@ -1746,7 +1735,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn controls_keep_their_names_and_preference_status() {
-        use crate::naming::NameStatus;
+        use nazuchem_ir::NameStatus;
         for (smiles, expected) in [
             ("CCO", "ethanol"),
             ("O=C(O)c1ccccc1", "benzoic acid"),
@@ -1934,7 +1923,7 @@ mod tests {
             let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let status = match smiles {
-                "SS" | "SSS" => NameStatus::Unverified(crate::naming::NameReason::UnauditedPath),
+                "SS" | "SSS" => NameStatus::Unverified(nazuchem_ir::NameReason::UnauditedPath),
                 _ => NameStatus::Preferred,
             };
             assert_eq!(name.status, status, "{smiles}");
@@ -1959,7 +1948,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn ring_assemblies_are_preferred_numbered_parents_and_round_trip() {
-        use crate::naming::NameStatus;
+        use nazuchem_ir::NameStatus;
         for (smiles, expected) in [
             (
                 "Oc1ccc2ccccc2c1-c1c(O)ccc2ccccc12",
@@ -2049,7 +2038,7 @@ mod tests {
 
     #[test]
     fn linear_phane_assemblies_keep_nonpreferred_status_and_round_trip() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         for (smiles, expected, status) in [
             (
                 "c1ccccc1-c1ccc(-c2ccc(Oc3cccc(-c4cccc(-c5ccccn5)n4)n3)cc2)cc1",
@@ -2125,7 +2114,7 @@ mod tests {
 
     #[test]
     fn linear_phane_status_respects_functional_class_components_and_round_trips() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         for (smiles, expected, status) in [
             // P-65.6.3.2.1 / P-65.6.3.3.1: each ester component has two rings.
             (
@@ -2191,7 +2180,7 @@ mod tests {
 
     #[test]
     fn linear_phane_status_respects_oxoacid_ester_components_and_round_trips() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         for (smiles, expected, status) in [
             // P-65.2.3 / P-65.6.3.2.1: ester organyl groups are separate components.
             (
@@ -2274,7 +2263,7 @@ mod tests {
 
     #[test]
     fn substituent_amine_sulfide_is_cited_as_a_prefix() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         let name = name_smiles(
             "O=P(Oc1ccc(Oc2ccccc2)cc1)(Oc1ccccc1)Oc1ccc(Oc2ccc([N+](C)(C)[S-])cc2)cc1",
             &Default::default(),
@@ -2299,7 +2288,7 @@ mod tests {
             name.text,
             "3-([1^1,2^1:2^2,3^1:3^2,4^1-quatercyclopropan]-1^2-yl)-2,2'-bi(bicyclo[2.2.0]hexane)"
         );
-        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+        assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
         let request = crate::naming::local::parse_request(&name.text).unwrap();
         let reply = crate::naming::worker::respond(&request).unwrap();
         let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
@@ -2315,7 +2304,7 @@ mod tests {
         assert_eq!(name.text, "cyclopentylidenecyclopentane");
         assert_eq!(
             name.status,
-            crate::naming::NameStatus::NotPreferred(crate::naming::NameReason::RingAssembly)
+            nazuchem_ir::NameStatus::NotPreferred(nazuchem_ir::NameReason::RingAssembly)
         );
     }
 
@@ -2346,7 +2335,7 @@ mod tests {
             let parsed = crate::naming::local::parse_result(expected, &reply).unwrap();
             let name = name_smiles(&parsed.smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected);
-            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
         }
     }
 
@@ -2363,11 +2352,7 @@ mod tests {
         ] {
             let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, "1,1'-bi(dispiro[2.0.2.1]heptane)", "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
             let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
@@ -2392,7 +2377,7 @@ mod tests {
         let smiles = "C1(OCCOC1)C1COCCO1";
         let name = name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(name.text, "2,2'-bi(1,4-dioxane)");
-        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+        assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
         let request = crate::naming::local::parse_request(&name.text).unwrap();
         let reply = crate::naming::worker::respond(&request).unwrap();
         let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
@@ -2412,7 +2397,7 @@ mod tests {
             let parsed = crate::naming::local::parse_result(expected, &reply).unwrap();
             let name = name_smiles(&parsed.smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected);
-            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
             let reparsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
@@ -2439,11 +2424,7 @@ mod tests {
         ] {
             let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
             let request = crate::naming::local::parse_request(&name.text).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
             let parsed = crate::naming::local::parse_result(&name.text, &reply).unwrap();
@@ -2476,7 +2457,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn preferred_von_baeyer_controls_do_not_report_fusion_fallback() {
-        use crate::naming::NameStatus;
+        use nazuchem_ir::NameStatus;
         for (smiles, expected) in [
             ("C1CCC2CCCCC2C1", "decahydronaphthalene"),
             ("C1CC2=CC=CC=C12", "bicyclo[4.2.0]octa-1,3,5-triene"),
@@ -2500,8 +2481,15 @@ mod tests {
 
     #[test]
     fn pheno_fusion_components_choose_preferred_parents_and_round_trip() {
-        use crate::naming::NameStatus;
-        let inchi = crate::naming::kernel_bridge::inchi_from_smiles;
+        use nazuchem_ir::NameStatus;
+        let inchi = |smiles: &str| {
+            use reshiki_chemistry::inchi::{generator, kernel};
+            let state = reshiki_chemistry::smiles::prepare(smiles).unwrap().state;
+            let input = kernel::Molecule::prepare(&state, None).unwrap();
+            let output = generator::generate_in_process(&input).unwrap();
+            assert!(output.status.is_success(), "{smiles}: {}", output.message);
+            output.inchi
+        };
         for (smiles, expected) in [
             (
                 "c1ccc2c(c1)Nc1cc3cnc4ccccc4c3cc1O2",
@@ -2561,7 +2549,7 @@ mod tests {
 
     #[test]
     fn pheno_fusion_derivatives_preserve_main_names_and_statuses() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         let unregistered = NameStatus::NotPreferred(NameReason::UnregisteredRetainedComponent);
         let fallback = NameStatus::NotPreferred(NameReason::VonBaeyerFusionFallback);
         // Keep derivative behavior unchanged until its hydrogen composition and
@@ -2672,7 +2660,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn fusion_retained_component_controls_remain_preferred() {
-        use crate::naming::NameStatus;
+        use nazuchem_ir::NameStatus;
         for (smiles, expected) in [
             (
                 "c1ccc2c(c1)Cc1cc3ncccc3cc1O2",
@@ -2709,7 +2697,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips() {
-        use crate::naming::NameStatus;
+        use nazuchem_ir::NameStatus;
         // Issue #969: P-25.3.2.4 selects the senior retained component;
         // P-25.3.1.3 and P-25.3.3 assign its descriptor and completed locants.
         // In the two pyrido cases, parent side b is component 2 -> 3,
@@ -2763,7 +2751,7 @@ mod tests {
 
     #[test]
     fn fusion_registered_carbazole_keeps_existing_layout_status() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         // Carbazole is registered, but this first-order fusion still uses an
         // OPSIN-entry layout; its existing numbering status remains unverified.
         let name = name_smiles("c1ccc2c(c1)ccc1c2[nH]c2ccccc12", &Default::default()).unwrap();
@@ -2783,7 +2771,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn known_departures_keep_their_names_and_report_the_rule_family() {
-        use crate::naming::{NameReason as R, NameStatus};
+        use nazuchem_ir::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
             (
                 "C1=CN=C2C=CC=C3C2=C1C=C1C2=C(C3)C=CC=C2C=C1",
@@ -2954,7 +2942,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn unchecked_paths_keep_their_names_and_report_the_uncertainty() {
-        use crate::naming::{NameReason as R, NameStatus};
+        use nazuchem_ir::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
             ("NCC=O", "2-aminoethanal", R::SubstitutedRetainedParent),
             (

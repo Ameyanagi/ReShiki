@@ -23,6 +23,9 @@ mod drawing;
 pub use cumulene::{Cumulene, stereogenic_odd_cumulenes};
 pub use drawing::wedging;
 pub mod perception;
+// Nazuchem extension (not in RDKit): classify both full-CIP trial configurations.
+mod pseudoasymmetric;
+pub use pseudoasymmetric::is_pseudoasymmetric;
 mod priority;
 use super::{
     electronic::{self, Hybridization},

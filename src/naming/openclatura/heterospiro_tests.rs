@@ -8,7 +8,7 @@
 
 //! P-24.5 monospiro names from different components (issue #980).
 use super::{component_namer, graph_io, molecule::Molecule, name_smiles};
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 use std::collections::BTreeMap;
 
 type Case = (&'static str, &'static str, &'static str, NameStatus);

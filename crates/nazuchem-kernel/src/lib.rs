@@ -32,6 +32,7 @@ pub mod cx;
 pub mod electronic;
 pub mod graph;
 pub mod hydrogens;
+pub mod identity;
 pub mod kekulize;
 mod native_order;
 pub mod normalize;

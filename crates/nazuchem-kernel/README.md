@@ -11,6 +11,12 @@ module declarations, and crate attributes from the original root. The unused
 generated-wedging module and the host allocation-measurement test stay outside
 the extraction. Four existing JSON test fixtures are copied without changes.
 
+Phase A step 3 also copies ReShiki's pure canonical identity, private M/P axis
+marker codec, and pseudoasymmetric-centre classifier. These operate on kernel
+states; identity and axis helpers take an explicit `Budget`. Document selection,
+component admission and caption policy remain in `reshiki-model`, whose own
+chemistry implementation is checked against the kernel by parity tests.
+
 Molecular perception is adapted from RDKit under BSD-3-Clause. Extended
 tetrahedral CIP code is adapted from SiMolecule centres under BSD-2-Clause.
 Apple and Windows sorting policies adapt LLVM libc++ and Microsoft STL under

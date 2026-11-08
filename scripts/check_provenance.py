@@ -20,7 +20,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
 LEDGER_NAME = "PROVENANCE-nazuchem.toml"
-REQUIRED_ROOTS = ("crates/nazuchem-kernel", "crates/opsin", "src/naming/openclatura")
+REQUIRED_ROOTS = (
+    "crates/nazuchem-ir",
+    "crates/nazuchem-kernel",
+    "crates/opsin",
+    "src/naming/openclatura",
+)
 REQUIRED_FIXTURES = (
     "src/naming/catalog/data.json",
     "src/naming/catalog/provenance.json",

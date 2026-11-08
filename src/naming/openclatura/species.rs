@@ -14,7 +14,7 @@
 
 //! Binary salt names and monatomic metal cations, outside the organic parent engine.
 use super::{Name, component_namer::Derivation, molecule::Molecule, name_smiles_with_style};
-use crate::naming::{IsotopeStyle, NameReason, NameStatus};
+use nazuchem_ir::{IsotopeStyle, NameReason, NameStatus};
 use std::collections::BTreeMap;
 
 // Provenance: fn monatomic_cation | original

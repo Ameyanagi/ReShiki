@@ -3,7 +3,7 @@
 // Source: ReShiki | src/naming/openclatura/anion_parent_tests.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 
 #[test]
 fn anion_parent_choice_matrix() {

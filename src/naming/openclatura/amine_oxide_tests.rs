@@ -7,7 +7,8 @@
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 use super::name_smiles;
-use crate::naming::{NameReason, NameStatus, canonical_smiles};
+use crate::naming::canonical_smiles;
+use nazuchem_ir::{NameReason, NameStatus};
 
 type Case = (&'static str, &'static str, &'static str, NameStatus);
 

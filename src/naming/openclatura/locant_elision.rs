@@ -1313,11 +1313,7 @@ mod tests {
             let canonical = crate::naming::canonical_smiles(smiles).unwrap();
             let name = super::super::name_smiles(&canonical, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
             let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
@@ -1385,11 +1381,7 @@ mod tests {
         ] {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
             let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
@@ -1450,14 +1442,10 @@ mod tests {
             if smiles == "[2H]C=C=C=C" {
                 assert!(matches!(
                     name.status,
-                    crate::naming::NameStatus::Unverified(_)
+                    nazuchem_ir::NameStatus::Unverified(_)
                 ));
             } else {
-                assert_eq!(
-                    name.status,
-                    crate::naming::NameStatus::Preferred,
-                    "{smiles}"
-                );
+                assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
             }
         }
         let error = super::super::name_smiles("F/C=C=C=C/Cl", &Default::default()).unwrap_err();
@@ -1518,11 +1506,7 @@ mod tests {
         ] {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
         }
     }
 

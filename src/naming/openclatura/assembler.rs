@@ -36,7 +36,7 @@ use super::{
     fused_ion_templates::{consume_fused_ion_operation, select_fused_ion_operation},
     nomenclature::section,
 };
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Record departures only after promotions and final text selection have run.

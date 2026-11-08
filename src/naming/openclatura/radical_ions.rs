@@ -39,8 +39,8 @@ pub(in crate::naming) fn recover(
     // This also proves the ordinary SMILES retains the original radical state.
     let canonical = super::super::canonical_smiles(smiles)?;
     let prepared = smiles::prepare(smiles, budget).map_err(|error| error.to_string())?;
-    let source =
-        super::app_chemistry::apply_axis_markers(&prepared.state).map_err(|_| UNSUPPORTED)?;
+    let source = nazuchem_kernel::identity::apply_axis_markers(&prepared.state, budget)
+        .map_err(|_| UNSUPPORTED)?;
     let radicals: Vec<_> = source
         .graph
         .atoms
@@ -176,7 +176,7 @@ fn closed_shell_parent(
     };
     // Recompute axial descriptors after neutralization: an M/P identity map
     // from the radical ion need not retain its letter if CIP priorities change.
-    let text = super::app_chemistry::canonical_identity(&state).ok()?;
+    let text = nazuchem_kernel::identity::canonical_identity(&state, budget).ok()?;
     let prepared = smiles::prepare(&text, budget).ok()?;
     if prepared
         .state
@@ -204,7 +204,9 @@ mod tests {
         let expected = input.replace("[N+]", "N");
         crate::naming::verify_identity(&expected, &neutral).unwrap();
         let prepared = smiles::prepare(&neutral, &Default::default()).unwrap();
-        let decoded = super::super::app_chemistry::apply_axis_markers(&prepared.state).unwrap();
+        let decoded =
+            nazuchem_kernel::identity::apply_axis_markers(&prepared.state, &Default::default())
+                .unwrap();
         assert_eq!(
             decoded
                 .metadata

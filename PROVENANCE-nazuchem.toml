@@ -1,4 +1,6 @@
 # Provenance for the files that will form the nazuchem library.
+# Phase A step 3 removes app_chemistry.rs and the unlisted app-only kernel_bridge.rs;
+# the latter's two original InChI test helpers are inlined into their existing callers.
 # Source audit: 2026-11-09; owner decisions and source-pin gaps remain explicit below.
 # NOASSERTION is not a licence grant. Test-only fixtures are excluded from packages.
 
@@ -49,8 +51,8 @@ license = "MIT OR Apache-2.0"
 sources = [
   { project = "ReShiki/nazuchem", path = "crates/nazuchem-kernel/NOTICE", ref = "Phase A step 2 working tree (uncommitted)", license = "MIT OR Apache-2.0" },
 ]
-notes = "Phase A step 2 crate-local attribution and unresolved sort-policy notice."
-sha256 = "d4c11bc7849904c17487bf05f94098a78bc9ef71ae701af84f2089ced9c1ef6f"
+notes = "Phase A step 2 crate-local attribution and unresolved sort-policy notice. Phase A step 3 adds the pure identity, axis-marker and pseudoasymmetric-classifier scope with original ReShiki source pins."
+sha256 = "5e673728376b3b33598f1a544c1dcecfa4a10bfaab28a77e4189f44b0d7fbb22"
 
 [[file]]
 path = "crates/nazuchem-kernel/README.md"
@@ -59,8 +61,8 @@ license = "MIT OR Apache-2.0"
 sources = [
   { project = "Nazuchem/ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "crates/nazuchem-kernel/README.md", license = "MIT OR Apache-2.0" },
 ]
-notes = "Extraction documentation records copied source, RDKit, centres and LLVM/Microsoft adaptations, crate-local notices and remaining sort-policy decisions."
-sha256 = "8aa1c3bbda621432ce309ed55842f4b1fddde382eb0079ce1ab4db1edf3e21ad"
+notes = "Extraction documentation records copied source, RDKit, centres and LLVM/Microsoft adaptations, crate-local notices and remaining sort-policy decisions. Phase A step 3 adds the pure identity, axis-marker and pseudoasymmetric-classifier scope with original ReShiki source pins."
+sha256 = "9574f3706a88b288ab7f676b986f71bd6d53a0287fad7d925f9dea13633465f7"
 
 [[file]]
 path = "crates/nazuchem-kernel/licenses/centres/LICENSE"
@@ -4149,15 +4151,6 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/app_chemistry.rs"
-origin = "original"
-license = "MIT OR Apache-2.0"
-sources = [
-  { project = "ReShiki", path = "src/naming/openclatura/app_chemistry.rs", ref = "327d32fed63a5b3df15b7b8dc5ab84a7c36e0865", license = "MIT OR Apache-2.0" },
-]
-notes = "Phase A JSON bridge to identity helpers retained in ReShiki."
-
-[[file]]
 path = "src/naming/openclatura/assembler.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
@@ -7178,3 +7171,101 @@ sources = [
 ]
 notes = "Local complete worker request/response byte snapshot; generated names use extended openclatura and OPSIN Rust ports."
 sha256 = "2411d7777b3c2ccd6d6666ad454d19eb1789480649c0f479fd1bb66e42b46d95"
+
+[[file]]
+path = "crates/nazuchem-ir/src/lib.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "ReShiki", path = "src/naming.rs", ref = "8e09fa7f89e47d8465772eabf2ef7f2ea491af3a", license = "MIT OR Apache-2.0" },
+]
+notes = "Exact shared vocabulary extraction, except public severity visibility. git log --follow and introduction diffs establish local NameStatus/NameReason in 001003b2444f8cec530b7f2b06f193d7b9c9b92c, AlternativeName in 0d10886c93f6f7aa673f4179739143986d392a01, IsotopeStyle in 381ac4164154afecf04bb4a89d8eef32eeb52190, and severity in 4cb6255557d7a904ec64cbf77377e3559fe6e0f5. Serde attributes, variant/field order and wire text are preserved."
+
+[[file]]
+path = "crates/nazuchem-ir/Cargo.toml"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-ir/Cargo.toml", ref = "Phase A step 3 working tree (uncommitted)", license = "MIT OR Apache-2.0" },
+]
+notes = "New Phase A step 3 shared-vocabulary crate metadata and source-history attribution; no structure IR or engine implementation."
+sha256 = "fcc93011598f889a30f62043c1218a9fb5242d5a8167559d1014ab7e68af6ac6"
+
+[[file]]
+path = "crates/nazuchem-ir/NOTICE"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-ir/NOTICE", ref = "Phase A step 3 working tree (uncommitted)", license = "MIT OR Apache-2.0" },
+]
+notes = "New Phase A step 3 shared-vocabulary crate metadata and source-history attribution; no structure IR or engine implementation."
+sha256 = "a227c8e269721fb9c010d4ec287bddab4769c8251885b0e4b8baf5533e49e270"
+
+[[file]]
+path = "crates/nazuchem-ir/LICENSE-MIT"
+origin = "copy"
+license = "MIT"
+sources = [
+  { project = "ReShiki/nazuchem", path = "LICENSE-MIT", ref = "8e09fa7f89e47d8465772eabf2ef7f2ea491af3a", license = "MIT" },
+]
+notes = "Byte-preserved complete repository-root licence text for the original shared vocabulary."
+sha256 = "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+
+[[file]]
+path = "crates/nazuchem-ir/LICENSE-APACHE"
+origin = "copy"
+license = "Apache-2.0"
+sources = [
+  { project = "ReShiki/nazuchem", path = "LICENSE-APACHE", ref = "8e09fa7f89e47d8465772eabf2ef7f2ea491af3a", license = "Apache-2.0" },
+]
+notes = "Byte-preserved complete repository-root licence text for the original shared vocabulary."
+sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+
+[[file]]
+path = "crates/nazuchem-kernel/src/identity.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "ReShiki", path = "crates/model/src/molecule_names.rs", ref = "2df788dc456793c687b934afd6d4b317e3c73ef8", license = "MIT OR Apache-2.0" },
+]
+notes = "git log --follow and introduction diffs show original ReShiki orchestration: canonical identity consolidated in f751b382eba9731cc39e6e1838697100b531c4ea, unknown stereo handling added in 0d10886c93f6f7aa673f4179739143986d392a01, radical preservation in 381ac4164154afecf04bb4a89d8eef32eeb52190, and axial identity in 2df788dc456793c687b934afd6d4b317e3c73ef8. Calls into separately attributed RDKit/centres-derived chemistry implementations are not copied implementations of those algorithms. Document/component admission stays in model molecule_names.rs."
+
+[[file]]
+path = "crates/model/src/molecule_names/identity.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "ReShiki", path = "crates/model/src/molecule_names.rs", ref = "2df788dc456793c687b934afd6d4b317e3c73ef8", license = "MIT OR Apache-2.0" },
+]
+notes = "git log --follow and introduction diffs show original ReShiki orchestration: canonical identity consolidated in f751b382eba9731cc39e6e1838697100b531c4ea, unknown stereo handling added in 0d10886c93f6f7aa673f4179739143986d392a01, radical preservation in 381ac4164154afecf04bb4a89d8eef32eeb52190, and axial identity in 2df788dc456793c687b934afd6d4b317e3c73ef8. Calls into separately attributed RDKit/centres-derived chemistry implementations are not copied implementations of those algorithms. Document/component admission stays in model molecule_names.rs."
+
+[[file]]
+path = "crates/nazuchem-kernel/src/identity/axis_markers.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "ReShiki", path = "crates/model/src/molecule_names/axis_markers.rs", ref = "13660ba1bd3fa6cc15bca563607e98550412ffdb", license = "MIT OR Apache-2.0" },
+]
+notes = "git log --follow shows the private naming map codec introduced in 2df788dc456793c687b934afd6d4b317e3c73ef8 and equivalent-end validation added in 13660ba1bd3fa6cc15bca563607e98550412ffdb. Original ReShiki transport policy calls the separately attributed chemistry routines. Copy retains logic and forwards Budget to axis-end validation."
+
+[[file]]
+path = "crates/nazuchem-kernel/src/stereo/pseudoasymmetric.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "ReShiki", path = "crates/model/src/chemistry/stereo_lint.rs", ref = "82b8e6e9c0133fe31a59109ec0adc91507bc8d6f", license = "MIT OR Apache-2.0" },
+]
+notes = "git log --follow and the 82b8e6e9c0133fe31a59109ec0adc91507bc8d6f introduction diff establish this original ReShiki two-trial classifier. It invokes the separately attributed full CIP engine; no CIP algorithm implementation is copied into this file."
+
+[[file]]
+path = "crates/model/src/molecule_names/identity_parity.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/model/src/molecule_names/identity_parity.rs", ref = "Phase A step 3 working tree (uncommitted)", license = "MIT OR Apache-2.0" },
+  { project = "ReShiki", path = "crates/model/src/molecule_names.rs", ref = "381ac4164154afecf04bb4a89d8eef32eeb52190", license = "MIT OR Apache-2.0" },
+  { project = "ReShiki", path = "crates/model/src/molecule_names/axis_markers.rs", ref = "2df788dc456793c687b934afd6d4b317e3c73ef8", license = "MIT OR Apache-2.0" },
+  { project = "ReShiki", path = "crates/model/src/chemistry/document/atrop_tests.rs", ref = "feed38dc791ee59fb0b8c4b392a3f72c100a1be7", license = "MIT OR Apache-2.0" },
+  { project = "ReShiki", path = "src/naming/openclatura/unknown_stereo.rs", ref = "0d10886c93f6f7aa673f4179739143986d392a01", license = "MIT OR Apache-2.0" },
+]
+notes = "New Phase A step 3 parity and denied-budget assertions. Original ReShiki radical, malformed-axis and pseudoasymmetric cases are reused with their introduction commits recorded; binol is a local drawing fixture independently checked against RDKit, not a copied RDKit implementation. JSON conversion is confined to these cross-type tests; engine calls use kernel State directly."

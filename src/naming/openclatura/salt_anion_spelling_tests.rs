@@ -8,7 +8,7 @@
 // Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 
 #[test]
 // Provenance: fn salt_anion_spelling_matrix | adapted

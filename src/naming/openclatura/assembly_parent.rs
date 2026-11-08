@@ -1514,11 +1514,7 @@ mod tests {
         ] {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
         }
         for smiles in ["[13CH]#C", "[2H]C#C", "[C]#C", "[C-]#C"] {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();

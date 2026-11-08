@@ -21,7 +21,7 @@ use super::{
     perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
 };
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 use std::collections::BTreeMap;
 
 pub struct PrefixContext<'a> {
@@ -674,7 +674,7 @@ mod tests {
         );
         assert_eq!(
             mol.name_status(),
-            crate::naming::NameStatus::Unverified(crate::naming::NameReason::UnauditedPath)
+            nazuchem_ir::NameStatus::Unverified(nazuchem_ir::NameReason::UnauditedPath)
         );
     }
 

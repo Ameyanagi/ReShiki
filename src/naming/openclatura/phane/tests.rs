@@ -10,7 +10,8 @@
 // Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
 
 use super::*;
-use crate::naming::{NameReason, NameStatus, openclatura::graph_io, verify_identity};
+use crate::naming::{openclatura::graph_io, verify_identity};
+use nazuchem_ir::{NameReason, NameStatus};
 
 const PARA: &str = "C1Cc2ccc(cc2)CCc2ccc1cc2";
 const META: &str = "C1Cc2cccc(c2)CCc2cccc1c2";
@@ -45,7 +46,12 @@ fn fixture_smiles(name: &str) -> Result<String, String> {
         .find(|(fixture, _)| *fixture == name)
         .ok_or("Missing upstream phane fixture")?
         .1;
-    crate::naming::kernel_bridge::smiles_from_inchi(inchi)
+    let imported = reshiki_chemistry::inchi::generator::read_in_process(inchi)
+        .map_err(|error| error.to_string())?;
+    let state = imported.state.ok_or(imported.message)?;
+    reshiki_chemistry::smiles::write::write(&state, Default::default())
+        .map(|output| output.text)
+        .map_err(|error| error.to_string())
 }
 
 #[test]

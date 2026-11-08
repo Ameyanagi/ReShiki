@@ -547,8 +547,8 @@ fn name_subgraph_rendered_except_stereo(
         )?;
     }
     if super::heterospiro::needs_hydrogen_proof(mol, &parts) {
-        mol.mark_name(crate::naming::NameStatus::Unverified(
-            crate::naming::NameReason::SpiroHydrogen,
+        mol.mark_name(nazuchem_ir::NameStatus::Unverified(
+            nazuchem_ir::NameReason::SpiroHydrogen,
         ));
     }
     let raw = super::assembler::assemble_name_raw(&mut parts)?;
