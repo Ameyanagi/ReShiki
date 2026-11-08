@@ -19,6 +19,8 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
 #[cfg(test)]
 mod allene_tests;
+#[cfg(test)]
+mod atrop_tests;
 pub(super) mod chain_layout;
 pub(super) mod template_retry;
 #[cfg(test)]
@@ -96,6 +98,9 @@ struct Prepared {
     molecule: molecular::Molecule,
     document: Document,
     warnings: Vec<String>,
+    /// The molecule keeps a 3D MOL file's own XYZ, which state its stereo as
+    /// RDKit reads them, even where the drawing is a projection of them.
+    file_xyz: bool,
 }
 enum Preparation {
     Complete(Box<Prepared>),
@@ -153,13 +158,16 @@ pub async fn execute(
         molecule,
         document,
         mut warnings,
+        file_xyz,
     } = *prepared;
     let attachments = crate::attachments::present(&document);
     let generic = crate::generic::present(&document);
     let analysis = if molecule.state.graph.atoms.is_empty() || attachments || generic {
         None
     } else {
-        let projected = molfile::has_projected_coordinates(&document);
+        // Generated or projected XY must not define stereo the input left
+        // open (#909); a file's own XYZ may.
+        let projected = !file_xyz && molfile::has_projected_coordinates(&document);
         warnings.extend(native_response::identifier_notices(&molecule, projected));
         Some(native_response::analyze_prepared(Arc::new(molecule), projected, config).await?)
     };
@@ -236,11 +244,15 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             prepared
         }
         "mol" => {
-            let (document, molecule) = molfile::read(&text)?.display_document()?;
+            let imported = molfile::read(&text)?;
+            // A 3D file is never Haworth-restored, so the molecule keeps its XYZ.
+            let file_xyz = imported.annotations.is_3d;
+            let (document, molecule) = imported.display_document()?;
             Prepared {
                 molecule,
                 document,
                 warnings: Vec::new(),
+                file_xyz,
             }
         }
         "cdxml" | "cdx" => {
@@ -298,6 +310,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 molecule: imported.molecule,
                 document: imported.document,
                 warnings,
+                file_xyz: false,
             }
         }
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
@@ -357,6 +370,7 @@ fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {
         molecule,
         document,
         warnings: Vec::new(),
+        file_xyz: false,
     })
 }
 
@@ -429,11 +443,57 @@ fn finish_molecule(
     let labels = drawing.labels()?;
     let document = drawing.finish(labels)?;
     document.validate().map_err(Error::Document)?;
+    // An axis end reads a wedge from a neighbouring centre as its own, as
+    // RDKit does, so some fresh layouts' wedges hide an axis (#1056). Refuse
+    // such a drawing, as the reference refuses atropisomer bond stereo,
+    // rather than silently lose the axis.
+    // A drawing that cannot be prepared again (named dummy atoms) keeps
+    // main's behaviour.
+    let expected = axes(&molecule)?;
+    if !expected.is_empty()
+        && let Ok(read) = molecular::prepare(&document)
+        && expected
+            .iter()
+            .any(|axis| !axes(&read).is_ok_and(|read| read.contains(axis)))
+    {
+        return Err(molecular::Error::WedgeAssignment(
+            "The wedges in this layout cannot show the atropisomer axis next to a wedged stereocentre"
+                .into(),
+        )
+        .into());
+    }
     Ok(Prepared {
         molecule,
         document,
         warnings: Vec::new(),
+        file_xyz: false,
     })
+}
+
+/// Atropisomer axes by stable atom IDs.
+fn axes(molecule: &molecular::Molecule) -> Result<Vec<(u64, u64, u8)>, Error> {
+    let id = |atom: usize| {
+        molecule
+            .ids
+            .get(atom)
+            .copied()
+            .ok_or_else(|| Error::Document("Missing atom ID".into()))
+    };
+    let mut axes = Vec::new();
+    for (bond, meta) in molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&molecule.state.metadata.bonds)
+    {
+        if matches!(meta.stereo, 6 | 7) {
+            let (a, b) = (id(bond.a)?, id(bond.b)?);
+            axes.push((a.min(b), a.max(b), meta.stereo));
+        }
+    }
+    axes.sort_unstable();
+    Ok(axes)
 }
 
 fn prepare_inchi(

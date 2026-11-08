@@ -107,10 +107,11 @@ fn opposite(d: Direction) -> Result<Direction, String> {
 }
 
 /// Assign the pinned legacy atom/bond stereo and repair annotations as requested.
-/// Legacy R/S and E/Z rules are approximate; full CIP labeling is separate.
+/// Legacy R/S and E/Z rules are approximate; full CIP labeling is separate,
+/// except that it decides whether an allene winding has an axis.
 /// Supplied caches must belong to this graph. Errors leave the input unchanged.
 pub fn perceive(input: &State, options: Options) -> Result<State, String> {
-    with_work(input, options, None, &mut Work(50_000_000))
+    with_work(input, options, None, true, &mut Work(50_000_000))
 }
 
 /// Whether a state perceived with `flag_possible` has an unspecified atom,
@@ -206,6 +207,7 @@ pub fn perceive_preserving_bonds(
         options,
         None,
         Some(authoritative),
+        true,
         &mut Work(50_000_000),
     )
 }
@@ -245,7 +247,9 @@ pub(crate) fn perceive_prepared_with_work(
             work.spend(1)?;
             work.spend(label.as_ref().map_or(0, String::len))?;
         }
-        with_work(input, options, None, &mut work)
+        // Depiction's shared budget covers legacy perception only, so its
+        // allene windings are not checked against full CIP here.
+        with_work(input, options, None, false, &mut work)
     })();
     let used = initial
         .checked_sub(work.0)
@@ -279,21 +283,25 @@ pub fn perceive_file_queries(
     options: Options,
     queries: &[bool],
 ) -> Result<State, String> {
-    with_work(input, options, Some(queries), &mut Work(50_000_000))
+    with_work(input, options, Some(queries), true, &mut Work(50_000_000))
 }
 fn with_work(
     input: &State,
     options: Options,
     queries: Option<&[bool]>,
+    allene_axes: bool,
     work: &mut Work,
 ) -> Result<State, String> {
-    with_work_preserving(input, options, queries, None, work)
+    with_work_preserving(input, options, queries, None, allene_axes, work)
 }
+/// `allene_axes` runs full CIP, with its own limits, to clear allene windings
+/// that have no axis.
 fn with_work_preserving(
     input: &State,
     options: Options,
     queries: Option<&[bool]>,
     authoritative: Option<&[bool]>,
+    allene_axes: bool,
     work: &mut Work,
 ) -> Result<State, String> {
     input.graph.cached_valences(Some(&input.valences))?;
@@ -471,11 +479,49 @@ fn with_work_preserving(
             ctx.write_ranks()?;
         }
     }
+    // Before cleanup, so stereo groups drop a cleared allene.
+    if allene_axes {
+        clear_allenes_without_axis(&mut ctx.state, work)?;
+    }
     if options.clean {
         ctx.cleanup(work)?;
     }
     ctx.state.properties.done = Some(true);
     Ok(ctx.state)
+}
+
+/// An allene winding needs an axis, as a centre needs four different
+/// ligands: keep tag 5 only where full CIP gives the allene a descriptor
+/// (M/P, or m/p when only stereo tells two ligands apart). CIP labelling has
+/// its own limits; if it fails, the winding stays as given.
+fn clear_allenes_without_axis(state: &mut State, work: &mut Work) -> Result<(), String> {
+    let mut allenes = vec![false; state.graph.atoms.len()];
+    for (i, (allene, meta)) in allenes.iter_mut().zip(&state.metadata.atoms).enumerate() {
+        if meta.chiral_tag == 5 {
+            // The allene topology check scans the bond list.
+            work.spend(state.graph.bonds.len())?;
+            *allene = super::allene::terminals(&state.graph, i).is_some();
+        }
+    }
+    if !allenes.contains(&true) {
+        return Ok(());
+    }
+    let Ok(labeled) = super::cip::label::assign(state, &Default::default()) else {
+        return Ok(());
+    };
+    for ((meta, labels), allene) in state
+        .metadata
+        .atoms
+        .iter_mut()
+        .zip(&labeled.state.properties.atoms)
+        .zip(allenes)
+    {
+        if allene && labels.cip_code.is_none() {
+            meta.chiral_tag = 0;
+            meta.chiral_permutation = None;
+        }
+    }
+    Ok(())
 }
 
 struct Context {
