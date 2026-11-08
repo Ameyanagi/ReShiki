@@ -199,7 +199,7 @@ mod tests {
             "C[C@H](Cc1ncccc1)CC=NC1CCC2(CC1)CCCC2",
         ] {
             assert!(
-                name_smiles(smiles, &crate::naming::kernel_budget()).is_err(),
+                name_smiles(smiles, &Default::default()).is_err(),
                 "{smiles}"
             );
         }
@@ -214,7 +214,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                name_smiles(smiles, &crate::naming::kernel_budget())
+                name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),
@@ -243,7 +243,7 @@ mod tests {
             "CCC[IH-]",
         ] {
             assert!(
-                name_smiles(smiles, &crate::naming::kernel_budget()).is_err(),
+                name_smiles(smiles, &Default::default()).is_err(),
                 "{smiles}"
             );
         }
@@ -263,7 +263,7 @@ mod tests {
             "[SH2]1CCCC1",
         ] {
             assert!(
-                name_smiles(smiles, &crate::naming::kernel_budget()).is_err(),
+                name_smiles(smiles, &Default::default()).is_err(),
                 "{smiles}"
             );
         }
@@ -291,7 +291,7 @@ mod tests {
             ("[N-]1[NH+]=CC=C1", "1H-pyrazol-2-ium-1-ide"),
         ] {
             assert_eq!(
-                name_smiles(smiles, &crate::naming::kernel_budget())
+                name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),

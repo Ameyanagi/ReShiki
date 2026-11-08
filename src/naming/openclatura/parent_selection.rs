@@ -1037,8 +1037,7 @@ mod tests {
 
     #[test]
     fn exchanged_arm_choice_precedes_canonical_fallback_and_ignores_path_order() {
-        let mol =
-            read_smiles("C[C@H](F)C([C@H](F)C)CCCC", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C[C@H](F)C([C@H](F)C)CCCC", &Default::default()).unwrap();
         let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
         let mut expected = None;
         for reverse_paths in [false, true] {
@@ -1095,7 +1094,7 @@ mod tests {
             // Bond descriptors are outside the bounded R/S rule.
             "C[C@H](F)C([C@H](F)C)/C=C/CC",
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let mut candidates = chain_candidates(&mol);
             prefer_single_centre_exchanged_arms(&mol, &mut candidates, &[]);
             assert!(
@@ -1107,7 +1106,7 @@ mod tests {
 
     #[test]
     fn arm_constitution_proof_rejects_cycles() {
-        let mol = read_smiles("CC1CC1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("CC1CC1", &Default::default()).unwrap();
         assert!(
             arm_tree(
                 &mol,
@@ -1128,7 +1127,7 @@ mod tests {
             "[13CH3][C@H](F)C([C@H](F)C)CCCC",
             "C[C@H](F)C([C@H](F)C)CCCC",
         ] {
-            let mut mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mut mol = read_smiles(smiles, &Default::default()).unwrap();
             if !mol.atoms.values().any(|a| a.isotope.is_some()) {
                 mol.isotope_labels_stripped = true;
             }
@@ -1142,8 +1141,7 @@ mod tests {
 
     #[test]
     fn earlier_parent_criteria_and_the_complete_tie_set_limit_stereo_choice() {
-        let mol =
-            read_smiles("C[C@H](F)C([C@H](F)C)CCCC", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C[C@H](F)C([C@H](F)C)CCCC", &Default::default()).unwrap();
         let mut candidates = chain_candidates(&mol);
         let s_parent = candidates
             .iter()
@@ -1254,7 +1252,7 @@ mod tests {
             "Oc1ccc(cc1)[CH2-]",
             "OCCc1cc[n-]c1",
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let excluded = AtomSet::new();
             let groups = super::super::perception::perceive_groups(&mol);
             let principal: Vec<_> = groups.iter().map(|g| g.attachment_carbon).collect();
@@ -1280,7 +1278,7 @@ mod tests {
 
     #[test]
     fn two_anionic_suffix_centres_precede_one_skeletal_anion() {
-        let mol = read_smiles("[O-]CC([O-])c1cc[n-]c1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("[O-]CC([O-])c1cc[n-]c1", &Default::default()).unwrap();
         let excluded = AtomSet::new();
         let groups = super::super::perception::perceive_groups(&mol);
         let parent = select_principal_parent(
@@ -1305,7 +1303,7 @@ mod tests {
             "c1ccccc1C(=O)[O-]",
             "CS(=O)(=O)[O-]",
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let mut groups = super::super::perception::perceive_groups(&mol);
             let parent = mol
                 .atoms
@@ -1326,7 +1324,7 @@ mod tests {
 
     #[test]
     fn neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre() {
-        let mol = read_smiles("CC#[N+][O-]", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("CC#[N+][O-]", &Default::default()).unwrap();
         let groups = super::super::perception::perceive_groups(&mol);
         assert!(groups.iter().any(|g| {
             g.is_principal_candidate
@@ -1345,7 +1343,7 @@ mod tests {
 
     #[test]
     fn skeletal_anion_precedes_a_neutral_nitrile_oxide_parent() {
-        let mol = read_smiles("[O-][N+]#CCCc1cc[n-]c1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("[O-][N+]#CCCc1cc[n-]c1", &Default::default()).unwrap();
         let excluded = AtomSet::new();
         let groups = super::super::perception::perceive_groups(&mol);
         let key = super::super::principal_groups::component_principal_key(&mol, &groups, false);
@@ -1368,7 +1366,7 @@ mod tests {
 
     #[test]
     fn ring_precedes_a_longer_chain_without_principal_groups() {
-        let mol = read_smiles("CCCCCCCC1CCCCC1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("CCCCCCCC1CCCCC1", &Default::default()).unwrap();
         let excluded = AtomSet::new();
         let parent = select_principal_parent(
             &mol,
@@ -1383,7 +1381,7 @@ mod tests {
     }
     #[test]
     fn principal_group_coverage_precedes_ring_seniority() {
-        let mol = read_smiles("OCCCC1CCCCC1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("OCCCC1CCCCC1", &Default::default()).unwrap();
         let excluded = AtomSet::new();
         let parent = select_principal_parent(
             &mol,
@@ -1401,7 +1399,7 @@ mod tests {
     fn principal_group_coverage_precedes_branched_assembly_junctions() {
         let mol = read_smiles(
             "c1(-c2ccccc2)c(-c2ccccc2)cc(-c2ccc(O)cc2)cc1",
-            &crate::naming::kernel_budget(),
+            &Default::default(),
         )
         .unwrap();
         let excluded = AtomSet::new();
@@ -1428,7 +1426,7 @@ mod tests {
             "c1(-c2ccc(Br)cc2)cc(-c2ccc(Cl)cc2)cc(-c2ccc(F)cc2)c1",
             "c1(-c2ccc(F)cc2)cc(-c2ccc(Cl)cc2)cc(-c2ccc(Br)cc2)c1",
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let excluded = AtomSet::new();
             let parent = select_principal_parent(
                 &mol,
@@ -1456,11 +1454,8 @@ mod tests {
 
     #[test]
     fn fused_parent_precedes_an_assembly_after_equal_ring_and_atom_totals() {
-        let mol = read_smiles(
-            "c1ccc2C=CC=CC=Cc2c1-c1ccccc1-c1ccccc1",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mol =
+            read_smiles("c1ccc2C=CC=CC=Cc2c1-c1ccccc1-c1ccccc1", &Default::default()).unwrap();
         let excluded = AtomSet::new();
         let systems = find_ring_systems(&mol, &excluded).unwrap();
         let assembly = discover_ring_assemblies(&mol, &systems)
@@ -1484,7 +1479,7 @@ mod tests {
             ),
             ("C1CCCCCC1C1CCCCCC1Cc1ccccc1-c1ccccc1", 2, 14),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let excluded = AtomSet::new();
             let parent = select_principal_parent(
                 &mol,

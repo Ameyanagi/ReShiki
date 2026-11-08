@@ -396,7 +396,7 @@ mod tests {
     fn marked_biaryl_axes_survive_kekulization_and_full_cip() {
         for (marker, descriptor) in [(900_004, "M"), (900_008, "P")] {
             let input = format!("Oc1ccc2ccccc2[c:{marker}]1-[c:{marker}]1c(O)ccc2ccccc12");
-            let mol = read_smiles(&input, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(&input, &Default::default()).unwrap();
             let axes: Vec<_> = mol
                 .bonds
                 .values()
@@ -414,10 +414,7 @@ mod tests {
             "Oc1cccc[c:900004]1-c1ccccc1O",
             "[c:900004]1ccccc1-[c:900004]1ccccc1",
         ] {
-            assert!(
-                read_smiles(input, &crate::naming::kernel_budget()).is_err(),
-                "{input}"
-            );
+            assert!(read_smiles(input, &Default::default()).is_err(), "{input}");
         }
     }
 
@@ -431,7 +428,7 @@ mod tests {
         .unwrap();
         for expected in cases {
             let text = expected["smiles"].as_str().unwrap();
-            let mol = read_smiles(text, &crate::naming::kernel_budget())
+            let mol = read_smiles(text, &Default::default())
                 .unwrap_or_else(|error| panic!("{text}: {error}"));
             let actual = graph_snapshot(&mol, text);
             assert_eq!(actual, expected, "{text}");
@@ -450,11 +447,11 @@ mod tests {
             "c1ccnc1",
         ] {
             assert!(
-                read_smiles(text, &crate::naming::kernel_budget()).is_err(),
+                read_smiles(text, &Default::default()).is_err(),
                 "Unexpected input acceptance: {text}"
             );
         }
-        assert!(read_smiles("[13CH3][C@@H](F)Cl", &crate::naming::kernel_budget()).is_ok());
+        assert!(read_smiles("[13CH3][C@@H](F)Cl", &Default::default()).is_ok());
     }
 
     #[test]
@@ -465,7 +462,7 @@ mod tests {
             "c1ccccc1-c2ccccc2",
             "C1CC1CC2CC2CC3CC3",
         ] {
-            read_smiles(text, &crate::naming::kernel_budget())
+            read_smiles(text, &Default::default())
                 .unwrap_or_else(|error| panic!("{text}: {error}"));
         }
     }
@@ -478,7 +475,7 @@ mod tests {
             "C1CC2(C1)CCC1(CC2)CC1",
             "C1CC1CC2CC23CC3",
         ] {
-            read_smiles(text, &crate::naming::kernel_budget())
+            read_smiles(text, &Default::default())
                 .unwrap_or_else(|error| panic!("{text}: {error}"));
         }
     }
@@ -495,7 +492,7 @@ mod tests {
             "C1CC2CCC1C2C3CC3",       // A separate monocycle connected by a bridge.
             "C1CC2CCC1C2C3CC4CCC3C4", // Two separate nonsimple cyclic blocks.
         ] {
-            read_smiles(text, &crate::naming::kernel_budget())
+            read_smiles(text, &Default::default())
                 .unwrap_or_else(|error| panic!("{text}: {error}"));
         }
     }
@@ -509,7 +506,7 @@ mod tests {
             "c1ccc2ccccc2c1",  // Aromatic fused system.
             "c1ccc2c(c1)CC2",  // Only one SSSR ring has five or more atoms.
         ] {
-            let mol = read_smiles(text, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(text, &Default::default()).unwrap();
             assert!(
                 !super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new()).is_empty(),
                 "{text}"
@@ -523,7 +520,7 @@ mod tests {
             "C1CC2(C1)CCC1CCCCC12", // A fused block and a simple cycle.
             "C12(CC1)CC3CCC2C3",    // A bridged block and a simple cycle.
         ] {
-            read_smiles(text, &crate::naming::kernel_budget())
+            read_smiles(text, &Default::default())
                 .unwrap_or_else(|error| panic!("{text}: {error}"));
         }
     }
@@ -531,7 +528,7 @@ mod tests {
     #[test]
     fn three_rings_on_one_spiro_atom_remain_outside_scope() {
         assert_eq!(
-            read_smiles("S123(CC1)(CC2)CC3", &crate::naming::kernel_budget()).unwrap_err(),
+            read_smiles("S123(CC1)(CC2)CC3", &Default::default()).unwrap_err(),
             "openclatura: three rings at one spiro atom are not ported"
         );
     }

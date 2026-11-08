@@ -392,7 +392,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles, &crate::naming::kernel_budget())
+                super::super::name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),
@@ -404,7 +404,7 @@ mod tests {
     fn fallback_parent_cannot_name_the_same_bridge_as_two_methyl_groups() {
         let smiles = "CC1C2CCC3C4(CCCC5(C4C(OC5)O)C)COC(=O)C3(C2)C1=O";
         assert!(
-            super::super::name_smiles(smiles, &crate::naming::kernel_budget())
+            super::super::name_smiles(smiles, &Default::default())
                 .is_err_and(|error| error.contains("multiple parent attachment atoms"))
         );
     }
@@ -413,7 +413,7 @@ mod tests {
         assert_eq!(
             super::super::name_smiles(
                 "C1COC2=CC3=C(C=C21)C=C(C34CCC5(CC4)OCCO5)Br",
-                &crate::naming::kernel_budget()
+                &Default::default()
             )
             .map(|name| name.text)
             .as_deref(),
@@ -427,7 +427,7 @@ mod tests {
         assert_eq!(
             super::super::name_smiles(
                 "CC1=CC(=C(C=C1)OCC(=O)N2CCC3(CC2)CC(=O)C4=C(O3)C=C(C(=C4)C)C)C(C)(C)C",
-                &crate::naming::kernel_budget()
+                &Default::default()
             )
             .map(|name| name.text)
             .as_deref(),

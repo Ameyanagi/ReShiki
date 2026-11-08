@@ -1653,7 +1653,7 @@ mod tests {
     }
     #[test]
     fn retained_face_matches_keep_all_local_numberings() {
-        let mol = read_smiles("c1ccc2ccccc2c1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("c1ccc2ccccc2c1", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
         let model = typed_face_model(&mol, &bounded);
@@ -1675,7 +1675,7 @@ mod tests {
     #[test]
     fn table_28_pin_names_templates_and_whole_system_components() {
         let registry = fusion_component_registry();
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
+        let parser = opsin::Parser::new().unwrap();
         let mut checked = 0;
         let mut templates = 0;
         let mut components = 0;
@@ -1713,15 +1713,14 @@ mod tests {
                 parsed.warnings
             );
             let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
-            let named =
-                super::super::super::name_smiles(&smiles, &crate::naming::kernel_budget()).unwrap();
+            let named = super::super::super::name_smiles(&smiles, &Default::default()).unwrap();
             if named.text != row.pin_name || named.status != crate::naming::NameStatus::Preferred {
                 errors.push(format!(
                     "{}: named {} ({:?})",
                     row.pin_name, named.text, named.status
                 ));
             }
-            let mol = read_smiles(&smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(&smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
             let model = typed_face_model(&mol, &bounded);
@@ -1768,11 +1767,7 @@ mod tests {
     }
     #[test]
     fn unregistered_retained_status_requires_exact_faces_and_template_identity() {
-        let mut mol = read_smiles(
-            "c1ccc2c(c1)Nc1c(ccc3ccccc13)S2",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mut mol = read_smiles("c1ccc2c(c1)Nc1c(ccc3ccccc13)S2", &Default::default()).unwrap();
         let atoms: AtomSet = mol.atoms.keys().copied().collect();
         let mut registry = incomplete_pheno_registry();
         let (benzo, hetero) = benzo_test_pair("generated-hw:S.C.C.N.C.C", ["5", "6"]);
@@ -1842,7 +1837,7 @@ mod tests {
             ("c1ccc2c(c1)Cc1cc3ncccc3cc1O2", "quinoline", false),
             ("c1ccc2c(c1)Nc1ccccc1O2", "pyran", false),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let plan = junior_parent_plan(&mol, parent);
             assert_eq!(
                 registry.has_senior_unregistered_retained_component(&mol, &plan),
@@ -1907,7 +1902,7 @@ mod tests {
             ("O=C1CC=C2Oc3cc4Nc5ccccc5Sc4cc3NC2=C1", true),
             ("N=C1CC=C2Oc3cc4Nc5ccccc5Sc4cc3NC2=C1", true),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let plan = junior_parent_plan(&mol, "phenanthridine");
             let matches = registry
                 .match_face_model(&mol, &plan.numbering.selected_face_model)
@@ -2078,7 +2073,7 @@ mod tests {
                 format!("[{symbol}]1CC=CC=C1"),
                 format!("[{symbol}]1C=CCC=C1"),
             ] {
-                let mol = read_smiles(&smiles, &crate::naming::kernel_budget()).unwrap();
+                let mol = read_smiles(&smiles, &Default::default()).unwrap();
                 let face = Face {
                     id: 0,
                     atom_cycle: (0..6).collect(),
@@ -2094,7 +2089,7 @@ mod tests {
     #[test]
     fn generated_hw_is_stateless_and_rejects_incompatible_pi_edges() {
         let r = fusion_component_registry();
-        let mol = read_smiles("c1ncncn1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("c1ncncn1", &Default::default()).unwrap();
         let f = Face {
             id: 0,
             atom_cycle: vec![0, 1, 2, 3, 4, 5],
@@ -2335,7 +2330,7 @@ mod tests {
     /// P-25.3.2.4(b,d,g): ring count, heteroatom count, then horizontal rings.
     #[test]
     fn retained_tricycles_compete_as_parent_components() {
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
+        let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
             ("c1ccc2nc3ccccc3cc2c1", "acridine"),
             ("c1ccc2c(c1)cnc1ccccc12", "phenanthridine"),
@@ -2360,8 +2355,7 @@ mod tests {
                 "quinolino[4,3-b]acridine",
             ),
         ] {
-            let name =
-                super::super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let name = super::super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -2380,7 +2374,7 @@ mod tests {
     /// (2 rings) over pyrazine (b), and quinazoline (6,6) over indole (c).
     #[test]
     fn retained_bicycles_compete_as_parent_components() {
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
+        let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
             (
                 "Cc1c2ccccc2nc2cc3ccccc3n12",
@@ -2406,8 +2400,7 @@ mod tests {
                 "1-methyl-3-{[(6-methyl-5H-[1,2,4]triazino[5,6-b]indol-3-yl)amino]imino}-5-nitro-1,3-dihydro-2H-indol-2-one",
             ),
         ] {
-            let name =
-                super::super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let name = super::super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
             assert_eq!(
@@ -2468,7 +2461,7 @@ mod tests {
                 < component_spec_seniority_key(&registry.get("pyrazine").unwrap().spec)
         );
 
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
+        let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
             ("c1oc2cc3nc4ccccc4nc3cc2c1", "furo[2,3-b]phenazine"),
             ("c1sc2cc3nc4ccccc4nc3cc2c1", "thieno[2,3-b]phenazine"),
@@ -2484,8 +2477,7 @@ mod tests {
             let reference_smiles = reference.structure.unwrap().semantic_cxsmiles().unwrap();
             crate::naming::verify_identity(smiles, &reference_smiles).unwrap();
 
-            let name =
-                super::super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let name = super::super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected);
             assert_eq!(
                 name.status,

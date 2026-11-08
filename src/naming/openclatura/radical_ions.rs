@@ -184,13 +184,11 @@ mod tests {
     #[test]
     fn radical_ion_recovery_preserves_decoded_biaryl_configuration() {
         let input = "Oc1ccc(C[N+](C)C)c[c:900004]1-[c:900004]1ccccc1O";
-        let (neutral, suffix) = recover(input, &crate::naming::kernel_budget())
-            .unwrap()
-            .unwrap();
+        let (neutral, suffix) = recover(input, &Default::default()).unwrap().unwrap();
         assert_eq!(suffix, "radical cation");
         let expected = input.replace("[N+]", "N");
         crate::naming::verify_identity(&expected, &neutral).unwrap();
-        let prepared = smiles::prepare(&neutral, &crate::naming::kernel_budget()).unwrap();
+        let prepared = smiles::prepare(&neutral, &Default::default()).unwrap();
         let decoded = super::super::app_chemistry::apply_axis_markers(&prepared.state).unwrap();
         assert_eq!(
             decoded
@@ -222,7 +220,7 @@ mod tests {
                 "radical anion",
             ),
         ] {
-            let (neutral, actual_suffix) = recover(ion, &crate::naming::kernel_budget())
+            let (neutral, actual_suffix) = recover(ion, &Default::default())
                 .unwrap_or_else(|error| panic!("{ion}: {error}"))
                 .unwrap();
             assert_eq!(actual_suffix, suffix, "{ion}");
@@ -241,7 +239,7 @@ mod tests {
             ("C[N+](C)C", "CN(C)C", "radical cation"),
             ("[OH2+]", "O", "radical cation"),
         ] {
-            let (neutral, actual_suffix) = recover(ion, &crate::naming::kernel_budget())
+            let (neutral, actual_suffix) = recover(ion, &Default::default())
                 .unwrap_or_else(|error| panic!("{ion}: {error}"))
                 .unwrap();
             assert_eq!(actual_suffix, suffix, "{ion}");
@@ -255,18 +253,15 @@ mod tests {
 
     #[test]
     fn neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph() {
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
+        let parser = opsin::Parser::new().unwrap();
         for ion in [
             "[CH2+][CH2]",
             "[CH+]1[CH]C=CC=C1",
             "[CH-]1[CH]C=CC2=CC=CC=C12",
             "C[N+](C)C",
         ] {
-            let (neutral, _) = recover(ion, &crate::naming::kernel_budget())
-                .unwrap()
-                .unwrap();
-            let name =
-                super::super::name_smiles(&neutral, &crate::naming::kernel_budget()).unwrap();
+            let (neutral, _) = recover(ion, &Default::default()).unwrap().unwrap();
+            let name = super::super::name_smiles(&neutral, &Default::default()).unwrap();
             let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
@@ -289,15 +284,13 @@ mod tests {
             "[CH2+][CH][CH2+]", // More than one charged center.
         ] {
             assert!(
-                recover(ion, &crate::naming::kernel_budget()).is_err(),
+                recover(ion, &Default::default()).is_err(),
                 "Unexpected recovery: {ion}"
             );
         }
         for ordinary in ["CC", "[CH3]", "C[CH2+]", "[NH4+]", "[O-][N+](=O)C"] {
             assert!(
-                recover(ordinary, &crate::naming::kernel_budget())
-                    .unwrap()
-                    .is_none(),
+                recover(ordinary, &Default::default()).unwrap().is_none(),
                 "{ordinary}"
             );
         }
@@ -320,7 +313,7 @@ mod tests {
         document.atoms[0].charge = 1;
         document.atoms[1].radical_electrons = 1;
         let identity = crate::naming::document_identity(&document).unwrap();
-        let (neutral, suffix) = recover(&identity.smiles, &crate::naming::kernel_budget())
+        let (neutral, suffix) = recover(&identity.smiles, &Default::default())
             .unwrap()
             .unwrap();
         assert_eq!(

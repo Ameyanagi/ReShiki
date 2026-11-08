@@ -807,7 +807,7 @@ mod tests {
 
     #[test]
     fn bicyclo_proof_reconstructs_all_equal_bridge_orders() {
-        let mol = read_smiles("C1CC2CCC1C2", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C1CC2CCC1C2", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let edges = edges_within_atoms(&mol, &atoms);
         let proof = bicyclo_proof(&atoms, &edges).unwrap();
@@ -881,11 +881,7 @@ mod tests {
 
     #[test]
     fn opsin_audit_detects_secondary_bridge_direction_and_order() {
-        let mol = read_smiles(
-            "OCC1C=C2CC(Cl)C1CCC1CCCCCCC2CCCCC1",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mol = read_smiles("OCC1C=C2CC(Cl)C1CCC1CCCCCCC2CCCCC1", &Default::default()).unwrap();
         let path = [
             11, 12, 13, 14, 15, 16, 17, 18, 4, 3, 2, 8, 9, 10, 23, 22, 21, 20, 19, 5, 6,
         ];
@@ -943,7 +939,7 @@ mod tests {
 
     #[test]
     fn monospiro_proof_matches_python_paths_and_reconstructs_every_orientation() {
-        let mol = read_smiles("C1CCC2(CC1)CCCC2", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C1CCC2(CC1)CCCC2", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let edges = edges_within_atoms(&mol, &atoms);
         let proof = monospiro_proof(&atoms, &edges).unwrap();
@@ -980,7 +976,7 @@ mod tests {
 
     #[test]
     fn equal_spiro_rings_offer_both_ring_orders_before_heteroatom_numbering() {
-        let mol = read_smiles("C1CC2(C1)COC2", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C1CC2(C1)COC2", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let proof = monospiro_proof(&atoms, &edges_within_atoms(&mol, &atoms)).unwrap();
         assert_eq!(proof.descriptor_numbers, [3, 3]);
@@ -1023,7 +1019,7 @@ mod tests {
                 ],
             ),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let edges = edges_within_atoms(&mol, &atoms);
             let (actual, paths) =
@@ -1035,7 +1031,7 @@ mod tests {
 
     #[test]
     fn terminal_heteroatom_preference_precedes_terminal_ring_size() {
-        let mol = read_smiles("C1=CC12CCC1(CNCOCN1)CSC2", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C1=CC12CCC1(CNCOCN1)CSC2", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let edges = edges_within_atoms(&mol, &atoms);
         let (descriptor, paths) =

@@ -1632,7 +1632,7 @@ mod tests {
 
     #[test]
     fn equivalent_bridge_numberings_keep_their_aligned_parent_proofs() {
-        let mol = read_smiles("Nc1ccc2c(c1)C1CCC2O1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("Nc1ccc2c(c1)C1CCC2O1", &Default::default()).unwrap();
         let atoms = super::super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new());
         let amine = mol.atoms.values().find(|atom| atom.symbol == "N").unwrap();
         let attachment = mol.get_neighbors(amine.idx)[0];
@@ -1670,7 +1670,7 @@ mod tests {
         use super::super::super::name_smiles;
         use crate::naming::{NameReason, NameStatus, verify_identity};
 
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
+        let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
             (
                 "Nc1cc(C)c2c(c1)C1CCC2O1",
@@ -1681,7 +1681,7 @@ mod tests {
                 "1,2-dihydro-1,4-epoxynaphthalene",
             ),
         ] {
-            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -1697,7 +1697,7 @@ mod tests {
             let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
             verify_identity(smiles, &reconstructed).unwrap();
             assert_eq!(
-                name_smiles(&reconstructed, &crate::naming::kernel_budget())
+                name_smiles(&reconstructed, &Default::default())
                     .unwrap()
                     .text,
                 expected,
@@ -1711,7 +1711,7 @@ mod tests {
         use super::super::super::name_smiles;
         use crate::naming::{NameReason, NameStatus, verify_identity};
 
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget()).unwrap();
+        let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
             (
                 "O=C1C2CN1c1ccccc12",
@@ -1726,7 +1726,7 @@ mod tests {
                 "10,11,12,13-tetradehydro-1,2,3,4-tetrahydro-1,4-pentanonaphthalene",
             ),
         ] {
-            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -1750,7 +1750,7 @@ mod tests {
             ("O=C1Cc2cc3c(csc3o2)C1", "one"),
             ("N=C1Cc2cc3c(csc3o2)C1", "imine"),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = super::super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new());
             let plan = plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().unwrap();
             assert_eq!(
@@ -1758,34 +1758,28 @@ mod tests {
                 ["6"]
             );
             assert_eq!(
-                super::super::super::name_smiles(smiles, &crate::naming::kernel_budget())
+                super::super::super::name_smiles(smiles, &Default::default())
                     .unwrap()
                     .text,
                 format!("1,7-epoxy-4H-cyclohepta[c]thiophen-5(6H)-{suffix}")
             );
         }
         assert_eq!(
-            super::super::super::name_smiles(
-                "C12=CC=C(C3=CC=CC=C13)CCCCCC2",
-                &crate::naming::kernel_budget()
-            )
-            .map(|name| name.text)
-            .as_deref(),
+            super::super::super::name_smiles("C12=CC=C(C3=CC=CC=C13)CCCCCC2", &Default::default())
+                .map(|name| name.text)
+                .as_deref(),
             Ok("1,4-hexanonaphthalene")
         );
         assert!(
-            super::super::super::name_smiles(
-                "C=C1Cc2cc3c(csc3[nH]2)C1",
-                &crate::naming::kernel_budget()
-            )
-            .is_err()
+            super::super::super::name_smiles("C=C1Cc2cc3c(csc3[nH]2)C1", &Default::default())
+                .is_err()
         );
     }
 
     #[test]
     fn bridge_prefixes_require_hydride_valence_and_neutral_boundary() {
         for smiles in ["[SH2]1c2ccc3cc1ccc3c2", "[O-]n1c2cc3c(occ31)s2"] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = super::super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new());
             assert!(
                 plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().is_none(),
@@ -1797,7 +1791,7 @@ mod tests {
             "N1c2ccc3cc1ccc3c2",
             "O=S1c2ccc3cc1ccc3c2",
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = super::super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new());
             assert!(
                 plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().is_some(),
@@ -1828,7 +1822,7 @@ mod tests {
             ("C12=CC=C(C3=CC=CC=C13)C=C2", "1,4-ethenonaphthalene"),
             ("C12=CC=C(C3=CC=CC=C13)CCCCCC2", "1,4-hexanonaphthalene"),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let plan = plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().unwrap();
             assert_eq!(plan.rendered_name, expected, "{smiles}");
@@ -1842,11 +1836,7 @@ mod tests {
     }
     #[test]
     fn wrapper_bounds_and_annulation_gate_are_graph_based() {
-        let mol = read_smiles(
-            "C12=CC=C(C3=CC=CC=C13)CCCCCC2",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mol = read_smiles("C12=CC=C(C3=CC=CC=C13)CCCCCC2", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         assert!(
             plan_bridged_fusion_wrapper_with_options(&mol, &atoms, Some(0))
@@ -1859,7 +1849,7 @@ mod tests {
                 .is_none()
         );
         for smiles in ["C1CC2CCC1C2", "C1C2CC3CC1CC(C2)C3", "c1ccc2ccccc2c1"] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             assert!(
                 plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().is_none(),
@@ -1873,7 +1863,7 @@ mod tests {
             "CC1=CNN=C2CC3C=CC=CNC3[SH]12",
             "BrC1=CNC=C[C@@H]2N=C3C(=CCN4C=CCC[C@H]34)CC=C12",
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = super::super::super::chains::find_ring_systems(&mol, &AtomSet::new())
                 .unwrap()
                 .into_iter()
@@ -1888,7 +1878,7 @@ mod tests {
     }
     #[test]
     fn composite_bridges_follow_senior_fragment_and_carbon_internal_locants() {
-        let mol = read_smiles("COCC=C", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("COCC=C", &Default::default()).unwrap();
         let path = vec![1, 2, 3, 4];
         let (_, prefix, orders, locants) = bridge_class(&mol, &path).unwrap();
         assert_eq!(prefix, "(epoxyprop[2]eno)");
@@ -1903,7 +1893,7 @@ mod tests {
     #[test]
     fn systematic_fused_spiro_and_bridge_sides_keep_numbering_proof_alignment() {
         use super::super::super::molecule::{Atom, Bond};
-        let mut mol = read_smiles("O1C2=C(C=C1)C=CS2", &crate::naming::kernel_budget()).unwrap();
+        let mut mol = read_smiles("O1C2=C(C=C1)C=CS2", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let side = plan_fusion_spiro_side(&mol, &atoms, 4, false)
             .unwrap()
@@ -1929,11 +1919,7 @@ mod tests {
     }
     #[test]
     fn completed_system_bridge_unsaturation_is_proved_and_rejects_corruption() {
-        let mol = read_smiles(
-            "c1cc2ccc3ccc4ccc5ccc6ccc1c2c3c4c56",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mol = read_smiles("c1cc2ccc3ccc4ccc5ccc6ccc1c2c3c4c56", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let plan = plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().unwrap();
         assert_eq!(
@@ -1973,7 +1959,7 @@ mod tests {
     fn selected_wrapper_declines_parent_pi_bonds_omitted_by_its_citation() {
         use super::super::super::{chains::find_ring_systems, name_smiles};
         let smiles = r"C/C=C\[C@@H]1CCCC2=C([N+](=O)[O-])C[C@H]3NC[C@]1(N)C[C@H]23";
-        let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles(smiles, &Default::default()).unwrap();
         let atoms = find_ring_systems(&mol, &AtomSet::new())
             .unwrap()
             .into_iter()
@@ -1986,7 +1972,7 @@ mod tests {
             expected
         );
         assert_eq!(
-            name_smiles(smiles, &crate::naming::kernel_budget()).unwrap_err(),
+            name_smiles(smiles, &Default::default()).unwrap_err(),
             expected
         );
     }

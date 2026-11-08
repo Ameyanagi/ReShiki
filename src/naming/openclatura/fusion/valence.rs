@@ -70,7 +70,7 @@ mod tests {
     use super::*;
     #[test]
     fn complete_graph_oxo_bonds_determine_lambda_bonding_number() {
-        let mol = read_smiles("S1(=O)(=O)CCC1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("S1(=O)(=O)CCC1", &Default::default()).unwrap();
         let sulfur = *mol.atoms.iter().find(|(_, a)| a.symbol == "S").unwrap().0;
         let descriptors = fusion_lambda_descriptors(
             &mol,
@@ -84,11 +84,7 @@ mod tests {
 
     #[test]
     fn lambda_hydrogen_does_not_waive_an_unproved_carbon_hydrogen_state() {
-        let mol = read_smiles(
-            "CC1=C(C(=O)O)CC2=CN=C[SH]21",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mol = read_smiles("CC1=C(C(=O)O)CC2=CN=C[SH]21", &Default::default()).unwrap();
         let sulfur = *mol.atoms.iter().find(|(_, a)| a.symbol == "S").unwrap().0;
         assert_eq!(mol.atoms[&sulfur].total_h_count, 1);
         assert_eq!(mol.degree(sulfur), 3);

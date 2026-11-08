@@ -3,6 +3,10 @@
 //! The default is unbounded. Hosts may inject their own reservation accounting;
 //! dropping the returned guard releases a reservation. The kernel does not
 //! detect capabilities or maintain a process-wide resource pool.
+//!
+//! Origin: original nazuchem code, except `Cancellation`, adapted from ReShiki
+//! crates/process-heap/src/policy.rs (MIT OR Apache-2.0). The limit fields mirror
+//! that crate's resolved `Budget`.
 use std::{
     fmt,
     sync::{

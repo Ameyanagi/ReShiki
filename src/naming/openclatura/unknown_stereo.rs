@@ -206,7 +206,7 @@ fn without_unknown_descriptors(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     fn round_trip(input: &str, expected: &str, omitted: &[&str], explicit: &str) {
-        let name = super::super::name_smiles(input, &crate::naming::kernel_budget()).unwrap();
+        let name = super::super::name_smiles(input, &Default::default()).unwrap();
         assert_eq!(name.text, expected);
         assert_eq!(name.omitted_stereo, omitted);
         assert_eq!(name.alternatives[0].name, explicit);
@@ -340,7 +340,7 @@ mod tests {
             // The chiral functional-class form has no locant for an unknown sulfur.
             ("C[S:900001](=O)CC", "(methanesulfinyl)ethane", &[], 1, None),
         ] {
-            let name = super::super::name_smiles(input, &crate::naming::kernel_budget()).unwrap();
+            let name = super::super::name_smiles(input, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{input}");
             assert_eq!(name.omitted_stereo, located, "{input}");
             assert_eq!(name.omitted_units, units, "{input}");
@@ -369,9 +369,7 @@ mod tests {
 
     #[test]
     fn ordinary_maps_do_not_request_unknown_stereochemistry() {
-        let name =
-            super::super::name_smiles("[CH3:1][CH2:2][OH:3]", &crate::naming::kernel_budget())
-                .unwrap();
+        let name = super::super::name_smiles("[CH3:1][CH2:2][OH:3]", &Default::default()).unwrap();
         assert_eq!(name.text, "ethanol");
         assert!(name.omitted_stereo.is_empty());
         assert!(name.alternatives.is_empty());
@@ -380,7 +378,7 @@ mod tests {
     #[test]
     fn enantiomorphic_ligands_use_lowercase_unknown_descriptor() {
         let smiles = "[CH:900001](O)(C[C@H](F)C)C[C@@H](F)C";
-        let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+        let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(name.omitted_stereo, ["4"]);
         let explicit = &name.alternatives[0].name;
         assert!(explicit.contains("4ξ"), "{explicit}");
@@ -421,7 +419,7 @@ mod tests {
     #[test]
     fn symmetric_numbering_keeps_warning_locants_in_the_displayed_name() {
         let smiles = "C[CH:900001](Cl)CC[C@H](Cl)C";
-        let name = super::super::name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+        let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
         let explicit = &name.alternatives[0].name;
         assert_eq!(name.text, super::without_unknown_descriptors(explicit));
         for candidate in [name.text.as_str(), explicit.as_str()] {

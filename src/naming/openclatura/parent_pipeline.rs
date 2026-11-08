@@ -928,7 +928,7 @@ mod tests {
             fusion::{model::FusionComponentMatch, planner::plan_fusion_parent},
             graph_io::read_smiles,
         };
-        let mol = read_smiles("C1C=Cc2cc3sccc3n12", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C1C=Cc2cc3sccc3n12", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let mut plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
         assert_eq!(
@@ -981,7 +981,7 @@ mod tests {
     #[test]
     fn repeated_base_fusion_status_is_deferred_until_rendering() {
         use super::super::{fusion::planner::plan_fusion_parent, graph_io::read_smiles};
-        let mol = read_smiles("o1ccc2oc3ccoc3c12", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("o1ccc2oc3ccoc3c12", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
         assert_eq!(plan.rendered_base_name, "difuro[3,2-b:2',3'-d]furan");
@@ -1017,7 +1017,7 @@ mod tests {
                 NameStatus::Preferred,
             ),
         ] {
-            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, text, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
         }
@@ -1052,7 +1052,7 @@ mod tests {
                 NameStatus::Preferred,
             ),
         ] {
-            let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let name = name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, text, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
         }
@@ -1087,7 +1087,7 @@ mod tests {
     }
 
     fn assert_relative_ring_name(smiles: &str, expected: &str, alternative: &str) {
-        let name = name_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+        let name = name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(name.text, expected, "{smiles}");
         // The primary name keeps the rest of its rule path's status.
         assert_ne!(
@@ -1155,8 +1155,7 @@ mod tests {
             ),
         ] {
             assert_relative_ring_name(smiles, expected, alternative);
-            let mol = super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget())
-                .unwrap();
+            let mol = super::super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
             for (&idx, label) in &mol.accurate_cip {
                 assert_eq!(
                     mol.atoms[&idx].stereo.as_deref(),
@@ -1178,11 +1177,9 @@ mod tests {
 
     #[test]
     fn relative_ring_fallback_is_explicitly_not_preferred() {
-        let mut mol = super::super::graph_io::read_smiles(
-            "C[C@H]1C[C@@H](C)C1",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mut mol =
+            super::super::graph_io::read_smiles("C[C@H]1C[C@@H](C)C1", &Default::default())
+                .unwrap();
         for atom in mol.atoms.values_mut() {
             atom.stereo = None;
         }
@@ -1218,7 +1215,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                name_smiles(smiles, &crate::naming::kernel_budget())
+                name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),
@@ -1248,7 +1245,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                name_smiles(smiles, &crate::naming::kernel_budget())
+                name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),
@@ -1302,8 +1299,7 @@ mod tests {
                 vec![(5, "s")],
             ),
         ] {
-            let mol = super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget())
-                .unwrap();
+            let mol = super::super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
             for (atom, label) in pseudo_atoms {
                 // graph_io uses the same full CIP labeler as the canvas.
                 assert_eq!(
@@ -1312,9 +1308,7 @@ mod tests {
                     "{smiles}: {atom}"
                 );
             }
-            let name = name_smiles(smiles, &crate::naming::kernel_budget())
-                .unwrap()
-                .text;
+            let name = name_smiles(smiles, &Default::default()).unwrap().text;
             assert_eq!(name, expected, "{smiles}");
             let request = crate::naming::local::parse_request(&name).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
@@ -1344,9 +1338,7 @@ mod tests {
                 "(4r,8r)-4,8-dimethyldispiro[2.1.2.1]octane",
             ),
         ] {
-            let name = name_smiles(smiles, &crate::naming::kernel_budget())
-                .unwrap()
-                .text;
+            let name = name_smiles(smiles, &Default::default()).unwrap().text;
             assert_eq!(name, expected, "{smiles}");
             let request = crate::naming::local::parse_request(&name).unwrap();
             let reply = crate::naming::worker::respond(&request).unwrap();
@@ -1367,18 +1359,15 @@ mod tests {
             "OCC1C=C2CC(Cl)C1CCC1CCCCCCC2CCCCC1",
         ] {
             assert_eq!(
-                name_smiles(smiles, &crate::naming::kernel_budget()).unwrap_err(),
+                name_smiles(smiles, &Default::default()).unwrap_err(),
                 "openclatura: secondary-bridge numbering disagrees with OPSIN reading",
                 "{smiles}",
             );
         }
         assert_eq!(
-            name_smiles(
-                "CC1C(F)CCCC2CCCC=CCC1C1CC(CC2)C1",
-                &crate::naming::kernel_budget()
-            )
-            .map(|name| name.text)
-            .as_deref(),
+            name_smiles("CC1C(F)CCCC2CCCC=CCC1C1CC(CC2)C1", &Default::default())
+                .map(|name| name.text)
+                .as_deref(),
             Ok("17-fluoro-18-methyltricyclo[6.5.5.1^{9,11}]nonadec-5-ene"),
         );
     }
@@ -1386,9 +1375,7 @@ mod tests {
     #[test]
     fn external_double_bond_uses_modern_cip_priority() {
         let smiles = "C/C=C\\C(=C/C)[C@H](C)/C=C\\C";
-        let name = name_smiles(smiles, &crate::naming::kernel_budget())
-            .unwrap()
-            .text;
+        let name = name_smiles(smiles, &Default::default()).unwrap().text;
         assert_eq!(name, "(2Z,4E,5R,6Z)-4-ethylidene-5-methylocta-2,6-diene");
         let request = crate::naming::local::parse_request(&name).unwrap();
         let reply = crate::naming::worker::respond(&request).unwrap();

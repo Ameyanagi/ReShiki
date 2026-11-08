@@ -405,8 +405,7 @@ mod tests {
     use super::*;
 
     fn external_parent(smiles: &str) -> Option<ExternalCarboxylicParent> {
-        let mol =
-            super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+        let mol = super::super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
         let groups = super::super::principal_groups::component_groups(
             &mol,
             &mol.atoms.keys().copied().collect(),

@@ -753,7 +753,7 @@ mod tests {
     use super::super::super::{chains::find_ring_systems, graph_io::read_smiles};
     use super::*;
     fn retained_name(smiles: &str) -> Option<String> {
-        let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles(smiles, &Default::default()).unwrap();
         let ring = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         get_retained_ring(&mol, &ring[0].paths[0]).map(|r| r.name)
     }
@@ -776,13 +776,13 @@ mod tests {
             ("C1C2CC3CC1CC(C2)C3", "adamantane", 24),
             ("C12C3C4C1C5C2C3C45", "cubane", 48),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let path: Vec<_> = mol.atoms.keys().copied().collect();
             let retained = get_retained_ring(&mol, &path).unwrap();
             assert_eq!(retained.name, name);
             assert_eq!(retained.locant_maps.len(), numberings);
         }
-        let mol = read_smiles("C1CC2CCC1CC2", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C1CC2CCC1CC2", &Default::default()).unwrap();
         let path: Vec<_> = mol.atoms.keys().copied().collect();
         assert!(get_retained_ring(&mol, &path).is_none());
     }
@@ -794,14 +794,14 @@ mod tests {
             "C1[C+]2CC3CC1CC(C2)C3",
             "C1[C-]2CC3CC1CC(C2)C3",
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let path: Vec<_> = mol.atoms.keys().copied().collect();
             assert!(get_retained_ring(&mol, &path).is_none(), "{smiles}");
         }
     }
     #[test]
     fn partly_saturated_parent_reports_hydro_positions() {
-        let mol = read_smiles("N1CCC=CC1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("N1CCC=CC1", &Default::default()).unwrap();
         let ring = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let path = &ring[0].paths[0];
         assert_eq!(get_retained_ring(&mol, path).unwrap().name, "pyridine");
@@ -812,7 +812,7 @@ mod tests {
     fn generated_hydrogen_metadata_is_available_without_prior_recognition() {
         // Upstream HW specs for these rings are azepine (3 double bonds,
         // indicated H) and oxepine (3 double bonds, fixed saturated O).
-        let mol = read_smiles("N1CCC=CC=C1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("N1CCC=CC=C1", &Default::default()).unwrap();
         let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let path = &rings[0].paths[0];
         let plan = mancude_monocycle_hydro_plan(&mol, path, Some("azepine")).unwrap();
@@ -823,7 +823,7 @@ mod tests {
         assert!(cites_indicated_hydrogen(&mol, path, Some("azepine")));
         assert!(mancude_monocycle_hydro_plan(&mol, path, Some("oxepine")).is_none());
 
-        let oxygen = read_smiles("O1C=CC=CC=C1", &crate::naming::kernel_budget()).unwrap();
+        let oxygen = read_smiles("O1C=CC=CC=C1", &Default::default()).unwrap();
         let oxygen_rings = find_ring_systems(&oxygen, &AtomSet::new()).unwrap();
         let oxygen_path = &oxygen_rings[0].paths[0];
         assert!(!cites_indicated_hydrogen(

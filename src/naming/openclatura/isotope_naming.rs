@@ -340,8 +340,7 @@ fn with_descriptor(
 
 #[cfg(test)]
 fn verify(smiles: &str, name: &str) -> Result<(), String> {
-    let parser =
-        opsin::Parser::with_budget(crate::naming::kernel_budget()).map_err(|e| e.to_string())?;
+    let parser = opsin::Parser::new().map_err(|e| e.to_string())?;
     let result = parser.parse(name, &opsin::ParseOptions::strict());
     if result
         .warnings
@@ -426,7 +425,7 @@ mod tests {
             "[13CH3][C@H](F)C([C@H](F)C)CCCC",
             "[2H][C@H](F)C([C@H](F)C)CCCC",
         ] {
-            let source = graph_io::read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let source = graph_io::read_smiles(smiles, &Default::default()).unwrap();
             let (parent, _) = stripped_parent(&source).unwrap();
             assert!(parent.atoms.values().all(|a| a.isotope.is_none()));
             assert!(parent.isotope_labels_stripped);
@@ -461,7 +460,7 @@ mod tests {
             "[2H][C@@H](O)C",
         ] {
             for style in [IsotopeStyle::Iupac, IsotopeStyle::Boughton] {
-                let name = name_smiles(smiles, style, &crate::naming::kernel_budget())
+                let name = name_smiles(smiles, style, &Default::default())
                     .unwrap_or_else(|e| panic!("{smiles} {style:?}: {e}"));
                 verify(smiles, &name.text).unwrap();
                 assert_eq!(
@@ -484,18 +483,10 @@ mod tests {
             ("C[13CH2]C([2H])C", "(2-13C,3-2H1)butane"),
             ("CC([2H])C([3H])C", "(3-2H1,2-3H1)butane"),
         ] {
-            let name =
-                name_smiles(smiles, IsotopeStyle::Iupac, &crate::naming::kernel_budget()).unwrap();
+            let name = name_smiles(smiles, IsotopeStyle::Iupac, &Default::default()).unwrap();
             assert_eq!(name.text, expected);
             verify(smiles, &name.text).unwrap();
-            assert!(
-                name_smiles(
-                    smiles,
-                    IsotopeStyle::Boughton,
-                    &crate::naming::kernel_budget()
-                )
-                .is_err()
-            );
+            assert!(name_smiles(smiles, IsotopeStyle::Boughton, &Default::default()).is_err());
         }
     }
 
@@ -506,59 +497,47 @@ mod tests {
             ("[2H]CCC", "CCC[2H]"),
             ("[13CH3]CO", "OC[13CH3]"),
         ] {
-            let a = name_smiles(a, IsotopeStyle::Iupac, &crate::naming::kernel_budget())
+            let a = name_smiles(a, IsotopeStyle::Iupac, &Default::default())
                 .unwrap()
                 .text;
-            let b = name_smiles(b, IsotopeStyle::Iupac, &crate::naming::kernel_budget())
+            let b = name_smiles(b, IsotopeStyle::Iupac, &Default::default())
                 .unwrap()
                 .text;
             assert_eq!(a, b);
         }
         assert_eq!(
-            name_smiles(
-                "CC[13CH2]C",
-                IsotopeStyle::Iupac,
-                &crate::naming::kernel_budget()
-            )
-            .unwrap()
-            .text,
+            name_smiles("CC[13CH2]C", IsotopeStyle::Iupac, &Default::default())
+                .unwrap()
+                .text,
             "(2-13C)butane"
         );
         assert_eq!(
-            name_smiles(
-                "[13CH3]CO",
-                IsotopeStyle::Iupac,
-                &crate::naming::kernel_budget()
-            )
-            .unwrap()
-            .text,
+            name_smiles("[13CH3]CO", IsotopeStyle::Iupac, &Default::default())
+                .unwrap()
+                .text,
             "(2-13C)ethan-1-ol"
         );
         assert_eq!(
             name_smiles(
                 "[2H]C([2H])([2H])O",
                 IsotopeStyle::Iupac,
-                &crate::naming::kernel_budget()
+                &Default::default()
             )
             .unwrap()
             .text,
             "(2H3)methanol"
         );
         assert_eq!(
-            name_smiles(
-                "CO[2H]",
-                IsotopeStyle::Iupac,
-                &crate::naming::kernel_budget()
-            )
-            .unwrap()
-            .text,
+            name_smiles("CO[2H]", IsotopeStyle::Iupac, &Default::default())
+                .unwrap()
+                .text,
             "(O-2H1)methanol"
         );
         assert_eq!(
             name_smiles(
                 "[2H]C([2H])(C)O",
                 IsotopeStyle::Boughton,
-                &crate::naming::kernel_budget()
+                &Default::default()
             )
             .unwrap()
             .text,
@@ -575,8 +554,7 @@ mod tests {
             // P-91.3: the only stereocentre of an unlocanted name.
             ("F[13C@H](Cl)Br", "(R)-bromochlorofluoro(13C)methane"),
         ] {
-            let name =
-                name_smiles(smiles, IsotopeStyle::Iupac, &crate::naming::kernel_budget()).unwrap();
+            let name = name_smiles(smiles, IsotopeStyle::Iupac, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             verify(smiles, &name.text).unwrap();
         }
@@ -589,8 +567,7 @@ mod tests {
             ("N[13C](=O)CNC(=O)c1ccccc1", "2-benzamido(1-13C)acetamide"),
             ("NC(=O)[13CH2]NC(=O)c1ccccc1", "2-benzamido(2-13C)acetamide"),
         ] {
-            let name =
-                name_smiles(smiles, IsotopeStyle::Iupac, &crate::naming::kernel_budget()).unwrap();
+            let name = name_smiles(smiles, IsotopeStyle::Iupac, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             verify(smiles, &name.text).unwrap();
         }
@@ -601,7 +578,7 @@ mod tests {
         for smiles in ["[13CH3]C1CCCCC1", "C(=[18O])O", "[2H][2H]", "[13CH3]"] {
             // Generation keeps only names that the parser reconstructs exactly.
             assert!(
-                name_smiles(smiles, IsotopeStyle::Iupac, &crate::naming::kernel_budget())
+                name_smiles(smiles, IsotopeStyle::Iupac, &Default::default())
                     .and_then(|name| verify(smiles, &name.text))
                     .is_err(),
                 "{smiles}"
@@ -613,8 +590,7 @@ mod tests {
     fn isotopic_onium_keeps_the_ordinary_parent_plan() {
         // The sulfanium shortcut has no atom locants for the isotope descriptor.
         let smiles = "[13CH3][S+](C)C";
-        let name =
-            name_smiles(smiles, IsotopeStyle::Iupac, &crate::naming::kernel_budget()).unwrap();
+        let name = name_smiles(smiles, IsotopeStyle::Iupac, &Default::default()).unwrap();
         assert_eq!(name.text, "(dimethylsulfaniumyl)(1-13C)methane");
         verify(smiles, &name.text).unwrap();
     }
@@ -626,8 +602,7 @@ mod tests {
             ("NN[13C](=O)OC", "1-methoxy(1-13C)formohydrazide"),
             ("NN[13C](=O)O", "1-hydroxy(13C)formohydrazide"),
         ] {
-            let name =
-                name_smiles(smiles, IsotopeStyle::Iupac, &crate::naming::kernel_budget()).unwrap();
+            let name = name_smiles(smiles, IsotopeStyle::Iupac, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             verify(smiles, &name.text).unwrap();
         }
@@ -636,8 +611,7 @@ mod tests {
     #[test]
     fn isotopic_spiro_parent_uses_the_engine_locants_and_exact_graph() {
         let smiles = "[13CH2]1CCC2(CC1)CCCC2";
-        let name =
-            name_smiles(smiles, IsotopeStyle::Iupac, &crate::naming::kernel_budget()).unwrap();
+        let name = name_smiles(smiles, IsotopeStyle::Iupac, &Default::default()).unwrap();
         assert!(name.text.contains("13C"));
         verify(smiles, &name.text).unwrap();
         assert!(!matches!(name.status, NameStatus::Preferred));

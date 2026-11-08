@@ -322,7 +322,7 @@ mod tests {
             ("NC(=O)CNC(=O)c1ccccc1", 2),
             ("NC(=O)C(NC(=O)c1ccccc1)C(N)=O", 3),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let groups = perceive_groups(&mol);
             let expected: Vec<_> = groups
                 .iter()
@@ -349,7 +349,7 @@ mod tests {
             }
         }
         for smiles in ["O=C(O)Cc1ccc(C(=O)O)cc1", "N#CCc1ccc(C#N)cc1"] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let groups = perceive_groups(&mol);
             let key = component_principal_key(&mol, &groups, false);
             assert_eq!(
@@ -370,7 +370,7 @@ mod tests {
             "NC(=O)C[NH2+]C(=O)c1ccccc1",
             "NC(=O)CN(CC(=O)[NH3+])C(=O)c1ccccc1",
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let mut groups = perceive_groups(&mol);
             let key = component_principal_key(&mol, &groups, false);
             assert!(
@@ -410,7 +410,7 @@ mod tests {
             component_group_rules::retarget_external_carbonyl_groups, graph_io::read_smiles,
         };
         for (smiles, expected_length) in [("N#C[CH-]C#N", 1), ("N#CCC[CH-]CC#N", 4)] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let mut groups = component_groups(&mol, &atoms);
             demote_neutral_suffixes_for_skeletal_anion(&mol, &atoms, &mut groups);
@@ -444,7 +444,7 @@ mod tests {
             ("O=C1[CH-]NC2=C1C[NH2+]C2", Some("ketone")),
             ("[N-]1C(=O)NC(=O)C1", None),
         ] {
-            let mol = read_smiles(smiles, &crate::naming::kernel_budget()).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let mut groups = component_groups(&mol, &atoms);
             demote_neutral_suffixes_for_skeletal_anion(&mol, &atoms, &mut groups);
@@ -454,7 +454,7 @@ mod tests {
                 "{smiles}"
             );
         }
-        let mut mol = read_smiles("CC#N", &crate::naming::kernel_budget()).unwrap();
+        let mut mol = read_smiles("CC#N", &Default::default()).unwrap();
         let mut external_anion = super::super::molecule::Atom::new(100, "C");
         external_anion.charge = -1;
         mol.add_atom(external_anion).unwrap();
@@ -481,8 +481,7 @@ mod tests {
             ("[S-]CC[Te-]", "thiolate"),
             ("[O-]CCC(=O)[O-]", "carboxylate"),
         ] {
-            let mol = super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget())
-                .unwrap();
+            let mol = super::super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
             let groups = perceive_groups(&mol);
             assert_eq!(
                 component_principal_key(&mol, &groups, false).as_deref(),

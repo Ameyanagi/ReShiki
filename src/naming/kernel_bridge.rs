@@ -1,4 +1,6 @@
 //! Temporary plain-data boundary to identity helpers that stay in the app.
+//! Removed in step 3 of docs/plans/naming-split.md, when `canonical_identity`,
+//! `apply_axis_markers` and `is_pseudoasymmetric` move into nazuchem-kernel.
 //!
 //! Prepared bare-SMILES states cross as JSON bytes to preserve source indices,
 //! valences and stereo caches. Rewriting SMILES here would reorder atoms and

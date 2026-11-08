@@ -87,11 +87,7 @@ mod tests {
     fn modern_cip_precedes_the_scoped_local_isotope_fallback() {
         // Upstream _assign_local_cip_with_locant_labels independently gives
         // R/S at atoms 4/7; modern accurate CIP gives s/s at the same centers.
-        let mut mol = read_smiles(
-            "CC(=O)N[C@]1(C)C[C@H](N)C1",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mut mol = read_smiles("CC(=O)N[C@]1(C)C[C@H](N)C1", &Default::default()).unwrap();
         let path = [4, 6, 7, 9];
         let locants = BTreeMap::from([(4, 1), (6, 2), (7, 3), (9, 4)]);
         assert_eq!(
@@ -118,7 +114,7 @@ mod tests {
 
     #[test]
     fn monosubstituted_centers_use_full_cip_without_local_isotopes() {
-        let mol = read_smiles("C[C@H]1C[C@@H](C)C1", &crate::naming::kernel_budget()).unwrap();
+        let mol = read_smiles("C[C@H]1C[C@@H](C)C1", &Default::default()).unwrap();
         let mut parts = AssemblyParts::new(4);
         parts.is_ring = true;
         parts.is_substituent = true;

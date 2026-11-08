@@ -5,7 +5,7 @@ const PARA: &str = "C1Cc2ccc(cc2)CCc2ccc1cc2";
 const META: &str = "C1Cc2cccc(c2)CCc2cccc1c2";
 
 fn round_trip(smiles: &str, name: &str) -> Result<(), String> {
-    let parsed = opsin::Parser::with_budget(crate::naming::kernel_budget())
+    let parsed = opsin::Parser::new()
         .map_err(|e| e.to_string())?
         .parse(name, &opsin::ParseOptions::strict());
     assert_eq!(
@@ -68,11 +68,7 @@ fn cyclic_phane_names_reconstruct_exactly() -> Result<(), String> {
         ),
     ] {
         assert_eq!(
-            name(&graph_io::read_smiles(
-                smiles,
-                &crate::naming::kernel_budget()
-            )?)
-            .as_deref(),
+            name(&graph_io::read_smiles(smiles, &Default::default())?).as_deref(),
             Some(expected),
             "{smiles}"
         );
@@ -80,11 +76,7 @@ fn cyclic_phane_names_reconstruct_exactly() -> Result<(), String> {
         // Input order and aromatic/Kekule spelling cannot change the result.
         let canonical = crate::naming::canonical_smiles(smiles)?;
         assert_eq!(
-            name(&graph_io::read_smiles(
-                &canonical,
-                &crate::naming::kernel_budget()
-            )?)
-            .as_deref(),
+            name(&graph_io::read_smiles(&canonical, &Default::default())?).as_deref(),
             Some(expected)
         );
     }
@@ -114,11 +106,7 @@ fn declines_out_of_scope_graphs() -> Result<(), String> {
         "C1Cc2occc2CCc2ccc1cc2",
     ] {
         assert!(
-            name(&graph_io::read_smiles(
-                smiles,
-                &crate::naming::kernel_budget()
-            )?)
-            .is_none(),
+            name(&graph_io::read_smiles(smiles, &Default::default())?).is_none(),
             "{smiles}"
         );
     }
@@ -132,11 +120,7 @@ fn mixed_attachment_sets_follow_amplificant_seniority() -> Result<(), String> {
     let smiles = "C1c2cc(ccn2)Cc2cccc(c2)Cc2ccc(cn2)Cc2cc(ccn2)Cc2cccc(c2)Cc2cc1ccn2";
     let expected = "1(2,4),3,7(4,2),9(5,2)-tetrapyridina-5,11(1,3)-dibenzenacyclododecaphane";
     assert_eq!(
-        name(&graph_io::read_smiles(
-            smiles,
-            &crate::naming::kernel_budget()
-        )?)
-        .as_deref(),
+        name(&graph_io::read_smiles(smiles, &Default::default())?).as_deref(),
         Some(expected)
     );
     round_trip(smiles, expected)
@@ -144,7 +128,7 @@ fn mixed_attachment_sets_follow_amplificant_seniority() -> Result<(), String> {
 
 #[test]
 fn failed_ordinary_name_falls_back_to_unverified_phane() -> Result<(), String> {
-    let named = super::super::name_smiles(PARA, &crate::naming::kernel_budget())?;
+    let named = super::super::name_smiles(PARA, &Default::default())?;
     assert_eq!(named.text, "1,4(1,4)-dibenzenacyclohexaphane");
     assert_eq!(named.status, NameStatus::Unverified(NameReason::Phane));
     assert!(named.alternatives.is_empty());
@@ -163,11 +147,7 @@ fn names_independent_upstream_inchi_graphs() -> Result<(), String> {
     ] {
         let smiles = fixture_smiles(expected)?;
         assert_eq!(
-            name(&graph_io::read_smiles(
-                &smiles,
-                &crate::naming::kernel_budget()
-            )?)
-            .as_deref(),
+            name(&graph_io::read_smiles(&smiles, &Default::default())?).as_deref(),
             Some(expected)
         );
         round_trip(&smiles, expected)?;
@@ -178,7 +158,7 @@ fn names_independent_upstream_inchi_graphs() -> Result<(), String> {
 #[test]
 fn ordinary_names_with_phane_alternatives_are_never_preferred() -> Result<(), String> {
     for smiles in [META] {
-        let named = super::super::name_smiles(smiles, &crate::naming::kernel_budget())?;
+        let named = super::super::name_smiles(smiles, &Default::default())?;
         assert_eq!(named.status, NameStatus::NotPreferred(NameReason::Phane));
         assert_eq!(named.alternatives.len(), 1);
         assert!(!named.text.contains("phane"));

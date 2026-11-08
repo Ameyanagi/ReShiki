@@ -1164,12 +1164,10 @@ async fn steroid_alpha_beta_survives_cleanup_exchange_and_cli_render() {
     ] {
         crate::style::add_font(bytes.to_vec()).unwrap();
     }
-    let parsed = opsin::Parser::with_budget(crate::naming::kernel_budget())
-        .unwrap()
-        .parse(
-            "estra-1,3,5(10)-triene-3,17beta-diol",
-            &opsin::ParseOptions::default(),
-        );
+    let parsed = opsin::Parser::new().unwrap().parse(
+        "estra-1,3,5(10)-triene-3,17beta-diol",
+        &opsin::ParseOptions::default(),
+    );
     let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
     let input = chemistry::smiles::read(&smiles).unwrap();
     let state = input.prepared.state;

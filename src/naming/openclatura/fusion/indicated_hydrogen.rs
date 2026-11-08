@@ -846,8 +846,7 @@ mod tests {
             ("[N-]1[NH2+]CCC2N=CC=C12", false),
         ] {
             let mol =
-                super::super::super::graph_io::read_smiles(smiles, &crate::naming::kernel_budget())
-                    .unwrap();
+                super::super::super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
             let locants = mol
                 .atoms
                 .keys()
@@ -875,22 +874,16 @@ mod tests {
             assert_eq!(candidates.contains(&0), expected, "{smiles}");
         }
         assert_eq!(
-            super::super::super::name_smiles(
-                "[N-]1[NH2+]CCC2N=CC=C12",
-                &crate::naming::kernel_budget()
-            )
-            .unwrap_err(),
+            super::super::super::name_smiles("[N-]1[NH2+]CCC2N=CC=C12", &Default::default())
+                .unwrap_err(),
             "openclatura: protonated fused hydrogenation state not ported"
         );
     }
 
     #[test]
     fn aromatic_donor_hydrogen_and_sigma_substitution_share_the_lone_pair_role() {
-        let mut mol = super::super::super::graph_io::read_smiles(
-            "c1cc[nH]c1",
-            &crate::naming::kernel_budget(),
-        )
-        .unwrap();
+        let mut mol =
+            super::super::super::graph_io::read_smiles("c1cc[nH]c1", &Default::default()).unwrap();
         let nitrogen = *mol.atoms.iter().find(|(_, a)| a.symbol == "N").unwrap().0;
         let graph = FusionGraph {
             atoms: mol

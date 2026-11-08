@@ -370,7 +370,7 @@ mod tests {
         assert_eq!(
             super::super::name_smiles(
                 "C1=CC(=C2C=C(NC2=C1)C(=O)N=N)CN=[N+]=[N-]",
-                &crate::naming::kernel_budget()
+                &Default::default()
             )
             .map(|name| name.text)
             .as_deref(),

@@ -1187,7 +1187,7 @@ mod tests {
     fn fully_tied_numberings_preserve_source_layout_enumeration() {
         let mol = super::super::super::graph_io::read_smiles(
             "N1CCC2C(C1)C[NH2+]CC2",
-            &crate::naming::kernel_budget(),
+            &Default::default(),
         )
         .unwrap();
         let atoms = mol.atoms.keys().copied().collect();

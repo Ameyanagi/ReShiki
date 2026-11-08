@@ -49,8 +49,7 @@ fn every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph(
             .sum::<usize>(),
         97
     );
-    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget())
-        .map_err(|error| error.to_string())?;
+    let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
     for entry in &data.entries {
         for alias in &entry.aliases {
             for evidence in &alias.evidence {
@@ -294,8 +293,7 @@ fn biochemical_aliases_keep_configuration_and_purine_tautomers_distinct() -> Res
 
 #[test]
 fn biochemical_plain_opsin_defaults_keep_template_tautomers_distinct() -> Result<(), String> {
-    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget())
-        .map_err(|error| error.to_string())?;
+    let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
     for (name, independent_graph, template_graph, template_alias) in [
         (
             "cytosine",

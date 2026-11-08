@@ -3054,8 +3054,7 @@ mod tests {
                 "furo[3,2-b]thieno[2,3-e]pyridine",
             ),
         ] {
-            let name =
-                crate::naming::openclatura::name_smiles(smiles, &crate::naming::kernel_budget())?;
+            let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
             assert_eq!(name.text, expected);
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
             assert_strict_fusion_name_identity(smiles, &name)?;
@@ -3079,8 +3078,7 @@ mod tests {
                 "1H-dipyrano[2,3-b:3',4',5'-de]quinoline",
             ),
         ] {
-            let name =
-                crate::naming::openclatura::name_smiles(smiles, &crate::naming::kernel_budget())?;
+            let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
             assert_eq!(name.text, expected);
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
             assert_strict_fusion_name_identity(smiles, &name)?;
@@ -3092,8 +3090,7 @@ mod tests {
         smiles: &str,
         name: &crate::naming::openclatura::Name,
     ) -> Result<(), String> {
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget())
-            .map_err(|error| error.to_string())?;
+        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
         for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
             let parsed = parser.parse(text, &opsin::ParseOptions::strict());
             assert_eq!(
@@ -3116,8 +3113,7 @@ mod tests {
     #[test]
     fn naphthyridine_parent_simplifies_alphabetized_fusion_name() -> Result<(), String> {
         let smiles = "S1CC=C2C1=NC=1N2C=2C(=C3C1N=C1C=CC=CC1=C3)N=CC2";
-        let name =
-            crate::naming::openclatura::name_smiles(smiles, &crate::naming::kernel_budget())?;
+        let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
         assert_eq!(
             name.text,
             "2H-benzo[b]pyrrolo[2,3-f]thieno[2',3':4,5]imidazo[1,2-h][1,7]naphthyridine"
@@ -3129,8 +3125,7 @@ mod tests {
     #[test]
     fn alphabetized_corpus_prefixes_preserve_numbering_and_round_trip() -> Result<(), String> {
         let smiles = "CC1=C(SC(=N1)NC(=O)CSC2=NN=C3N2C(=NC4=C3C5=C(S4)CCCC5)C(C)C)C";
-        let name =
-            crate::naming::openclatura::name_smiles(smiles, &crate::naming::kernel_budget())?;
+        let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
         assert_eq!(
             name.text,
             "N-(4,5-dimethyl-1,3-thiazol-2-yl)-2-{[5-(propan-2-yl)-8,9,10,11-tetrahydro[1]benzothieno[3,2-e][1,2,4]triazolo[4,3-c]pyrimidin-3-yl]sulfanyl}acetamide"
@@ -3249,8 +3244,7 @@ mod tests {
                 assert_eq!(render_fusion_name(&ast, registry).unwrap(), expected);
             }
         }
-        let parser = opsin::Parser::with_budget(crate::naming::kernel_budget())
-            .map_err(|error| error.to_string())?;
+        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
         let mut graphs = Vec::new();
         for name in [
             "furo[2',3':4,5]thieno[2,3-b]pyridine",
