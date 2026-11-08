@@ -2,15 +2,7 @@
  * ReShiki drawing, `cdx` the binary ChemDraw file, `rsmi` reaction SMILES;
  * `auto` tells the text formats apart. */
 export type InputFormat =
-  | "rsk"
-  | "mol"
-  | "smiles"
-  | "inchi"
-  | "cdxml"
-  | "cdx"
-  | "rxn"
-  | "rsmi"
-  | "auto";
+  "rsk" | "mol" | "smiles" | "inchi" | "cdxml" | "cdx" | "rxn" | "rsmi" | "auto";
 
 /** Outputs returned as bytes. */
 export type BinaryFormat = "png" | "pdf" | "cdx";

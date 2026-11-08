@@ -112,7 +112,7 @@ Regenerate or verify the catalog from the pinned original checkout:
 .venv/bin/python reference/generate_depict_templates.py --rdkit-source /path/to/rdkit --check
 ```
 
-Omit `--check` to regenerate and run `oxfmt` on the generated JSON afterward.
+Omit `--check` to regenerate and run `bun fmt` on the generated JSON afterward.
 Build and capture the independent native oracle on Linux or macOS:
 
 ```sh

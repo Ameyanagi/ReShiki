@@ -10,6 +10,8 @@ from scripts.ci_scope import changed_paths, needs_geometry, needs_native
 class CheckScopeTests(unittest.TestCase):
     def test_web_only_changes_skip_native_jobs(self):
         self.assertFalse(needs_native(["docs/assistant.md", "website/package.json", "bun.lock"]))
+        self.assertFalse(needs_native(["bunfig.toml", "package.json"]))
+        self.assertTrue(needs_native(["bunfig.toml", "src/lib.rs"]))
 
     def test_native_unknown_and_removed_files_require_checks(self):
         for path in (

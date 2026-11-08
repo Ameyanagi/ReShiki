@@ -4,10 +4,10 @@ pre-commit:
     oxlint:
       glob: "*.{js,mjs,cjs,ts,tsx,jsx,json}"
       run: bun run lint:js
-    oxfmt:
-      glob: "*.{js,mjs,cjs,ts,tsx,jsx,json,css,md,mdx,yml,yaml,toml}"
+    bun-fmt:
+      glob: "*.{js,mjs,cjs,ts,tsx,jsx,json,css,html,md,mdx,yml,yaml,toml}"
       exclude: "assets/**"
-      run: bun run --bun oxfmt --check --no-error-on-unmatched-pattern {staged_files}
+      run: bun fmt --check --no-error-on-unmatched-pattern {staged_files}
     ruff:
       glob: "*.{py,toml,lock}"
       run: uv run --locked ruff check reference scripts tests
