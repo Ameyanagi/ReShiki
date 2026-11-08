@@ -1,8 +1,10 @@
 //! #892 opens wedged atropisomer inputs that the original worker refused.
 //! Such a case is accepted only when every axis RDKit perceives in the input
 //! survives on the same bond with the same winding (bond stereo 6/7) and the
-//! same M/P label, and no other axis appears. `reference/atropisomer_axes.py`
-//! reads the input as the original worker does.
+//! same M/P label, and no other axis appears. A finished MOL drawing
+//! (`Checked::MolDocument`) may instead lose an axis, but never add, invert or
+//! relabel one. `reference/atropisomer_axes.py` reads the input as the
+//! original worker does.
 use reshiki::{
     chemistry::{
         document,
