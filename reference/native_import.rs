@@ -1,6 +1,10 @@
 //! Complete import responses against the unchanged worker and pinned chemistry.
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/empty_heads.rs"]
+mod empty_heads;
+#[path = "support/longest_lived_mass.rs"]
+mod longest_lived_mass;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
 #[path = "support/smiles_extensions.rs"]
@@ -102,6 +106,17 @@ fn compare_response(
     // #878 keeps singlet spin on two-electron atoms; RDKit keeps only the count.
     for atom in a["document"]["atoms"].as_array_mut().into_iter().flatten() {
         atom.as_object_mut().map(|atom| atom.remove("singlet"));
+    }
+    // #877: IUPAC 2023 masses for unlabelled Tc, Db, Hs, Nh, Mc and Ts.
+    let change = longest_lived_mass::change(&a["document"]["atoms"]);
+    if change != 0.
+        && let Some(mass) = b["analysis"]["mass"].as_f64()
+    {
+        b["analysis"]["mass"] = (mass + change).into();
+    }
+    // #777: curves carry `heads`; only empty ones are dropped.
+    if let Some(document) = a.get_mut("document") {
+        *document = empty_heads::without(document.take());
     }
     reaction_presentation::adapt_import("import", import_format, &a, &mut b)?;
     for key in ["mass", "exact_mass", "logp", "tpsa"] {

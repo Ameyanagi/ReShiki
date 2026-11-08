@@ -17,6 +17,8 @@ type TestResult = anyhow::Result<()>;
 
 #[path = "support/coordinate_free_wedges.rs"]
 mod coordinate_free_wedges;
+#[path = "support/longest_lived_mass.rs"]
+mod longest_lived_mass;
 #[path = "support/molfile_restrictions.rs"]
 mod molfile_restrictions;
 #[path = "support/nci_2808_template_layout.rs"]
@@ -467,24 +469,6 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     Ok(())
 }
 
-/// #877 weighs unlabelled Tc, Db, Hs, Nh, Mc and Ts with the IUPAC 2023
-/// longest-lived mass numbers; labelled atoms keep their nuclide mass. Return
-/// the change from the pinned RDKit weights (98, 268, 269, 284, 288, 292).
-fn longest_lived_mass(atoms: &serde_json::Value) -> f64 {
-    atoms
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|atom| atom["isotope"].as_u64().unwrap_or(0) == 0)
-        .map(|atom| match atom["element"].as_str() {
-            Some("Tc") => -1.,
-            Some("Db" | "Nh") => 2.,
-            Some("Hs" | "Mc" | "Ts") => 1.,
-            _ => 0.,
-        })
-        .sum()
-}
-
 fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
     assert_response_matches_with_source(actual, expected, None)
 }
@@ -560,7 +544,7 @@ fn assert_response_matches_contract(
                 .context("Missing reference mass")?;
             // RDKit wheels may fuse floating-point operations on some targets.
             let ev = if field == "mass" {
-                ev + longest_lived_mass(&actual_atoms)
+                ev + longest_lived_mass::change(&actual_atoms)
             } else {
                 ev
             };
