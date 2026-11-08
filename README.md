@@ -22,7 +22,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.13.1 improves atom-label editing, crystal substitutions, 3D models, recovery and feedback on large drawings. It includes the 3D models, crystal files, browser editor, group abbreviations and command palette introduced in 0.13.0. Older drawings open normally; every drawing saved in 0.13.1 uses document version 30 and cannot be opened in 0.13.0 or earlier. Keep a copy saved by the older version if you share drawings with someone who uses it. [Release notes](docs/changes-0.13.1.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
+Version 0.14.0 names structures offline with a preferred-IUPAC-name status, reads more names, and adds Fischer projections, IUPAC drawing conventions, new template groups, stale-model updates and ORTEP ellipsoids for 3D models, and the `reshiki` Python package. Older drawings open normally. Most drawings saved in 0.14.0 use document version 30 and open in 0.13.1; drawings with a custom reaction-label gap, ORTEP settings, a 3D model generated in 0.14.0 or a two-sided residue group need 0.14.0. Keep a copy saved by the older version if you share drawings with someone who uses it. [Release notes](docs/changes-0.14.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
 
 [Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel, Jmol and VESTA element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
 
@@ -85,4 +85,4 @@ See the [documentation and evidence policy](docs/README.md) when adding guides, 
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-See the [latest release notes](docs/changes-0.13.1.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+See the [latest release notes](docs/changes-0.14.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.

@@ -109,18 +109,18 @@ Extracted macOS archives and installed disk-image copies also run the actual app
 
 Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
-The [0.13.1 validation record](release-0.13.1-validation.md) tracks the current preparation, package review and publication prerequisites. The [0.13.0 validation record](release-0.13.0-validation.md) lists the automated checks for the release preparation and the manual smoke tests still to run. The [0.12.0 validation record](release-0.12.0-validation.md) records the source review, the tag runs that did not publish, the publishing run and public-download verification. The [0.11.0 record](release-0.11.0-validation.md) and [0.10.0 record](release-0.10.0-validation.md) retains the single-executable release evidence, and the [0.9.0 record](release-0.9.0-validation.md) and [0.8.0 record](release-0.8.0-validation.md) retain earlier checks.
+The [0.14.0 validation record](release-0.14.0-validation.md) tracks the current preparation and the checks still to run before the tag. The [0.13.1 validation record](release-0.13.1-validation.md) records that release's preparation, package review and publication. The [0.13.0 validation record](release-0.13.0-validation.md) lists the automated checks for the release preparation and the manual smoke tests still to run. The [0.12.0 validation record](release-0.12.0-validation.md) records the source review, the tag runs that did not publish, the publishing run and public-download verification. The [0.11.0 record](release-0.11.0-validation.md) and [0.10.0 record](release-0.10.0-validation.md) retains the single-executable release evidence, and the [0.9.0 record](release-0.9.0-validation.md) and [0.8.0 record](release-0.8.0-validation.md) retain earlier checks.
 
 ## Publish a version
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
 3. In the release build, close Clean up, 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
-4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.13.1` for version `0.13.1`.
+4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.14.0` for version `0.14.0`.
 
 ```sh
-git tag -a v0.13.1 -m "ReShiki 0.13.1"
-git push origin v0.13.1
+git tag -a v0.14.0 -m "ReShiki 0.14.0"
+git push origin v0.14.0
 ```
 
 A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. With `SIGNPATH_ENABLED=true`, the Windows application and final setup program must also pass release-signature verification before publication; missing credentials, approval, or signature verification fail the release. Until activation, Windows packages are unsigned. Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `main`.
@@ -213,7 +213,7 @@ The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/
 | Workflow name     | `release.yml` |
 | Environment name  | `pypi`        |
 
-A pending publisher creates the project on its first upload. The first PyPI release is the next version tag, published like any release. Each version must match its tag's code, so the manual `pypi_only` run refuses to publish when `v<version>` is already tagged at another commit: main is past `v0.13.1`, which predates the Python package, so main cannot publish as 0.13.1. A `pypi_only` run is for publishing right after a version bump on main, before that version is tagged:
+A pending publisher creates the project on its first upload. The first PyPI release is the next version tag, published like any release. Each version must match its tag's code, so the manual `pypi_only` run refuses to publish when `v<version>` is already tagged at another commit: once `v0.14.0` is tagged, later main commits cannot publish as 0.14.0. A `pypi_only` run is for publishing right after a version bump on main, before that version is tagged:
 
 ```sh
 gh workflow run release.yml --ref main -f pypi_only=true
@@ -303,7 +303,7 @@ Packaging checks the application's selected CPU architecture, including ARM64 on
 
 Build runners are macOS 14 on Apple Silicon, macOS 15 on Intel, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
 
-Build on the target operating system with Rust 1.99.0, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
+Build on the target operating system with Rust 1.99.1, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
 
 On macOS, run `python3 scripts/build_macos_app.py` for a development app. Add `--portable --release` for an optimized bundle in `dist/ReShiki.app`. Both forms include one executable, the icon, license notices and an ad-hoc signature; release signing replaces that signature.
 

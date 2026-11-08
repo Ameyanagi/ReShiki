@@ -3,7 +3,7 @@
 ReShiki's experimental Python API draws, converts and analyzes structures with
 the editor's Rust engine. It requires Python 3.10 or later and runs without the
 desktop application. Install it with `uv add reshiki` or `pip install reshiki`.
-From the first release after 0.13.1, each ReShiki release publishes abi3 wheels
+From 0.14.0, each ReShiki release publishes abi3 wheels
 with the app's version for macOS, Windows and Linux on x64 and ARM64; see
 [Releasing](releasing.md#configure-pypi-publishing).
 
