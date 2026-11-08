@@ -109,3 +109,27 @@ fn fresh_wedges_that_hide_an_axis_are_refused() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn an_axis_beside_a_named_dummy_atom_still_imports() -> anyhow::Result<()> {
+    // The finished drawing stores R1 as an element and cannot be prepared
+    // again, so the axis check leaves this import to main's behaviour.
+    let config = if std::env::var_os("RESHIKI_INCHI_HELPER").is_some() {
+        native_response::Config::new(helper::discover()?)
+    } else {
+        assert!(std::env::var_os("RESHIKI_REQUIRE_INCHI_HELPER").is_none());
+        native_response::Config::in_process()
+    };
+    let outcome = execute(
+        Request::import_smiles(
+            "c1(-c2c(O)c3c(cc2)cccc3)c(O)c2c(cc1)cccc2.* |wU:0.13,atomProp:22.dummyLabel.R1|",
+        ),
+        Some(config),
+    )
+    .await?;
+    let Outcome::Complete(response) = outcome else {
+        panic!("Import unexpectedly deferred");
+    };
+    assert!(response.document.is_some());
+    Ok(())
+}

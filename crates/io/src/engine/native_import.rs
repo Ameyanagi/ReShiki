@@ -435,11 +435,15 @@ fn finish_molecule(
     // RDKit does, so some fresh layouts' wedges hide an axis (#1056). Refuse
     // such a drawing, as the reference refuses atropisomer bond stereo,
     // rather than silently lose the axis.
+    // A drawing that cannot be prepared again (named dummy atoms) keeps
+    // main's behaviour.
     let expected = axes(&molecule)?;
-    if !expected.is_empty() && {
-        let read = axes(&molecular::prepare(&document)?)?;
-        expected.iter().any(|axis| !read.contains(axis))
-    } {
+    if !expected.is_empty()
+        && let Ok(read) = molecular::prepare(&document)
+        && expected
+            .iter()
+            .any(|axis| !axes(&read).is_ok_and(|read| read.contains(axis)))
+    {
         return Err(molecular::Error::WedgeAssignment(
             "The wedges in this layout cannot show the atropisomer axis next to a wedged stereocentre"
                 .into(),
