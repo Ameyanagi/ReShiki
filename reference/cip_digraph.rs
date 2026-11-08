@@ -134,9 +134,7 @@ fn expansion_and_rerooting_match_native_rdkit() -> anyhow::Result<()> {
         );
         if actual != case.expected
             // An exact CIP tie can exhaust a reduced iteration budget sooner.
-            && (actual.get("error").is_some() == case.expected.get("error").is_some()
-                || actual["error"] == "iterations"
-                || case.expected["error"] == "iterations")
+            && (actual.get("error").is_some() == case.expected.get("error").is_some())
             && intended_cip::difference(&case.before.graph, &case.before.metadata).is_some()
         {
             continue;

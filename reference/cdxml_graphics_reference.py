@@ -135,18 +135,25 @@ def emit(
 
 
 ARROWHEADS = ("ArrowheadHead", "ArrowheadTail")
+HEAD_ATTRIBUTES = (
+    *ARROWHEADS,
+    "ArrowheadType",
+    "HeadSize",
+    "ArrowheadWidth",
+    "ArrowheadCenterSize",
+)
 
 
 def arrowed_curves(root, scale, first_id, claimed, error):
     """#777: ReShiki reads an arrowed curve that the original worker refused.
     The same file without arrowhead attributes gives the expected curve,
-    with its bindings; `heads` lists each curve's source arrowheads."""
+    with its bindings; `heads` lists each curve's source arrowhead attributes."""
     if error != "Arrowed, shaded or doubled CDXML curves are not supported yet":
         return None
     root = copy.deepcopy(root)
     heads = []
     for el in root.iter("curve"):
-        heads.append([el.get(k, "None") for k in ARROWHEADS])
+        heads.append({k: el.get(k) for k in HEAD_ATTRIBUTES})
         for k in ARROWHEADS:
             el.attrib.pop(k, None)
     elements = list(root.iter())

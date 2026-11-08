@@ -18,9 +18,12 @@ pub fn mass_numbers(doc: &Document) -> Document {
     doc
 }
 
-/// The echoed document of a `mass_numbers` request, as requested.
+/// The echoed document of a `mass_numbers` request, as requested. Any other
+/// echoed mode is left in place and fails the comparison.
 pub fn auto(doc: &mut Document) {
-    doc.drawing_style.hydrogen_isotopes = HydrogenIsotopes::Auto;
+    if doc.drawing_style.hydrogen_isotopes == HydrogenIsotopes::MassNumbers {
+        doc.drawing_style.hydrogen_isotopes = HydrogenIsotopes::Auto;
+    }
 }
 
 /// Default CDXML with each D/T label written as the original 2H/3H label.

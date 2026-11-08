@@ -743,8 +743,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
             // The original writer predates Haworth semantics and explicit
             // contracted-group alignment. Those templates are checked against
             // real ChemDraw exports in haworth_interchange.rs instead.
-            // #881's nucleosides use the same explicit contracted-group alignment.
-            .filter(|t| !matches!(t.group.as_str(), "Carbohydrates" | "Nucleosides"))
+            .filter(|t| t.group != "Carbohydrates")
             .map(|t| (format!("template/{}", t.id), t.document.clone())),
     );
     use reshiki::{
@@ -905,8 +904,25 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         // ChemDraw reads its wedges as projection; the original writer predates it.
         let actual = if name.starts_with("template/builtin:Coordination geometry/") {
             actual.map(|xml| {
-                assert_eq!(xml.matches(" AS=\"N\"").count(), 1, "{name}");
+                assert_eq!(frame_marker(&xml).as_deref(), Some(xml.as_str()), "{name}");
                 xml.replacen(" AS=\"N\"", "", 1)
+            })
+        } else if name.starts_with("template/builtin:Nucleosides/") {
+            // #881's nucleosides right-align one contracted group explicitly,
+            // which the original writer predates; everything else compares.
+            actual.map(|xml| {
+                let edits = [
+                    (" LabelDisplay=\"Right\"", ""),
+                    (" LabelJustification=\"Right\"", ""),
+                    (" LabelAlignment=\"Right\"", " LabelAlignment=\"Left\""),
+                ];
+                if !xml.contains(" LabelJustification=\"Right\"") {
+                    return xml;
+                }
+                edits.into_iter().fold(xml, |xml, (from, to)| {
+                    assert_eq!(xml.matches(from).count(), 1, "{name}: {from}");
+                    xml.replacen(from, to, 1)
+                })
             })
         } else {
             actual
@@ -1030,4 +1046,30 @@ fn invalid_export_geometry_and_text_return_errors() -> anyhow::Result<()> {
     );
     assert!(drawing::write(&text, drawing::Options::default())?.contains("valid"));
     Ok(())
+}
+
+/// #882: the CDXML when its one `AS="N"` marks the polyhedral frame metal,
+/// the node with the most bonds; `None` for a missing, repeated or misplaced
+/// marker.
+fn frame_marker(xml: &str) -> Option<String> {
+    let marker = " AS=\"N\"";
+    if xml.matches(marker).count() != 1 {
+        return None;
+    }
+    let at = xml.find(marker)?;
+    let start = xml[..at].rfind("<n ")?;
+    let tag = &xml[start..at];
+    let id = tag.split(" id=\"").nth(1)?.split('"').next()?;
+    let bonds = |id: &str| {
+        xml.matches(&format!(" B=\"{id}\"")).count() + xml.matches(&format!(" E=\"{id}\"")).count()
+    };
+    let own = bonds(id);
+    let others = xml
+        .match_indices("<n ")
+        .filter_map(|(i, _)| xml[i..].split(" id=\"").nth(1)?.split('"').next())
+        .filter(|other| *other != id)
+        .map(bonds)
+        .max()
+        .unwrap_or(0);
+    (own > others).then(|| xml.to_owned())
 }

@@ -115,8 +115,16 @@ fn in_document(doc: &Document, expected: &[BTreeSet<Axis>]) -> Option<bool> {
     let mut wanted = BTreeSet::new();
     for (atoms, axes_) in molecules.iter().zip(expected) {
         for (a, b, stereo, label) in axes_ {
-            let a = *state_index.get(atoms.get(*a)?)?;
-            let b = *state_index.get(atoms.get(*b)?)?;
+            let (a, b) = (*atoms.get(*a)?, *atoms.get(*b)?);
+            // The returned drawing's own label on that bond must agree too.
+            let bond = doc
+                .bonds
+                .iter()
+                .find(|bond| (bond.a, bond.b) == (a, b) || (bond.a, bond.b) == (b, a))?;
+            if bond.cip_label != *label {
+                return Some(false);
+            }
+            let (a, b) = (*state_index.get(&a)?, *state_index.get(&b)?);
             wanted.insert((a.min(b), a.max(b), *stereo, label.clone()));
         }
     }

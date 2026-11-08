@@ -62,13 +62,23 @@ pub fn refused_allene(text: &str, error: &str) -> bool {
     let Ok(parsed) = smiles::parse(&marked) else {
         return false;
     };
-    windings.iter().enumerate().any(|(k, &winding)| {
-        parsed
-            .metadata
-            .atoms
+    // Every marker must find exactly one atom; a map number the input
+    // already used cannot identify the atom, so the refusal is not accepted.
+    let atoms: Option<Vec<usize>> = (0..windings.len())
+        .map(|k| {
+            let mut found = (0..parsed.metadata.atoms.len())
+                .filter(|&i| parsed.metadata.atoms[i].map_number == MARK + k as i32);
+            match (found.next(), found.next()) {
+                (Some(i), None) => Some(i),
+                _ => None,
+            }
+        })
+        .collect();
+    atoms.is_some_and(|atoms| {
+        atoms
             .iter()
-            .position(|a| a.map_number == MARK + k as i32)
-            .is_some_and(|i| !allene::supported(&parsed.graph, i, 5, winding))
+            .zip(&windings)
+            .any(|(&i, &winding)| !allene::supported(&parsed.graph, i, 5, winding))
     })
 }
 
