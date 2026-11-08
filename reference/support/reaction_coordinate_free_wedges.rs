@@ -6,8 +6,8 @@
 //! rejection and every other field stay compared.
 use reshiki::engine::Response;
 
-/// Atom indices of coordinate-free wU/wD flags in a reaction SMILES.
-pub fn atoms(format: &str, text: &str) -> Vec<usize> {
+/// (atom, bond) indices of coordinate-free wU/wD flags in a reaction SMILES.
+pub fn atoms(format: &str, text: &str) -> Vec<(usize, usize)> {
     let Some((_, cx)) = text.trim().split_once(char::is_whitespace) else {
         return Vec::new();
     };
@@ -21,7 +21,7 @@ pub fn atoms(format: &str, text: &str) -> Vec<usize> {
                 break;
             };
             match (atom.parse::<usize>(), bond.parse::<usize>()) {
-                (Ok(atom), Ok(_)) => atoms.push(atom),
+                (Ok(atom), Ok(bond)) => atoms.push((atom, bond)),
                 _ => break,
             }
         }
@@ -29,15 +29,29 @@ pub fn atoms(format: &str, text: &str) -> Vec<usize> {
     atoms
 }
 
-pub fn adapt(atoms: &[usize], actual: &Response, expected: &mut Response) {
-    // Only an invented centre: every flagged atom exists and carries stereo.
-    let invented = actual.document.as_ref().is_some_and(|doc| {
-        atoms
-            .iter()
-            .all(|&i| doc.atoms.get(i).is_some_and(|a| a.stereo.is_some()))
-    });
+/// Whether the case was adapted.
+pub fn adapt(flags: &[(usize, usize)], actual: &Response, expected: &mut Response) -> bool {
+    // Only an invented centre: each flag names an existing atom and bond, a
+    // wedge starts at that atom in the drawing (CX bond numbers follow the
+    // text, not the drawing), and the actual SMILES gains stereo marks.
+    let marks = |r: &Response| {
+        r.analysis
+            .as_ref()
+            .map_or(0, |a| a.smiles.matches('@').count())
+    };
+    let invented = marks(actual) > marks(expected)
+        && actual.document.as_ref().is_some_and(|doc| {
+            flags.iter().all(|&(atom, bond)| {
+                let Some(at) = doc.atoms.get(atom).filter(|_| bond < doc.bonds.len()) else {
+                    return false;
+                };
+                doc.bonds
+                    .iter()
+                    .any(|b| b.a == at.id && matches!(b.display.as_str(), "wedge" | "hash"))
+            })
+        });
     if !invented {
-        return;
+        return false;
     }
     if let (Some(a), Some(e)) = (&actual.analysis, expected.analysis.as_mut()) {
         e.inchi = a.inchi.clone();
@@ -45,10 +59,11 @@ pub fn adapt(atoms: &[usize], actual: &Response, expected: &mut Response) {
         e.smiles = a.smiles.clone();
     }
     if let (Some(a), Some(e)) = (&actual.document, expected.document.as_mut()) {
-        for &i in atoms {
+        for &(i, _) in flags {
             if let (Some(a), Some(e)) = (a.atoms.get(i), e.atoms.get_mut(i)) {
                 e.stereo = a.stereo.clone();
             }
         }
     }
+    true
 }

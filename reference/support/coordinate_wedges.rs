@@ -21,8 +21,11 @@ pub fn adapt(input: &CoordinateWedges, actual: &Response, expected: &mut Respons
         }
         for (a, e) in a.bonds.iter().zip(e.bonds.iter_mut()) {
             let wedged = |display: &str| matches!(display, "wedge" | "hash");
+            let placed = |display: &str| matches!(display, "wedge" | "hash" | "plain");
             if ((a.a, a.b) == (e.a, e.b) || (a.a, a.b) == (e.b, e.a))
                 && (wedged(&a.display) || wedged(&e.display))
+                && placed(&a.display)
+                && placed(&e.display)
             {
                 (e.a, e.b, e.display) = (a.a, a.b, a.display.clone());
             }

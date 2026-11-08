@@ -139,6 +139,8 @@ def shaded_or_doubled(root):
     """#777: whether a curve still has the original's non-arrowhead refusal
     (reference/engine/graphics_exchange.py `curve`)."""
     for el in root.iter("curve"):
+        if el.get("SupersededBy") is not None:
+            continue
         try:
             flags = int(el.get("CurveType", "0"))
         except ValueError:

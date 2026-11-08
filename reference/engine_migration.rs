@@ -392,8 +392,9 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                     molecule_reading::adapt(reading, &actual, &mut expected);
                 }
                 let flagged = reaction_coordinate_free_wedges::atoms(format, &case.text);
-                if !flagged.is_empty() {
-                    reaction_coordinate_free_wedges::adapt(&flagged, &actual, &mut expected);
+                if !flagged.is_empty()
+                    && reaction_coordinate_free_wedges::adapt(&flagged, &actual, &mut expected)
+                {
                     deferred.push(case.name.clone());
                 }
                 let doubles = stated_ez_wedges::double_bonds(format, &case.text);
