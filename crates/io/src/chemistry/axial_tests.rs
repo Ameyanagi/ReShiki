@@ -311,3 +311,150 @@ fn binol_cleanup_retains_visible_axial_configuration() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+// RDKit atropisomer reference geometry/4327 (2D, with and without its crossed
+// double bond), geometry/824 (3D) and rings/c1ccccc1/C=C/c1ccccc1/False/34,
+// each the agent of water to water (#1037).
+#[tokio::test]
+async fn rxn_imports_keep_axes_or_refuse_ones_the_drawing_changes() -> anyhow::Result<()> {
+    use crate::engine::{LocalEngine, Request};
+
+    let rxn = |dimension: &str, atoms: &str, bonds: &str| {
+        let water = "$MOL\n\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000
+    0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\nM  END\n";
+        let counts = format!("{} {}", atoms.lines().count(), bonds.lines().count());
+        format!(
+            "$RXN\n\n\n\n  1  1  1\n{water}{water}$MOL\n\n                    {dimension}\n
+  0  0  0  0  0  0  0  0  0  0999 V3000
+M  V30 BEGIN CTAB\nM  V30 COUNTS {counts} 0 0 0\nM  V30 BEGIN ATOM\n{atoms}M  V30 END ATOM
+M  V30 BEGIN BOND\n{bonds}M  V30 END BOND\nM  V30 END CTAB\nM  END\n"
+        )
+    };
+    let engine = LocalEngine::in_process();
+    let atoms = "M  V30 1 C 2.5 -1 0 0\nM  V30 2 C -1 1 0 0\nM  V30 3 C 0 0 0 0
+M  V30 4 C 2.5 1 0 0\nM  V30 5 C -1 -1 0 0\nM  V30 6 C 1.5 0 0 0\n";
+    let bonds = |crossed: u8| {
+        format!(
+            "M  V30 1 1 3 2 CFG=1\nM  V30 2 2 1 6 CFG=0\nM  V30 3 1 6 3 CFG=1
+M  V30 4 2 3 5 CFG={crossed}\nM  V30 5 1 4 6 CFG=3\n"
+        )
+    };
+    // Without the crossed double bond the drawn wedges keep the axis,
+    // through Clean Up too.
+    let flat = rxn("2D", atoms, &bonds(0));
+    assert_eq!(
+        axial_code(&super::reaction::read_rxn(&flat)?.agents[0].molecule)?,
+        "M"
+    );
+    let imported = engine
+        .request(Request::import("rxn", &flat))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let document = imported.document.unwrap();
+    assert_visible_axis(&document, "M")?;
+    let cleaned = engine
+        .request(Request::molecule("clean", document))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_visible_axis(cleaned.document.as_ref().unwrap(), "M")?;
+    // The crossed double bond at the axis is drawn wavy, which hides the axis
+    // when the drawing is prepared (#1053), so the reaction is refused.
+    let crossed = rxn("2D", atoms, &bonds(2));
+    let read = super::reaction::read_rxn(&crossed)?;
+    assert_eq!(axial_code(&read.agents[0].molecule)?, "M");
+    assert!(read.drawing().is_err());
+    // A 3D participant whose XY projection still shows its axis imports.
+    let lifted = rxn(
+        "3D",
+        "M  V30 1 C 2.5 -1 0 0\nM  V30 2 C -1 1 1 0\nM  V30 3 C 0 0 0 0
+M  V30 4 C 2.5 1 0 0\nM  V30 5 C -1 -1 0 0\nM  V30 6 C 1.5 0 0 0\n",
+        &bonds(0),
+    );
+    let read = super::reaction::read_rxn(&lifted)?;
+    assert!(read.agents[0].annotations.is_3d);
+    let code = axial_code(&read.agents[0].molecule)?;
+    let imported = engine
+        .request(Request::import("rxn", &lifted))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_visible_axis(imported.document.as_ref().unwrap(), &code)?;
+    // Both ends' substituents project to one side of the axis in XY.
+    let spatial = rxn(
+        "3D",
+        "M  V30 1 C 0.272056121724 2.5 -1 0\nM  V30 2 C 0.64164810781 -1 -1 0
+M  V30 3 C 0.0162909961425 2.5 1 0\nM  V30 4 C 0.469819084052 1.5 0 0
+M  V30 5 C 0.94431136875 -1 1 0\nM  V30 6 C 0.561261511328 0 0 0\n",
+        "M  V30 1 2 4 1 CFG=2\nM  V30 2 1 6 4 CFG=0\nM  V30 3 1 4 3 CFG=3
+M  V30 4 2 6 2 CFG=0\nM  V30 5 1 6 5 CFG=0\n",
+    );
+    let read = super::reaction::read_rxn(&spatial)?;
+    axial_code(&read.agents[0].molecule)?;
+    // The RXN reader's drawing step itself refuses, as live comparisons expect.
+    assert!(read.drawing().is_err());
+    let error = engine
+        .request(Request::import("rxn", &spatial))
+        .await
+        .unwrap_err();
+    assert!(
+        error.contains("cannot keep this reaction's atropisomer axes"),
+        "{error}"
+    );
+    // A file wedge on a ring double bond lands on a single bond once the ring
+    // is drawn in Kekulé form, where it would add a second axis.
+    let ring_wedge = rxn(
+        "2D",
+        "M  V30 1 C -2.45047391041 -1.14353732532 0 0
+M  V30 2 C -4.90874998216 -0.302776506132 0 0
+M  V30 3 C -1.96506042513 0.275749026448 0 0
+M  V30 4 C 3.92231868892 1.43280009161 0 0
+M  V30 5 C 2.45047391041 1.14353732532 0 0
+M  V30 6 C 2.95149171836 -1.40577261192 0 0
+M  V30 7 C -0.493215646616 0.565011792738 0 0
+M  V30 8 C 4.42333649688 -1.11650984563 0 0
+M  V30 9 C 1.96506042513 -0.275749026448 0 0
+M  V30 10 C 4.90874998216 0.302776506132 0 0
+M  V30 11 C -4.42333649688 1.11650984563 0 0
+M  V30 12 C -2.95149171836 1.40577261192 0 0
+M  V30 13 C 0.493215646616 -0.565011792738 0 0
+M  V30 14 C -3.92231868892 -1.43280009161 0 0
+",
+        "M  V30 1 1 12 11 CFG=0
+M  V30 2 1 14 2 CFG=0
+M  V30 3 1 10 8 CFG=0
+M  V30 4 1 13 9 CFG=3
+M  V30 5 2 12 3 CFG=0
+M  V30 6 1 4 5 CFG=0
+M  V30 7 2 2 11 CFG=0
+M  V30 8 1 3 1 CFG=3
+M  V30 9 2 7 13 CFG=0
+M  V30 10 2 1 14 CFG=0
+M  V30 11 1 6 9 CFG=0
+M  V30 12 2 6 8 CFG=0
+M  V30 13 1 7 3 CFG=3
+M  V30 14 2 9 5 CFG=3
+M  V30 15 2 4 10 CFG=0
+",
+    );
+    let read = super::reaction::read_rxn(&ring_wedge)?;
+    assert_eq!(
+        read.agents[0]
+            .molecule
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .filter(|b| matches!(b.stereo, 6 | 7))
+            .count(),
+        1
+    );
+    assert!(read.drawing().is_err());
+    let error = engine
+        .request(Request::import("rxn", &ring_wedge))
+        .await
+        .unwrap_err();
+    assert!(
+        error.contains("cannot keep this reaction's atropisomer axes"),
+        "{error}"
+    );
+    Ok(())
+}
