@@ -360,6 +360,7 @@ pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
 
 fn assess_derivation(mol: &molecule::Molecule, derivation: &component_namer::Derivation) {
     species::assess_anion_parent(mol, derivation);
+    species::assess_cation_parent(mol, derivation);
     // P-51.3.2 / P-52.2.5.3: mandatory phane nomenclature takes precedence.
     if phane::has_linear_skeleton(mol, derivation.component_splits()) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(

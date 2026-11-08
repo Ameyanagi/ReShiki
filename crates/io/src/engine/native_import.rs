@@ -9,6 +9,7 @@ use crate::{
     chemistry::{
         self, cdxml, depict, document as molecular,
         inchi::{helper, output},
+        kekulize::Direction,
         molfile, reaction, smiles,
         stereo::{Point3, perception::State},
     },
@@ -18,6 +19,8 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
 #[cfg(test)]
 mod allene_tests;
+#[cfg(test)]
+mod atrop_tests;
 pub(super) mod chain_layout;
 pub(super) mod template_retry;
 #[cfg(test)]
@@ -95,6 +98,9 @@ struct Prepared {
     molecule: molecular::Molecule,
     document: Document,
     warnings: Vec<String>,
+    /// The molecule keeps a 3D MOL file's own XYZ, which state its stereo as
+    /// RDKit reads them, even where the drawing is a projection of them.
+    file_xyz: bool,
 }
 enum Preparation {
     Complete(Box<Prepared>),
@@ -152,13 +158,16 @@ pub async fn execute(
         molecule,
         document,
         mut warnings,
+        file_xyz,
     } = *prepared;
     let attachments = crate::attachments::present(&document);
     let generic = crate::generic::present(&document);
     let analysis = if molecule.state.graph.atoms.is_empty() || attachments || generic {
         None
     } else {
-        let projected = molfile::has_projected_coordinates(&document);
+        // Generated or projected XY must not define stereo the input left
+        // open (#909); a file's own XYZ may.
+        let projected = !file_xyz && molfile::has_projected_coordinates(&document);
         warnings.extend(native_response::identifier_notices(&molecule, projected));
         Some(native_response::analyze_prepared(Arc::new(molecule), projected, config).await?)
     };
@@ -206,6 +215,23 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                     crate::molecule_names::apply_axis_markers(&imported.prepared.state)
                         .map_err(|_| Error::AxisMarkers)?;
             }
+            // Wedges were read at the 2D input coordinates, which the fresh
+            // layout replaces (#1037). Without coordinates the @/@@ tags state
+            // the configuration (#1044); smiles::read has already taken any
+            // axial configuration from the flags. Either way, draw wedges again
+            // from the stereo. A wavy bond left after preparation would stop
+            // that redraw at a tagged centre, so such inputs still read the
+            // flags on the layout (#1049).
+            let directions = &mut imported.prepared.state.directions;
+            let tag_wins =
+                imported.conformers.is_empty() && !directions.contains(&Direction::Unknown);
+            if tag_wins || imported.conformers.iter().any(|c| !c.is_3d) {
+                for direction in directions {
+                    if matches!(direction, Direction::Wedge | Direction::Hash) {
+                        *direction = Direction::None;
+                    }
+                }
+            }
             let mut molecule = molecule(imported.prepared.state)?;
             let mut warnings = layout(&mut molecule, &imported.reaction_properties)?;
             // Import perception does not keep cumulene E/Z; say so.
@@ -218,11 +244,15 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             prepared
         }
         "mol" => {
-            let (document, molecule) = molfile::read(&text)?.display_document()?;
+            let imported = molfile::read(&text)?;
+            // A 3D file is never Haworth-restored, so the molecule keeps its XYZ.
+            let file_xyz = imported.annotations.is_3d;
+            let (document, molecule) = imported.display_document()?;
             Prepared {
                 molecule,
                 document,
                 warnings: Vec::new(),
+                file_xyz,
             }
         }
         "cdxml" | "cdx" => {
@@ -280,6 +310,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 molecule: imported.molecule,
                 document: imported.document,
                 warnings,
+                file_xyz: false,
             }
         }
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
@@ -339,6 +370,7 @@ fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {
         molecule,
         document,
         warnings: Vec::new(),
+        file_xyz: false,
     })
 }
 
@@ -373,14 +405,26 @@ fn coordinates(
             // Native public Compute2DCoords defaults. Cleanup explicitly opts in
             // to templates, while original import calls supply no such option.
             use_ring_templates: false,
+            // RDKit 2026.09.1's path angle expansion (#735) is a refinement.
+            path_angle_expansion: molecular::refine(),
             ..depict::Options::default()
         },
     )?;
     let positions = template_retry::improve(state, &ranks, conformer.positions, 1.5);
     let mut layout = chain_layout::improve(state, &ranks, positions);
-    chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
-    chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
-    chemistry::layout_refinement::arrange_components(state, &mut layout.positions);
+    if molecular::refine() {
+        chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
+        // Input wedge flags are read against these coordinates, so a reflection
+        // would invert them (#1037). Rotation and translation keep their meaning.
+        if !state
+            .directions
+            .iter()
+            .any(|d| matches!(d, Direction::Wedge | Direction::Hash))
+        {
+            chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
+        }
+        chemistry::layout_refinement::arrange_components(state, &mut layout.positions);
+    }
     Ok(layout)
 }
 
@@ -403,11 +447,57 @@ fn finish_molecule(
     let labels = drawing.labels()?;
     let document = drawing.finish(labels)?;
     document.validate().map_err(Error::Document)?;
+    // An axis end reads a wedge from a neighbouring centre as its own, as
+    // RDKit does, so some fresh layouts' wedges hide an axis (#1056). Refuse
+    // such a drawing, as the reference refuses atropisomer bond stereo,
+    // rather than silently lose the axis.
+    // A drawing that cannot be prepared again (named dummy atoms) keeps
+    // main's behaviour.
+    let expected = axes(&molecule)?;
+    if !expected.is_empty()
+        && let Ok(read) = molecular::prepare(&document)
+        && expected
+            .iter()
+            .any(|axis| !axes(&read).is_ok_and(|read| read.contains(axis)))
+    {
+        return Err(molecular::Error::WedgeAssignment(
+            "The wedges in this layout cannot show the atropisomer axis next to a wedged stereocentre"
+                .into(),
+        )
+        .into());
+    }
     Ok(Prepared {
         molecule,
         document,
         warnings: Vec::new(),
+        file_xyz: false,
     })
+}
+
+/// Atropisomer axes by stable atom IDs.
+fn axes(molecule: &molecular::Molecule) -> Result<Vec<(u64, u64, u8)>, Error> {
+    let id = |atom: usize| {
+        molecule
+            .ids
+            .get(atom)
+            .copied()
+            .ok_or_else(|| Error::Document("Missing atom ID".into()))
+    };
+    let mut axes = Vec::new();
+    for (bond, meta) in molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&molecule.state.metadata.bonds)
+    {
+        if matches!(meta.stereo, 6 | 7) {
+            let (a, b) = (id(bond.a)?, id(bond.b)?);
+            axes.push((a.min(b), a.max(b), meta.stereo));
+        }
+    }
+    axes.sort_unstable();
+    Ok(axes)
 }
 
 fn prepare_inchi(

@@ -572,6 +572,90 @@ async fn imported_butenes_retain_specified_or_unspecified_stereo_through_exports
     Ok(())
 }
 
+// RDKit's MolToInchi reads a MOL file's own XYZ; expected values are its output
+// (2026.03.6). The first input is RDKit's C[C@H]1CC[C@H](C)CC1 with out-of-plane Z.
+#[tokio::test]
+async fn mol_imports_give_inchi_their_own_xyz() -> anyhow::Result<()> {
+    const RING: &str = "
+     RDKit          2D
+
+  8  8  0  0  0  0  0  0  0  0999 V2000
+    3.0000    0.0000   -0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    1.5000   -0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.7500   -1.2990    0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.7500   -1.2990   -0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.5000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -3.0000    0.0000    0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.7500    1.2990   -0.4000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.7500    1.2990    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+  2  1  1  1
+  2  3  1  0
+  3  4  1  0
+  4  5  1  0
+  5  6  1  6
+  5  7  1  0
+  7  8  1  0
+  8  2  1  0
+M  END
+";
+    let butene = |stereo: u8| {
+        format!(
+            "
+     RDKit          3D
+
+  4  3  0  0  0  0  0  0  0  0999 V2000
+    1.8942    0.1555   -0.0535 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.4521    0.2141   -0.4705 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.4317   -0.2179    0.4371 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.8978   -0.1863    0.0827 C   0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  1  0
+  2  3  2  {stereo}
+  3  4  1  0
+M  END
+"
+        )
+    };
+    // A 3D header with flat coordinates is still the file's own geometry.
+    const CUMULENE: &str = "
+     RDKit          3D
+
+  6  5  0  0  0  0  0  0  0  0999 V2000
+   -1.0000    1.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    1.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    2.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    3.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    4.0000   -1.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  1  0
+  2  3  2  0
+  3  4  2  0
+  4  5  2  0
+  5  6  1  0
+M  END
+";
+    let engine = crate::engine::LocalEngine::in_process();
+    for (text, expected) in [
+        (
+            CUMULENE.to_owned(),
+            "InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3/b4-3+",
+        ),
+        (
+            RING.to_owned(),
+            "InChI=1S/C8H16/c1-7-3-5-8(2)6-4-7/h7-8H,3-6H2,1-2H3/t7-,8?",
+        ),
+        (butene(0), "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3/b4-3+"),
+        // A crossed double bond stays unspecified with real XYZ too.
+        (butene(3), "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3"),
+    ] {
+        let imported = engine
+            .request(Request::import("mol", &text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(imported.analysis.unwrap().inchi, expected, "{text}");
+    }
+    Ok(())
+}
+
 const UNSPECIFIED_TRIENE_INCHI: &str = "InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3";
 
 #[tokio::test]
@@ -1122,6 +1206,171 @@ fn cross(o: &Point3, a: &Point3, b: &Point3) -> f64 {
     (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
 }
 
+/// CX wedge flags carry configuration only at the coordinates they are read
+/// against: the input coordinates when given, else the fresh layout, which
+/// conventional orientation must then not mirror (#1037).
+const WEDGE_FLAGGED_RING: &str = "C1[C@@H](F)CC[C@H]1O |(0,-1.03088,;1.21353,-0.149206,;2.64011,-0.612731,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,),wD:1.1,5.6|";
+/// The same stereoisomer drawn mirrored in y, with wedges instead of hashes.
+const MIRRORED_WEDGE_FLAGGED_RING: &str = "C1[C@@H](F)CC[C@H]1O |(0,1.03088,;1.21353,0.149206,;2.64011,0.612731,;0.75,-1.27738,;-0.75,-1.27738,;-1.21353,0.149206,;-2.64011,0.612731,),wU:1.1,5.6|";
+
+#[test]
+fn wedge_flagged_smiles_import_keeps_the_stated_enantiomer() -> anyhow::Result<()> {
+    let stated = smiles::write::write(
+        &smiles::read("O[C@@H]1CC[C@H](F)C1")?.prepared.state,
+        Default::default(),
+    )?
+    .text;
+    for text in [
+        WEDGE_FLAGGED_RING,
+        MIRRORED_WEDGE_FLAGGED_RING,
+        "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,;1.21353,-0.149206,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,;0,-1.03088,),wU:1.0,4.4|",
+    ] {
+        let mut visible = imported_smiles(text)?.document;
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        assert_eq!(
+            smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+            stated,
+            "{text}: visible wedges must keep the stated enantiomer"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn wedge_flagged_smiles_import_keeps_stated_stereo_identifiers() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    const RING: &str = "InChI=1S/C5H9FO/c6-4-1-2-5(7)3-4/h4-5,7H,1-3H2";
+    for (text, inchi) in [
+        // Without coordinates the @/@@ tags state m0 whatever the flag (#1044).
+        ("C1[C@@H](F)CC[C@H]1O |wU:1.0|", "/t4-,5+/m0/s1"),
+        ("C1[C@@H](F)CC[C@H]1O |wD:1.0|", "/t4-,5+/m0/s1"),
+        // With coordinates, tags, wedges and coordinates all state m0.
+        (WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
+        (MIRRORED_WEDGE_FLAGGED_RING, "/t4-,5+/m0/s1"),
+        // With 3D coordinates the flags are again read on the fresh layout.
+        (
+            "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,-0.75;1.21353,-0.149206,;0.75,1.27738,0.75;-0.75,1.27738,-0.75;-1.21353,-0.149206,0.75;-2.64011,-0.612731,;0,-1.03088,-0.75),wU:1.0,4.4|",
+            "/t4-,5+/m0/s1",
+        ),
+        (
+            "O[C@@H]1CC[C@H](F)C1 |(2.64011,-0.612731,;1.21353,-0.149206,;0.75,1.27738,;-0.75,1.27738,;-1.21353,-0.149206,;-2.64011,-0.612731,;0,-1.03088,),wU:1.0,4.4|",
+            "/t4-,5+/m0/s1",
+        ),
+    ] {
+        let imported = engine
+            .request(Request::import("smiles", text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            imported.analysis.unwrap().inchi,
+            format!("{RING}{inchi}"),
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+/// A CX wedge flag without coordinates has no geometric meaning, so the
+/// @/@@ tag (or its absence) states the configuration: the flagged import
+/// draws and identifies exactly as the bare SMILES, whether the flag read on
+/// the layout would agree with the tag (wD here) or not (wU) (#1044).
+#[tokio::test]
+async fn coordinate_free_wedge_flags_follow_the_tag() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let import = async |format: &str, text: &str| {
+        engine
+            .request(Request::import(format, text))
+            .await
+            .map_err(anyhow::Error::msg)
+    };
+    // The flag also names a bond's begin atom, which orders a plain bond's ends.
+    let drawn = |response: &Response| {
+        let mut document = response.document.clone().unwrap();
+        for bond in &mut document.bonds {
+            if bond.display == "plain" && bond.a > bond.b {
+                std::mem::swap(&mut bond.a, &mut bond.b);
+            }
+        }
+        document
+    };
+    const ALANINE: &str = "InChI=1S/C3H7NO2/c1-2(4)3(5)6/h2H,4H2,1H3,(H,5,6)/t2-/m0/s1";
+    for (format, bare, inchi) in [
+        ("smiles", "C[C@H](N)C(=O)O", Some(ALANINE)),
+        ("naming_smiles", "C[C@H](N)C(=O)O", Some(ALANINE)),
+        (
+            "smiles",
+            "C1[C@@H](F)CC[C@H]1O",
+            Some("InChI=1S/C5H9FO/c6-4-1-2-5(7)3-4/h4-5,7H,1-3H2/t4-,5+/m0/s1"),
+        ),
+        (
+            "smiles",
+            "CC=[C@]=CC",
+            Some("InChI=1S/C5H8/c1-3-5-4-2/h3-4H,1-2H3/t5-/m0/s1"),
+        ),
+        ("smiles", "FC(Cl)(Br)I", None),
+    ] {
+        let stated =
+            smiles::write::write(&smiles::read(bare)?.prepared.state, Default::default())?.text;
+        let expected = import(format, bare).await?;
+        for flag in ["wU", "wD"] {
+            let text = format!("{bare} |{flag}:1.0|");
+            let imported = import(format, &text).await?;
+            if let Some(analysis) = &expected.analysis {
+                let actual = imported.analysis.as_ref().unwrap();
+                assert_eq!(actual.inchi, analysis.inchi, "{text}");
+                assert_eq!(actual.smiles, analysis.smiles, "{text}");
+            }
+            if let Some(inchi) = inchi {
+                assert_eq!(imported.analysis.as_ref().unwrap().inchi, inchi, "{text}");
+            }
+            let mut visible = drawn(&imported);
+            assert_eq!(visible, drawn(&expected), "{text}");
+            for atom in &mut visible.atoms {
+                atom.stereo = None;
+            }
+            assert_eq!(
+                smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?
+                    .text,
+                stated,
+                "{text}: visible wedges must state the tag"
+            );
+        }
+    }
+    // A wavy flag next to a wedge flag keeps the flags on the layout (#1049):
+    // the drawing must not lose the tagged centre's stereobond.
+    let text = "C[C@H](N)C(=O)O |w:0.0,wD:1.1|";
+    let mut visible = drawn(&import("smiles", text).await?);
+    for atom in &mut visible.atoms {
+        atom.stereo = None;
+    }
+    assert_eq!(
+        smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+        "C[C@H](N)C(=O)O",
+        "{text}"
+    );
+    // An axial flag has no tag to defer to: the molecule reader takes the
+    // configuration from it, and the drawing is wedged from that.
+    let binol = "c1(-c2c(O)c3c(cc2)cccc3)c(O)c2c(cc1)cccc2";
+    let mut axes = Vec::new();
+    for flag in ["wU", "wD"] {
+        let document = import("smiles", &format!("{binol} |{flag}:0.13|"))
+            .await?
+            .document
+            .unwrap();
+        let labels = document
+            .bonds
+            .iter()
+            .filter_map(|bond| bond.cip_label.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(labels.len(), 1, "{flag}: {labels:?}");
+        axes.push(labels);
+    }
+    assert_ne!(axes[0], axes[1]);
+    Ok(())
+}
+
 /// No non-bonded atom pair is inside the depictor's 0.7-unit collision
 /// threshold (bonds are 1.5 units), and no bond outside a ring crosses that
 /// ring's edges or ends inside its polygon.
@@ -1190,6 +1439,99 @@ fn buchwald_ligands_lay_out_without_ring_overlap() -> anyhow::Result<()> {
             },
         )?;
         assert_separated(text, state, &cleaned.positions);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn reaction_imports_keep_stated_alkene_stereo() -> anyhow::Result<()> {
+    // Reaction participants keep `/` `\` (or RXN geometry) as directions
+    // without assigned stereo. Those state E/Z; an alkene the input leaves
+    // open stays unspecified (#1043, #909).
+    const AGENT_RXN: &str = "$RXN\n\n      RDKit\n\n  1  1  1\n\
+        $MOL\n\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n\
+        \x20   0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\nM  END\n\
+        $MOL\n\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n\
+        \x20   0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\nM  END\n\
+        $MOL\n\n     RDKit          2D\n\n  4  3  0  0  0  0  0  0  0  0999 V2000\n\
+        \x20  -1.9796   -0.1365    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        \x20  -0.5994    0.4508    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        \x20   0.5994   -0.4508    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        \x20   1.9796    0.1365    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        \x20 1  2  1  0\n  2  3  2  0\n  3  4  1  0\nM  END\n";
+    let engine = crate::engine::LocalEngine::in_process();
+    for (format, text, smiles, inchi, unspecified) in [
+        (
+            "rsmi",
+            "C/C=C/C>>C",
+            "C.C/C=C/C",
+            Some("InChI=1S/C4H8.CH4/c1-3-4-2;/h3-4H,1-2H3;1H4/b4-3+;"),
+            0,
+        ),
+        (
+            "rsmi",
+            r"C/C=C\C>>C",
+            r"C.C/C=C\C",
+            Some("InChI=1S/C4H8.CH4/c1-3-4-2;/h3-4H,1-2H3;1H4/b4-3-;"),
+            0,
+        ),
+        (
+            "rsmi",
+            "C/C=C/C>O>N",
+            "C/C=C/C.N.O",
+            Some("InChI=1S/C4H8.H3N.H2O/c1-3-4-2;;/h3-4H,1-2H3;1H3;1H2/b4-3+;;"),
+            0,
+        ),
+        (
+            "rsmi",
+            "CC=CC>>C",
+            "C.CC=CC",
+            Some("InChI=1S/C4H8.CH4/c1-3-4-2;/h3-4H,1-2H3;1H4"),
+            1,
+        ),
+        ("rsmi", "C/C=C/CC=CCC>>C", "C.C/C=C/CC=CCC", None, 1),
+        ("rsmi", "CC=CCC/C=C/CC>>C", "C.CC=CCC/C=C/CC", None, 1),
+        // Input coordinates take precedence over directions, as in RDKit.
+        (
+            "rsmi",
+            "C/C=C/C>>C |(0,1,;1,0,;2,0,;3,1,;4,0,)|",
+            r"C.C/C=C\C",
+            None,
+            0,
+        ),
+        // Source perception fails on the invalid property: keep #909's rule.
+        (
+            "rsmi",
+            "(C/C=C/C.CC=CC)>>C |(0,1,;1,0,;2,0,;3,-1,;5,1,;6,0,;7,0,;8,-1,;10,0,),atomProp:1._UnknownStereo.x|",
+            "C.CC=CC.CC=CC",
+            None,
+            2,
+        ),
+        ("rxn", AGENT_RXN, "C.C.C/C=C/C", None, 0),
+    ] {
+        let response = engine
+            .request(Request::import(format, text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let analysis = response.analysis.unwrap();
+        assert_eq!(analysis.smiles, smiles, "{text}");
+        if let Some(inchi) = inchi {
+            assert_eq!(analysis.inchi, inchi, "{text}");
+        }
+        let document = response.document.unwrap();
+        let marked = document
+            .bonds
+            .iter()
+            .filter(|bond| bond.order == 2 && bond.stereo_authoritative)
+            .count();
+        assert_eq!(marked, unspecified, "{text}");
+        assert!(
+            document
+                .bonds
+                .iter()
+                .all(|bond| bond.stereo.is_none() && bond.stereo_atoms.is_empty()),
+            "{text}"
+        );
     }
     Ok(())
 }

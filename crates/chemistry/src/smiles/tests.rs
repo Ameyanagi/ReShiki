@@ -813,6 +813,39 @@ fn allene_smiles_writes_exact_classes_and_rejects_unsupported_topologies() -> an
 }
 
 #[test]
+fn raw_allene_tag_off_an_allene_centre_writes_no_winding() -> anyhow::Result<()> {
+    // Raw states can carry tag 5 anywhere; RDKit writes no winding for it
+    // outside ring stereo.
+    for (text, atom) in [("C", 0), ("CC(C)(F)Cl", 1), ("CC=C", 1)] {
+        let mut state = super::read(text)?.prepared.state;
+        state.metadata.atoms[atom].chiral_tag = 5;
+        state.metadata.atoms[atom].chiral_permutation = Some(1);
+        for root in 0..state.graph.atoms.len() {
+            let options = super::write::Options {
+                canonical: false,
+                root: Some(root),
+                ..Default::default()
+            };
+            assert!(
+                !super::write::write(&state, options)?.text.contains('@'),
+                "{text}, root {root}"
+            );
+        }
+    }
+    // Ring stereo rewrites any tag on its centres, tag 5 included, as RDKit's
+    // canonicalizeFragment does: RDKit 2026.03.6 writes the same SMILES here.
+    let mut ring = super::read("O[C@H]1CC[C@@H](O)CC1")?.prepared.state;
+    for atom in [1, 4] {
+        ring.metadata.atoms[atom].chiral_tag = 5;
+    }
+    assert_eq!(
+        super::write::write(&ring, Default::default())?.text,
+        "O[C@H]1CC[C@@H](O)CC1"
+    );
+    Ok(())
+}
+
+#[test]
 fn bridging_hydride_keeps_configuration() -> anyhow::Result<()> {
     // A bridging H⁻ continues to B, so it is not the ligand an implicit H is.
     for (first, second) in [

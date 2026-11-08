@@ -1,4 +1,6 @@
 //! Independent complete-document comparison with the original replacement edit.
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, abbreviations, document},
@@ -22,6 +24,36 @@ struct Case {
     expected: Option<Document>,
     error: Option<String>,
     chemistry_ok: Option<bool>,
+}
+
+/// #909: a group's double bond that its SMILES leaves without E/Z stays
+/// unspecified (`stereo_authoritative` with no stereo) instead of taking E/Z
+/// from the inserted layout. Mark exactly those bonds in the expectation.
+fn unspecified_ez(original: &Document, actual: &Value, expected: &mut Value, smiles: &str) {
+    if smiles.contains(['/', '\\']) {
+        return;
+    }
+    // Only bonds of the inserted group, whose atoms the source did not hold.
+    let inserted = |id: &Value| {
+        id.as_u64()
+            .is_some_and(|id| original.atoms.iter().all(|a| a.id != id))
+    };
+    for (bond, expected) in actual["bonds"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .zip(expected["bonds"].as_array_mut().into_iter().flatten())
+    {
+        if bond["order"] == 2
+            && inserted(&bond["a"])
+            && inserted(&bond["b"])
+            && bond["stereo_authoritative"] == true
+            && bond["stereo"].is_null()
+            && expected.get("stereo_authoritative").is_none()
+        {
+            expected["stereo_authoritative"] = true.into();
+        }
+    }
 }
 
 fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
@@ -126,6 +158,7 @@ fn math_diagnostic(case: &Case, geometry: &Value) -> anyhow::Result<String> {
 
 #[test]
 fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -177,11 +210,12 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
         let failure = match (result, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 successful += 1;
-                let difference = difference(
-                    &serde_json::to_value(&actual)?,
-                    &serde_json::to_value(expected)?,
-                    "document",
-                );
+                let actual_value = serde_json::to_value(&actual)?;
+                let mut expected = serde_json::to_value(expected)?;
+                if let Some(preset) = catalog.iter().find(|p| p.label == case.label) {
+                    unspecified_ez(&case.document, &actual_value, &mut expected, &preset.smiles);
+                }
+                let difference = difference(&actual_value, &expected, "document");
                 let chemistry = if let Some(allowed) = case.chemistry_ok {
                     rejected_chemistry += usize::from(!allowed);
                     let prepared = document::prepare(&actual);
@@ -229,6 +263,7 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
 
 #[test]
 fn failed_replacement_leaves_its_source_unchanged() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let doc: Document = serde_json::from_value(serde_json::json!({"version":15,"atoms":[
         {"id":1,"element":"C","position":{"x":0,"y":0}},
         {"id":2,"element":"C","position":{"x":0,"y":0}}
@@ -256,6 +291,7 @@ fn failed_replacement_leaves_its_source_unchanged() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn replacement_uses_the_actual_request_and_response_numeric_contract() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -313,12 +349,10 @@ async fn replacement_uses_the_actual_request_and_response_numeric_contract() -> 
             let expected: Document = serde_json::from_value(result["edit"].clone())?;
             let direct: Document = serde_json::from_str(&result["edit"].to_string())?;
             output_regressions += usize::from(direct != expected);
-            let actual = abbreviations::replace(&doc, &[1], &preset.label)?;
-            let mismatch = difference(
-                &serde_json::to_value(&actual)?,
-                &serde_json::to_value(&expected)?,
-                "document",
-            );
+            let actual = serde_json::to_value(abbreviations::replace(&doc, &[1], &preset.label)?)?;
+            let mut expected = serde_json::to_value(&expected)?;
+            unspecified_ez(&doc, &actual, &mut expected, &preset.smiles);
+            let mismatch = difference(&actual, &expected, "document");
             anyhow::ensure!(
                 mismatch.is_none(),
                 "{} {origin:?}/{outside:?}: {mismatch:?}",

@@ -1,3 +1,6 @@
+#[path = "support/hydrogen_isotopes.rs"]
+#[allow(dead_code)]
+mod hydrogen_isotopes;
 use anyhow::Context;
 use reshiki::{
     document::{Annotation, Document, Point},
@@ -892,6 +895,30 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         }
         let expected = oracle.request(&request)?;
         let actual = drawing::write(&doc, drawing::Options::from(&request));
+        let actual = if hydrogen_isotopes::labelled(&doc) {
+            actual.map(|xml| hydrogen_isotopes::as_mass_numbers(&xml))
+        } else {
+            actual
+        };
+        // #882 marks a polyhedral frame metal as "not a stereocentre" so
+        // ChemDraw reads its wedges as projection; the original writer predates it.
+        let actual = if name.starts_with("template/builtin:Coordination geometry/") {
+            actual.map(|xml| {
+                assert_eq!(frame_marker(&xml).as_deref(), Some(xml.as_str()), "{name}");
+                xml.replacen(" AS=\"N\"", "", 1)
+            })
+        } else if name.starts_with("template/builtin:Nucleosides/") {
+            // #881's nucleosides right-align one contracted group explicitly,
+            // which the original writer predates; everything else compares.
+            actual.map(|xml| {
+                if !xml.contains(" LabelJustification=\"Right\"") {
+                    return xml;
+                }
+                right_aligned_group(&xml).unwrap_or_else(|| panic!("{name}: right-aligned group"))
+            })
+        } else {
+            actual
+        };
         match (actual, expected.get("output").and_then(Value::as_str)) {
             (Ok(actual), Some(expected)) => {
                 if let Err(error) = compare_xml_with_source(&actual, expected, &name, Some(&doc)) {
@@ -901,6 +928,16 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
                 accepted += 1;
             }
             (Err(_), None) => {
+                rejected += 1;
+            }
+            // #894: CDXML/CDX export asks to convert a Fischer projection first
+            // "instead of dropping the stereo"; the original writer predates it.
+            (Err(error), Some(_))
+                if name.starts_with("template/builtin:Fischer projections/")
+                    && error.to_string().contains(
+                        "CDXML/CDX cannot preserve Fischer projection stereochemistry",
+                    ) =>
+            {
                 rejected += 1;
             }
             (actual, expected) => failures.push(format!(
@@ -1001,4 +1038,77 @@ fn invalid_export_geometry_and_text_return_errors() -> anyhow::Result<()> {
     );
     assert!(drawing::write(&text, drawing::Options::default())?.contains("valid"));
     Ok(())
+}
+
+/// #882: the CDXML when its one `AS="N"` marks the polyhedral frame metal,
+/// the node with the most bonds; `None` for a missing, repeated or misplaced
+/// marker.
+fn frame_marker(xml: &str) -> Option<String> {
+    let marker = " AS=\"N\"";
+    if xml.matches(marker).count() != 1 {
+        return None;
+    }
+    let at = xml.find(marker)?;
+    let start = xml[..at].rfind('<')?;
+    let tag = &xml[start..at];
+    if !tag.starts_with("<n ") || tag.contains('>') {
+        return None;
+    }
+    let id = tag.split(" id=\"").nth(1)?.split('"').next()?;
+    let bonds = |id: &str| {
+        xml.matches(&format!(" B=\"{id}\"")).count() + xml.matches(&format!(" E=\"{id}\"")).count()
+    };
+    let own = bonds(id);
+    let others = xml
+        .match_indices("<n ")
+        .filter_map(|(i, _)| xml[i..].split(" id=\"").nth(1)?.split('"').next())
+        .filter(|other| *other != id)
+        .map(bonds)
+        .max()
+        .unwrap_or(0);
+    (own > others).then(|| xml.to_owned())
+}
+
+/// #881: undo the one right-aligned contracted group, which must be one
+/// `<n NodeType="Fragment" LabelDisplay="Right">` whose own label `<t>`, after
+/// its inner fragment, is right-justified and right-aligned. `None` otherwise.
+fn right_aligned_group(xml: &str) -> Option<String> {
+    let display = " LabelDisplay=\"Right\"";
+    if [
+        display,
+        " LabelJustification=\"Right\"",
+        " LabelAlignment=\"Right\"",
+    ]
+    .iter()
+    .any(|a| xml.matches(a).count() != 1)
+    {
+        return None;
+    }
+    let at = xml.find(display)?;
+    let start = xml[..at].rfind('<')?;
+    let node = &xml[start..at];
+    if !node.starts_with("<n ") || node.contains('>') || !node.contains(" NodeType=\"Fragment\"") {
+        return None;
+    }
+    // The group's own label follows its inner fragment.
+    let text = at + xml[at..].find("</fragment>")? + "</fragment>".len();
+    if !xml[text..].starts_with("<t ") {
+        return None;
+    }
+    let close = text + xml[text..].find('>')?;
+    let tag = &xml[text..close];
+    if !tag.contains(" LabelJustification=\"Right\"") || !tag.contains(" LabelAlignment=\"Right\"")
+    {
+        return None;
+    }
+    let tag = tag
+        .replacen(" LabelJustification=\"Right\"", "", 1)
+        .replacen(" LabelAlignment=\"Right\"", " LabelAlignment=\"Left\"", 1);
+    Some(format!(
+        "{}{}{}{}",
+        &xml[..at],
+        &xml[at + display.len()..text],
+        tag,
+        &xml[close..]
+    ))
 }

@@ -36,7 +36,7 @@ fn stereo_cleanup_matches_independent_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("reference/stereo_reference.py"))
+        .arg(root.join("reference/stereo_allene_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -92,6 +92,7 @@ fn stereo_cleanup_matches_independent_rdkit() -> anyhow::Result<()> {
                 usize::from(expected["metadata"]["groups"] != original["metadata"]["groups"]);
         }
         let matches = match (&result, &case.expected) {
+            // The oracle clears tag 5 on non-allene atoms first (#892).
             (Ok(actual), Some(expected)) => actual == expected,
             (Err(_), None) => true,
             _ => false,

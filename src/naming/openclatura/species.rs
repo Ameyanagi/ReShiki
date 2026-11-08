@@ -78,35 +78,7 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
     {
         return;
     }
-    // Nitro, N-oxide, azido, diazo and isocyano charges express neutral groups rather
-    // than anionic centres. A separate cation does not cancel a real centre.
-    let neutral_group_atoms: std::collections::BTreeSet<_> =
-        super::perception::perceive_groups(mol)
-            .into_iter()
-            .filter(|group| {
-                (matches!(
-                    group.key.as_str(),
-                    "nitro"
-                        | "azido"
-                        | "diazo"
-                        | "acid_azide"
-                        | "ring_acid_azide"
-                        | "isocyano"
-                        | "acid_isocyanide"
-                        | "ring_acid_isocyanide"
-                ) || group
-                    .descriptor
-                    .as_ref()
-                    .is_some_and(|descriptor| descriptor.derivative == "zwitterion"))
-                    && group
-                        .atoms_involved
-                        .iter()
-                        .map(|i| mol.atoms[i].charge)
-                        .sum::<i32>()
-                        == 0
-            })
-            .flat_map(|group| group.atoms_involved)
-            .collect();
+    let neutral_group_atoms = neutral_group_atoms(mol);
     let anionic_centre = |i: &usize| mol.atoms[i].charge < 0 && !neutral_group_atoms.contains(i);
     if !mol.atoms.keys().any(anionic_centre) {
         return;
@@ -155,6 +127,70 @@ pub(super) fn assess_anion_parent(mol: &Molecule, derivation: &Derivation) {
             mol.mark_name(status);
         }
     }
+}
+
+/// P-41, P-73.1: a cation is senior to every neutral class, so its parent must
+/// carry a cationic centre. A name that cites every cationic centre in a prefix,
+/// as in (1-methylpyridin-1-ium-4-yl)methanol, is not certified.
+pub(super) fn assess_cation_parent(mol: &Molecule, derivation: &Derivation) {
+    let Derivation::Plan {
+        parent_atoms,
+        principal_group,
+        ..
+    } = derivation
+    else {
+        return;
+    };
+    let neutral_group_atoms = neutral_group_atoms(mol);
+    let centres: Vec<_> = mol
+        .atoms
+        .iter()
+        .filter(|(i, atom)| atom.charge != 0 && !neutral_group_atoms.contains(i))
+        .collect();
+    // Zwitterions and anions take the anionic parent (P-72, P-74).
+    if centres.is_empty() || centres.iter().any(|(_, atom)| atom.charge < 0) {
+        return;
+    }
+    let cited = |i: &usize| {
+        parent_atoms.contains(i)
+            || principal_group
+                .as_ref()
+                .is_some_and(|(_, atoms)| atoms.contains(i))
+    };
+    if !centres.iter().any(|(i, _)| cited(i)) {
+        mol.mark_name(NameStatus::Unverified(NameReason::CationParent));
+    }
+}
+
+/// Nitro, N-oxide, azido, diazo and isocyano charges express neutral groups
+/// rather than ionic centres. A separate counter-ion does not cancel a real centre.
+fn neutral_group_atoms(mol: &Molecule) -> std::collections::BTreeSet<usize> {
+    super::perception::perceive_groups(mol)
+        .into_iter()
+        .filter(|group| {
+            (matches!(
+                group.key.as_str(),
+                "nitro"
+                    | "azido"
+                    | "diazo"
+                    | "acid_azide"
+                    | "ring_acid_azide"
+                    | "isocyano"
+                    | "acid_isocyanide"
+                    | "ring_acid_isocyanide"
+            ) || group
+                .descriptor
+                .as_ref()
+                .is_some_and(|descriptor| descriptor.derivative == "zwitterion"))
+                && group
+                    .atoms_involved
+                    .iter()
+                    .map(|i| mol.atoms[i].charge)
+                    .sum::<i32>()
+                    == 0
+        })
+        .flat_map(|group| group.atoms_involved)
+        .collect()
 }
 
 /// Nonitalic Roman letters, then locants (italic element locants before numerals).

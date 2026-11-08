@@ -42,6 +42,11 @@ fn collisions(state: &State, positions: &[Point3], stop: usize, bond_length: f64
         }
         cells.entry(cell).or_default().push((id, point));
     }
+    // Atom-on-bond overlaps and the bridge repair (#735) are ReShiki
+    // refinements that live RDKit comparisons stop before.
+    if !crate::chemistry::document::refine() {
+        return count;
+    }
     for bond in &state.graph.bonds {
         let (Some(a), Some(b)) = (positions.get(bond.a), positions.get(bond.b)) else {
             continue;
@@ -97,6 +102,7 @@ pub(in crate::engine) fn improve(
         depict::Options {
             bond_length,
             use_ring_templates: true,
+            path_angle_expansion: crate::chemistry::document::refine(),
             ..Default::default()
         },
     ) {
@@ -105,9 +111,15 @@ pub(in crate::engine) fn improve(
         if collisions(state, &positions, count, bond_length) < count {
             return positions;
         }
+        if !crate::chemistry::document::refine() {
+            return original;
+        }
         if let Some(positions) = bridges::clear(state, &positions, bond_length) {
             return positions;
         }
+    }
+    if !crate::chemistry::document::refine() {
+        return original;
     }
     if let Some(positions) = bridges::clear(state, &original, bond_length) {
         return positions;

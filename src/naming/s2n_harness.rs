@@ -74,6 +74,14 @@ fn corpus(fast: bool) -> Vec<Case> {
     cases
 }
 
+/// Input identity for comparison. Atom maps and an explicit [H] can leave
+/// bond directions on a non-stereogenic double bond in the first canonical
+/// form, as for `[H]/N=C=C=CC`; one more pass reaches the fixed point that a
+/// parsed name produces, as the CLI's import does before naming.
+fn identity(smiles: &str) -> Result<String, String> {
+    super::canonical_smiles(&super::canonical_smiles(smiles)?)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Class {
     Correct,
@@ -134,7 +142,7 @@ impl Measurements {
             class: Class::Declined,
             name: name.into(),
             status: None,
-            expected: super::canonical_smiles(smiles).unwrap_or_default(),
+            expected: identity(smiles).unwrap_or_default(),
             actual: String::new(),
             reason: String::new(),
         };
@@ -161,7 +169,7 @@ impl Measurements {
     /// All four checks share the same structural classification. Text parity
     /// is an additional metric: alternative valid names are not wrong graphs.
     fn classify(&mut self, smiles: &str) -> Outcome {
-        let expected = match super::canonical_smiles(smiles) {
+        let expected = match identity(smiles) {
             Ok(value) => value,
             Err(reason) => {
                 return Outcome {
@@ -583,7 +591,7 @@ fn run(fast: bool) {
         });
         assert_ne!(
             Ok(actual),
-            super::canonical_smiles(smiles),
+            identity(smiles),
             "{smiles}: now fixed, remove it from name_known_failures.tsv"
         );
     }
@@ -626,7 +634,7 @@ fn run(fast: bool) {
     for case in cases.iter().filter(|c| !c.pubchem_name.is_empty()) {
         match measurements.parse_name(&case.pubchem_name) {
             Ok(actual) => {
-                let expected = super::canonical_smiles(&case.smiles)
+                let expected = identity(&case.smiles)
                     .unwrap_or_else(|error| panic!("{}: {error}", case.smiles));
                 let reason = known.get(&(case.smiles.as_str(), case.pubchem_name.as_str()));
                 if actual == expected {

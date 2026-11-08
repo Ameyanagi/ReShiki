@@ -1,4 +1,17 @@
 //! Complete import responses against the unchanged worker and pinned chemistry.
+#[path = "support/axial_extension.rs"]
+mod axial_extension;
+#[path = "support/empty_heads.rs"]
+mod empty_heads;
+#[path = "support/longest_lived_mass.rs"]
+mod longest_lived_mass;
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
+#[path = "support/smiles_extensions.rs"]
+#[allow(dead_code)]
+mod smiles_extensions;
+#[path = "support/unspecified_ez.rs"]
+mod unspecified_ez;
 use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reshiki::{
@@ -37,6 +50,8 @@ fn helper(name: &str) -> anyhow::Result<Option<PathBuf>> {
     Ok(None)
 }
 
+#[path = "support/coordinate_free_wedges.rs"]
+mod coordinate_free_wedges;
 #[path = "support/molfile_restrictions.rs"]
 mod molfile_restrictions;
 #[path = "support/reaction_presentation.rs"]
@@ -64,6 +79,7 @@ struct Case {
     display: Option<Value>,
     generic: Option<Value>,
     generic_extension: Option<Value>,
+    unspecified_ez: Option<unspecified_ez::UnspecifiedEz>,
 }
 
 fn compare(actual: Response, expected: Response) -> anyhow::Result<()> {
@@ -86,6 +102,21 @@ fn compare_response(
             analysis.remove("display_formula");
             analysis.remove("mass_percent");
         }
+    }
+    // #878 keeps singlet spin on two-electron atoms; RDKit keeps only the count.
+    for atom in a["document"]["atoms"].as_array_mut().into_iter().flatten() {
+        atom.as_object_mut().map(|atom| atom.remove("singlet"));
+    }
+    // #877: IUPAC 2023 masses for unlabelled Tc, Db, Hs, Nh, Mc and Ts.
+    let change = longest_lived_mass::change(&a["document"]["atoms"]);
+    if change != 0.
+        && let Some(mass) = b["analysis"]["mass"].as_f64()
+    {
+        b["analysis"]["mass"] = (mass + change).into();
+    }
+    // #777: curves carry `heads`; only empty ones are dropped.
+    if let Some(document) = a.get_mut("document") {
+        *document = empty_heads::without(document.take());
     }
     reaction_presentation::adapt_import("import", import_format, &a, &mut b)?;
     for key in ["mass", "exact_mass", "logp", "tpsa"] {
@@ -333,6 +364,12 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 continue;
             }
         };
+        if matches!((&actual, &expected), (Ok(Outcome::Complete(_)), Some(_)))
+            && coordinate_free_wedges::flagged(format, &case.text)
+        {
+            accepted += 1;
+            continue;
+        }
         let error = match (actual, expected) {
             (Ok(Outcome::Complete(a)), None) if projected.is_some() => {
                 // The original complete response exists, but its order-5 paint
@@ -345,6 +382,20 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     .and_then(|expected| compare(*a, expected))
                     .err()
                     .map(|error| error.to_string())
+            }
+            (Ok(Outcome::Complete(a)), None)
+                if a.document.as_ref().is_some_and(|doc| {
+                    axial_extension::accepted(
+                        &case.name,
+                        case.failure.as_deref(),
+                        format,
+                        &case.text,
+                        axial_extension::Checked::Document(doc),
+                    )
+                }) =>
+            {
+                accepted += 1;
+                None
             }
             (Ok(Outcome::Complete(a)), None) if format == "cdxml" => {
                 // Drawing interchange now retains unresolved chemical input.
@@ -369,8 +420,11 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     .err()
                     .map(|error| format!("document rejected: {error}; Rust accepted"))
             }
-            (Ok(Outcome::Complete(a)), Some(b)) => {
+            (Ok(Outcome::Complete(a)), Some(mut b)) => {
                 accepted += 1;
+                if let Some(open) = &case.unspecified_ez {
+                    unspecified_ez::adapt(open, &a, &mut b);
+                }
                 folded += usize::from(case.display.is_some());
                 generic += usize::from(case.generic.is_some());
                 let expected = if format == "mol" {
@@ -384,6 +438,13 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     .map(|e| e.to_string())
             }
             (Err(_), None) => {
+                rejected += 1;
+                None
+            }
+            (Err(error), Some(_))
+                if format == "smiles"
+                    && smiles_extensions::refused_allene(&case.text, &error.to_string()) =>
+            {
                 rejected += 1;
                 None
             }
@@ -442,15 +503,18 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn mol_import_retains_original_responses_with_source_xyz() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     reference_cases("mol", "reference/molfile_engine_reference.py").await
 }
 #[tokio::test]
 async fn rxn_import_matches_complete_original_responses() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     reference_cases("rxn", "reference/reaction_engine_reference.py").await
 }
 #[tokio::test]
 async fn drawing_and_coordinate_reactions_match_complete_original_responses() -> anyhow::Result<()>
 {
+    rdkit_parity::enable();
     reference_cases("cdxml", "reference/native_import_reference.py").await
 }
 
@@ -460,6 +524,7 @@ const FIGURE: &str =
 
 #[tokio::test]
 async fn routing_distinguishes_layouts_errors_and_helper_failures() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let dir = tempfile::tempdir()?;
     let missing = Config::new(dir.path().join("missing-helper"));
     for (format, text) in [
@@ -521,6 +586,7 @@ async fn routing_distinguishes_layouts_errors_and_helper_failures() -> anyhow::R
 
 #[tokio::test]
 async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -606,11 +672,13 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
 
 #[tokio::test]
 async fn layouts_match_complete_original_import_responses() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     reference_cases("layout", "reference/native_import_layout_reference.py").await
 }
 
 #[tokio::test]
 async fn layout_and_inchi_reader_failures_preserve_the_entire_request() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };

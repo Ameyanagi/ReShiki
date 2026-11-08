@@ -26,6 +26,49 @@ fn options() -> Options {
 }
 
 #[test]
+fn allene_winding_needs_an_axis() -> TestResult {
+    // Like ligands at a terminal leave no axis, as at a centre: two methyls,
+    // atom maps, or ¹H beside H (#992). Stereo-only differences (m/p), ring
+    // paths and a bridging hydride, which continues to B, keep the winding.
+    for (smiles, kept) in [
+        ("CC=C=C(C)C", false),
+        ("CC=C=C([CH3:1])[CH3:2]", false),
+        ("[1H]C=C=C(F)Cl", false),
+        ("CC=C=C(C)CC", true),
+        ("[2H]C=C=C(F)Cl", true),
+        ("C([C@H](F)Cl)([C@@H](F)Cl)=C=C(I)Br", true),
+        ("C1CCC2=C=C1CCC2", true),
+        ("B[H-]C=C=C(F)Cl", true),
+    ] {
+        let mut input = crate::smiles::prepare(smiles)?.state;
+        let center = (0..input.graph.atoms.len())
+            .find(|&i| crate::stereo::allene::terminals(&input.graph, i).is_some())
+            .ok_or_else(|| anyhow::anyhow!("No allene in {smiles}"))?;
+        input.metadata.atoms[center].chiral_tag = 5;
+        input.metadata.atoms[center].chiral_permutation = Some(1);
+        for clean in [false, true] {
+            let options = Options { clean, ..options() };
+            let meta = &perceive(&input, options)
+                .map_err(anyhow::Error::msg)?
+                .metadata
+                .atoms[center];
+            assert_eq!(
+                (meta.chiral_tag, meta.chiral_permutation),
+                if kept { (5, Some(1)) } else { (0, None) },
+                "{smiles}, clean {clean}"
+            );
+        }
+    }
+    // A stereo group loses a cleared allene, as it loses a cleared centre.
+    let read = crate::smiles::read("CC=[C@AL1]=C(C)C |&1:2|")?
+        .prepared
+        .state;
+    assert!(read.metadata.atoms.iter().all(|a| a.chiral_tag == 0));
+    assert!(read.metadata.groups.is_empty());
+    Ok(())
+}
+
+#[test]
 fn unspecified_stereo_uses_perceived_atom_and_double_bond_candidates() -> TestResult {
     for (smiles, unspecified) in [
         ("CC(O)C(=O)O", true),
@@ -163,8 +206,8 @@ fn empty_and_cached_done_do_not_require_stereo_ranks() -> TestResult {
 fn invalid_metadata_and_work_exhaustion_leave_inputs_unchanged() -> TestResult {
     let input = star().map_err(anyhow::Error::msg)?;
     let before = serde_json::to_value(&input)?;
-    assert!(with_work(&input, options(), None, &mut Work(0)).is_err());
-    assert!(with_work(&input, options(), None, &mut Work(10)).is_err());
+    assert!(with_work(&input, options(), None, true, &mut Work(0)).is_err());
+    assert!(with_work(&input, options(), None, true, &mut Work(10)).is_err());
     assert!(perceive_file_queries(&input, options(), &[]).is_err());
     let mut bad = input.clone();
     bad.properties.atoms.pop();
@@ -248,5 +291,30 @@ fn deep_chain_is_iterative_and_group_expansion_is_bounded() -> TestResult {
     let error = perceive(&input, options());
     assert!(error.is_err_and(|e| e.contains("group output storage")));
     assert_eq!(serde_json::to_value(&input)?, before);
+    Ok(())
+}
+
+#[test]
+fn cleanup_keeps_allene_winding_only_on_an_allene_centre() -> TestResult {
+    // A raw tag 5 on an atom that is not an allene centre is cleared, as RDKit
+    // does; a supported allene keeps its winding.
+    let mut lone = crate::smiles::prepare("C")?.state;
+    lone.metadata.atoms[0].chiral_tag = 5;
+    lone.metadata.atoms[0].chiral_permutation = Some(1);
+    assert_eq!(
+        perceive(&lone, options())
+            .map_err(anyhow::Error::msg)?
+            .metadata
+            .atoms[0]
+            .chiral_tag,
+        0
+    );
+    let allene = crate::smiles::prepare("OC=[C@AL1]=CF")?.state;
+    let perceived = perceive(&allene, options()).map_err(anyhow::Error::msg)?;
+    assert_eq!(perceived.metadata.atoms[2].chiral_tag, 5);
+    assert_eq!(
+        perceived.metadata.atoms[2].chiral_permutation,
+        allene.metadata.atoms[2].chiral_permutation
+    );
     Ok(())
 }

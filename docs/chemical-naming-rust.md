@@ -336,6 +336,9 @@ with two identical attached components, which may need a multiparent name
 under P-25.3.7.1), `hydro_prefix_locants` (locanted hydro prefixes for a
 completely hydrogenated polycyclic parent, P-31.2.3.3.2), `cation_prefix`
 (`ammonio`, where the need for `azaniumyl` under P-73.6 has not been verified),
+`cation_parent` (every cationic centre cited in a prefix, as in
+`(1-methylpyridin-1-ium-4-yl)methanol`; a cation is senior to neutral classes
+under P-41, so the PIN takes a cationic parent),
 `bridged_fused_parent`, `spiro_hydrogen` (the completed spiro parent’s indicated,
 added or hydro hydrogen state and suffix composition have not been verified),
 `unaudited_path` (a naming path not audited against P-10/P-12),

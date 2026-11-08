@@ -1,3 +1,6 @@
+#[path = "support/intended_cip.rs"]
+#[allow(dead_code)]
+mod intended_cip;
 use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, graph::Graph, ranking::Metadata, stereo};
 use serde::Deserialize;
@@ -58,6 +61,9 @@ fn legacy_atom_priorities_match_independent_rdkit() -> anyhow::Result<()> {
             }
             _ => false,
         };
+        // #992: ¹H ranks as H (P-92.3); RDKit ranks it by isotope mass.
+        let matches = matches
+            || (result.is_ok() && case.expected.is_some() && intended_cip::protium(&case.graph));
         if !matches && failures.len() < 10 {
             failures.push(format!("{}: {result:?} != {:?}", case.name, case.expected));
         }

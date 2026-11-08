@@ -53,6 +53,21 @@ pub fn get_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch
     if !is_monocycle(mol, path) {
         return match_fused_templates(mol, path);
     }
+    // P-22.2.2.1.1: retained and HW monocycles cite the maximum number of
+    // noncumulative double bonds. A ring triple bond or cumulated ring atom
+    // needs dehydro prefixes (P-31.2.4.1), which are not implemented here.
+    let ring: AtomSet = path.iter().copied().collect();
+    if path.iter().any(|&idx| {
+        let orders: Vec<_> = mol
+            .get_neighbors(idx)
+            .iter()
+            .filter(|n| ring.contains(n))
+            .map(|&n| mol.bond_order(idx, n))
+            .collect();
+        orders.contains(&3) || orders.iter().filter(|&&o| o == 2).count() > 1
+    }) {
+        return None;
+    }
     let double_bonds = count_double_bonds_in_ring(mol, path);
     let symbols: Vec<String> = path.iter().map(|i| mol.atoms[i].symbol.clone()).collect();
     let name = match_monocycle_spec(mol, path, double_bonds, &symbols, false)

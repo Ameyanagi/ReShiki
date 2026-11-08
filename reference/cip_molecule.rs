@@ -1,3 +1,5 @@
+#[path = "support/intended_cip.rs"]
+mod intended_cip;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -79,6 +81,14 @@ fn molecule_preparation_matches_native_cipmol() -> anyhow::Result<()> {
         match (&actual, &case.expected) {
             (Ok(value), Some(expected)) if value == expected => accepted += 1,
             (Err(_), None) => rejected += 1,
+            // #992 protium changes ranking only, not this prepared molecule.
+            // #901 changes only the mancude fractions; bond orders and ring
+            // membership are still compared.
+            (Ok(value), Some(expected))
+                if value["orders"] == expected["orders"]
+                    && value["ring_bonds"] == expected["ring_bonds"]
+                    && intended_cip::difference(&case.before.graph, &case.before.metadata)
+                        .is_some_and(|d| d != "#992 protium") => {}
             _ => {
                 mismatches += 1;
                 if failures.len() < 20 {
