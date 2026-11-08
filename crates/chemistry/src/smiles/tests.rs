@@ -814,7 +814,8 @@ fn allene_smiles_writes_exact_classes_and_rejects_unsupported_topologies() -> an
 
 #[test]
 fn raw_allene_tag_off_an_allene_centre_writes_no_winding() -> anyhow::Result<()> {
-    // Raw states can carry tag 5 anywhere; RDKit writes no winding for it.
+    // Raw states can carry tag 5 anywhere; RDKit writes no winding for it
+    // outside ring stereo.
     for (text, atom) in [("C", 0), ("CC(C)(F)Cl", 1), ("CC=C", 1)] {
         let mut state = super::read(text)?.prepared.state;
         state.metadata.atoms[atom].chiral_tag = 5;
