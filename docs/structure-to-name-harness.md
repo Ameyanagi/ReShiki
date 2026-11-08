@@ -55,8 +55,10 @@ for every distinct SMILES in the full bakeoff, openclatura and rules corpora.
 Requests follow first occurrence in that source order, with IUPAC generation
 for every input and Boughton generation for inputs containing an isotope label.
 Each successful generation is followed by a Verify request for its name, a
-strict Parse request for the same name and, when present, a Verify request for
-its radical-ion neutral-parent verification name. Requests use
+strict Parse request for the same name, a Verify request for each alternative
+name and, when present, a Verify request for its radical-ion neutral-parent
+name. A few inputs from the unit tests (listed in `worker_snapshot.rs`) keep
+every optional response field populated; the test fails if one disappears. Requests use
 the app's builders and current worker protocol.
 
 Each JSONL row contains the request object and the original UTF-8 response
