@@ -13,8 +13,8 @@ impl Context<'_> {
         for a in 0..n {
             self.work.spend(1)?;
             let meta = at(&self.input.metadata.atoms, a)?;
-            // Off an allene centre, tag 5 takes the tetrahedral path, which
-            // writes no winding for it, as RDKit does.
+            // Off an allene centre, tag 5 takes the tetrahedral path as in
+            // RDKit: no winding, except that ring stereo rewrites it as @/@@.
             if meta.chiral_tag == 5
                 && !*at(self.broken, a)?
                 && let Some(terminals) = crate::stereo::allene::terminals(&self.input.graph, a)

@@ -831,6 +831,16 @@ fn raw_allene_tag_off_an_allene_centre_writes_no_winding() -> anyhow::Result<()>
             );
         }
     }
+    // Ring stereo rewrites any tag on its centres, tag 5 included, as RDKit's
+    // canonicalizeFragment does: RDKit 2026.03.6 writes the same SMILES here.
+    let mut ring = super::read("O[C@H]1CC[C@@H](O)CC1")?.prepared.state;
+    for atom in [1, 4] {
+        ring.metadata.atoms[atom].chiral_tag = 5;
+    }
+    assert_eq!(
+        super::write::write(&ring, Default::default())?.text,
+        "O[C@H]1CC[C@@H](O)CC1"
+    );
     Ok(())
 }
 
