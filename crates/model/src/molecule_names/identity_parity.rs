@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Origin: original
-// Source: Nazuchem/ReShiki | crates/model/src/molecule_names/identity_parity.rs | 4f67fbcc24c3b6c10cb84e1ced567ad534e40e8b
+// Source: Nazuchem/ReShiki | crates/model/src/molecule_names/identity_parity.rs | 098298a396d6d2b51edeebd62dd66cd9c5871b48
 // Source: ReShiki | crates/model/src/molecule_names.rs | 381ac4164154afecf04bb4a89d8eef32eeb52190
 // Source: ReShiki | crates/model/src/molecule_names/axis_markers.rs | 2df788dc456793c687b934afd6d4b317e3c73ef8
 // Source: ReShiki | crates/model/src/chemistry/document/atrop_tests.rs | feed38dc791ee59fb0b8c4b392a3f72c100a1be7
