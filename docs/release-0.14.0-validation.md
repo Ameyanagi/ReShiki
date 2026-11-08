@@ -148,7 +148,8 @@ compared narrowly:
 
 The complete suite then ran on the release branch on macOS ARM64, Linux x64
 and Windows x64:
-[run 42465554525](https://github.com/Ameyanagi/ReShiki/actions/runs/42465554525).
+[run 42465554525](https://github.com/Ameyanagi/ReShiki/actions/runs/42465554525)
+passed all 12 reference shards and the other 19 jobs (one skipped by design).
 
 ## After the release
 
