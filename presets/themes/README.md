@@ -1,6 +1,6 @@
 # ReShiki theme library
 
-[Browse and download the built-in color palettes](https://reshiki.com/guide/color-palettes/): the Strong and Tint rows of every built-in theme and all 118 elements in Presentation, Pastel, Jmol and VESTA, with exact RGB and derived OKLCH values for both canvas modes. Regenerate the public data and native theme downloads with `cargo run --locked --example theme_colors`, then run `bun run --bun oxfmt website/src/data/theme-colors.json` and `cargo test --locked --test theme_reference`.
+[Browse and download the built-in color palettes](https://reshiki.com/guide/color-palettes/): the Strong and Tint rows of every built-in theme and all 118 elements in Presentation, Pastel, Jmol and VESTA, with exact RGB and derived OKLCH values for both canvas modes. Regenerate the public data and native theme downloads with `cargo run --locked --example theme_colors`, then run `bun fmt website/src/data/theme-colors.json` and `cargo test --locked --test theme_reference`.
 
 A theme controls canvas element colors, periodic-table tile seeds, and the hue angles of its eight-hue palette. It is independent of a journal's drawing style (fonts, bond lengths, stroke widths). The interface's Match canvas / Light / Dark preference remains independent. In v1, canvas paper stays white or black and neutral bonds stay black or white.
 

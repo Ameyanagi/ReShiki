@@ -231,7 +231,7 @@ def verify(root=ROOT, metadata=None):
 
 
 def layout(value, indent="", key=None, comma=""):
-    """Lines in the repository's oxfmt JSON style: arrays inline when they fit."""
+    """Lines in the repository's `bun fmt` JSON style: arrays inline when they fit."""
     head = indent + ("" if key is None else json.dumps(key) + ": ")
     inner = indent + "  "
     if isinstance(value, dict):

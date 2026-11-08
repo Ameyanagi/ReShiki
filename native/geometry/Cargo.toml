@@ -8,19 +8,10 @@ description = "Bounded Rust MMFF/UFF and ETKDG geometry solver"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 # Keep one COSMolKit source and rev across the workspace so its crates unify.
-cosmolkit = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631", default-features = false, features = [
-  "cap-conformer",
-  "cap-forcefields",
-  "cap-hydrogens",
-  "cap-sanitize",
-  "cap-stereo",
-  "cap-transforms",
-] }
+cosmolkit = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631", default-features = false, features = ["cap-conformer", "cap-forcefields", "cap-hydrogens", "cap-sanitize", "cap-stereo", "cap-transforms"] }
 # Symmetrized SSSR rows for cage admission; the facade does not expose them.
 cosmolkit-core = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631" }
 
 [dev-dependencies]
 serde_json = "1"
-cosmolkit = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631", default-features = false, features = [
-  "cap-smiles",
-] }
+cosmolkit = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631", default-features = false, features = ["cap-smiles"] }

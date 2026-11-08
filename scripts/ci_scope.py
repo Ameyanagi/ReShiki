@@ -10,7 +10,7 @@ WEB_FILES = {
     "README.md",
     "package.json",
     "bun.lock",
-    ".oxfmtrc.json",
+    "bunfig.toml",
     ".github/FUNDING.yml",
     ".github/workflows/docs.yml",
 }
