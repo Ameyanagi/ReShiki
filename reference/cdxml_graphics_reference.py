@@ -129,9 +129,27 @@ def emit(
                 image_error=image_error,
                 image_pixels=image_pixels,
                 unarrowed=unarrowed,
+                shaded_or_doubled=shaded_or_doubled(root),
             )
         )
     )
+
+
+def shaded_or_doubled(root):
+    """#777: whether a curve still has the original's non-arrowhead refusal
+    (reference/engine/graphics_exchange.py `curve`)."""
+    for el in root.iter("curve"):
+        try:
+            flags = int(el.get("CurveType", "0"))
+        except ValueError:
+            return False
+        if (
+            flags & ~(1 | 2 | 4 | 128)
+            or el.get("FillType", "None") not in ("None", "Solid", "Unspecified")
+            or el.get("LineType", "Solid") not in ("Solid", "Dashed", "Bold")
+        ):
+            return True
+    return False
 
 
 ARROWHEADS = ("ArrowheadHead", "ArrowheadTail")

@@ -158,7 +158,7 @@ fn complete_labeling_matches_public_native_api() -> anyhow::Result<()> {
             // iteration budget; no other outcome change is accepted.
             && (actual.get("error").is_some() == case.expected.get("error").is_some()
                 || actual["error"] == "iterations"
-                    && case.options.max_iterations > 0
+                    && (1..1_250_000).contains(&case.options.max_iterations)
                     && intended_cip::protium(&case.before.graph))
             && intended_cip::difference(&case.before.graph, &case.before.metadata).is_some()
         {

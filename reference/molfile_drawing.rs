@@ -256,11 +256,19 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
                         )?),
                     ) =>
                 {
-                    drawing
-                        .labels()
-                        .and_then(|labels| drawing.finish(labels))
-                        .err()
-                        .map(|error| format!("Accepted axial drawing did not finish: {error}"))
+                    match drawing.labels().and_then(|labels| drawing.finish(labels)) {
+                        Err(error) => {
+                            Some(format!("Accepted axial drawing did not finish: {error}"))
+                        }
+                        Ok(doc) => (!axial_extension::accepted(
+                            &case.name,
+                            case.failure.as_deref(),
+                            "mol",
+                            &case.text,
+                            axial_extension::Checked::Document(&doc),
+                        ))
+                        .then(|| "Accepted axial drawing changed an axis or its label".into()),
+                    }
                 }
                 (Ok(_), None) => Some(format!("Accepted invalid drawing: {:?}", case.failure)),
             }

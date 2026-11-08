@@ -20,7 +20,10 @@ pub fn adapt(input: &CoordinateWedges, actual: &Response, expected: &mut Respons
             e.position = a.position;
         }
         for (a, e) in a.bonds.iter().zip(e.bonds.iter_mut()) {
-            if (a.a, a.b) == (e.a, e.b) || (a.a, a.b) == (e.b, e.a) {
+            let wedged = |display: &str| matches!(display, "wedge" | "hash");
+            if ((a.a, a.b) == (e.a, e.b) || (a.a, a.b) == (e.b, e.a))
+                && (wedged(&a.display) || wedged(&e.display))
+            {
                 (e.a, e.b, e.display) = (a.a, a.b, a.display.clone());
             }
         }

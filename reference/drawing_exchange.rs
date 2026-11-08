@@ -911,18 +911,10 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
             // #881's nucleosides right-align one contracted group explicitly,
             // which the original writer predates; everything else compares.
             actual.map(|xml| {
-                let edits = [
-                    (" LabelDisplay=\"Right\"", ""),
-                    (" LabelJustification=\"Right\"", ""),
-                    (" LabelAlignment=\"Right\"", " LabelAlignment=\"Left\""),
-                ];
                 if !xml.contains(" LabelJustification=\"Right\"") {
                     return xml;
                 }
-                edits.into_iter().fold(xml, |xml, (from, to)| {
-                    assert_eq!(xml.matches(from).count(), 1, "{name}: {from}");
-                    xml.replacen(from, to, 1)
-                })
+                right_aligned_group(&xml).unwrap_or_else(|| panic!("{name}: right-aligned group"))
             })
         } else {
             actual
@@ -1057,8 +1049,11 @@ fn frame_marker(xml: &str) -> Option<String> {
         return None;
     }
     let at = xml.find(marker)?;
-    let start = xml[..at].rfind("<n ")?;
+    let start = xml[..at].rfind('<')?;
     let tag = &xml[start..at];
+    if !tag.starts_with("<n ") || tag.contains('>') {
+        return None;
+    }
     let id = tag.split(" id=\"").nth(1)?.split('"').next()?;
     let bonds = |id: &str| {
         xml.matches(&format!(" B=\"{id}\"")).count() + xml.matches(&format!(" E=\"{id}\"")).count()
@@ -1072,4 +1067,48 @@ fn frame_marker(xml: &str) -> Option<String> {
         .max()
         .unwrap_or(0);
     (own > others).then(|| xml.to_owned())
+}
+
+/// #881: undo the one right-aligned contracted group, which must be one
+/// `<n NodeType="Fragment" LabelDisplay="Right">` whose own label `<t>`, after
+/// its inner fragment, is right-justified and right-aligned. `None` otherwise.
+fn right_aligned_group(xml: &str) -> Option<String> {
+    let display = " LabelDisplay=\"Right\"";
+    if [
+        display,
+        " LabelJustification=\"Right\"",
+        " LabelAlignment=\"Right\"",
+    ]
+    .iter()
+    .any(|a| xml.matches(a).count() != 1)
+    {
+        return None;
+    }
+    let at = xml.find(display)?;
+    let start = xml[..at].rfind('<')?;
+    let node = &xml[start..at];
+    if !node.starts_with("<n ") || node.contains('>') || !node.contains(" NodeType=\"Fragment\"") {
+        return None;
+    }
+    // The group's own label follows its inner fragment.
+    let text = at + xml[at..].find("</fragment>")? + "</fragment>".len();
+    if !xml[text..].starts_with("<t ") {
+        return None;
+    }
+    let close = text + xml[text..].find('>')?;
+    let tag = &xml[text..close];
+    if !tag.contains(" LabelJustification=\"Right\"") || !tag.contains(" LabelAlignment=\"Right\"")
+    {
+        return None;
+    }
+    let tag = tag
+        .replacen(" LabelJustification=\"Right\"", "", 1)
+        .replacen(" LabelAlignment=\"Right\"", " LabelAlignment=\"Left\"", 1);
+    Some(format!(
+        "{}{}{}{}",
+        &xml[..at],
+        &xml[at + display.len()..text],
+        tag,
+        &xml[close..]
+    ))
 }

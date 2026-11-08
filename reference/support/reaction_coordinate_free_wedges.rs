@@ -30,6 +30,15 @@ pub fn atoms(format: &str, text: &str) -> Vec<usize> {
 }
 
 pub fn adapt(atoms: &[usize], actual: &Response, expected: &mut Response) {
+    // Only an invented centre: every flagged atom exists and carries stereo.
+    let invented = actual.document.as_ref().is_some_and(|doc| {
+        atoms
+            .iter()
+            .all(|&i| doc.atoms.get(i).is_some_and(|a| a.stereo.is_some()))
+    });
+    if !invented {
+        return;
+    }
     if let (Some(a), Some(e)) = (&actual.analysis, expected.analysis.as_mut()) {
         e.inchi = a.inchi.clone();
         e.inchikey = a.inchikey.clone();

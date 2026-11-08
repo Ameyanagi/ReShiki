@@ -45,6 +45,8 @@ struct Case {
     image_error: Option<String>,
     image_pixels: Vec<Pixels>,
     unarrowed: Option<Value>,
+    #[serde(default)]
+    shaded_or_doubled: bool,
 }
 /// #777: a curve's heads as the CDXML reader maps its source attributes
 /// (crates/io/src/chemistry/cdxml/arrows.rs), or `None` for an arrowhead
@@ -72,9 +74,19 @@ fn expected_heads(source: &Value) -> Option<Value> {
     let length = number("HeadSize", 1000.)? / 100.;
     let width = number("ArrowheadWidth", 250.)? / 100.;
     let center = number("ArrowheadCenterSize", length * 100.)? / 100.;
+    let notch = 1. - center / length;
+    // The reader's limits; anything outside them must be refused.
+    if length <= 0.
+        || !(0. ..=length).contains(&center)
+        || !(0.5..=24.).contains(&length)
+        || !(0.25..=16.).contains(&width)
+        || !(0. ..=0.9).contains(&notch)
+    {
+        return None;
+    }
     Some(serde_json::json!({
         "head": kind("ArrowheadHead")?, "tail": kind("ArrowheadTail")?, "shape": shape,
-        "head_length_pt": length, "head_width_pt": width, "head_notch": 1. - center / length,
+        "head_length_pt": length, "head_width_pt": width, "head_notch": notch,
     }))
 }
 
@@ -255,7 +267,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
                 if case.error.as_deref() == Some(ARROWED)
                     && match actual.to_string().as_str() {
                         "Shaded or doubled CDXML curves are not supported yet" => {
-                            case.unarrowed.is_none()
+                            case.shaded_or_doubled
                         }
                         "Unsupported CDXML arrowhead" => case.unarrowed.as_ref().is_some_and(|u| {
                             u["heads"]
