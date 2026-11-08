@@ -212,7 +212,7 @@ impl Imported {
 
     /// X/Y already use this single source-to-canvas factor. Retain Z with the
     /// same factor; do not fit, minimize, flatten or generate coordinates.
-    pub(crate) fn restore_xyz(
+    pub fn restore_xyz(
         &self,
         document: &mut crate::document::Document,
     ) -> Result<(), document::Error> {
