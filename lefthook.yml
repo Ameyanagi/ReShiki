@@ -5,9 +5,9 @@ pre-commit:
       glob: "*.{js,mjs,cjs,ts,tsx,jsx,json}"
       run: bun run lint:js
     bun-fmt:
-      glob: "*.{js,mjs,cjs,ts,tsx,jsx,json,css,md,mdx,yml,yaml,toml}"
+      glob: "*.{js,mjs,cjs,ts,tsx,jsx,json,css,html,md,mdx,yml,yaml,toml}"
       exclude: "assets/**"
-      run: bun fmt --check {staged_files}
+      run: bun fmt --check --no-error-on-unmatched-pattern {staged_files}
     ruff:
       glob: "*.{py,toml,lock}"
       run: uv run --locked ruff check reference scripts tests
