@@ -48,6 +48,37 @@ regenerate the snapshot with `S2N_UPDATE_BASELINE=1`, review each changed row,
 and list the changes in its PR body. A new Preferred label, or a change one PR
 causes in another's results, is then visible in review.
 
+## Worker response snapshot
+
+`tests/fixtures/s2n/worker_snapshot.jsonl` freezes the complete worker responses
+for every distinct SMILES in the full bakeoff, openclatura and rules corpora.
+Requests follow first occurrence in that source order, with IUPAC generation
+for every input and Boughton generation for inputs containing an isotope label.
+Each successful generation is followed by a Verify request for its name, a
+strict Parse request for the same name, a Verify request for each alternative
+name and, when present, a Verify request for its radical-ion neutral-parent
+name. A few inputs from the unit tests (listed in `worker_snapshot.rs`) keep
+every optional response field populated; the test fails if one disappears. Requests use
+the app's builders and current worker protocol.
+
+Each JSONL row contains the request object and the original UTF-8 response
+string, or an `{"error":"..."}` object for a worker error. The replay compares
+response bytes, including JSON formatting and field order, and reports the
+total differences and the first ten expected/actual responses. It also checks
+that the frozen requests still cover the full corpora in the expected order.
+
+```sh
+# Replay the frozen worker responses in the normal cargo test profile
+cargo test --locked --lib -p reshiki naming::s2n_harness::worker_snapshot::s2n_worker_snapshot -- --exact --nocapture
+# Explicitly regenerate all requests and responses, then review the fixture diff
+RESHIKI_UPDATE_S2N_SNAPSHOT=1 cargo test --locked --lib -p reshiki naming::s2n_harness::worker_snapshot::s2n_worker_snapshot -- --exact --nocapture
+```
+
+Run regeneration twice and compare the complete fixture before accepting an
+update. Do not normalize response JSON, sort its fields or remove variable
+data: any nondeterminism must be investigated. The fixture is test data and
+is excluded from formatting by `bunfig.toml`.
+
 ## Metamorphic tests
 
 `src/naming/s2n_harness/metamorphic.rs` names every fast-run structure, plus
