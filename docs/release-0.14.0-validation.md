@@ -1,9 +1,8 @@
 # ReShiki 0.14.0 release validation
 
 This record lists the checks run on the 0.14.0 release preparation and the
-checks that remain before the tag is pushed. It does not yet record a tag run,
-a publishing run or the public downloads; add them here after the release, as
-the [0.13.1 record](release-0.13.1-validation.md) does.
+checks that remain, and the [published release](#after-the-release): the tag
+run, the public downloads and the package registries.
 [Release notes](changes-0.14.md) · [Release procedure](releasing.md).
 
 ## Release preparation
@@ -153,6 +152,41 @@ passed all 12 reference shards and the other 19 jobs (one skipped by design).
 
 ## After the release
 
-Record the tag commit, the publishing run, the public download checksums,
-the macOS signing checks, the npm and PyPI versions, as in the
-[0.13.1 record](release-0.13.1-validation.md).
+[ReShiki 0.14.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.14.0)
+was published on 8 November 2026 from `59a104b52ab23610a22fd942343367ad235c0a89`,
+the merge of the release preparation pull request
+([#1028](https://github.com/Ameyanagi/ReShiki/pull/1028)), by
+[release run 42475474500](https://github.com/Ameyanagi/ReShiki/actions/runs/42475474500).
+Every job passed: the six platform packages, the Python wheels, macOS signing
+for ARM64 and Intel (sign, notarize, staple and verify), the complete live
+reference tests on macOS ARM64, Linux x64 and Windows x64, and publishing.
+Windows signing was skipped as configured; Windows and Linux downloads are
+unsigned.
+
+| Channel                                                                      | Version | Notes                                                                                   |
+| ---------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------- |
+| [GitHub release](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.14.0)  | 0.14.0  | 10 packages and `SHA256SUMS`                                                            |
+| [npm `@ameyanagi/reshiki`](https://www.npmjs.com/package/@ameyanagi/reshiki) | 0.14.0  | `latest`, with a provenance statement                                                   |
+| [PyPI `reshiki`](https://pypi.org/project/reshiki/0.14.0/)                   | 0.14.0  | First release; six abi3 wheels (macOS ARM64/x64, Linux x64/arm64, Windows x64/ARM64)    |
+| [Browser demo](https://reshiki.com/demo/)                                    | 0.14.0  | `web_demo` job; the Documentation deploy was rerun after a GitHub token request timeout |
+
+`SHA256SUMS`:
+
+```text
+1715bd181d7acec340b0d48566ff0a10912135411202befc65d9222e8c87f533  reshiki-0.14.0-macos-arm64.dmg
+4467f00bcce91852f58204b120984f7f6ab9976b9cdeed6c7d18639ecbd4bfd1  reshiki-0.14.0-macos-arm64.zip
+9bfc0a09fcfe341eabd799bf6e6890e3fed9a762228a411615a23ea3ead06784  reshiki-0.14.0-macos-x64.dmg
+be249a1d5560c17829605eec6e937ad15d282ffabfac62fcd8ce02b9e3098392  reshiki-0.14.0-macos-x64.zip
+9bce863ba0f31cf36f9bcb7ed3e7de6e815b1e929a4c8a9520d868fc926dd17a  reshiki-0.14.0-windows-x64-setup.exe
+27396402effb9c78f2c5002c64988faf94b19f672831223d02e98c3fd5559076  reshiki-0.14.0-windows-x64.zip
+ec72ccde533433644f4af8be41dd9a8b150d0f00978e3db0cb1cf479762fb2e5  reshiki-0.14.0-windows-arm64-setup.exe
+735412f473ed1fdca3531c38bfc76e5debb8ea8699cc209b4475437603abb3b2  reshiki-0.14.0-windows-arm64.zip
+28ce8b5ad69dbf134a21e5a6bce578578f88e0d3428b62be225ca701bbd34fa0  reshiki-0.14.0-linux-x64.tar.gz
+697fbf8c3f7554396877409bc804596d0b43c2b84fac49e37ffe9496f793e1ca  reshiki-0.14.0-linux-arm64.tar.gz
+```
+
+The tag was pushed with the maintainer's approval after the live reference
+run and the focus check passed. The remaining manual checks above (release
+build run, macOS app, Windows install, Linux archives, browser demo,
+npm/PyPI installs and file compatibility) were not run before the tag and
+stay open for the published downloads.
