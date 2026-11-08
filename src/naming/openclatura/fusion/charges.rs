@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/fusion/charges.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/fusion/charges.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fusion/charges.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura charge restoration and operation construction, with a separate local protonated-donor guard.
@@ -15,6 +16,8 @@ use super::{
     mancude::{all_single, parent_degree},
     model::*,
 };
+// Provenance: fn require_deprotonation_valence | adapted
+// Source: openclatura | src/openclatura/fusion/charges.py::_require_deprotonation_valence
 fn require_deprotonation_valence(mol: &Molecule, id: usize) -> Result<(), String> {
     let atom = &mol.atoms[&id];
     let valence = atom.total_h_count
@@ -35,6 +38,8 @@ fn require_deprotonation_valence(mol: &Molecule, id: usize) -> Result<(), String
     }
     Ok(())
 }
+// Provenance: fn fusion_component_charge_parent | adapted
+// Source: openclatura | src/openclatura/fusion/charges.py::fusion_component_charge_parent
 pub(super) fn fusion_component_charge_parent(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -55,6 +60,8 @@ pub(super) fn fusion_component_charge_parent(
     }
     Ok(parent)
 }
+// Provenance: fn fusion_charge_lone_pair_sites | adapted
+// Source: openclatura | src/openclatura/fusion/charges.py::fusion_charge_lone_pair_sites
 pub(super) fn fusion_charge_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
     if !graph.atoms.iter().any(|a| mol.atoms[&a.id].charge == -1) {
         return AtomSet::new();
@@ -73,6 +80,8 @@ pub(super) fn fusion_charge_lone_pair_sites(mol: &Molecule, graph: &FusionGraph)
         .map(|a| a.id)
         .collect()
 }
+// Provenance: fn protonated_pi_nitrogen_atoms | adapted
+// Source: openclatura | src/openclatura/fusion/charges.py::protonated_pi_nitrogen_atoms
 pub(super) fn protonated_pi_nitrogen_atoms(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
     let atoms: AtomSet = graph.atoms.iter().map(|a| a.id).collect();
     graph
@@ -99,7 +108,8 @@ pub(super) fn protonated_pi_nitrogen_atoms(mol: &Molecule, graph: &FusionGraph) 
         .collect()
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn has_unproved_protonated_junction_donor
+// Provenance: fn has_unproved_protonated_junction_donor | original
+// Source: ReShiki | src/naming/openclatura/fusion/charges.rs::has_unproved_protonated_junction_donor
 fn has_unproved_protonated_junction_donor(mol: &Molecule, atoms: &AtomSet) -> bool {
     if !mol
         .bonds
@@ -149,6 +159,8 @@ fn has_unproved_protonated_junction_donor(mol: &Molecule, atoms: &AtomSet) -> bo
     })
 }
 
+// Provenance: fn fusion_charge_operations | adapted
+// Source: openclatura | src/openclatura/fusion/charges.py::fusion_charge_operations
 pub(super) fn fusion_charge_operations(
     mol: &Molecule,
     graph: &FusionGraph,
@@ -218,6 +230,8 @@ pub(super) fn fusion_charge_operations(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | adapted
+// Source: openclatura | src/openclatura/fusion/charges.py::module scope (mapping uncertain)
 mod tests {
     use super::super::super::graph_io::read_smiles;
     use super::*;
@@ -236,8 +250,9 @@ mod tests {
         .unwrap()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn protonated_donor_citation_cannot_hide_a_reduced_carbon_junction
     #[test]
+    // Provenance: fn tests::protonated_donor_citation_cannot_hide_a_reduced_carbon_junction | original
+    // Source: ReShiki | src/naming/openclatura/fusion/charges.rs::tests::protonated_donor_citation_cannot_hide_a_reduced_carbon_junction
     fn protonated_donor_citation_cannot_hide_a_reduced_carbon_junction() {
         for smiles in [
             "C1=CC2CCCCC2[NH2+]1",
@@ -281,8 +296,9 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn mixed_donors_require_a_joint_protonation_pi_and_hydrogen_proof
     #[test]
+    // Provenance: fn tests::mixed_donors_require_a_joint_protonation_pi_and_hydrogen_proof | original
+    // Source: ReShiki | src/naming/openclatura/fusion/charges.rs::tests::mixed_donors_require_a_joint_protonation_pi_and_hydrogen_proof
     fn mixed_donors_require_a_joint_protonation_pi_and_hydrogen_proof() {
         for smiles in [
             "C[NH+]1CCC2=C(C1)SC=C2",

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: BSD-3-Clause AND (MIT OR Apache-2.0)
-// Origin: mixed adaptation of RDKit with ledger-marked local functions; source paths and pins follow.
-//   RDKit 2026.03.6, Code/GraphMol/Aromaticity.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/MolOps.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/PeriodicTable.h @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   ReShiki, crates/chemistry/src/aromaticity.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Origin: mixed
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/MolOps.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/PeriodicTable.h | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/aromaticity.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Source: RDKit | Code/RDGeneral/types.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
 // Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 // Copyright (C) 2001-2011 Rational Discovery LLC.
 // Changes: Rust adaptation; ledger-marked local functions; inject borrowed Budget and local cancellation/reservation support instead of host capability detection; support optional timeout.
@@ -57,11 +58,20 @@ pub struct Aromaticity {
     pub aromatic_rings: usize,
 }
 
+// Provenance: fn at | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn at<T>(items: &[T], id: usize) -> Result<&T, String> {
     items
         .get(id)
         .ok_or_else(|| "Invalid aromaticity index".into())
 }
+// Provenance: fn element | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::PeriodicTable::getDefaultValence
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::PeriodicTable::getNouterElecs
 fn element(number: i32) -> Result<&'static Element, String> {
     usize::try_from(number)
         .ok()
@@ -74,8 +84,9 @@ struct Work {
     deadline: Option<Instant>,
     cancellation: Cancellation,
 }
+// Provenance: impl Work | original
+// Source: ReShiki | crates/chemistry/src/aromaticity.rs::Work
 impl Work {
-    // Original nazuchem code (not in RDKit).
     fn units(remaining: usize) -> Self {
         Self {
             remaining,
@@ -84,7 +95,6 @@ impl Work {
             cancellation: Cancellation::default(),
         }
     }
-    // Original nazuchem code (not in RDKit).
     fn check(&self) -> Result<(), String> {
         if self.cancellation.is_cancelled() {
             return Err("Aromaticity calculation cancelled".into());
@@ -99,7 +109,6 @@ impl Work {
         }
         Ok(())
     }
-    // Original nazuchem code (not in RDKit).
     fn spend(&mut self, amount: usize) -> Result<(), String> {
         self.remaining = self
             .remaining
@@ -120,6 +129,14 @@ struct Topology<'a> {
     ring_bonds: Vec<Vec<usize>>,
     cyclic: Vec<bool>,
 }
+// Provenance: impl Topology | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::countAtomElec
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::getAtomDonorTypeArom
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::PeriodicTable::moreElectroNegative
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::isAtomCandForArom
 impl<'a> Topology<'a> {
     fn new(
         graph: &'a Graph,
@@ -169,7 +186,6 @@ impl<'a> Topology<'a> {
             cyclic,
         })
     }
-    // Adapted from Code/GraphMol/Aromaticity.cpp and Code/GraphMol/MolOps.cpp and Code/GraphMol/PeriodicTable.h::Topology::electrons (local Rust boundary; exact upstream function mapping not recorded).
     fn electrons(&self, id: usize) -> Result<i32, String> {
         let atom = at(&self.graph.atoms, id)?;
         let valence = at(&self.valences, id)?;
@@ -180,7 +196,6 @@ impl<'a> Topology<'a> {
         }
         pi_electron_count(atom, valence, adjacent.len(), zero_bonds)
     }
-    // Adapted from Code/GraphMol/Aromaticity.cpp and Code/GraphMol/MolOps.cpp and Code/GraphMol/PeriodicTable.h::Topology::donor (local Rust boundary; exact upstream function mapping not recorded).
     fn donor(&self, id: usize) -> Result<Donor, String> {
         let atom = at(&self.graph.atoms, id)?;
         let mut external = None;
@@ -251,7 +266,6 @@ impl<'a> Topology<'a> {
             Donor::Two
         })
     }
-    // Adapted from Code/GraphMol/Aromaticity.cpp and Code/GraphMol/MolOps.cpp and Code/GraphMol/PeriodicTable.h::Topology::candidate (local Rust boundary; exact upstream function mapping not recorded).
     fn candidate(&self, id: usize, donor: Donor) -> Result<bool, String> {
         let atom = at(&self.graph.atoms, id)?;
         let number = atom.atomic_number;
@@ -291,6 +305,11 @@ impl<'a> Topology<'a> {
 
 /// Perceive the default aromaticity model without changing explicit H counts.
 /// Ring order is significant for shared atoms in macrocycles, matching RDKit.
+// Provenance: fn perceive | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 pub fn perceive(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -301,6 +320,11 @@ pub fn perceive(
 
 /// Complete perception under an immutable operational budget. Exhaustion or
 /// cancellation never returns a partially perceived graph.
+// Provenance: fn perceive_with_budget | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 pub fn perceive_with_budget(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -310,7 +334,8 @@ pub fn perceive_with_budget(
     run_with_budget(graph, rings, None, budget, cancellation)
 }
 
-// Original nazuchem code (not in RDKit).
+// Provenance: fn estimated_bytes | original
+// Source: ReShiki | crates/chemistry/src/aromaticity.rs::estimated_bytes
 fn estimated_bytes(graph: &Graph, rings: &[Vec<usize>]) -> Option<usize> {
     let ring_slots = rings
         .iter()
@@ -340,6 +365,11 @@ fn estimated_bytes(graph: &Graph, rings: &[Vec<usize>]) -> Option<usize> {
         .and_then(|n| n.checked_add(BASE_ESTIMATE))
 }
 
+// Provenance: fn run_with_budget | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn run_with_budget(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -377,6 +407,11 @@ fn run_with_budget(
 }
 
 #[cfg(test)]
+// Provenance: fn perceive_with_work | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn perceive_with_work(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -385,6 +420,11 @@ fn perceive_with_work(
     perceive_cached_with_work(graph, rings, None, work)
 }
 
+// Provenance: fn perceive_cached | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::MolOps::setAromaticity
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 pub(crate) fn perceive_cached(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -394,6 +434,10 @@ pub(crate) fn perceive_cached(
     run_with_budget(graph, rings, Some(cache), budget, Cancellation::default())
 }
 
+// Provenance: fn perceive_cached_with_work | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::aromaticityHelper
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn perceive_cached_with_work(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -477,7 +521,10 @@ fn perceive_cached_with_work(
     })
 }
 
-// Adapted from Code/GraphMol/Aromaticity.cpp and Code/GraphMol/MolOps.cpp and Code/GraphMol/PeriodicTable.h::ring_neighbors (local Rust boundary; exact upstream function mapping not recorded).
+// Provenance: fn ring_neighbors | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::RingUtils::makeRingNeighborMap
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn ring_neighbors(
     rings: &[&[usize]],
     bond_count: usize,
@@ -515,6 +562,11 @@ fn ring_neighbors(
 }
 
 #[cfg(test)]
+// Provenance: fn connected | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::RingUtils::checkFused
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::RingUtils::pickFusedRings
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn connected(rings: &[usize], neighbors: &[Vec<usize>], work: &mut Work) -> Result<bool, String> {
     let root = *rings.first().ok_or("Missing ring combination")?;
     let mut stack = vec![root];
@@ -532,7 +584,11 @@ fn connected(rings: &[usize], neighbors: &[Vec<usize>], work: &mut Work) -> Resu
     }
     Ok(seen.len() == rings.len())
 }
-// Adapted from Code/GraphMol/Aromaticity.cpp and Code/GraphMol/MolOps.cpp and Code/GraphMol/PeriodicTable.h::huckel (local Rust boundary; exact upstream function mapping not recorded).
+// Provenance: fn huckel | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::applyHuckel
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::getMinMaxAtomElecs
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn huckel(atoms: &BTreeMap<usize, usize>, donors: &[Donor]) -> Result<bool, String> {
     let (mut low, mut high, mut any) = (0, 0, 0);
     for (&id, &count) in atoms {
@@ -561,6 +617,11 @@ fn huckel(atoms: &BTreeMap<usize, usize>, donors: &[Donor]) -> Result<bool, Stri
     })
 }
 #[cfg(test)]
+// Provenance: fn next_combination | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
+// Source: RDKit | Code/RDGeneral/types.cpp::RDKit::nextCombination
 fn next_combination(indices: &mut [usize], count: usize) -> Result<bool, String> {
     let length = indices.len();
     for i in (0..length).rev() {
@@ -574,7 +635,11 @@ fn next_combination(indices: &mut [usize], count: usize) -> Result<bool, String>
     }
     Ok(false)
 }
-// Adapted from Code/GraphMol/Aromaticity.cpp and Code/GraphMol/MolOps.cpp and Code/GraphMol/PeriodicTable.h::mark_fused (local Rust boundary; exact upstream function mapping not recorded).
+// Provenance: fn mark_fused | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::applyHuckelToFused
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::markAtomsBondsArom
+// Source: RDKit | Code/GraphMol/MolOps.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 fn mark_fused(
     graph: &mut Graph,
     rings: &[&[usize]],
@@ -690,7 +755,8 @@ fn mark_fused(
 /// Emit connected sorted subsets in the original exhaustive lexicographic
 /// order. Disconnected sorted prefixes remain allowed: 0--2--1 must emit
 /// [0,1,2]. Weighted reachability only prunes impossible completions.
-// Original nazuchem code (not in RDKit).
+// Provenance: fn connected_combinations | original
+// Source: ReShiki | crates/chemistry/src/aromaticity.rs::connected_combinations
 fn connected_combinations(
     neighbors: &[Vec<usize>],
     size: usize,
@@ -717,7 +783,8 @@ fn connected_combinations(
     Ok(())
 }
 
-// Original nazuchem code (not in RDKit).
+// Provenance: fn visit_connected | original
+// Source: ReShiki | crates/chemistry/src/aromaticity.rs::visit_connected
 fn visit_connected(
     prefix: &mut Vec<usize>,
     size: usize,
@@ -792,7 +859,10 @@ fn visit_connected(
 /// Preserve hydrogens that disappear from the implicit cache when aromaticity
 /// changes bond orders, e.g. the N-H in a pyridone. The prior counts must be from
 /// the same graph immediately before aromaticity perception.
-// Adapted from Code/GraphMol/Aromaticity.cpp and Code/GraphMol/MolOps.cpp and Code/GraphMol/PeriodicTable.h::adjust_hydrogens (local Rust boundary; exact upstream function mapping not recorded).
+// Provenance: fn adjust_hydrogens | adapted
+// Source: RDKit | Code/GraphMol/Aromaticity.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/MolOps.cpp::MolOps::adjustHs
+// Source: RDKit | Code/GraphMol/PeriodicTable.h::module scope (mapping uncertain)
 pub fn adjust_hydrogens(graph: &Graph, previous: &[Valence]) -> Result<Graph, String> {
     if previous.len() != graph.atoms.len() {
         return Err("Hydrogen cache size changed".into());

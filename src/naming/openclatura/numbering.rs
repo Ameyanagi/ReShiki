@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/numbering.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/numbering.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura parent-numbering criteria extended with local skeletal-anion and late modifier priorities.
@@ -46,8 +47,9 @@ struct ModifierPreference {
     alcohol_citation: Vec<LocantKey>,
 }
 
+// Provenance: impl NumberingModifiers | original
+// Source: ReShiki | src/naming/openclatura/numbering.rs::NumberingModifiers
 impl NumberingModifiers {
-    // Original nazuchem code (not in openclatura 0.4.3): fn NumberingModifiers::preference
     fn preference(&self, map: &BTreeMap<usize, String>) -> ModifierPreference {
         let mut nitrogens: Vec<_> = self
             .nitrogen_substituents
@@ -110,7 +112,6 @@ impl NumberingModifiers {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn NumberingModifiers::path_preference
     fn path_preference(&self, path: &[usize]) -> ModifierPreference {
         let map = path
             .iter()
@@ -121,7 +122,8 @@ impl NumberingModifiers {
     }
 }
 impl NumberingTopology {
-    // Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn NumberingTopology::has_fixed_paths)
+    // Provenance: fn NumberingTopology::has_fixed_paths | adapted
+    // Source: openclatura | src/openclatura/numbering.py::inline in number_parent
     fn has_fixed_paths(self) -> bool {
         self.is_assembly || self.is_bicycle || self.is_spiro || self.is_polycycle
     }
@@ -162,7 +164,8 @@ enum NumberingCriterion {
     clippy::panic,
     reason = "The immutable checked-in registry supplies arrays of known criterion names."
 )]
-// Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn numbering_criteria)
+// Provenance: fn numbering_criteria | adapted
+// Source: openclatura | src/openclatura/numbering.py::NUMBERING_CRITERIA module mapping
 fn numbering_criteria(parent_kind: &str) -> Vec<NumberingCriterion> {
     let mut criteria: Vec<_> = super::nomenclature::section("numbering_criteria")[parent_kind]
         .as_array()
@@ -207,7 +210,8 @@ enum Criterion<'a> {
     Nested(&'a [Vec<usize>]),
 }
 impl Criterion<'_> {
-    // Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn Criterion::is_empty)
+    // Provenance: fn Criterion::is_empty | adapted
+    // Source: openclatura | src/openclatura/numbering.py::module scope (mapping uncertain)
     fn is_empty(&self) -> bool {
         match self {
             Self::Flat(v) => v.is_empty(),
@@ -217,7 +221,8 @@ impl Criterion<'_> {
 }
 
 impl NumberingPreference {
-    // Adapted from src/openclatura/numbering.py::NumberingPreference.criterion_value (adapted; local fn NumberingPreference::criterion)
+    // Provenance: fn NumberingPreference::criterion | adapted
+    // Source: openclatura | src/openclatura/numbering.py::NumberingPreference.criterion_value
     fn criterion(&self, criterion: NumberingCriterion) -> Criterion<'_> {
         match criterion {
             NumberingCriterion::FreeValence => Criterion::Flat(&self.free_valence),
@@ -235,7 +240,8 @@ impl NumberingPreference {
             NumberingCriterion::Stereochemistry => Criterion::Flat(&self.stereochemistry),
         }
     }
-    // Adapted from src/openclatura/numbering.py::number_parent.compare_evaluations (adapted; local fn NumberingPreference::compare)
+    // Provenance: fn NumberingPreference::compare | adapted
+    // Source: openclatura | src/openclatura/numbering.py::number_parent.compare_evaluations
     fn compare(&self, other: &Self, is_ring: bool) -> Ordering {
         let criteria = if is_ring {
             &RING_CRITERIA
@@ -261,7 +267,8 @@ impl NumberingPreference {
 }
 
 #[allow(clippy::too_many_arguments)]
-// Adapted from src/openclatura/numbering.py::number_parent (adapted; local fn number_parent)
+// Provenance: fn number_parent | adapted
+// Source: openclatura | src/openclatura/numbering.py::number_parent
 fn number_parent(
     mol: &Molecule,
     modifiers: &NumberingModifiers,
@@ -346,7 +353,8 @@ fn number_parent(
 pub type ProvenHydrogenLocants = BTreeMap<Vec<(usize, String)>, (Vec<String>, Vec<String>)>;
 
 #[allow(clippy::too_many_arguments)]
-// Adapted from src/openclatura/numbering.py::choose_parent_numbering (adapted; local fn choose_parent_numbering)
+// Provenance: fn choose_parent_numbering | adapted
+// Source: openclatura | src/openclatura/numbering.py::choose_parent_numbering
 pub fn choose_parent_numbering(
     mol: &Molecule,
     modifiers: &NumberingModifiers,
@@ -535,7 +543,9 @@ pub fn choose_parent_numbering(
     (path, map)
 }
 
-// Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn numbering_preference)
+// Provenance: fn numbering_preference | adapted
+// Source: openclatura | src/openclatura/numbering.py::NumberingPreference
+// Source: openclatura | src/openclatura/numbering.py::_numbering_preference
 fn numbering_preference(
     mol: &Molecule,
     path: &[usize],
@@ -610,7 +620,9 @@ fn numbering_preference(
 }
 
 /// Keep every chain orientation permitted by criteria preceding stereo.
-// Original nazuchem code (not in openclatura 0.4.3): fn chain_orientations_before_stereo
+// Provenance: fn chain_orientations_before_stereo | adapted
+// Source: openclatura | src/openclatura/numbering.py::number_parent
+// Source: openclatura | src/openclatura/numbering.py::_numbering_preference
 pub(super) fn chain_orientations_before_stereo(
     mol: &Molecule,
     path: &[usize],
@@ -641,7 +653,8 @@ pub(super) fn chain_orientations_before_stereo(
 /// P-14.4(j): after structural numbering ties, prefer R to S and M to P
 /// at the first differing locant. An internal axis is cited once, at its lower
 /// locant; an axis leaving this parent is cited at the parent endpoint.
-// Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn stereochemistry_preference)
+// Provenance: fn stereochemistry_preference | adapted
+// Source: openclatura | src/openclatura/numbering.py::_stereochemistry_sequence
 fn stereochemistry_preference(
     mol: &Molecule,
     path: &[usize],
@@ -675,7 +688,8 @@ fn stereochemistry_preference(
     descriptors
 }
 
-// Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn mancude_hydro_split)
+// Provenance: fn mancude_hydro_split | adapted
+// Source: openclatura | src/openclatura/numbering.py::_mancude_hydro_split
 fn mancude_hydro_split(
     mol: &Molecule,
     path: &[usize],
@@ -690,7 +704,8 @@ fn mancude_hydro_split(
     ))
 }
 
-// Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn heteroatom_locants_by_priority)
+// Provenance: fn heteroatom_locants_by_priority | adapted
+// Source: openclatura | src/openclatura/numbering.py::_heteroatom_locants_by_priority
 pub fn heteroatom_locants_by_priority(
     mol: &Molecule,
     path: &[usize],
@@ -736,7 +751,8 @@ pub fn heteroatom_locants_by_priority(
     key
 }
 
-// Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn indicated_hydrogen_like_atoms)
+// Provenance: fn indicated_hydrogen_like_atoms | adapted
+// Source: openclatura | src/openclatura/numbering.py::_indicated_hydrogen_like_atoms
 pub fn indicated_hydrogen_like_atoms(
     mol: &Molecule,
     path: &[usize],
@@ -775,14 +791,16 @@ pub fn indicated_hydrogen_like_atoms(
         .collect()
 }
 
-// Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn substituent_citation_name)
+// Provenance: fn substituent_citation_name | adapted
+// Source: openclatura | src/openclatura/numbering.py::_substituent_citation_name
 pub fn substituent_citation_name(name: &str) -> String {
     name.to_lowercase()
         .chars()
         .filter(|c| c.is_alphabetic())
         .collect()
 }
-// Adapted from src/openclatura/numbering.py (adapted; upstream function mapping not recorded; local fn substituent_citation_locants)
+// Provenance: fn substituent_citation_locants | adapted
+// Source: openclatura | src/openclatura/numbering.py::_substituent_citation_locants
 fn substituent_citation_locants(
     path: &[usize],
     mapping: &BTreeMap<usize, Vec<String>>,
@@ -800,6 +818,8 @@ fn substituent_citation_locants(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/numbering.rs::tests
 mod tests {
     use super::super::{
         chains::{find_all_carbon_paths, find_ring_systems},
@@ -807,7 +827,6 @@ mod tests {
     };
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_junction_precedes_real_suffix_and_suffix_precedes_unsaturation
     #[test]
     fn spiro_junction_precedes_real_suffix_and_suffix_precedes_unsaturation() {
         let mol = read_smiles("O=C1CC=CC2(C1)CCc1ccccc12", &Default::default()).unwrap();
@@ -831,7 +850,6 @@ mod tests {
         assert_eq!(path, vec![5, 6, 1, 2, 3, 4]);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_junction_respects_intrinsic_heterocycle_numbering
     #[test]
     fn spiro_junction_respects_intrinsic_heterocycle_numbering() {
         let mol = read_smiles("N1CCC2(CC1)CCc1ccccc12", &Default::default()).unwrap();
@@ -854,7 +872,6 @@ mod tests {
         assert_eq!(path.iter().position(|&atom| atom == 3), Some(3));
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn pre_stereo_chain_orientations_respect_principal_and_prefix_locants
     #[test]
     fn pre_stereo_chain_orientations_respect_principal_and_prefix_locants() {
         let mol = read_smiles("C[C@H](F)CCC", &Default::default()).unwrap();
@@ -873,7 +890,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn late_nitrogen_numbering_preserves_multiplicity_before_citation
     #[test]
     fn late_nitrogen_numbering_preserves_multiplicity_before_citation() {
         let mol = read_smiles("CCC", &Default::default()).unwrap();
@@ -908,7 +924,6 @@ mod tests {
         assert!(modifiers.path_preference(&[2, 1, 0]) < modifiers.path_preference(&[0, 1, 2]));
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn existing_carbon_numbering_precedes_late_nitrogen_and_alcohol_citation
     #[test]
     fn existing_carbon_numbering_precedes_late_nitrogen_and_alcohol_citation() {
         let mol = read_smiles("CCCCC", &Default::default()).unwrap();
@@ -956,7 +971,6 @@ mod tests {
             assert_eq!(path, vec![0, 1, 2, 3, 4]);
         }
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn ordinary_and_retained_numbering_prefer_m_to_p
     #[test]
     fn ordinary_and_retained_numbering_prefer_m_to_p() {
         let mut mol = read_smiles("c1(-c2ccccc2)ccc(-c2ccccc2)cc1", &Default::default()).unwrap();
@@ -1011,7 +1025,6 @@ mod tests {
         assert_eq!(stereochemistry_preference(&mol, &[0, 1], false), vec![0]);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn double_bonds_take_low_locants_only_after_multiple_bonds_tie
     #[test]
     fn double_bonds_take_low_locants_only_after_multiple_bonds_tie() {
         for (smiles, principal, expected) in [
@@ -1037,7 +1050,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn repeated_principal_groups_choose_the_lowest_locant_sequence
     #[test]
     fn repeated_principal_groups_choose_the_lowest_locant_sequence() {
         let mol = read_smiles("CC", &Default::default()).unwrap();
@@ -1058,7 +1070,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn principal_group_numbering_precedes_unsaturation
     #[test]
     fn principal_group_numbering_precedes_unsaturation() {
         let mol = read_smiles("C=CCCCO", &Default::default()).unwrap();
@@ -1082,7 +1093,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn skeletal_anions_precede_characteristic_suffix_locants
     #[test]
     fn skeletal_anions_precede_characteristic_suffix_locants() {
         for (smiles, path, principal, expected, is_ring) in [
@@ -1134,7 +1144,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn skeletal_anions_precede_unsaturation_and_prefixes
     #[test]
     fn skeletal_anions_precede_unsaturation_and_prefixes() {
         for (smiles, path, substituents, expected) in [
@@ -1170,7 +1179,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn retained_maps_assign_skeletal_anions_low_locants_before_suffixes
     #[test]
     fn retained_maps_assign_skeletal_anions_low_locants_before_suffixes() {
         let mol = read_smiles("[CH-]1CCC(=O)CC1", &Default::default()).unwrap();
@@ -1202,7 +1210,6 @@ mod tests {
         assert_eq!(map, Some(maps[1].clone()));
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn free_valence_precedes_skeletal_anions_in_both_numbering_paths
     #[test]
     fn free_valence_precedes_skeletal_anions_in_both_numbering_paths() {
         for (smiles, root, rooted, anionic, is_ring, retained) in [
@@ -1251,7 +1258,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn skeletal_anions_respect_fixed_heteroatom_numbering
     #[test]
     fn skeletal_anions_respect_fixed_heteroatom_numbering() {
         let mol = read_smiles("N1CCC[CH-]C1", &Default::default()).unwrap();
@@ -1296,7 +1302,6 @@ mod tests {
         assert_eq!(map, Some(maps[1].clone()));
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn hw_numbering_prioritizes_senior_heteroatom_then_all_hetero_locants
     #[test]
     fn hw_numbering_prioritizes_senior_heteroatom_then_all_hetero_locants() {
         let mol = read_smiles("s1cnnc1", &Default::default()).unwrap();
@@ -1323,7 +1328,6 @@ mod tests {
             vec![3, 4]
         );
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn alphabetic_substituent_citation_breaks_equal_locant_sets
     #[test]
     fn alphabetic_substituent_citation_breaks_equal_locant_sets() {
         let mol = read_smiles("CCCCCCC", &Default::default()).unwrap();
@@ -1344,7 +1348,6 @@ mod tests {
         assert_eq!(numbered, (0..7).rev().collect::<Vec<_>>());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn prefix_locant_sets_count_every_prefix
     #[test]
     fn prefix_locant_sets_count_every_prefix() {
         // P-14.4(f): {1,1,4} is lower than {1,4,4}; issue #949.
@@ -1367,7 +1370,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_numbering_scores_only_the_topology_candidates
     #[test]
     fn spiro_numbering_scores_only_the_topology_candidates() {
         let mol = read_smiles("C1CCC2(CC1)OCCO2", &Default::default()).unwrap();

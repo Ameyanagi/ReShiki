@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
-//   ReShiki, crates/chemistry/src/native_order.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Origin: original
+// Source: ReShiki | crates/chemistry/src/native_order.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
 
 //! Checked copies of the pinned platform's C++ comparison-sort policies.
 //! Used where equal keys affect chemical output, including traversal and rings.

@@ -5,20 +5,65 @@ import hashlib
 import io
 import json
 import tempfile
+import tomllib
 import unittest
+from copy import deepcopy
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
 from scripts.check_provenance import (
+    FROZEN_PENDING,
     LEDGER_NAME,
     check_provenance,
     check_rust,
     main,
     rust_functions,
+    rust_items,
 )
 
-HEADER = "// SPDX-License-Identifier: MIT\n// Origin: test implementation\n"
-SOURCE = {"project": "upstream", "path": "upstream/source.py", "license": "MIT", "ref": "v1"}
+SOURCE = {
+    "project": "upstream",
+    "path": "upstream/source.py",
+    "license": "MIT",
+    "ref": "v1",
+    "symbol": "upstream_name",
+}
+LOCAL = {
+    "project": "nazuchem",
+    "path": "src/local.rs",
+    "license": "MIT",
+    "ref": "local-v1",
+    "symbol": "local_name",
+}
+
+
+def header(origin="original", sources=None):
+    sources = [SOURCE] if sources is None else sources
+    return f"// SPDX-License-Identifier: MIT\n// Origin: {origin}\n" + "".join(
+        f"// Source: {source['project']} | {source['path']} | {source['ref']}\n"
+        for source in sources
+    )
+
+
+def marker(identity, origin="adapted", sources=None):
+    sources = [SOURCE] if sources is None else sources
+    return f"// Provenance: {identity} | {origin}\n" + "".join(
+        f"// Source: {source['project']} | {source['path']}::{source['symbol']}\n"
+        for source in sources
+    )
+
+
+def toml_value(value):
+    if isinstance(value, dict):
+        return "{ " + ", ".join(f"{key} = {toml_value(item)}" for key, item in value.items()) + " }"
+    if isinstance(value, list):
+        return "[" + ", ".join(toml_value(item) for item in value) + "]"
+    return json.dumps(value)
+
+
+HEADER = header()
+MIXED_HEADER = header("mixed")
 
 
 class ProvenanceTests(unittest.TestCase):
@@ -41,7 +86,13 @@ class ProvenanceTests(unittest.TestCase):
         target = self.root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(contents.encode() if isinstance(contents, str) else contents)
-        entry = {"path": path, "license": "MIT", "origin": "original", **metadata}
+        entry = {
+            "path": path,
+            "license": "MIT",
+            "origin": "original",
+            "sources": [SOURCE],
+            **metadata,
+        }
         if target.suffix != ".rs":
             entry["sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
         self.entries.append(entry)
@@ -52,7 +103,7 @@ class ProvenanceTests(unittest.TestCase):
         for entry in self.entries:
             lines.append("[[file]]")
             for key, value in entry.items():
-                lines.append(f"{key} = {json.dumps(value)}")
+                lines.append(f"{key} = {toml_value(value)}")
         (self.root / LEDGER_NAME).write_text("\n".join(lines), encoding="utf-8")
 
     def check(self):
@@ -104,7 +155,7 @@ class ProvenanceTests(unittest.TestCase):
         self.assertTrue(any("invalid repository-relative path" in e for e in self.check()))
 
     def test_rust_headers_must_open_file_and_match_expression(self):
-        entry = {"origin": "original", "license": "MIT OR Apache-2.0"}
+        entry = {"origin": "original", "license": "MIT OR Apache-2.0", "sources": [SOURCE]}
         errors = check_rust("sample.rs", HEADER + "fn x() {}", entry)
         self.assertTrue(any("SPDX header must match" in error for error in errors))
         for text in (
@@ -114,9 +165,53 @@ class ProvenanceTests(unittest.TestCase):
             "/*\n// SPDX-License-Identifier: MIT\n// Origin: fake\n*/\nfn x() {}\n",
         ):
             with self.subTest(text=text):
-                self.assertTrue(
-                    check_rust("sample.rs", text, {"origin": "original", "license": "MIT"})
-                )
+                self.assertTrue(check_rust("sample.rs", text, {**entry, "license": "MIT"}))
+
+    def test_origin_classification_and_all_file_source_identities_are_exact(self):
+        entry = {"origin": "original", "license": "MIT", "sources": [SOURCE, LOCAL]}
+        valid = header(sources=[LOCAL, SOURCE]) + "fn x() {}"
+        self.assertEqual(check_rust("sample.rs", valid, entry), [])
+        for text in (
+            valid.replace("// Origin: original", "// Origin: entirely original code."),
+            valid.replace("// Origin: original", "// Origin: adapted"),
+            valid.replace("// Origin: original", "// Origin: original\n// Origin: original"),
+            valid.replace("// Source: upstream | upstream/source.py | v1\n", ""),
+            valid.replace("upstream/source.py | v1", "upstream/source.py | WRONG_REF"),
+            valid.replace("// Source: upstream", "// Source: OTHER_PROJECT"),
+            valid.replace(
+                "// Source: upstream", "// Source: upstream | extra\n// Source: upstream"
+            ),
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(check_rust("sample.rs", text, entry))
+
+    def test_unresolved_license_does_not_create_a_general_legacy_exemption(self):
+        entry = {"origin": "original", "license": "NOASSERTION", "sources": [SOURCE]}
+        text = (
+            "// SPDX-License-Identifier: NOASSERTION\n// Origin: arbitrary legacy prose\nfn x() {}"
+        )
+        self.assertTrue(check_rust("another_pending.rs", text, entry))
+
+    def test_only_the_two_exact_pending_source_and_ledger_snapshots_are_exempt(self):
+        repository = Path(__file__).resolve().parents[1]
+        ledger = tomllib.loads((repository / LEDGER_NAME).read_text(encoding="utf-8"))
+        entries = {entry["path"]: entry for entry in ledger["file"]}
+        self.assertEqual(len(FROZEN_PENDING), 2)
+        for path in FROZEN_PENDING:
+            with self.subTest(path=path):
+                text = (repository / path).read_bytes().decode("utf-8")
+                entry = entries[path]
+                self.assertEqual(check_rust(path, text, entry), [])
+                self.assertIn("source snapshot changed", check_rust(path, text + "\n", entry)[0])
+                changed = deepcopy(entry)
+                changed["notes"] += " altered"
+                self.assertIn("ledger entry changed", check_rust(path, text, changed)[0])
+                changed = deepcopy(entry)
+                changed["sources"][0]["ref"] = "new reference"
+                self.assertIn("ledger entry changed", check_rust(path, text, changed)[0])
+                changed["sources"][0]["ref"] = date(2026, 11, 9)
+                self.assertIn("ledger entry changed", check_rust(path, text, changed)[0])
+                self.assertTrue(check_rust("elsewhere/" + Path(path).name, text, entry))
 
     def test_cli_exit_codes_and_diagnostics(self):
         self.write_ledger()
@@ -130,57 +225,90 @@ class ProvenanceTests(unittest.TestCase):
 
 
 class RustBoundaryTests(unittest.TestCase):
-    def entry(self, items, origin="adapted"):
+    def entry(self, items, origin="adapted", sources=None):
+        sources = [SOURCE] if sources is None else sources
         return {
             "origin": "mixed",
             "license": "MIT",
-            "parts": [{"items": items, "origin": origin, "sources": [SOURCE]}],
+            "sources": sources,
+            "parts": [{"items": items, "origin": origin, "sources": sources}],
         }
 
     def test_each_origin_requires_its_correct_marker_and_recorded_source(self):
-        cases = (
-            ("port", "// Ported from upstream/source.py::_upstream"),
-            ("adapted", "// Adapted from upstream/source.py (exact mapping not recorded)"),
-            ("adapted", "// Adapted from upstream/source.py, upstream/other.py (module mapping)"),
-            ("mixed", "// Adapted from upstream/source.py::x (local Rust boundary)"),
-            ("original", "// Original nazuchem code (not in upstream v1): fn x"),
-        )
-        for origin, marker in cases:
+        for origin in ("port", "copy", "adapted", "mixed", "original"):
             with self.subTest(origin=origin):
                 entry = self.entry(["fn x"], origin)
-                self.assertEqual(check_rust("test.rs", HEADER + marker + "\nfn x() {}", entry), [])
-                self.assertTrue(check_rust("test.rs", HEADER + "fn x() {}", entry))
-        self.assertTrue(
-            check_rust(
-                "x.rs", HEADER + "// Ported from wrong.py\nfn x() {}", self.entry(["fn x"], "port")
-            )
+                text = MIXED_HEADER + marker("fn x", origin) + "fn x() {}"
+                self.assertEqual(check_rust("test.rs", text, entry), [])
+                self.assertTrue(check_rust("test.rs", MIXED_HEADER + "fn x() {}", entry))
+
+    def test_local_identity_source_symbol_and_classification_must_match(self):
+        entry = self.entry(["fn x"])
+        valid = MIXED_HEADER + marker("fn x") + "fn x() {}"
+        for text in (
+            valid.replace("Provenance: fn x", "Provenance: fn WRONG_LOCAL"),
+            valid.replace("::upstream_name", "::WRONG_SYMBOL"),
+            valid.replace("| adapted", "| port"),
+            valid.replace("upstream/source.py::", "upstream/source.py.extra::"),
+            valid.replace("// Source: upstream | upstream/source.py::upstream_name\n", ""),
+            MIXED_HEADER + "// Adapted from upstream/source.py::upstream_name\nfn x() {}",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(check_rust("test.rs", text, entry))
+
+    def test_all_sources_are_required_including_original_local_sources(self):
+        sources = [SOURCE, LOCAL]
+        entry = self.entry(["fn x"], sources=sources)
+        opening = header("mixed", sources)
+        self.assertEqual(
+            check_rust("x.rs", opening + marker("fn x", sources=sources) + "fn x() {}", entry), []
         )
-        self.assertTrue(
-            check_rust(
-                "x.rs",
-                HEADER + "// Adapted from upstream/source.py.extra\nfn x() {}",
-                self.entry(["fn x"]),
-            )
-        )
-        self.assertTrue(
-            check_rust(
-                "x.rs",
-                HEADER + "// Ported from upstream/source.py\nfn x() {}",
-                self.entry(["fn x"]),
-            )
-        )
+        for origin in ("adapted", "original"):
+            with self.subTest(origin=origin):
+                entry["parts"][0]["origin"] = origin
+                text = opening + marker("fn x", origin, [SOURCE]) + "fn x() {}"
+                self.assertTrue(check_rust("x.rs", text, entry))
+        missing_symbol = deepcopy(entry)
+        missing_symbol["parts"][0]["sources"][1].pop("symbol")
+        self.assertTrue(check_rust("x.rs", opening + "fn x() {}", missing_symbol))
+
+    def test_multiple_symbols_in_one_source_file_are_distinct_required_mappings(self):
+        sources = [SOURCE, {**SOURCE, "symbol": "Class.field default expression"}]
+        entry = self.entry(["fn x"], sources=sources)
+        entry["sources"] = [SOURCE]
+        text = MIXED_HEADER + marker("fn x", sources=sources) + "fn x() {}"
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+        self.assertTrue(check_rust("x.rs", text.replace("::upstream_name", "::wrong"), entry))
+
+    def test_same_source_symbol_at_multiple_pins_has_one_marker_and_all_header_refs(self):
+        sources = [SOURCE, {**SOURCE, "ref": "v2"}]
+        entry = self.entry(["fn x"], sources=sources)
+        text = header("mixed", sources) + marker("fn x") + "fn x() {}"
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+        missing_ref = text.replace("// Source: upstream | upstream/source.py | v2\n", "")
+        self.assertTrue(check_rust("x.rs", missing_ref, entry))
+
+    def test_duplicate_and_unexpected_marker_sources_are_rejected(self):
+        entry = self.entry(["fn x"])
+        text = MIXED_HEADER + marker("fn x")
+        for extra in (
+            "// Source: upstream | upstream/source.py::upstream_name\n",
+            "// Source: nazuchem | src/local.rs::local_name\n",
+            "// Provenance: fn x | adapted\n",
+        ):
+            self.assertTrue(check_rust("x.rs", text + extra + "fn x() {}", entry))
 
     def test_marker_cannot_leak_from_previous_function(self):
-        text = HEADER + "// Adapted from upstream/source.py\nfn x() {}\nfn y() {}"
+        text = MIXED_HEADER + marker("fn x") + "fn x() {}\nfn y() {}"
         errors = check_rust("x.rs", text, self.entry(["fn x", "fn y"]))
         self.assertEqual(len(errors), 1)
         self.assertIn("fn y missing", errors[0])
 
     def test_docs_attributes_and_literals_do_not_hide_real_boundaries(self):
         text = (
-            HEADER
+            MIXED_HEADER
+            + marker("fn real")
             + """
-// Adapted from upstream/source.py
 /// Example documentation.
 #[cfg(any(test, feature = "fn fake() { }"))]
 #[custom({ fn ignored() {} })]
@@ -198,51 +326,303 @@ pub(crate) async fn real<'a>(value: &'a str) {
 
     def test_marker_text_inside_block_comment_or_literal_does_not_count(self):
         for prelude in (
-            "/*\n// Adapted from upstream/source.py\n*/",
-            '#[doc = r"\n// Adapted from upstream/source.py\n"]',
+            "/*\n" + marker("fn x") + "*/",
+            '#[doc = r"\n' + marker("fn x") + '"]',
         ):
             self.assertTrue(
-                check_rust("x.rs", HEADER + prelude + "\nfn x() {}", self.entry(["fn x"]))
+                check_rust("x.rs", MIXED_HEADER + prelude + "\nfn x() {}", self.entry(["fn x"]))
             )
 
-    def test_qualified_methods_nested_functions_and_all_duplicate_names(self):
+    def test_every_discovered_function_requires_a_two_way_exact_assignment(self):
+        entry = self.entry(["fn x"])
+        text = MIXED_HEADER + marker("fn x") + "fn x() {}"
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+        errors = check_rust("x.rs", text + "\nfn uncredited_port() {}", entry)
+        self.assertTrue(any("fn uncredited_port has no mixed-file" in e for e in errors))
+        errors = check_rust("x.rs", text.replace("fn x()", "fn renamed()"), entry)
+        self.assertTrue(any("has no Rust declaration" in e for e in errors))
+        self.assertTrue(any("fn renamed has no mixed-file" in e for e in errors))
+
+    def test_unicode_function_module_and_method_identifiers_are_covered(self):
         text = (
-            HEADER
-            + """
-impl<'a, T> Trait<T> for First<'a, T> {
-    // Adapted from upstream/source.py
-    fn new() {}
-}
-impl Second {
-    fn new() {}
-}
-fn outer() {
-    // Adapted from upstream/source.py
-    fn recur() {}
-}
-#[cfg(test)]
-mod tests {
-    fn recur() {}
-}
-"""
+            MIXED_HEADER
+            + "mod 試験 { impl 型 {\n"
+            + marker("fn 試験::型::名前")
+            + "fn r#名前() {}\n}\n"
+            + marker("fn 試験::café")
+            + "fn cafe\u0301() {}\n}"
+        )
+        self.assertEqual(
+            [item.identity for item in rust_items(text)],
+            ["mod 試験", "impl 試験::型", "fn 試験::型::名前", "fn 試験::café"],
+        )
+        entry = self.entry(["fn 試験::型::名前", "fn 試験::café"])
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+        errors = check_rust("x.rs", text + "\nfn 未帰属() {}", entry)
+        self.assertTrue(
+            any("fn 未帰属 has no mixed-file provenance assignment" in e for e in errors)
+        )
+
+    def test_unicode_append_to_real_mixed_file_is_rejected(self):
+        repository = Path(__file__).resolve().parents[1]
+        path = "src/naming/openclatura/principal_suffixes.rs"
+        ledger = tomllib.loads((repository / LEDGER_NAME).read_text(encoding="utf-8"))
+        entry = next(item for item in ledger["file"] if item["path"] == path)
+        text = (repository / path).read_text(encoding="utf-8")
+        errors = check_rust(path, text + "\nfn 未帰属() {}\n", entry)
+        self.assertTrue(
+            any("fn 未帰属 has no mixed-file provenance assignment" in e for e in errors)
+        )
+
+    def test_unicode_identifier_boundaries_and_rust_directional_whitespace(self):
+        text = (
+            "use cafe\u0301fn as other; use r#fn as alias;\n"
+            "fn\u200e未帰属() {}\nmod\u200f試験 { fn ℘a·b١() {} }"
+        )
+        self.assertEqual(
+            [item.identity for item in rust_items(text)],
+            ["fn 未帰属", "mod 試験", "fn 試験::℘a·b١"],
+        )
+
+    def test_unsupported_unicode_identifier_fails_closed(self):
+        text = MIXED_HEADER + marker("fn x") + "fn x() {}\nfn a\u200db() {}"
+        errors = check_rust("x.rs", text, self.entry(["fn x"]))
+        self.assertTrue(any("cannot verify complete Rust inventory" in e for e in errors))
+        self.assertTrue(any("unsupported Rust identifier" in e for e in errors))
+
+    def test_nested_declarations_in_const_generic_signatures_fail_closed(self):
+        for declaration in (
+            "fn outer<T: Trait<{ fn hidden() {} 0 }>>() {}",
+            "fn outer() where (): Trait<{ fn hidden() {} 0 }> {}",
+            "fn outer<T: Trait<{ mod hidden { fn inner() {} } 0 }>>() {}",
+        ):
+            with self.subTest(declaration=declaration):
+                text = MIXED_HEADER + marker("fn outer") + declaration
+                errors = check_rust("x.rs", text, self.entry(["fn outer"]))
+                self.assertTrue(any("cannot verify complete Rust inventory" in e for e in errors))
+                self.assertTrue(any("unsupported signature expression" in e for e in errors))
+
+    def test_signature_expression_blocks_without_declarations_remain_supported(self):
+        for declaration in (
+            "fn outer<T: Trait<{ 0 }>>() {}",
+            "fn outer(Point { x, y }: Point) {}",
+        ):
+            with self.subTest(declaration=declaration):
+                text = MIXED_HEADER + marker("fn outer") + declaration
+                self.assertEqual(check_rust("x.rs", text, self.entry(["fn outer"])), [])
+
+    def test_inherent_impl_type_paths_have_distinct_qualified_identities(self):
+        text = "impl a::Foo { fn f() {} } impl b::Foo { fn f() {} }\nimpl 模組::型 { fn 方法() {} }"
+        self.assertEqual(
+            [item.identity for item in rust_items(text)],
+            [
+                "impl a::Foo",
+                "fn a::Foo::f",
+                "impl b::Foo",
+                "fn b::Foo::f",
+                "impl 模組::型",
+                "fn 模組::型::方法",
+            ],
+        )
+
+    def test_colliding_concrete_generic_impl_identities_fail_closed(self):
+        text = (
+            MIXED_HEADER
+            + "impl Foo<u8> {\n"
+            + marker("fn Foo::f")
+            + "fn f() {} }\n"
+            + "impl Foo<u16> {\n"
+            + marker("fn Foo::f")
+            + "fn f() {} }"
+        )
+        errors = check_rust("x.rs", text, self.entry(["fn Foo::f"]))
+        self.assertTrue(any("ambiguous impl identity 'Foo'" in e for e in errors))
+
+    def test_qualified_methods_nested_functions_and_duplicate_leaf_names(self):
+        text = (
+            MIXED_HEADER
+            + "impl<'a, T> Trait<T> for First<'a, T> {\n"
+            + marker("fn <First<'a,T> as Trait<T>>::new")
+            + "fn new() {}\n}\n"
+            + "impl Second {\n"
+            + marker("fn Second::new")
+            + "fn new() {}\n}\n"
+            + marker("fn outer")
+            + "fn outer() {\n"
+            + marker("fn outer::recur")
+            + "fn recur() {}\n}\n"
+            + "#[cfg(test)]\nmod tests {\n"
+            + marker("fn tests::recur")
+            + "fn recur() {}\n}\n"
         )
         names = [function.qualified_name for function in rust_functions(text)]
         self.assertEqual(
-            names, ["First::new", "Second::new", "outer", "outer::recur", "tests::recur"]
+            names,
+            [
+                "<First<'a,T> as Trait<T>>::new",
+                "Second::new",
+                "outer",
+                "outer::recur",
+                "tests::recur",
+            ],
+        )
+        self.assertEqual(check_rust("x.rs", text, self.entry(["fn " + n for n in names])), [])
+        errors = check_rust("x.rs", text, self.entry(["fn new", "fn recur"]))
+        self.assertTrue(any("'fn new' has no Rust declaration" in error for error in errors))
+        self.assertTrue(any("'fn recur' has no Rust declaration" in error for error in errors))
+
+    def test_trait_implementations_with_the_same_method_have_distinct_identities(self):
+        text = (
+            "impl From<First> for Error { fn from() {} }\n"
+            "impl From<Second> for Error { fn from() {} }\n"
+            "impl Error { fn from() {} }"
         )
         self.assertEqual(
-            check_rust("x.rs", text, self.entry(["fn First::new", "fn outer::recur"])), []
+            [f.qualified_name for f in rust_functions(text)],
+            ["<Error as From<First>>::from", "<Error as From<Second>>::from", "Error::from"],
         )
-        errors = check_rust("x.rs", text, self.entry(["fn new", "fn recur"]))
+
+    def test_module_regions_cover_nested_scopes_and_explicit_overrides(self):
+        text = (
+            header("mixed", [SOURCE, LOCAL])
+            + marker("mod tests", "original", [LOCAL])
+            + "mod tests {\n"
+            + "fn setup() { fn nested() {} }\n"
+            + "mod inner {\n"
+            + marker("impl tests::inner::Fixture")
+            + "impl Fixture {\nfn build() {}\n}\n"
+            + marker("fn tests::inner::special")
+            + "fn special() {}\n}\n}\n"
+        )
+        entry = self.entry(["mod tests"], "original", [LOCAL])
+        entry["sources"] = [SOURCE, LOCAL]
+        entry["parts"].append(
+            {
+                "items": ["impl tests::inner::Fixture", "fn tests::inner::special"],
+                "origin": "adapted",
+                "sources": [SOURCE],
+            }
+        )
+        self.assertEqual(check_rust("x.rs", text, entry), [])
+        wrong_override = text.replace(
+            "fn tests::inner::special | adapted", "fn tests::inner::special | original"
+        )
+        self.assertTrue(check_rust("x.rs", wrong_override, entry))
+        missing_override = text.replace(marker("fn tests::inner::special"), "")
+        self.assertTrue(check_rust("x.rs", missing_override, entry))
+
+    def test_region_markers_require_exact_lexical_scope_and_ledger_identity(self):
+        text = MIXED_HEADER + marker("mod tests") + "mod tests { fn inside() {} }\nfn outside() {}"
+        errors = check_rust("x.rs", text, self.entry(["mod tests"]))
+        self.assertEqual(len(errors), 1)
+        self.assertIn("fn outside has no mixed-file", errors[0])
+        for item in ("mod wrong", "impl tests", "fn inside"):
+            with self.subTest(item=item):
+                self.assertTrue(check_rust("x.rs", text, self.entry([item])))
+        external = MIXED_HEADER + marker("mod tests") + "mod tests;\nfn outside() {}"
+        self.assertTrue(check_rust("x.rs", external, self.entry(["mod tests"])))
+
+    def test_own_function_assignment_does_not_cover_nested_functions(self):
+        text = MIXED_HEADER + marker("fn outer") + "fn outer() { fn nested() {} }"
+        errors = check_rust("x.rs", text, self.entry(["fn outer"]))
+        self.assertEqual(len(errors), 1)
+        self.assertIn("fn outer::nested has no mixed-file", errors[0])
+
+    def test_nested_functions_in_array_and_call_argument_blocks_are_not_hidden(self):
+        text = (
+            MIXED_HEADER
+            + marker("fn outer")
+            + "fn outer() {\n"
+            + "let _ = [ { fn array_helper() {} 1 } ];\n"
+            + "consume({ fn argument_helper() {} 1 });\n"
+            + "type Alias = impl Trait;\n}"
+        )
+        self.assertEqual(
+            [item.identity for item in rust_items(text)],
+            ["fn outer", "fn outer::array_helper", "fn outer::argument_helper"],
+        )
+        errors = check_rust("x.rs", text, self.entry(["fn outer"]))
         self.assertEqual(len(errors), 2)
-        self.assertTrue(any("fn new missing" in error for error in errors))
-        self.assertTrue(any("fn recur missing" in error for error in errors))
+        self.assertTrue(all("has no mixed-file provenance assignment" in e for e in errors))
+
+    def test_an_own_marker_cannot_silently_override_a_region_without_a_ledger_item(self):
+        text = (
+            MIXED_HEADER
+            + marker("mod tests")
+            + "mod tests {\n"
+            + marker("fn tests::x", "original")
+            + "fn x() {} }"
+        )
+        errors = check_rust("x.rs", text, self.entry(["mod tests"]))
+        self.assertTrue(any("provenance marker has no exact ledger item" in e for e in errors))
+
+    def test_scope_metadata_tracks_modules_impls_nested_functions_and_boundaries(self):
+        text = (
+            "mod tests {\n// region\nimpl<T> Type<T> where T: Trait {\n"
+            "fn outer(value: impl Trait) { fn nested() {} }\n}\n}\n"
+            "trait Factory { fn make(); }\nmod external;\nfn after() {}"
+        )
+        items = rust_items(text)
+        self.assertEqual(
+            [item.identity for item in items],
+            [
+                "mod tests",
+                "impl tests::Type",
+                "fn tests::Type::outer",
+                "fn tests::Type::outer::nested",
+                "fn Factory::make",
+                "mod external",
+                "fn after",
+            ],
+        )
+        self.assertEqual(items[3].ancestors, (0, 1, 2))
+        self.assertEqual(items[3].parent, 2)
+        self.assertIn("// region", items[1].prelude)
+        self.assertEqual(text[items[1].start : items[1].start + 4], "impl")
+        self.assertEqual(text[items[1].body_start], "{")
+        self.assertEqual(text[items[1].end - 1], "}")
+        self.assertIsNone(items[5].body_start)
+        self.assertEqual(text[items[5].end - 1], ";")
+        self.assertEqual(items[6].ancestors, ())
+
+    def test_parts_must_be_well_formed_unique_and_use_header_sources(self):
+        text = MIXED_HEADER + marker("fn x") + "fn x() {}"
+        for change in ("duplicate", "missing-symbol", "foreign-source", "invalid-kind", "no-parts"):
+            entry = self.entry(["fn x"])
+            with self.subTest(change=change):
+                if change == "duplicate":
+                    entry["parts"].append(deepcopy(entry["parts"][0]))
+                elif change == "missing-symbol":
+                    entry["parts"][0]["sources"] = [
+                        {k: v for k, v in SOURCE.items() if k != "symbol"}
+                    ]
+                elif change == "foreign-source":
+                    entry["parts"][0]["sources"] = [LOCAL]
+                elif change == "invalid-kind":
+                    entry["parts"][0]["items"] = ["struct X"]
+                else:
+                    entry["parts"] = []
+                self.assertTrue(check_rust("x.rs", text, entry))
+
+    def test_invalid_ledger_origin_types_report_errors_without_crashing(self):
+        text = MIXED_HEADER + marker("fn x") + "fn x() {}"
+        entry = self.entry(["fn x"])
+        entry["origin"] = ["mixed"]
+        self.assertTrue(check_rust("x.rs", text, entry))
+        entry = self.entry(["fn x"])
+        entry["parts"][0]["origin"] = ["adapted"]
+        self.assertTrue(check_rust("x.rs", text, entry))
 
     def test_missing_function_is_actionable_and_nonmixed_files_need_no_marker(self):
-        errors = check_rust("x.rs", HEADER, self.entry(["fn missing"]))
-        self.assertIn("has no Rust function", errors[0])
+        errors = check_rust("x.rs", MIXED_HEADER, self.entry(["fn missing"]))
+        self.assertTrue(any("'fn missing' has no Rust declaration" in e for e in errors))
         self.assertEqual(
-            check_rust("x.rs", HEADER + "fn x() {}", {"origin": "port", "license": "MIT"}), []
+            check_rust(
+                "x.rs",
+                header("port") + "fn x() {}",
+                {"origin": "port", "license": "MIT", "sources": [SOURCE]},
+            ),
+            [],
         )
 
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/small_ring_stereo.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   ReShiki, src/naming/openclatura/small_ring_stereo.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: mixed
+// Source: openclatura | src/openclatura/small_ring_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/small_ring_stereo.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Adapted openclatura local numbered-ring isotope CIP fallback, using the native graph adapter, with original Rust regression tests.
@@ -15,7 +15,8 @@ use super::{
 };
 use std::collections::BTreeMap;
 
-// Adapted from src/openclatura/small_ring_stereo.py::scoped_small_ring_stereo_features (adapted; local fn scoped_small_ring_stereo_features)
+// Provenance: fn scoped_small_ring_stereo_features | adapted
+// Source: openclatura | src/openclatura/small_ring_stereo.py::scoped_small_ring_stereo_features
 pub fn scoped_small_ring_stereo_features(
     mol: &Molecule,
     parts: &AssemblyParts,
@@ -89,11 +90,12 @@ pub fn scoped_small_ring_stereo_features(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/small_ring_stereo.rs::tests
 mod tests {
     use super::*;
     use crate::naming::openclatura::graph_io::read_smiles;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn modern_cip_precedes_the_scoped_local_isotope_fallback
     #[test]
     fn modern_cip_precedes_the_scoped_local_isotope_fallback() {
         // Upstream _assign_local_cip_with_locant_labels independently gives
@@ -123,7 +125,6 @@ mod tests {
         assert!(scoped_small_ring_stereo_features(&mol, &parts, &path, get_loc).is_empty());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn monosubstituted_centers_use_full_cip_without_local_isotopes
     #[test]
     fn monosubstituted_centers_use_full_cip_without_local_isotopes() {
         let mol = read_smiles("C[C@H]1C[C@@H](C)C1", &Default::default()).unwrap();

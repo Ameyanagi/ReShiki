@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-// Origin: adapted from upstream code.
-//   openclatura 0.4.3, src/openclatura/fusion/rules.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/retained_fused_templates.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: adapted
+// Source: openclatura | src/openclatura/fusion/rules.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/retained_fused_templates.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Changes: Openclatura fusion eligibility/seniority/interface identity rules, with rewritten graph automorphism adapter and local seniority/multiplier adjustments.
 

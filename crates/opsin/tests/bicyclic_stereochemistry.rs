@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
-//   ReShiki, crates/opsin/tests/bicyclic_stereochemistry.rs @ d9859a4d1dbdae0e25ebf9a5201f963677c73b19.
+// Origin: original
+// Source: ReShiki | crates/opsin/tests/bicyclic_stereochemistry.rs | d9859a4d1dbdae0e25ebf9a5201f963677c73b19
 
 //! Rigid cage descriptors must define the bridgeheads and the substituted atom.
 use std::collections::{BTreeMap, BTreeSet};

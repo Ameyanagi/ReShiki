@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/principal_suffixes.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   ReShiki, src/naming/openclatura/principal_suffixes.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: mixed
+// Source: openclatura | src/openclatura/principal_suffixes.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/principal_suffixes.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Ported principal-suffix word-position rendering, locally extended for suffix elision and bis(aminium), with original tests.
@@ -9,7 +9,8 @@
 
 //! Programmatic rendering of equivalent principal-group suffixes.
 use super::{nomenclature::FunctionalGroupRule, rules::multipliers};
-// Adapted from src/openclatura/principal_suffixes.py::render_principal_suffix (adapted; local fn render_principal_suffix)
+// Provenance: fn render_principal_suffix | adapted
+// Source: openclatura | src/openclatura/principal_suffixes.py::render_principal_suffix
 pub fn render_principal_suffix(rule: &FunctionalGroupRule, count: usize) -> String {
     let Some(suffix) = rule.suffix.as_ref() else {
         return String::new();
@@ -41,11 +42,12 @@ pub fn render_principal_suffix(rule: &FunctionalGroupRule, count: usize) -> Stri
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/principal_suffixes.rs::tests
 mod tests {
     use super::super::nomenclature::RULES;
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn equivalent_principal_groups_use_suffix_specific_elision
     #[test]
     fn equivalent_principal_groups_use_suffix_specific_elision() {
         for (key, count, expected) in [
@@ -69,7 +71,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn suffix_multipliers_respect_word_positions
     #[test]
     fn suffix_multipliers_respect_word_positions() {
         let mut rule = FunctionalGroupRule {

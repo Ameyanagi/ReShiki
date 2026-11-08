@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/locants.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/locants.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/locants.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura typed system/atom/bond locants with local compound-locant ordering.
@@ -21,7 +22,8 @@ pub struct SystemLocant {
 }
 #[cfg(test)]
 impl SystemLocant {
-    // Ported from src/openclatura/locants.py (port; upstream function mapping not recorded; local fn SystemLocant::render)
+    // Provenance: fn SystemLocant::render | port
+    // Source: openclatura | src/openclatura/locants.py::SystemLocant.render
     pub fn render(&self, unicode_superscript: bool) -> String {
         let mut text = format!("{}{}", self.base, self.fusion_suffix);
         if let Some(distance) = self.interior_distance {
@@ -40,7 +42,8 @@ impl SystemLocant {
         text
     }
 }
-// Adapted from src/openclatura/locants.py (adapted; upstream function mapping not recorded; local fn parse_system_locant)
+// Provenance: fn parse_system_locant | adapted
+// Source: openclatura | src/openclatura/locants.py::parse_system_locant
 pub fn parse_system_locant(value: &str) -> Result<SystemLocant, String> {
     let mut normalized = String::new();
     let mut in_superscript = false;
@@ -85,7 +88,8 @@ pub fn parse_system_locant(value: &str) -> Result<SystemLocant, String> {
         interior_distance,
     })
 }
-// Adapted from src/openclatura/locants.py (adapted; upstream function mapping not recorded; local fn retained_locant_sort_key)
+// Provenance: fn retained_locant_sort_key | adapted
+// Source: openclatura | src/openclatura/locants.py::retained_locant_sort_key
 pub fn retained_locant_sort_key(value: &str) -> LocantKey {
     if let Ok(locant) = parse_system_locant(value) {
         if locant.fusion_suffix.is_empty()
@@ -135,7 +139,8 @@ pub fn retained_locant_sort_key(value: &str) -> LocantKey {
         0,
     )
 }
-// Ported from src/openclatura/locants.py (port; upstream function mapping not recorded; local fn canonical_locant_pair)
+// Provenance: fn canonical_locant_pair | port
+// Source: openclatura | src/openclatura/locants.py::canonical_locant_pair
 pub fn canonical_locant_pair(left: &str, right: &str) -> (String, String) {
     if retained_locant_sort_key(left) <= retained_locant_sort_key(right) {
         (left.into(), right.into())
@@ -144,7 +149,8 @@ pub fn canonical_locant_pair(left: &str, right: &str) -> (String, String) {
     }
 }
 
-// Ported from src/openclatura/locants.py (port; upstream function mapping not recorded; local fn get_atom_locants)
+// Provenance: fn get_atom_locants | port
+// Source: openclatura | src/openclatura/locants.py::get_atom_locants
 pub fn get_atom_locants(oriented_path: &[usize], target_indices: &AtomSet) -> Vec<usize> {
     oriented_path
         .iter()
@@ -153,7 +159,8 @@ pub fn get_atom_locants(oriented_path: &[usize], target_indices: &AtomSet) -> Ve
         .collect()
 }
 
-// Ported from src/openclatura/locants.py (port; upstream function mapping not recorded; local fn get_bond_locants)
+// Provenance: fn get_bond_locants | port
+// Source: openclatura | src/openclatura/locants.py::get_bond_locants
 pub fn get_bond_locants(
     mol: &Molecule,
     oriented_path: &[usize],
@@ -199,10 +206,11 @@ pub fn get_bond_locants(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/locants.rs::tests
 mod tests {
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn assembly_composite_locants_compare_secondary_numbers_and_fusion_letters
     #[test]
     fn assembly_composite_locants_compare_secondary_numbers_and_fusion_letters() {
         let mut labels = ["2^1", "1^10", "1^4a", "1^5", "1^4", "1^4b", "1^2"];
@@ -215,7 +223,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn completed_system_locants_preserve_interior_distance
     #[test]
     fn completed_system_locants_preserve_interior_distance() {
         let locant = parse_system_locant("9a¹²").unwrap();

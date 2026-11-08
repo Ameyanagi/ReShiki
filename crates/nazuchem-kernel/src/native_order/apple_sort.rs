@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Origin: adapted from LLVM libc++; source paths and pins follow.
-//   LLVM libc++, libcxx/include/__algorithm/sort.h @ llvmorg-20.1.8 / Apple MacOSX26.2 SDK.
-//   ReShiki, crates/chemistry/src/native_order/apple_sort.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Origin: adapted
+// Source: LLVM libc++ | libcxx/include/__algorithm/sort.h | llvmorg-20.1.8 / Apple MacOSX26.2 SDK
+// Source: ReShiki | crates/chemistry/src/native_order/apple_sort.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
 // Copyright (c) 2003-2019 University of Illinois at Urbana-Champaign.
 // Changes: Rust adaptation; integer keys, checked indexing and an explicit range stack.
 

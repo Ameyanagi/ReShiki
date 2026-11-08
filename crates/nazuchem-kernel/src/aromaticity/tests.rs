@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
-//   ReShiki, crates/chemistry/src/aromaticity/tests.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Origin: original
+// Source: ReShiki | crates/chemistry/src/aromaticity/tests.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
 
 // Copied from crates/chemistry/src/aromaticity/tests.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: inject explicit/default budgets, replace host profile setup, and test limits plus reservation lifetimes
 use super::*;

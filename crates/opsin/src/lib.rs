@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
-// Origin: mixed adaptation of OPSIN with ledger-marked local functions; source paths and pins follow.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   ReShiki, crates/opsin/src/lib.rs @ 89f30ab6d32736a8beccf3bab9c355c68f178f00.
-//   ReShiki, crates/opsin/src/lib.rs @ 2df788dc456793c687b934afd6d4b317e3c73ef8.
-//   ReShiki, crates/opsin/src/lib.rs @ 777cdd3f98dfb955e165b17e352d3ce6da768b0c.
+// Origin: mixed
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/lib.rs | 89f30ab6d32736a8beccf3bab9c355c68f178f00
+// Source: ReShiki | crates/opsin/src/lib.rs | 2df788dc456793c687b934afd6d4b317e3c73ef8
+// Source: ReShiki | crates/opsin/src/lib.rs | 777cdd3f98dfb955e165b17e352d3ce6da768b0c
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
 // Copyright 2017 Daniel Lowe
 // Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
 
@@ -102,6 +103,12 @@ pub struct Structure {
     pub principal_parent_atoms: Vec<graph::AtomId>,
 }
 
+// Provenance: impl Structure | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java::getExtendedSmiles
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::writeExtendedSmilesLayer
 impl Structure {
     /// Semantic CXSMILES retains atom labels, enhanced stereo and polymers.
     /// Cosmetic atom values (including locants) are intentionally excluded.
@@ -113,7 +120,6 @@ impl Structure {
     /// Semantic CXSMILES and the first principal-parent locant for each written
     /// atom, in SMILES order. Folded hydrogens have no entry in this vector.
     /// Returns an error when axes would otherwise be omitted.
-    // Original nazuchem code (not in OPSIN).
     pub fn semantic_cxsmiles_with_locants(
         &self,
     ) -> Result<(String, Vec<Option<String>>), SerializationError> {
@@ -126,7 +132,6 @@ impl Structure {
 
     /// Serialize SMILES, parent locants, and axial configurations together.
     /// Axes use the same written atom indices as the locants vector.
-    // Original nazuchem code (not in OPSIN).
     pub fn semantic_cxsmiles_with_locants_and_axes(
         &self,
     ) -> Result<SerializedStructure, SerializationError> {
@@ -145,6 +150,15 @@ pub struct Parser {
     budget: Budget,
 }
 
+// Provenance: impl Parser | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::getInstance
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::NameToStructure
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::parseWord
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::tokenize
 impl Parser {
     /// Initialize a parser with an unbounded chemistry budget.
     /// Hosts that limit chemistry analysis should use [`Self::with_budget`].
@@ -154,7 +168,6 @@ impl Parser {
 
     /// Initialize a parser using the host's chemistry limits and reservation hook.
     /// The budget is shared by clones and applied independently to each analysis.
-    // Original nazuchem code (not in OPSIN).
     pub fn with_budget(budget: Budget) -> Result<Self, InitializationError> {
         static RESOURCES: OnceLock<Result<Arc<resources::Resources>, InitializationError>> =
             OnceLock::new();

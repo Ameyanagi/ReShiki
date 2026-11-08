@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Origin: adapted from RDKit; source paths and pins follow.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/Sort.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rules.h @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule1a.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule1b.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule2.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule3.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule4a.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule4b.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule4c.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule5.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule5New.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rule6.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   ReShiki, crates/chemistry/src/stereo/cip/rules.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Origin: adapted
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule1a.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule1b.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule2.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule3.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule4a.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule4b.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule4c.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule5.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule5New.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rule6.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/stereo/cip/rules.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
 // Copyright (C) 2020 Schrödinger, LLC. BSD-3-Clause; see licenses/rdkit/.
 // Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
 

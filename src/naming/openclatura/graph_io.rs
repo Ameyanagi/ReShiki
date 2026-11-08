@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/graph_io.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/small_ring_stereo.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/graph_io.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/small_ring_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/graph_io.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura graph semantics adapted to the local chemistry kernel with additional admission checks.
@@ -20,7 +21,8 @@ use nazuchem_kernel::{
 use std::collections::{BTreeMap, VecDeque};
 
 /// Read one supported graph, retaining source atom order and aromatic identity.
-// Adapted from src/openclatura/graph_io.py::read_smiles, src/openclatura/graph_io.py::read_rdkit_mol, src/openclatura/graph_io.py::_kekulize, src/openclatura/graph_io.py::_build_molecule, src/openclatura/graph_io.py::_raw_tetrahedral_stereo, src/openclatura/graph_io.py::_atom_metadata (adapted; local fn read_smiles)
+// Provenance: fn read_smiles | adapted
+// Source: openclatura | src/openclatura/graph_io.py::read_smiles
 pub fn read_smiles(
     text: &str,
     budget: &nazuchem_kernel::budget::Budget,
@@ -206,7 +208,8 @@ pub fn read_smiles(
 }
 
 /// Input checks that do not depend on the selected nomenclature system.
-// Original nazuchem code (not in openclatura 0.4.3): fn require_supported_ring_blocks
+// Provenance: fn require_supported_ring_blocks | original
+// Source: ReShiki | src/naming/openclatura/graph_io.rs::require_supported_ring_blocks
 fn require_supported_ring_blocks(mol: &Molecule) -> Result<(), String> {
     let atoms = mol.atoms.keys().copied().collect();
     let mut ring_blocks = BTreeMap::<usize, usize>::new();
@@ -224,7 +227,9 @@ fn require_supported_ring_blocks(mol: &Molecule) -> Result<(), String> {
     Ok(())
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn atom_cip
+// Provenance: fn atom_cip | adapted
+// Source: openclatura | src/openclatura/graph_io.py::_modern_cip_labels
+// Source: openclatura | src/openclatura/graph_io.py::_build_molecule
 fn atom_cip(state: &perception::State) -> BTreeMap<usize, String> {
     state
         .properties
@@ -235,7 +240,8 @@ fn atom_cip(state: &perception::State) -> BTreeMap<usize, String> {
         .collect()
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn total_degree
+// Provenance: fn total_degree | original
+// Source: ReShiki | src/naming/openclatura/graph_io.rs::total_degree
 fn total_degree(state: &perception::State, atom: usize, hydrogens: usize) -> usize {
     hydrogens
         + state
@@ -246,7 +252,8 @@ fn total_degree(state: &perception::State, atom: usize, hydrogens: usize) -> usi
             .count()
 }
 
-// Ported from src/openclatura/graph_io.py::get_connected_components (port; local fn get_connected_components)
+// Provenance: fn get_connected_components | port
+// Source: openclatura | src/openclatura/graph_io.py::get_connected_components
 pub fn get_connected_components(mol: &Molecule) -> Vec<AtomSet> {
     let mut visited = AtomSet::new();
     let mut components = Vec::new();
@@ -269,7 +276,8 @@ pub fn get_connected_components(mol: &Molecule) -> Vec<AtomSet> {
 
 /// The local isotope-numbering graph used by `small_ring_stereo.py`.
 /// These artificial isotopes exist only in this detached priority calculation.
-// Adapted from src/openclatura/small_ring_stereo.py::_assign_local_cip_with_locant_labels (adapted; local fn assign_local_cip_with_locant_labels)
+// Provenance: fn assign_local_cip_with_locant_labels | adapted
+// Source: openclatura | src/openclatura/small_ring_stereo.py::_assign_local_cip_with_locant_labels
 pub fn assign_local_cip_with_locant_labels(
     mol: &Molecule,
     locants: &BTreeMap<usize, usize>,
@@ -366,11 +374,12 @@ pub fn assign_local_cip_with_locant_labels(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/graph_io.rs::tests
 mod tests {
     use super::*;
     use serde_json::{Value, json};
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn graph_snapshot
     fn graph_snapshot(mol: &Molecule, text: &str) -> Value {
         let atoms = mol
             .atoms
@@ -408,7 +417,6 @@ mod tests {
         json!({"smiles": text, "atoms": atoms, "bonds": bonds, "accurate_cip": mol.accurate_cip, "legacy_cip": mol.legacy_cip, "adjacency": adjacency})
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn marked_biaryl_axes_survive_kekulization_and_full_cip
     #[test]
     fn marked_biaryl_axes_survive_kekulization_and_full_cip() {
         for (marker, descriptor) in [(900_004, "M"), (900_008, "P")] {
@@ -435,7 +443,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn graph_fields_match_upstream_rdkit_oracle
     #[test]
     fn graph_fields_match_upstream_rdkit_oracle() {
         // Generated by upstream openclatura 0.4.3 read_smiles with RDKit 2026.09.1 (Python -I -B),
@@ -453,7 +460,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn identity_and_stage_guards_precede_graph_conversion
     #[test]
     fn identity_and_stage_guards_precede_graph_conversion() {
         for text in [
@@ -473,7 +479,6 @@ mod tests {
         assert!(read_smiles("[13CH3][C@@H](F)Cl", &Default::default()).is_ok());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn separate_monocycles_are_supported_across_bridges_and_chains
     #[test]
     fn separate_monocycles_are_supported_across_bridges_and_chains() {
         for text in [
@@ -487,7 +492,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn pure_spiro_blocks_are_admitted
     #[test]
     fn pure_spiro_blocks_are_admitted() {
         for text in [
@@ -501,7 +505,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn polycyclic_blocks_are_admitted_only_when_fusion_abstains
     #[test]
     fn polycyclic_blocks_are_admitted_only_when_fusion_abstains() {
         for text in [
@@ -519,7 +522,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn fusion_blocks_are_admitted_for_audited_parent_selection
     #[test]
     fn fusion_blocks_are_admitted_for_audited_parent_selection() {
         for text in [
@@ -537,7 +539,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_junctions_on_polycyclic_blocks_reach_parent_selection
     #[test]
     fn spiro_junctions_on_polycyclic_blocks_reach_parent_selection() {
         for text in [
@@ -549,7 +550,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn three_rings_on_one_spiro_atom_remain_outside_scope
     #[test]
     fn three_rings_on_one_spiro_atom_remain_outside_scope() {
         assert_eq!(

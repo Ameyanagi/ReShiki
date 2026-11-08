@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/assembly_parts.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/name_operations.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/ring_parent.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/assembly_parts.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/name_operations.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/ring_parent.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/assembly_parts.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Adapted Openclatura assembly records with local anion, isotope and stereo state.
@@ -18,8 +19,9 @@ pub struct RenderedSubstituentName {
     pub outer_parentheses_optional: bool,
     pub oxy_prefix: Option<String>,
 }
+// Provenance: impl RenderedSubstituentName | original
+// Source: ReShiki | src/naming/openclatura/assembly_parts.rs::RenderedSubstituentName
 impl RenderedSubstituentName {
-    // Original nazuchem code (not in openclatura 0.4.3): fn RenderedSubstituentName::into_oxy_prefix
     pub fn into_oxy_prefix(self) -> String {
         self.oxy_prefix
             .unwrap_or_else(|| super::formatting::oxy_prefix_from_branch(&self.text))
@@ -36,7 +38,10 @@ pub struct SubstituentItem {
     pub spiro: Option<Box<super::assembly_spiro::SpiroAssembly>>,
 }
 impl SubstituentItem {
-    // Adapted from src/openclatura/assembly_parts.py::SubstituentItem (adapted; local fn SubstituentItem::new)
+    // Provenance: fn SubstituentItem::new | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::SubstituentItem
+    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     pub fn new(name: impl Into<String>, locants: Vec<String>) -> Self {
         Self {
             name: name.into(),
@@ -63,7 +68,10 @@ pub struct PrincipalGroupItem {
     pub external_substitution_sites: bool,
 }
 impl PrincipalGroupItem {
-    // Adapted from src/openclatura/assembly_parts.py::PrincipalGroupItem (adapted; local fn PrincipalGroupItem::new)
+    // Provenance: fn PrincipalGroupItem::new | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::PrincipalGroupItem
+    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     pub fn new(key: impl Into<String>, locants: Vec<String>) -> Self {
         Self {
             key: key.into(),
@@ -183,20 +191,27 @@ pub struct AssemblyParts {
     pub locanted_total_hydrogenation: bool,
 }
 impl Default for AssemblyParts {
-    // Adapted from src/openclatura/assembly_parts.py::AssemblyParts (adapted; local fn AssemblyParts::default)
+    // Provenance: fn <AssemblyParts as Default>::default | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts
+    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     fn default() -> Self {
         Self::new(0)
     }
 }
 impl AssemblyParts {
-    // Original nazuchem code (not in openclatura 0.4.3): fn AssemblyParts::is_ring_assembly
+    // Provenance: fn AssemblyParts::is_ring_assembly | original
+    // Source: ReShiki | src/naming/openclatura/assembly_parts.rs::AssemblyParts::is_ring_assembly
     pub fn is_ring_assembly(&self) -> bool {
         self.parent_hydride
             .as_ref()
             .is_some_and(|parent| parent.assembly.is_some())
     }
 
-    // Adapted from src/openclatura/assembly_parts.py::AssemblyParts (adapted; local fn AssemblyParts::new)
+    // Provenance: fn AssemblyParts::new | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts
+    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     pub fn new(parent_length: usize) -> Self {
         Self {
             parent_length,
@@ -265,12 +280,16 @@ impl AssemblyParts {
         }
     }
 
-    // Adapted from src/openclatura/assembly_parts.py, src/openclatura/name_operations.py, src/openclatura/ring_parent.py (adapted; upstream function mapping not recorded; local fn AssemblyParts::is_simple_ring)
+    // Provenance: fn AssemblyParts::is_simple_ring | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts fields is_ring/is_bicycle/is_spiro/is_polycycle
+    // Source: openclatura | src/openclatura/name_operations.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/ring_parent.py::module scope (mapping uncertain)
     pub fn is_simple_ring(&self) -> bool {
         self.is_ring && !self.is_bicycle && !self.is_spiro && !self.is_polycycle
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn AssemblyParts::stereochemical_locants
+    // Provenance: fn AssemblyParts::stereochemical_locants | original
+    // Source: ReShiki | src/naming/openclatura/assembly_parts.rs::AssemblyParts::stereochemical_locants
     pub(super) fn stereochemical_locants(&self, locants: &[String]) -> String {
         locants
             .iter()
@@ -279,7 +298,8 @@ impl AssemblyParts {
             .join(",")
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn AssemblyParts::stereochemical_locant
+    // Provenance: fn AssemblyParts::stereochemical_locant | original
+    // Source: ReShiki | src/naming/openclatura/assembly_parts.rs::AssemblyParts::stereochemical_locant
     pub(super) fn stereochemical_locant(&self, locant: &str) -> String {
         self.endo_exo_descriptors.get(locant).map_or_else(
             || locant.to_owned(),

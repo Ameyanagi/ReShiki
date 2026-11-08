@@ -1,7 +1,8 @@
-// SPDX-License-Identifier: BSD-3-Clause AND (MIT OR Apache-2.0)
-// Origin: mixed adaptation of RDKit with ledger-marked local functions; source paths and pins follow.
-//   RDKit 2026.03.6, Code/GraphMol/NontetrahedralStereo.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   ReShiki, crates/chemistry/src/smiles/chirality.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// SPDX-License-Identifier: BSD-2-Clause AND BSD-3-Clause AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/smiles/chirality.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Source: SiMolecule centres | core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java | d4b2ca46228bdf8814ff0c1f00465be4085af8c9
 // Copyright (C) 2022 Greg Landrum and other RDKit contributors.
 // Changes: Rust adaptation; ledger-marked local functions; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
 
@@ -16,7 +17,8 @@ use super::{Error, Result};
 /// immediately after that atom (after its incoming bond, before its branches).
 /// Storage instead keeps absent H last in each terminal's insertion-order pair.
 /// Reversing the axis swaps both pairs and has even parity.
-// Original nazuchem code (not in RDKit).
+// Provenance: fn allene_permutation | adapted
+// Source: SiMolecule centres | core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java::ExtendedTetrahedral carrier-order documentation; label2
 pub(super) fn allene_permutation(
     graph: &crate::graph::Graph,
     center: usize,
@@ -64,7 +66,11 @@ pub(super) fn allene_permutation(
 }
 
 /// Convert text neighbor order to storage order, keeping absent ligands.
-// Adapted from Code/GraphMol/NontetrahedralStereo.cpp::permutation (local Rust boundary; exact upstream function mapping not recorded).
+// Provenance: fn permutation | adapted
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp::Chirality::getChiralPermutation
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp::swap_squareplanar
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp::swap_trigonalbipyramidal
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp::swap_octahedral
 pub(super) fn permutation(
     tag: u8,
     mut value: u32,
@@ -119,7 +125,11 @@ pub(super) fn permutation(
 }
 
 /// Convert storage coordination winding to the writer's traversal order.
-// Adapted from Code/GraphMol/NontetrahedralStereo.cpp::output_permutation (local Rust boundary; exact upstream function mapping not recorded).
+// Provenance: fn output_permutation | adapted
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp::Chirality::getChiralPermutation
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp::swap_squareplanar
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp::swap_trigonalbipyramidal
+// Source: RDKit | Code/GraphMol/NontetrahedralStereo.cpp::swap_octahedral
 pub(super) fn output_permutation(
     tag: u8,
     mut value: u32,

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/polycycle_topology.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/chains.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/molecule.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   OPSIN main, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   ReShiki, src/naming/openclatura/polycycle_topology.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: mixed
+// Source: openclatura | src/openclatura/polycycle_topology.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/molecule.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | src/naming/openclatura/polycycle_topology.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright 2017 Daniel Lowe
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
@@ -54,7 +54,10 @@ pub struct RingNumbering {
     pub bridgehead_locants: Vec<usize>,
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn bridgehead_locants)
+// Provenance: fn bridgehead_locants | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::_bridgehead_locants
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn bridgehead_locants(kind: &str, descriptor_numbers: &[usize]) -> Vec<usize> {
     if kind == "bicyclo" && !descriptor_numbers.is_empty() {
         vec![1, descriptor_numbers[0] + 2]
@@ -63,7 +66,10 @@ fn bridgehead_locants(kind: &str, descriptor_numbers: &[usize]) -> Vec<usize> {
     }
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn build_ring_numbering)
+// Provenance: fn build_ring_numbering | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::build_ring_numbering
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn build_ring_numbering(
     kind: &str,
     numbers: &[usize],
@@ -89,7 +95,10 @@ pub fn build_ring_numbering(
     }
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn build_von_baeyer_numbering)
+// Provenance: fn build_von_baeyer_numbering | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::build_von_baeyer_numbering
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn build_von_baeyer_numbering(
     descriptor: &str,
     path: &[usize],
@@ -130,7 +139,8 @@ pub fn build_von_baeyer_numbering(
     }
 }
 
-// Adapted from src/openclatura/molecule.py::edges_within_atoms (adapted; local fn edges_within_atoms)
+// Provenance: fn edges_within_atoms | adapted
+// Source: openclatura | src/openclatura/molecule.py::edges_within_atoms
 pub fn edges_within_atoms(mol: &Molecule, atoms: &AtomSet) -> EdgeSet {
     mol.bonds
         .values()
@@ -139,7 +149,10 @@ pub fn edges_within_atoms(mol: &Molecule, atoms: &AtomSet) -> EdgeSet {
         .collect()
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn internal_degrees)
+// Provenance: fn internal_degrees | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::internal_degrees
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn internal_degrees(atoms: &AtomSet, edges: &EdgeSet) -> BTreeMap<usize, usize> {
     let mut degrees: BTreeMap<_, _> = atoms.iter().map(|&atom| (atom, 0)).collect();
     for &(u, v) in edges {
@@ -153,7 +166,8 @@ pub fn internal_degrees(atoms: &AtomSet, edges: &EdgeSet) -> BTreeMap<usize, usi
     degrees
 }
 
-// Adapted from src/openclatura/chains.py::_has_multiple_spiro_centers (adapted; local fn has_multiple_spiro_centers)
+// Provenance: fn has_multiple_spiro_centers | adapted
+// Source: openclatura | src/openclatura/chains.py::_has_multiple_spiro_centers
 pub fn has_multiple_spiro_centers(atoms: &AtomSet, edges: &EdgeSet) -> bool {
     internal_degrees(atoms, edges)
         .values()
@@ -162,7 +176,10 @@ pub fn has_multiple_spiro_centers(atoms: &AtomSet, edges: &EdgeSet) -> bool {
         >= 2
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn adjacent_atoms)
+// Provenance: fn adjacent_atoms | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::adjacent_atoms
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn adjacent_atoms(atom: usize, edges: &EdgeSet) -> AtomSet {
     edges
         .iter()
@@ -178,7 +195,11 @@ fn adjacent_atoms(atom: usize, edges: &EdgeSet) -> AtomSet {
         .collect()
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn bicyclo_proof)
+// Provenance: fn bicyclo_proof | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::BicycloProof
+// Source: openclatura | src/openclatura/polycycle_topology.py::bicyclo_proof
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn bicyclo_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<BicycloProof> {
     let degrees = internal_degrees(atoms, edges);
     let bridgeheads: Vec<_> = degrees
@@ -266,7 +287,11 @@ pub fn bicyclo_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<BicycloProof> {
     })
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn monospiro_proof)
+// Provenance: fn monospiro_proof | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::MonospiroProof
+// Source: openclatura | src/openclatura/polycycle_topology.py::monospiro_proof
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn monospiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<MonospiroProof> {
     let spiro_atoms: Vec<_> = internal_degrees(atoms, edges)
         .into_iter()
@@ -322,7 +347,11 @@ pub fn monospiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<MonospiroProo
     })
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn linear_dispiro_proof)
+// Provenance: fn linear_dispiro_proof | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::LinearDispiroProof
+// Source: openclatura | src/openclatura/polycycle_topology.py::linear_dispiro_proof
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn linear_dispiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<LinearDispiroProof> {
     let degrees = internal_degrees(atoms, edges);
     let centers: Vec<_> = degrees
@@ -383,7 +412,10 @@ struct TerminalComponent {
     spiro_atom: usize,
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn dispiro_components)
+// Provenance: fn dispiro_components | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::inline in linear_dispiro_proof
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn dispiro_components(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -414,7 +446,10 @@ fn dispiro_components(
 }
 
 /// Descriptor and paths from upstream `get_linear_dispiro_descriptor_and_paths`.
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn linear_dispiro_descriptor_and_paths)
+// Provenance: fn linear_dispiro_descriptor_and_paths | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/chains.py::get_linear_dispiro_descriptor_and_paths
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn linear_dispiro_descriptor_and_paths(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -494,7 +529,10 @@ pub fn linear_dispiro_descriptor_and_paths(
     ))
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn component_path_between_attachments)
+// Provenance: fn component_path_between_attachments | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::_component_path_between_attachment_atoms
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn component_path_between_attachments(
     component: &AtomSet,
     center: usize,
@@ -511,7 +549,10 @@ fn component_path_between_attachments(
     shortest_component_path(endpoints[0], endpoints[1], component, edges)
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn component_path_between_centers)
+// Provenance: fn component_path_between_centers | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::_component_path_between_centers
+// Source: openclatura | src/openclatura/chains.py::_component_path_between_centers
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn component_path_between_centers(
     component: &AtomSet,
     first: usize,
@@ -539,7 +580,10 @@ fn component_path_between_centers(
     component.iter().copied().collect()
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn shortest_component_path)
+// Provenance: fn shortest_component_path | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::_shortest_component_path
+// Source: openclatura | src/openclatura/chains.py::_shortest_component_path
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn shortest_component_path(
     start: usize,
     end: usize,
@@ -563,12 +607,18 @@ fn shortest_component_path(
     vec![start]
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn reversed)
+// Provenance: fn reversed | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/chains.py::inline in get_linear_dispiro_descriptor_and_paths
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn reversed(path: &[usize]) -> Vec<usize> {
     path.iter().rev().copied().collect()
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn dedupe_paths)
+// Provenance: fn dedupe_paths | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::_dedupe_paths
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn dedupe_paths(paths: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
     let mut seen = BTreeSet::new();
     paths
@@ -577,13 +627,19 @@ pub fn dedupe_paths(paths: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
         .collect()
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn atom_at_locant)
+// Provenance: fn atom_at_locant | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::inline in build_ring_numbering
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn atom_at_locant(path: &[usize], locant: usize) -> Option<usize> {
     path.get(locant.wrapping_sub(1)).copied()
 }
 
 /// Rebuild a descriptor's edges from its proposed locants and require identity.
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn audit_ring_numbering)
+// Provenance: fn audit_ring_numbering | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::build_ring_numbering
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn audit_ring_numbering(
     kind: &str,
     numbers: &[usize],
@@ -638,7 +694,10 @@ pub fn audit_ring_numbering(
     path.len() == expected_count && expected == *edges
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn append_bicyclo_edges)
+// Provenance: fn append_bicyclo_edges | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::inline in _bicyclo_edges_from_numbering
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn append_bicyclo_edges(edge: &mut impl FnMut(usize, usize), [first, second, third]: [usize; 3]) {
     let other = first + 2;
     for locant in 1..other {
@@ -662,7 +721,10 @@ struct ParsedVonBaeyer {
     bridges: Vec<(usize, [usize; 2])>,
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn parse_von_baeyer_descriptor)
+// Provenance: fn parse_von_baeyer_descriptor | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::_parse_von_baeyer_descriptor
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn parse_von_baeyer_descriptor(descriptor: &str) -> Option<ParsedVonBaeyer> {
     let count = super::ring_renderer::von_baeyer_cycle_count(Some(descriptor))?;
     if count < 3 {
@@ -697,7 +759,10 @@ fn parse_von_baeyer_descriptor(descriptor: &str) -> Option<ParsedVonBaeyer> {
 }
 
 /// Rebuild every primary and secondary bridge from the descriptor's locants.
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn audit_von_baeyer_descriptor)
+// Provenance: fn audit_von_baeyer_descriptor | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::audit_von_baeyer_descriptor
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 pub fn audit_von_baeyer_descriptor(descriptor: &str, path: &[usize], edges: &EdgeSet) -> bool {
     let Some(ParsedVonBaeyer {
         count,
@@ -747,7 +812,10 @@ pub fn audit_von_baeyer_descriptor(descriptor: &str, path: &[usize], edges: &Edg
 /// Rebuild the numbered graph read by OPSIN, which numbers positive secondary
 /// bridges from their higher attachment locant and orders them by attachments.
 /// Upstream's own audit instead numbers from the lower attachment locant.
-// Adapted from opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java::processVonBaeyerSystem, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java::VonBaeyerSecondaryBridgeSort (adapted; local fn audit_von_baeyer_opsin_reading)
+// Provenance: fn audit_von_baeyer_opsin_reading | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java::processVonBaeyerSystem
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java::VonBaeyerSecondaryBridgeSort
 pub fn audit_von_baeyer_opsin_reading(descriptor: &str, path: &[usize], edges: &EdgeSet) -> bool {
     let Some(ParsedVonBaeyer {
         count,
@@ -806,7 +874,10 @@ pub fn audit_von_baeyer_opsin_reading(descriptor: &str, path: &[usize], edges: &
     valid && next == path.len() + 1 && expected == *edges
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn append_ring_segment)
+// Provenance: fn append_ring_segment | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::_append_ring_segment_edges
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn append_ring_segment(
     edge: &mut impl FnMut(usize, usize),
     start: usize,
@@ -823,7 +894,10 @@ fn append_ring_segment(
     edge(start + length - 1, center);
 }
 
-// Adapted from src/openclatura/polycycle_topology.py, src/openclatura/chains.py, src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn append_bridge)
+// Provenance: fn append_bridge | adapted
+// Source: openclatura | src/openclatura/polycycle_topology.py::_append_bridge_edges
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/molecule.py::module scope (mapping uncertain)
 fn append_bridge(
     edge: &mut impl FnMut(usize, usize),
     first: usize,
@@ -839,11 +913,12 @@ fn append_bridge(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/polycycle_topology.rs::tests
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
 
-    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn bicyclo_proof_reconstructs_all_equal_bridge_orders
     #[test]
     fn bicyclo_proof_reconstructs_all_equal_bridge_orders() {
         let mol = read_smiles("C1CC2CCC1C2", &Default::default()).unwrap();
@@ -876,7 +951,6 @@ mod tests {
         ));
     }
 
-    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn von_baeyer_audit_rejects_count_locant_and_coverage_errors
     #[test]
     fn von_baeyer_audit_rejects_count_locant_and_coverage_errors() {
         let path: Vec<_> = (0..9).collect();
@@ -919,7 +993,6 @@ mod tests {
         ));
     }
 
-    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn opsin_audit_detects_secondary_bridge_direction_and_order
     #[test]
     fn opsin_audit_detects_secondary_bridge_direction_and_order() {
         let mol = read_smiles("OCC1C=C2CC(Cl)C1CCC1CCCCCCC2CCCCC1", &Default::default()).unwrap();
@@ -956,7 +1029,6 @@ mod tests {
         ));
     }
 
-    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn opsin_audit_resolves_secondary_bridge_dependencies
     #[test]
     fn opsin_audit_resolves_secondary_bridge_dependencies() {
         let path: Vec<_> = (0..10).collect();
@@ -979,7 +1051,6 @@ mod tests {
         ));
     }
 
-    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn monospiro_proof_matches_python_paths_and_reconstructs_every_orientation
     #[test]
     fn monospiro_proof_matches_python_paths_and_reconstructs_every_orientation() {
         let mol = read_smiles("C1CCC2(CC1)CCCC2", &Default::default()).unwrap();
@@ -1017,7 +1088,6 @@ mod tests {
         ));
     }
 
-    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn equal_spiro_rings_offer_both_ring_orders_before_heteroatom_numbering
     #[test]
     fn equal_spiro_rings_offer_both_ring_orders_before_heteroatom_numbering() {
         let mol = read_smiles("C1CC2(C1)COC2", &Default::default()).unwrap();
@@ -1039,7 +1109,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn linear_dispiro_direct_middle_and_two_middle_paths_match_python
     #[test]
     fn linear_dispiro_direct_middle_and_two_middle_paths_match_python() {
         for (smiles, descriptor, expected) in [
@@ -1074,7 +1143,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in OPSIN / openclatura 0.4.3): fn terminal_heteroatom_preference_precedes_terminal_ring_size
     #[test]
     fn terminal_heteroatom_preference_precedes_terminal_ring_size() {
         let mol = read_smiles("C1=CC12CCC1(CNCOCN1)CSC2", &Default::default()).unwrap();

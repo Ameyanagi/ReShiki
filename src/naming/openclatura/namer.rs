@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/namer.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/namer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura recursive substituent pipeline with local scope, status and acid attachment preservation.
@@ -34,7 +35,8 @@ use super::subgraph_tools::{
 use std::collections::BTreeMap;
 
 /// Name a branch from its attachment atom and an explicit parent boundary.
-// Adapted from src/openclatura/namer.py::name_subgraph (adapted; local fn name_subgraph_with_upstream)
+// Provenance: fn name_subgraph_with_upstream | adapted
+// Source: openclatura | src/openclatura/namer.py::name_subgraph
 pub(super) fn name_subgraph_with_upstream(
     mol: &Molecule,
     start_idx: usize,
@@ -45,7 +47,8 @@ pub(super) fn name_subgraph_with_upstream(
 }
 
 /// Name a branch whose attachment-bond descriptor is cited by the caller.
-// Original nazuchem code (not in openclatura 0.4.3): fn name_subgraph_without_attachment_stereo
+// Provenance: fn name_subgraph_without_attachment_stereo | original
+// Source: ReShiki | src/naming/openclatura/namer.rs::name_subgraph_without_attachment_stereo
 pub(super) fn name_subgraph_without_attachment_stereo(
     mol: &Molecule,
     start: usize,
@@ -57,7 +60,8 @@ pub(super) fn name_subgraph_without_attachment_stereo(
         .map(|name| name.text)
 }
 
-// Adapted from src/openclatura/namer.py::_direct_amide_subgraph_prefix (adapted; local fn direct_amide_prefix)
+// Provenance: fn direct_amide_prefix | adapted
+// Source: openclatura | src/openclatura/namer.py::_direct_amide_subgraph_prefix
 fn direct_amide_prefix(
     mol: &Molecule,
     group: &PerceivedGroup,
@@ -101,7 +105,9 @@ fn direct_amide_prefix(
     )))
 }
 
-// Adapted from src/openclatura/namer.py::_direct_subgraph_prefix (adapted; local fn direct_subgraph_prefix)
+// Provenance: fn direct_subgraph_prefix | adapted
+// Source: openclatura | src/openclatura/namer.py::DirectSubgraphPrefix
+// Source: openclatura | src/openclatura/namer.py::_direct_subgraph_prefix
 fn direct_subgraph_prefix(
     mol: &Molecule,
     start: usize,
@@ -195,7 +201,8 @@ fn direct_subgraph_prefix(
     Ok(None)
 }
 
-// Adapted from src/openclatura/namer.py::_select_subgraph_parent (adapted; local fn select_subgraph_parent)
+// Provenance: fn select_subgraph_parent | adapted
+// Source: openclatura | src/openclatura/namer.py::_select_subgraph_parent
 pub(super) fn select_subgraph_parent(
     mol: &Molecule,
     start: usize,
@@ -223,7 +230,8 @@ pub(super) fn select_subgraph_parent(
         .ok_or_else(|| "openclatura: no recursive chain parent".into())
 }
 
-// Adapted from src/openclatura/namer.py::_collect_subgraph_substituents (adapted; local fn collect_subgraph_substituents)
+// Provenance: fn collect_subgraph_substituents | adapted
+// Source: openclatura | src/openclatura/namer.py::_collect_subgraph_substituents
 fn collect_subgraph_substituents(
     mol: &Molecule,
     parent_path: &[usize],
@@ -328,7 +336,8 @@ fn collect_subgraph_substituents(
     Ok(mapping)
 }
 
-// Adapted from src/openclatura/namer.py::_finalize_subgraph_name (adapted; local fn finalize_subgraph_name)
+// Provenance: fn finalize_subgraph_name | adapted
+// Source: openclatura | src/openclatura/namer.py::_finalize_subgraph_name
 fn finalize_subgraph_name(mut name: String, parts: &AssemblyParts) -> String {
     if parts
         .principal_group
@@ -358,7 +367,8 @@ fn finalize_subgraph_name(mut name: String, parts: &AssemblyParts) -> String {
     format!("({name})")
 }
 
-// Adapted from src/openclatura/namer.py::name_subgraph (adapted; local fn name_subgraph_rendered)
+// Provenance: fn name_subgraph_rendered | adapted
+// Source: openclatura | src/openclatura/namer.py::name_subgraph
 pub(super) fn name_subgraph_rendered(
     mol: &Molecule,
     start: usize,
@@ -369,7 +379,8 @@ pub(super) fn name_subgraph_rendered(
     name_subgraph_rendered_except_stereo(mol, start, exclude, upstream, None, acid_prefix_mode)
 }
 
-// Adapted from src/openclatura/namer.py::name_subgraph (adapted; local fn name_subgraph_rendered_except_stereo)
+// Provenance: fn name_subgraph_rendered_except_stereo | adapted
+// Source: openclatura | src/openclatura/namer.py::name_subgraph
 fn name_subgraph_rendered_except_stereo(
     mol: &Molecule,
     start: usize,
@@ -575,7 +586,8 @@ fn name_subgraph_rendered_except_stereo(
     })
 }
 
-// Adapted from src/openclatura/namer.py::_simple_rooted_carbanion_substituent_name (adapted; local fn simple_rooted_carbanion)
+// Provenance: fn simple_rooted_carbanion | adapted
+// Source: openclatura | src/openclatura/namer.py::_simple_rooted_carbanion_substituent_name
 fn simple_rooted_carbanion(
     mol: &Molecule,
     parts: &AssemblyParts,
@@ -616,7 +628,8 @@ fn simple_rooted_carbanion(
     })
 }
 
-// Adapted from src/openclatura/namer.py::_acid_name_to_amido (adapted; local fn acid_name_to_amido)
+// Provenance: fn acid_name_to_amido | adapted
+// Source: openclatura | src/openclatura/namer.py::_acid_name_to_amido
 fn acid_name_to_amido(acid: &str) -> Option<String> {
     if ["di", "tri", "tetra"].iter().any(|m| {
         ["oic acid", "carboxylic acid"]
@@ -639,7 +652,8 @@ fn acid_name_to_amido(acid: &str) -> Option<String> {
     None
 }
 
-// Adapted from src/openclatura/namer.py::_acylamino_amido_prefix (adapted; local fn acylamino_amido_prefix)
+// Provenance: fn acylamino_amido_prefix | adapted
+// Source: openclatura | src/openclatura/namer.py::_acylamino_amido_prefix
 fn acylamino_amido_prefix(
     mol: &Molecule,
     nitrogen: usize,
@@ -753,7 +767,10 @@ fn acylamino_amido_prefix(
 
 /// Names `acid_atoms` with `center` capped by a hydroxy group, or None when
 /// another acid group could take the suffix or the acid cannot be named.
-// Adapted from src/openclatura/namer.py::_acylamino_amido_prefix, src/openclatura/namer.py::_competing_acid_reachable, src/openclatura/namer.py::_neutralize_charge_separated_oxo (adapted; local fn capped_acid_name)
+// Provenance: fn capped_acid_name | adapted
+// Source: openclatura | src/openclatura/namer.py::_acylamino_amido_prefix
+// Source: openclatura | src/openclatura/namer.py::_competing_acid_reachable
+// Source: openclatura | src/openclatura/namer.py::_neutralize_charge_separated_oxo
 pub(super) fn capped_acid_name(
     mol: &Molecule,
     center: usize,
@@ -836,6 +853,8 @@ pub(super) fn capped_acid_name(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/namer.rs::tests
 mod tests {
     use super::{
         AssemblyParts, BTreeMap, name_subgraph_with_upstream,
@@ -843,7 +862,6 @@ mod tests {
     };
     use crate::naming::openclatura::{graph_io::read_smiles, molecule::AtomSet};
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn acid_prefix_context_crosses_heteroatoms_and_stays_within_its_branch
     #[test]
     fn acid_prefix_context_crosses_heteroatoms_and_stays_within_its_branch() {
         let mol = read_smiles("COCC(=O)O", &Default::default()).unwrap();
@@ -863,7 +881,6 @@ mod tests {
         assert!(!mol.uses_acid_prefixes());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn public_naming_bounds_recursion_on_a_two_mebibyte_stack
     #[test]
     fn public_naming_bounds_recursion_on_a_two_mebibyte_stack() {
         std::thread::Builder::new()
@@ -887,7 +904,6 @@ mod tests {
             .unwrap();
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn simple_carbanion_requires_charge_on_the_attachment_atom
     #[test]
     fn simple_carbanion_requires_charge_on_the_attachment_atom() {
         let mol = read_smiles("CC[CH2-]", &Default::default()).unwrap();
@@ -904,7 +920,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn recursive_substituent_names_preserve_attachment_and_boundary
     #[test]
     fn recursive_substituent_names_preserve_attachment_and_boundary() -> Result<(), String> {
         let methyl = read_smiles("C", &Default::default())?;
@@ -937,7 +952,6 @@ mod tests {
         Ok(())
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn attachment_bond_stereo_can_be_cited_by_the_caller
     #[test]
     fn attachment_bond_stereo_can_be_cited_by_the_caller() {
         for smiles in ["C/C=N/N=C/C", "C/C=N\\N=C/C"] {
@@ -954,7 +968,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn disjoint_ring_branches_keep_recursive_parent_and_attachment_names
     #[test]
     fn disjoint_ring_branches_keep_recursive_parent_and_attachment_names() {
         use crate::naming::openclatura::name_smiles;
@@ -989,7 +1002,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn ring_branches_preserve_bond_and_atom_stereochemistry
     #[test]
     fn ring_branches_preserve_bond_and_atom_stereochemistry() {
         use crate::naming::openclatura::name_smiles;

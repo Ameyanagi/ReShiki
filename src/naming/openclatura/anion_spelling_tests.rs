@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original nazuchem/ReShiki code.
-//   ReShiki, src/naming/openclatura/anion_spelling_tests.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: original
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 
 use super::name_smiles;

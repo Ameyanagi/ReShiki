@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/fusion/registry.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/hantzsch_widman.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/fusion/registry.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/hantzsch_widman.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fusion/registry.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/retained_graph_model.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/retained_fused_templates.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/layout.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/rules.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/citation_numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_registry.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura retained/generated registry and HW-component machinery, substantially extended with generated benzoheterocycles, retained-component status and Table 2.8 registration.
@@ -51,13 +59,15 @@ struct Table28Row {
     pin_eligible: bool,
 }
 impl Table28Row {
-    // Original nazuchem code (not in openclatura 0.4.3): fn Table28Row::parent_name
+    // Provenance: fn Table28Row::parent_name | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::FusionComponentRegistry._register_retained_families
     fn parent_name(&self) -> &'static str {
         self.pin_name
             .split_once("H-")
             .map_or(self.pin_name, |(_, name)| name)
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn Table28Row::template
+    // Provenance: fn Table28Row::template | original
+    // Source: ReShiki | src/naming/openclatura/fusion/registry.rs::Table28Row::template
     fn template<'a>(
         &self,
         templates: &'a BTreeMap<String, FusionComponentSpec>,
@@ -93,6 +103,9 @@ static TABLE_28: LazyLock<Vec<Table28Row>> = LazyLock::new(|| {
         .collect()
 });
 impl RegisteredFusionComponent {
+    // Provenance: fn RegisteredFusionComponent::spec_for_template | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::RegisteredFusionComponent.spec_for_template
+    // Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
     pub fn spec_for_template(&self, name: &str) -> Result<FusionComponentSpec, String> {
         if name.is_empty() || name == self.spec.template.name {
             return Ok(self.spec.clone());
@@ -119,6 +132,9 @@ pub struct FusionComponentRegistry {
     generated_hw_policy: Option<GeneratedHWPolicy>,
     retained_component_status: Vec<FusionComponentSpec>,
 }
+// Provenance: fn metadata | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::inline in _component_spec
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn metadata(template: RetainedGraphTemplate, row: &RetainedGraphRow) -> FusionComponentSpec {
     FusionComponentSpec {
         parent_name: template.output_name(),
@@ -131,6 +147,9 @@ fn metadata(template: RetainedGraphTemplate, row: &RetainedGraphRow) -> FusionCo
         ..Default::default()
     }
 }
+// Provenance: fn ordered_perimeter | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::_with_ordered_fusion_perimeter
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn ordered_perimeter(mut spec: FusionComponentSpec) -> FusionComponentSpec {
     let peripheral: BTreeSet<_> = spec.peripheral_order.iter().cloned().collect();
     let rings: Vec<BTreeSet<_>> = spec
@@ -194,6 +213,10 @@ fn ordered_perimeter(mut spec: FusionComponentSpec) -> FusionComponentSpec {
     }
     spec
 }
+// Provenance: fn monocycle | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/retained_graph_model.py::monocyclic_graph_template
 fn monocycle(name: &str, symbols: &[String], bond_class: &str, pin: bool) -> FusionComponentSpec {
     let locants: Vec<_> = (1..=symbols.len()).map(|i| i.to_string()).collect();
     let atoms = locants
@@ -271,6 +294,20 @@ static CONSTRUCTION_ORDERS: LazyLock<BTreeMap<String, FusionComponentConstructio
             })
             .collect()
     });
+// Provenance: impl FusionComponentRegistry | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/fusion/registry.py::FusionComponentRegistry.components
+// Source: openclatura | src/openclatura/fusion/registry.py::FusionComponentRegistry.get
+// Source: openclatura | src/openclatura/fusion/registry.py::FusionComponentRegistry.spec_for_match
+// Source: openclatura | src/openclatura/fusion/registry.py::FusionComponentRegistry.from_data
+// Source: openclatura | src/openclatura/fusion/registry.py::FusionComponentRegistry.register
+// Source: openclatura | src/openclatura/fusion/registry.py::register
+// Source: openclatura | src/openclatura/fusion/registry.py::FusionComponentRegistry.match_faces
+// Source: openclatura | src/openclatura/fusion/registry.py::match_faces
+// Source: openclatura | src/openclatura/hantzsch_widman.py::hw_fusion_component_from_key
+// Source: openclatura | src/openclatura/fusion/registry.py::_is_retained_benzoheterocycle
+// Source: openclatura | src/openclatura/hantzsch_widman.py::hw_fusion_components_for_ring
 impl FusionComponentRegistry {
     pub fn template_spec(&self, name: &str) -> Option<&FusionComponentSpec> {
         self.template_by_name.get(name)
@@ -569,7 +606,8 @@ impl FusionComponentRegistry {
         self.match_faces(mol, mol, &model.faces, None)
     }
     /// P-25.3.2.4: assess the rendered parent without adding planning candidates.
-    // Original nazuchem code (not in openclatura 0.4.3): fn FusionComponentRegistry::has_senior_unregistered_retained_component
+    // Provenance: fn FusionComponentRegistry::has_senior_unregistered_retained_component | original
+    // Source: ReShiki | src/naming/openclatura/fusion/registry.rs::FusionComponentRegistry::has_senior_unregistered_retained_component
     pub fn has_senior_unregistered_retained_component(
         &self,
         mol: &Molecule,
@@ -804,7 +842,6 @@ impl FusionComponentRegistry {
         }
         Ok(out)
     }
-    // Adapted from src/openclatura/hantzsch_widman.py::hw_fusion_component_from_key (adapted; local fn FusionComponentRegistry::generated_from_key)
     fn generated_from_key(&self, key: &str) -> Option<RegisteredFusionComponent> {
         if key.starts_with("generated-benzo:") {
             return self.generated_benzo_from_key(key);
@@ -873,7 +910,6 @@ impl FusionComponentRegistry {
     /// FR-3.5 combines already selected components, rather than adding benzo
     /// bicycles to the component-cover search. The key keeps the source template
     /// and its oriented ring, so this operation never mutates the registry.
-    // Original nazuchem code (not in openclatura 0.4.3): fn FusionComponentRegistry::benzoheterocycle_matches
     pub(super) fn benzoheterocycle_matches(
         &self,
         benzo: &FusionComponentMatch,
@@ -996,7 +1032,8 @@ impl FusionComponentRegistry {
         }
         Ok(matches)
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn FusionComponentRegistry::benzoheterocycle_parent_matches
+    // Provenance: fn FusionComponentRegistry::benzoheterocycle_parent_matches | original
+    // Source: ReShiki | src/naming/openclatura/fusion/registry.rs::FusionComponentRegistry::benzoheterocycle_parent_matches
     pub(super) fn benzoheterocycle_parent_matches(
         &self,
         benzo: &FusionComponentMatch,
@@ -1010,7 +1047,8 @@ impl FusionComponentRegistry {
         }
         Ok(parents)
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn FusionComponentRegistry::generated_benzo_from_key
+    // Provenance: fn FusionComponentRegistry::generated_benzo_from_key | original
+    // Source: ReShiki | src/naming/openclatura/fusion/registry.rs::FusionComponentRegistry::generated_benzo_from_key
     fn generated_benzo_from_key(&self, key: &str) -> Option<RegisteredFusionComponent> {
         let (source_key, source_template, ring): (String, String, Vec<String>) =
             serde_json::from_str(key.strip_prefix("generated-benzo:")?).ok()?;
@@ -1146,7 +1184,6 @@ impl FusionComponentRegistry {
             omit_ortho_peri_attached_locants: false,
         })
     }
-    // Adapted from src/openclatura/hantzsch_widman.py::hw_fusion_components_for_ring (adapted; local fn FusionComponentRegistry::generated_for_ring)
     fn generated_for_ring(
         &self,
         mol: &Molecule,
@@ -1274,6 +1311,9 @@ impl FusionComponentRegistry {
             .collect())
     }
 }
+// Provenance: fn is_fused_ring_derivative | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn is_fused_ring_derivative(mol: &Molecule, faces: &[&Face]) -> bool {
     let atoms: AtomSet = faces
         .iter()
@@ -1289,6 +1329,10 @@ fn is_fused_ring_derivative(mol: &Molecule, faces: &[&Face]) -> bool {
             })
     })
 }
+// Provenance: fn topology_key | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/retained_fused_templates.py::inline in _topology_key
 fn topology_key(k: &TopologyKey) -> ComparisonKey {
     ComparisonKey::tuple([
         k.size.into(),
@@ -1317,6 +1361,9 @@ fn topology_key(k: &TopologyKey) -> ComparisonKey {
         ),
     ])
 }
+// Provenance: fn is_benzoheterocycle | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::_is_retained_benzoheterocycle
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn is_benzoheterocycle(s: &FusionComponentSpec) -> bool {
     if !s.template.enabled
         || !s.pin_component
@@ -1345,6 +1392,9 @@ fn is_benzoheterocycle(s: &FusionComponentSpec) -> bool {
             .iter()
             .any(|r| r.len() == 6 && r.iter().all(|l| atoms[l].symbol == "C"))
 }
+// Provenance: fn connected_face_subsets | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::_connected_face_subsets
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 fn connected_face_subsets(faces: &[&Face], sizes: &BTreeSet<usize>) -> Vec<Vec<usize>> {
     let max = sizes.last().copied().unwrap_or(0);
     let edges: Vec<BTreeSet<_>> = faces
@@ -1401,10 +1451,15 @@ static REGISTRY: LazyLock<FusionComponentRegistry> = LazyLock::new(|| {
     );
     registry
 });
+// Provenance: fn fusion_component_registry | adapted
+// Source: openclatura | src/openclatura/fusion/registry.py::FusionComponentRegistry
+// Source: openclatura | src/openclatura/fusion/registry.py::fusion_component_registry
+// Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
 pub fn fusion_component_registry() -> &'static FusionComponentRegistry {
     &REGISTRY
 }
-// Adapted from src/openclatura/hantzsch_widman.py::_maximum_cycle_matching_size (adapted; local fn maximum_cycle_matching)
+// Provenance: fn maximum_cycle_matching | adapted
+// Source: openclatura | src/openclatura/hantzsch_widman.py::_maximum_cycle_matching_size
 fn maximum_cycle_matching(unavailable: &[bool]) -> usize {
     let Some(blocked) = unavailable.iter().position(|b| *b) else {
         return unavailable.len() / 2;
@@ -1421,7 +1476,8 @@ fn maximum_cycle_matching(unavailable: &[bool]) -> usize {
     }
     result + run / 2
 }
-// Adapted from src/openclatura/hantzsch_widman.py::_hw_fusion_forms (adapted; local fn hw_forms)
+// Provenance: fn hw_forms | adapted
+// Source: openclatura | src/openclatura/hantzsch_widman.py::_hw_fusion_forms
 fn hw_forms(name: &str) -> (String, String) {
     let (locants, base) = name
         .split_once('-')
@@ -1435,7 +1491,8 @@ fn hw_forms(name: &str) -> (String, String) {
     }
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn ordered_locant_edge
+// Provenance: fn ordered_locant_edge | original
+// Source: ReShiki | src/naming/openclatura/fusion/registry.rs::ordered_locant_edge
 fn ordered_locant_edge(a: &str, b: &str) -> (String, String) {
     if a < b {
         (a.into(), b.into())
@@ -1443,7 +1500,8 @@ fn ordered_locant_edge(a: &str, b: &str) -> (String, String) {
         (b.into(), a.into())
     }
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn benzo_locants
+// Provenance: fn benzo_locants | original
+// Source: ReShiki | src/naming/openclatura/fusion/registry.rs::benzo_locants
 fn benzo_locants(size: usize) -> Vec<String> {
     (1..=size - 2)
         .map(|i| i.to_string())
@@ -1452,7 +1510,9 @@ fn benzo_locants(size: usize) -> Vec<String> {
         .chain([format!("{}a", size + 2)])
         .collect()
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn ring_path_without_edge
+// Provenance: fn ring_path_without_edge | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_oriented_cycle
+// Source: openclatura | src/openclatura/fusion/layout.py::_orders_starting_with_edge
 fn ring_path_without_edge(
     ring: &[String],
     atoms: &BTreeMap<String, usize>,
@@ -1476,7 +1536,8 @@ fn ring_path_without_edge(
     }
     None
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn canonical_benzo_source_ring
+// Provenance: fn canonical_benzo_source_ring | adapted
+// Source: openclatura | src/openclatura/fusion/rules.py::component_interface_orbit
 fn canonical_benzo_source_ring(spec: &FusionComponentSpec, ring: &[String]) -> Vec<String> {
     let atoms = spec.template.atom_by_locant();
     let defaults: BTreeSet<_> = spec.template.default_indicated_h.iter().cloned().collect();
@@ -1499,7 +1560,9 @@ fn canonical_benzo_source_ring(spec: &FusionComponentSpec, ring: &[String]) -> V
         .min_by_key(|order| order.iter().map(|l| locant_key(l)).collect::<Vec<_>>())
         .unwrap_or_else(|| ring.to_vec())
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn benzo_numbering_key
+// Provenance: fn benzo_numbering_key | adapted
+// Source: openclatura | src/openclatura/fusion/numbering.py::_numbering_score
+// Source: openclatura | src/openclatura/fusion/rules.py::component_spec_seniority_key
 fn benzo_numbering_key(spec: &FusionComponentSpec) -> Vec<Vec<LocantKey>> {
     // FR-5.3 excludes fusion carbons from the integer sequence. For these
     // ortho-bicycles their locants are fixed, so FR-5.4(a), (b), and (f) decide
@@ -1537,7 +1600,8 @@ fn benzo_numbering_key(spec: &FusionComponentSpec) -> Vec<Vec<LocantKey>> {
     result.push(indicated);
     result
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn benzo_forms
+// Provenance: fn benzo_forms | original
+// Source: ReShiki | src/naming/openclatura/fusion/registry.rs::benzo_forms
 fn benzo_forms(
     source: &FusionComponentSpec,
     fused: &FusionComponentSpec,
@@ -1603,11 +1667,13 @@ fn benzo_forms(
         }),
     ))
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn is_trivial_benzo_name
+// Provenance: fn is_trivial_benzo_name | original
+// Source: ReShiki | src/naming/openclatura/fusion/registry.rs::is_trivial_benzo_name
 fn is_trivial_benzo_name(name: &str) -> bool {
     !name.contains("benz")
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn same_numbered_component_graph
+// Provenance: fn same_numbered_component_graph | adapted
+// Source: openclatura | src/openclatura/fusion/citation_numbering.py::numbered_parent_graphs_agree
 fn same_numbered_component_graph(a: &FusionComponentSpec, b: &FusionComponentSpec) -> bool {
     let atoms = |s: &FusionComponentSpec| {
         s.atoms()
@@ -1625,6 +1691,8 @@ fn same_numbered_component_graph(a: &FusionComponentSpec, b: &FusionComponentSpe
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/fusion/registry.rs::tests
 mod tests {
     use super::super::super::graph_io::read_smiles;
     use super::super::{
@@ -1632,7 +1700,6 @@ mod tests {
         rules::{component_automorphisms, component_spec_seniority_key},
     };
     use super::*;
-    // Original nazuchem code (not in openclatura 0.4.3): fn incomplete_pheno_registry
     fn incomplete_pheno_registry() -> FusionComponentRegistry {
         let mut data: FusionComponentData =
             serde_json::from_str(include_str!("../data/fusion_components.json")).unwrap();
@@ -1641,7 +1708,6 @@ mod tests {
             .retain(|row| !omitted.contains(&row.key.as_str()));
         FusionComponentRegistry::from_data(&data).unwrap()
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn junior_parent_plan
     fn junior_parent_plan(mol: &Molecule, parent: &str) -> FusionParentPlan {
         let atoms = super::super::super::chains::find_ring_systems(mol, &AtomSet::new())
             .unwrap()
@@ -1660,6 +1726,10 @@ mod tests {
         plan
     }
     #[test]
+    // Provenance: fn tests::checked_in_registry_preserves_component_policy_and_exact_symmetries | adapted
+    // Source: openclatura | tests/unit/test_fusion_registry.py::test_checked_in_registry_exposes_stable_version_and_unique_policy_keys
+    // Source: openclatura | tests/unit/test_fusion_registry.py::test_preferred_fusion_prefix_is_separate_from_accepted_general_aliases
+    // Source: openclatura | tests/unit/test_fusion_registry.py::test_registered_polycycles_expose_a_bonded_locant_ordered_perimeter
     fn checked_in_registry_preserves_component_policy_and_exact_symmetries() {
         let r = fusion_component_registry();
         assert_eq!(r.version, "2026.1");
@@ -1681,6 +1751,9 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::retained_face_matches_keep_all_local_numberings | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
     fn retained_face_matches_keep_all_local_numberings() {
         let mol = read_smiles("c1ccc2ccccc2c1", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
@@ -1701,7 +1774,6 @@ mod tests {
             24
         );
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn table_28_pin_names_templates_and_whole_system_components
     #[test]
     fn table_28_pin_names_templates_and_whole_system_components() {
         let registry = fusion_component_registry();
@@ -1795,7 +1867,6 @@ mod tests {
             (55, 47, 42, 47)
         );
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn unregistered_retained_status_requires_exact_faces_and_template_identity
     #[test]
     fn unregistered_retained_status_requires_exact_faces_and_template_identity() {
         let mut mol = read_smiles("c1ccc2c(c1)Nc1c(ccc3ccccc13)S2", &Default::default()).unwrap();
@@ -1860,7 +1931,6 @@ mod tests {
             .push("10H-phenothiazine".into());
         assert!(!registry.has_senior_unregistered_retained_component(&mol, &plan));
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn unregistered_retained_status_requires_a_strictly_senior_proper_component
     #[test]
     fn unregistered_retained_status_requires_a_strictly_senior_proper_component() {
         let registry = incomplete_pheno_registry();
@@ -1887,6 +1957,9 @@ mod tests {
         }
     }
     #[test]
+    // Provenance: fn tests::pheno_components_keep_pin_prefixes_and_chemical_seniority | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
     fn pheno_components_keep_pin_prefixes_and_chemical_seniority() {
         let r = fusion_component_registry();
         assert_eq!(
@@ -1921,7 +1994,6 @@ mod tests {
         assert!(key("phenoxathiine") < key("thianthrene"));
         assert!(key("pyridine") < key("phenoxathiine"));
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn parent_hydride_components_are_unregistered_for_fused_ring_derivatives
     #[test]
     fn parent_hydride_components_are_unregistered_for_fused_ring_derivatives() {
         let registry = fusion_component_registry();
@@ -1954,7 +2026,6 @@ mod tests {
             );
         }
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn angular_six_membered_tricycles_rank_above_phenalene_topologies
     #[test]
     fn angular_six_membered_tricycles_rank_above_phenalene_topologies() {
         let r = fusion_component_registry();
@@ -2002,6 +2073,9 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::retained_tricycles_preserve_numbering_and_seniority | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
     fn retained_tricycles_preserve_numbering_and_seniority() {
         let r = fusion_component_registry();
         for (key, prefix, nitrogen, horizontal, perimeter) in [
@@ -2080,6 +2154,9 @@ mod tests {
         }
     }
     #[test]
+    // Provenance: fn tests::retained_pyrans_exclude_generated_hw_citations | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
     fn retained_pyrans_exclude_generated_hw_citations() {
         let r = fusion_component_registry();
         for (symbol, name) in [
@@ -2121,6 +2198,8 @@ mod tests {
         }
     }
     #[test]
+    // Provenance: fn tests::generated_hw_is_stateless_and_rejects_incompatible_pi_edges | adapted
+    // Source: openclatura | tests/unit/test_fusion_registry.py::test_unlisted_hw_monocycle_is_derived_as_a_systematic_component
     fn generated_hw_is_stateless_and_rejects_incompatible_pi_edges() {
         let r = fusion_component_registry();
         let mol = read_smiles("c1ncncn1", &Default::default()).unwrap();
@@ -2141,7 +2220,6 @@ mod tests {
         let rebuilt = r.get(&matches[0].spec_key).unwrap();
         assert_eq!(rebuilt.spec.template.atoms.len(), 6);
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn benzo_test_pair
     fn benzo_test_pair(
         source: &str,
         edge: [&str; 2],
@@ -2179,7 +2257,6 @@ mod tests {
             make(&hetero, 1, input.into_iter().collect()),
         )
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn benzo_components_generate_bicyclic_locants_and_round_trip_without_registration
     #[test]
     fn benzo_components_generate_bicyclic_locants_and_round_trip_without_registration() {
         let r = fusion_component_registry();
@@ -2273,7 +2350,6 @@ mod tests {
             }
         }
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn benzo_generation_respects_exceptional_trivial_bicycle_names
     #[test]
     fn benzo_generation_respects_exceptional_trivial_bicycle_names() {
         let r = fusion_component_registry();
@@ -2286,7 +2362,6 @@ mod tests {
             assert_eq!(spec.attached_prefix, "quinolino");
         }
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn standalone_benzo_usage_preserves_component_identity_and_retained_names
     #[test]
     fn standalone_benzo_usage_preserves_component_identity_and_retained_names() {
         let r = fusion_component_registry();
@@ -2332,7 +2407,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn initial_components_distinguish_fr228_from_retained_trivial_bicycles
     #[test]
     fn initial_components_distinguish_fr228_from_retained_trivial_bicycles() {
         let r = fusion_component_registry();
@@ -2368,6 +2442,9 @@ mod tests {
 
     /// P-25.3.2.4(b,d,g): ring count, heteroatom count, then horizontal rings.
     #[test]
+    // Provenance: fn tests::retained_tricycles_compete_as_parent_components | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
     fn retained_tricycles_compete_as_parent_components() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
@@ -2412,6 +2489,9 @@ mod tests {
     /// P-25.3.2.4: retained bicycles compete as parents, e.g. quinoxaline
     /// (2 rings) over pyrazine (b), and quinazoline (6,6) over indole (c).
     #[test]
+    // Provenance: fn tests::retained_bicycles_compete_as_parent_components | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
     fn retained_bicycles_compete_as_parent_components() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
@@ -2455,7 +2535,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn retained_benzo_components_cite_whole_bicycle_heteroatom_locants
     #[test]
     fn retained_benzo_components_cite_whole_bicycle_heteroatom_locants() {
         let registry = fusion_component_registry();
@@ -2485,6 +2564,9 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_phenazine_remains_available_before_benzo_component_combination | adapted
+    // Source: openclatura | src/openclatura/fusion/registry.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/hantzsch_widman.py::module scope (mapping uncertain)
     fn retained_phenazine_remains_available_before_benzo_component_combination() {
         let registry = fusion_component_registry();
         let phenazine = registry.get("phenazine").unwrap().spec;

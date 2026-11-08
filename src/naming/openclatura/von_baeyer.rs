@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/von_baeyer.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/chains.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   ReShiki, src/naming/openclatura/von_baeyer.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: mixed
+// Source: openclatura | src/openclatura/von_baeyer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/von_baeyer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/graph_kernel.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Consolidated openclatura legacy/main-ring and independent von-Baeyer searches with original Rust Python-order adapter and local bounds/tests.
@@ -42,7 +43,9 @@ struct LegacyBridge {
     endpoints: [usize; 2],
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn python_adjacency
+// Provenance: fn python_adjacency | adapted
+// Source: openclatura | src/openclatura/chains.py::get_von_baeyer_descriptor_candidates
+// Source: openclatura | src/openclatura/graph_kernel.py::adjacency_from_edges
 fn python_adjacency(adj: &Adjacency) -> OrderedAdjacency {
     // Upstream divergence: upstream inserts neighbors in tuple-edge-set order.
     // Rebuilding from sorted IDs retains integer-table traversal, but a hash
@@ -55,7 +58,8 @@ fn python_adjacency(adj: &Adjacency) -> OrderedAdjacency {
         .collect()
 }
 
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn bridge_interior_path)
+// Provenance: fn bridge_interior_path | adapted
+// Source: openclatura | src/openclatura/chains.py::_bridge_interior_path
 fn bridge_interior_path(
     adj: &OrderedAdjacency,
     nodes: &AtomSet,
@@ -80,7 +84,8 @@ fn bridge_interior_path(
     Vec::new()
 }
 
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn largest_cycles_walk)
+// Provenance: fn largest_cycles_walk | adapted
+// Source: openclatura | src/openclatura/chains.py::inline in _largest_cycles_from_cycle_space
 fn largest_cycles_walk(atoms: &AtomSet, adj: &OrderedAdjacency) -> Option<Vec<Vec<usize>>> {
     let mut states = 0;
     let mut longest = 0;
@@ -119,14 +124,16 @@ fn largest_cycles_walk(atoms: &AtomSet, adj: &OrderedAdjacency) -> Option<Vec<Ve
     Some(cycles)
 }
 
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn xor_mask)
+// Provenance: fn xor_mask | adapted
+// Source: openclatura | src/openclatura/chains.py::inline in _largest_cycles_from_cycle_space
 fn xor_mask(target: &mut [u64], source: &[u64]) {
     for (target, source) in target.iter_mut().zip(source) {
         *target ^= source;
     }
 }
 
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn cycle_path_from_mask)
+// Provenance: fn cycle_path_from_mask | adapted
+// Source: openclatura | src/openclatura/chains.py::_cycle_path_from_edges
 fn cycle_path_from_mask(mask: &[u64], edges: &[(usize, usize)]) -> Option<Vec<usize>> {
     let mut adj: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (index, &(left, right)) in edges.iter().enumerate() {
@@ -163,7 +170,8 @@ fn cycle_path_from_mask(mask: &[u64], edges: &[(usize, usize)]) -> Option<Vec<us
     (path.len() == adj.len()).then_some(path)
 }
 
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn largest_cycles_from_cycle_space)
+// Provenance: fn largest_cycles_from_cycle_space | adapted
+// Source: openclatura | src/openclatura/chains.py::_largest_cycles_from_cycle_space
 fn largest_cycles_from_cycle_space(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -255,7 +263,8 @@ fn largest_cycles_from_cycle_space(
     best
 }
 
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn main_ring_division)
+// Provenance: fn main_ring_division | adapted
+// Source: openclatura | src/openclatura/chains.py::_main_ring_division
 fn main_ring_division(
     bridge: &LegacyBridge,
     position: &BTreeMap<usize, usize>,
@@ -269,7 +278,8 @@ fn main_ring_division(
 
 /// Upstream main-ring search, in preference order. The per-call walk and
 /// cycle-space bounds deliberately abstain on an unmanageable graph.
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn descriptor_candidates)
+// Provenance: fn descriptor_candidates | adapted
+// Source: openclatura | src/openclatura/chains.py::get_von_baeyer_descriptor_candidates
 pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<DescriptorPaths> {
     let adj = adjacency_from_edges(atoms, edges);
     let ordered_adj = python_adjacency(&adj);
@@ -372,7 +382,8 @@ pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<Descriptor
         .collect()
 }
 
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn legacy_from_candidate)
+// Provenance: fn legacy_from_candidate | adapted
+// Source: openclatura | src/openclatura/chains.py::_von_baeyer_from_candidate
 fn legacy_from_candidate(
     ring: &[usize],
     bridges: &[LegacyBridge],
@@ -479,7 +490,8 @@ fn legacy_from_candidate(
         .collect()
 }
 
-// Adapted from src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn secondary_numbering_key)
+// Provenance: fn secondary_numbering_key | adapted
+// Source: openclatura | src/openclatura/chains.py::_secondary_bridge_numbering_key
 fn secondary_numbering_key(
     length: usize,
     first: usize,
@@ -525,7 +537,9 @@ pub struct VonBaeyerCandidate {
 
 /// The independent audited decomposition used when the main-ring search has
 /// no reconstructable descriptor. Limits match upstream's bounded scope.
-// Adapted from src/openclatura/von_baeyer.py, src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn find_von_baeyer_candidates)
+// Provenance: fn find_von_baeyer_candidates | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::find_von_baeyer_candidates
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 pub fn find_von_baeyer_candidates(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -609,7 +623,9 @@ pub fn find_von_baeyer_candidates(
     candidates
 }
 
-// Adapted from src/openclatura/von_baeyer.py, src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn simple_paths_between)
+// Provenance: fn simple_paths_between | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::_simple_paths_between
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 fn simple_paths_between(start: usize, end: usize, adj: &Adjacency) -> Vec<Vec<usize>> {
     let mut paths = Vec::new();
     let mut stack = vec![(start, vec![start])];
@@ -633,7 +649,9 @@ fn simple_paths_between(start: usize, end: usize, adj: &Adjacency) -> Vec<Vec<us
     paths
 }
 
-// Adapted from src/openclatura/von_baeyer.py, src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn build_candidate)
+// Provenance: fn build_candidate | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::inline in _build_candidates_for_decomposition
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 fn build_candidate(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -750,7 +768,9 @@ fn build_candidate(
     })
 }
 
-// Adapted from src/openclatura/von_baeyer.py, src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn classify_secondary)
+// Provenance: fn classify_secondary | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::_classify_secondary_bridges
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 fn classify_secondary(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -835,7 +855,9 @@ fn classify_secondary(
     Some(bridges)
 }
 
-// Adapted from src/openclatura/von_baeyer.py, src/openclatura/chains.py (adapted; upstream function mapping not recorded; local fn component_path)
+// Provenance: fn component_path | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::_component_path
+// Source: openclatura | src/openclatura/chains.py::module scope (mapping uncertain)
 fn component_path(component: &AtomSet, first: usize, second: usize, edges: &EdgeSet) -> Vec<usize> {
     let adj = adjacency_from_edges(component, edges);
     let ends: AtomSet = component
@@ -866,11 +888,12 @@ fn component_path(component: &AtomSet, first: usize, second: usize, edges: &Edge
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/von_baeyer.rs::tests
 mod tests {
     use super::super::{graph_io::read_smiles, polycycle_topology::edges_within_atoms};
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn cycle_space_recovers_every_largest_simple_cycle
     #[test]
     fn cycle_space_recovers_every_largest_simple_cycle() {
         let atoms = AtomSet::from([0, 1, 2, 3]);
@@ -893,7 +916,6 @@ mod tests {
         assert_eq!(space, exhaustive);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn legacy_and_independent_search_offer_only_audited_parent_numberings
     #[test]
     fn legacy_and_independent_search_offer_only_audited_parent_numberings() {
         let mol = read_smiles("C1NC23COC12C=CC3", &Default::default()).unwrap();
@@ -926,7 +948,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn main_ring_integer_set_walk_preserves_first_audited_descriptor
     #[test]
     fn main_ring_integer_set_walk_preserves_first_audited_descriptor() {
         for (smiles, expected) in [

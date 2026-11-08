@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-// Origin: adapted from upstream code.
-//   openclatura 0.4.3, src/openclatura/fusion/construction_order.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingBuilder.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SSSRFinder.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingNumberer.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+// Origin: adapted
+// Source: openclatura | src/openclatura/fusion/construction_order.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingBuilder.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SSSRFinder.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingNumberer.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
 // Copyright (c) 2026 lamalab-org
 // Copyright 2017 Daniel Lowe
 // Changes: Openclatura translation of an explicitly OPSIN-derived stable construction/SSSR/ring-direction enumeration.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
-//   ReShiki, crates/opsin/tests/atropisomer_names.rs @ 2df788dc456793c687b934afd6d4b317e3c73ef8.
+// Origin: original
+// Source: ReShiki | crates/opsin/tests/atropisomer_names.rs | 2df788dc456793c687b934afd6d4b317e3c73ef8
 
 use opsin::{
     Axis, ParseOptions, Parser, Status, Structure,

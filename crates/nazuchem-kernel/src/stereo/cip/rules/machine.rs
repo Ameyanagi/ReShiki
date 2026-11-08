@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause AND (MIT OR Apache-2.0)
-// Origin: mixed adaptation of RDKit with ledger-marked local functions; source paths and pins follow.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/Sort.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/CIPLabeler/rules/Rules.h @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   ReShiki, crates/chemistry/src/stereo/cip/rules/machine.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Origin: mixed
+// Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/stereo/cip/rules/machine.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
 // Copyright (c) 2006-2015, Rational Discovery LLC, Greg Landrum, and Julie Penzotti and others
 // Changes: Rust adaptation; ledger-marked local functions; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
 
@@ -27,6 +27,10 @@ pub(super) struct Spec {
     pub isolated: bool,
 }
 impl Spec {
+    // Provenance: fn Spec::sorter | adapted
+    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::inline in Rules::add (rule->setSorter(new Sort(d_rules)))
     pub fn sorter(self) -> Scope {
         if self.isolated {
             Scope::Only(self)
@@ -34,6 +38,10 @@ impl Spec {
             Scope::Prefix(self.index + 1)
         }
     }
+    // Provenance: fn Spec::replacement | adapted
+    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     pub fn replacement(self, reference: Descriptor) -> Scope {
         if self.isolated {
             Scope::Only(Self { reference, ..self })
@@ -46,6 +54,10 @@ impl Spec {
     }
 }
 impl Scope {
+    // Provenance: fn Scope::count | adapted
+    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     fn count(self) -> usize {
         match self {
             Self::Composite | Self::Only(_) => 1,
@@ -53,6 +65,10 @@ impl Scope {
             Self::Replacing { index, .. } => index + 1,
         }
     }
+    // Provenance: fn Scope::spec | adapted
+    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     fn spec(self, index: usize, rules: &Rules) -> Result<Spec, Error> {
         match self {
             Self::Only(spec) if index == 0 => Ok(spec),
@@ -77,8 +93,9 @@ pub(super) enum Value {
     Sorted(Sorted),
     Groups(Vec<Vec<usize>>),
 }
+// Provenance: impl Value | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/rules/machine.rs::Value
 impl Value {
-    // Original nazuchem code (not in RDKit).
     fn storage(&self) -> usize {
         match self {
             Self::Number(_) => 0,
@@ -89,25 +106,29 @@ impl Value {
         }
     }
 }
-// Original nazuchem code (not in RDKit).
+// Provenance: fn group_storage | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/rules/machine.rs::group_storage
 fn group_storage(groups: &Vec<Vec<usize>>) -> usize {
     groups.capacity() * 3 + groups.iter().map(Vec::capacity).sum::<usize>()
 }
-// Original nazuchem code (not in RDKit).
+// Provenance: fn number | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/rules/machine.rs::number
 pub(super) fn number(value: Option<Value>) -> Result<i8, Error> {
     match value {
         Some(Value::Number(n)) => Ok(n),
         _ => Err(invalid("Missing comparison result")),
     }
 }
-// Original nazuchem code (not in RDKit).
+// Provenance: fn sorted | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/rules/machine.rs::sorted
 pub(super) fn sorted(value: Option<Value>) -> Result<Vec<usize>, Error> {
     match value {
         Some(Value::Sorted(s)) => Ok(s.edges),
         _ => Err(invalid("Missing sorted edges")),
     }
 }
-// Original nazuchem code (not in RDKit).
+// Provenance: fn at | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/rules/machine.rs::at
 pub(super) fn at<T: Copy>(values: &[T], index: usize) -> Result<T, Error> {
     values
         .get(index)
@@ -189,6 +210,15 @@ pub(super) enum Step {
     Again(Frame),
     Call(Frame, Frame),
 }
+// Provenance: impl Frame | adapted
+// Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
+// Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::Sort::prioritize
+// Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::Sort::compareSubstituents
+// Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::Sort::getGroups
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::Rules::compare
+// Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::Rules::getComparision
 impl Frame {
     pub(super) fn direct(rule: Spec, a: usize, b: usize) -> Self {
         Self::Direct { rule, a, b }
@@ -248,7 +278,8 @@ impl Frame {
             waiting: false,
         }
     }
-    // Original nazuchem code (not in RDKit).
+    // Provenance: fn Frame::storage | original
+    // Source: ReShiki | crates/chemistry/src/stereo/cip/rules/machine.rs::Frame::storage
     fn storage(&self) -> usize {
         match self {
             Self::Sort(s) => s.edges.capacity(),
@@ -262,7 +293,6 @@ impl Frame {
             _ => 0,
         }
     }
-    // Adapted from Code/GraphMol/CIPLabeler/Sort.cpp and Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp and Code/GraphMol/CIPLabeler/rules/Rules.h::Frame::step (local Rust boundary; exact upstream function mapping not recorded).
     fn step(
         self,
         rules: &Rules,
@@ -439,7 +469,11 @@ impl Frame {
     }
 }
 impl Sequence {
-    // Adapted from Code/GraphMol/CIPLabeler/Sort.cpp and Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp and Code/GraphMol/CIPLabeler/rules/Rules.h::Sequence::step (local Rust boundary; exact upstream function mapping not recorded).
+    // Provenance: fn Sequence::step | adapted
+    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::SequenceRule::recursiveCompare
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::SequenceRule::areUpEdges
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     fn step(mut self, ctx: &mut Context<'_, '_>, input: Option<Value>) -> Result<Step, Error> {
         match self.phase {
             Phase::Start => {
@@ -523,7 +557,11 @@ impl Sequence {
         }
         Ok(Step::Again(Frame::Sequence(self)))
     }
-    // Adapted from Code/GraphMol/CIPLabeler/Sort.cpp and Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp and Code/GraphMol/CIPLabeler/rules/Rules.h::Sequence::sort_a (local Rust boundary; exact upstream function mapping not recorded).
+    // Provenance: fn Sequence::sort_a | adapted
+    // Source: RDKit | Code/GraphMol/CIPLabeler/Sort.cpp::module scope (mapping uncertain)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::inline in SequenceRule::recursiveCompare (a-side shallow/deep sort calls)
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/SequenceRule.cpp::SequenceRule::sort
+    // Source: RDKit | Code/GraphMol/CIPLabeler/rules/Rules.h::module scope (mapping uncertain)
     fn sort_a(mut self, deep: bool) -> Step {
         self.phase = Phase::SortA(deep);
         let child = Frame::sort(
@@ -540,8 +578,9 @@ pub(super) struct Machine {
     stack: Vec<Frame>,
     storage: usize,
 }
+// Provenance: impl Machine | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/rules/machine.rs::Machine
 impl Machine {
-    // Original nazuchem code (not in RDKit).
     fn push(&mut self, frame: Frame) -> Result<(), Error> {
         self.storage = self
             .storage
@@ -553,7 +592,6 @@ impl Machine {
         self.stack.push(frame);
         Ok(())
     }
-    // Original nazuchem code (not in RDKit).
     pub(super) fn run(
         rules: &Rules,
         ctx: &mut Context<'_, '_>,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/fused_ion_templates.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/fused_ion_templates.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fused_ion_templates.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura fused-ion registry and graph-bound operation selection with local regression tests.
@@ -31,7 +32,8 @@ struct FusedIonTemplateRegistry {
     templates: Vec<FusedIonTemplate>,
 }
 impl FusedIonTemplateRegistry {
-    // Ported from src/openclatura/fused_ion_templates.py (port; upstream function mapping not recorded; local fn FusedIonTemplateRegistry::for_operation)
+    // Provenance: fn FusedIonTemplateRegistry::for_operation | port
+    // Source: openclatura | src/openclatura/fused_ion_templates.py::FusedIonTemplateRegistry.for_operation
     fn for_operation(
         &self,
         parent_name: &str,
@@ -84,12 +86,14 @@ pub struct FusedIonOperationCandidate {
     consumed_substituent_names: Vec<String>,
 }
 impl FusedIonOperationCandidate {
-    // Ported from src/openclatura/fused_ion_templates.py (port; upstream function mapping not recorded; local fn FusedIonOperationCandidate::production_ready)
+    // Provenance: fn FusedIonOperationCandidate::production_ready | port
+    // Source: openclatura | src/openclatura/fused_ion_templates.py::FusedIonOperationCandidate.production_ready
     fn production_ready(&self) -> bool {
         self.template
             .is_some_and(|template| template.production_ready)
     }
-    // Ported from src/openclatura/fused_ion_templates.py (port; upstream function mapping not recorded; local fn FusedIonOperationCandidate::rendered_name)
+    // Provenance: fn FusedIonOperationCandidate::rendered_name | port
+    // Source: openclatura | src/openclatura/fused_ion_templates.py::FusedIonOperationCandidate.rendered_name
     pub fn rendered_name(&self) -> Option<&str> {
         self.template
             .filter(|template| template.production_ready)
@@ -97,12 +101,14 @@ impl FusedIonOperationCandidate {
     }
 }
 
-// Ported from src/openclatura/fused_ion_templates.py (port; upstream function mapping not recorded; local fn select_fused_ion_operation)
+// Provenance: fn select_fused_ion_operation | port
+// Source: openclatura | src/openclatura/fused_ion_templates.py::select_fused_ion_operation
 pub fn select_fused_ion_operation(parts: &AssemblyParts) -> Option<FusedIonOperationCandidate> {
     fused_ion_operation_candidates(parts).find(FusedIonOperationCandidate::production_ready)
 }
 
-// Ported from src/openclatura/fused_ion_templates.py (port; upstream function mapping not recorded; local fn consume_fused_ion_operation)
+// Provenance: fn consume_fused_ion_operation | port
+// Source: openclatura | src/openclatura/fused_ion_templates.py::consume_fused_ion_operation
 pub fn consume_fused_ion_operation(
     parts: &mut AssemblyParts,
     candidate: &FusedIonOperationCandidate,
@@ -120,7 +126,8 @@ pub fn consume_fused_ion_operation(
         .retain(|charge| !candidate.locants.contains(&charge.locant));
 }
 
-// Ported from src/openclatura/fused_ion_templates.py (port; upstream function mapping not recorded; local fn fused_ion_operation_candidates)
+// Provenance: fn fused_ion_operation_candidates | port
+// Source: openclatura | src/openclatura/fused_ion_templates.py::fused_ion_operation_candidates
 fn fused_ion_operation_candidates(
     parts: &AssemblyParts,
 ) -> impl Iterator<Item = FusedIonOperationCandidate> {
@@ -132,7 +139,8 @@ fn fused_ion_operation_candidates(
     .flatten()
 }
 
-// Adapted from src/openclatura/fused_ion_templates.py (adapted; upstream function mapping not recorded; local fn eligible_parent)
+// Provenance: fn eligible_parent | adapted
+// Source: openclatura | src/openclatura/fused_ion_templates.py::inline in _retained_fused_ring_n_charge_operation
 fn eligible_parent(parts: &AssemblyParts) -> Option<&str> {
     if parts.is_substituent
         || parts.principal_group.is_some()
@@ -146,7 +154,8 @@ fn eligible_parent(parts: &AssemblyParts) -> Option<&str> {
     parts.retained_name.as_deref()
 }
 
-// Adapted from src/openclatura/fused_ion_templates.py (adapted; upstream function mapping not recorded; local fn retained_fused_ring_n_charge_operation)
+// Provenance: fn retained_fused_ring_n_charge_operation | adapted
+// Source: openclatura | src/openclatura/fused_ion_templates.py::_retained_fused_ring_n_charge_operation
 fn retained_fused_ring_n_charge_operation(
     parts: &AssemblyParts,
 ) -> Option<FusedIonOperationCandidate> {
@@ -179,7 +188,8 @@ fn retained_fused_ring_n_charge_operation(
     })
 }
 
-// Adapted from src/openclatura/fused_ion_templates.py (adapted; upstream function mapping not recorded; local fn retained_fused_n_oxide_operation)
+// Provenance: fn retained_fused_n_oxide_operation | adapted
+// Source: openclatura | src/openclatura/fused_ion_templates.py::_retained_fused_n_oxide_operation
 fn retained_fused_n_oxide_operation(parts: &AssemblyParts) -> Option<FusedIonOperationCandidate> {
     let parent = eligible_parent(parts)?;
     if !parts.indicated_hydrogens.is_empty() {
@@ -220,11 +230,12 @@ fn retained_fused_n_oxide_operation(parts: &AssemblyParts) -> Option<FusedIonOpe
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/fused_ion_templates.rs::tests
 mod tests {
     use super::super::assembly_parts::{ParentChargeItem, SubstituentItem};
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn n_oxide_consumes_only_the_graph_bound_oxide_and_charge
     #[test]
     fn n_oxide_consumes_only_the_graph_bound_oxide_and_charge() {
         let mut parts = AssemblyParts::new(10);
@@ -259,7 +270,6 @@ mod tests {
         assert_eq!(parts.substituents[0].name, "methyl");
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn unproved_ion_rows_and_wrong_numbering_do_not_render
     #[test]
     fn unproved_ion_rows_and_wrong_numbering_do_not_render() {
         let mut parts = AssemblyParts::new(9);

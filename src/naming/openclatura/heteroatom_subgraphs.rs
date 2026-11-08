@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/heteroatom_subgraphs.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/heteroatom_substituent_specs.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/oxoacid_roles.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/hypervalent_roles.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/nitrogen_roles.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/heterocumulene_roles.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/heteroatom_substituent_specs.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/oxoacid_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/hypervalent_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/nitrogen_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/heterocumulene_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/heteroatom_subgraphs.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura heteroatom recursive renderer consolidated across role modules with local charge/acyl extensions.
@@ -61,21 +62,26 @@ static SPECS: LazyLock<SubstituentData> = LazyLock::new(|| {
     serde_json::from_str(include_str!("data/heteroatom_substituents.json"))
         .expect("heteroatom substituent data")
 });
-// Original nazuchem code (not in openclatura 0.4.3): fn unsupported
+// Provenance: fn unsupported | original
+// Source: ReShiki | src/naming/openclatura/heteroatom_subgraphs.rs::unsupported
 fn unsupported(symbol: &str) -> String {
     format!("openclatura: {symbol} substituent role not ported")
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn with_atoms
+// Provenance: fn with_atoms | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_group_13_14_subgraph
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_pnictogen_subgraph
 fn with_atoms(exclude: &AtomSet, atoms: impl IntoIterator<Item = usize>) -> AtomSet {
     let mut out = exclude.clone();
     out.extend(atoms);
     out
 }
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn upstream_bond_order)
+// Provenance: fn upstream_bond_order | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::upstream_bond_order
 pub fn upstream_bond_order(mol: &Molecule, start: usize, upstream: Option<usize>) -> usize {
     upstream.map_or(0, |up| mol.bond_order(start, up))
 }
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn subgraph_neighbors)
+// Provenance: fn subgraph_neighbors | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::subgraph_neighbors
 pub fn subgraph_neighbors(
     mol: &Molecule,
     start: usize,
@@ -88,7 +94,8 @@ pub fn subgraph_neighbors(
         .filter(|n| !exclude.contains(n) && Some(*n) != upstream && mol.atoms[n].symbol != "H")
         .collect()
 }
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn double_bonded_neighbors)
+// Provenance: fn double_bonded_neighbors | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::double_bonded_neighbors
 pub fn double_bonded_neighbors(mol: &Molecule, start: usize, symbol: &str) -> Vec<usize> {
     mol.get_neighbors(start)
         .iter()
@@ -98,7 +105,8 @@ pub fn double_bonded_neighbors(mol: &Molecule, start: usize, symbol: &str) -> Ve
         })
         .collect()
 }
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn plain_branch)
+// Provenance: fn plain_branch | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::_branch_name_text
 fn plain_branch(
     mol: &Molecule,
     start: usize,
@@ -108,7 +116,9 @@ fn plain_branch(
     name_subgraph_with_upstream(mol, start, exclude, Some(upstream))
         .map(|s| strip_outer_parentheses(&s))
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn branches
+// Provenance: fn branches | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_group_13_14_subgraph
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_pnictogen_subgraph
 fn branches(
     mol: &Molecule,
     roots: &[usize],
@@ -120,11 +130,15 @@ fn branches(
         .map(|&n| name_subgraph_with_upstream(mol, n, exclude, Some(upstream)))
         .collect()
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn center
+// Provenance: fn center | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::format_n_substituted_amino_prefix
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::format_lambda_substituent
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_group_13_14_subgraph
 fn center(names: &[String]) -> String {
     format_center_ligands_by(names, substituent_sort_key)
 }
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn stereo)
+// Provenance: fn stereo | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::stereo_prefix
 fn stereo(mol: &Molecule, idx: usize) -> String {
     mol.atoms[&idx]
         .stereo
@@ -132,7 +146,8 @@ fn stereo(mol: &Molecule, idx: usize) -> String {
         .map(|s| format!("({s})-"))
         .unwrap_or_default()
 }
-// Adapted from src/openclatura/heteroatom_substituent_specs.py::unsubstituted_prefix (adapted; local fn prefix)
+// Provenance: fn prefix | adapted
+// Source: openclatura | src/openclatura/heteroatom_substituent_specs.py::unsubstituted_prefix
 fn prefix(symbol: &str, oxo: usize) -> Option<String> {
     SPECS
         .heteroatom_substituents
@@ -141,7 +156,8 @@ fn prefix(symbol: &str, oxo: usize) -> Option<String> {
         .get(&oxo)
         .cloned()
 }
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn charged_prefix)
+// Provenance: fn charged_prefix | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::charged_heteroatom_prefix
 fn charged_prefix(symbol: &str, charge: i32, order: usize) -> Option<String> {
     let kind = match order {
         2 => "double",
@@ -153,7 +169,8 @@ fn charged_prefix(symbol: &str, charge: i32, order: usize) -> Option<String> {
     .as_str()
     .map(str::to_owned)
 }
-// Original nazuchem code (not in openclatura 0.4.3): fn has_balanced_oxo_charges
+// Provenance: fn has_balanced_oxo_charges | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_halogen_subgraph
 fn has_balanced_oxo_charges(mol: &Molecule, center: usize) -> bool {
     let atom = &mol.atoms[&center];
     atom.charge > 0
@@ -168,7 +185,8 @@ fn has_balanced_oxo_charges(mol: &Molecule, center: usize) -> bool {
             .count() as i32
             == atom.charge
 }
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn substituent_bonding_number)
+// Provenance: fn substituent_bonding_number | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::substituent_bonding_number
 pub fn substituent_bonding_number(mol: &Molecule, idx: usize) -> usize {
     let atom = &mol.atoms[&idx];
     let sulfur_ylide = atom.symbol == "S"
@@ -191,7 +209,8 @@ pub fn substituent_bonding_number(mol: &Molecule, idx: usize) -> usize {
             atom.explicit_h_count
         }
 }
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn lambda)
+// Provenance: fn lambda | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::format_lambda_substituent
 fn lambda(mol: &Molecule, idx: usize, names: &[String], suffix: &str) -> String {
     format!(
         "({}{}-lambda^{}-{suffix})",
@@ -201,7 +220,8 @@ fn lambda(mol: &Molecule, idx: usize, names: &[String], suffix: &str) -> String 
     )
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn format_amino_from_branches)
+// Provenance: fn format_amino_from_branches | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::format_amino_from_branches
 pub fn format_amino_from_branches(
     mol: &Molecule,
     names: &[String],
@@ -311,7 +331,8 @@ pub fn format_amino_from_branches(
 /// too (pyrrolidine-1-sulfonamide, P-66.1.1.2), so its substituent name only
 /// regains the elided final e: piperidin-1-yl gives piperidine-1-sulfonyl.
 /// `outside` holds every atom beyond the sulfur's upstream bond.
-// Original nazuchem code (not in openclatura 0.4.3): fn acid_sulfonyl
+// Provenance: fn acid_sulfonyl | original
+// Source: ReShiki | src/naming/openclatura/heteroatom_subgraphs.rs::acid_sulfonyl
 fn acid_sulfonyl(
     mol: &Molecule,
     sulfur: usize,
@@ -361,7 +382,8 @@ fn acid_sulfonyl(
     Ok(acyl.map(|acyl| format!("({}{acyl})", stereo(mol, sulfur))))
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn sulfonyl_group)
+// Provenance: fn sulfonyl_group | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::sulfonyl_group_name
 fn sulfonyl_group(mol: &Molecule, branch: &str, suffix: &str) -> (String, bool) {
     let b = strip_outer_parentheses(branch);
     if let Some(rows) = section("retained_sulfonyl_group_names").as_array() {
@@ -408,7 +430,8 @@ struct CarbonylFragmentStyle<'a> {
     wrap: bool,
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn carbonyl_like_fragment)
+// Provenance: fn carbonyl_like_fragment | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_carbonyl_like_fragment
 fn carbonyl_like_fragment(
     mol: &Molecule,
     center: usize,
@@ -460,7 +483,8 @@ fn carbonyl_like_fragment(
     })
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn is_sulfonamido_oxygen_ligand
+// Provenance: fn is_sulfonamido_oxygen_ligand | original
+// Source: ReShiki | src/naming/openclatura/heteroatom_subgraphs.rs::is_sulfonamido_oxygen_ligand
 fn is_sulfonamido_oxygen_ligand(mol: &Molecule, oxygen: usize, nitrogen: usize) -> bool {
     let atom = &mol.atoms[&nitrogen];
     if mol.atoms[&oxygen].charge != 0
@@ -513,7 +537,8 @@ fn is_sulfonamido_oxygen_ligand(mol: &Molecule, oxygen: usize, nitrogen: usize) 
             .is_some_and(|bond| bond.order == 1)
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn name_oxygen)
+// Provenance: fn name_oxygen | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_oxygen_subgraph
 fn name_oxygen(
     mol: &Molecule,
     start: usize,
@@ -644,7 +669,8 @@ fn name_oxygen(
     Ok(b.into_oxy_prefix())
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn name_nitrogen)
+// Provenance: fn name_nitrogen | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_nitrogen_subgraph
 fn name_nitrogen(
     mol: &Molecule,
     start: usize,
@@ -887,7 +913,8 @@ fn name_nitrogen(
     ))
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn sulfur_imide_branch)
+// Provenance: fn sulfur_imide_branch | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::_sulfur_imide_branch_name
 fn sulfur_imide_branch(
     mol: &Molecule,
     nitrogen: usize,
@@ -955,7 +982,8 @@ fn sulfur_imide_branch(
     Ok(Some(format!("{}{name}", stereo(mol, sulfur))))
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn cyclic_sulfur_imide)
+// Provenance: fn cyclic_sulfur_imide | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::_cyclic_sulfur_imide_ligand_name
 fn cyclic_sulfur_imide(
     mol: &Molecule,
     sulfur: usize,
@@ -1015,7 +1043,12 @@ fn cyclic_sulfur_imide(
 }
 
 /// Exact oxygen-ligand signatures consumed by the data-shaped class prefixes.
-// Adapted from src/openclatura/heteroatom_subgraphs.py, src/openclatura/oxoacid_roles.py, src/openclatura/hypervalent_roles.py, src/openclatura/heteroatom_substituent_specs.py (adapted; upstream function mapping not recorded; local fn central_oxo)
+// Provenance: fn central_oxo | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::central_oxo_substituent_excluded_ligand_atoms
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::central_oxo_substituent_prefix_for_center
+// Source: openclatura | src/openclatura/oxoacid_roles.py::central_oxo_substituent_role
+// Source: openclatura | src/openclatura/hypervalent_roles.py::hypervalent_center_role
+// Source: openclatura | src/openclatura/heteroatom_substituent_specs.py::central_oxo_substituent_prefix
 fn central_oxo(
     mol: &Molecule,
     start: usize,
@@ -1106,7 +1139,8 @@ fn central_oxo(
     Ok((excluded, class))
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn name_sulfur)
+// Provenance: fn name_sulfur | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_sulfur_subgraph
 fn name_sulfur(
     mol: &Molecule,
     start: usize,
@@ -1295,7 +1329,8 @@ fn name_sulfur(
     Ok(lambda(mol, start, &ns, sulfanyl_suffix))
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn name_heteroatom_subgraph)
+// Provenance: fn name_heteroatom_subgraph | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::name_heteroatom_subgraph
 pub fn name_heteroatom_subgraph(
     mol: &Molecule,
     start: usize,
@@ -1571,7 +1606,9 @@ pub fn name_heteroatom_subgraph(
     Ok(Some(name))
 }
 
-// Adapted from src/openclatura/nitrogen_roles.py::terminal_n3_substituent_role (adapted; local fn terminal_azido)
+// Provenance: fn terminal_azido | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/nitrogen_roles.py::terminal_n3_substituent_role
 fn terminal_azido(
     mol: &Molecule,
     start: usize,
@@ -1621,7 +1658,9 @@ fn terminal_azido(
     }
 }
 
-// Adapted from src/openclatura/heterocumulene_roles.py::nitrogen_heterocumulene_role, src/openclatura/heterocumulene_roles.py::_terminal_double_heteroatom (adapted; local fn nitrogen_heterocumulene)
+// Provenance: fn nitrogen_heterocumulene | adapted
+// Source: openclatura | src/openclatura/heterocumulene_roles.py::nitrogen_heterocumulene_role
+// Source: openclatura | src/openclatura/heterocumulene_roles.py::_terminal_double_heteroatom
 fn nitrogen_heterocumulene(
     mol: &Molecule,
     start: usize,
@@ -1667,7 +1706,8 @@ fn nitrogen_heterocumulene(
     )
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn guanidino_prefix)
+// Provenance: fn guanidino_prefix | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::_guanidino_prefix
 fn guanidino_prefix(
     mol: &Molecule,
     start: usize,
@@ -1785,7 +1825,8 @@ fn guanidino_prefix(
     Ok(Some(format!("({stereo}{prefixes}guanidino)")))
 }
 
-// Adapted from src/openclatura/heteroatom_subgraphs.py (adapted; upstream function mapping not recorded; local fn charge_normalized_chalcogenido)
+// Provenance: fn charge_normalized_chalcogenido | adapted
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::_is_charge_normalized_chalcogenido
 fn charge_normalized_chalcogenido(mol: &Molecule, center: Option<usize>, ligand: usize) -> bool {
     let Some(center) = center else {
         return false;
@@ -1802,6 +1843,8 @@ fn charge_normalized_chalcogenido(mol: &Molecule, center: Option<usize>, ligand:
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/heteroatom_subgraphs.rs::tests
 mod tests {
     use super::central_oxo;
     use crate::naming::openclatura::{
@@ -1809,7 +1852,6 @@ mod tests {
     };
     use crate::naming::{NameReason, NameStatus};
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn cationic_nitrogen_prefixes_distinguish_unsubstituted_nitrogen
     #[test]
     fn cationic_nitrogen_prefixes_distinguish_unsubstituted_nitrogen() -> Result<(), String> {
         for (smiles, start, upstream, expected, status) in [
@@ -1882,7 +1924,6 @@ mod tests {
         Ok(())
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn amino_contractions_read_anilino_as_phenylamino
     #[test]
     fn amino_contractions_read_anilino_as_phenylamino() -> Result<(), String> {
         for (smiles, start, upstream, expected) in [
@@ -1904,7 +1945,6 @@ mod tests {
         Ok(())
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn sulfonamidooxy_keeps_the_proved_oxygen_nitrogen_sulfur_linkage
     #[test]
     fn sulfonamidooxy_keeps_the_proved_oxygen_nitrogen_sulfur_linkage() -> Result<(), String> {
         let mol = read_smiles("CONS(=O)(=O)c1ccccc1", &Default::default())?;
@@ -1927,7 +1967,6 @@ mod tests {
         Ok(())
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn heteroatom_branches_preserve_acyl_ligands_and_oxo_roles
     #[test]
     fn heteroatom_branches_preserve_acyl_ligands_and_oxo_roles() -> Result<(), String> {
         for (smiles, expected) in [
@@ -1956,7 +1995,6 @@ mod tests {
         Ok(())
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn generic_oxygen_ligands_stay_outside_exact_oxo_classes
     #[test]
     fn generic_oxygen_ligands_stay_outside_exact_oxo_classes() -> Result<(), String> {
         for smiles in ["CP(=O)(O)ON", "CP(=O)(O)OP(=O)(O)O", "CP(=O)(O)OBr"] {

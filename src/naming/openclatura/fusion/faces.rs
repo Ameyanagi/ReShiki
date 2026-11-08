@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/fusion/faces.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/fusion/faces.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/graph_kernel.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fusion/faces.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_fusion_faces.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_larger_carbon_bicycle.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura chordless-face enumeration/auditing with a local bridge-free fused-parent eligibility proof and enlarged benzoheterobicycle applicability.
@@ -25,6 +29,8 @@ pub struct GraphCycle {
     pub edges: EdgeSet,
 }
 impl GraphCycle {
+    // Provenance: fn GraphCycle::from_atoms | adapted
+    // Source: openclatura | src/openclatura/fusion/faces.py::GraphCycle.from_atoms
     pub fn from_atoms(atoms: impl IntoIterator<Item = usize>) -> Result<Self, String> {
         let atoms = canonical_cycle(&atoms.into_iter().collect::<Vec<_>>());
         if atoms.len() < 3 || atoms.iter().copied().collect::<AtomSet>().len() != atoms.len() {
@@ -34,6 +40,9 @@ impl GraphCycle {
         Ok(Self { atoms, edges })
     }
 }
+// Provenance: fn canonical_cycle | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/graph_kernel.py::canonical_cycle
 pub fn canonical_cycle(atoms: &[usize]) -> Vec<usize> {
     let mut best = None;
     for rev in [false, true] {
@@ -52,9 +61,15 @@ pub fn canonical_cycle(atoms: &[usize]) -> Vec<usize> {
     }
     best.unwrap_or_default()
 }
+// Provenance: fn cycle_edges | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/graph_kernel.py::cycle_edges
 pub fn cycle_edges(atoms: &[usize]) -> EdgeSet {
     cycle_edge_iter(atoms).collect()
 }
+// Provenance: fn cycle_edge_iter | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/graph_kernel.py::inline in cycle_edges
 pub(super) fn cycle_edge_iter(cycle: &[usize]) -> impl Iterator<Item = Edge> + '_ {
     cycle
         .iter()
@@ -82,6 +97,11 @@ pub struct BoundedFaceModel {
     pub cycle_rank: usize,
     pub audit: FaceModelAudit,
 }
+// Provenance: impl BoundedFaceModel | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::BoundedFaceModel.peripheral_atoms
+// Source: openclatura | src/openclatura/fusion/faces.py::BoundedFaceModel.interior_atoms
+// Source: openclatura | src/openclatura/fusion/faces.py::BoundedFaceModel.face_membership_by_atom
+// Source: openclatura | src/openclatura/fusion/faces.py::BoundedFaceModel.fusion_atoms
 impl BoundedFaceModel {
     pub fn peripheral_atoms(&self) -> AtomSet {
         self.outer_boundary.atoms.iter().copied().collect()
@@ -123,6 +143,8 @@ struct Budget {
     used: usize,
 }
 impl Budget {
+    // Provenance: fn Budget::new | adapted
+    // Source: openclatura | src/openclatura/fusion/faces.py::_Budget dataclass fields phase/limit/used
     fn new(phase: &'static str, limit: usize) -> Self {
         Self {
             phase,
@@ -130,6 +152,8 @@ impl Budget {
             used: 0,
         }
     }
+    // Provenance: fn Budget::spend | adapted
+    // Source: openclatura | src/openclatura/fusion/faces.py::_Budget.spend
     fn spend(&mut self) -> Result<(), String> {
         self.used += 1;
         if self.used > self.limit {
@@ -147,6 +171,8 @@ impl Budget {
     clippy::expect_used,
     reason = "bounded-face proofs contain only molecular edges"
 )]
+// Provenance: fn typed_face_model | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::typed_face_model
 pub fn typed_face_model(mol: &Molecule, bounded: &BoundedFaceModel) -> FaceModel {
     let mut owners: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     let faces = bounded
@@ -195,6 +221,8 @@ pub fn typed_face_model(mol: &Molecule, bounded: &BoundedFaceModel) -> FaceModel
         face_adjacency,
     }
 }
+// Provenance: fn enumerate_chordless_cycles_with_limits | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::enumerate_chordless_cycles
 pub fn enumerate_chordless_cycles_with_limits(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -232,6 +260,8 @@ pub fn enumerate_chordless_cycles_with_limits(
     cycles.sort_by_key(|c| (c.atoms.len(), c.atoms.clone()));
     Ok(cycles)
 }
+// Provenance: fn enumerate_from_start | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::_enumerate_from_start
 fn enumerate_from_start(
     start: usize,
     adj: &BTreeMap<usize, AtomSet>,
@@ -245,6 +275,8 @@ fn enumerate_from_start(
         clippy::too_many_arguments,
         reason = "DFS keeps the immutable graph and bounded mutable frontier explicit"
     )]
+    // Provenance: fn enumerate_from_start::visit | adapted
+    // Source: openclatura | src/openclatura/fusion/faces.py::_enumerate_from_start.search
     fn visit(
         start: usize,
         adj: &BTreeMap<usize, AtomSet>,
@@ -304,6 +336,8 @@ fn enumerate_from_start(
         &mut seen,
     )
 }
+// Provenance: fn edges_from_adjacency | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
 fn edges_from_adjacency(atoms: &AtomSet, adj: &BTreeMap<usize, AtomSet>) -> EdgeSet {
     atoms
         .iter()
@@ -315,6 +349,8 @@ fn edges_from_adjacency(atoms: &AtomSet, adj: &BTreeMap<usize, AtomSet>) -> Edge
         })
         .collect()
 }
+// Provenance: fn audit_bounded_face_model | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::audit_bounded_face_model
 pub fn audit_bounded_face_model(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -406,6 +442,8 @@ pub fn audit_bounded_face_model(
         reconstructed_edges: reconstructed,
     }
 }
+// Provenance: fn simple_cycle_order | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::_simple_cycle_order
 pub fn simple_cycle_order(edges: &EdgeSet) -> Option<Vec<usize>> {
     if edges.len() < 3 {
         return None;
@@ -439,6 +477,8 @@ struct FaceCacheKey {
 thread_local! {
     static FACE_CACHE: super::ThreadLocalCache<FaceCacheKey, Option<BoundedFaceModel>> = const { super::ThreadLocalCache::new() };
 }
+// Provenance: fn cached_bounded_face_model | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::cached_bounded_face_model
 pub fn cached_bounded_face_model(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -481,7 +521,8 @@ pub fn cached_bounded_face_model(
 /// FR-1.1.1/FR-1.2 additionally require adjacent constituent rings to share
 /// exactly two atoms and one bond. A shared path of two or more bonds is a
 /// bridge, even when a bounded-face model can be found for it.
-// Original nazuchem code (not in openclatura 0.4.3): fn bridge_free_fusion_parent_eligible
+// Provenance: fn bridge_free_fusion_parent_eligible | original
+// Source: ReShiki | src/naming/openclatura/fusion/faces.rs::bridge_free_fusion_parent_eligible
 pub fn bridge_free_fusion_parent_eligible(mol: &Molecule, atoms: &AtomSet) -> bool {
     if let Some(proof) = bicyclo_proof(atoms, &edges_within_atoms(mol, atoms)) {
         // A zero-length bridge is the single shared bond. The two remaining
@@ -520,6 +561,8 @@ pub fn bridge_free_fusion_parent_eligible(mol: &Molecule, atoms: &AtomSet) -> bo
     true
 }
 
+// Provenance: fn select_bounded_face_model | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::select_bounded_face_model
 pub fn select_bounded_face_model(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -534,6 +577,8 @@ pub fn select_bounded_face_model(
         c.face_model_states,
     )
 }
+// Provenance: fn select_bounded_face_model_with_limits | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::select_bounded_face_model
 pub fn select_bounded_face_model_with_limits(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -667,6 +712,8 @@ pub fn select_bounded_face_model_with_limits(
     }
     Ok(if distinct.len() == 1 { best } else { None })
 }
+// Provenance: fn larger_fused_bicycle | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::_larger_carbon_bicycle
 fn larger_fused_bicycle(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -757,12 +804,17 @@ fn larger_fused_bicycle(
         audit,
     })
 }
+// Provenance: fn independent_face_sets | adapted
+// Source: openclatura | src/openclatura/fusion/faces.py::_independent_face_sets
 fn independent_face_sets(
     cycles: &[GraphCycle],
     edges: &EdgeSet,
     target: usize,
     budget: &mut Budget,
 ) -> Result<Vec<Vec<usize>>, String> {
+    // Provenance: fn independent_face_sets::insert_basis | adapted
+    // Source: openclatura | src/openclatura/fusion/faces.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/graph_kernel.py::gf2_basis_insert
     fn insert_basis(basis: &[EdgeSet], mut mask: EdgeSet) -> Option<Vec<EdgeSet>> {
         for row in basis {
             if mask.last() == row.last() {
@@ -781,6 +833,8 @@ fn independent_face_sets(
         clippy::too_many_arguments,
         reason = "bounded GF(2) search keeps graph, frontier and proof accumulators separate"
     )]
+    // Provenance: fn independent_face_sets::visit | adapted
+    // Source: openclatura | src/openclatura/fusion/faces.py::_independent_face_sets.visit
     fn visit(
         cycles: &[GraphCycle],
         edges: &EdgeSet,
@@ -896,6 +950,12 @@ fn independent_face_sets(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | adapted
+// Source: openclatura | tests/unit/test_fusion_faces.py::_linear_fused_hexagons
+// Source: openclatura | tests/unit/test_fusion_faces.py::test_bounded_face_model_proves_fused_edge_and_outer_boundary
+// Source: openclatura | tests/unit/test_fusion_faces.py::test_cycle_enumeration_budget_exhaustion_is_explicit
+// Source: openclatura | tests/unit/test_fusion_larger_carbon_bicycle.py::_bicycle
+// Source: openclatura | tests/unit/test_fusion_larger_carbon_bicycle.py::test_two_path_proof_bypasses_exponential_cycle_search
 mod tests {
     use super::*;
     use crate::naming::openclatura::{
@@ -938,8 +998,9 @@ mod tests {
         assert!(select_bounded_face_model(&theta, &atoms).unwrap().is_none());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems
     #[test]
+    // Provenance: fn tests::bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems | original
+    // Source: ReShiki | src/naming/openclatura/fusion/faces.rs::tests::bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems
     fn bridge_free_fusion_gate_distinguishes_fused_bridged_and_spiro_systems() {
         for (smiles, expected) in [
             // Bond orders and heteroatoms do not change the topology proof.
@@ -1018,8 +1079,9 @@ mod tests {
         assert_eq!(bounded.outer_boundary.atoms.len(), 14);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit
     #[test]
+    // Provenance: fn tests::benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit | original
+    // Source: ReShiki | src/naming/openclatura/fusion/faces.rs::tests::benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit
     fn benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit() {
         let parser = opsin::Parser::new().unwrap();
         for (name, size) in [("1-benzoxonine", 9), ("2H-1-benzoxecine", 10)] {

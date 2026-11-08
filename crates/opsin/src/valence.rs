@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-// Origin: port of OPSIN; source paths and pins follow.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ValencyChecker.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ChemEl.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ValencyChecker.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ChemEl.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
+// Origin: port
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ValencyChecker.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ChemEl.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ValencyChecker.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ChemEl.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
 // Copyright 2017 Daniel Lowe
 
 //! Exact tables and checks translated from OPSIN 2.9.0 ValencyChecker.java.

@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: MIT
-// Origin: mixed adaptation of OPSIN with ledger-marked local functions; source paths and pins follow.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ d9859a4d1dbdae0e25ebf9a5201f963677c73b19.
-//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ 0d10886c93f6f7aa673f4179739143986d392a01.
-//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ 2df788dc456793c687b934afd6d4b317e3c73ef8.
-//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ bfce35014e5c5a0062ea26a3381a883c5acc829d.
-//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ 8f3723b357bf1b701c65676e9db08e2d410f0211.
-//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ d9b9bafe8f8c9d3d24b6233c14682d63b58269b2.
-//   ReShiki, crates/opsin/src/stereochemistry_handler.rs @ f4342c00aa4a4f0705dbe6776acf4c110f113117.
+// Origin: mixed
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs | d9859a4d1dbdae0e25ebf9a5201f963677c73b19
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs | 0d10886c93f6f7aa673f4179739143986d392a01
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs | 2df788dc456793c687b934afd6d4b317e3c73ef8
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs | bfce35014e5c5a0062ea26a3381a883c5acc829d
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs | 8f3723b357bf1b701c65676e9db08e2d410f0211
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs | d9b9bafe8f8c9d3d24b6233c14682d63b58269b2
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs | f4342c00aa4a4f0705dbe6776acf4c110f113117
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryException.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingException.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingMethods.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
 // Copyright 2017 Daniel Lowe
 // Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
 
@@ -55,8 +59,9 @@ struct CageStereochemistry {
     group: Option<StereoGroupType>,
 }
 
+// Provenance: impl BicyclicCage | original
+// Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs::BicyclicCage
 impl BicyclicCage {
-    // Original nazuchem code (not in OPSIN).
     fn find(graph: &Graph, fragment: FragmentId) -> Option<Self> {
         for longest in [2, 3] {
             let count = longest + 5;
@@ -132,7 +137,6 @@ impl BicyclicCage {
         }
         None
     }
-    // Original nazuchem code (not in OPSIN).
     fn substituent(&self, graph: &Graph, index: usize) -> Option<AtomId> {
         if index == 0 || index == self.bridgehead {
             return None;
@@ -151,7 +155,6 @@ impl BicyclicCage {
             .collect();
         (heavy.len() == 1).then(|| heavy[0])
     }
-    // Original nazuchem code (not in OPSIN).
     fn parity(
         &self,
         graph: &Graph,
@@ -205,6 +208,10 @@ pub enum StereochemistryError {
     StructureBuilding(String),
 }
 impl fmt::Display for StereochemistryError {
+    // Provenance: fn <StereochemistryError as fmt::Display>::fmt | adapted
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryException.java::StereochemistryException(String)
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingException.java::StructureBuildingException(String)
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Uninterpretable(s) | Self::StructureBuilding(s) => f.write_str(s),
@@ -213,19 +220,31 @@ impl fmt::Display for StereochemistryError {
 }
 impl std::error::Error for StereochemistryError {}
 impl From<CipOrderingError> for StereochemistryError {
+    // Provenance: fn <StereochemistryError as From<CipOrderingError>>::from | adapted
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryException.java::StereochemistryException(Throwable)
     fn from(e: CipOrderingError) -> Self {
         Self::Uninterpretable(e.to_string())
     }
 }
 impl From<GraphError> for StereochemistryError {
+    // Provenance: fn <StereochemistryError as From<GraphError>>::from | adapted
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingException.java::StructureBuildingException(Throwable)
     fn from(e: GraphError) -> Self {
         Self::StructureBuilding(e.to_string())
     }
 }
 type Result<T = ()> = std::result::Result<T, StereochemistryError>;
+// Provenance: fn structure | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingException.java::StructureBuildingException(String)
 fn structure<T>(s: impl Into<String>) -> Result<T> {
     Err(StereochemistryError::StructureBuilding(s.into()))
 }
+// Provenance: fn stereo | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryException.java::StereochemistryException(String)
 fn stereo<T>(s: impl Into<String>) -> Result<T> {
     Err(StereochemistryError::Uninterpretable(s.into()))
 }
@@ -250,6 +269,38 @@ pub struct StereochemistryHandler<'a> {
     unknown_stereo_reservations: BTreeSet<AtomId>,
     coupled_unknown_candidates: BTreeSet<AtomId>,
 }
+// Provenance: impl StereochemistryHandler | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::StereochemistryHandler
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in assignStereoCentre (alternative fragments plus reversed descendant groups)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in assignStereoBond (alternative fragments plus reversed descendant groups)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in assignCisTransOnRing (alternative fragments plus reversed descendant groups)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in assignStereoCentre (later-word group fallback)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in assignCisTransOnRing (later-word group fallback)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in applyStereochemicalElements (StereochemistryException warning/catch policy)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::applyStereochemicalElements
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::removeRedundantStereoCentres
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::matchStereochemistryToAtomsAndBonds
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::applyStereoChemistryToCisTransOnRing
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingMethods.java::findAlternativeGroups
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::applyGlobalRacOrRelFlags
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::assignStereoCentre
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::attemptAssignmentOfStereoCentreToFragment
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::assignStereoBond
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::attemptAssignmentOfStereoBondToFragment
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::sortInterFragmentBonds
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::assignCisTransOnRing
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::attemptAssignmentOfCisTransRingStereoToFragment
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in applyStereoChemistryToCisTransOnRing (per-centre Atom[4] construction)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::getLowestCip
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::getHydrogenOrAcyclicOrOutsideOfFragment
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::assignAlphaBetaXiStereochem
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::applyStereoChemistryToStereoCentre
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::applyAlphaBetaStereochemistryToStereoCentre
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::processCarbohydrateStereochemistry
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::assignCarbohydratePrefixStereochem
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::assignDlStereochem
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::attemptAssignmentOfDlStereoToFragment
 impl<'a> StereochemistryHandler<'a> {
     pub fn new(
         state: &'a mut BuildState,
@@ -482,7 +533,8 @@ impl<'a> StereochemistryHandler<'a> {
         self.cage_stereo_groups.clear();
         Ok(())
     }
-    // Original nazuchem code (not in OPSIN).
+    // Provenance: fn StereochemistryHandler::cage_scope_is_single_group | original
+    // Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs::StereochemistryHandler::cage_scope_is_single_group
     fn cage_scope_is_single_group(
         &self,
         requested_group_kinds: &BTreeSet<StereoGroupType>,
@@ -546,7 +598,8 @@ impl<'a> StereochemistryHandler<'a> {
     }
     /// Collect all relative descriptors in a common template frame before
     /// existing parities on that frame choose its mirror.
-    // Original nazuchem code (not in OPSIN).
+    // Provenance: fn StereochemistryHandler::assign_cage_stereochemistry | original
+    // Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs::StereochemistryHandler::assign_cage_stereochemistry
     fn assign_cage_stereochemistry(&mut self, id: NodeId) -> Result {
         let value = self.attr(id, VALUE_ATR);
         let locant = self.attribute(id, LOCANT_ATR);
@@ -623,7 +676,6 @@ impl<'a> StereochemistryHandler<'a> {
             "Endo/exo/syn/anti is supported only for substituted bicyclo[2.2.1]heptane and bicyclo[3.2.1]octane cages",
         )
     }
-    // Original nazuchem code (not in OPSIN).
     fn resolve_cage_stereochemistry(&mut self, cage: &mut CageStereochemistry) -> Result {
         let mut mirror = None;
         let existing_group = cage
@@ -671,7 +723,6 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
-    // Original nazuchem code (not in OPSIN).
     fn cage_owning_fragment(&self, id: NodeId) -> Result<Option<FragmentId>> {
         let mut scope = self.parent(id)?;
         if self.arena[scope].attribute(LOCANT_ATR).is_none()
@@ -715,7 +766,8 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(None)
     }
-    // Original nazuchem code (not in OPSIN).
+    // Provenance: fn StereochemistryHandler::apply_cage_stereo_groups | original
+    // Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs::StereochemistryHandler::apply_cage_stereo_groups
     fn apply_cage_stereo_groups(&mut self) -> Result {
         let cages = std::mem::take(&mut self.cage_stereo_groups);
         let (mut racemic_number, mut relative_number) = (0, 0);
@@ -796,7 +848,8 @@ impl<'a> StereochemistryHandler<'a> {
         self.cage_stereo_groups = cages;
         Ok(())
     }
-    // Original nazuchem code (not in OPSIN).
+    // Provenance: fn StereochemistryHandler::cage_has_distinct_mirror | original
+    // Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs::StereochemistryHandler::cage_has_distinct_mirror
     fn cage_has_distinct_mirror(&self, frame: &[AtomId]) -> Result<bool> {
         let mut graph = self.graph().clone();
         let fragment = graph.atom(frame[0]).fragment;
@@ -994,7 +1047,8 @@ impl<'a> StereochemistryHandler<'a> {
             Ok(false)
         }
     }
-    // Original nazuchem code (not in OPSIN).
+    // Provenance: fn StereochemistryHandler::resolve_pseudo_stereo_centres | original
+    // Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs::StereochemistryHandler::resolve_pseudo_stereo_centres
     fn resolve_pseudo_stereo_centres(&mut self) -> Result {
         for (atom, expected) in &self.pseudo_stereo_centres {
             let labels = crate::modern_cip::atom_labels(self.graph())?;
@@ -1032,7 +1086,6 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
-    // Original nazuchem code (not in OPSIN).
     fn assign_axial_stereo(&mut self, id: NodeId) -> Result {
         let value = self.attr(id, VALUE_ATR);
         let descriptor = match value.as_str() {
@@ -1541,7 +1594,8 @@ impl<'a> StereochemistryHandler<'a> {
             self.arena.to_xml(id)
         ))
     }
-    // Original nazuchem code (not in OPSIN).
+    // Provenance: fn StereochemistryHandler::find_coupled_unknown_candidates | original
+    // Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs::StereochemistryHandler::find_coupled_unknown_candidates
     fn find_coupled_unknown_candidates(&mut self) -> Result {
         let (mut native, indices) = crate::modern_cip::state(self.graph())?;
         // stereogenic_units consumes a ring cache; the CIP adapter leaves it empty.
@@ -1571,7 +1625,6 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
-    // Original nazuchem code (not in OPSIN).
     fn seeded_coupled_labels(
         &self,
         candidates: &BTreeSet<AtomId>,
@@ -1594,7 +1647,8 @@ impl<'a> StereochemistryHandler<'a> {
         }
         crate::modern_cip::atom_labels(&seeded)
     }
-    // Original nazuchem code (not in OPSIN).
+    // Provenance: fn StereochemistryHandler::validate_coupled_unknown_centre | original
+    // Source: ReShiki | crates/opsin/src/stereochemistry_handler.rs::StereochemistryHandler::validate_coupled_unknown_centre
     fn validate_coupled_unknown_centre(&self, centre: &UnknownStereoCentre) -> Result {
         let mut visited = BTreeSet::new();
         let mut pending = vec![centre.atom];
@@ -1625,7 +1679,6 @@ impl<'a> StereochemistryHandler<'a> {
             stereo("Could not confirm coupled pseudoasymmetric stereochemistry")
         }
     }
-    // Original nazuchem code (not in OPSIN).
     fn resolve_unknown_stereo_centres(&mut self) -> Result {
         self.unknown_stereo_reservations.clear();
         let mut centres = std::mem::take(&mut self.unknown_stereo_centres);
@@ -1662,7 +1715,6 @@ impl<'a> StereochemistryHandler<'a> {
             centres = accepted;
         }
     }
-    // Original nazuchem code (not in OPSIN).
     fn validate_unknown_stereo_centre(&mut self, centre: &UnknownStereoCentre) -> Result {
         let atom = centre.atom;
         if self.coupled_unknown_candidates.contains(&atom) {
@@ -2017,6 +2069,8 @@ impl<'a> StereochemistryHandler<'a> {
     }
 }
 
+// Provenance: fn apply_stereo_chemistry_to_stereo_centre | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::applyStereoChemistryToStereoCentre
 pub fn apply_stereo_chemistry_to_stereo_centre(
     graph: &mut Graph,
     centre: StereoCentre,
@@ -2035,6 +2089,8 @@ pub fn apply_stereo_chemistry_to_stereo_centre(
     graph.atom_mut(centre.atom).parity = Some(AtomParity::new(references, parity));
     Ok(())
 }
+// Provenance: fn apply_stereo_chemistry_to_stereo_bond | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::applyStereoChemistryToStereoBond
 pub fn apply_stereo_chemistry_to_stereo_bond(
     graph: &mut Graph,
     bond: StereoBond,
@@ -2055,6 +2111,8 @@ pub fn apply_stereo_chemistry_to_stereo_bond(
     };
     Ok(())
 }
+// Provenance: fn cis_trans_unambiguous_on_bond | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::cisTransUnambiguousOnBond
 pub fn cis_trans_unambiguous_on_bond(graph: &Graph, bond: BondId) -> bool {
     let bond = graph.bond(bond);
     [bond.from, bond.to].iter().all(|&a| {
@@ -2064,10 +2122,14 @@ pub fn cis_trans_unambiguous_on_bond(graph: &Graph, bond: BondId) -> bool {
             .any(|&n| graph.atom(n).element == Element::H)
     })
 }
+// Provenance: fn atom_references | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::inline in applyStereoChemistryToStereoCentre (Atom[4] reference representation)
 fn atom_references(atoms: [AtomId; 4]) -> [Option<StereoReference>; 4] {
     atoms.map(|a| Some(StereoReference::Atom(a)))
 }
 
+// Provenance: fn swaps_required_to_sort | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::swapsRequiredToSort
 pub fn swaps_required_to_sort(references: &[Option<StereoReference>; 4]) -> usize {
     let key = |a: Option<StereoReference>| match a {
         Some(StereoReference::Atom(id)) => id.0 + 1,
@@ -2090,6 +2152,8 @@ pub fn swaps_required_to_sort(references: &[Option<StereoReference>; 4]) -> usiz
     }
     swaps
 }
+// Provenance: fn check_equivalency_of_atom_refs_and_parity | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::checkEquivalencyOfAtomsRefs4AndParity
 pub fn check_equivalency_of_atom_refs_and_parity(
     a: &[Option<StereoReference>; 4],
     a_parity: i8,
@@ -2103,6 +2167,8 @@ pub fn check_equivalency_of_atom_refs_and_parity(
     }
     a_swaps % 2 == b_swaps % 2
 }
+// Provenance: fn determine_periphery_bonds | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StereochemistryHandler.java::determinePeripheryBonds
 fn determine_periphery_bonds(graph: &Graph, fragment: FragmentId) -> Result<Vec<BondId>> {
     let mut rings = crate::fused_ring_numberer::get_set_of_smallest_rings(graph, fragment)?;
     crate::fused_ring_numberer::setup_adjacent_fused_ring_properties(&mut rings);

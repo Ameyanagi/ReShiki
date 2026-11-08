@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Origin: adapted from RDKit; source paths and pins follow.
-//   RDKit 2026.03.6, Code/GraphMol/SmilesParse/smiles.ll @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/SmilesParse/smiles.yy @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/SmilesParse/SmilesParseOps.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/Canon.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   ReShiki, crates/chemistry/src/smiles.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Origin: adapted
+// Source: RDKit | Code/GraphMol/SmilesParse/smiles.ll | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/SmilesParse/smiles.yy | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/SmilesParse/SmilesParseOps.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/Canon.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/smiles.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
 // Copyright (C) 2001-2022 Randal Henne, Greg Landrum, Rational Discovery LLC
 // Changes: Rust adaptation; forward an explicit borrowed Budget through stereoisomer enumeration.
 

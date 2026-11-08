@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/parent_pipeline.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   ReShiki, src/naming/openclatura/parent_pipeline.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: mixed
+// Source: openclatura | src/openclatura/parent_pipeline.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/audit/relative_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura parent planning adapted to native graph/CIP with original rendered-parent status policy and ring-face parity proof.
@@ -22,7 +23,8 @@ use crate::naming::{NameReason, NameStatus};
 /// Assess only a parent that has entered a successfully rendered name.
 /// Fusion and wrapper plans are also cached and tried speculatively, so their
 /// construction and numbering routines must not mutate the name assessment.
-// Original nazuchem code (not in openclatura 0.4.3): fn mark_rendered_parent_status
+// Provenance: fn mark_rendered_parent_status | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::mark_rendered_parent_status
 pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts) {
     // Retained-name exceptions are vetoed separately below.
     let audited = match parts.parent_hydride.as_ref().map(|parent| parent.kind) {
@@ -82,7 +84,8 @@ pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts)
     }
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn mark_parent_hydride_status
+// Provenance: fn mark_parent_hydride_status | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::mark_parent_hydride_status
 fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
     if let Some(assembly) = &parent.assembly {
         mol.record_ring_assembly(&assembly.junction_bond_ids);
@@ -103,7 +106,8 @@ fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
     }
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn mark_fusion_plan_status
+// Provenance: fn mark_fusion_plan_status | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::mark_fusion_plan_status
 fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionParentPlan) {
     if plan.ast.plan_kind == "benzoheterocycle" {
         mol.mark_benzo_fusion_alternative();
@@ -152,7 +156,8 @@ fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionPa
     }
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn mark_retained_parent_status
+// Provenance: fn mark_retained_parent_status | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::mark_retained_parent_status
 fn mark_retained_parent_status(mol: &Molecule, name: &str) {
     if matches!(name, "porphyrin" | "corrin" | "gonane") {
         mol.mark_name(NameStatus::Unverified(NameReason::UnauditedParent));
@@ -161,7 +166,8 @@ fn mark_retained_parent_status(mol: &Molecule, name: &str) {
 
 /// Apply the retained-parent eligibility checks before sharing a retained
 /// identity between component and recursive-substituent assembly.
-// Adapted from src/openclatura/parent_pipeline.py::resolve_retained_parent (adapted; local fn resolve_retained_parent)
+// Provenance: fn resolve_retained_parent | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::resolve_retained_parent
 pub fn resolve_retained_parent(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -192,7 +198,8 @@ pub fn resolve_retained_parent(
     Some(retained)
 }
 
-// Adapted from src/openclatura/parent_pipeline.py::resolve_parent_hydride_plan (adapted; local fn resolve_parent_hydride_plan)
+// Provenance: fn resolve_parent_hydride_plan | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::resolve_parent_hydride_plan
 pub fn resolve_parent_hydride_plan(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -222,7 +229,8 @@ pub struct ParentAssemblyPlan {
 }
 
 #[allow(clippy::too_many_arguments)]
-// Adapted from src/openclatura/parent_pipeline.py::build_parent_assembly_plan (adapted; local fn build_parent_assembly_plan)
+// Provenance: fn build_parent_assembly_plan | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::build_parent_assembly_plan
 pub fn build_parent_assembly_plan(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -247,7 +255,8 @@ pub fn build_parent_assembly_plan(
 }
 
 #[allow(clippy::too_many_arguments)]
-// Adapted from src/openclatura/parent_pipeline.py (adapted; upstream function mapping not recorded; local fn build_parent_assembly_plan_with_modifiers)
+// Provenance: fn build_parent_assembly_plan_with_modifiers | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::build_parent_assembly_plan
 pub fn build_parent_assembly_plan_with_modifiers(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -303,7 +312,8 @@ pub fn build_parent_assembly_plan_with_modifiers(
 }
 
 #[allow(clippy::too_many_arguments)]
-// Adapted from src/openclatura/parent_pipeline.py (adapted; upstream function mapping not recorded; local fn build_parent_assembly_plan_with_parent)
+// Provenance: fn build_parent_assembly_plan_with_parent | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::build_parent_assembly_plan
 pub fn build_parent_assembly_plan_with_parent(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -633,7 +643,8 @@ pub fn build_parent_assembly_plan_with_parent(
 }
 
 #[allow(clippy::too_many_arguments)]
-// Adapted from src/openclatura/parent_pipeline.py::build_parent_parts (adapted; local fn build_parent_parts)
+// Provenance: fn build_parent_parts | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::build_parent_parts
 fn build_parent_parts(
     mol: &Molecule,
     numbered_path: &[usize],
@@ -765,7 +776,8 @@ fn build_parent_parts(
     Ok(parts)
 }
 
-// Adapted from src/openclatura/parent_pipeline.py::_add_relative_ring_stereo (adapted; local fn add_relative_ring_stereo)
+// Provenance: fn add_relative_ring_stereo | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::_add_relative_ring_stereo
 fn add_relative_ring_stereo(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -853,7 +865,10 @@ fn add_relative_ring_stereo(
     Ok(())
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn relative_ring_face
+// Provenance: fn relative_ring_face | adapted
+// Source: openclatura | src/openclatura/audit/relative_stereo.py::_face_parity
+// Source: openclatura | src/openclatura/audit/relative_stereo.py::_permutation_sign
+// Source: openclatura | src/openclatura/audit/relative_stereo.py::ring_face_relation
 fn relative_ring_face(
     mol: &Molecule,
     parts: &AssemblyParts,
@@ -903,11 +918,12 @@ fn relative_ring_face(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests
 mod tests {
     use super::super::name_smiles;
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn selected_retained_templates_keep_their_preference_status
     #[test]
     fn selected_retained_templates_keep_their_preference_status() {
         for (name, expected) in [
@@ -944,7 +960,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn unregistered_retained_fusion_status_is_deferred_until_rendering
     #[test]
     fn unregistered_retained_fusion_status_is_deferred_until_rendering() {
         use super::super::{
@@ -975,7 +990,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn fusion_layout_status_is_deferred_until_rendering
     #[test]
     fn fusion_layout_status_is_deferred_until_rendering() {
         use super::super::fusion::model::{FusionParentPlan, LayoutKind};
@@ -1002,7 +1016,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn repeated_base_fusion_status_is_deferred_until_rendering
     #[test]
     fn repeated_base_fusion_status_is_deferred_until_rendering() {
         use super::super::{fusion::planner::plan_fusion_parent, graph_io::read_smiles};
@@ -1023,7 +1036,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls
     #[test]
     fn complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls() {
         for (smiles, text, status) in [
@@ -1049,7 +1061,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn rendered_units_veto_unaudited_parent_choices
     #[test]
     fn rendered_units_veto_unaudited_parent_choices() {
         for (smiles, text, status) in [
@@ -1085,7 +1096,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn relative_ring_stereo_is_independent_of_smiles_neighbor_order
     #[test]
     fn relative_ring_stereo_is_independent_of_smiles_neighbor_order() {
         for (smiles, expected, alternative) in [
@@ -1114,7 +1124,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn assert_relative_ring_name
     fn assert_relative_ring_name(smiles: &str, expected: &str, alternative: &str) {
         let name = name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(name.text, expected, "{smiles}");
@@ -1149,7 +1158,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn relative_ring_diols_and_tert_butyl_alcohol_use_canvas_cip_labels
     #[test]
     fn relative_ring_diols_and_tert_butyl_alcohol_use_canvas_cip_labels() {
         for (smiles, expected, alternative) in [
@@ -1196,7 +1204,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn relative_ring_substituents_keep_cip_and_cis_trans_alternatives
     #[test]
     fn relative_ring_substituents_keep_cip_and_cis_trans_alternatives() {
         assert_relative_ring_name(
@@ -1206,7 +1213,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn relative_ring_fallback_is_explicitly_not_preferred
     #[test]
     fn relative_ring_fallback_is_explicitly_not_preferred() {
         let mut mol =
@@ -1235,7 +1241,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn spiro_parents_keep_descriptor_numbering_and_internal_bond_locants
     #[test]
     fn spiro_parents_keep_descriptor_numbering_and_internal_bond_locants() {
         for (smiles, expected) in [
@@ -1257,7 +1262,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn von_baeyer_numbering_preserves_replacements_suffixes_and_substituent_roots
     #[test]
     fn von_baeyer_numbering_preserves_replacements_suffixes_and_substituent_roots() {
         for (smiles, expected) in [
@@ -1288,7 +1292,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn von_baeyer_pseudoasymmetric_centres_use_canvas_cip_and_round_trip
     #[test]
     fn von_baeyer_pseudoasymmetric_centres_use_canvas_cip_and_round_trip() {
         for (smiles, expected, pseudo_atoms) in [
@@ -1356,7 +1359,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn multicyclic_pseudoasymmetric_centres_round_trip
     #[test]
     fn multicyclic_pseudoasymmetric_centres_round_trip() {
         for (smiles, expected) in [
@@ -1387,7 +1389,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn secondary_bridge_reading_disagreement_declines_with_or_without_stereo
     #[test]
     fn secondary_bridge_reading_disagreement_declines_with_or_without_stereo() {
         for smiles in [
@@ -1409,7 +1410,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn external_double_bond_uses_modern_cip_priority
     #[test]
     fn external_double_bond_uses_modern_cip_priority() {
         let smiles = "C/C=C\\C(=C/C)[C@H](C)/C=C\\C";

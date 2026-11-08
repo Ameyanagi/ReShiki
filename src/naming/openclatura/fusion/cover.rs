@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// Origin: port of upstream code.
-//   openclatura 0.4.3, src/openclatura/fusion/cover.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: port
+// Source: openclatura | src/openclatura/fusion/cover.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 
 //! Exact component overlap graphs and their independently checked topology.

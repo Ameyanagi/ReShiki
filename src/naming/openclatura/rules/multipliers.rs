@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/rules/multipliers.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   ReShiki, src/naming/openclatura/rules/multipliers.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: mixed
+// Source: openclatura | src/openclatura/rules/multipliers.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/rules/multipliers.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/principal_suffixes.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/rules/elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Inherited openclatura numerical-term constants/generation plus original suffix-specific elision and compound-anion multiplication.
@@ -33,7 +35,8 @@ const HUNDREDS: [&str; 10] = [
     "", "hecta", "dicta", "tricta", "tetracta", "pentacta", "hexacta", "heptacta", "octacta",
     "nonacta",
 ];
-// Adapted from src/openclatura/rules/multipliers.py (adapted; upstream function mapping not recorded; local fn numerical_term)
+// Provenance: fn numerical_term | adapted
+// Source: openclatura | src/openclatura/rules/multipliers.py::numerical_term
 pub fn numerical_term(count: usize) -> String {
     assert!((1..=1000).contains(&count));
     if count == 1000 {
@@ -54,7 +57,8 @@ pub fn numerical_term(count: usize) -> String {
     };
     format!("{under}{}", HUNDREDS[count / 100])
 }
-// Adapted from src/openclatura/rules/multipliers.py (adapted; upstream function mapping not recorded; local fn get)
+// Provenance: fn get | adapted
+// Source: openclatura | src/openclatura/rules/multipliers.py::get
 pub fn get(count: usize) -> Multiplier {
     assert!((2..=1000).contains(&count));
     let basic = match count {
@@ -73,7 +77,8 @@ pub fn get(count: usize) -> Multiplier {
         complex,
     }
 }
-// Adapted from src/openclatura/rules/multipliers.py (adapted; upstream function mapping not recorded; local fn basic)
+// Provenance: fn basic | adapted
+// Source: openclatura | src/openclatura/rules/multipliers.py::basic
 pub fn basic(count: usize) -> String {
     get(count).basic
 }
@@ -81,7 +86,9 @@ pub fn basic(count: usize) -> String {
 /// Only suffixes beginning with `a` or `o` elide a numerical prefix's terminal
 /// `a`; substituent prefixes and other suffix initials keep it.
 /// https://iupac.qmul.ac.uk/BlueBook/P1.html#160701
-// Original nazuchem code (not in openclatura 0.4.3): fn suffix
+// Provenance: fn suffix | adapted
+// Source: openclatura | src/openclatura/principal_suffixes.py::render_principal_suffix
+// Source: openclatura | src/openclatura/rules/elision.py::elide_terminal_a
 pub fn suffix(count: usize, suffix: &str) -> String {
     if count <= 1 {
         return suffix.into();
@@ -96,11 +103,13 @@ pub fn suffix(count: usize, suffix: &str) -> String {
     }
     format!("{multiplier}{suffix}")
 }
-// Adapted from src/openclatura/rules/multipliers.py (adapted; upstream function mapping not recorded; local fn complex_)
+// Provenance: fn complex_ | adapted
+// Source: openclatura | src/openclatura/rules/multipliers.py::complex_
 pub fn complex_(count: usize) -> String {
     get(count).complex
 }
-// Adapted from src/openclatura/rules/multipliers.py (adapted; upstream function mapping not recorded; local fn candidate_splits)
+// Provenance: fn candidate_splits | adapted
+// Source: openclatura | src/openclatura/rules/multipliers.py::candidate_splits
 pub fn candidate_splits(name: &str) -> Vec<(usize, String)> {
     let mut found = Vec::new();
     for n in 2..=1000 {
@@ -116,10 +125,11 @@ pub fn candidate_splits(name: &str) -> Vec<(usize, String)> {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/rules/multipliers.rs::tests
 mod tests {
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn suffix_multiplier_elides_a_only_before_a_or_o
     #[test]
     fn suffix_multiplier_elides_a_only_before_a_or_o() {
         for (ending, expected) in [
@@ -138,7 +148,6 @@ mod tests {
         assert_eq!(basic(4), "tetra");
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn suffix_multiplier_handles_single_and_larger_counts
     #[test]
     fn suffix_multiplier_handles_single_and_larger_counts() {
         for (count, ending, expected) in [

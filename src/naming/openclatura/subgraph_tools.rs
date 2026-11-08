@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/subgraph_tools.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/additive.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/subtractive.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   openclatura 0.4.3, src/openclatura/trace_helpers.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   ReShiki, src/naming/openclatura/subgraph_tools.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: mixed
+// Source: openclatura | src/openclatura/subgraph_tools.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/additive.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/subtractive.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/trace_helpers.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/subgraph_tools.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Consolidated openclatura branch/stereo/replacement/unsaturation/substituent helpers with local fidelity checks and tests.
@@ -21,7 +21,11 @@ use super::molecule::{AtomSet, Molecule};
 use super::ring_parent::ParentHydrideKind;
 
 /// Return the connected branch reached without crossing the parent boundary.
-// Adapted from src/openclatura/subgraph_tools.py, src/openclatura/additive.py, src/openclatura/subtractive.py, src/openclatura/trace_helpers.py (adapted; upstream function mapping not recorded; local fn subgraph_component)
+// Provenance: fn subgraph_component | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::subgraph_component
+// Source: openclatura | src/openclatura/additive.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/subtractive.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/trace_helpers.py::module scope (mapping uncertain)
 pub fn subgraph_component(mol: &Molecule, start_idx: usize, exclude_atoms: &AtomSet) -> AtomSet {
     let mut visited = exclude_atoms.clone();
     let mut component = AtomSet::new();
@@ -42,7 +46,11 @@ pub fn subgraph_component(mol: &Molecule, start_idx: usize, exclude_atoms: &Atom
 
 /// Collect bond descriptors at their numbered parent locant (P-93.5.7.1
 /// for a biaryl axis, including an axis crossing into a substituent).
-// Adapted from src/openclatura/subgraph_tools.py, src/openclatura/additive.py, src/openclatura/subtractive.py, src/openclatura/trace_helpers.py (adapted; upstream function mapping not recorded; local fn emit_bond_stereo)
+// Provenance: fn emit_bond_stereo | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::emit_bond_stereo
+// Source: openclatura | src/openclatura/additive.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/subtractive.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/trace_helpers.py::module scope (mapping uncertain)
 pub fn emit_bond_stereo(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -53,7 +61,11 @@ pub fn emit_bond_stereo(
     emit_bond_stereo_except(mol, parts, numbered_path, locants, upstream_atom, None);
 }
 
-// Adapted from src/openclatura/subgraph_tools.py, src/openclatura/additive.py, src/openclatura/subtractive.py, src/openclatura/trace_helpers.py (adapted; upstream function mapping not recorded; local fn emit_bond_stereo_except)
+// Provenance: fn emit_bond_stereo_except | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::emit_bond_stereo
+// Source: openclatura | src/openclatura/additive.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/subtractive.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/trace_helpers.py::module scope (mapping uncertain)
 pub(super) fn emit_bond_stereo_except(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -117,7 +129,11 @@ pub(super) fn emit_bond_stereo_except(
 }
 
 /// Add the selected parent's replacement and explicit multiple-bond features.
-// Adapted from src/openclatura/subgraph_tools.py, src/openclatura/additive.py, src/openclatura/subtractive.py, src/openclatura/trace_helpers.py (adapted; upstream function mapping not recorded; local fn add_parent_features)
+// Provenance: fn add_parent_features | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::add_parent_features
+// Source: openclatura | src/openclatura/additive.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/subtractive.py::module scope (mapping uncertain)
+// Source: openclatura | src/openclatura/trace_helpers.py::module scope (mapping uncertain)
 pub fn add_parent_features(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -322,7 +338,8 @@ pub fn add_parent_features(
 }
 
 /// Collect retained-parent hydrogen citations using the parent bond model.
-// Adapted from src/openclatura/additive.py (adapted; upstream function mapping not recorded; local fn add_indicated_hydrogens)
+// Provenance: fn add_indicated_hydrogens | adapted
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 pub fn add_indicated_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -334,7 +351,8 @@ pub fn add_indicated_hydrogens(
 
 /// Merge same-name branch citations before parent promotion, as the upstream
 /// add_substituent_trace does even when no trace metadata is requested.
-// Adapted from src/openclatura/trace_helpers.py::add_substituent_trace (adapted; local fn add_substituent)
+// Provenance: fn add_substituent | adapted
+// Source: openclatura | src/openclatura/trace_helpers.py::add_substituent_trace
 pub fn add_substituent(
     parts: &mut AssemblyParts,
     mut item: super::assembly_parts::SubstituentItem,
@@ -361,11 +379,12 @@ pub fn add_substituent(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/subgraph_tools.rs::tests
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn axial_descriptor_uses_parent_endpoint_and_is_emitted_once
     #[test]
     fn axial_descriptor_uses_parent_endpoint_and_is_emitted_once() {
         let mol =
@@ -387,7 +406,6 @@ mod tests {
         assert!(parts.stereo_features.is_empty());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn omitting_attachment_bond_stereo_keeps_internal_descriptors
     #[test]
     fn omitting_attachment_bond_stereo_keeps_internal_descriptors() {
         let mol = read_smiles("C/C=C/C=N/O", &Default::default()).unwrap();
@@ -412,7 +430,6 @@ mod tests {
         assert_eq!(attachment.stereo.as_deref(), Some("E"));
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn skeletal_replacement_handoff_keeps_heteroatom_prefixes
     #[test]
     fn skeletal_replacement_handoff_keeps_heteroatom_prefixes() {
         use super::super::ring_parent::RingParent;
@@ -448,7 +465,6 @@ mod tests {
         assert_eq!(parts.a_prefixes[0].atom_ids, AtomSet::from([oxygen]));
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn bridge_prefix_and_parent_model_own_their_multiple_bonds
     #[test]
     fn bridge_prefix_and_parent_model_own_their_multiple_bonds() {
         use super::super::{
@@ -470,7 +486,6 @@ mod tests {
         assert!(parts.unsaturations.is_empty());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn same_name_spiro_branches_keep_their_graph_metadata
     #[test]
     fn same_name_spiro_branches_keep_their_graph_metadata() {
         use super::super::{assembly_parts::SubstituentItem, assembly_spiro::SpiroAssembly};
@@ -489,7 +504,6 @@ mod tests {
         assert_eq!(spiro.side_parent_name, "oxirane");
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn retained_sulfur_uses_the_ordinary_valence_implied_by_its_substituents
     #[test]
     fn retained_sulfur_uses_the_ordinary_valence_implied_by_its_substituents() {
         assert_eq!(
@@ -501,7 +515,6 @@ mod tests {
         assert!(super::super::name_smiles("[SH2]1CCCC1", &Default::default()).is_err());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn retained_parent_does_not_absorb_unrepresented_extra_hydrogen
     #[test]
     fn retained_parent_does_not_absorb_unrepresented_extra_hydrogen() {
         for (smiles, symbol, name) in [

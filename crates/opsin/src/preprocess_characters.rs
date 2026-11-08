@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Origin: adapted from OPSIN; source paths and pins follow.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   ReShiki, crates/opsin/src/preprocess_characters.rs @ bfce35014e5c5a0062ea26a3381a883c5acc829d.
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/preprocess_characters.rs | bfce35014e5c5a0062ea26a3381a883c5acc829d
 // Copyright 2017 Daniel Lowe
 // Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md.
 

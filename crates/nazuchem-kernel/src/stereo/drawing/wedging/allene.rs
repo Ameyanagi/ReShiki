@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: original nazuchem/ReShiki code; source history and separately attributed data/API context follow.
-//   ReShiki, crates/chemistry/src/stereo/drawing/wedging/allene.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Origin: original
+// Source: ReShiki | crates/chemistry/src/stereo/drawing/wedging/allene.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
 
 // Copied from crates/chemistry/src/stereo/drawing/wedging/allene.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: pass an explicit default preparation budget in the inline test
 use super::*;

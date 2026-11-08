@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
-// Origin: mixed adaptation of OPSIN with ledger-marked local functions; source paths and pins follow.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   ReShiki, crates/opsin/src/preprocess.rs @ d9859a4d1dbdae0e25ebf9a5201f963677c73b19.
-//   ReShiki, crates/opsin/src/preprocess.rs @ bfce35014e5c5a0062ea26a3381a883c5acc829d.
-//   ReShiki, crates/opsin/src/preprocess.rs @ 6d484c42972f340cfdb104f87022d97f8a2d18fe.
+// Origin: mixed
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/preprocess.rs | d9859a4d1dbdae0e25ebf9a5201f963677c73b19
+// Source: ReShiki | crates/opsin/src/preprocess.rs | bfce35014e5c5a0062ea26a3381a883c5acc829d
+// Source: ReShiki | crates/opsin/src/preprocess.rs | 6d484c42972f340cfdb104f87022d97f8a2d18fe
+// Source: ReShiki | crates/opsin/src/preprocess.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright 2017 Daniel Lowe
 // Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
 
@@ -33,7 +34,8 @@ static CAGE_LOCANT_DESCRIPTORS: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Cage locant descriptors")
 });
 
-// Original nazuchem code (not in OPSIN).
+// Provenance: fn normalize_cage_descriptors | original
+// Source: ReShiki | crates/opsin/src/preprocess.rs::normalize_cage_descriptors
 fn normalize_cage_descriptors(input: &str) -> String {
     input
         .split(' ')
@@ -123,6 +125,10 @@ fn normalize_cage_descriptors(input: &str) -> String {
         .join(" ")
 }
 
+// Provenance: fn preprocess | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::preProcess
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::performMultiCharacterReplacements
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 pub fn preprocess(name: &str) -> Result<String, ParsingError> {
     // Java String.trim removes only characters <= U+0020.
     let name = name.trim_matches(|c| c <= '\u{20}');
@@ -209,6 +215,10 @@ pub fn preprocess(name: &str) -> Result<String, ParsingError> {
     )?))
 }
 
+// Provenance: fn superscript_digit_to_digit | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::superscriptDigitToDigit
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::isSuperscriptDigit
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn superscript_digit_to_digit(ch: char) -> Option<char> {
     Some(match ch {
         '\u{2070}' => '0',
@@ -220,6 +230,9 @@ fn superscript_digit_to_digit(ch: char) -> Option<char> {
     })
 }
 
+// Provenance: fn starts_with_sup_tag | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::inline in performMultiCharacterReplacements (case-insensitive sup-tag regionMatches)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn starts_with_sup_tag(remaining: &[char], tag: &str) -> bool {
     remaining.len() >= tag.len()
         && remaining
@@ -232,11 +245,18 @@ fn starts_with_sup_tag(remaining: &[char], tag: &str) -> bool {
             })
 }
 
+// Provenance: fn is_java_digit | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::inline in performMultiCharacterReplacements (Character.isDigit on previous UTF-16 code unit)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn is_java_digit(ch: char) -> bool {
     // Character.isDigit(charAt(i - 1)) observes a single UTF-16 code unit.
     ch as u32 <= 0xffff && JAVA_DECIMAL_DIGIT.is_match(ch.encode_utf8(&mut [0; 4]))
 }
 
+// Provenance: fn normalize_representation | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::convertNonAsciiAndNormaliseRepresentation
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::getReplacementForNonAsciiChar
 fn normalize_representation(input: &str) -> Result<String, ParsingError> {
     let mut normalized = String::with_capacity(input.len());
     for (index, ch) in input.char_indices() {
@@ -277,6 +297,9 @@ fn normalize_representation(input: &str) -> Result<String, ParsingError> {
     Ok(normalized)
 }
 
+// Provenance: fn dollar_greek | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::getReplacementForDollarGreek
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn dollar_greek(ch: char) -> Option<&'static str> {
     Some(match ch {
         'a' => "alpha",
@@ -289,6 +312,10 @@ fn dollar_greek(ch: char) -> Option<&'static str> {
     })
 }
 
+// Provenance: fn enclosed_greek | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::DOTENCLOSED_TO_DESIRED
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java::XMLENTITY_TO_DESIRED
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::module scope (mapping uncertain)
 fn enclosed_greek(text: &str, dot: bool) -> Option<&'static str> {
     Some(match text {
         "alpha" => "alpha",
@@ -316,6 +343,8 @@ fn enclosed_greek(text: &str, dot: bool) -> Option<&'static str> {
 include!("preprocess_characters.rs");
 
 #[cfg(test)]
+// Provenance: mod tests | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java::convertNonAsciiAndNormaliseRepresentation
 mod tests {
     #[test]
     fn whitespace_normalization_preserves_one_leading_space() {

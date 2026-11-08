@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-// Origin: mixed adaptation of OPSIN with ledger-marked local functions; source paths and pins follow.
-//   OPSIN 3.0-SNAPSHOT, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java @ 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   ReShiki, crates/opsin/src/cip.rs @ c1115c9053caa1907973003703ce9aa9edc1dbc7.
-//   ReShiki, crates/opsin/src/cip.rs @ 3bf2af9f326364a362d04151a1b8c3400545e571.
+// Origin: mixed
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/cip.rs | c1115c9053caa1907973003703ce9aa9edc1dbc7
+// Source: ReShiki | crates/opsin/src/cip.rs | 3bf2af9f326364a362d04151a1b8c3400545e571
+// Source: ReShiki | crates/opsin/src/cip.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright Daniel Lowe and OPSIN contributors; MIT, see the crate license.
 // Copyright 2017 Daniel Lowe
 // Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
@@ -43,6 +44,9 @@ pub enum CipOrderingError {
 }
 
 impl fmt::Display for CipOrderingError {
+    // Provenance: fn <CipOrderingError as fmt::Display>::fmt | adapted
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::SortByCipOrder.compare
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::CipOrderingRunTimeException
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnresolvedTie => f.write_str(UNRESOLVED_MESSAGE),
@@ -60,6 +64,11 @@ pub struct CipSequenceRules<'a> {
     charged_rings: OnceCell<HashMap<AtomId, Fraction>>,
 }
 
+// Provenance: impl CipSequenceRules | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::module scope (mapping uncertain)
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::getNeighbouringAtomsInCipOrder
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::getNeighbouringAtomsInCipOrderIgnoringGivenNeighbour
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::compare
 impl<'a> CipSequenceRules<'a> {
     pub const fn new(graph: &'a Graph, chiral_atom: AtomId) -> Self {
         Self {
@@ -187,7 +196,8 @@ impl<'a> CipSequenceRules<'a> {
         Err(CipOrderingError::UnresolvedTie)
     }
 
-    // Original nazuchem code (not in OPSIN).
+    // Provenance: fn CipSequenceRules::charged_rings | original
+    // Source: ReShiki | crates/opsin/src/cip.rs::CipSequenceRules::charged_rings
     fn charged_rings(&self) -> &HashMap<AtomId, Fraction> {
         self.charged_rings.get_or_init(|| {
             let mut rings = HashMap::new();
@@ -383,6 +393,9 @@ struct Node {
 }
 
 impl Node {
+    // Provenance: fn Node::ghost | adapted
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::AtomWithHistory
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::SortByCipOrder.getNextAtomsWithAppropriateGhostAtoms
     fn ghost(atomic_number: Fraction, visited: Vec<AtomId>, origin: usize) -> Self {
         Self {
             atom: None,
@@ -394,6 +407,8 @@ impl Node {
     }
 }
 
+// Provenance: fn compare_nodes | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::SortByCipOrder.compareByCipRules
 fn compare_nodes(a: &Node, b: &Node, rule: u8) -> Ordering {
     let Fraction(an, ad) = a.atomic_number;
     let Fraction(bn, bd) = b.atomic_number;
@@ -417,6 +432,8 @@ fn compare_nodes(a: &Node, b: &Node, rule: u8) -> Ordering {
     a_isotope.cmp(&b_isotope)
 }
 
+// Provenance: fn compare_lists | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::SortByCipOrder.AtomListCipComparator.compare
 fn compare_lists(a: &[Node], b: &[Node], rule: u8) -> Ordering {
     a.iter()
         .rev()
@@ -426,6 +443,8 @@ fn compare_lists(a: &[Node], b: &[Node], rule: u8) -> Ordering {
         .unwrap_or_else(|| a.len().cmp(&b.len()))
 }
 
+// Provenance: fn compare_lists_of_lists | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::SortByCipOrder.ListOfAtomListsCipComparator.compare
 fn compare_lists_of_lists(a: &[Vec<Node>], b: &[Vec<Node>], rule: u8) -> Ordering {
     a.iter()
         .rev()
@@ -438,6 +457,8 @@ fn compare_lists_of_lists(a: &[Vec<Node>], b: &[Vec<Node>], rule: u8) -> Orderin
 /// Combine equal sibling lists before splitting their union by atom priority.
 /// Distinct sibling-list priorities remain separate even when individual atom
 /// priorities coincide; flattening all neighbours here changes CIP results.
+// Provenance: fn group_same_priority | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/CipSequenceRules.java::SortByCipOrder.formListsWithSamePriority
 fn group_same_priority(lists: Vec<Vec<Node>>, rule: u8) -> Vec<Vec<Node>> {
     let mut input = lists.into_iter().peekable();
     let mut output = Vec::new();
@@ -471,10 +492,11 @@ fn group_same_priority(lists: Vec<Vec<Node>>, rule: u8) -> Vec<Vec<Node>> {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | crates/opsin/src/cip.rs::tests
 mod tests {
     use super::*;
 
-    // Original nazuchem code (not in OPSIN).
     #[test]
     fn fractional_atomic_numbers_compare_exactly() {
         let node = |n, d| Node::ghost(Fraction(n, d), Vec::new(), 0);
@@ -485,7 +507,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in OPSIN).
     #[test]
     fn each_cyclopentadienide_atom_has_one_averaged_bond_duplicate() {
         for smiles in [
@@ -501,7 +522,6 @@ mod tests {
         assert_ring_duplicates(smiles, 8..13, &[Fraction(24, 5); 5]);
     }
 
-    // Original nazuchem code (not in OPSIN).
     #[test]
     fn any_ineligible_charge_in_the_component_disables_all_averaging() {
         for excluded in [
@@ -540,7 +560,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in OPSIN).
     #[test]
     fn charges_in_other_components_do_not_disable_ring_averaging() {
         for spectator in [
@@ -558,7 +577,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in OPSIN).
     #[test]
     fn each_cyclopropenide_atom_has_one_integral_averaged_bond_duplicate() {
         for smiles in ["O[C@H](C1=CC1)C1=C[CH-]1", "O[C@H](C1=CC1)[C-]1C=C1"] {
@@ -566,7 +584,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in OPSIN).
     fn assert_ring_duplicates(smiles: &str, ring: std::ops::Range<usize>, fractions: &[Fraction]) {
         let mut graph = Graph::default();
         let fragment = crate::smiles::build_fragment(&mut graph, smiles, "", "").unwrap();
@@ -596,7 +613,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in OPSIN).
     #[test]
     fn charged_part_keeps_exocyclic_oxygen_duplicate_and_origin() {
         // Neither ring has n maximal contributors: its carbonyl carbons keep
@@ -618,7 +634,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in OPSIN).
     #[test]
     fn eligible_ring_keeps_external_carbonyl_duplicate_and_origin() {
         let mut graph = Graph::default();
@@ -641,7 +656,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in OPSIN).
     #[test]
     fn fused_and_multiply_charged_parts_keep_drawn_duplicates() {
         for smiles in [

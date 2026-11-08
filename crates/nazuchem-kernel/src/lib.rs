@@ -1,19 +1,16 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// Origin: ReShiki kernel-root extraction; inherited RDKit attribution is retained pending per-type origin confirmation.
-//   ReShiki, crates/chemistry/src/lib.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
-//   RDKit 2026.03.6, Code/GraphMol/MolProps.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
-//   RDKit 2026.03.6, Code/GraphMol/Atom.cpp @ 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985.
+// SPDX-License-Identifier: BSD-3-Clause AND (MIT OR Apache-2.0)
+// Origin: adapted
+// Source: ReShiki | crates/chemistry/src/lib.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Source: RDKit | Code/GraphMol/atomic_data.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
 // Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
-// Unresolved: Inherited BSD attribution is stale/overbroad for the reduced root; author should confirm intended per-type origin before replacing it with an original-code header.
 
-//! Molecular preparation, drawing reconstruction and properties in safe Rust.
+//! Molecular preparation and shared atomic records in safe Rust.
 //!
-//! Migrated operations use local sanitization and stereo perception. Remaining
-//! imports, full CIP labels and identifiers still use the backend. Never use cached
-//! drawing labels: they may predate the latest edit.
-//! Mass/formula semantics adapted from RDKit MolProps.cpp and Atom::getMass.
-//! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
-//! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
+//! The Element record stores RDKit-derived element properties supplied by
+//! atomic_data.rs; ELEMENTS and ISOTOPES re-export those BSD-3-Clause tables.
+//! Module wiring and AtomFacts are local ReShiki declarations. The former
+//! mass/formula calculation operations were removed during kernel extraction.
+//! See licenses/rdkit/LICENSE and NOTICE for the retained atomic-data attribution.
 // Copied from crates/chemistry/src/lib.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: retain required modules, atomic exports, AtomFacts and Element only; add local budget module and narrow unused-field allowance
 #![forbid(unsafe_code)]
 #![cfg_attr(

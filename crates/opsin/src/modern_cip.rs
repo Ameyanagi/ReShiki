@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// Origin: original nazuchem/ReShiki graph-conversion and delegation adapter; the separately adapted full-CIP kernel retains its own BSD provenance.
-//   ReShiki, crates/opsin/src/modern_cip.rs @ 0d10886c93f6f7aa673f4179739143986d392a01.
+// Origin: original
+// Source: ReShiki | crates/opsin/src/modern_cip.rs | 0d10886c93f6f7aa673f4179739143986d392a01
 
 //! Full CIP ordering for descriptors that depend on other stereogenic units.
 //! The OPSIN constitutional rules remain the fast path for ordinary R/S.

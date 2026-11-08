@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Origin: adapted from OPSIN; source paths and pins follow.
-//   OPSIN 2.9.0, opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   OPSIN 2.9.0, opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilderTest.java @ b91b610af5ab07560fedb20730d7aef46bb2bca0.
-//   ReShiki, crates/opsin/tests/graph_upstream_parser.rs @ 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9.
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilder.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/SMILESFragmentBuilderTest.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/tests/graph_upstream_parser.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
 // Copyright 2017 Daniel Lowe
 // Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
 

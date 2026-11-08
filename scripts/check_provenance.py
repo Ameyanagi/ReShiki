@@ -1,17 +1,21 @@
 """Check the Phase A naming ledger without rewriting source files or recorded hashes.
 
-Rust files carry opening SPDX/Origin headers; mixed files additionally mark the
-functions listed in ``parts``. Other files are checked byte for byte with SHA-256.
-The small Rust scanner only locates declarations and their leading comments: it
-does not interpret function bodies or attempt to infer upstream ancestry.
+Rust files carry exact opening SPDX/Origin/Source headers. Every function in a
+mixed file belongs to an explicitly marked function or enclosing module/impl
+region; a more specific assignment overrides the region. Other files are checked
+byte for byte with SHA-256. The scanner locates declarations and their comments;
+it does not interpret bodies or attempt to infer upstream ancestry.
 """
 
 import argparse
 import hashlib
+import json
 import re
 import sys
 import tomllib
-from dataclasses import dataclass
+import unicodedata
+from collections import Counter
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
 LEDGER_NAME = "PROVENANCE-nazuchem.toml"
@@ -29,10 +33,35 @@ REQUIRED_FIXTURES = (
     "tests/fixtures/s2n/status-snapshot.tsv",
     "tests/fixtures/s2n/worker_snapshot.jsonl",
 )
-IDENTIFIER = r"(?:r#)?[A-Za-z_][A-Za-z_0-9]*"
-RUST_TOKEN = re.compile(rf"\bfn\s+({IDENTIFIER})|\bmod\s+({IDENTIFIER})|\bimpl\b|[{{}};\[\]]")
+# Rust identifiers use Unicode XID_Start/XID_Continue. Match a superset so newer
+# Unicode characters cannot disappear from the inventory; validate with Python's
+# XID-compatible identifier rules below and fail closed if unsupported. Rust's
+# Pattern_White_Space additionally includes the left/right directional marks.
+RUST_SPACE = r"[\s\u200e\u200f]"
+IDENTIFIER_START = r"(?:[^\W\d]|[^\x00-\x7f\s\u200e\u200f])"
+IDENTIFIER_CONTINUE = r"(?:\w|[^\x00-\x7f\s\u200e\u200f])"
+IDENTIFIER = rf"(?:r#)?{IDENTIFIER_START}{IDENTIFIER_CONTINUE}*"
+KEYWORD_PREFIX = rf"(?<!{IDENTIFIER_CONTINUE})(?<!#)"
+RUST_TOKEN = re.compile(
+    rf"{KEYWORD_PREFIX}(fn|mod|trait){RUST_SPACE}+({IDENTIFIER})"
+    rf"|{KEYWORD_PREFIX}impl(?!{IDENTIFIER_CONTINUE})|[{{}};\[\]()<>]"
+)
 RAW_LITERAL = re.compile(r'(?:br|cr|r)(#*)"')
 CHAR_LITERAL = re.compile(r"'(?:\\(?:[^\n]|u\{[^}]*\})|[^'\\\n])'")
+ORIGINS = {"original", "port", "copy", "adapted", "mixed", "data"}
+# These owner-deferred files are the only legacy-format exceptions. Pin both
+# source bytes and canonical ledger contents so the exception cannot spread or
+# silently accommodate changes to unresolved provenance.
+FROZEN_PENDING = {
+    "crates/nazuchem-kernel/src/native_order/linux_sort.rs": (
+        "cf814c15f7111d5473a0b8add9683c1a9ca49229eb4ed62e28c210ae099e43c0",
+        "f1bebe4cd078021f1ae6408364931aaa31e41aa251ba88b8b23d850770cf2611",
+    ),
+    "crates/nazuchem-kernel/src/native_order/sort_common.rs": (
+        "98660b6f23fb85316695b08855f646523208ef0bd625603e951c3c89e0fbf909",
+        "77f13e9de2d20a465ebb4b6c041babccfaa38d44d6b002f3522c167556c36146",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -41,6 +70,24 @@ class RustFunction:
     qualified_name: str
     line: int
     prelude: str
+
+
+@dataclass(frozen=True)
+class RustItem:
+    kind: str
+    name: str
+    qualified_name: str
+    line: int
+    prelude: str
+    start: int
+    body_start: int | None
+    end: int
+    parent: int | None
+    ancestors: tuple[int, ...]
+
+    @property
+    def identity(self) -> str:
+        return f"{self.kind} {self.qualified_name}"
 
 
 def mask_rust(text: str, comments: list[str] | None = None) -> str:
@@ -90,141 +137,375 @@ def mask_rust(text: str, comments: list[str] | None = None) -> str:
     return "".join(result)
 
 
-def impl_name(declaration: str) -> str:
-    # Generic parameters and arguments can contain `for` and identifiers that
-    # are not the implementing type. Keep only the outer declaration tokens.
+def impl_name(declaration: str, *, preserve_generics: bool = False) -> str:
+    """Name inherent impls by type and trait impls by fully qualified identity."""
+    declaration = re.sub(RUST_SPACE, " ", declaration).strip()
+    # Leading impl generic parameters do not identify the implemented trait.
+    if declaration.startswith("<"):
+        depth = 0
+        for index, character in enumerate(declaration):
+            depth += (character == "<") - (character == ">")
+            if not depth:
+                declaration = declaration[index + 1 :].strip()
+                break
     depth = 0
-    outer = []
-    for character in declaration:
+    split_for = None
+    for index, character in enumerate(declaration):
         if character == "<":
             depth += 1
         elif character == ">":
             depth = max(0, depth - 1)
-        elif not depth:
-            outer.append(character)
-    declaration = "".join(outer).split(" where ")[0]
-    declaration = re.split(r"\bfor\b", declaration)[-1]
-    names = re.findall(IDENTIFIER, declaration)
-    return names[-1] if names else ""
+        elif not depth and re.match(r"\bwhere\b", declaration[index:]):
+            declaration = declaration[:index].strip()
+            break
+        elif not depth and re.match(r"\bfor\b", declaration[index:]):
+            split_for = index
+
+    def compact(value: str) -> str:
+        value = unicodedata.normalize("NFC", value)
+        return re.sub(r"\s*([<>,:&])\s*", r"\1", " ".join(value.split()))
+
+    if split_for is not None:
+        trait = declaration[:split_for].strip()
+        target = declaration[split_for + 3 :].strip()
+        return f"<{compact(target)} as {compact(trait)}>"
+    if preserve_generics:
+        return compact(declaration)
+    # Inherent generic impls share their type's namespace (Type::method).
+    outer = re.sub(r"<.*>", "", declaration)
+    return compact(outer).replace("r#", "")
 
 
-def rust_functions(text: str) -> list[RustFunction]:
+def rust_items(text: str) -> list[RustItem]:
+    """Locate fn/mod/impl declarations and their lexical scope relationships.
+
+    Offsets are character offsets into ``text``. ``parent``/``ancestors`` index
+    this source-ordered result. Traits contribute a namespace but are not region
+    assignments; trait methods can be individually assigned as ``fn Trait::f``.
+    Unsupported identifiers or declarations nested in a pending signature raise
+    ValueError, so callers cannot accept an incomplete function inventory.
+    """
     masked = mask_rust(text)
-    scopes: list[str] = []
-    functions = []
-    pending = ""
-    impl_start = None
+    scopes: list[tuple[str, int | None]] = []
+    items: list[RustItem] = []
+    impl_targets: dict[str, str] = {}
+    pending: tuple[str, int | None] | None = None
+    impl_start: int | None = None
+    attribute_depth = 0
     square_depth = 0
+    paren_depth = 0
+    pending_parens = 0
+    pending_squares = 0
+    angle_depth = 0
     boundary = 0
     for token in RUST_TOKEN.finditer(masked):
         value = token[0]
         if value == "[":
-            square_depth += 1
+            prefix = masked[: token.start()].rstrip()
+            if attribute_depth or prefix.endswith(("#", "#!")):
+                attribute_depth += 1
+            else:
+                square_depth += 1
             continue
         if value == "]":
-            square_depth -= 1
+            if attribute_depth:
+                attribute_depth -= 1
+            else:
+                square_depth = max(0, square_depth - 1)
             continue
-        if square_depth:
+        if attribute_depth:
             continue
-        if token[1]:
-            name = token[1].removeprefix("r#")
-            qualified = "::".join(scope for scope in [*scopes, name] if scope)
-            functions.append(
-                RustFunction(
-                    name,
-                    qualified,
-                    text.count("\n", 0, token.start()) + 1,
-                    text[boundary : token.start()],
-                )
-            )
-            pending = name
-            impl_start = None
-        elif token[2]:
-            pending = token[2].removeprefix("r#")
-        elif value == "impl":
+        if value == "(":
+            paren_depth += 1
+            continue
+        if value == ")":
+            paren_depth = max(0, paren_depth - 1)
+            continue
+        if value in {"<", ">"}:
+            if pending and paren_depth == pending_parens and square_depth == pending_squares:
+                angle_depth = max(0, angle_depth + (1 if value == "<" else -1))
+            continue
+        if token[1] or value == "impl":
             # `impl Trait` inside a function's parameter list is not a scope.
-            if not pending:
+            if pending:
+                if token[1]:
+                    line = text.count("\n", 0, token.start()) + 1
+                    raise ValueError(
+                        f"nested {token[1]} declaration at line {line} inside pending "
+                        f"declaration {pending[0]!r}; unsupported signature expression"
+                    )
+                continue
+            if value == "impl" and "=" in masked[boundary : token.start()]:
+                # `type Alias = impl Trait` is a type expression, not an impl.
+                continue
+            kind = token[1] or "impl"
+            name = token[2].removeprefix("r#") if token[2] else ""
+            if name and not name.isidentifier():
+                line = text.count("\n", 0, token.start()) + 1
+                raise ValueError(f"unsupported Rust identifier {name!r} at line {line}")
+            name = unicodedata.normalize("NFC", name)
+            ancestors = tuple(index for _, index in scopes if index is not None)
+            index = None
+            if kind != "trait":
+                index = len(items)
+                qualified = "::".join(scope for scope, _ in scopes if scope)
+                qualified = "::".join(filter(None, (qualified, name)))
+                items.append(
+                    RustItem(
+                        kind,
+                        name,
+                        qualified,
+                        text.count("\n", 0, token.start()) + 1,
+                        text[boundary : token.start()],
+                        token.start(),
+                        None,
+                        len(text),
+                        ancestors[-1] if ancestors else None,
+                        ancestors,
+                    )
+                )
+            pending = (name, index)
+            pending_parens = paren_depth
+            pending_squares = square_depth
+            angle_depth = 0
+            if kind == "impl":
                 impl_start = token.end()
         elif value == "{":
-            if impl_start is not None:
-                pending = impl_name(masked[impl_start : token.start()])
-            scopes.append(pending)
-            pending = ""
-            impl_start = None
+            if (
+                pending
+                and paren_depth == pending_parens
+                and square_depth == pending_squares
+                and not angle_depth
+            ):
+                name, index = pending
+                if impl_start is not None:
+                    name = impl_name(masked[impl_start : token.start()])
+                if index is not None:
+                    qualified = "::".join(scope for scope, _ in scopes if scope)
+                    qualified = "::".join(filter(None, (qualified, name)))
+                    if impl_start is not None:
+                        target = impl_name(
+                            masked[impl_start : token.start()], preserve_generics=True
+                        )
+                        previous = impl_targets.setdefault(qualified, target)
+                        if previous != target:
+                            raise ValueError(
+                                f"ambiguous impl identity {qualified!r} for distinct targets "
+                                f"{previous!r} and {target!r}; concrete generic impls need "
+                                "distinct scanner identities"
+                            )
+                    items[index] = replace(
+                        items[index], name=name, qualified_name=qualified, body_start=token.start()
+                    )
+                scopes.append((name, index))
+                pending = None
+                impl_start = None
+            else:
+                scopes.append(("", None))
             boundary = token.end()
         elif value == "}":
             if scopes:
-                scopes.pop()
-            pending = ""
-            impl_start = None
+                _, index = scopes.pop()
+                if index is not None:
+                    items[index] = replace(items[index], end=token.end())
             boundary = token.end()
         elif value == ";":
-            pending = ""
+            if pending and pending[1] is not None:
+                items[pending[1]] = replace(items[pending[1]], end=token.end())
+            pending = None
             impl_start = None
+            angle_depth = 0
             boundary = token.end()
-    return functions
+    return items
 
 
-def correct_marker(prelude: str, part: dict) -> bool:
+def rust_functions(text: str) -> list[RustFunction]:
+    """Retain the public function-scanner API for callers and migration tools."""
+    return [
+        RustFunction(item.name, item.qualified_name, item.line, item.prelude)
+        for item in rust_items(text)
+        if item.kind == "fn"
+    ]
+
+
+def comment_fields(text: str, field: str) -> list[str]:
+    comments: list[str] = []
+    mask_rust(text, comments)
+    return [
+        match[1]
+        for comment in comments
+        if (match := re.fullmatch(rf"// {re.escape(field)}:[ \t]*(.*?)[ \t]*", comment))
+    ]
+
+
+def source_identities(
+    sources: object, fields: tuple[str, ...], *, unique: bool = True
+) -> list[tuple[str, ...]] | None:
+    if not isinstance(sources, list) or not sources:
+        return None
+    identities = []
+    for source in sources:
+        if not isinstance(source, dict):
+            return None
+        values = tuple(source.get(field) for field in fields)
+        if any(not isinstance(value, str) or not value.strip() for value in values):
+            return None
+        identities.append(values)
+    if unique and len(set(identities)) != len(identities):
+        return None
+    return identities
+
+
+def correct_marker(prelude: str, part: dict, identity: str) -> bool:
+    """Match the local identity, classification, and every source symbol exactly."""
+    markers = comment_fields(prelude, "Provenance")
+    if markers != [f"{identity} | {part.get('origin')}"]:
+        return False
+    sources = source_identities(part.get("sources"), ("project", "path", "symbol"), unique=False)
+    if sources is None:
+        return False
+    # File Source headers before the marker are a separate namespace.
     comments: list[str] = []
     mask_rust(prelude, comments)
-    prelude = "\n".join(comments)
-    origin = part.get("origin")
-    if origin == "original":
-        return bool(re.search(r"^\s*// Original nazuchem code \(not in .+\)", prelude, re.M))
-    verb = {"port": "Ported", "copy": "Ported", "adapted": "Adapted", "mixed": "Adapted"}.get(
-        origin
+    marker_index = next(
+        index for index, comment in enumerate(comments) if comment.startswith("// Provenance:")
     )
-    if verb is None:
-        return False
-    for source in part.get("sources", []):
-        path = source.get("path")
-        if isinstance(path, str):
-            for marker in re.finditer(rf"^\s*// {verb} from (.+)$", prelude, re.M):
-                if re.search(rf"(?:^|,\s*){re.escape(path)}(?=::|[,\s]|$)", marker[1]):
-                    return True
-    return False
+    marker_sources = comment_fields("\n".join(comments[marker_index + 1 :]), "Source")
+    expected = {f"{project} | {path}::{symbol}" for project, path, symbol in sources}
+    return Counter(marker_sources) == Counter(expected)
+
+
+def ledger_entry_digest(entry: dict) -> str:
+    canonical = json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def check_rust(path: str, text: str, entry: dict) -> list[str]:
+    if frozen := FROZEN_PENDING.get(path):
+        errors = []
+        if hashlib.sha256(text.encode("utf-8")).hexdigest() != frozen[0]:
+            errors.append(f"{path}: frozen pending provenance source snapshot changed")
+        try:
+            digest = ledger_entry_digest(entry)
+        except (TypeError, ValueError):
+            digest = None
+        if digest != frozen[1]:
+            errors.append(f"{path}: frozen pending provenance ledger entry changed")
+        return errors
     errors = []
     code = mask_rust(text)
     first_code = re.search(r"\S", code)
     header = text[: first_code.start()] if first_code else text
     header_comments: list[str] = []
     mask_rust(header, header_comments)
-    header = "\n".join(header_comments)
-    identifiers = re.findall(r"^[ \t]*// SPDX-License-Identifier:[ \t]*(.*?)[ \t]*$", header, re.M)
+    # A first declaration's own marker may precede the first code token. Its
+    # Source symbols are not file-header Source triples.
+    marker = next(
+        (
+            index
+            for index, comment in enumerate(header_comments)
+            if comment.startswith("// Provenance:")
+        ),
+        len(header_comments),
+    )
+    header = "\n".join(header_comments[:marker])
+    identifiers = comment_fields(header, "SPDX-License-Identifier")
     if identifiers != [entry.get("license")]:
         errors.append(
             f"{path}: opening SPDX header must match ledger license {entry.get('license')!r}"
         )
-    if not re.search(r"^[ \t]*// Origin:[ \t]*\S.*$", header, re.M):
-        errors.append(f"{path}: missing opening // Origin: header")
+    if not isinstance(entry.get("origin"), str) or entry["origin"] not in ORIGINS:
+        errors.append(f"{path}: unsupported ledger origin {entry.get('origin')!r}")
+    if comment_fields(header, "Origin") != [entry.get("origin")]:
+        errors.append(
+            f"{path}: opening // Origin: header must match ledger origin {entry.get('origin')!r}"
+        )
+    sources = source_identities(entry.get("sources"), ("project", "path", "ref"))
+    if sources is None:
+        errors.append(f"{path}: file sources require unique nonempty project, path and ref fields")
+    else:
+        expected = [" | ".join(source) for source in sources]
+        if Counter(comment_fields(header, "Source")) != Counter(expected):
+            errors.append(
+                f"{path}: opening // Source: headers must match every ledger project, path and ref"
+            )
     if entry.get("origin") != "mixed":
         return errors
-    functions = rust_functions(text)
-    for part in entry.get("parts", []):
-        for item in part.get("items", []):
-            if not isinstance(item, str) or not item.startswith("fn "):
-                errors.append(f"{path}: unsupported mixed-file item {item!r}; expected 'fn name'")
+
+    try:
+        items = rust_items(text)
+    except ValueError as error:
+        errors.append(f"{path}: cannot verify complete Rust inventory: {error}")
+        return errors
+    by_identity: dict[str, list[RustItem]] = {}
+    for item in items:
+        by_identity.setdefault(item.identity, []).append(item)
+    assigned: dict[str, dict] = {}
+    parts = entry.get("parts")
+    if not isinstance(parts, list) or not parts:
+        errors.append(f"{path}: mixed file requires nonempty parts")
+        parts = []
+    for part in parts:
+        if not isinstance(part, dict):
+            errors.append(f"{path}: mixed-file part must be a table")
+            continue
+        if not isinstance(part.get("origin"), str) or part["origin"] not in ORIGINS - {"data"}:
+            errors.append(f"{path}: unsupported mixed-file part origin {part.get('origin')!r}")
+        part_sources = source_identities(part.get("sources"), ("project", "path", "ref", "symbol"))
+        part_file_sources = source_identities(
+            part.get("sources"), ("project", "path", "ref"), unique=False
+        )
+        if part_sources is None or part_file_sources is None:
+            errors.append(
+                f"{path}: part sources require unique nonempty project, path, ref and symbol fields"
+            )
+        elif sources is not None and not set(part_file_sources).issubset(sources):
+            errors.append(f"{path}: part sources must also occur in file sources")
+        part_items = part.get("items")
+        if not isinstance(part_items, list) or not part_items:
+            errors.append(f"{path}: mixed-file part requires nonempty items")
+            continue
+        for identity in part_items:
+            if not isinstance(identity, str) or not re.fullmatch(
+                r"(?:fn|mod|impl) \S(?:.*\S)?", identity
+            ):
+                errors.append(
+                    f"{path}: unsupported mixed-file item {identity!r}; expected 'fn/mod/impl qualified_name'"
+                )
                 continue
-            name = item.removeprefix("fn ")
-            matches = [
-                function
-                for function in functions
-                if function.qualified_name == name
-                or function.qualified_name.endswith("::" + name)
-                or ("::" not in name and function.name == name)
-            ]
+            if identity in assigned:
+                errors.append(f"{path}: duplicate mixed-file ledger item {identity!r}")
+                continue
+            assigned[identity] = part
+            matches = by_identity.get(identity, [])
             if not matches:
-                errors.append(f"{path}: ledger item {item!r} has no Rust function")
-            for function in matches:
-                if not correct_marker(function.prelude, part):
+                errors.append(
+                    f"{path}: ledger item {identity!r} has no Rust declaration with that exact identity"
+                )
+            for item in matches:
+                if not correct_marker(item.prelude, part, identity):
                     errors.append(
-                        f"{path}:{function.line}: {item} missing {part.get('origin')!r} "
-                        "provenance marker matching ledger sources"
+                        f"{path}:{item.line}: {identity} missing {part.get('origin')!r} "
+                        "provenance marker matching exact local identity and all ledger source symbols"
                     )
+    for item in items:
+        if item.identity in assigned:
+            continue
+        if comment_fields(item.prelude, "Provenance"):
+            errors.append(
+                f"{path}:{item.line}: {item.identity} provenance marker has no exact ledger item"
+            )
+        if item.kind != "fn":
+            continue
+        regions = [
+            items[index]
+            for index in reversed(item.ancestors)
+            if items[index].kind in {"mod", "impl"} and items[index].identity in assigned
+        ]
+        if not regions:
+            errors.append(
+                f"{path}:{item.line}: {item.identity} has no mixed-file provenance assignment"
+            )
     return errors
 
 

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/parent_selection.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
-//   ReShiki, src/naming/openclatura/parent_selection.rs @ 5f559fd482e237307a589dfcb7ea333cee0a6e13.
+// Origin: mixed
+// Source: openclatura | src/openclatura/parent_selection.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/component_namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Inherited parent scoring/candidate pipeline with original anion, ring-assembly and exchanged-arm stereochemical preference extensions.
@@ -32,16 +34,17 @@ pub struct ParentSelection {
     pub ring_assembly: Option<RingAssembly>,
 }
 
+// Provenance: impl ParentSelection | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSelection.primary_path
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSelection.atom_set
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSelection.requires_fixed_substituent_start
 impl ParentSelection {
-    // Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn ParentSelection::primary_path)
     pub fn primary_path(&self) -> &[usize] {
         self.paths.first().map(Vec::as_slice).unwrap_or(&[])
     }
-    // Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn ParentSelection::atom_set)
     pub fn atom_set(&self) -> AtomSet {
         self.primary_path().iter().copied().collect()
     }
-    // Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn ParentSelection::requires_fixed_substituent_start)
     pub fn requires_fixed_substituent_start(&self) -> bool {
         self.is_bicycle || self.is_spiro || self.is_polycycle || self.ring_assembly.is_some()
     }
@@ -76,7 +79,9 @@ struct ParentScore {
 }
 
 impl ParentScore {
-    // Original nazuchem code (not in openclatura 0.4.3): fn ParentScore::principal_preference
+    // Provenance: fn ParentScore::principal_preference | adapted
+    // Source: openclatura | src/openclatura/parent_selection.py::_prefer_spiro_backbone_components
+    // Source: openclatura | src/openclatura/parent_selection.py::ParentSeniorityProfile.criterion_value
     fn principal_preference(&self) -> (i64, i64, i64, [i64; 19], i64, i64) {
         (
             self.anionic_centres,
@@ -97,7 +102,8 @@ struct ParentGroups<'a> {
 
 /// P-72.7(a): skeletal anions and anionic suffixes each contribute their
 /// negatively charged atoms once, even when perceived groups overlap.
-// Original nazuchem code (not in openclatura 0.4.3): fn anionic_centres
+// Provenance: fn anionic_centres | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::anionic_centres
 fn anionic_centres(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) -> AtomSet {
     parent
         .iter()
@@ -119,12 +125,14 @@ fn anionic_centres(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) 
 }
 
 #[cfg(test)]
-// Original nazuchem code (not in openclatura 0.4.3): fn anionic_centre_count
+// Provenance: fn anionic_centre_count | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::anionic_centre_count
 fn anionic_centre_count(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) -> usize {
     anionic_centres(mol, parent, groups).len()
 }
 
-// Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn score)
+// Provenance: fn score | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::ParentCandidate.build
 fn score(
     mol: &Molecule,
     path: &[usize],
@@ -285,7 +293,8 @@ fn score(
     }
 }
 
-// Adapted from src/openclatura/parent_selection.py::select_principal_parent (adapted; local fn select_principal_parent)
+// Provenance: fn select_principal_parent | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::select_principal_parent
 pub fn select_principal_parent(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -324,7 +333,8 @@ struct ArmTree {
     branches: Vec<(usize, bool, ArmTree)>,
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn arm_tree
+// Provenance: fn arm_tree | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::arm_tree
 fn arm_tree(
     mol: &Molecule,
     atom: usize,
@@ -376,7 +386,8 @@ fn arm_tree(
 
 /// Bounded P-44.4.1.12.2: one R/S centre in otherwise identical exchanged
 /// terminal arms. This does not implement like/unlike pairs or E/Z seniority.
-// Original nazuchem code (not in openclatura 0.4.3): fn prefer_single_centre_exchanged_arms
+// Provenance: fn prefer_single_centre_exchanged_arms | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::prefer_single_centre_exchanged_arms
 fn prefer_single_centre_exchanged_arms(
     mol: &Molecule,
     candidates: &mut [(ParentScore, ParentSelection)],
@@ -528,7 +539,10 @@ fn prefer_single_centre_exchanged_arms(
 
 /// Compare the cited anion with actual competing parents, using the same
 /// P-72.7 score as selection. Atom-order tie-breaks cannot certify a PIN.
-// Original nazuchem code (not in openclatura 0.4.3): fn anion_parent_is_senior
+// Provenance: fn anion_parent_is_senior | adapted
+// Source: openclatura | src/openclatura/component_namer.py::name_component
+// Source: openclatura | src/openclatura/component_namer.py::select_component_parent
+// Source: openclatura | src/openclatura/parent_selection.py::select_principal_parent
 pub(super) fn anion_parent_is_senior(
     mol: &Molecule,
     parent: &AtomSet,
@@ -585,7 +599,8 @@ pub(super) fn anion_parent_is_senior(
     })
 }
 
-// Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn select_principal_parent_with_excluded)
+// Provenance: fn select_principal_parent_with_excluded | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::select_principal_parent
 pub fn select_principal_parent_with_excluded(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -610,7 +625,9 @@ pub fn select_principal_parent_with_excluded(
 
 /// P-15.3 / P-51.3.1: multiplicative units must tie on parent seniority,
 /// before substituent counts, locants and citation order select one parent.
-// Original nazuchem code (not in openclatura 0.4.3): fn senior_parent_candidates
+// Provenance: fn senior_parent_candidates | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::select_principal_parent
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSeniorityProfile.score_tuple
 pub(super) fn senior_parent_candidates(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -640,7 +657,8 @@ pub(super) fn senior_parent_candidates(
         .collect()
 }
 
-// Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn parent_candidates)
+// Provenance: fn parent_candidates | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::inline in select_principal_parent
 fn parent_candidates(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -800,7 +818,9 @@ fn parent_candidates(
     candidates
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn prefer_assembly_substituent_citation
+// Provenance: fn prefer_assembly_substituent_citation | adapted
+// Source: openclatura | src/openclatura/numbering.py::choose_parent_numbering
+// Source: openclatura | src/openclatura/numbering.py::_substituent_citation_locants
 fn prefer_assembly_substituent_citation(
     candidates: &mut [(ParentScore, ParentSelection)],
     mol: &Molecule,
@@ -886,7 +906,8 @@ fn prefer_assembly_substituent_citation(
     }
 }
 
-// Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn ring_kind)
+// Provenance: fn ring_kind | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::module scope (mapping uncertain)
 fn ring_kind(system: &RingSystem) -> usize {
     // P-44.2.2.2: spiro, cyclic phane, fused, bridged fused,
     // nonfused bridged, linear phane, assembly.
@@ -909,7 +930,9 @@ fn ring_kind(system: &RingSystem) -> usize {
     }
 }
 
-// Original nazuchem code (not in openclatura 0.4.3): fn prefer_ring_or_chain_class
+// Provenance: fn prefer_ring_or_chain_class | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::ELEMENT_SENIORITY
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSeniorityProfile.criterion_value
 fn prefer_ring_or_chain_class(
     candidates: &mut Vec<(ParentScore, ParentSelection)>,
     mol: &Molecule,
@@ -952,7 +975,8 @@ fn prefer_ring_or_chain_class(
     }
 }
 
-// Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn ring_count_for_system)
+// Provenance: fn ring_count_for_system | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::_ring_count_for_system
 fn ring_count_for_system(mol: &Molecule, system: &RingSystem) -> usize {
     if system.is_polycycle {
         let edges = system
@@ -975,7 +999,8 @@ fn ring_count_for_system(mol: &Molecule, system: &RingSystem) -> usize {
 
 /// Spiro-connected components compete for the shared backbone before their
 /// element seniority is compared. Principal-group coverage still comes first.
-// Adapted from src/openclatura/parent_selection.py (adapted; upstream function mapping not recorded; local fn prefer_spiro_backbone_components)
+// Provenance: fn prefer_spiro_backbone_components | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::_prefer_spiro_backbone_components
 fn prefer_spiro_backbone_components(
     candidates: &mut Vec<(ParentScore, ParentSelection)>,
     systems: &[RingSystem],
@@ -1044,6 +1069,8 @@ fn prefer_spiro_backbone_components(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::tests
 mod tests {
     use super::super::{
         chains::{find_all_carbon_paths, find_ring_systems},
@@ -1051,7 +1078,6 @@ mod tests {
     };
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn chain_candidates
     fn chain_candidates(mol: &Molecule) -> Vec<(ParentScore, ParentSelection)> {
         parent_candidates(
             mol,
@@ -1064,7 +1090,6 @@ mod tests {
         )
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn exchanged_arm_choice_precedes_canonical_fallback_and_ignores_path_order
     #[test]
     fn exchanged_arm_choice_precedes_canonical_fallback_and_ignores_path_order() {
         let mol = read_smiles("C[C@H](F)C([C@H](F)C)CCCC", &Default::default()).unwrap();
@@ -1106,7 +1131,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn exchanged_arm_rule_requires_single_corresponding_opposite_centres
     #[test]
     fn exchanged_arm_rule_requires_single_corresponding_opposite_centres() {
         for smiles in [
@@ -1135,7 +1159,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn arm_constitution_proof_rejects_cycles
     #[test]
     fn arm_constitution_proof_rejects_cycles() {
         let mol = read_smiles("CC1CC1", &Default::default()).unwrap();
@@ -1153,7 +1176,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn isotope_labels_and_stripped_provenance_exclude_stereo_parent_choice
     #[test]
     fn isotope_labels_and_stripped_provenance_exclude_stereo_parent_choice() {
         for smiles in [
@@ -1172,7 +1194,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn earlier_parent_criteria_and_the_complete_tie_set_limit_stereo_choice
     #[test]
     fn earlier_parent_criteria_and_the_complete_tie_set_limit_stereo_choice() {
         let mol = read_smiles("C[C@H](F)C([C@H](F)C)CCCC", &Default::default()).unwrap();
@@ -1208,7 +1229,6 @@ mod tests {
         assert!(candidates.iter().all(|(s, _)| s.exchanged_arm_stereo == 0));
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn linked_skeletal_anions
     fn linked_skeletal_anions(symbol: &str, hydrogen_count: usize) -> Molecule {
         use super::super::molecule::{Atom, Bond};
 
@@ -1230,7 +1250,6 @@ mod tests {
         mol
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn uide_centres_precede_senior_anionic_elements
     #[test]
     fn uide_centres_precede_senior_anionic_elements() {
         // P-72.7(c): (2-phosphanidylethyl)arsanuide. Score the two
@@ -1255,7 +1274,6 @@ mod tests {
         assert!(arsanuide < phosphanide);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn senior_anionic_elements_precede_characteristic_suffixes
     #[test]
     fn senior_anionic_elements_precede_characteristic_suffixes() {
         // P-72.7(d): (2-silanidylethyl)phosphanide. Give the competing
@@ -1281,7 +1299,6 @@ mod tests {
         assert!(phosphanide < silanide);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn anionic_centres_precede_neutral_principal_groups
     #[test]
     fn anionic_centres_precede_neutral_principal_groups() {
         for smiles in [
@@ -1314,7 +1331,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn two_anionic_suffix_centres_precede_one_skeletal_anion
     #[test]
     fn two_anionic_suffix_centres_precede_one_skeletal_anion() {
         let mol = read_smiles("[O-]CC([O-])c1cc[n-]c1", &Default::default()).unwrap();
@@ -1332,7 +1348,6 @@ mod tests {
         assert_eq!(anionic_centre_count(&mol, &parent.atom_set(), &groups), 2);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn perceived_anionic_suffix_atoms_are_counted_once
     #[test]
     fn perceived_anionic_suffix_atoms_are_counted_once() {
         for smiles in [
@@ -1362,7 +1377,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre
     #[test]
     fn neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre() {
         let mol = read_smiles("CC#[N+][O-]", &Default::default()).unwrap();
@@ -1382,7 +1396,6 @@ mod tests {
         assert_eq!(anionic_centre_count(&mol, &parent, &groups), 0);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn skeletal_anion_precedes_a_neutral_nitrile_oxide_parent
     #[test]
     fn skeletal_anion_precedes_a_neutral_nitrile_oxide_parent() {
         let mol = read_smiles("[O-][N+]#CCCc1cc[n-]c1", &Default::default()).unwrap();
@@ -1406,7 +1419,6 @@ mod tests {
         assert_eq!(anionic_centre_count(&mol, &parent.atom_set(), &groups), 1);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn ring_precedes_a_longer_chain_without_principal_groups
     #[test]
     fn ring_precedes_a_longer_chain_without_principal_groups() {
         let mol = read_smiles("CCCCCCCC1CCCCC1", &Default::default()).unwrap();
@@ -1422,7 +1434,6 @@ mod tests {
         assert!(parent.is_ring);
         assert_eq!(parent.primary_path().len(), 6);
     }
-    // Original nazuchem code (not in openclatura 0.4.3): fn principal_group_coverage_precedes_ring_seniority
     #[test]
     fn principal_group_coverage_precedes_ring_seniority() {
         let mol = read_smiles("OCCCC1CCCCC1", &Default::default()).unwrap();
@@ -1439,7 +1450,6 @@ mod tests {
         assert!(parent.atom_set().contains(&1));
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn principal_group_coverage_precedes_branched_assembly_junctions
     #[test]
     fn principal_group_coverage_precedes_branched_assembly_junctions() {
         let mol = read_smiles(
@@ -1465,7 +1475,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn branched_assemblies_use_alphanumerical_prefix_citation_to_break_ties
     #[test]
     fn branched_assemblies_use_alphanumerical_prefix_citation_to_break_ties() {
         for smiles in [
@@ -1498,7 +1507,6 @@ mod tests {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn fused_parent_precedes_an_assembly_after_equal_ring_and_atom_totals
     #[test]
     fn fused_parent_precedes_an_assembly_after_equal_ring_and_atom_totals() {
         let mol =
@@ -1516,7 +1524,6 @@ mod tests {
         assert_eq!(parent.primary_path().len(), 12);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn assembly_seniority_uses_all_units_for_ring_and_atom_totals
     #[test]
     fn assembly_seniority_uses_all_units_for_ring_and_atom_totals() {
         for (smiles, rings, atoms) in [

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/fusion/model.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/fusion/model.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/mancude.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fusion/model.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura fused-graph/proof/citation types and methods, with a local standalone-benzo value/rendering extension.
@@ -24,6 +26,8 @@ pub struct FusionGraphAtom {
     pub saturated: bool,
 }
 impl FusionGraphAtom {
+    // Provenance: fn FusionGraphAtom::new | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionGraphAtom dataclass fields id/symbol/formal_charge/pi_capacity/forced_single/indicated_h_site/saturated
     pub(super) fn new(id: usize, symbol: impl Into<String>) -> Self {
         Self {
             id,
@@ -51,6 +55,9 @@ pub struct BondAssignment {
     pub orders: Vec<(Edge, usize)>,
 }
 impl BondAssignment {
+    // Provenance: fn BondAssignment::paired_atoms | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/fusion/mancude.py::inline in _external_pi_parent_delta
     pub(super) fn paired_atoms(&self) -> AtomSet {
         self.orders
             .iter()
@@ -68,6 +75,8 @@ pub struct ParentBondModel {
     pub required_double_bonds: EdgeSet,
 }
 impl ParentBondModel {
+    // Provenance: fn ParentBondModel::edges | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::inline in ParentBondModel.__post_init__
     pub(super) fn edges(&self) -> EdgeSet {
         self.required_single_bonds
             .iter()
@@ -76,6 +85,9 @@ impl ParentBondModel {
             .copied()
             .collect()
     }
+    // Provenance: fn ParentBondModel::pi_atoms | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
+    // Source: openclatura | src/openclatura/fusion/mancude.py::inline in _external_pi_parent_delta
     pub(super) fn pi_atoms(&self) -> BTreeSet<usize> {
         self.pi_eligible_edges
             .iter()
@@ -93,41 +105,57 @@ pub enum ComparisonKey {
     Tuple(Vec<ComparisonKey>),
 }
 impl Default for ComparisonKey {
+    // Provenance: fn <ComparisonKey as Default>::default | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn default() -> Self {
         Self::Tuple(Vec::new())
     }
 }
 impl From<i32> for ComparisonKey {
+    // Provenance: fn <ComparisonKey as From<i32>>::from | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: i32) -> Self {
         Self::Int(v as i64)
     }
 }
 impl From<i64> for ComparisonKey {
+    // Provenance: fn <ComparisonKey as From<i64>>::from | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: i64) -> Self {
         Self::Int(v)
     }
 }
 impl From<usize> for ComparisonKey {
+    // Provenance: fn <ComparisonKey as From<usize>>::from | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: usize) -> Self {
         Self::Int(v as i64)
     }
 }
 impl From<String> for ComparisonKey {
+    // Provenance: fn <ComparisonKey as From<String>>::from | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: String) -> Self {
         Self::Str(v)
     }
 }
 impl From<&str> for ComparisonKey {
+    // Provenance: fn <ComparisonKey as From<&str>>::from | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: &str) -> Self {
         Self::Str(v.into())
     }
 }
 impl From<Vec<i64>> for ComparisonKey {
+    // Provenance: fn <ComparisonKey as From<Vec<i64>>>::from | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     fn from(v: Vec<i64>) -> Self {
         Self::Tuple(v.into_iter().map(Self::Int).collect())
     }
 }
 impl ComparisonKey {
+    // Provenance: fn ComparisonKey::tuple | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
     pub(super) fn tuple(values: impl IntoIterator<Item = ComparisonKey>) -> Self {
         Self::Tuple(values.into_iter().collect())
     }
@@ -154,6 +182,8 @@ pub struct ComponentLocant {
     pub prime_depth: usize,
 }
 impl std::fmt::Display for ComponentLocant {
+    // Provenance: fn <ComponentLocant as std::fmt::Display>::fmt | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::ComponentLocant.render
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.text, "'".repeat(self.prime_depth))
     }
@@ -165,6 +195,8 @@ pub struct FusionSide {
     pub prime_depth: usize,
 }
 impl std::fmt::Display for FusionSide {
+    // Provenance: fn <FusionSide as std::fmt::Display>::fmt | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionSide.render
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.letter, "'".repeat(self.prime_depth))
     }
@@ -184,9 +216,15 @@ pub struct OrderedFusionInterface {
     pub ordered_input_bonds: Vec<usize>,
 }
 impl OrderedFusionInterface {
+    // Provenance: fn OrderedFusionInterface::shared_input_atoms | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::OrderedFusionInterface.shared_input_atoms
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.shared_input_atoms
     pub(super) fn shared_input_atoms(&self) -> BTreeSet<usize> {
         self.ordered_input_atoms.iter().copied().collect()
     }
+    // Provenance: fn OrderedFusionInterface::shared_input_bonds | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::OrderedFusionInterface.shared_input_bonds
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.shared_input_bonds
     pub(super) fn shared_input_bonds(&self) -> BTreeSet<usize> {
         self.ordered_input_bonds.iter().copied().collect()
     }
@@ -203,8 +241,9 @@ pub struct BenzoParentName {
     pub heteroatom_locants: Vec<String>,
     pub stem: String,
 }
+// Provenance: impl BenzoParentName | original
+// Source: ReShiki | src/naming/openclatura/fusion/model.rs::BenzoParentName
 impl BenzoParentName {
-    // Original nazuchem code (not in openclatura 0.4.3): fn BenzoParentName::render
     pub(super) fn render(&self, lambda: &[super::valence::FusionLambdaDescriptor]) -> String {
         // P-25.6 inserts lambda into the P-25.2.2.4 heteroatom locant set.
         let locants = self
@@ -244,6 +283,12 @@ pub struct FusionComponentSpec {
     pub interior_atoms: Vec<String>,
     pub pin_component: bool,
 }
+// Provenance: impl FusionComponentSpec | adapted
+// Source: openclatura | src/openclatura/fusion/model.py::FusionComponentSpec.locants
+// Source: openclatura | src/openclatura/fusion/model.py::FusionComponentSpec.atoms
+// Source: openclatura | src/openclatura/fusion/model.py::FusionComponentSpec.bonds
+// Source: openclatura | src/openclatura/fusion/model.py::FusionComponentSpec.ring_sizes
+// Source: openclatura | src/openclatura/fusion/model.py::FusionComponentSpec.fusion_carbon_locants
 impl FusionComponentSpec {
     pub(super) fn locants(&self) -> &[String] {
         &self.template.locants
@@ -280,9 +325,13 @@ pub struct FusionComponentMatch {
     pub standalone_benzo_parent: bool,
 }
 impl FusionComponentMatch {
+    // Provenance: fn FusionComponentMatch::input_atom_by_locant | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionComponentMatch.input_atom_by_locant
     pub(super) fn input_atom_by_locant(&self) -> BTreeMap<String, usize> {
         self.local_to_input_atom.iter().cloned().collect()
     }
+    // Provenance: fn FusionComponentMatch::skeleton_atom_by_locant | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionComponentMatch.skeleton_atom_by_locant
     pub(super) fn skeleton_atom_by_locant(&self) -> BTreeMap<String, usize> {
         self.local_to_skeleton_atom.iter().cloned().collect()
     }
@@ -292,6 +341,15 @@ pub struct FusionJoin {
     pub order: usize,
     pub interface: OrderedFusionInterface,
 }
+// Provenance: impl FusionJoin | adapted
+// Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.attached_occurrence
+// Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.host_occurrence
+// Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.kind
+// Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.attached_locants
+// Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.host_sides
+// Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.host_locants
+// Source: openclatura | src/openclatura/fusion/model.py::OrderedFusionInterface.shared_input_atoms
+// Source: openclatura | src/openclatura/fusion/model.py::FusionJoin.shared_input_atoms
 impl FusionJoin {
     pub(super) fn attached_occurrence(&self) -> usize {
         self.interface.attached_occurrence
@@ -323,6 +381,8 @@ pub struct FusionDescriptor {
     pub kind: FusionJoinKind,
 }
 impl FusionDescriptor {
+    // Provenance: fn FusionDescriptor::from_interface | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionDescriptor.from_interface
     pub(super) fn from_interface(i: &OrderedFusionInterface) -> Self {
         Self {
             attached_locants: i.cited_attached_locants.clone(),
@@ -331,6 +391,10 @@ impl FusionDescriptor {
             kind: i.kind,
         }
     }
+    // Provenance: fn FusionDescriptor::render | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::ComponentLocant.render
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionSide.render
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionDescriptor.render
     pub(super) fn render(&self) -> String {
         let a = self
             .attached_locants
@@ -372,6 +436,10 @@ pub struct FusionCitationPlan {
     pub interparent_occurrences: Vec<usize>,
     pub render_order: Vec<usize>,
 }
+// Provenance: impl FusionCitationPlan | adapted
+// Source: openclatura | src/openclatura/fusion/model.py::FusionCitationPlan.parent_occurrences
+// Source: openclatura | src/openclatura/fusion/model.py::FusionCitationPlan.from_tree
+// Source: openclatura | src/openclatura/fusion/model.py::module scope (mapping uncertain)
 impl FusionCitationPlan {
     pub(super) fn parent_occurrences(&self) -> Vec<usize> {
         self.roots.iter().map(|r| r.occurrence_id).collect()
@@ -476,6 +544,8 @@ pub struct FusionNumberingProof {
     pub rejected_numberings: Vec<RejectedNumbering>,
 }
 impl FusionNumberingProof {
+    // Provenance: fn FusionNumberingProof::string_input_locant_maps | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionNumberingProof.string_input_locant_maps
     pub(in super::super) fn string_input_locant_maps(&self) -> Vec<BTreeMap<usize, String>> {
         self.input_locant_maps
             .iter()
@@ -490,6 +560,8 @@ pub struct FusionAuditResult {
     pub errors: Vec<String>,
 }
 impl FusionAuditResult {
+    // Provenance: fn FusionAuditResult::confirmed | adapted
+    // Source: openclatura | src/openclatura/fusion/model.py::FusionAuditResult.confirmed
     pub(in super::super) fn confirmed(&self) -> bool {
         self.status == AuditStatus::Confirmed
     }

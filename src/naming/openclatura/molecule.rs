@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
-// Origin: mixed; upstream-derived code with original nazuchem/ReShiki extensions.
-//   openclatura 0.4.3, src/openclatura/molecule.py @ 90dc5bcb4910c196122ec0405d06a32929a8f308.
+// Origin: mixed
+// Source: openclatura | src/openclatura/molecule.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/molecule.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/special_cases.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/charges.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/construction_order.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/canonical_ranks.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
 // Copyright (c) 2026 lamalab-org
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Openclatura graph model extended with local budget, status, alternatives and speculative rollback.
@@ -39,8 +46,9 @@ struct NamingBudget {
     isotope_parent: Cell<bool>,
 }
 
+// Provenance: impl <NamingBudget as Default> | original
+// Source: ReShiki | src/naming/openclatura/molecule.rs::<NamingBudget as Default>
 impl Default for NamingBudget {
-    // Original nazuchem code (not in openclatura 0.4.3): fn NamingBudget::default
     fn default() -> Self {
         Self {
             remaining: Cell::new(NAMING_WORK_LIMIT),
@@ -63,8 +71,9 @@ impl Default for NamingBudget {
 
 pub(super) struct NamingDepth<'a>(&'a NamingBudget);
 
+// Provenance: impl <NamingDepth<'_> as Drop> | original
+// Source: ReShiki | src/naming/openclatura/molecule.rs::<NamingDepth<'_> as Drop>
 impl Drop for NamingDepth<'_> {
-    // Original nazuchem code (not in openclatura 0.4.3): fn NamingDepth::drop
     fn drop(&mut self) {
         self.0.depth.set(self.0.depth.get() - 1);
     }
@@ -75,8 +84,9 @@ pub(super) struct AcidPrefixScope<'a> {
     previous: bool,
 }
 
+// Provenance: impl <AcidPrefixScope<'_> as Drop> | original
+// Source: ReShiki | src/naming/openclatura/molecule.rs::<AcidPrefixScope<'_> as Drop>
 impl Drop for AcidPrefixScope<'_> {
-    // Original nazuchem code (not in openclatura 0.4.3): fn AcidPrefixScope::drop
     fn drop(&mut self) {
         self.active.set(self.previous);
     }
@@ -96,8 +106,14 @@ pub struct Atom {
     pub radical_electrons: usize,
 }
 
+// Provenance: impl Atom | adapted
+// Source: openclatura | src/openclatura/molecule.py::Atom dataclass fields idx/symbol/charge/isotope/stereo/is_aromatic/total_h_count
+// Source: openclatura | src/openclatura/molecule.py::Atom.is_carbon
+// Source: openclatura | src/openclatura/special_cases.py::phosphane_borane_zwitterion_result
+// Source: openclatura | src/openclatura/special_cases.py::sulfonium_ylide_name
+// Source: openclatura | src/openclatura/special_cases.py::oxoacid_ester_result
+// Source: openclatura | src/openclatura/molecule.py::Atom.element
 impl Atom {
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Atom::new)
     pub fn new(idx: usize, symbol: impl Into<String>) -> Self {
         Self {
             idx,
@@ -106,17 +122,14 @@ impl Atom {
         }
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Atom::is_carbon)
     pub fn is_carbon(&self) -> bool {
         self.symbol == "C"
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Atom::has_stereo
     pub fn has_stereo(&self) -> bool {
         self.stereo.is_some() || self.raw_stereo.is_some()
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Atom::element)
     pub fn element(&self) -> Option<&'static super::rules::elements::Element> {
         super::rules::elements::get(&self.symbol)
     }
@@ -134,7 +147,8 @@ pub struct Bond {
 }
 
 impl Bond {
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Bond::new)
+    // Provenance: fn Bond::new | adapted
+    // Source: openclatura | src/openclatura/molecule.py::Bond dataclass fields idx/u/v/order/stereo/in_small_ring
     pub fn new(idx: usize, u: usize, v: usize, order: usize) -> Self {
         Self {
             idx,
@@ -177,7 +191,9 @@ pub struct Molecule {
 }
 
 impl Clone for Molecule {
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::clone
+    // Provenance: fn <Molecule as Clone>::clone | adapted
+    // Source: openclatura | src/openclatura/fusion/charges.py::fusion_component_charge_parent
+    // Source: openclatura | src/openclatura/molecule.py::Molecule.subgraph
     fn clone(&self) -> Self {
         Self {
             atoms: self.atoms.clone(),
@@ -198,15 +214,30 @@ impl Clone for Molecule {
     }
 }
 
+// Provenance: impl Molecule | adapted
+// Source: openclatura | src/openclatura/molecule.py::Molecule.__init__
+// Source: openclatura | src/openclatura/locant_elision.py::_SearchBudget.consume
+// Source: openclatura | src/openclatura/fusion/construction_order.py::ordered_hexagonal_construction
+// Source: openclatura | src/openclatura/molecule.py::Molecule.add_atom
+// Source: openclatura | src/openclatura/molecule.py::Molecule.add_bond
+// Source: openclatura | src/openclatura/molecule.py::Molecule.get_neighbors
+// Source: openclatura | src/openclatura/molecule.py::Molecule.get_bond
+// Source: openclatura | src/openclatura/heteroatom_subgraphs.py::upstream_bond_order
+// Source: openclatura | src/openclatura/canonical_ranks.py::_initial_invariant
+// Source: openclatura | src/openclatura/special_cases.py::_lambda_text
+// Source: openclatura | src/openclatura/molecule.py::Molecule.degree
+// Source: openclatura | src/openclatura/molecule.py::Molecule.set_atom_charge
+// Source: openclatura | src/openclatura/molecule.py::Molecule.set_bond_order
+// Source: openclatura | src/openclatura/molecule.py::Molecule.subgraph
 impl Molecule {
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::new)
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Keep acid prefixes through carbon and heteroatom branch recursion,
     /// restoring the enclosing component's naming mode when the branch ends.
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::enter_acid_prefix_scope
+    // Provenance: fn Molecule::enter_acid_prefix_scope | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::enter_acid_prefix_scope
     pub(super) fn enter_acid_prefix_scope(&self) -> AcidPrefixScope<'_> {
         AcidPrefixScope {
             active: &self.naming_budget.acid_prefix_mode,
@@ -214,63 +245,74 @@ impl Molecule {
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::uses_acid_prefixes
+    // Provenance: fn Molecule::uses_acid_prefixes | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::uses_acid_prefixes
     pub(super) fn uses_acid_prefixes(&self) -> bool {
         self.naming_budget.acid_prefix_mode.get()
     }
 
     /// The isotope adapter names the stripped parent and needs a proven atom
     /// locant map, which only ordinary parent plans provide.
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::mark_isotope_parent
+    // Provenance: fn Molecule::mark_isotope_parent | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::mark_isotope_parent
     pub(super) fn mark_isotope_parent(&self) {
         self.naming_budget.isotope_parent.set(true);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::is_isotope_parent
+    // Provenance: fn Molecule::is_isotope_parent | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::is_isotope_parent
     pub(super) fn is_isotope_parent(&self) -> bool {
         self.naming_budget.isotope_parent.get()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::mark_name
+    // Provenance: fn Molecule::mark_name | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::mark_name
     pub(super) fn mark_name(&self, status: NameStatus) {
         if status.severity() > self.name_status().severity() {
             self.set_name_status(status);
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::certify
+    // Provenance: fn Molecule::certify | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::certify
     pub(super) fn certify(&self) {
         if self.name_status() == NameStatus::Unverified(NameReason::UnauditedPath) {
             self.set_name_status(NameStatus::Preferred);
         }
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::mark_relative_ring_alternative
+    // Provenance: fn Molecule::mark_relative_ring_alternative | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::mark_relative_ring_alternative
     pub(super) fn mark_relative_ring_alternative(&self) {
         self.naming_budget.relative_ring_alternative.set(true);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::has_relative_ring_alternative
+    // Provenance: fn Molecule::has_relative_ring_alternative | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::has_relative_ring_alternative
     pub(super) fn has_relative_ring_alternative(&self) -> bool {
         self.naming_budget.relative_ring_alternative.get()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::use_relative_ring_names
+    // Provenance: fn Molecule::use_relative_ring_names | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::use_relative_ring_names
     pub(super) fn use_relative_ring_names(&self) -> bool {
         self.naming_budget.relative_ring_names.get()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::set_relative_ring_names
+    // Provenance: fn Molecule::set_relative_ring_names | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::set_relative_ring_names
     pub(super) fn set_relative_ring_names(&self, enabled: bool) {
         self.naming_budget.relative_ring_names.set(enabled);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::mark_endo_exo_alternative
+    // Provenance: fn Molecule::mark_endo_exo_alternative | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::mark_endo_exo_alternative
     pub(super) fn mark_endo_exo_alternative(&self, cage: &AtomSet) {
         *self.naming_budget.endo_exo_alternative.borrow_mut() = Some(cage.clone());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::has_endo_exo_alternative
+    // Provenance: fn Molecule::has_endo_exo_alternative | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::has_endo_exo_alternative
     pub(super) fn has_endo_exo_alternative(&self) -> bool {
         // Fragment naming shares this budget. Check against the complete
         // source graph here, so an acid-side fragment cannot hide stereo on
@@ -286,57 +328,68 @@ impl Molecule {
             })
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::use_endo_exo_names
+    // Provenance: fn Molecule::use_endo_exo_names | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::use_endo_exo_names
     pub(super) fn use_endo_exo_names(&self) -> bool {
         self.naming_budget.endo_exo_names.get()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::set_endo_exo_names
+    // Provenance: fn Molecule::set_endo_exo_names | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::set_endo_exo_names
     pub(super) fn set_endo_exo_names(&self, enabled: bool) {
         self.naming_budget.endo_exo_names.set(enabled);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::mark_higher_order_fusion_alternative
+    // Provenance: fn Molecule::mark_higher_order_fusion_alternative | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::mark_higher_order_fusion_alternative
     pub(super) fn mark_higher_order_fusion_alternative(&self) {
         self.naming_budget.higher_order_fusion_alternative.set(true);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::has_higher_order_fusion_alternative
+    // Provenance: fn Molecule::has_higher_order_fusion_alternative | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::has_higher_order_fusion_alternative
     pub(super) fn has_higher_order_fusion_alternative(&self) -> bool {
         self.naming_budget.higher_order_fusion_alternative.get()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::mark_benzo_fusion_alternative
+    // Provenance: fn Molecule::mark_benzo_fusion_alternative | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::mark_benzo_fusion_alternative
     pub(super) fn mark_benzo_fusion_alternative(&self) {
         self.naming_budget.benzo_fusion_alternative.set(true);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::has_benzo_fusion_alternative
+    // Provenance: fn Molecule::has_benzo_fusion_alternative | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::has_benzo_fusion_alternative
     pub(super) fn has_benzo_fusion_alternative(&self) -> bool {
         self.naming_budget.benzo_fusion_alternative.get()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::use_benzoheterocycle_names
+    // Provenance: fn Molecule::use_benzoheterocycle_names | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::use_benzoheterocycle_names
     pub(super) fn use_benzoheterocycle_names(&self) -> bool {
         self.naming_budget.benzoheterocycle_names.get()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::set_benzoheterocycle_names
+    // Provenance: fn Molecule::set_benzoheterocycle_names | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::set_benzoheterocycle_names
     pub(super) fn set_benzoheterocycle_names(&self, enabled: bool) {
         self.naming_budget.benzoheterocycle_names.set(enabled);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::name_status
+    // Provenance: fn Molecule::name_status | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::name_status
     pub(super) fn name_status(&self) -> NameStatus {
         self.naming_budget.status.get()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::record_unknown_unit
+    // Provenance: fn Molecule::record_unknown_unit | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::record_unknown_unit
     pub(super) fn record_unknown_unit(&self, locant: String) {
         self.naming_budget.unknown_units.borrow_mut().insert(locant);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::unknown_units
+    // Provenance: fn Molecule::unknown_units | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::unknown_units
     pub(super) fn unknown_units(&self) -> Vec<String> {
         self.naming_budget
             .unknown_units
@@ -346,7 +399,8 @@ impl Molecule {
             .collect()
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::record_ring_assembly
+    // Provenance: fn Molecule::record_ring_assembly | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::record_ring_assembly
     pub(super) fn record_ring_assembly(&self, junctions: &AtomSet) {
         self.naming_budget
             .ring_assembly_junctions
@@ -354,7 +408,8 @@ impl Molecule {
             .extend(junctions);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::ring_assembly_is_named
+    // Provenance: fn Molecule::ring_assembly_is_named | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::ring_assembly_is_named
     pub(super) fn ring_assembly_is_named(&self, junction: usize) -> bool {
         self.naming_budget
             .ring_assembly_junctions
@@ -362,14 +417,16 @@ impl Molecule {
             .contains(&junction)
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::set_name_status
+    // Provenance: fn Molecule::set_name_status | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::set_name_status
     pub(super) fn set_name_status(&self, status: NameStatus) {
         self.naming_budget.status.set(status);
     }
 
     /// Runs a naming attempt whose `None` or error the caller discards, so
     /// only an attempt that names something keeps its status marks.
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::candidate
+    // Provenance: fn Molecule::candidate | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::candidate
     pub(super) fn candidate<T>(
         &self,
         name: impl FnOnce() -> Result<Option<T>, String>,
@@ -400,7 +457,6 @@ impl Molecule {
         result
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::spend_naming_work
     pub(super) fn spend_naming_work(&self, amount: usize) -> Result<(), String> {
         let remaining = self.naming_budget.remaining.get().saturating_sub(amount);
         self.naming_budget.remaining.set(remaining);
@@ -410,7 +466,8 @@ impl Molecule {
         Ok(())
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::enter_naming
+    // Provenance: fn Molecule::enter_naming | original
+    // Source: ReShiki | src/naming/openclatura/molecule.rs::Molecule::enter_naming
     pub(super) fn enter_naming(&self) -> Result<NamingDepth<'_>, String> {
         if self.naming_budget.depth.get() >= 16 {
             self.naming_budget.remaining.set(0);
@@ -423,7 +480,6 @@ impl Molecule {
         Ok(NamingDepth(&self.naming_budget))
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::add_atom)
     pub fn add_atom(&mut self, atom: Atom) -> Result<(), String> {
         if !super::rules::elements::is_known(&atom.symbol) {
             return Err(format!("Unknown element symbol: {}", atom.symbol));
@@ -438,7 +494,6 @@ impl Molecule {
         Ok(())
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::add_bond)
     pub fn add_bond(&mut self, bond: Bond) -> Result<(), String> {
         if !self.atoms.contains_key(&bond.u) || !self.atoms.contains_key(&bond.v) {
             return Err("Both atoms must exist".into());
@@ -468,29 +523,24 @@ impl Molecule {
         Ok(())
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::get_neighbors)
     pub fn get_neighbors(&self, atom_idx: usize) -> &[usize] {
         self.adjacency.get(&atom_idx).map_or(&[], Vec::as_slice)
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::get_bond)
     pub fn get_bond(&self, u: usize, v: usize) -> Option<&Bond> {
         self.bond_lookup
             .get(&normalize_edge(u, v))
             .and_then(|id| self.bonds.get(id))
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn Molecule::bond_order
     pub fn bond_order(&self, u: usize, v: usize) -> usize {
         self.get_bond(u, v).map_or(0, |bond| bond.order)
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::degree)
     pub fn degree(&self, atom_idx: usize) -> usize {
         self.get_neighbors(atom_idx).len()
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::set_atom_charge)
     pub fn set_atom_charge(&mut self, atom_idx: usize, charge: i32) -> Result<(), String> {
         self.atoms
             .get_mut(&atom_idx)
@@ -501,7 +551,6 @@ impl Molecule {
         Ok(())
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::set_bond_order)
     pub fn set_bond_order(&mut self, bond_idx: usize, order: usize) -> Result<(), String> {
         self.bonds
             .get_mut(&bond_idx)
@@ -512,12 +561,10 @@ impl Molecule {
         Ok(())
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::subgraph)
     pub fn subgraph(&self, atom_ids: &AtomSet) -> Self {
         self.subgraph_with_symbols(atom_ids, &BTreeMap::new())
     }
 
-    // Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn Molecule::subgraph_with_symbols)
     pub fn subgraph_with_symbols(
         &self,
         atom_ids: &AtomSet,
@@ -592,7 +639,8 @@ impl Molecule {
     }
 }
 
-// Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn bond_ids_within)
+// Provenance: fn bond_ids_within | adapted
+// Source: openclatura | src/openclatura/molecule.py::bond_ids_within
 pub fn bond_ids_within(mol: &Molecule, atom_ids: &AtomSet) -> BTreeSet<usize> {
     mol.bonds
         .values()
@@ -601,7 +649,8 @@ pub fn bond_ids_within(mol: &Molecule, atom_ids: &AtomSet) -> BTreeSet<usize> {
         .collect()
 }
 
-// Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn component_atoms_until_blocked)
+// Provenance: fn component_atoms_until_blocked | adapted
+// Source: openclatura | src/openclatura/molecule.py::component_atoms_until_blocked
 pub fn component_atoms_until_blocked(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -628,7 +677,8 @@ pub fn component_atoms_until_blocked(
     atoms
 }
 
-// Adapted from src/openclatura/molecule.py (adapted; upstream function mapping not recorded; local fn charged_atoms)
+// Provenance: fn charged_atoms | adapted
+// Source: openclatura | src/openclatura/molecule.py::charged_atoms
 pub fn charged_atoms(mol: &Molecule, atom_ids: &AtomSet) -> AtomSet {
     atom_ids
         .iter()
@@ -638,10 +688,11 @@ pub fn charged_atoms(mol: &Molecule, atom_ids: &AtomSet) -> AtomSet {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/molecule.rs::tests
 mod tests {
     use super::*;
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn name_status_is_shared_and_keeps_the_first_strongest_reason
     #[test]
     fn name_status_is_shared_and_keeps_the_first_strongest_reason() {
         let mol = super::super::graph_io::read_smiles("CCO", &Default::default()).unwrap();
@@ -681,7 +732,6 @@ mod tests {
         assert_eq!(mol.name_status(), NameStatus::Preferred);
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn discarded_candidates_restore_stereo_alternatives
     #[test]
     fn discarded_candidates_restore_stereo_alternatives() {
         let mol = super::super::graph_io::read_smiles("CCO", &Default::default()).unwrap();
@@ -697,7 +747,6 @@ mod tests {
         assert!(!mol.has_endo_exo_alternative());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn fusion_plans_do_not_survive_detached_or_chemically_changed_graphs
     #[test]
     fn fusion_plans_do_not_survive_detached_or_chemically_changed_graphs() {
         let mut mol = Molecule::new();
@@ -717,7 +766,6 @@ mod tests {
         assert!(mol.fusion_plan_cache.borrow().is_empty());
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn insertion_order_identity_and_induced_subgraph
     #[test]
     fn insertion_order_identity_and_induced_subgraph() {
         let mut mol = Molecule::new();
@@ -758,7 +806,6 @@ mod tests {
         );
     }
 
-    // Original nazuchem code (not in openclatura 0.4.3): fn extracted_acid_fragments_preserve_stereo_locant_omission
     #[test]
     fn extracted_acid_fragments_preserve_stereo_locant_omission() {
         for (smiles, expected) in [
