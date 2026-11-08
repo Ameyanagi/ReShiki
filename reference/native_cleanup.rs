@@ -1,5 +1,7 @@
 //! Complete original-worker cleanup responses with the actual Rust solver.
 //! Captured layouts are observations only and never become implementation input.
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     chemistry::{cleanup, inchi::generator},
@@ -202,6 +204,7 @@ async fn isolated(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<(
 
 #[tokio::test]
 async fn complete_responses_use_actual_solver_without_python() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(helper) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
@@ -241,6 +244,7 @@ fn carbon(scope: Scope) -> Case {
 }
 #[tokio::test]
 async fn helper_failures_and_cancellation_remain_errors_in_every_scope() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let Some(stub) = helper("inchi-helper-stub")? else {
         return Ok(());
     };
@@ -274,6 +278,7 @@ async fn helper_failures_and_cancellation_remain_errors_in_every_scope() -> anyh
 #[tokio::test(flavor = "current_thread")]
 #[ignore = "Invoked by isolated cleanup subprocess tests"]
 async fn cleanup_child() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let mode = std::env::var("RESHIKI_CLEANUP_MODE")?;
     let bytes =
         std::fs::read(std::env::var_os("RESHIKI_CLEANUP_FIXTURE").context("Missing fixture")?)?;
@@ -486,6 +491,7 @@ async fn cancel(request: Arc<Request>) -> anyhow::Result<()> {
 
 #[test]
 fn component_callback_order_and_failures_are_atomic() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     #[derive(Debug, thiserror::Error)]
     enum Failure {
         #[error(transparent)]
@@ -526,6 +532,7 @@ fn component_callback_order_and_failures_are_atomic() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn rejected_requests_preserve_the_source_and_skip_analysis() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let mut request = carbon(Scope::Drawing).request();
     request.protocol = 0;
     anyhow::ensure!(matches!(

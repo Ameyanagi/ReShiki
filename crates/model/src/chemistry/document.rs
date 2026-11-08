@@ -23,6 +23,21 @@ pub use output::{for_import_scene, for_import_with_attachments, kekule, validate
 /// Drawing world units per depiction (RDKit coordinate) unit.
 pub const WORLD_PER_DEPICT_UNIT: f64 = 28.0;
 
+/// Set by live RDKit comparisons (#1037): new layouts and wedges stop at the
+/// RDKit-parity result, before ReShiki's own refinements, which have their
+/// own tests. Reference builds only.
+#[cfg(feature = "rdkit-reference")]
+pub static RDKIT_PARITY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether ReShiki refines new layouts and wedges after the RDKit-parity result.
+pub fn refine() -> bool {
+    #[cfg(feature = "rdkit-reference")]
+    if RDKIT_PARITY.load(std::sync::atomic::Ordering::Relaxed) {
+        return false;
+    }
+    true
+}
+
 #[cfg(test)]
 pub(crate) mod allene_tests;
 #[cfg(test)]

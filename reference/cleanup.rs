@@ -1,4 +1,6 @@
 //! Full original cleanup responses, using only independently captured layouts.
+#[path = "support/rdkit_parity.rs"]
+mod rdkit_parity;
 use anyhow::Context;
 use reshiki::{
     chemistry::{cleanup, stereo::Point3},
@@ -83,6 +85,7 @@ fn compare(actual: Response, expected: Response) -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn complete_cleanup_matches_original_worker_and_captured_layouts() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let helper = root.join("artifacts/inchi-helper").join(if cfg!(windows) {
         "reshiki-inchi-helper.exe"
@@ -261,6 +264,7 @@ async fn complete_cleanup_matches_original_worker_and_captured_layouts() -> anyh
 
 #[tokio::test]
 async fn malformed_layouts_fixed_atoms_and_helper_failures_are_atomic() -> anyhow::Result<()> {
+    rdkit_parity::enable();
     use reshiki::{cleanup::Scope, document::Point};
     let mut document = Document::default();
     let a = document.add_atom("C", Point::new(0., 0.));

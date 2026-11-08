@@ -1,3 +1,5 @@
+#[path = "support/axial_extension.rs"]
+mod axial_extension;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, document::Labels, molfile},
@@ -243,6 +245,23 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
                     None
                 }
                 (Err(error), Some(_)) => Some(format!("Rejected supported drawing: {error}")),
+                (Ok(drawing), None)
+                    if axial_extension::accepted(
+                        &case.name,
+                        case.failure.as_deref(),
+                        "mol",
+                        &case.text,
+                        axial_extension::Checked::State(&serde_json::to_value(
+                            &drawing.molecule().state,
+                        )?),
+                    ) =>
+                {
+                    drawing
+                        .labels()
+                        .and_then(|labels| drawing.finish(labels))
+                        .err()
+                        .map(|error| format!("Accepted axial drawing did not finish: {error}"))
+                }
                 (Ok(_), None) => Some(format!("Accepted invalid drawing: {:?}", case.failure)),
             }
         };

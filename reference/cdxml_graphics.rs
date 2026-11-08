@@ -1,3 +1,5 @@
+#[path = "support/empty_heads.rs"]
+mod empty_heads;
 use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reshiki::{
@@ -16,6 +18,8 @@ use std::{
     path::Path,
     process::{Command, Stdio},
 };
+
+const ARROWED: &str = "Arrowed, shaded or doubled CDXML curves are not supported yet";
 
 #[derive(Deserialize)]
 struct Pixels {
@@ -40,7 +44,53 @@ struct Case {
     images: bool,
     image_error: Option<String>,
     image_pixels: Vec<Pixels>,
+    unarrowed: Option<Value>,
 }
+/// #777: a curve's heads as the CDXML reader maps its source attributes
+/// (crates/io/src/chemistry/cdxml/arrows.rs), or `None` for an arrowhead
+/// that the reader must refuse.
+fn expected_heads(source: &Value) -> Option<Value> {
+    use reshiki::arrows::{Head, HeadShape};
+    let kind = |key: &str| match source[key].as_str() {
+        None | Some("None" | "Unspecified") => Some(Head::None),
+        Some("Full") => Some(Head::Full),
+        Some("HalfLeft") => Some(Head::Left),
+        Some("HalfRight") => Some(Head::Right),
+        Some(_) => None,
+    };
+    let shape = match source["ArrowheadType"].as_str() {
+        None | Some("Solid") => HeadShape::Solid,
+        Some("Hollow") => HeadShape::Hollow,
+        Some("Angle") => HeadShape::Open,
+        Some(_) => return None,
+    };
+    let number = |key: &str, default: f64| -> Option<f64> {
+        source[key]
+            .as_str()
+            .map_or(Some(default), |text| text.trim().parse().ok())
+    };
+    let length = number("HeadSize", 1000.)? / 100.;
+    let width = number("ArrowheadWidth", 250.)? / 100.;
+    let center = number("ArrowheadCenterSize", length * 100.)? / 100.;
+    Some(serde_json::json!({
+        "head": kind("ArrowheadHead")?, "tail": kind("ArrowheadTail")?, "shape": shape,
+        "head_length_pt": length, "head_width_pt": width, "head_notch": 1. - center / length,
+    }))
+}
+
+/// Kinds and shape exactly; sizes to the drawing's f32 precision.
+fn same_heads(actual: &Value, expected: &Value) -> bool {
+    ["head", "tail", "shape"]
+        .iter()
+        .all(|k| actual[*k] == expected[*k])
+        && ["head_length_pt", "head_width_pt", "head_notch"]
+            .iter()
+            .all(|k| match (actual[*k].as_f64(), expected[*k].as_f64()) {
+                (Some(a), Some(e)) => a == f64::from(e as f32),
+                _ => false,
+            })
+}
+
 fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
     match (actual, expected) {
         (Value::Number(a), Value::Number(b))
@@ -122,6 +172,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
     let header: Value = serde_json::from_str(&lines.next().context("Oracle header")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut converted, mut bounded, mut decoded) = (0, 0, 0, 0, 0);
+    let mut arrowed = 0;
     let mut failures = Vec::new();
     for line in lines {
         // Preserve exact worker transport: JSON -> Value(f64) -> typed Case.
@@ -145,12 +196,44 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             bounded += 1;
             continue;
         }
+        // #777: ReShiki reads an arrowed curve that the original worker
+        // refused. The same file without arrowheads gives the expected curve
+        // and bindings, and each curve's heads must match its source.
+        if let (Ok(actual), None, Some(unarrowed)) = (&actual, &case.expected, &case.unarrowed) {
+            let mut graphics = serde_json::to_value(&actual.graphics)?;
+            let mut heads = Vec::new();
+            for graphic in graphics.as_array_mut().into_iter().flatten() {
+                if let Some(h) = graphic.as_object_mut().and_then(|g| g.remove("heads")) {
+                    heads.push(h);
+                }
+            }
+            let source: Option<Vec<Value>> = unarrowed["heads"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(expected_heads)
+                .collect();
+            let source = source.unwrap_or_default();
+            if let Some(error) = difference(&graphics, &unarrowed["graphics"], "arrowed") {
+                failures.push(format!("{}: {error}", case.name));
+            } else if serde_json::to_value(&actual.bindings)? != unarrowed["bindings"] {
+                failures.push(format!("{}: arrowed curve bindings", case.name));
+            } else if heads.len() != source.len()
+                || heads.iter().zip(&source).any(|(a, e)| !same_heads(a, e))
+            {
+                failures.push(format!("{}: heads {heads:?} != {source:?}", case.name));
+            }
+            arrowed += 1;
+            continue;
+        }
         let actual = match (actual, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
-                if let Some(error) =
-                    difference(&serde_json::to_value(&actual.graphics)?, expected, "native")
-                {
+                if let Some(error) = difference(
+                    &empty_heads::without(serde_json::to_value(&actual.graphics)?),
+                    expected,
+                    "native",
+                ) {
                     failures.push(format!("{}: {error}", case.name));
                 }
                 assert_eq!(
@@ -162,6 +245,28 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
                 actual
             }
             (Err(actual), None) if Some(actual.to_string()) == case.error => {
+                rejected += 1;
+                continue;
+            }
+            // #777: arrowed curves are no longer refused. A curve that the
+            // original still refuses without its arrowheads keeps a narrower
+            // rejection, and so does an arrowhead the source cannot express.
+            (Err(actual), None)
+                if case.error.as_deref() == Some(ARROWED)
+                    && match actual.to_string().as_str() {
+                        "Shaded or doubled CDXML curves are not supported yet" => {
+                            case.unarrowed.is_none()
+                        }
+                        "Unsupported CDXML arrowhead" => case.unarrowed.as_ref().is_some_and(|u| {
+                            u["heads"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .any(|h| expected_heads(h).is_none())
+                        }),
+                        _ => false,
+                    } =>
+            {
                 rejected += 1;
                 continue;
             }
@@ -195,7 +300,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             (Ok(actual), Ok(expected)) => {
                 converted += 1;
                 if let Some(error) = difference(
-                    &serde_json::to_value(&actual)?,
+                    &empty_heads::without(serde_json::to_value(&actual)?),
                     &serde_json::to_value(expected)?,
                     "document",
                 ) {
@@ -248,16 +353,21 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
         failures.len(),
         failures
             .iter()
-            .take(25)
+            .take(60)
             .cloned()
             .collect::<Vec<_>>()
             .join("\n")
     );
     assert!(
-        accepted > 2000 && rejected > 800 && converted > 1500 && bounded > 100 && decoded >= 90
+        accepted > 2000
+            && rejected > 800
+            && converted > 1500
+            && bounded > 100
+            && decoded >= 90
+            && arrowed > 0
     );
     eprintln!(
-        "{accepted} native successes, {rejected} exact errors, {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
+        "{accepted} native successes, {rejected} exact errors, {arrowed} arrowed curves now accepted (#777), {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
     );
     Ok(())
 }

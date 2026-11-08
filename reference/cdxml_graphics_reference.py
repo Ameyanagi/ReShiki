@@ -75,6 +75,7 @@ def emit(
         expected, error, error_type = None, str(exc), type(exc).__name__
     assert ET.tostring(root, encoding="unicode") == before
     assert [objects[elements[i]] for i in claimed] == snapshot
+    unarrowed = arrowed_curves(root, scale, first_id, claimed, error)
     bindings = [
         [i, objects[el][0]] for i, el in enumerate(elements) if el in objects and i not in claimed
     ]
@@ -127,9 +128,49 @@ def emit(
                 images=images,
                 image_error=image_error,
                 image_pixels=image_pixels,
+                unarrowed=unarrowed,
             )
         )
     )
+
+
+ARROWHEADS = ("ArrowheadHead", "ArrowheadTail")
+HEAD_ATTRIBUTES = (
+    *ARROWHEADS,
+    "ArrowheadType",
+    "HeadSize",
+    "ArrowheadWidth",
+    "ArrowheadCenterSize",
+)
+
+
+def arrowed_curves(root, scale, first_id, claimed, error):
+    """#777: ReShiki reads an arrowed curve that the original worker refused.
+    The same file without arrowhead attributes gives the expected curve,
+    with its bindings; `heads` lists each curve's source arrowhead attributes."""
+    if error != "Arrowed, shaded or doubled CDXML curves are not supported yet":
+        return None
+    root = copy.deepcopy(root)
+    heads = []
+    for el in root.iter("curve"):
+        heads.append({k: el.get(k) for k in HEAD_ATTRIBUTES})
+        for k in ARROWHEADS:
+            el.attrib.pop(k, None)
+    elements = list(root.iter())
+    objects = {elements[i]: [1000 + i] for i in claimed}
+    try:
+        graphics = graphics_exchange.read_graphics(
+            root, scale, first_id, objects, local_pictures=True
+        )
+    except (ValueError, KeyError, OverflowError):
+        return None
+    bindings = [
+        [i, objects[el][0]] for i, el in enumerate(elements) if el in objects and i not in claimed
+    ]
+    bindings.sort(key=lambda pair: pair[1])
+    for graphic in graphics:
+        graphic["layer"] = str(graphic["layer"])
+    return dict(graphics=safe(graphics), bindings=bindings, heads=heads)
 
 
 def raster(fmt="PNG", subsampling=0):
