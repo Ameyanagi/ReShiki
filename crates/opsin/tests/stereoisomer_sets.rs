@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
+use nazuchem_kernel::smiles::stereoisomers;
 use opsin::{ParseOptions, Parser, Status};
-use reshiki_chemistry::smiles::stereoisomers;
 
 // These independent representatives were checked with RDKit CIP assignments
 // and conformers before being used as expectations.
@@ -22,7 +22,7 @@ fn check_relative_mirror(name: &str, actual: &BTreeSet<String>) -> Result<(), St
         return Ok(());
     }
     let first = actual.first().unwrap();
-    let mirror_pair = stereoisomers(&format!("{first} |r|")).unwrap();
+    let mirror_pair = stereoisomers(&format!("{first} |r|"), &Default::default()).unwrap();
     if actual != &mirror_pair {
         return Err(format!(
             "leading rel-/rac- requires one mirror pair: actual {actual:?}, mirror pair {mirror_pair:?}"
@@ -37,8 +37,8 @@ fn check(name: &str, intended: &str) -> Result<(), String> {
     let result = Parser::new().unwrap().parse(name, &ParseOptions::strict());
     assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
     let actual = result.structure.unwrap().semantic_cxsmiles().unwrap();
-    let actual_set = stereoisomers(&actual).unwrap();
-    let intended_set = stereoisomers(intended).unwrap();
+    let actual_set = stereoisomers(&actual, &Default::default()).unwrap();
+    let intended_set = stereoisomers(intended, &Default::default()).unwrap();
     if actual_set != intended_set {
         return Err(format!(
             "{actual}: actual {actual_set:?}, intended {intended_set:?}"
@@ -256,9 +256,13 @@ fn literal_cxsmiles_audit_rejects_split_or_lost_mirror_pairs() {
             2,
         ),
     ] {
-        let actual = stereoisomers(literal).unwrap();
+        let actual = stereoisomers(literal, &Default::default()).unwrap();
         assert_eq!(actual.len(), size, "{literal}");
-        assert_ne!(actual, stereoisomers(intended).unwrap(), "{literal}");
+        assert_ne!(
+            actual,
+            stereoisomers(intended, &Default::default()).unwrap(),
+            "{literal}"
+        );
         assert!(check_relative_mirror(name, &actual).is_err(), "{literal}");
     }
 }

@@ -131,7 +131,7 @@ pub fn add_parent_features(
             // heavy bonds do not imply the extra H of a ring [SH2] atom.
             // Upstream divergence: reject H requiring an unrendered lambda citation at ordinary valence.
             let implied_valence = elements::get(&atom.symbol)
-                .and_then(|e| reshiki_chemistry::ELEMENTS.get(e.atomic_number))
+                .and_then(|e| nazuchem_kernel::ELEMENTS.get(e.atomic_number))
                 .and_then(|e| {
                     e.valences
                         .iter()
@@ -349,7 +349,8 @@ mod tests {
 
     #[test]
     fn axial_descriptor_uses_parent_endpoint_and_is_emitted_once() {
-        let mol = read_smiles("Oc1cccc[c:900004]1-[c:900004]1ccccc1O").unwrap();
+        let mol =
+            read_smiles("Oc1cccc[c:900004]1-[c:900004]1ccccc1O", &Default::default()).unwrap();
         let axis = mol
             .bonds
             .values()
@@ -369,7 +370,7 @@ mod tests {
 
     #[test]
     fn omitting_attachment_bond_stereo_keeps_internal_descriptors() {
-        let mol = read_smiles("C/C=C/C=N/O").unwrap();
+        let mol = read_smiles("C/C=C/C=N/O", &Default::default()).unwrap();
         let attachment = mol.get_bond(3, 4).unwrap();
         let locants = BTreeMap::from([
             (3, "1".into()),
@@ -394,7 +395,7 @@ mod tests {
     #[test]
     fn skeletal_replacement_handoff_keeps_heteroatom_prefixes() {
         use super::super::ring_parent::RingParent;
-        let mol = read_smiles("O1CCCC1").unwrap();
+        let mol = read_smiles("O1CCCC1", &Default::default()).unwrap();
         let path: Vec<_> = mol.atoms.keys().copied().collect();
         let atoms: AtomSet = path.iter().copied().collect();
         let locants: BTreeMap<_, _> = path
@@ -431,7 +432,7 @@ mod tests {
         use super::super::{
             fusion::wrappers::plan_bridged_fusion_wrapper, ring_parent::RingParent,
         };
-        let mol = read_smiles("C12=CC=C(C3=CC=CC=C13)C=C2").unwrap();
+        let mol = read_smiles("C12=CC=C(C3=CC=CC=C13)C=C2", &Default::default()).unwrap();
         let atoms: AtomSet = mol.atoms.keys().copied().collect();
         let wrapper = plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().unwrap();
         let locants = wrapper.atom_to_locant();
@@ -468,12 +469,12 @@ mod tests {
     #[test]
     fn retained_sulfur_uses_the_ordinary_valence_implied_by_its_substituents() {
         assert_eq!(
-            super::super::name_smiles("Cl[SH]1C=c2ccccc2=C1")
+            super::super::name_smiles("Cl[SH]1C=c2ccccc2=C1", &Default::default())
                 .map(|name| name.text)
                 .as_deref(),
             Ok("2-chloro-2-benzothiophene")
         );
-        assert!(super::super::name_smiles("[SH2]1CCCC1").is_err());
+        assert!(super::super::name_smiles("[SH2]1CCCC1", &Default::default()).is_err());
     }
 
     #[test]
@@ -482,7 +483,7 @@ mod tests {
             ("S1CCCC1", "S", "thiolane"),
             ("N1CCCC1", "N", "pyrrolidine"),
         ] {
-            let mut mol = read_smiles(smiles).unwrap();
+            let mut mol = read_smiles(smiles, &Default::default()).unwrap();
             let atom = mol
                 .atoms
                 .values_mut()

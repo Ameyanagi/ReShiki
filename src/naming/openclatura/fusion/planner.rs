@@ -991,12 +991,13 @@ mod tests {
                 "telluropyrano[2'',3'':6',7']thiepino[4',5':4,5]furo[3,2-c]pyrazole",
             ),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let plan = plan_fusion_parent(&mol, &atoms).unwrap().unwrap();
             assert!(plan.audit.confirmed(), "{:?}", plan.audit);
             assert_eq!(plan.numbering.selected_layout.kind, LayoutKind::Intrinsic);
-            let name = crate::naming::openclatura::name_smiles(smiles).unwrap();
+            let name =
+                crate::naming::openclatura::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected);
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
             let parsed = opsin::Parser::new()
@@ -1021,7 +1022,7 @@ mod tests {
             "C1=CC2C[NH2+]CCC2CC1",
             "C1=CCC2CC[NH2+]CCC2CC1",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let error = plan_fusion_parent(&mol, &atoms).unwrap_err();
             assert!(error.contains("protonated"), "{smiles}: {error}");
@@ -1035,7 +1036,7 @@ mod tests {
             "ClC1=CC=CC2=CC=CC=CC2=C1",
             "c1cn2c3cc4ccnc-4c=3ccn2cn1",
         ] {
-            let mol = read_smiles(text).unwrap();
+            let mol = read_smiles(text, &Default::default()).unwrap();
             let atoms = mol
                 .atoms
                 .keys()
@@ -1048,7 +1049,7 @@ mod tests {
             );
         }
         for text in ["c1oc2ncccc2c1", "C1OCC2COCC12"] {
-            let mol = read_smiles(text).unwrap();
+            let mol = read_smiles(text, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             assert!(
                 plan_fusion_parent(&mol, &atoms).unwrap().is_some(),

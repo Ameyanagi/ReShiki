@@ -159,7 +159,19 @@ pub async fn from_name(name: &str) -> Result<(Vec<u8>, String), String> {
     if name.trim().is_empty() {
         return Err("Enter a chemical name first".into());
     }
-    let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+    let policy = reshiki_process_heap::policy::Capabilities::detect().resolve();
+    let budget = opsin::Budget::new(
+        policy.heap_bytes(),
+        policy.work_units(),
+        Some(policy.analysis_timeout()),
+        policy.reservation_ceiling(),
+        move |bytes| {
+            policy
+                .try_reserve(bytes)
+                .map(|guard| Box::new(guard) as Box<dyn Send + Sync>)
+        },
+    );
+    let parser = opsin::Parser::with_budget(budget).map_err(|error| error.to_string())?;
     let result = parser.parse(name, &opsin::ParseOptions::strict());
     let structure = result.structure.ok_or_else(|| {
         if result.message.is_empty() {

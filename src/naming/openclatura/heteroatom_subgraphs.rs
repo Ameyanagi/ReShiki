@@ -1819,7 +1819,7 @@ mod tests {
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
         ] {
-            let mol = read_smiles(smiles)?;
+            let mol = read_smiles(smiles, &Default::default())?;
             let exclude = (0..=upstream).collect();
             assert_eq!(
                 name_subgraph_with_upstream(&mol, start, &exclude, Some(upstream))?,
@@ -1828,7 +1828,8 @@ mod tests {
             );
             assert_eq!(mol.name_status(), status, "{smiles}");
         }
-        let name = crate::naming::openclatura::name_smiles("C[N+](C)(C)CC(=O)[O-]")?;
+        let name =
+            crate::naming::openclatura::name_smiles("C[N+](C)(C)CC(=O)[O-]", &Default::default())?;
         assert_eq!(name.text, "(trimethylammonio)acetate");
         assert_eq!(
             name.status,
@@ -1843,7 +1844,7 @@ mod tests {
             ("CCS(=O)(=O)Nc1ccccc1", 2, 1, "(phenylsulfamoyl)"),
             ("CCNC(=S)Nc1ccccc1", 2, 1, "(phenylcarbamothioylamino)"),
         ] {
-            let mol = read_smiles(smiles)?;
+            let mol = read_smiles(smiles, &Default::default())?;
             assert_eq!(
                 name_subgraph_with_upstream(&mol, start, &AtomSet::from([0, 1]), Some(upstream))?,
                 expected,
@@ -1860,18 +1861,19 @@ mod tests {
 
     #[test]
     fn sulfonamidooxy_keeps_the_proved_oxygen_nitrogen_sulfur_linkage() -> Result<(), String> {
-        let mol = read_smiles("CONS(=O)(=O)c1ccccc1")?;
+        let mol = read_smiles("CONS(=O)(=O)c1ccccc1", &Default::default())?;
         assert_eq!(
             name_subgraph_with_upstream(&mol, 1, &AtomSet::from([0]), Some(0))?,
             "(benzenesulfonamidooxy)"
         );
-        let carbon_amide = read_smiles("CONC(C)=O")?;
+        let carbon_amide = read_smiles("CONC(C)=O", &Default::default())?;
         assert!(
             name_subgraph_with_upstream(&carbon_amide, 1, &AtomSet::from([0]), Some(0)).is_err()
         );
         assert_eq!(
             crate::naming::openclatura::name_smiles(
-                "CCC(C1=NOC2=C1C(=C(C=C2)Br)OC)ONS(=O)(=O)C3=CC=CC=C3"
+                "CCC(C1=NOC2=C1C(=C(C=C2)Br)OC)ONS(=O)(=O)C3=CC=CC=C3",
+                &Default::default()
             )?
             .text,
             "3-[1-(benzenesulfonamidooxy)propyl]-5-bromo-4-methoxy-1,2-benzoxazole"
@@ -1897,7 +1899,7 @@ mod tests {
                 "((1-oxo-1lambda^6-thiolan-1-ylidene)amino)",
             ),
         ] {
-            let mol = read_smiles(smiles)?;
+            let mol = read_smiles(smiles, &Default::default())?;
             assert_eq!(
                 name_subgraph_with_upstream(&mol, 1, &AtomSet::from([0]), Some(0))?,
                 expected,
@@ -1910,7 +1912,7 @@ mod tests {
     #[test]
     fn generic_oxygen_ligands_stay_outside_exact_oxo_classes() -> Result<(), String> {
         for smiles in ["CP(=O)(O)ON", "CP(=O)(O)OP(=O)(O)O", "CP(=O)(O)OBr"] {
-            let mol = read_smiles(smiles)?;
+            let mol = read_smiles(smiles, &Default::default())?;
             let (oxygen, class) = central_oxo(&mol, 1, &AtomSet::from([0]))?;
             assert_eq!(oxygen, vec![2], "{smiles}");
             assert_eq!(class, None, "{smiles}");

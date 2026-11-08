@@ -198,7 +198,10 @@ mod tests {
             "C[C@H](Cc1ncccc1)CC=NC1CCCCC1",
             "C[C@H](Cc1ncccc1)CC=NC1CCC2(CC1)CCCC2",
         ] {
-            assert!(name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                name_smiles(smiles, &Default::default()).is_err(),
+                "{smiles}"
+            );
         }
         for (smiles, expected) in [
             (
@@ -211,7 +214,9 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                name_smiles(smiles).map(|name| name.text).as_deref(),
+                name_smiles(smiles, &Default::default())
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );
@@ -237,7 +242,10 @@ mod tests {
             "CCC[ClH+]",
             "CCC[IH-]",
         ] {
-            assert!(name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                name_smiles(smiles, &Default::default()).is_err(),
+                "{smiles}"
+            );
         }
     }
 
@@ -254,7 +262,10 @@ mod tests {
             "CC(=O)[SeH3]",
             "[SH2]1CCCC1",
         ] {
-            assert!(name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                name_smiles(smiles, &Default::default()).is_err(),
+                "{smiles}"
+            );
         }
     }
 
@@ -280,7 +291,9 @@ mod tests {
             ("[N-]1[NH+]=CC=C1", "1H-pyrazol-2-ium-1-ide"),
         ] {
             assert_eq!(
-                name_smiles(smiles).map(|name| name.text).as_deref(),
+                name_smiles(smiles, &Default::default())
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );

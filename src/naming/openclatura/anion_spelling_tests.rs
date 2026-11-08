@@ -3,7 +3,10 @@ use crate::naming::{NameReason, NameStatus};
 
 fn name(smiles: &str) -> Result<super::Name, String> {
     // Match the CLI's canonical input boundary without changing numbering.
-    name_smiles(&super::super::canonical_smiles(smiles)?)
+    name_smiles(
+        &super::super::canonical_smiles(smiles)?,
+        &Default::default(),
+    )
 }
 
 fn assert_name_and_round_trip(
@@ -265,7 +268,7 @@ fn zwitterion_suffix_order_preserves_numbering_status_and_identity() {
             "1H-pyrrolo[3,2-c]pyridazin-2-ium-1-ide",
         ),
     ] {
-        let actual = name_smiles(smiles).unwrap();
+        let actual = name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(
             (actual.text.as_str(), actual.status),
             (expected, NameStatus::Preferred),

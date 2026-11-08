@@ -2843,7 +2843,7 @@ mod tests {
             ("O=[AsH]1C=CC=CC1", "1-oxo-2H-1lambda^5-arsinine"),
             ("O=[AsH]1C=CC=C1", "1-oxo-1H-1lambda^5-arsole"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -2948,7 +2948,7 @@ mod tests {
                 "octahydro-2H-2lambda^4-benzothiophen-2-one",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             let status = match smiles {
                 "CP(=O)(O)C" | "CP(=O)(O)O" => {
@@ -2979,10 +2979,11 @@ mod tests {
     #[test]
     fn cyano_chalcogen_ligands_do_not_consume_a_ring_skeleton() {
         for (smiles, expected) in [("CSC#N", "thiocyanato"), ("COC#N", "cyanato")] {
-            let groups = perceive_groups(&read_smiles(smiles).unwrap());
+            let groups = perceive_groups(&read_smiles(smiles, &Default::default()).unwrap());
             assert!(groups.iter().any(|group| group.key == expected), "{smiles}");
         }
-        let groups = perceive_groups(&read_smiles("N#C[SH]1C=CC=CN2C=CNN21").unwrap());
+        let groups =
+            perceive_groups(&read_smiles("N#C[SH]1C=CC=CN2C=CNN21", &Default::default()).unwrap());
         assert!(groups.iter().all(|group| group.key != "thiocyanato"));
     }
 
@@ -3018,7 +3019,7 @@ mod tests {
             ("C1CCCCC1C#N", "ring_nitrile"),
             ("C1CCCCC1C=O", "ring_aldehyde"),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let groups = perceive_groups(&mol);
             assert!(
                 groups.iter().any(|g| g.key == key),
@@ -3026,7 +3027,8 @@ mod tests {
                 groups.iter().map(|g| &g.key).collect::<Vec<_>>()
             );
         }
-        let groups = perceive_groups(&read_smiles("C[N+](C)(C)CC(=O)[O-]").unwrap());
+        let groups =
+            perceive_groups(&read_smiles("C[N+](C)(C)CC(=O)[O-]", &Default::default()).unwrap());
         assert!(
             groups
                 .iter()

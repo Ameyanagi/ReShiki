@@ -784,7 +784,7 @@ mod tests {
 
     #[test]
     fn spiro_junction_precedes_real_suffix_and_suffix_precedes_unsaturation() {
-        let mol = read_smiles("O=C1CC=CC2(C1)CCc1ccccc12").unwrap();
+        let mol = read_smiles("O=C1CC=CC2(C1)CCc1ccccc12", &Default::default()).unwrap();
         let path = number_parent(
             &mol,
             &NumberingModifiers {
@@ -807,7 +807,7 @@ mod tests {
 
     #[test]
     fn spiro_junction_respects_intrinsic_heterocycle_numbering() {
-        let mol = read_smiles("N1CCC2(CC1)CCc1ccccc12").unwrap();
+        let mol = read_smiles("N1CCC2(CC1)CCc1ccccc12", &Default::default()).unwrap();
         let path = number_parent(
             &mol,
             &NumberingModifiers {
@@ -829,7 +829,7 @@ mod tests {
 
     #[test]
     fn pre_stereo_chain_orientations_respect_principal_and_prefix_locants() {
-        let mol = read_smiles("C[C@H](F)CCC").unwrap();
+        let mol = read_smiles("C[C@H](F)CCC", &Default::default()).unwrap();
         let path = vec![0, 1, 3, 4, 5];
         let substituents = BTreeMap::from([(1, vec!["fluoro".into()])]);
         assert_eq!(
@@ -847,7 +847,7 @@ mod tests {
 
     #[test]
     fn late_nitrogen_numbering_preserves_multiplicity_before_citation() {
-        let mol = read_smiles("CCC").unwrap();
+        let mol = read_smiles("CCC", &Default::default()).unwrap();
         let modifiers = NumberingModifiers {
             nitrogen_substituents: BTreeMap::from([
                 (0, vec!["ethyl".into()]),
@@ -881,7 +881,7 @@ mod tests {
 
     #[test]
     fn existing_carbon_numbering_precedes_late_nitrogen_and_alcohol_citation() {
-        let mol = read_smiles("CCCCC").unwrap();
+        let mol = read_smiles("CCCCC", &Default::default()).unwrap();
         let modifiers = NumberingModifiers {
             nitrogen_substituents: BTreeMap::from([
                 (0, vec!["methyl".into()]),
@@ -928,7 +928,7 @@ mod tests {
     }
     #[test]
     fn ordinary_and_retained_numbering_prefer_m_to_p() {
-        let mut mol = read_smiles("c1(-c2ccccc2)ccc(-c2ccccc2)cc1").unwrap();
+        let mut mol = read_smiles("c1(-c2ccccc2)ccc(-c2ccccc2)cc1", &Default::default()).unwrap();
         for bond in mol.bonds.values_mut() {
             bond.stereo = match (bond.u, bond.v) {
                 (0, 1) => Some("M".into()),
@@ -987,7 +987,7 @@ mod tests {
             ("C#CCC=C", vec![0], vec![0, 1, 2, 3, 4]),
             ("C#CCC=CC", vec![], vec![0, 1, 2, 3, 4, 5]),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let path: Vec<_> = (0..mol.atoms.len()).collect();
             let numbered = number_parent(
                 &mol,
@@ -1007,7 +1007,7 @@ mod tests {
 
     #[test]
     fn repeated_principal_groups_choose_the_lowest_locant_sequence() {
-        let mol = read_smiles("CC").unwrap();
+        let mol = read_smiles("CC", &Default::default()).unwrap();
         for path in [vec![0, 1], vec![1, 0]] {
             let numbered = number_parent(
                 &mol,
@@ -1027,7 +1027,7 @@ mod tests {
 
     #[test]
     fn principal_group_numbering_precedes_unsaturation() {
-        let mol = read_smiles("C=CCCCO").unwrap();
+        let mol = read_smiles("C=CCCCO", &Default::default()).unwrap();
         let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
         let numbered = number_parent(
             &mol,
@@ -1080,7 +1080,7 @@ mod tests {
                 true,
             ),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let (numbered, _) = choose_parent_numbering(
                 &mol,
                 &NumberingModifiers::default(),
@@ -1115,7 +1115,7 @@ mod tests {
                 vec![6, 5, 4, 3, 2, 1],
             ),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let (numbered, _) = choose_parent_numbering(
                 &mol,
                 &NumberingModifiers::default(),
@@ -1136,7 +1136,7 @@ mod tests {
 
     #[test]
     fn retained_maps_assign_skeletal_anions_low_locants_before_suffixes() {
-        let mol = read_smiles("[CH-]1CCC(=O)CC1").unwrap();
+        let mol = read_smiles("[CH-]1CCC(=O)CC1", &Default::default()).unwrap();
         let paths = [vec![3, 2, 1, 0, 6, 5], vec![0, 1, 2, 3, 5, 6]];
         let maps: Vec<BTreeMap<_, _>> = paths
             .iter()
@@ -1178,7 +1178,7 @@ mod tests {
                 Some("pyrrole"),
             ),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let paths = [anionic.clone(), rooted.clone()];
             let maps: Vec<BTreeMap<_, _>> = paths
                 .iter()
@@ -1215,7 +1215,7 @@ mod tests {
 
     #[test]
     fn skeletal_anions_respect_fixed_heteroatom_numbering() {
-        let mol = read_smiles("N1CCC[CH-]C1").unwrap();
+        let mol = read_smiles("N1CCC[CH-]C1", &Default::default()).unwrap();
         let preferred = vec![0, 5, 4, 3, 2, 1];
         let ordinary = number_parent(
             &mol,
@@ -1259,7 +1259,7 @@ mod tests {
 
     #[test]
     fn hw_numbering_prioritizes_senior_heteroatom_then_all_hetero_locants() {
-        let mol = read_smiles("s1cnnc1").unwrap();
+        let mol = read_smiles("s1cnnc1", &Default::default()).unwrap();
         let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let numbered = number_parent(
             &mol,
@@ -1285,7 +1285,7 @@ mod tests {
     }
     #[test]
     fn alphabetic_substituent_citation_breaks_equal_locant_sets() {
-        let mol = read_smiles("CCCCCCC").unwrap();
+        let mol = read_smiles("CCCCCCC", &Default::default()).unwrap();
         let path = (0..7).collect::<Vec<_>>();
         let subs = BTreeMap::from([(1, vec!["methyl".into()]), (5, vec!["ethyl".into()])]);
         let numbered = number_parent(
@@ -1320,14 +1320,14 @@ mod tests {
                 "1,1-dibromo-4,4-dichlorobuta-1,2,3-triene",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
         }
     }
 
     #[test]
     fn spiro_numbering_scores_only_the_topology_candidates() {
-        let mol = read_smiles("C1CCC2(CC1)OCCO2").unwrap();
+        let mol = read_smiles("C1CCC2(CC1)OCCO2", &Default::default()).unwrap();
         let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let system = &rings[0];
         let (path, map) = choose_parent_numbering(

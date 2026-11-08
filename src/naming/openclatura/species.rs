@@ -3,8 +3,12 @@ use super::{Name, component_namer::Derivation, molecule::Molecule, name_smiles_w
 use crate::naming::{IsotopeStyle, NameReason, NameStatus};
 use std::collections::BTreeMap;
 
-pub(super) fn monatomic_cation(smiles: &str, in_salt: bool) -> Result<Option<Name>, String> {
-    let parsed = crate::chemistry::smiles::prepare(smiles).map_err(|e| e.to_string())?;
+pub(super) fn monatomic_cation(
+    smiles: &str,
+    in_salt: bool,
+    budget: &nazuchem_kernel::budget::Budget,
+) -> Result<Option<Name>, String> {
+    let parsed = nazuchem_kernel::smiles::prepare(smiles, budget).map_err(|e| e.to_string())?;
     let [atom] = parsed.state.graph.atoms.as_slice() else {
         return Ok(None);
     };
@@ -252,11 +256,15 @@ fn salt_ion_sort_key(name: &str) -> Option<SaltIonKey> {
     Some((letters, primary_locants.then_some(locants)))
 }
 
-pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, String> {
+pub(super) fn name_salt(
+    smiles: &str,
+    style: IsotopeStyle,
+    budget: &nazuchem_kernel::budget::Budget,
+) -> Result<Name, String> {
     let mut ions = Vec::new();
     let mut charge = 0i32;
     for component in smiles.split('.') {
-        let state = crate::chemistry::smiles::prepare(component)
+        let state = nazuchem_kernel::smiles::prepare(component, budget)
             .map_err(|e| e.to_string())?
             .state;
         let positive = state.graph.atoms.iter().any(|a| a.charge > 0);
@@ -269,9 +277,9 @@ pub(super) fn name_salt(smiles: &str, style: IsotopeStyle) -> Result<Name, Strin
             return Err("Salt naming requires charged components without zwitterions or radicals; neutral components and mixtures are unsupported".into());
         }
         charge += q;
-        let name = match monatomic_cation(component, true)? {
+        let name = match monatomic_cation(component, true, budget)? {
             Some(name) => name,
-            None => name_smiles_with_style(component, style)?,
+            None => name_smiles_with_style(component, style, budget)?,
         };
         // P-14.5 leaves out stereodescriptors and isotope descriptors, which
         // the cited names cannot omit yet.
@@ -410,7 +418,7 @@ mod tests {
                 "disodium [1,1'-biphenyl]-4-carboxylate acetate",
             ),
         ] {
-            let name = name_salt(smiles, IsotopeStyle::Iupac).unwrap();
+            let name = name_salt(smiles, IsotopeStyle::Iupac, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -426,7 +434,12 @@ mod tests {
         assert_eq!(first.0, second.0);
         assert!(first.1.is_none() || second.1.is_none());
         // One stereospecified ion per sign leaves nothing to order.
-        let name = name_salt("C[C@@H](CC)[NH3+].CC(=O)[O-]", IsotopeStyle::Iupac).unwrap();
+        let name = name_salt(
+            "C[C@@H](CC)[NH3+].CC(=O)[O-]",
+            IsotopeStyle::Iupac,
+            &Default::default(),
+        )
+        .unwrap();
         assert_eq!(name.status, NameStatus::Preferred, "{}", name.text);
     }
 
@@ -444,14 +457,14 @@ mod tests {
                 NameStatus::NotPreferred(NameReason::Multiplicative),
             ),
         ] {
-            let name = name_salt(smiles, IsotopeStyle::Iupac).unwrap();
+            let name = name_salt(smiles, IsotopeStyle::Iupac, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
         }
     }
 
     fn assess_component(smiles: &str) -> NameStatus {
-        let mol = super::super::graph_io::read_smiles(smiles).unwrap();
+        let mol = super::super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let name =
             super::super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
@@ -537,7 +550,7 @@ mod tests {
     fn retained_anion_assessment_requires_application_evidence() {
         use super::super::assembly_parts::RetainedAnionName;
 
-        let mol = super::super::graph_io::read_smiles("C[O-]").unwrap();
+        let mol = super::super::graph_io::read_smiles("C[O-]", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let mut component =
             super::super::component_namer::name_component_with_citation(&mol, &atoms, None, None)
@@ -579,7 +592,7 @@ mod tests {
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected);
             assert_eq!(name.status, status, "{smiles}");
         }
@@ -588,7 +601,10 @@ mod tests {
     #[test]
     fn unsupported_anionic_parent_examples_still_decline() {
         for smiles in ["[Na+].Oc1ccccc1-[n-]1cccc1", "[Na+].Oc1ccccc1-n1cccc1"] {
-            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                super::super::name_smiles(smiles, &Default::default()).is_err(),
+                "{smiles}"
+            );
         }
     }
 
@@ -744,7 +760,7 @@ mod tests {
                 NameStatus::Preferred,
             ),
         ] {
-            let name = super::super::name_smiles(smiles)
+            let name = super::super::name_smiles(smiles, &Default::default())
                 .unwrap_or_else(|error| panic!("{smiles}: {error}"));
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
@@ -765,28 +781,29 @@ mod tests {
 
     #[test]
     fn retained_alkoxide_parent_is_preferred() {
-        let name = super::super::name_smiles("C[O-]").unwrap();
+        let name = super::super::name_smiles("C[O-]", &Default::default()).unwrap();
         assert_eq!(name.text, "methoxide");
         assert_eq!(name.status, NameStatus::Preferred);
     }
 
     #[test]
     fn acid_anion_parent_precedes_the_neutral_acid() {
-        let name = super::super::name_smiles("O=C([O-])CCC(=O)O").unwrap();
+        let name = super::super::name_smiles("O=C([O-])CCC(=O)O", &Default::default()).unwrap();
         assert_eq!(name.text, "3-carboxypropanoate");
         assert_eq!(name.status, NameStatus::Preferred);
     }
 
     #[test]
     fn salt_inherits_retained_alkoxide_parent_preference() {
-        let name = super::super::name_smiles("[Na+].C[O-]").unwrap();
+        let name = super::super::name_smiles("[Na+].C[O-]", &Default::default()).unwrap();
         assert_eq!(name.text, "sodium methoxide");
         assert_eq!(name.status, NameStatus::Preferred);
     }
 
     #[test]
     fn salt_inherits_the_preferred_acid_anion_parent() {
-        let name = super::super::name_smiles("[Na+].O=C([O-])CCC(=O)O").unwrap();
+        let name =
+            super::super::name_smiles("[Na+].O=C([O-])CCC(=O)O", &Default::default()).unwrap();
         assert_eq!(name.text, "sodium 3-carboxypropanoate");
         assert_eq!(name.status, NameStatus::Preferred);
     }
@@ -818,7 +835,7 @@ mod tests {
             ("C[NH3+]", "methanaminium", NameStatus::Preferred),
             ("CC(=O)O", "acetic acid", NameStatus::Preferred),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
         }
@@ -875,8 +892,8 @@ mod tests {
                 NameStatus::Unverified(NameReason::UnauditedPath),
             ),
         ] {
-            let name =
-                super::super::name_smiles(smiles).unwrap_or_else(|e| panic!("{smiles}: {e}"));
+            let name = super::super::name_smiles(smiles, &Default::default())
+                .unwrap_or_else(|e| panic!("{smiles}: {e}"));
             assert_eq!(name.text, expected);
             assert_eq!(name.status, status, "{smiles}");
             let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
@@ -992,8 +1009,8 @@ mod tests {
             ),
             ("CC(=O)O".into(), "acetic acid", Preferred),
         ] {
-            let name =
-                super::super::name_smiles(&smiles).unwrap_or_else(|e| panic!("{smiles}: {e}"));
+            let name = super::super::name_smiles(&smiles, &Default::default())
+                .unwrap_or_else(|e| panic!("{smiles}: {e}"));
             assert_eq!(
                 (name.text.as_str(), name.status),
                 (expected, status),
@@ -1004,7 +1021,8 @@ mod tests {
 
     #[test]
     fn salt_inherits_the_strongest_ion_status() {
-        let name = super::super::name_smiles("[Na+].[Na+].[Cl-].C[O-]").unwrap();
+        let name =
+            super::super::name_smiles("[Na+].[Na+].[Cl-].C[O-]", &Default::default()).unwrap();
         assert_eq!(name.text, "disodium chloride methoxide");
         assert_eq!(
             name.status,
@@ -1016,12 +1034,18 @@ mod tests {
     fn monatomic_cations_are_certified_only_in_salts() {
         for smiles in ["[Na+]", "[Fe+2]", "[Ca+2]"] {
             assert_eq!(
-                monatomic_cation(smiles, false).unwrap().unwrap().status,
+                monatomic_cation(smiles, false, &Default::default())
+                    .unwrap()
+                    .unwrap()
+                    .status,
                 NameStatus::Unverified(NameReason::UnauditedPath),
                 "{smiles}"
             );
             assert_eq!(
-                monatomic_cation(smiles, true).unwrap().unwrap().status,
+                monatomic_cation(smiles, true, &Default::default())
+                    .unwrap()
+                    .unwrap()
+                    .status,
                 NameStatus::Preferred,
                 "{smiles}"
             );
@@ -1036,7 +1060,10 @@ mod tests {
             "[Na+].[Na+].[Cl-]",
             "[NH3+]CC(=O)[O-].[Na+].[Cl-]",
         ] {
-            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                super::super::name_smiles(smiles, &Default::default()).is_err(),
+                "{smiles}"
+            );
         }
     }
 }

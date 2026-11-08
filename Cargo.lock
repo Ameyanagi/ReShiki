@@ -2768,6 +2768,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nazuchem-kernel"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "web-time",
+]
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3191,8 +3202,8 @@ name = "opsin"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "nazuchem-kernel",
  "regex",
- "reshiki-chemistry",
  "roxmltree",
  "serde_json",
  "sha2",
@@ -3895,6 +3906,7 @@ dependencies = [
  "iced_winit",
  "image",
  "js-sys",
+ "nazuchem-kernel",
  "open",
  "opsin",
  "pdf-writer",
@@ -4112,6 +4124,7 @@ dependencies = [
  "rayon",
  "reshiki-io",
  "reshiki-model",
+ "reshiki-process-heap",
  "resvg",
  "serde_json",
  "svg2pdf",

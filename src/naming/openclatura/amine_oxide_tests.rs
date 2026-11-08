@@ -104,7 +104,7 @@ const CHALCOGEN_ANALOGUES: &[Case] = &[
 fn name(smiles: &str) -> Result<super::Name, String> {
     // Match the CLI boundary for the audit matrix; the atom-order test below
     // also exercises the naming pipeline directly without canonicalizing first.
-    name_smiles(&canonical_smiles(smiles)?)
+    name_smiles(&canonical_smiles(smiles)?, &Default::default())
 }
 
 fn assert_case((row, smiles, expected, status): Case) {
@@ -221,7 +221,7 @@ fn amine_oxide_keeps_source_stereo_alternatives() {
             NameReason::RelativeRingStereo,
         ),
     ] {
-        let mol = super::graph_io::read_smiles(smiles).unwrap();
+        let mol = super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         assert!(super::amine_oxides::name(&mol, &atoms).unwrap().is_none());
         assert!(!mol.has_endo_exo_alternative());
@@ -289,7 +289,7 @@ fn amine_oxide_neutral_candidates_restore_source_status() {
         ),
     ] {
         let canonical = canonical_smiles(smiles).unwrap();
-        let mol = super::graph_io::read_smiles(&canonical).unwrap();
+        let mol = super::graph_io::read_smiles(&canonical, &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let initial = NameStatus::Unverified(NameReason::UnauditedPath);
         assert_eq!(mol.name_status(), initial, "{row}: before candidate");
@@ -304,7 +304,7 @@ fn amine_oxide_neutral_candidates_restore_source_status() {
         }
         assert_eq!(mol.name_status(), initial, "{row}: after candidate");
 
-        let ordinary = name_smiles(&canonical).unwrap();
+        let ordinary = name_smiles(&canonical, &Default::default()).unwrap();
         assert_eq!(
             (ordinary.text.as_str(), ordinary.status),
             (expected, status),
@@ -401,7 +401,7 @@ fn amine_oxide_nitrogen_stereocentres_remain_rejected() {
 #[test]
 fn amine_oxide_unknown_stereo_does_not_certify_zwitterionic_alternatives() {
     let smiles = "[O-][n+]1ccc([CH:900001](F)Cl)cc1";
-    let actual = name_smiles(smiles).unwrap();
+    let actual = name_smiles(smiles, &Default::default()).unwrap();
     assert_eq!(actual.text, "4-(chlorofluoromethyl)-1-oxidopyridin-1-ium");
     assert_eq!(
         actual.status,
@@ -465,7 +465,7 @@ fn amine_oxide_names_and_statuses_are_independent_of_atom_order() {
                 identity,
                 "{permutation}"
             );
-            let actual = name_smiles(permutation).unwrap();
+            let actual = name_smiles(permutation, &Default::default()).unwrap();
             assert_eq!(
                 (actual.text.as_str(), actual.status),
                 (expected.text.as_str(), expected.status),
@@ -482,7 +482,7 @@ fn amine_oxide_ambiguous_ring_locants_remain_unverified() {
     let identity = canonical_smiles("[O-][n+]1ccncc1").unwrap();
     for smiles in ["[O-][n+]1ccncc1", "c1c[n+]([O-])ccn1"] {
         assert_eq!(canonical_smiles(smiles).unwrap(), identity, "{smiles}");
-        let actual = name_smiles(smiles).unwrap();
+        let actual = name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(
             actual.status,
             NameStatus::Unverified(NameReason::AmineChalcogenide),
@@ -529,7 +529,7 @@ fn amine_oxide_functional_class_names_preserve_remote_carbon_stereo() {
     let mut names = Vec::new();
     let mut identities = Vec::new();
     for smiles in ["C[N+](C)([O-])C[C@H](F)Cl", "C[N+](C)([O-])C[C@@H](F)Cl"] {
-        let mol = super::graph_io::read_smiles(smiles).unwrap();
+        let mol = super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
         let centre = mol
             .atoms
             .values()
@@ -583,7 +583,7 @@ fn amine_oxide_keeps_source_carbon_stereo_when_neutral_priorities_reverse() {
     ] {
         // Removing oxygen reverses the priority of the two nitrogen branches.
         for (input, expected) in [(smiles, descriptor), (neutral, neutral_descriptor)] {
-            let mol = super::graph_io::read_smiles(input).unwrap();
+            let mol = super::graph_io::read_smiles(input, &Default::default()).unwrap();
             let centre = mol
                 .atoms
                 .values()
@@ -612,7 +612,7 @@ fn amine_oxide_keeps_source_carbon_stereo_when_neutral_priorities_reverse() {
 #[test]
 fn amine_oxide_nitrones_keep_opposite_double_bond_stereo() {
     for (smiles, descriptor) in [("C/C=[N+](/C)[O-]", "Z"), ("C/C=[N+](\\C)[O-]", "E")] {
-        let mol = super::graph_io::read_smiles(smiles).unwrap();
+        let mol = super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
         let bond = mol.bonds.values().find(|bond| bond.order == 2).unwrap();
         assert_eq!(bond.stereo.as_deref(), Some(descriptor), "{smiles}");
         let actual = name(smiles).unwrap();

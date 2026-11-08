@@ -296,7 +296,7 @@ fn anion_parent_choice_matrix() {
         ),
     ] {
         let result = crate::naming::canonical_smiles(smiles)
-            .and_then(|canonical| super::name_smiles(&canonical));
+            .and_then(|canonical| super::name_smiles(&canonical, &Default::default()));
         let actual = match result {
             Ok(actual) => actual,
             Err(error) => {
@@ -330,7 +330,7 @@ fn anion_parent_choice_matrix() {
     // can miscite the charged atom as the substituent's free valence.
     let smiles = "[O-]C(=O)c1cc(C(=O)[O-])ccc1CC[CH2-]";
     let result = crate::naming::canonical_smiles(smiles)
-        .and_then(|canonical| super::name_smiles(&canonical));
+        .and_then(|canonical| super::name_smiles(&canonical, &Default::default()));
     match result {
         Err(error)
             if error.starts_with("openclatura: anionic C parent atom ")
@@ -340,7 +340,7 @@ fn anion_parent_choice_matrix() {
     // Several skeletal anions with a skeletal cation remain outside the
     // supported parent-anion scope after the P-74.1.1 spelling correction.
     let smiles = "[N-]1C[NH2+]C[N-]C1";
-    if let Ok(name) = super::name_smiles(smiles) {
+    if let Ok(name) = super::name_smiles(smiles, &Default::default()) {
         failures.push(format!("mixed-charge ring: {smiles}: {}", name.text));
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));

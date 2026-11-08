@@ -332,7 +332,7 @@ async fn axial_ester_candidate_without_its_axis_descriptor_is_refused() {
         write_unknown_stereo: false,
         warnings: vec![],
     };
-    let mut candidate = openclatura::name_smiles(&identity.smiles).unwrap();
+    let mut candidate = openclatura::name_smiles(&identity.smiles, &Default::default()).unwrap();
     assert!(candidate.text.starts_with("(1M)-"));
     candidate.text = candidate.text.replacen("(1M)-", "", 1);
     candidate.alternatives.clear();
@@ -377,7 +377,7 @@ async fn axial_drawing_identity_keeps_unknown_stereo_markers_and_the_axis() {
     assert_eq!(naming_smiles.matches(":900004]").count(), 2);
     assert_eq!(naming_smiles.matches(":900001]").count(), 1);
     verify_identity(&identity.smiles, naming_smiles).unwrap();
-    let candidate = openclatura::name_smiles(naming_smiles).unwrap();
+    let candidate = openclatura::name_smiles(naming_smiles, &Default::default()).unwrap();
     assert!(candidate.text.contains("M)"), "{}", candidate.text);
     assert_eq!(candidate.omitted_units, 1);
     assert!(

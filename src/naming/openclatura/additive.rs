@@ -1474,7 +1474,7 @@ mod tests {
             ("O=C1Cc2ccccc2C(=O)C1", "naphthalene-1,3(2H,4H)-dione"),
             ("O=C1C=Cc2ccccc12", "1H-inden-1-one"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
@@ -1600,7 +1600,7 @@ mod tests {
             ("C1CCc2ccccc2C1", "1,2,3,4-tetrahydronaphthalene"),
             ("OC1CCCc2ccccc12", "1,2,3,4-tetrahydronaphthalen-1-ol"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             if name.text != expected {
                 failures.push(format!("{smiles}: {} -> {expected}", name.text));
             }
@@ -1623,7 +1623,7 @@ mod tests {
     #[test]
     fn projected_spiro_components_keep_unverified_hydrogen_fallback() {
         let smiles = "CC1C2C(C(=O)N(C2=O)C3=CC=CC=C3OC)C4(N1)C5=CC=CC=C5N(C4=O)CCBr";
-        let name = super::super::name_smiles(smiles).unwrap();
+        let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(
             name.text,
             "1-(2-bromoethyl)-5'-(2-methoxyphenyl)-3'-methyl-2-oxospiro[2,3-dihydro-1H-indole-3,1'-2H-pyrrolo[3,4-c]pyrrole]-4',6'(3'H,3a'H,6a'H)-dione"
@@ -1643,7 +1643,7 @@ mod tests {
     #[test]
     fn bridge_oxo_composition_does_not_invent_hydrogenation() {
         assert_eq!(
-            super::super::name_smiles("C12C(C=C(C3=CC=CC=C13)O2)=O")
+            super::super::name_smiles("C12C(C=C(C3=CC=CC=C13)O2)=O", &Default::default())
                 .map(|name| name.text)
                 .as_deref(),
             Ok("1,4-epoxynaphthalen-2(1H)-one")
@@ -1666,7 +1666,7 @@ mod tests {
             ("C=C1C=C2C=CC=CC2=N1", "2-methylidene-2H-indole"),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected)
@@ -1678,7 +1678,7 @@ mod tests {
     fn supplied_retained_bond_model_collects_hydrogenated_edges() {
         use super::super::fusion::numbering::{parent_bond_graph, parent_bond_model};
         use super::*;
-        let mol = super::super::graph_io::read_smiles("C1CCCCC1").unwrap();
+        let mol = super::super::graph_io::read_smiles("C1CCCCC1", &Default::default()).unwrap();
         let ring: AtomSet = mol.atoms.keys().copied().collect();
         let locants: BTreeMap<_, _> = ring
             .iter()
@@ -1734,7 +1734,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),
@@ -1772,7 +1772,7 @@ mod tests {
                 "9,10,10-trioxo-9,10-dihydro-10lambda^6-thioxanthene-3-carboxylic acid",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
             for candidate in std::iter::once(&name.text).chain(

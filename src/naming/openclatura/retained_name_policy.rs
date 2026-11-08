@@ -308,7 +308,7 @@ mod tests {
                 NameStatus::Preferred,
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
             for candidate in std::iter::once(name.text.as_str()).chain(
@@ -346,7 +346,7 @@ mod tests {
             ("c1ccc2[nH]cnc2c1", "1H-1,3-benzimidazole"),
             ("Cn1cnc2ccccc21", "1-methyl-1H-1,3-benzimidazole"),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
             for candidate in std::iter::once(name.text.as_str()).chain(
@@ -370,7 +370,8 @@ mod tests {
         // follows the linear-phane rule and is pinned in the audit fixture.
         assert_eq!(
             super::super::name_smiles(
-                r"C1=CC=C(C=C1)COC2=CC\3=C(C=C2)NN/C3=C\4/N=C5C=CC(=CC5=N4)NCCCN6C=CN=C6"
+                r"C1=CC=C(C=C1)COC2=CC\3=C(C=C2)NN/C3=C\4/N=C5C=CC(=CC5=N4)NCCCN6C=CN=C6",
+                &Default::default()
             )
             .unwrap()
             .text,
@@ -398,7 +399,7 @@ mod tests {
                 "3-(6,7-dimethoxyindan-1-yl)-2-methylbutanamide",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
         }
     }

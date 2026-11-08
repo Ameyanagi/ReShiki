@@ -240,7 +240,7 @@ fn ion_spelling_matrix() {
     ] {
         let result = (|| {
             let canonical = crate::naming::canonical_smiles(smiles)?;
-            let actual = name_smiles(&canonical)?;
+            let actual = name_smiles(&canonical, &Default::default())?;
             println!("{row}\t{}\t{:?}", actual.text, actual.status);
             if (actual.text.as_str(), actual.status) != (expected, status) {
                 return Err(format!(

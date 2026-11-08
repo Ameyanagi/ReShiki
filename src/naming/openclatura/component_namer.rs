@@ -798,7 +798,7 @@ mod tests {
                 "2-(carboxymethoxy)propane-1,2,3-tricarboxylic acid",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -818,7 +818,7 @@ mod tests {
                 "2-(2-ethoxy-2-oxoethyl)-2-hydroxybutanedioic acid",
             ),
         ] {
-            let name = super::super::name_smiles(smiles).unwrap();
+            let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(
                 name.status,
@@ -830,7 +830,8 @@ mod tests {
 
     #[test]
     fn branched_acid_without_three_groups_on_one_chain_is_not_tricarboxylic() {
-        let name = super::super::name_smiles("OC(=O)CC(CC(=O)O)CC(=O)O").unwrap();
+        let name =
+            super::super::name_smiles("OC(=O)CC(CC(=O)O)CC(=O)O", &Default::default()).unwrap();
         assert!(!name.text.contains("tricarboxylic"));
     }
 
@@ -838,13 +839,18 @@ mod tests {
     fn external_carboxylates_with_another_anion_keep_the_old_parent() {
         // Any anionic centre outside the suffix keeps main's carbonyl-inclusive
         // parent; its PIN (2-oxidopropane-1,2,3-tricarboxylate) is not reached yet.
-        let name = super::super::name_smiles("[O-]C(=O)CC([O-])(CC(=O)[O-])C(=O)[O-]").unwrap();
+        let name = super::super::name_smiles(
+            "[O-]C(=O)CC([O-])(CC(=O)[O-])C(=O)[O-]",
+            &Default::default(),
+        )
+        .unwrap();
         assert_eq!(name.text, "3-carboxylato-3-oxidopentanedioate");
     }
 
     #[test]
     fn isotope_labelled_tricarboxylic_acid_keeps_the_ordinary_parent() {
-        let name = super::super::name_smiles("O[13C](=O)CC(O)(CC(=O)O)C(=O)O").unwrap();
+        let name = super::super::name_smiles("O[13C](=O)CC(O)(CC(=O)O)C(=O)O", &Default::default())
+            .unwrap();
         assert_eq!(name.text, "3-carboxy-3-hydroxy(1-13C)pentanedioic acid");
         assert!(!matches!(name.status, crate::naming::NameStatus::Preferred));
     }
@@ -852,7 +858,10 @@ mod tests {
     #[test]
     fn charged_retained_fallback_requires_citable_donor_hydrogen() {
         for smiles in ["C1=N[NH2+]c2ccccc21", "C1=Nc2ccccc2[NH2+]1"] {
-            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+            assert!(
+                super::super::name_smiles(smiles, &Default::default()).is_err(),
+                "{smiles}"
+            );
         }
         for (smiles, name) in [
             ("c1ccc2[nH+]cccc2c1", "quinolin-1-ium"),
@@ -860,7 +869,7 @@ mod tests {
             ("C1=Cc2ccccc2[NH2+]1", "1H-indol-1-ium"),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(name)

@@ -9,8 +9,8 @@ use opsin::{
 };
 
 fn canonical(text: &str) -> String {
-    let imported = reshiki_chemistry::smiles::read(text).unwrap();
-    reshiki_chemistry::smiles::write::write(&imported.prepared.state, Default::default())
+    let imported = nazuchem_kernel::smiles::read(text, &Default::default()).unwrap();
+    nazuchem_kernel::smiles::write::write(&imported.prepared.state, Default::default())
         .unwrap()
         .text
 }

@@ -82,7 +82,7 @@ fn written_axis(name: &str, expected: &str, locant: &str) -> (String, Vec<Option
     }
     // Check consistency after reimporting the exported SMILES and translating
     // its reference neighbours into the native bond carrier convention.
-    let mut native = reshiki_chemistry::smiles::read(&text)
+    let mut native = nazuchem_kernel::smiles::read(&text, &Default::default())
         .unwrap()
         .prepared
         .state;
@@ -121,7 +121,7 @@ fn written_axis(name: &str, expected: &str, locant: &str) -> (String, Vec<Option
     native.metadata.bonds[native_bond].stereo = if clockwise { 6 } else { 7 };
     native.metadata.bonds[native_bond].stereo_atoms = refs.to_vec();
     let labelled =
-        reshiki_chemistry::stereo::cip::label::assign(&native, &Default::default()).unwrap();
+        nazuchem_kernel::stereo::cip::label::assign(&native, &Default::default()).unwrap();
     assert_eq!(
         labelled.state.properties.bond_codes[native_bond].as_deref(),
         Some(expected),

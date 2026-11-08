@@ -3054,7 +3054,7 @@ mod tests {
                 "furo[3,2-b]thieno[2,3-e]pyridine",
             ),
         ] {
-            let name = crate::naming::openclatura::name_smiles(smiles)?;
+            let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
             assert_eq!(name.text, expected);
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
             assert_strict_fusion_name_identity(smiles, &name)?;
@@ -3078,7 +3078,7 @@ mod tests {
                 "1H-dipyrano[2,3-b:3',4',5'-de]quinoline",
             ),
         ] {
-            let name = crate::naming::openclatura::name_smiles(smiles)?;
+            let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
             assert_eq!(name.text, expected);
             assert_eq!(name.status, crate::naming::NameStatus::Preferred);
             assert_strict_fusion_name_identity(smiles, &name)?;
@@ -3113,7 +3113,7 @@ mod tests {
     #[test]
     fn naphthyridine_parent_simplifies_alphabetized_fusion_name() -> Result<(), String> {
         let smiles = "S1CC=C2C1=NC=1N2C=2C(=C3C1N=C1C=CC=CC1=C3)N=CC2";
-        let name = crate::naming::openclatura::name_smiles(smiles)?;
+        let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
         assert_eq!(
             name.text,
             "2H-benzo[b]pyrrolo[2,3-f]thieno[2',3':4,5]imidazo[1,2-h][1,7]naphthyridine"
@@ -3125,7 +3125,7 @@ mod tests {
     #[test]
     fn alphabetized_corpus_prefixes_preserve_numbering_and_round_trip() -> Result<(), String> {
         let smiles = "CC1=C(SC(=N1)NC(=O)CSC2=NN=C3N2C(=NC4=C3C5=C(S4)CCCC5)C(C)C)C";
-        let name = crate::naming::openclatura::name_smiles(smiles)?;
+        let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
         assert_eq!(
             name.text,
             "N-(4,5-dimethyl-1,3-thiazol-2-yl)-2-{[5-(propan-2-yl)-8,9,10,11-tetrahydro[1]benzothieno[3,2-e][1,2,4]triazolo[4,3-c]pyrimidin-3-yl]sulfanyl}acetamide"

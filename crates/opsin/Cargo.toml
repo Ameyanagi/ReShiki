@@ -7,7 +7,7 @@ description = "A native Rust port of OPSIN chemical name interpretation"
 publish = false
 
 [dependencies]
-reshiki-chemistry = { path = "../chemistry" }
+nazuchem-kernel = { path = "../nazuchem-kernel" }
 roxmltree = "0.20"
 regex = "1"
 

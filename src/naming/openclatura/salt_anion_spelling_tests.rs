@@ -231,7 +231,7 @@ fn salt_anion_spelling_matrix() {
         ),
     ] {
         let result = crate::naming::canonical_smiles(smiles)
-            .and_then(|canonical| super::name_smiles(&canonical));
+            .and_then(|canonical| super::name_smiles(&canonical, &Default::default()));
         let actual = match result {
             Ok(actual) => actual,
             Err(error) => {

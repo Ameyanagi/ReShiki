@@ -392,7 +392,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &Default::default())
                     .map(|name| name.text)
                     .as_deref(),
                 Ok(expected),
@@ -404,16 +404,19 @@ mod tests {
     fn fallback_parent_cannot_name_the_same_bridge_as_two_methyl_groups() {
         let smiles = "CC1C2CCC3C4(CCCC5(C4C(OC5)O)C)COC(=O)C3(C2)C1=O";
         assert!(
-            super::super::name_smiles(smiles)
+            super::super::name_smiles(smiles, &Default::default())
                 .is_err_and(|error| error.contains("multiple parent attachment atoms"))
         );
     }
     #[test]
     fn fused_parent_can_keep_a_complete_spiro_descriptor_as_its_side() {
         assert_eq!(
-            super::super::name_smiles("C1COC2=CC3=C(C=C21)C=C(C34CCC5(CC4)OCCO5)Br")
-                .map(|name| name.text)
-                .as_deref(),
+            super::super::name_smiles(
+                "C1COC2=CC3=C(C=C21)C=C(C34CCC5(CC4)OCCO5)Br",
+                &Default::default()
+            )
+            .map(|name| name.text)
+            .as_deref(),
             Ok(
                 "6-bromo-2,3-dihydro-1',4'-dioxaspiro[cyclopenta[f][1]benzofuran-7,8'-(spiro[4.5]decane)]"
             )
@@ -423,7 +426,8 @@ mod tests {
     fn spiro_parent_derivatives_use_the_systematic_fusion_proof() {
         assert_eq!(
             super::super::name_smiles(
-                "CC1=CC(=C(C=C1)OCC(=O)N2CCC3(CC2)CC(=O)C4=C(O3)C=C(C(=C4)C)C)C(C)(C)C"
+                "CC1=CC(=C(C=C1)OCC(=O)N2CCC3(CC2)CC(=O)C4=C(O3)C=C(C(=C4)C)C)C(C)(C)C",
+                &Default::default()
             )
             .map(|name| name.text)
             .as_deref(),

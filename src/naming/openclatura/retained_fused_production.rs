@@ -460,7 +460,7 @@ mod tests {
             ("O=C1Cc2ccccc2-c2ccccc12", "phenanthrene", Some("ketone")),
             ("O=C1c2ccccc2C(=O)c2ccccc12", "anthracene", Some("ketone")),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
             let retained = production_retained_fused_parent(
                 &mol,

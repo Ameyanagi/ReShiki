@@ -15,7 +15,7 @@ use crate::graph::{
 use crate::parse_tree::{Arena, NodeId};
 use crate::stereo_analyser::{StereoBond, StereoCentre};
 use crate::xml_declarations::*;
-use reshiki_chemistry::stereo::{
+use nazuchem_kernel::stereo::{
     axis_ends_distinct,
     cip::label,
     perception::{RingCache, RingKind},
@@ -785,9 +785,9 @@ impl<'a> StereochemistryHandler<'a> {
         let canonical = |graph: &Graph| -> Result<String> {
             let smiles = crate::smiles::write_semantic_cxsmiles(graph, fragment)
                 .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
-            let imported = reshiki_chemistry::smiles::read(&smiles)
+            let imported = nazuchem_kernel::smiles::read(&smiles, &self.state.budget)
                 .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
-            reshiki_chemistry::smiles::write::write(&imported.prepared.state, Default::default())
+            nazuchem_kernel::smiles::write::write(&imported.prepared.state, Default::default())
                 .map(|output| output.text)
                 .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))
         };
@@ -1033,13 +1033,14 @@ impl<'a> StereochemistryHandler<'a> {
             return stereo(format!("Could not find a biaryl axis at locant {locant}"));
         };
         let (mut native, indices) = crate::modern_cip::state(self.graph())?;
-        let rings = reshiki_chemistry::rings::perceive(
+        let rings = nazuchem_kernel::rings::perceive(
             &native.graph,
-            reshiki_chemistry::rings::Options::default(),
+            nazuchem_kernel::rings::Options::default(),
         )
         .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
-        let aromatic = reshiki_chemistry::aromaticity::perceive(&native.graph, &rings.atoms)
-            .map_err(StereochemistryError::Uninterpretable)?;
+        let aromatic =
+            nazuchem_kernel::aromaticity::perceive(&native.graph, &rings.atoms, &self.state.budget)
+                .map_err(StereochemistryError::Uninterpretable)?;
         let aryl_atoms: HashSet<_> = indices
             .iter()
             .filter_map(|(&atom, &index)| aromatic.graph.atoms[index].aromatic.then_some(atom))
@@ -1093,7 +1094,7 @@ impl<'a> StereochemistryHandler<'a> {
             .iter()
             .position(|bond| bond.a == indices[&axis.from] && bond.b == indices[&axis.to])
             .unwrap();
-        if !axis_ends_distinct(&native.graph, native_bond)
+        if !axis_ends_distinct(&native.graph, native_bond, &self.state.budget)
             .map_err(StereochemistryError::Uninterpretable)?
         {
             return stereo(format!("Axis at locant {locant} has equivalent ligands"));
@@ -1520,11 +1521,11 @@ impl<'a> StereochemistryHandler<'a> {
         // stereogenic_units consumes a ring cache; the CIP adapter leaves it empty.
         native.rings = RingCache {
             kind: RingKind::Fast,
-            atoms: reshiki_chemistry::rings::fast(&native.graph)
+            atoms: nazuchem_kernel::rings::fast(&native.graph)
                 .map_err(StereochemistryError::Uninterpretable)?
                 .atoms,
         };
-        let (possible, _) = reshiki_chemistry::stereo::perception::stereogenic_units(&native)
+        let (possible, _) = nazuchem_kernel::stereo::perception::stereogenic_units(&native)
             .map_err(StereochemistryError::Uninterpretable)?;
         let possible: BTreeSet<_> = possible.into_iter().collect();
         let candidates = indices

@@ -896,7 +896,7 @@ mod tests {
 
     #[test]
     fn bounded_faces_reconstruct_naphthalene_and_reject_ambiguous_bridge() {
-        let mol = read_smiles("c1ccc2ccccc2c1").unwrap();
+        let mol = read_smiles("c1ccc2ccccc2c1", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
         assert_eq!(
@@ -953,7 +953,7 @@ mod tests {
             ("C1CC2CCCC1C2", false),
             ("C1CCC2(CC1)CCCC2", false),
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             assert_eq!(
                 bridge_free_fusion_parent_eligible(&mol, &atoms),
@@ -965,7 +965,7 @@ mod tests {
 
     #[test]
     fn budget_exhaustion_never_returns_partial_cycles() {
-        let mol = read_smiles("c1ccc2ccccc2c1").unwrap();
+        let mol = read_smiles("c1ccc2ccccc2c1", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();
         assert!(
             enumerate_chordless_cycles_with_limits(&mol, &atoms, 3, 8, 1)
@@ -1018,7 +1018,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{name}: {}", parsed.message))
                 .semantic_cxsmiles()
                 .unwrap();
-            let mol = read_smiles(&smiles).unwrap();
+            let mol = read_smiles(&smiles, &Default::default()).unwrap();
             let atoms = mol.atoms.keys().copied().collect();
             let bounded = select_bounded_face_model(&mol, &atoms)
                 .unwrap()

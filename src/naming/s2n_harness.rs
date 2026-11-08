@@ -16,7 +16,7 @@ const OPENCLATURA: &str = include_str!("../../tests/fixtures/s2n/openclatura_tes
 const RULES_CASES: &str = include_str!("../../tests/fixtures/s2n/rules_cases.tsv");
 
 fn namer(smiles: &str) -> Result<super::openclatura::Name, String> {
-    super::openclatura::name_smiles(smiles)
+    super::openclatura::name_smiles(smiles, &Default::default())
 }
 
 struct Case {

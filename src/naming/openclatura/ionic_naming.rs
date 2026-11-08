@@ -491,7 +491,12 @@ mod tests {
             ("[SeH+]1CNCC1", "1,3-selenazolidin-1-ium"),
             ("[TeH+]1CNCC1", "1,3-tellurazolidin-1-ium"),
         ] {
-            assert_eq!(super::super::name_smiles(smiles).unwrap().text, expected);
+            assert_eq!(
+                super::super::name_smiles(smiles, &Default::default())
+                    .unwrap()
+                    .text,
+                expected
+            );
         }
         for smiles in [
             "[S+]1=CN=CC1",
@@ -500,7 +505,7 @@ mod tests {
             "CC1=NC=[S+]C1",
         ] {
             assert!(
-                super::super::name_smiles(smiles)
+                super::super::name_smiles(smiles, &Default::default())
                     .unwrap_err()
                     .contains("chalcogen cation pi state"),
                 "{smiles}",
@@ -512,14 +517,14 @@ mod tests {
     fn neutral_oxo_prefixes_cannot_consume_protonated_noncarbon_oxo() {
         use super::super::graph_io::read_smiles;
         for smiles in ["CS(=[OH+])(=O)C", "OP(O)(O)=[OH+]"] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             assert!(
                 validate_heteroatom_oxo_charge_states(&mol).is_err(),
                 "{smiles}"
             );
         }
         for smiles in ["CS(=O)(=O)C", "C=[OH+]", "C[OH2+]"] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             assert!(
                 validate_heteroatom_oxo_charge_states(&mol).is_ok(),
                 "{smiles}"
@@ -531,7 +536,7 @@ mod tests {
     fn external_ligands_cannot_lose_charge_or_chalcogen_hydrogen() {
         use super::super::graph_io::read_smiles;
         for smiles in ["[O-][SH]1c2ccc3cc1ccc3c2", "[N-]=C1CCCCC1"] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             assert!(
                 validate_heteroatom_oxo_charge_states(&mol).is_err(),
                 "{smiles}"
@@ -543,7 +548,7 @@ mod tests {
             "[NH2+]=C1CCCCC1",
             "[SH2]1c2ccc3cc1ccc3c2",
         ] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             assert!(
                 validate_heteroatom_oxo_charge_states(&mol).is_ok(),
                 "{smiles}"
@@ -630,10 +635,13 @@ mod tests {
         assert_eq!(
             super::super::name_smiles(
                 "CC(=[NH2+])[N+](=CC1C[C@H]2CC(C1)(CCCN2)C)C(=N)C3=CC=CC=C3",
+                &Default::default(),
             )
             .map(|name| name.text)
             .as_deref(),
-            Ok("1-[(1-imino-1-phenylmethyl){[(1S)-6-methyl-2-azabicyclo[4.3.1]decan-8-yl]methylidene}ammonio]ethan-1-iminium"),
+            Ok(
+                "1-[(1-imino-1-phenylmethyl){[(1S)-6-methyl-2-azabicyclo[4.3.1]decan-8-yl]methylidene}ammonio]ethan-1-iminium"
+            ),
         );
     }
 }

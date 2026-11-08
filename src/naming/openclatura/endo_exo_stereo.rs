@@ -154,7 +154,7 @@ fn reference_parity(
 mod tests {
     use super::super::name_smiles;
     use crate::naming::{NameReason, NameStatus, canonical_smiles};
-    use reshiki_chemistry::smiles;
+    use nazuchem_kernel::smiles;
 
     #[test]
     fn cage_relative_names_keep_cip_primary_names_in_multiple_atom_orders() {
@@ -228,7 +228,7 @@ mod tests {
             let identity = canonical_smiles(input).unwrap();
             for order in atom_orders(input) {
                 assert_eq!(canonical_smiles(&order).unwrap(), identity, "{order}");
-                let name = name_smiles(&order).unwrap();
+                let name = name_smiles(&order, &Default::default()).unwrap();
                 assert_eq!(name.text, primary, "{order}");
                 assert_ne!(
                     name.status,
@@ -252,7 +252,7 @@ mod tests {
     }
 
     fn atom_orders(input: &str) -> [String; 2] {
-        let prepared = smiles::prepare(input).unwrap();
+        let prepared = smiles::prepare(input, &Default::default()).unwrap();
         let reordered = smiles::write::write(
             &prepared.state,
             smiles::write::Options {
@@ -288,7 +288,7 @@ mod tests {
         let input = "O[C@H]1C[C@@H]2[C@H](C)C[C@H]1[C@H]2C";
         let expected = "5-endo,7-anti-dimethylbicyclo[2.2.1]heptan-2-exo-ol";
         for order in atom_orders(input) {
-            let name = name_smiles(&order).unwrap();
+            let name = name_smiles(&order, &Default::default()).unwrap();
             assert_eq!(name.alternatives[0].name, expected, "{order}");
         }
         assert_round_trip(expected, &canonical_smiles(input).unwrap(), true);
@@ -308,7 +308,7 @@ mod tests {
         ] {
             let identity = canonical_smiles(input).unwrap();
             for order in atom_orders(input) {
-                let name = name_smiles(&order).unwrap();
+                let name = name_smiles(&order, &Default::default()).unwrap();
                 assert_eq!(name.alternatives.len(), 1, "{order}");
                 assert_eq!(name.alternatives[0].name, alternative, "{order}");
                 assert_eq!(
@@ -338,7 +338,7 @@ mod tests {
             let identity = canonical_smiles(input).unwrap();
             for order in atom_orders(input) {
                 assert_eq!(canonical_smiles(&order).unwrap(), identity, "{order}");
-                let name = name_smiles(&order).unwrap();
+                let name = name_smiles(&order, &Default::default()).unwrap();
                 assert_eq!(name.text, primary, "{order}");
                 assert_eq!(
                     name.status,
@@ -378,7 +378,7 @@ mod tests {
             // A different bridge-length system.
             "O[C@H]1C[C@@H]2CC[C@H]1CC2",
         ] {
-            let name = name_smiles(input).unwrap();
+            let name = name_smiles(input, &Default::default()).unwrap();
             assert!(
                 name.alternatives
                     .iter()

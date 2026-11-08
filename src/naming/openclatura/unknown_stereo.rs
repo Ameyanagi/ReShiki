@@ -2,7 +2,7 @@
 //! The structure used for identity omits only these units' configurations.
 use super::{Name, graph_io, molecule::Molecule};
 use crate::naming::{AlternativeName, NameReason, NameStatus};
-use reshiki_chemistry::stereo::perception;
+use nazuchem_kernel::stereo::perception;
 
 const UNKNOWN_ATOM: i32 = 900_001;
 const UNKNOWN_BOND: i32 = 900_002;
@@ -30,7 +30,7 @@ pub(super) fn annotate(state: &perception::State, mol: &mut Molecule) -> Result<
         if !atom_marker(map) {
             continue;
         }
-        let pseudo = reshiki_model::chemistry::stereo_lint::is_pseudoasymmetric(state, idx);
+        let pseudo = super::app_chemistry::is_pseudoasymmetric(state, idx)?;
         let atom = mol
             .atoms
             .get_mut(&idx)
@@ -61,6 +61,7 @@ pub(super) fn annotate(state: &perception::State, mol: &mut Molecule) -> Result<
 pub(super) fn name_smiles(
     smiles: &str,
     style: crate::naming::IsotopeStyle,
+    budget: &nazuchem_kernel::budget::Budget,
 ) -> Result<Option<Name>, String> {
     if ![":900001]", ":900002]", ":900003]"]
         .iter()
@@ -71,10 +72,10 @@ pub(super) fn name_smiles(
     // Keep the ordinary size and supported-semantics gate ahead of parsing
     // the internal marker transport, just as in graph_io::read_smiles.
     let unspecified = crate::naming::canonical_smiles(smiles)?;
-    let mut normal = super::name_smiles_with_style(&unspecified, style)?;
+    let mut normal = super::name_smiles_with_style(&unspecified, style, budget)?;
     let status = normal.status;
     normal.status = NameStatus::NotPreferred(NameReason::UnknownConfiguration);
-    let mol = graph_io::read_smiles(smiles)?;
+    let mol = graph_io::read_smiles(smiles, budget)?;
     // The explicit route may use a different name family (e.g. an oxide
     // zwitterion under P-62.5); preserve any departures it records.
     mol.set_name_status(status);
@@ -205,7 +206,7 @@ fn without_unknown_descriptors(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     fn round_trip(input: &str, expected: &str, omitted: &[&str], explicit: &str) {
-        let name = super::super::name_smiles(input).unwrap();
+        let name = super::super::name_smiles(input, &Default::default()).unwrap();
         assert_eq!(name.text, expected);
         assert_eq!(name.omitted_stereo, omitted);
         assert_eq!(name.alternatives[0].name, explicit);
@@ -339,7 +340,7 @@ mod tests {
             // The chiral functional-class form has no locant for an unknown sulfur.
             ("C[S:900001](=O)CC", "(methanesulfinyl)ethane", &[], 1, None),
         ] {
-            let name = super::super::name_smiles(input).unwrap();
+            let name = super::super::name_smiles(input, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{input}");
             assert_eq!(name.omitted_stereo, located, "{input}");
             assert_eq!(name.omitted_units, units, "{input}");
@@ -368,7 +369,7 @@ mod tests {
 
     #[test]
     fn ordinary_maps_do_not_request_unknown_stereochemistry() {
-        let name = super::super::name_smiles("[CH3:1][CH2:2][OH:3]").unwrap();
+        let name = super::super::name_smiles("[CH3:1][CH2:2][OH:3]", &Default::default()).unwrap();
         assert_eq!(name.text, "ethanol");
         assert!(name.omitted_stereo.is_empty());
         assert!(name.alternatives.is_empty());
@@ -377,7 +378,7 @@ mod tests {
     #[test]
     fn enantiomorphic_ligands_use_lowercase_unknown_descriptor() {
         let smiles = "[CH:900001](O)(C[C@H](F)C)C[C@@H](F)C";
-        let name = super::super::name_smiles(smiles).unwrap();
+        let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(name.omitted_stereo, ["4"]);
         let explicit = &name.alternatives[0].name;
         assert!(explicit.contains("4ξ"), "{explicit}");
@@ -418,7 +419,7 @@ mod tests {
     #[test]
     fn symmetric_numbering_keeps_warning_locants_in_the_displayed_name() {
         let smiles = "C[CH:900001](Cl)CC[C@H](Cl)C";
-        let name = super::super::name_smiles(smiles).unwrap();
+        let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
         let explicit = &name.alternatives[0].name;
         assert_eq!(name.text, super::without_unknown_descriptors(explicit));
         for candidate in [name.text.as_str(), explicit.as_str()] {

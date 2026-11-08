@@ -28,6 +28,7 @@ members = [
   "native/process",
   "crates/agent",
   "crates/chemistry",
+  "crates/nazuchem-kernel",
   "crates/depict-math",
   "crates/io",
   "crates/mcp",
@@ -70,6 +71,7 @@ iced_tiny_skia = { version = "0.14", default-features = false }
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 
 [dependencies]
+nazuchem-kernel = { path = "crates/nazuchem-kernel" }
 opsin = { path = "crates/opsin" }
 reshiki-geometry = { path = "native/geometry" }
 accesskit = "=0.24.1"

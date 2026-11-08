@@ -23,6 +23,14 @@ if result.status == Status::Success {
 }
 ```
 
+`Parser::new()` uses an unbounded chemistry budget. Hosts can pass their own
+limits and memory reservation hook to `Parser::with_budget(opsin::Budget)`;
+the parser forwards it to chemistry perception during structure construction.
+The library does not detect machine capabilities or access a process-wide
+reservation pool. The compatibility tests use the unbounded default; ReShiki
+checked once that the structure and configuration gates give the same results
+under its own limits.
+
 The options preserve all five upstream flags, initially false. Results retain
 the exact input, status, warnings, and failure message. The public graph model
 preserves the construction state, locants, attachment points, isotope, charge,

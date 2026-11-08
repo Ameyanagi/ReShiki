@@ -824,7 +824,7 @@ mod tests {
 
     #[test]
     fn acid_prefix_context_crosses_heteroatoms_and_stays_within_its_branch() {
-        let mol = read_smiles("COCC(=O)O").unwrap();
+        let mol = read_smiles("COCC(=O)O", &Default::default()).unwrap();
         let excluded = AtomSet::from([0]);
         assert_eq!(
             super::name_subgraph_rendered(&mol, 1, &excluded, Some(0), true)
@@ -849,12 +849,13 @@ mod tests {
                 use crate::naming::openclatura::name_smiles;
 
                 assert_eq!(
-                    name_smiles(&format!("{}C", "CO".repeat(100))).map(|name| name.text),
+                    name_smiles(&format!("{}C", "CO".repeat(100)), &Default::default())
+                        .map(|name| name.text),
                     Err("openclatura: naming complexity limit exceeded".into())
                 );
-                assert!(name_smiles("COCOCOC").is_ok());
+                assert!(name_smiles("COCOCOC", &Default::default()).is_ok());
                 assert_eq!(
-                    name_smiles("CCO").map(|name| name.text),
+                    name_smiles("CCO", &Default::default()).map(|name| name.text),
                     Ok("ethanol".into())
                 );
             })
@@ -865,7 +866,7 @@ mod tests {
 
     #[test]
     fn simple_carbanion_requires_charge_on_the_attachment_atom() {
-        let mol = read_smiles("CC[CH2-]").unwrap();
+        let mol = read_smiles("CC[CH2-]", &Default::default()).unwrap();
         let parts = AssemblyParts::default();
         let path = [2, 1, 0];
         let locants = BTreeMap::from([(2, "1".into()), (1, "2".into()), (0, "3".into())]);
@@ -881,7 +882,7 @@ mod tests {
 
     #[test]
     fn recursive_substituent_names_preserve_attachment_and_boundary() -> Result<(), String> {
-        let methyl = read_smiles("C")?;
+        let methyl = read_smiles("C", &Default::default())?;
         assert_eq!(
             name_subgraph_with_upstream(&methyl, 0, &AtomSet::new(), None)?,
             "methyl"
@@ -901,7 +902,7 @@ mod tests {
             ("COC", 1, "methoxy"),
             ("CN(C)C", 1, "(dimethylamino)"),
         ] {
-            let mol = read_smiles(smiles)?;
+            let mol = read_smiles(smiles, &Default::default())?;
             assert_eq!(
                 name_subgraph_with_upstream(&mol, start, &AtomSet::from([0]), Some(0))?,
                 expected,
@@ -914,7 +915,7 @@ mod tests {
     #[test]
     fn attachment_bond_stereo_can_be_cited_by_the_caller() {
         for smiles in ["C/C=N/N=C/C", "C/C=N\\N=C/C"] {
-            let mol = read_smiles(smiles).unwrap();
+            let mol = read_smiles(smiles, &Default::default()).unwrap();
             let exclude = AtomSet::from([2]);
             let stereo = mol.get_bond(1, 2).unwrap().stereo.as_deref().unwrap();
             let complete = name_subgraph_with_upstream(&mol, 1, &exclude, Some(2)).unwrap();
@@ -952,7 +953,9 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                name_smiles(smiles).map(|name| name.text).as_deref(),
+                name_smiles(smiles, &Default::default())
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );
@@ -974,7 +977,9 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                name_smiles(smiles).map(|name| name.text).as_deref(),
+                name_smiles(smiles, &Default::default())
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );
