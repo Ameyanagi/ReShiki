@@ -9,7 +9,7 @@ Status: accepted 2026-11-09 (decisions D1–D6 made). Name: **nazuchem** (名付
 | name→structure (n2s)            | `crates/opsin`                                                                                                                                                                                                                                                | ~50k lines Rust (src + tests), 5.7 MB resources, 5.7 MB oracle fixtures  | Port of OPSIN main `42e87ac6` (MIT, Daniel Lowe). Already a standalone crate with `PORTING.md`, `NOTICE`, `provenance/`                                                                                                                         |
 | structure→name (s2n)            | `src/naming/openclatura`                                                                                                                                                                                                                                      | 89 files / 54k lines (nested `fusion/`, `phane/`, `rules/`), 960 KB data | Began as a port of openclatura 0.4.3 (MIT, lamalab-org), heavily extended in ReShiki. **Also contains OPSIN-derived data** (`data/fusion_entry_geometry.json`, `retained_macrocycle_templates.json`). Many files have no per-file origin marker |
 | App glue                        | `src/naming.rs`, `src/naming/*.rs`                                                                                                                                                                                                                            | ~3.8k lines                                                              | ReShiki original; `catalog` data is OPSIN MIT + ChEBI CC BY 4.0                                                                                                                                                                                 |
-| Chemistry the naming code needs | `crates/chemistry`: `smiles`, `kekulize`, `aromaticity`, `rings`, `ranking`, `stereo` (perception, CIP, and the spatial/drawing types they use), `sanitize`, `electronic`, `normalize`, `cx`, `graph`, `hydrogens`, `atomic_data`, `isotopes`, `native_order` | ~25k lines (exact transitive closure to be inventoried in step 1)        | RDKit-derived (BSD-3); extended-tetrahedral CIP from SiMolecule **centres (BSD-2)**                                                                                                                                                             |
+| Chemistry the naming code needs | `crates/chemistry`: `smiles`, `kekulize`, `aromaticity`, `rings`, `ranking`, `stereo` (perception, CIP, and the spatial/drawing types they use), `sanitize`, `electronic`, `normalize`, `cx`, `graph`, `hydrogens`, `atomic_data`, `isotopes`, `native_order` | ~27.5k lines (exact transitive closure to be inventoried in step 1)      | RDKit-derived (BSD-3); extended-tetrahedral CIP from SiMolecule **centres (BSD-2)**                                                                                                                                                             |
 
 Couplings that matter:
 
@@ -17,8 +17,10 @@ Couplings that matter:
 - `openclatura` → `reshiki-chemistry`, `crate::naming` (status/reason enums, `IsotopeStyle`, `canonical_smiles`), and through `canonical_smiles` → `molecule_names::canonical_identity` in `crates/model` (admission checks, clearing unknown stereo, radical-electron preservation).
 - `aromaticity` (via `sanitize`) calls `Capabilities::detect()` and draws on the process-wide reservation pool in `crates/process-heap`. `fusion` keeps thread-local caches.
 - Tests that cross the boundary: catalog tests embed 17 OPSIN XML resources; phane tests use the InChI reader; `s2n_harness` verifies through the worker adapters. `crates/python` `drawing::from_name` is **production** code calling `opsin` directly.
-- The ReShiki notice collector (`scripts/license_notices.py`) reads each dependency's **crate directory** only.
-- Churn: 89 commits since 2026-09-01 touch naming paths; 29 of 77 open issues are naming bugs.
+- The ReShiki notice collector (`scripts/license_notices.py`) reads the repo-root `licenses/` tree (where the RDKit, centres and openclatura terms live today), `licenses/rust/manifest.json` supplements, and each separately licensed dependency's crate directory; workspace crates declared `MIT OR Apache-2.0` (such as `reshiki-chemistry`) are skipped and rely on the root tree.
+- `canonical_smiles` in `src/naming.rs` holds s2n admission checks (SMILES size cap, CX/reaction rejection, atom-token bound, allene/coordination stereo rejection, kept tetrahedral centres). openclatura reaches it from `graph_io.rs`, `mod.rs`, `radical_ions.rs` and `unknown_stereo.rs`.
+- openclatura's own tests call the n2s worker in-process through `crate::naming::{local, worker}` (27 call sites, e.g. `parent_pipeline.rs`, `unknown_stereo.rs`, `mod.rs`); `radical_ions.rs` tests use `crate::document`.
+- Churn: 87 commits since 2026-09-01 touch naming paths; 29 of 77 open issues are naming bugs.
 
 ## 2. Goals and non-goals
 
@@ -56,12 +58,12 @@ nazuchem/
   PROVENANCE.toml  per-file origin ledger (§6)
 ```
 
-Dependency direction: `ir` ← `chem` ← {`n2s`, `s2n`} ← `nazuchem`. Shared types and identity sit **below** both engines, so the facade never has to be imported by an engine (no facade↔s2n cycle).
+Dependency direction: `ir` ← `kernel` ← {`n2s`, `s2n`} ← `nazuchem`. Shared types and identity sit **below** both engines, so the facade never has to be imported by an engine (no facade↔s2n cycle).
 
 Two adjustments needed to keep the library host-neutral without changing behaviour:
 
-- **Budget injection.** `nazuchem-kernel` must not detect machine capabilities or touch a process-wide reservation pool. The aromaticity/sanitize entry points take a `Budget` (default: unbounded); ReShiki passes exactly what `Capabilities::detect().resolve()` and its pool give today, so ReShiki output stays identical.
-- **Admission policy split.** `canonical_identity` splits into a pure identity function (to `nazuchem-kernel`) and ReShiki's admission rules (stay in `crates/model`). The s2n engine keeps its own existing rejections (e.g. allene/coordination stereo, N/ring lone-pair centres), so every input rejected today is still rejected.
+- **Budget injection.** `nazuchem-kernel` must not detect machine capabilities or touch a process-wide reservation pool. Today `aromaticity::perceive()` calls `Capabilities::detect()` itself; in the kernel every perception entry point takes a `Budget` argument instead, and so do the s2n entry points (`Namer::new(budget)`; the n2s `Parser` likewise for `modern_cip`). ReShiki's worker passes `Capabilities::detect().resolve()` and its pool, exactly as today, so ReShiki output stays identical; the snapshot gate runs with that budget. Library users get `Budget::default()`, documented as unbounded; it differs from ReShiki only where ReShiki's budget would have run out.
+- **Admission policy split.** `canonical_smiles` (from `src/naming.rs`) moves into `nazuchem-s2n` together with all its checks: size cap, CX/reaction rejection, atom-token bound, allene/coordination stereo rejection and the kept-tetrahedral-centre comparison. `canonical_identity` (from `crates/model`) splits into a pure identity function (to `nazuchem-kernel`) and ReShiki's document-level admission rules (stay in `crates/model`). The engine keeps its other rejections (e.g. N/ring lone-pair centres), so every input rejected today is still rejected.
 
 Not called `opsin` on crates.io: that would read as the upstream project. Docs say "a Rust port of OPSIN by Daniel Lowe".
 
@@ -69,7 +71,7 @@ Library invariants (stated in the README): no I/O, no threads, no process-wide m
 
 ### Chemistry kernel (decision D2)
 
-- **A (recommended): copy the exact transitive subset of `reshiki-chemistry`** → byte-identical, every corpus stays green. Cost: ~25k lines exist twice; fixes are mirrored deliberately.
+- **A (recommended): copy the exact transitive subset of `reshiki-chemistry`** → byte-identical, every corpus stays green. Cost: ~27.5k lines exist twice; fixes are mirrored deliberately.
 - B: COSMolKit (`cosmolkit-core/-smiles/-stereo`, 0.5.0-rc) → no duplication but canonical SMILES, Kekulé choice and ranking ties may differ, forcing a re-baseline mid-move. Evaluate later as its own project behind the same corpora.
 
 ## 5. The structure IR (Phase B)
@@ -109,8 +111,8 @@ The shape above covers these requirements (the engines use all of them today):
 
 1. **Position-variation bonds** (CXSMILES `m:`, e.g. `*CC |$_AP1$,m:0:1.2|`) as typed multi-attachment references.
 2. **Complete polymer units** (SRU connectivity `ht`/`hh`/`eu`, brackets) and fully typed `Abs/And/Or` stereo groups, matching what OPSIN serializes today.
-3. **Hydrogens as both explicit and total counts** (naming branches on `explicit_h_count`; `C` vs `[CH4]` must stay distinguishable), plus isotopic H kept as graph vertices (never folded into a count) and an input-atom → IR-atom map.
-4. **Locants as a defined contract**: per atom, `locants: Vec<String>` (all) plus `parent: bool` and the selected display locant, so ReShiki's current parent-only projection is reproducible exactly.
+3. **Hydrogen counts with their origin** (`hydrogens` + `hydrogens_stated`; naming branches on `explicit_h_count`, so `C` vs `[CH4]` must stay distinguishable), isotopic H kept as graph vertices (never folded into a count), and atom index = identity so s2n output maps back to input atoms.
+4. **Locants as a defined contract**: per atom, `locants: Vec<String>` (all, in name order) plus `Molecule.parent` (the principal-parent atoms); the displayed locant is `locants[0]` for parent atoms, so ReShiki's current parent-only projection is reproducible exactly.
 5. **Aromaticity**: Kekulé orders stay the contract, with a proof obligation: the IR → `nazuchem-kernel` adapter must reproduce `graph_io`'s aromatic-bond snapshot and the fusion audit's localized-pi rejections on the full corpora; if it cannot, carry an `aromatic` bond annotation.
 6. **Radicals vs wildcards** remain distinct (genuine radical electrons vs OPSIN wildcard attachment atoms with labels).
 
@@ -131,7 +133,7 @@ Result types must keep today's semantics:
    or `// SPDX-License-Identifier: MIT OR Apache-2.0` + `// Origin: original Nazuchem code`. Mixed files mark function-level boundaries: `// Ported from openclatura chains.py::_longest_chain` vs `// Nazuchem extension (not in openclatura 0.4.3): …`.
 2. **Data, byte-preserved upstream XML and binary DFA tables** get no inline header (that would break byte equality); they are listed in `PROVENANCE.toml` with origin, upstream path, commit, licence and SHA-256.
 3. `PROVENANCE.toml` covers every file recursively (source, data, fixtures, scripts). `cargo xtask provenance` fails CI on a missing entry, a header/ledger mismatch or a hash change, and generates the notices.
-4. **Notices travel inside each publishable crate**: every crate directory contains its own `LICENSE*`, `NOTICE` and a `licenses/` folder with the complete upstream texts that apply to it (n2s: OPSIN; s2n: openclatura + OPSIN; chem: RDKit + centres; facade: all). Wheels and npm packages include the same. Release CI asserts the **contents**, not just filenames, of the `.crate`, wheel and npm tarball, and ReShiki's CI asserts its aggregated `THIRD-PARTY-NOTICES.txt` still contains OPSIN, openclatura, RDKit and centres after the switch. During Phase A, the airlock crates are not `MIT OR Apache-2.0` as a whole, so the collector's "original workspace crate" shortcut must not skip them.
+4. **Notices travel inside each publishable crate**: every crate directory contains its own `LICENSE*`, `NOTICE` and a `licenses/` folder with the complete upstream texts that apply to it (n2s: OPSIN; s2n: openclatura + OPSIN; kernel: RDKit + centres; facade: all). Wheels and npm packages include the same. Release CI asserts the **contents**, not just filenames, of the `.crate`, wheel and npm tarball, and ReShiki's CI asserts its aggregated `THIRD-PARTY-NOTICES.txt` still contains OPSIN, openclatura, RDKit and centres after the switch. During Phase A (while the new crates still live in the ReShiki workspace), those crates are not `MIT OR Apache-2.0` as a whole: declare their real licence expressions, move the matching root `licenses/` entries (rdkit, centres, openclatura) into each crate's own `licenses/` folder, and make sure the collector's "original workspace crate" shortcut does not skip them.
 5. **Wording**: README, crate docs and package metadata say "port of OPSIN" / "began as a port of openclatura 0.4.3, extended" — never "original" for those parts.
 6. **IUPAC references**: rule functions carry a doc tag such as `/// IUPAC 2013: P-44.1.2.2`; fused `FR-`, spiro `SP-`, von Baeyer `VB-`, ring assemblies `RB-`. Rule numbers and short quotes only (Blue Book text is IUPAC/RSC copyright). A script turns the tags into a rule-coverage page. Note that OPSIN-compatibility data (e.g. `fusion_entry_geometry.json`) already says it is "parser compatibility, not IUPAC PIN certification"; keep that distinction.
 7. **Licences**: original code MIT OR Apache-2.0; OPSIN and openclatura MIT; RDKit BSD-3; centres BSD-2; ChEBI CC BY 4.0 (only if the catalog moves).
@@ -144,16 +146,16 @@ Baseline first: freeze the outputs of the OPSIN gates (8,100 lexical, 2,624 stru
 
 **Phase A (one ReShiki PR per step, each independently reviewed)**
 
-| Step | Work                                                                                                                                                                                                                            |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | Land or close in-flight naming PRs                                                                                                                                                                                              |
-| 1    | Inventory the chemistry transitive closure; create `crates/nazuchem-kernel` (exact copy + `Budget` injection); point `opsin` and openclatura at it                                                                              |
-| 2    | Provenance audit → `PROVENANCE.toml`, headers, per-crate `licenses/`, collector fix                                                                                                                                             |
-| 3    | `crates/nazuchem-ir` with the shared vocabulary only; split `canonical_identity`                                                                                                                                                |
-| 4    | Move openclatura → `crates/nazuchem-s2n` (SMILES in, unchanged `Name` out); move its tests and fixtures, replacing the worker-adapter harness and InChI-reader phane tests with library-local support                           |
-| 5    | Rename `crates/opsin` → `crates/nazuchem-n2s`; facade crate `nazuchem` with today's string API; switch ReShiki callers incl. `crates/python` `from_name`; keep catalog XML evidence pinned                                      |
-| 6    | `git filter-repo` the crates, corpora and licences into the new repo (history kept); ReShiki depends by git rev and deletes its copies. Real-app check: name import + locant hover, generated name panel, browser naming worker |
-| 7    | New repo CI: fmt, clippy, tests, oracle gates, provenance, 3 OS + wasm32. Transfer naming issues (`gh issue transfer`)                                                                                                          |
+| Step | Work                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | Land or close in-flight naming PRs                                                                                                                                                                                                                                                                                                                                                        |
+| 1    | Inventory the chemistry transitive closure; create `crates/nazuchem-kernel` (exact copy + `Budget` injection); point `opsin` and openclatura at it                                                                                                                                                                                                                                        |
+| 2    | Provenance audit → `PROVENANCE.toml` (upstream version recorded per file; e.g. `fusion_entry_geometry.json` comes from OPSIN 2.9.0, not `42e87ac6`), headers, per-crate `licenses/`, collector fix                                                                                                                                                                                        |
+| 3    | `crates/nazuchem-ir` with the shared vocabulary only; split `canonical_identity`                                                                                                                                                                                                                                                                                                          |
+| 4    | Move openclatura → `crates/nazuchem-s2n` (SMILES in, unchanged `Name` out) together with `canonical_smiles`; move its tests and fixtures; its tests that call n2s through `crate::naming::{local, worker}` (27 sites) use a dev-dependency on the n2s crate instead; replace the worker-adapter harness, `crate::document` and InChI-reader phane test helpers with library-local support |
+| 5    | Rename `crates/opsin` → `crates/nazuchem-n2s` (update `nazuchem-s2n`'s dev-dependency in the same PR); facade crate `nazuchem` with today's string API; switch ReShiki callers incl. `crates/python` `from_name`; keep catalog XML evidence pinned                                                                                                                                        |
+| 6    | `git filter-repo` the crates, corpora and licences into the new repo (history kept); ReShiki depends by git rev and deletes its copies. Real-app check: name import + locant hover, generated name panel, browser naming worker                                                                                                                                                           |
+| 7    | New repo CI: fmt, clippy, tests, oracle gates, provenance, 3 OS + wasm32. Transfer naming issues (`gh issue transfer`)                                                                                                                                                                                                                                                                    |
 
 **Phase B (in the new repo)**
 
@@ -164,11 +166,11 @@ Baseline first: freeze the outputs of the OPSIN gates (8,100 lexical, 2,624 stru
 | 10   | ReShiki: `IR → chemistry State` converter, worker protocol v5 after the size measurement                          |
 | 11   | 0.1.0 via tag-triggered trusted publishing (crates.io, PyPI, npm); ReShiki moves from git rev to version          |
 
-Risks: step 4 is the hardest (openclatura uses `crate::naming` in 114 places; most are the enums). The two chemistry copies can drift; mirror fixes deliberately. The npm package carries ~5.7 MB of OPSIN resources; features allow n2s-only or s2n-only builds.
+Risks: step 4 is the hardest (openclatura uses `crate::naming` in 112 places plus `super::super` paths; only about 32 are the status/reason enums, the rest are `canonical_smiles`, `IsotopeStyle` and test calls into the worker). The two chemistry copies can drift; mirror fixes deliberately. The npm package carries ~5.7 MB of OPSIN resources; features allow n2s-only or s2n-only builds.
 
 ## 8. Name
 
-**nazuchem** (decided 2026-11-09). Free on crates.io, PyPI, npm (`nazuchem`, `@ameyanagi/nazuchem`) and `github.com/Ameyanagi/nazuchem` when checked. Crates: `nazuchem` (facade), `nazuchem-ir`, `nazuchem-kernel` (chemistry; avoids `nazuchem-chem`), `nazuchem-n2s`, `nazuchem-s2n`.
+**nazuchem** (decided 2026-11-09). Free on crates.io, PyPI, npm (`nazuchem`, `@ameyanagi/nazuchem`) and `github.com/Ameyanagi/nazuchem` when checked on 2026-11-09. Crates: `nazuchem` (facade), `nazuchem-ir`, `nazuchem-kernel` (chemistry; avoids `nazuchem-chem`), `nazuchem-n2s`, `nazuchem-s2n`.
 
 ## 9. Decisions (made 2026-11-09)
 
