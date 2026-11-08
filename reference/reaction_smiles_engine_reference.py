@@ -76,6 +76,37 @@ def participants(text):
     return mols
 
 
+def molecule_reading(text):
+    """#1043: the original worker's reaction import keeps E/Z from slashes
+    that RDKit itself reads as unknown (a CX `_UnknownStereo` atom property on
+    a double-bond atom) or as unspecified (a slash bond not adjacent to the
+    double bond); both RDKit's molecule and reaction readers give no E/Z
+    there. ReShiki follows RDKit's reading. Return RDKit's molecule reading of
+    the participants, joined in text order with the same CX block, and its
+    double bonds without E/Z, for reaction SMILES that use slashes."""
+    smiles, *cx = text.strip().split(maxsplit=1)
+    if not any(c in smiles for c in "/\\"):
+        return None
+    joined = ".".join(part for part in smiles.split(">") if part)
+    mol = Chem.MolFromSmiles(" ".join([joined, *cx]))
+    if mol is None:
+        return None
+    stated = (Chem.BondStereo.STEREOE, Chem.BondStereo.STEREOZ)
+    bonds = [
+        b.GetIdx()
+        for b in mol.GetBonds()
+        if b.GetBondType() == Chem.BondType.DOUBLE and b.GetStereo() not in stated
+    ]
+    if not bonds:
+        return None
+    return dict(
+        bonds=bonds,
+        inchi=Chem.MolToInchi(mol),
+        inchikey=Chem.MolToInchiKey(mol),
+        smiles=Chem.MolToSmiles(mol),
+    )
+
+
 def unspecified_ez(text):
     """#909/#923: drawing-order indices of the double bonds whose configuration
     the input leaves open (and every cumulated double bond), with RDKit's
@@ -136,6 +167,7 @@ if __name__ == "__main__":
                     expected=expected,
                     failure=failure,
                     unspecified_ez=unspecified_ez(text) if expected else None,
+                    molecule_reading=molecule_reading(text) if expected else None,
                 )
             )
         )

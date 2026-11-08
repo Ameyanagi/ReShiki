@@ -21,10 +21,14 @@ mod coordinate_free_wedges;
 mod coordinate_wedges;
 #[path = "support/longest_lived_mass.rs"]
 mod longest_lived_mass;
+#[path = "support/molecule_reading.rs"]
+mod molecule_reading;
 #[path = "support/molfile_restrictions.rs"]
 mod molfile_restrictions;
 #[path = "support/nci_2808_template_layout.rs"]
 mod nci_2808_template_layout;
+#[path = "support/reaction_coordinate_free_wedges.rs"]
+mod reaction_coordinate_free_wedges;
 #[path = "support/reaction_presentation.rs"]
 mod reaction_presentation;
 #[path = "support/reference_mol.rs"]
@@ -248,6 +252,8 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         unspecified_ez: Option<unspecified_ez::UnspecifiedEz>,
         #[serde(default)]
         coordinate_wedges: Option<coordinate_wedges::CoordinateWedges>,
+        #[serde(default)]
+        molecule_reading: Option<molecule_reading::MoleculeReading>,
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
@@ -382,6 +388,14 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 if let Some(input) = &case.coordinate_wedges {
                     coordinate_wedges::adapt(input, &actual, &mut expected);
                 }
+                if let Some(reading) = &case.molecule_reading {
+                    molecule_reading::adapt(reading, &actual, &mut expected);
+                }
+                let flagged = reaction_coordinate_free_wedges::atoms(format, &case.text);
+                if !flagged.is_empty() {
+                    reaction_coordinate_free_wedges::adapt(&flagged, &actual, &mut expected);
+                    deferred.push(case.name.clone());
+                }
                 let doubles = stated_ez_wedges::double_bonds(format, &case.text);
                 if !doubles.is_empty() {
                     stated_ez_wedges::adapt(&doubles, &actual, &mut expected);
@@ -452,7 +466,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     }
     assert!(child.wait()?.success(), "Import reference failed");
     eprintln!("{format} coordinate-free wedge flags following the tag (#1044): {tag_wins:?}");
-    eprintln!("{format} stated E/Z beside a wedge flag, deferred (#1042): {deferred:?}");
+    eprintln!("{format} deferred known issues (#1042, #1048): {deferred:?}");
     eprintln!(
         "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
