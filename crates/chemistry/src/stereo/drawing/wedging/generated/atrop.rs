@@ -5,7 +5,7 @@ use crate::{
     electronic::Hybridization,
     kekulize::Direction,
     ranking::Metadata,
-    stereo::{atropisomers, drawing::detect_atropisomers},
+    stereo::{allene, atropisomers, drawing::detect_atropisomers},
 };
 
 #[cfg(test)]
@@ -167,68 +167,86 @@ fn search(
             *at_mut(&mut originals, atom)? = Some(bond);
         }
     }
-    let mut centers: Vec<_> = eligible
+    let reference = read_stereo(&ctx.state, ctx.conf, work)?;
+    let mut axes_at = vec![Vec::new(); input.graph.atoms.len()];
+    let mut allene_ends = vec![false; input.graph.atoms.len()];
+    let mut pending = Vec::new();
+    for (atom, metadata) in input.metadata.atoms.iter().enumerate() {
+        work.spend(1)?;
+        if *at(&eligible, atom)? && metadata.chiral_tag != at(&reference.atoms, atom)?.chiral_tag {
+            pending.push(atom);
+        }
+        if metadata.chiral_tag == 5 {
+            work.spend(input.graph.bonds.len().saturating_mul(3))?;
+            if let Some(ends) = allene::terminals(&input.graph, atom) {
+                for end in ends {
+                    *at_mut(&mut allene_ends, end)? = true;
+                }
+            }
+        }
+    }
+    for (axis, metadata) in input.metadata.bonds.iter().enumerate() {
+        work.spend(1)?;
+        let edge = at(&input.graph.bonds, axis)?;
+        let actual = at(&reference.bonds, axis)?.stereo;
+        if matches!(metadata.stereo, 6 | 7) {
+            for atom in [edge.a, edge.b] {
+                at_mut(&mut axes_at, atom)?.push(axis);
+            }
+        }
+        if metadata.stereo != actual
+            && (matches!(metadata.stereo, 6 | 7) || matches!(actual, 6 | 7))
+        {
+            pending.extend([edge.a, edge.b]);
+        }
+    }
+    let axis_ends: Vec<_> = axes_at.iter().map(|axes| !axes.is_empty()).collect();
+    let mut movable = vec![false; input.graph.atoms.len()];
+    // Close over shared carrier sites before clearing anything. A carrier
+    // touches its centre/axis end and a neighbour, including incoming wedges,
+    // second wedges and ring replacements absent from the chooser's map.
+    // Only centres and axis ends joined by directable bonds propagate;
+    // unrelated components stay fixed.
+    while let Some(atom) = pending.pop() {
+        work.spend(1)?;
+        if std::mem::replace(at_mut(&mut movable, atom)?, true) {
+            continue;
+        }
+        let incident =
+            std::iter::once(None).chain(at(&ctx.adjacent, atom)?.iter().copied().map(Some));
+        for bond in incident {
+            work.spend(1)?;
+            let other = if let Some(bond) = bond {
+                if !can_direct(at(&input.graph.bonds, bond)?.order) {
+                    continue;
+                }
+                ctx.other(bond, atom)?
+            } else {
+                atom
+            };
+            if *at(&eligible, other)? && !*at(&movable, other)? {
+                pending.push(other);
+            }
+            for &axis in at(&axes_at, other)? {
+                work.spend(1)?;
+                let edge = at(&input.graph.bonds, axis)?;
+                for end in [edge.a, edge.b] {
+                    if !*at(&movable, end)? {
+                        pending.push(end);
+                    }
+                }
+            }
+        }
+    }
+    let centers: Vec<_> = eligible
         .iter()
         .zip(originals)
         .enumerate()
-        .filter_map(|(atom, (&eligible, original))| eligible.then_some((atom, original)))
+        .filter_map(|(atom, (&eligible, original))| {
+            (eligible && movable.get(atom).copied().unwrap_or(false)).then_some((atom, original))
+        })
         .collect();
-    let mut axis_ends = vec![false; input.graph.atoms.len()];
-    for (bond, meta) in input.graph.bonds.iter().zip(&input.metadata.bonds) {
-        work.spend(1)?;
-        if matches!(meta.stereo, 6 | 7) {
-            *at_mut(&mut axis_ends, bond.a)? = true;
-            *at_mut(&mut axis_ends, bond.b)? = true;
-        }
-    }
-    let mut movable = vec![false; input.graph.atoms.len()];
-    let mut pending = Vec::new();
-    for &(atom, _) in &centers {
-        for &bond in at(&ctx.adjacent, atom)? {
-            work.spend(1)?;
-            if *at(&axis_ends, ctx.other(bond, atom)?)? {
-                *at_mut(&mut movable, atom)? = true;
-                pending.push(atom);
-                break;
-            }
-        }
-    }
-    // Bonded centres compete for the same carrier. Close over these centres
-    // (including the fourth tetrahedrane vertex), never disconnected ones.
-    while let Some(atom) = pending.pop() {
-        for &bond in at(&ctx.adjacent, atom)? {
-            work.spend(1)?;
-            let other = ctx.other(bond, atom)?;
-            if *at(&eligible, other)? && !*at(&movable, other)? {
-                *at_mut(&mut movable, other)? = true;
-                pending.push(other);
-            }
-        }
-    }
-    centers.retain(|&(atom, _)| movable.get(atom).copied().unwrap_or(false));
     let center_count = centers.len();
-    let reference = read_stereo(&ctx.state, ctx.conf, work)?;
-    let mut axes = Vec::new();
-    let mut movable_axis_ends = vec![false; input.graph.atoms.len()];
-    for (axis, metadata) in input.metadata.bonds.iter().enumerate() {
-        work.spend(1)?;
-        if !matches!(metadata.stereo, 6 | 7) {
-            continue;
-        }
-        let edge = at(&input.graph.bonds, axis)?;
-        let mut affected = at(&reference.bonds, axis)?.stereo != metadata.stereo;
-        for atom in [edge.a, edge.b] {
-            for &bond in at(&ctx.adjacent, atom)? {
-                work.spend(1)?;
-                affected |= *at(&movable, ctx.other(bond, atom)?)?;
-            }
-        }
-        if affected {
-            axes.push(axis);
-            *at_mut(&mut movable_axis_ends, edge.a)? = true;
-            *at_mut(&mut movable_axis_ends, edge.b)? = true;
-        }
-    }
     // Keep input wedges and allene carriers fixed. The optional second centre
     // wedge may have added more than one movable bond. Valid axes outside
     // the repair retain their reference carriers and add no search choices.
@@ -245,9 +263,11 @@ fn search(
             {
                 return Ok(None);
             }
-        } else if (*at(&movable, edge.a)?
-            || (*at(&movable_axis_ends, edge.a)?
-                && matches!(ctx.choices.get(&bond), Some(Choice::Atrop(_)))))
+        } else if *at(&movable, edge.a)?
+            && (*at(&eligible, edge.a)?
+                || matches!(ctx.choices.get(&bond), Some(Choice::Atrop(_))))
+            // An allene can reuse an atrop carrier without a Choice::Allene.
+            && !*at(&allene_ends, edge.a)?
             && wedged(*at(&ctx.state.directions, bond)?)
         {
             *at_mut(&mut ctx.state.directions, bond)? = Direction::None;
@@ -287,9 +307,12 @@ fn search(
         }
         alternatives.push(choices);
     }
-    for axis in axes {
+    for (axis, metadata) in input.metadata.bonds.iter().enumerate() {
         work.spend(1)?;
         let edge = at(&input.graph.bonds, axis)?;
+        if !matches!(metadata.stereo, 6 | 7) || !*at(&movable, edge.a)? {
+            continue;
+        }
         // A centre or fixed input wedge may already define this axis. Both
         // directions must be tried because another axis can share a carrier.
         let mut choices = vec![None];

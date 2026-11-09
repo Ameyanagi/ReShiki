@@ -128,6 +128,138 @@ fn readback(state: &WedgeState, conformer: &Conformer) -> anyhow::Result<Metadat
 }
 
 #[test]
+fn axes_sharing_an_end_repair_their_shared_carrier_together() -> TestResult {
+    let prepared = crate::smiles::prepare("CN(C(=C)C)C(=C)C")?.state;
+    let properties = WedgeProperties {
+        attachment_points: vec![false; prepared.graph.atoms.len()],
+        valences: prepared.valences,
+    };
+    let mut state = WedgeState {
+        graph: prepared.graph,
+        metadata: prepared.metadata,
+        directions: prepared.directions,
+        rings: prepared.rings,
+    };
+    for axis in [1, 4] {
+        at_mut(&mut state.metadata.bonds, axis)
+            .map_err(anyhow::Error::msg)?
+            .stereo = 6; // N1-C2 and N1-C5.
+    }
+    assert!(state.directions.iter().all(|&d| d == Direction::None));
+    let conformer = Conformer {
+        is_3d: false,
+        positions: [
+            (-1.0, 0.0),
+            (0.0, 0.0),
+            (0.5, 1.0),
+            (1.5, 1.0),
+            (0.0, 2.0),
+            (0.5, -1.0),
+            (1.5, -1.0),
+            (0.0, -2.0),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point3 { x, y, z: 0.0 })
+        .collect(),
+    };
+    let raw = wedging::wedge_molecule(&state, &properties, Some(&conformer), false)
+        .map_err(anyhow::Error::msg)?;
+    let reference =
+        prefer_ring_wedges(&raw, &properties, &conformer).map_err(anyhow::Error::msg)?;
+    let seen = readback(&reference, &conformer)?;
+    assert_eq!(at(&seen.bonds, 1).map_err(anyhow::Error::msg)?.stereo, 6);
+    assert_eq!(at(&seen.bonds, 4).map_err(anyhow::Error::msg)?.stereo, 7);
+    // Both axes use N1->C0. Repairing only the second used to clear the
+    // first axis's only carrier without giving it any alternatives.
+    assert!(wedged(
+        *at(&reference.directions, 0).map_err(anyhow::Error::msg)?
+    ));
+    let mut witness = state.clone();
+    for (bond, direction) in [(3, Direction::Hash), (6, Direction::Wedge)] {
+        *at_mut(&mut witness.directions, bond).map_err(anyhow::Error::msg)? = direction;
+    }
+    let mut work = Work(50_000_000);
+    assert!(preserves_stereo(&witness, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+    let repaired =
+        wedge_molecule(&state, &properties, &conformer, false).map_err(anyhow::Error::msg)?;
+    assert!(preserves_stereo(&repaired, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+    Ok(())
+}
+
+#[test]
+fn axis_repair_keeps_a_carrier_also_used_by_an_allene() -> TestResult {
+    let prepared = crate::smiles::prepare("CC(N(C)C(=C)C)=C=CC")?.state;
+    let properties = WedgeProperties {
+        attachment_points: vec![false; prepared.graph.atoms.len()],
+        valences: prepared.valences,
+    };
+    let mut state = WedgeState {
+        graph: prepared.graph,
+        metadata: prepared.metadata,
+        directions: prepared.directions,
+        rings: prepared.rings,
+    };
+    for axis in [1, 3] {
+        at_mut(&mut state.metadata.bonds, axis)
+            .map_err(anyhow::Error::msg)?
+            .stereo = 7; // C1-N2 and N2-C4.
+    }
+    let allene = at_mut(&mut state.metadata.atoms, 7).map_err(anyhow::Error::msg)?;
+    allene.chiral_tag = 5;
+    allene.chiral_permutation = Some(1);
+    let conformer = Conformer {
+        is_3d: false,
+        positions: [
+            (1.0, 1.0),
+            (0.0, 0.0),
+            (0.0, -1.0),
+            (1.0, -2.0),
+            (-1.0, -1.0),
+            (-2.0, -1.0),
+            (-2.0, -2.0),
+            (-1.0, 0.0),
+            (-2.0, 0.0),
+            (-3.0, 1.0),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point3 { x, y, z: 0.0 })
+        .collect(),
+    };
+    let mut work = Work(50_000_000);
+    let mut context =
+        wedging::with_context(&state, &properties, Some(&conformer), false, &mut work)
+            .map_err(anyhow::Error::msg)?;
+    // C1->C0 is allocated for an axis, then reused by the allene without
+    // any allene choice. Ownership cannot be inferred from the chooser map.
+    assert!(matches!(context.choices.get(&0), Some(Choice::Atrop(_))));
+    assert!(
+        !context
+            .choices
+            .values()
+            .any(|c| matches!(c, Choice::Allene(..)))
+    );
+    let seen = readback(&context.state, &conformer)?;
+    assert_eq!(
+        at(&seen.atoms, 7)
+            .map_err(anyhow::Error::msg)?
+            .chiral_permutation,
+        Some(1)
+    );
+    assert_ne!(at(&seen.bonds, 1).map_err(anyhow::Error::msg)?.stereo, 7);
+    assert_eq!(at(&seen.bonds, 3).map_err(anyhow::Error::msg)?.stereo, 7);
+    // Repair the axes without spending trials reconstructing the allene's
+    // already valid carrier. The first successful combination takes 3 reads.
+    let reference = context.state.clone();
+    let repaired = search(&state, &mut context, false, &mut 3, &mut work)
+        .map_err(anyhow::Error::msg)?
+        .ok_or_else(|| anyhow::anyhow!("No repair retaining the allene carrier"))?;
+    assert!(preserves_stereo(&repaired, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+    assert_eq!(repaired.graph.bonds.first(), reference.graph.bonds.first());
+    assert_eq!(repaired.directions.first(), reference.directions.first());
+    Ok(())
+}
+
+#[test]
 fn avoiding_axis_ends_must_not_leave_a_tetrahedrane_centre_unwedged() -> TestResult {
     let (state, properties, conformer) = tetrahedrane_fixture().map_err(anyhow::Error::msg)?;
     let raw = wedging::wedge_molecule(&state, &properties, Some(&conformer), false)
