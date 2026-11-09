@@ -1,7 +1,7 @@
 //! Stage reaction participants, laying out only those without input coordinates.
 use super::{Drawing, Error, Imported, SmilesReaction, document, invalid, molfile};
 use crate::{
-    chemistry::{RDKIT_VERSION, stereo::Point3},
+    chemistry::{RDKIT_VERSION, kekulize::Direction, stereo::Point3},
     reactions::Role,
 };
 
@@ -41,7 +41,7 @@ impl SmilesReaction {
             (Role::Agent, self.agents),
             (Role::Product, self.products),
         ] {
-            for part in row {
+            for mut part in row {
                 let n = part.prepared.state.graph.atoms.len();
                 let end = next_id
                     .checked_add(u64::try_from(n).map_err(|_| Error::Limit)?)
@@ -49,6 +49,20 @@ impl SmilesReaction {
                 let conformer = part.conformers.into_iter().next();
                 let pending = conformer.is_none();
                 let is_3d = conformer.as_ref().is_some_and(|c| c.is_3d);
+                // Axial flags were read before sanitization; without input XY,
+                // redraw wedges from that stereo and the tags (#1048).
+                // A kept wavy flag still prevents the redraw (#1049).
+                let directions = &mut part.prepared.state.directions;
+                if pending && !directions.contains(&Direction::Unknown) {
+                    for (bond, direction) in part.prepared.state.graph.bonds.iter().zip(directions)
+                    {
+                        if matches!(bond.order, 1 | 4)
+                            && matches!(direction, Direction::Wedge | Direction::Hash)
+                        {
+                            *direction = Direction::None;
+                        }
+                    }
+                }
                 let source = molfile::Imported {
                     molecule: document::Molecule {
                         rdkit_version: RDKIT_VERSION,

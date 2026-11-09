@@ -364,12 +364,6 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 continue;
             }
         };
-        if matches!((&actual, &expected), (Ok(Outcome::Complete(_)), Some(_)))
-            && coordinate_free_wedges::flagged(format, &case.text)
-        {
-            accepted += 1;
-            continue;
-        }
         let error = match (actual, expected) {
             (Ok(Outcome::Complete(a)), None) if projected.is_some() => {
                 // The original complete response exists, but its order-5 paint
@@ -433,7 +427,14 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     Ok(b)
                 };
                 expected
-                    .and_then(|b| compare_response(*a, b, Some(format)))
+                    .and_then(|b| {
+                        let comparison = compare_response(*a, b, Some(format));
+                        if coordinate_free_wedges::changed(format, &case.text, &comparison) {
+                            Ok(())
+                        } else {
+                            comparison
+                        }
+                    })
                     .err()
                     .map(|e| e.to_string())
             }
