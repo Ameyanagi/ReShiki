@@ -266,7 +266,7 @@ struct Extension<'a> {
     wedged: HashSet<usize>,
     groups: HashSet<usize>,
     next_group: usize,
-    stereo_atoms: HashMap<u32, HashSet<u32>>,
+    stereo_atoms: HashMap<(u8, u32), HashSet<u32>>,
     events: Vec<Event>,
     work: usize,
 }
@@ -501,7 +501,7 @@ impl Extension<'_> {
     }
     fn stereo_group(&mut self) -> Result<()> {
         let kind = match self.peek() {
-            Some(b'a') => 0u32,
+            Some(b'a') => 0u8,
             Some(b'o') => 1,
             _ => 2,
         };
@@ -524,15 +524,14 @@ impl Extension<'_> {
             }
             self.eat(b',');
         }
-        let hash = group.wrapping_mul(10).wrapping_add(kind);
-        let stored = self.stereo_atoms.entry(hash).or_default();
+        let stored = self.stereo_atoms.entry((kind, group)).or_default();
         if atoms.iter().any(|a| stored.contains(a)) {
             return Err(self.invalid());
         }
         stored.extend(atoms);
         if !ordered.is_empty() {
             self.events.push(Event::StereoGroup {
-                kind: kind as u8,
+                kind,
                 id: group,
                 atoms: ordered,
             });

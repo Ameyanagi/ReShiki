@@ -41,7 +41,7 @@ struct Annotations {
     context: prepare::Context,
     properties: Vec<HashMap<Vec<u8>, Vec<u8>>>,
     queries: Vec<bool>,
-    groups: HashMap<u32, usize>,
+    groups: HashMap<(u8, u32), usize>,
     labels_processed: bool,
     atom_stereo: bool,
     relative: bool,
@@ -171,13 +171,13 @@ impl Annotations {
                     .radical_electrons = electrons;
             }
             cx::Event::StereoGroup { kind, id, atoms } => {
-                let hash = id.wrapping_mul(10).wrapping_add(u32::from(kind));
-                if let Some(&index) = self.groups.get(&hash) {
+                let key = (kind, id);
+                if let Some(&index) = self.groups.get(&key) {
                     let group = parsed.metadata.groups.get_mut(index).ok_or(Error::Limit)?;
                     group.atoms.extend(atoms);
                     group.read_id = id;
                 } else {
-                    self.groups.insert(hash, parsed.metadata.groups.len());
+                    self.groups.insert(key, parsed.metadata.groups.len());
                     parsed.metadata.groups.push(StereoGroup {
                         kind,
                         read_id: id,

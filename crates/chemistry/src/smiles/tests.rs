@@ -121,7 +121,14 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
         "C[C@@H](O)[C@@H](F)Cl".into(),
     ]
     .into();
-    for extension in ["o1:1,&1:3", "o1:1,o2:3", "&1:1,&2:3", "r,o1:1", "r,&1:1"] {
+    for extension in [
+        "o1:1,&1:3",
+        "o1:1,o2:3",
+        "o858993459:1,o3006477107:3",
+        "&1:1,&2:3",
+        "r,o1:1",
+        "r,&1:1",
+    ] {
         assert_eq!(
             super::stereoisomers(&format!("{molecule} |{extension}|"))?,
             expected,
@@ -129,14 +136,27 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
         );
     }
     let paired = ["C[C@H](O)[C@H](F)Cl".into(), "C[C@@H](O)[C@@H](F)Cl".into()].into();
-    for extension in ["o1:1,3", "&1:1,3", "r", "o1:1,3,r"] {
+    for extension in [
+        "o1:1,3",
+        "&1:1,3",
+        "&2:1,&2:3",
+        "o2:1,o2:3",
+        "r",
+        "o1:1,3,r",
+    ] {
         assert_eq!(
             super::stereoisomers(&format!("{molecule} |{extension}|"))?,
             paired,
             "{extension}"
         );
     }
-    for extension in ["a:1,&1:3", "r,a:1,&1:3", "r,a:1,o1:3", "r,a:1"] {
+    for extension in [
+        "a:1,&1:3",
+        "a:1,&858993459:3",
+        "r,a:1,&1:3",
+        "r,a:1,o1:3",
+        "r,a:1",
+    ] {
         assert_eq!(
             super::stereoisomers(&format!("{molecule} |{extension}|"))?,
             ["C[C@H](O)[C@H](F)Cl".into(), "C[C@H](O)[C@@H](F)Cl".into(),].into(),
@@ -154,6 +174,67 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
         super::stereoisomers(&format!("{molecule} |r,a:1,3|"))?,
         super::stereoisomers(molecule)?
     );
+    Ok(())
+}
+
+#[test]
+fn cx_stereo_group_ids_preserve_kind_and_atoms() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)[C@H](F)Cl";
+    for (extension, [first, second]) in [
+        ("a:1,&1:3", [0, 2]),
+        ("a:1,&858993459:3", [0, 2]),
+        ("o1:1,o2:3", [1, 1]),
+        ("o858993459:1,o3006477107:3", [1, 1]),
+    ] {
+        let imported = super::read(&format!("{molecule} |{extension}|"))?;
+        let groups = imported
+            .prepared
+            .state
+            .metadata
+            .groups
+            .iter()
+            .map(|group| (group.kind, group.atoms.as_slice()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            groups,
+            [(first, &[1][..]), (second, &[3][..])],
+            "{extension}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn cx_stereo_group_duplicates_are_scoped_to_each_group() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)[C@H](F)Cl";
+    let expected = super::stereoisomers(&format!("{molecule} |a:1,&1:1|"))?;
+    assert_eq!(expected.len(), 2);
+    for (extension, [first, second]) in [
+        ("a:1,&1:1", [0, 2]),
+        ("a:1,&858993459:1", [0, 2]),
+        ("o1:1,o2:1", [1, 1]),
+        ("o858993459:1,o3006477107:1", [1, 1]),
+    ] {
+        let text = format!("{molecule} |{extension}|");
+        let imported = super::read(&text)?;
+        let groups = imported
+            .prepared
+            .state
+            .metadata
+            .groups
+            .iter()
+            .map(|group| (group.kind, group.atoms.as_slice()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            groups,
+            [(first, &[1][..]), (second, &[1][..])],
+            "{extension}"
+        );
+        assert_eq!(super::stereoisomers(&text)?, expected, "{extension}");
+    }
+    for extension in ["a:1,a:1", "&2:1,&2:1", "o2:1,o2:1"] {
+        assert!(super::read(&format!("{molecule} |{extension}|")).is_err());
+    }
     Ok(())
 }
 
