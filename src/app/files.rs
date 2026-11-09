@@ -322,7 +322,9 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             .map_err(|e| format!("Could not open document: {e}"))?;
         Ok(Prepared::Native(Box::new(doc)))
     } else {
-        let format = reshiki::compatibility::file_format(path).unwrap_or("smiles");
+        let format = reshiki::compatibility::file_format(path)
+            .or_else(|| matches!(extension.as_str(), "smi" | "smiles").then_some("smiles"))
+            .ok_or_else(|| super::import::unsupported_file(path))?;
         Ok(Prepared::Import {
             format,
             contents: super::import::contents(format, contents)?,
