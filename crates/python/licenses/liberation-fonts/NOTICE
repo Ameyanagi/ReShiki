@@ -15,10 +15,11 @@ Licensed under the SIL Open Font License, Version 1.1; see LICENSE in this
 directory.
 
 The browser build embeds them because a browser has no system fonts. Native
-builds embed them as a fallback when no system fonts are discovered, including
-headless Python environments. Liberation Sans has Arial's metrics, so the font
-database also lists its faces under the family name Arial; the font files
-themselves are not changed.
+builds include them as a final sans-serif fallback after installed fonts,
+including in headless Python environments. The browser's font database also
+lists these Arial-compatible faces under the family name Arial. Native builds
+retain the system's generic sans-serif preference. The font files themselves
+are not changed.
 
 Python package copies are maintained from licenses/liberation-fonts/LICENSE
 and licenses/liberation-fonts/NOTICE in the ReShiki source repository.

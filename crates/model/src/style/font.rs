@@ -47,11 +47,42 @@ pub(super) fn keep_resident(db: &mut resvg::usvg::fontdb::Database, families: &[
     }
 }
 
-/// The browser and some headless systems have no installed fonts. Liberation
-/// Sans has Arial's metrics, so its faces also answer to the default label family.
+/// An alias hidden from font pickers distinguishes the bundled glyph fallback.
+pub(super) const BUNDLED_FAMILY: &str = ".ReShiki Bundled Sans";
+
+/// Guarantee a Latin sans-serif fallback. The browser also aliases the faces to
+/// Arial; native builds retain the system's generic sans-serif preference.
 /// Source and license: licenses/liberation-fonts.
 pub(super) fn load_bundled(db: &mut resvg::usvg::fontdb::Database) {
     use resvg::usvg::fontdb::{Language, Source};
+    #[cfg(not(target_arch = "wasm32"))]
+    let sans = {
+        use resvg::usvg::fontdb::{Family, Query, Stretch, Style};
+        db.query(&Query {
+            families: &[Family::SansSerif],
+            ..Default::default()
+        })
+        .is_none()
+        .then(|| {
+            db.faces()
+                .filter(|face| {
+                    face.families
+                        .first()
+                        .is_some_and(|(name, _)| !name.starts_with('.'))
+                })
+                .min_by_key(|face| {
+                    (
+                        !face.families.iter().any(|(name, _)| name.contains("Sans")),
+                        face.monospaced,
+                        face.style != Style::Normal,
+                        face.stretch != Stretch::Normal,
+                        face.weight.0.abs_diff(400),
+                    )
+                })
+                .and_then(|face| face.families.first().map(|(name, _)| name.clone()))
+                .unwrap_or_else(|| "Liberation Sans".into())
+        })
+    };
     const FACES: [&[u8]; 4] = [
         include_bytes!("../../fonts/LiberationSans-Regular.ttf"),
         include_bytes!("../../fonts/LiberationSans-Bold.ttf"),
@@ -62,11 +93,19 @@ pub(super) fn load_bundled(db: &mut resvg::usvg::fontdb::Database) {
         for id in db.load_font_source(Source::Binary(std::sync::Arc::new(bytes))) {
             if let Some(mut face) = db.face(id).cloned() {
                 db.remove_face(id);
+                #[cfg(target_arch = "wasm32")]
                 face.families
                     .insert(0, ("Arial".into(), Language::English_UnitedStates));
+                #[cfg(not(target_arch = "wasm32"))]
+                face.families
+                    .push((BUNDLED_FAMILY.into(), Language::English_UnitedStates));
                 db.push_face_info(face);
             }
         }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(sans) = sans {
+        db.set_sans_serif_family(sans);
     }
 }
 

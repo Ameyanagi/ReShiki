@@ -19,16 +19,27 @@ def dark_pixels(image: Image.Image) -> int:
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux font discovery uses fontconfig")
-@pytest.mark.parametrize("system_fonts", ["empty", "liberation"])
+@pytest.mark.parametrize("system_fonts", ["empty", "generic-sans"])
 def test_exports_keep_labels_with_restricted_system_fonts(
     tmp_path: Path, system_fonts: str
 ) -> None:
     font_dir = tmp_path / "fonts"
     font_dir.mkdir()
-    if system_fonts == "liberation":
-        font_dir = Path(__file__).resolve().parents[2] / "model" / "fonts"
     config = ET.Element("fontconfig")
     ET.SubElement(config, "dir").text = str(font_dir)
+    if system_fonts == "generic-sans":
+        fixture = (
+            Path(__file__).resolve().parents[3]
+            / "tests"
+            / "fixtures"
+            / "font-export-103"
+            / "static-400.subset.ttf"
+        )
+        (font_dir / fixture.name).write_bytes(fixture.read_bytes())
+        alias = ET.SubElement(config, "alias")
+        ET.SubElement(alias, "family").text = "sans-serif"
+        prefer = ET.SubElement(alias, "prefer")
+        ET.SubElement(prefer, "family").text = "ReShiki Font Export Fixture"
     config_path = tmp_path / "fonts.conf"
     ET.ElementTree(config).write(config_path, encoding="utf-8", xml_declaration=True)
 
@@ -68,8 +79,8 @@ for name, smiles, width in [
     svg = ET.parse(tmp_path / "aspirin.svg").getroot()
     labels = [node for node in svg.iter("{http://www.w3.org/2000/svg}text") if node.text == "O"]
     assert len(labels) == 4
-    if system_fonts == "liberation":
-        assert {node.attrib["font-family"] for node in labels} == {"Liberation Sans"}
+    if system_fonts == "generic-sans":
+        assert {node.attrib["font-family"] for node in labels} == {"ReShiki Font Export Fixture"}
 
     left, top, width, _ = map(float, svg.attrib["viewBox"].split())
     with Image.open(tmp_path / "aspirin.png") as aspirin:

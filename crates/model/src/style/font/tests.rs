@@ -2,7 +2,7 @@ const VARIABLE: &[u8] =
     include_bytes!("../../../../../tests/fixtures/font-export-103/variable-default-100.subset.ttf");
 
 #[test]
-fn bundled_faces_supply_arial_in_an_empty_database_for_each_label_style() {
+fn bundled_faces_supply_generic_sans_in_an_empty_database_for_each_label_style() {
     use resvg::usvg::fontdb::{Database, Family, Query, Style, Weight};
 
     let mut db = Database::new();
@@ -12,7 +12,7 @@ fn bundled_faces_supply_arial_in_an_empty_database_for_each_label_style() {
         for style in [Style::Normal, Style::Italic] {
             let id = db
                 .query(&Query {
-                    families: &[Family::Name("Arial")],
+                    families: &[Family::SansSerif],
                     weight: Weight(weight),
                     style,
                     ..Default::default()
@@ -37,6 +37,14 @@ fn bundled_faces_supply_arial_in_an_empty_database_for_each_label_style() {
             .unwrap();
         }
     }
+    assert_eq!(
+        db.query(&Query {
+            families: &[Family::Name("Arial")],
+            ..Default::default()
+        })
+        .is_some(),
+        cfg!(target_arch = "wasm32")
+    );
 }
 
 #[test]
