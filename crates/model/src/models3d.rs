@@ -2323,6 +2323,8 @@ fn crystal_rotation(vectors: [[f32; 3]; 3], labels: &CrystalLabels) -> [f32; 4] 
 /// measures in.
 const LABEL_HEIGHT: f32 = 0.95;
 const LETTER_WIDTH: f32 = 0.8;
+/// A word space between labels on the same line, in label heights.
+const WORD_SPACE: f32 = 0.3;
 /// How far past its axis's end, away from the cell's centre, an axis label
 /// sits, and how far from every cell edge it should stay, in label heights.
 const AXIS_AHEAD: f32 = 0.8;
@@ -2346,12 +2348,14 @@ const SEPARATION_CAP: f32 = 4.;
 /// of one of the lattice `vectors`, from each other, and the axis labels from
 /// the cell's edges and the `stubs` of bonds leaving it. The least, over each
 /// pair, of how far apart they are, across or along, as a fraction of what
-/// keeps them apart: 1 or more when nothing overlaps. Return the atom-label
-/// pair clearance separately from the overall clearance.
+/// keeps them apart: 1 or more when nothing overlaps and labels sharing a
+/// line have a word space between them. Return the atom-label pair clearance
+/// separately from the overall clearance.
 fn separation(q: [f32; 4], labels: &CrystalLabels, vectors: [[f32; 3]; 3]) -> (f32, f32) {
     let width = |letters: usize| LETTER_WIDTH * letters.max(1) as f32;
     let apart = |s: [f32; 3], t: [f32; 3], wide: f32, room: f32| {
-        ((s[0] - t[0]).abs() / (wide + room)).max((s[1] - t[1]).abs() / (LABEL_HEIGHT + room))
+        ((s[0] - t[0]).abs() / (wide + room + WORD_SPACE))
+            .max((s[1] - t[1]).abs() / (LABEL_HEIGHT + room))
     };
     let atoms = if labels.atoms.len() > APART_ATOMS {
         &[][..]
@@ -2367,7 +2371,7 @@ fn separation(q: [f32; 4], labels: &CrystalLabels, vectors: [[f32; 3]; 3]) -> (f
     // so large repeats stay cheap. Scores beyond [`SEPARATION_CAP`] all
     // count as that much.
     let widest = seen.iter().map(|(_, w)| *w).fold(0., f32::max);
-    let reach = SEPARATION_CAP * (widest + BOND_ROOM);
+    let reach = SEPARATION_CAP * (widest + BOND_ROOM + WORD_SPACE);
     let mut order: Vec<usize> = (0..seen.len()).collect();
     order.sort_by(|a, b| {
         let x = |i: &usize| seen.get(*i).map_or(0., |(s, _)| s[0]);
