@@ -21,6 +21,7 @@ fn generic_sans_fallback_precedes_cjk_without_replacing_requested_families() {
         added: vec![],
     };
     let style = crate::typography::TextStyle::default();
+    assert_eq!(super::font_name_in("Arial", &fonts), "Local Sans");
     for c in "CHO".chars() {
         assert_eq!(super::glyph_metrics_in(c, &style, &fonts).0, "Local Sans");
     }
@@ -30,6 +31,7 @@ fn generic_sans_fallback_precedes_cjk_without_replacing_requested_families() {
             ..style.clone()
         };
         assert_eq!(super::glyph_metrics_in('O', &requested, &fonts).0, family);
+        assert_eq!(super::font_name_in(family, &fonts), family);
     }
 }
 

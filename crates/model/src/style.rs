@@ -710,10 +710,18 @@ pub fn font_families() -> &'static [&'static str] {
     fonts().names
 }
 pub fn font_name(name: &str) -> &'static str {
-    fonts()
+    font_name_in(name, &fonts())
+}
+
+fn font_name_in(name: &str, fonts: &Fonts) -> &'static str {
+    let sans = fonts
+        .db
+        .family_name(&resvg::usvg::fontdb::Family::SansSerif);
+    fonts
         .names
         .iter()
         .find(|n| **n == name)
+        .or_else(|| fonts.names.iter().find(|n| **n == sans))
         .copied()
         .unwrap_or("Arial")
 }

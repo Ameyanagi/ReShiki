@@ -6,12 +6,18 @@ import xml.etree.ElementTree as ET
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import Any
 
 import pytest
 import reshiki
 
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
 ETHANOL_INCHI = "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3"
+
+
+def drawing_style(drawing: reshiki.Drawing) -> dict[str, Any]:
+    values = json.loads(drawing.rsk()).get("drawing_style", {})
+    return reshiki.Style(**values).as_dict()
 
 
 def test_style_first_constructor_persists_through_clean_and_save(tmp_path: Path) -> None:
@@ -25,11 +31,11 @@ def test_style_first_constructor_persists_through_clean_and_save(tmp_path: Path)
 
     cleaned = aspirin.clean()
     assert type(cleaned) is reshiki.Molecule
-    assert json.loads(cleaned.rsk())["drawing_style"] == custom.style.as_dict()
+    assert drawing_style(cleaned) == custom.style.as_dict()
     assert float(ET.fromstring(cleaned.cdxml()).attrib["LabelSize"]) == 16
     target = cleaned.save(tmp_path / "aspirin.rsk")
     restored = reshiki.Molecule.open(target)
-    assert json.loads(restored.rsk())["drawing_style"] == custom.style.as_dict()
+    assert drawing_style(restored) == custom.style.as_dict()
     assert float(ET.fromstring(restored.cdxml()).attrib["LabelSize"]) == 16
 
 
@@ -83,7 +89,7 @@ def test_configuration_can_be_applied_before_or_after_construction() -> None:
     assert parsed.rsk() == reshiki.parse("CCO").with_style(custom.style).rsk()
     reaction = custom.parse("CCO>>CC=O")
     assert type(reaction) is reshiki.Reaction
-    assert json.loads(reaction.rsk())["drawing_style"] == custom.style.as_dict()
+    assert drawing_style(reaction) == custom.style.as_dict()
 
 
 def test_bound_molecular_constructors(fixtures: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -105,7 +111,7 @@ def test_bound_molecular_constructors(fixtures: Path, monkeypatch: pytest.Monkey
     for molecule in molecules:
         assert type(molecule) is reshiki.Molecule
         assert molecule.properties().formula == "C2H6O"
-        assert json.loads(molecule.rsk())["drawing_style"] == custom.style.as_dict()
+        assert drawing_style(molecule) == custom.style.as_dict()
 
 
 def test_bound_reaction_constructors(fixtures: Path) -> None:
@@ -120,7 +126,7 @@ def test_bound_reaction_constructors(fixtures: Path) -> None:
         custom.Drawing.from_smiles("CCO>>CC=O"),
     ):
         assert type(drawing) is reshiki.Reaction
-        assert json.loads(drawing.rsk())["drawing_style"] == custom.style.as_dict()
+        assert drawing_style(drawing) == custom.style.as_dict()
 
 
 def test_functional_exports_use_context_style_with_per_call_overrides(tmp_path: Path) -> None:
@@ -211,4 +217,42 @@ def test_online_name_resolution_is_forwarded_by_bound_constructors(
     assert calls == ["aspirin"]
     assert type(aspirin) is reshiki.Molecule
     assert aspirin.properties().formula == "C9H8O4"
-    assert json.loads(aspirin.rsk())["drawing_style"] == custom.style.as_dict()
+    assert drawing_style(aspirin) == custom.style.as_dict()
+
+
+@pytest.mark.parametrize(
+    ("option", "enabled", "default"),
+    [
+        ("center_chain_double_bonds", True, False),
+        ("two_wedge_stereocentres", True, False),
+        ("ring_fusion_hydrogens", False, True),
+        ("wavy_unknown_alkenes", True, False),
+        ("charge_before_radical", True, False),
+        ("hydrogen_isotopes", "letters", "auto"),
+    ],
+)
+def test_context_defaults_reset_existing_drawings(
+    option: str, enabled: Any, default: Any, tmp_path: Path
+) -> None:
+    custom = reshiki.with_style(**{option: enabled})
+    molecule = custom.Molecule.from_smiles("CC=CC")
+    assert drawing_style(molecule)[option] == enabled
+    reset = custom.with_style(**{option: default})
+    filename = molecule.save(tmp_path / "styled.rsk")
+
+    rendered = reset.render(molecule, "rsk")
+    batch = reset.render_many([molecule], "rsk")[0]
+    assert isinstance(rendered, bytes) and isinstance(batch, bytes)
+    for result in (
+        molecule.with_style(reset.style),
+        reset.Drawing.open(filename),
+        reset.parse(molecule.rsk(), format="rsk"),
+        reshiki.parse(rendered, format="rsk"),
+        reshiki.parse(batch, format="rsk"),
+    ):
+        assert drawing_style(result)[option] == default
+    assert drawing_style(molecule)[option] == enabled
+
+    partial = molecule.with_style(font_size=14)
+    assert drawing_style(partial)[option] == enabled
+    assert drawing_style(partial)["font_size_pt"] == 14
