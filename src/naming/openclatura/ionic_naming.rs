@@ -15,7 +15,7 @@ use super::{
     assembly_utils::{is_fully_enclosed, parse_locant},
     molecule::{AtomSet, Molecule},
 };
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Clone)]

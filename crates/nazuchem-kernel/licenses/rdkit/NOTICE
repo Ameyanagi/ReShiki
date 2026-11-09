@@ -1,3 +1,8 @@
+This is ReShiki's RDKit notice, shipped with nazuchem-kernel. In this crate the
+RDKit-derived code is under src/; PROVENANCE-nazuchem.toml lists the RDKit source
+file for each module. Paths below that start with crates/, reference/ or scripts/
+refer to the ReShiki repository and are not part of this crate.
+
 ReShiki includes atomic data and adapted sanitization, molecular property, valence, ring and descriptor calculations
 from RDKit 2026.03.6, commit 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985:
 https://github.com/rdkit/rdkit/tree/Release_2026_03_6

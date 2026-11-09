@@ -25,7 +25,7 @@ use super::numbering::{
 };
 use super::parent_selection::ParentSelection;
 use super::ring_parent::{ParentHydrideKind, RingParent};
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 
 /// Assess only a parent that has entered a successfully rendered name.
 /// Fusion and wrapper plans are also cached and tried speculatively, so their

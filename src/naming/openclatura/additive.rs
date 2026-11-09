@@ -421,8 +421,8 @@ fn collect_indicated_hydrogens(
                 })
                 && (unresolved_site || neutral_lambda_oxo_bonding_number(mol, id).is_none())
         }) {
-            mol.mark_name(crate::naming::NameStatus::Unverified(
-                crate::naming::NameReason::LambdaParentHydrogen,
+            mol.mark_name(nazuchem_ir::NameStatus::Unverified(
+                nazuchem_ir::NameReason::LambdaParentHydrogen,
             ));
         }
     }
@@ -1529,7 +1529,8 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn ring_ketone_numbering_compares_suffix_before_added_hydrogen() {
-        use crate::naming::{NameStatus, verify_identity};
+        use crate::naming::verify_identity;
+        use nazuchem_ir::NameStatus;
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
             ("O=C1C(=O)Cc2ccccc21", "1H-indene-1,2(3H)-dione"),
@@ -1599,7 +1600,8 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn suffix_hydrogen_names_are_preferred_and_round_trip() {
-        use crate::naming::{NameStatus, verify_identity};
+        use crate::naming::verify_identity;
+        use nazuchem_ir::NameStatus;
         let parser = opsin::Parser::new().unwrap();
         let mut failures = Vec::new();
         for (smiles, expected) in [
@@ -1736,7 +1738,7 @@ mod tests {
         );
         assert_eq!(
             name.status,
-            crate::naming::NameStatus::Unverified(crate::naming::NameReason::SpiroHydrogen)
+            nazuchem_ir::NameStatus::Unverified(nazuchem_ir::NameReason::SpiroHydrogen)
         );
         let parsed = opsin::Parser::new()
             .unwrap()
@@ -1908,7 +1910,7 @@ mod tests {
         ] {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
             for candidate in std::iter::once(&name.text).chain(
                 name.alternatives
                     .iter()

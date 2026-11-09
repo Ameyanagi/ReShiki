@@ -4,6 +4,7 @@ import contextlib
 import hashlib
 import io
 import json
+import subprocess
 import tempfile
 import tomllib
 import unittest
@@ -129,6 +130,14 @@ class ProvenanceTests(unittest.TestCase):
                 target.write_text("new file", encoding="utf-8", newline="\n")
                 self.assertIn(f"{path}: missing ledger entry", self.check())
                 target.unlink()
+
+    def test_git_ignored_files_are_not_inventoried(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        (self.root / ".gitignore").write_text(".DS_Store\n", encoding="utf-8", newline="\n")
+        (self.root / "naming/.DS_Store").write_bytes(b"finder")
+        self.assertEqual(self.check(), [])
+        (self.root / "naming/untracked.rs").write_text("new", encoding="utf-8", newline="\n")
+        self.assertIn("naming/untracked.rs: missing ledger entry", self.check())
 
     def test_required_fixture_cannot_be_dropped_from_ledger(self):
         self.entries.pop()

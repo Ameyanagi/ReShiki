@@ -3197,7 +3197,7 @@ mod tests {
         ] {
             let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
             assert_eq!(name.text, expected);
-            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
             assert_strict_fusion_name_identity(smiles, &name)?;
         }
         Ok(())
@@ -3221,7 +3221,7 @@ mod tests {
         ] {
             let name = crate::naming::openclatura::name_smiles(smiles, &Default::default())?;
             assert_eq!(name.text, expected);
-            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
             assert_strict_fusion_name_identity(smiles, &name)?;
         }
         Ok(())
@@ -3259,7 +3259,7 @@ mod tests {
             name.text,
             "2H-benzo[b]pyrrolo[2,3-f]thieno[2',3':4,5]imidazo[1,2-h][1,7]naphthyridine"
         );
-        assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+        assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
         assert_strict_fusion_name_identity(smiles, &name)
     }
 
@@ -3273,7 +3273,7 @@ mod tests {
         );
         assert_eq!(
             name.status,
-            crate::naming::NameStatus::Unverified(crate::naming::NameReason::OpsinFusionLayout)
+            nazuchem_ir::NameStatus::Unverified(nazuchem_ir::NameReason::OpsinFusionLayout)
         );
         assert_strict_fusion_name_identity(smiles, &name)
     }

@@ -40,7 +40,7 @@ pub fn read_smiles(
         return Err("Openclatura requires a single connected molecule".into());
     }
     let prepared = smiles::prepare(text, budget).map_err(|error| error.to_string())?;
-    let mut state = super::app_chemistry::apply_axis_markers(&prepared.state)
+    let mut state = nazuchem_kernel::identity::apply_axis_markers(&prepared.state, budget)
         .map_err(|_| "openclatura: invalid biaryl axis markers".to_owned())?;
     // Upstream divergence: aromatic atom endpoints cannot identify localized
     // inter-ring bonds; retain bond aromaticity for the final fusion pi audit.

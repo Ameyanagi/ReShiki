@@ -9,7 +9,7 @@
 //! Explicitly unknown stereogenic units transported in private atom maps.
 //! The structure used for identity omits only these units' configurations.
 use super::{Name, graph_io, molecule::Molecule};
-use crate::naming::{AlternativeName, NameReason, NameStatus};
+use nazuchem_ir::{AlternativeName, NameReason, NameStatus};
 use nazuchem_kernel::stereo::perception;
 
 const UNKNOWN_ATOM: i32 = 900_001;
@@ -44,7 +44,7 @@ pub(super) fn annotate(state: &perception::State, mol: &mut Molecule) -> Result<
         if !atom_marker(map) {
             continue;
         }
-        let pseudo = super::app_chemistry::is_pseudoasymmetric(state, idx)?;
+        let pseudo = nazuchem_kernel::stereo::is_pseudoasymmetric(state, idx);
         let atom = mol
             .atoms
             .get_mut(&idx)
@@ -76,7 +76,7 @@ pub(super) fn annotate(state: &perception::State, mol: &mut Molecule) -> Result<
 // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::name_smiles
 pub(super) fn name_smiles(
     smiles: &str,
-    style: crate::naming::IsotopeStyle,
+    style: nazuchem_ir::IsotopeStyle,
     budget: &nazuchem_kernel::budget::Budget,
 ) -> Result<Option<Name>, String> {
     if ![":900001]", ":900002]", ":900003]"]
@@ -232,9 +232,7 @@ mod tests {
         assert_eq!(name.alternatives[0].name, explicit);
         assert_eq!(
             name.status,
-            crate::naming::NameStatus::NotPreferred(
-                crate::naming::NameReason::UnknownConfiguration
-            )
+            nazuchem_ir::NameStatus::NotPreferred(nazuchem_ir::NameReason::UnknownConfiguration)
         );
         for name in std::iter::once(name.text.as_str()).chain(
             name.alternatives
@@ -354,7 +352,7 @@ mod tests {
     // Provenance: fn tests::incomplete_explicit_forms_keep_the_unspecified_name_and_count_units | original
     // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::incomplete_explicit_forms_keep_the_unspecified_name_and_count_units
     fn incomplete_explicit_forms_keep_the_unspecified_name_and_count_units() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         for (input, expected, located, units, explicit) in [
             // One descriptor inside bis(...) describes both units.
             (

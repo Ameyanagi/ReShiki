@@ -1293,7 +1293,7 @@ mod tests {
             }
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
             for candidate in std::iter::once(&name.text).chain(
                 name.alternatives
                     .iter()
@@ -1368,7 +1368,7 @@ mod tests {
                 assert_eq!(name.text, expected, "{smiles} via {input}");
                 assert_eq!(
                     name.status,
-                    crate::naming::NameStatus::Preferred,
+                    nazuchem_ir::NameStatus::Preferred,
                     "{smiles} via {input}"
                 );
             }

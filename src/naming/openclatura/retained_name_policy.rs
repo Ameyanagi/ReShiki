@@ -224,7 +224,8 @@ pub fn render_retained_hydrogen_state(
 // Provenance: mod tests | original
 // Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::tests
 mod tests {
-    use crate::naming::{NameReason, NameStatus, verify_identity};
+    use crate::naming::verify_identity;
+    use nazuchem_ir::{NameReason, NameStatus};
 
     #[test]
     // Provenance: fn tests::selected_hydrogen_replaces_the_source_parent_descriptor | adapted

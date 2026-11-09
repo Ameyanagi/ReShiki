@@ -1824,7 +1824,7 @@ mod tests {
             );
             let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
             let named = super::super::super::name_smiles(&smiles, &Default::default()).unwrap();
-            if named.text != row.pin_name || named.status != crate::naming::NameStatus::Preferred {
+            if named.text != row.pin_name || named.status != nazuchem_ir::NameStatus::Preferred {
                 errors.push(format!(
                     "{}: named {} ({:?})",
                     row.pin_name, named.text, named.status
@@ -2527,11 +2527,7 @@ mod tests {
         ] {
             let name = super::super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
             let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
             assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
             assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
@@ -2667,7 +2663,7 @@ mod tests {
             assert_eq!(name.text, expected);
             assert_eq!(
                 name.status,
-                crate::naming::NameStatus::Unverified(crate::naming::NameReason::OpsinFusionLayout)
+                nazuchem_ir::NameStatus::Unverified(nazuchem_ir::NameReason::OpsinFusionLayout)
             );
             for candidate in std::iter::once(name.text.as_str()).chain(
                 name.alternatives

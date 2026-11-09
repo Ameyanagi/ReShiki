@@ -12,7 +12,7 @@
 use super::{
     Name, component_namer, graph_io, locants::retained_locant_sort_key, molecule::Molecule,
 };
-use crate::naming::{IsotopeStyle, NameReason, NameStatus};
+use nazuchem_ir::{IsotopeStyle, NameReason, NameStatus};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug)]

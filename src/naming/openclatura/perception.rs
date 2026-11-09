@@ -2954,7 +2954,7 @@ mod tests {
 
     #[test]
     fn unrecomputed_lambda_parent_hydrogens_are_unverified() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
 
         for (smiles, expected) in [
             ("O=[PH]1C=CC1", "1lambda^5-phosphet-1(2H)-one"),
@@ -2981,7 +2981,8 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes() {
-        use crate::naming::{NameStatus, verify_identity};
+        use crate::naming::verify_identity;
+        use nazuchem_ir::NameStatus;
 
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
@@ -3078,7 +3079,7 @@ mod tests {
             assert_eq!(name.text, expected, "{smiles}");
             let status = match smiles {
                 "CP(=O)(O)C" | "CP(=O)(O)O" => {
-                    NameStatus::Unverified(crate::naming::NameReason::UnauditedPath)
+                    NameStatus::Unverified(nazuchem_ir::NameReason::UnauditedPath)
                 }
                 _ => NameStatus::Preferred,
             };

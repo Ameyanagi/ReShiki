@@ -396,8 +396,8 @@ fn component_pipeline(
             g.is_principal_candidate && g.key != selected.key && seniority(g) == seniority(selected)
         })
     {
-        mol.mark_name(crate::naming::NameStatus::Unverified(
-            crate::naming::NameReason::PrincipalGroupTie,
+        mol.mark_name(nazuchem_ir::NameStatus::Unverified(
+            nazuchem_ir::NameReason::PrincipalGroupTie,
         ));
     }
     let path = selection.primary_path();
@@ -687,8 +687,8 @@ fn render_component_and_parent(
     if let Some(name) = super::spirobi::compose(mol, parts)? {
         super::parent_pipeline::mark_rendered_parent_status(mol, parts);
         if !name.audited {
-            mol.mark_name(crate::naming::NameStatus::Unverified(
-                crate::naming::NameReason::UnauditedParent,
+            mol.mark_name(nazuchem_ir::NameStatus::Unverified(
+                nazuchem_ir::NameReason::UnauditedParent,
             ));
         }
         return Ok((
@@ -704,8 +704,8 @@ fn render_component_and_parent(
         ));
     }
     if super::heterospiro::needs_hydrogen_proof(mol, parts) {
-        mol.mark_name(crate::naming::NameStatus::Unverified(
-            crate::naming::NameReason::SpiroHydrogen,
+        mol.mark_name(nazuchem_ir::NameStatus::Unverified(
+            nazuchem_ir::NameReason::SpiroHydrogen,
         ));
     }
     let fusion_parent = parts
@@ -837,11 +837,7 @@ mod tests {
         ] {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
         }
     }
 
@@ -862,11 +858,7 @@ mod tests {
         ] {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            assert_eq!(
-                name.status,
-                crate::naming::NameStatus::Preferred,
-                "{smiles}"
-            );
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
         }
     }
 
@@ -894,7 +886,7 @@ mod tests {
         let name = super::super::name_smiles("O[13C](=O)CC(O)(CC(=O)O)C(=O)O", &Default::default())
             .unwrap();
         assert_eq!(name.text, "3-carboxy-3-hydroxy(1-13C)pentanedioic acid");
-        assert!(!matches!(name.status, crate::naming::NameStatus::Preferred));
+        assert!(!matches!(name.status, nazuchem_ir::NameStatus::Preferred));
     }
 
     #[test]

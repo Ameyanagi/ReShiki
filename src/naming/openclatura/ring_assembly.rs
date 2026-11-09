@@ -901,7 +901,7 @@ mod tests {
     // Provenance: fn tests::relocated_indicated_hydrogen_keeps_unsupported_assembly_status | original
     // Source: ReShiki | src/naming/openclatura/ring_assembly.rs::tests::relocated_indicated_hydrogen_keeps_unsupported_assembly_status
     fn relocated_indicated_hydrogen_keeps_unsupported_assembly_status() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         for (smiles, expected) in [
             (
                 "C1C(=CC2=CC=CC=C12)C=1C2=CCC=C2C=CC1",
@@ -936,7 +936,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn assembly_units_keep_their_parent_choice_status() {
-        use crate::naming::{NameReason, NameStatus};
+        use nazuchem_ir::{NameReason, NameStatus};
         for (smiles, text, status) in [
             (
                 "c1ccc(cc1)-c1ccccc1",

@@ -17,7 +17,7 @@ use super::{
     component_namer::{Derivation, name_component_with_citation},
     molecule::{AtomSet, Molecule},
 };
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 
 // Provenance: fn sites | adapted
 // Source: openclatura | src/openclatura/charge_pair_roles.py::_classify_charge_pair

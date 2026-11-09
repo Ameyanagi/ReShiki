@@ -20,7 +20,7 @@ use super::{
     perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
 };
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 use std::collections::{BTreeMap, BTreeSet};
 
 struct FrontModifier {

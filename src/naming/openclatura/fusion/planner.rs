@@ -1034,7 +1034,7 @@ mod tests {
             let name =
                 crate::naming::openclatura::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected);
-            assert_eq!(name.status, crate::naming::NameStatus::Preferred);
+            assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
             let parsed = opsin::Parser::new()
                 .unwrap()
                 .parse(&name.text, &opsin::ParseOptions::strict());

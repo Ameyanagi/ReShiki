@@ -158,7 +158,8 @@ fn reference_parity(
 #[cfg(test)]
 mod tests {
     use super::super::name_smiles;
-    use crate::naming::{NameReason, NameStatus, canonical_smiles};
+    use crate::naming::canonical_smiles;
+    use nazuchem_ir::{NameReason, NameStatus};
     use nazuchem_kernel::smiles;
 
     #[test]

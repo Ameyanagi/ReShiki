@@ -44,7 +44,7 @@ use super::nomenclature::RULES;
 use super::perception::{PerceivedGroup, perceive_groups};
 use super::rules::{elements, multipliers, retained, stems};
 use super::subgraph_tools::subgraph_component;
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 
 const SHORTCUT_STEREO_ERROR: &str =
     "openclatura: shortcut cannot preserve configured stereochemistry";

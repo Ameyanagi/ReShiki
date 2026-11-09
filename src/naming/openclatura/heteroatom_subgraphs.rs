@@ -27,7 +27,7 @@ use super::namer::{capped_acid_name, name_subgraph_rendered, name_subgraph_with_
 use super::nomenclature::section;
 use super::rules::{elements, multipliers};
 use super::subgraph_tools::subgraph_component;
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 use serde::Deserialize;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::LazyLock;
@@ -1856,7 +1856,7 @@ mod tests {
     use crate::naming::openclatura::{
         graph_io::read_smiles, molecule::AtomSet, namer::name_subgraph_with_upstream,
     };
-    use crate::naming::{NameReason, NameStatus};
+    use nazuchem_ir::{NameReason, NameStatus};
 
     #[test]
     // Provenance: fn tests::cationic_nitrogen_prefixes_distinguish_unsubstituted_nitrogen | adapted
@@ -1949,7 +1949,7 @@ mod tests {
             );
             assert_eq!(
                 mol.name_status(),
-                NameStatus::Unverified(crate::naming::NameReason::UnauditedPath),
+                NameStatus::Unverified(nazuchem_ir::NameReason::UnauditedPath),
                 "{smiles}"
             );
         }

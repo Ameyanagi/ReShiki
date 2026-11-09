@@ -17,7 +17,7 @@
 
 //! Plain graph model and helpers ported from openclatura's `molecule.py`.
 use super::graph_kernel::{Edge, normalize_edge};
-use crate::naming::{NameReason, NameStatus};
+use nazuchem_ir::{NameReason, NameStatus};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::{
     cell::{Cell, RefCell},

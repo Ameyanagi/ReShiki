@@ -341,7 +341,7 @@ fn carbon_diyl(mol: &Molecule) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::naming::{NameReason, NameStatus};
+    use nazuchem_ir::{NameReason, NameStatus};
 
     // Provenance: fn tests::roundtrip | original
     // Source: ReShiki | src/naming/openclatura/radical_naming.rs::tests::roundtrip
