@@ -10,10 +10,82 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, write_notices
+from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, dependency_metadata, write_notices
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_package_scope_keeps_transitive_normal_and_build_dependencies(self):
+        def dependency(package, *kinds):
+            return {"pkg": package, "dep_kinds": [{"kind": kind} for kind in kinds]}
+
+        graph = {
+            "python": [
+                dependency("normal", None),
+                dependency("build", "build"),
+                dependency("dev", "dev"),
+            ],
+            "normal": [dependency("shared", "dev", None)],
+            "build": [dependency("transitive", None)],
+            "shared": [dependency("normal", None)],
+            "transitive": [],
+            "dev": [dependency("dev-only", None)],
+            "dev-only": [],
+            "desktop": [dependency("gui", None)],
+            "gui": [],
+        }
+        metadata = {
+            "packages": [{"id": package} for package in graph],
+            "workspace_members": ["python", "desktop"],
+            "resolve": {
+                "root": "python",
+                "nodes": [{"id": package, "deps": deps} for package, deps in graph.items()],
+            },
+        }
+        scoped = dependency_metadata(metadata)
+        self.assertEqual(
+            {package["id"] for package in scoped["packages"]},
+            {"normal", "build", "shared", "transitive"},
+        )
+        self.assertEqual(len(metadata["packages"]), len(graph))
+        self.assertEqual(scoped["workspace_members"], metadata["workspace_members"])
+        metadata["resolve"]["root"] = None
+        with self.assertRaisesRegex(ValueError, "Select a package manifest"):
+            dependency_metadata(metadata)
+
+    def test_python_scope_includes_naming_notices_and_dependency_license(self):
+        repository = Path(__file__).resolve().parents[1]
+        metadata = json.loads(
+            subprocess.check_output(
+                [
+                    "cargo",
+                    "metadata",
+                    "--locked",
+                    "--format-version",
+                    "1",
+                    "--manifest-path",
+                    "crates/python/Cargo.toml",
+                ],
+                cwd=repository,
+                text=True,
+            )
+        )
+        scoped = dependency_metadata(metadata)
+        packages = {package["name"]: package for package in scoped["packages"]}
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            write_notices(repository, destination, scoped)
+            notices = (destination / THIRD_PARTY_FILE).read_bytes()
+            for name, relative in (
+                ("nazuchem-kernel", "NOTICE"),
+                ("nazuchem-n2s", "NOTICE"),
+                ("pyo3", "LICENSE-MIT"),
+            ):
+                with self.subTest(package=name, file=relative):
+                    package = packages[name]
+                    self.assertIn(f"{name}@{package['version']}/{relative}".encode(), notices)
+                    source = Path(package["manifest_path"]).parent
+                    self.assertIn((source / relative).read_bytes(), notices)
+
     def test_git_naming_components_collect_complete_crate_local_terms(self):
         repository = Path(__file__).resolve().parents[1]
         metadata = json.loads(
