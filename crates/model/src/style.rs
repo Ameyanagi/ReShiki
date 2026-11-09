@@ -197,11 +197,10 @@ pub fn fontdb() -> Arc<resvg::usvg::fontdb::Database> {
 static ADDED: Mutex<Vec<resvg::usvg::fontdb::Source>> = Mutex::new(Vec::new());
 
 /// Load the fonts that text is measured and drawn with: the system's on the
-/// desktop and the bundled ones in the browser, then any added at runtime.
+/// desktop, bundled sans-serif fallbacks, then any added at runtime.
 pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
     #[cfg(not(target_arch = "wasm32"))]
     db.load_system_fonts();
-    #[cfg(target_arch = "wasm32")]
     font::load_bundled(db);
     for source in added_fonts(0) {
         db.load_font_source(source);
@@ -331,7 +330,7 @@ pub fn styled_text_width(text: &str, size: f32, style: &crate::typography::TextS
     text.chars().map(|c| glyph_metrics(c, style).1 * size).sum()
 }
 
-const SANS_FALLBACKS: &[&str] = &[
+const UI_FONT_FALLBACKS: &[&str] = &[
     "Hiragino Sans",
     "Hiragino Kaku Gothic ProN",
     "Yu Gothic",
@@ -345,7 +344,7 @@ const SANS_FALLBACKS: &[&str] = &[
 /// Explicit Japanese sans-serif avoids the platform's generic CJK serif fallback.
 /// This is an interface preference; chemical labels retain their document style.
 pub fn ui_font_family() -> &'static str {
-    SANS_FALLBACKS
+    UI_FONT_FALLBACKS
         .iter()
         .find_map(|name| {
             fonts()
@@ -358,10 +357,17 @@ pub fn ui_font_family() -> &'static str {
 }
 
 /// The families a label's glyph is looked up in, in order: its own, the
-/// sans-serif fallbacks, then the fonts added at runtime.
-fn fallback_families<'a>(family: &'a str, added: &'a [&str]) -> impl Iterator<Item = &'a str> {
+/// generic sans-serif, the UI fallbacks, then the fonts added at runtime.
+fn fallback_families<'a>(
+    family: &'a str,
+    db: &'a resvg::usvg::fontdb::Database,
+    added: &'a [&str],
+) -> impl Iterator<Item = &'a str> {
     std::iter::once(family)
-        .chain(SANS_FALLBACKS.iter().copied())
+        .chain(std::iter::once(
+            db.family_name(&resvg::usvg::fontdb::Family::SansSerif),
+        ))
+        .chain(UI_FONT_FALLBACKS.iter().copied())
         .chain(added.iter().copied())
 }
 
@@ -397,7 +403,7 @@ fn resolve_font_in(
         .flatten()
         .is_some()
     };
-    fallback_families(family, added)
+    fallback_families(family, db, added)
         .filter(|name| !name.starts_with('.'))
         .find_map(|name| {
             db.query(&Query {
@@ -410,7 +416,14 @@ fn resolve_font_in(
         })
         .or_else(|| {
             db.faces()
-                .filter(|face| !hidden(face) && has_glyph(face.id))
+                .filter(|face| {
+                    !hidden(face)
+                        && !face
+                            .families
+                            .iter()
+                            .any(|(name, _)| name == font::BUNDLED_FAMILY)
+                        && has_glyph(face.id)
+                })
                 .min_by_key(|face| {
                     (
                         face.style != style,
@@ -421,6 +434,15 @@ fn resolve_font_in(
                     )
                 })
                 .map(|face| face.id)
+        })
+        .or_else(|| {
+            db.query(&Query {
+                families: &[Family::Name(font::BUNDLED_FAMILY)],
+                weight,
+                style,
+                ..Default::default()
+            })
+            .filter(|id| has_glyph(*id))
         })
 }
 
@@ -480,7 +502,7 @@ fn glyph_metrics_in(c: char, style: &crate::typography::TextStyle, fonts: &Fonts
         .and_then(|id| {
             let info = fonts.db.face(id)?;
             // Preserve a named match (including aliases) in exported SVG.
-            let name = fallback_families(&style.family, &fonts.added)
+            let name = fallback_families(&style.family, &fonts.db, &fonts.added)
                 .find(|name| info.families.iter().any(|(n, _)| n == name))
                 .or_else(|| info.families.first().map(|(name, _)| name.as_str()))?;
             let family = fonts.names.iter().find(|n| **n == name).copied()?;
@@ -511,7 +533,8 @@ pub fn label_glyph_reach(family: &str) -> Option<f32> {
         return *reach;
     }
     let fonts = fonts();
-    let chain: Vec<_> = fallback_families(family, &fonts.added)
+    let chain: Vec<_> = fallback_families(family, &fonts.db, &fonts.added)
+        .chain(std::iter::once(font::BUNDLED_FAMILY))
         .flat_map(|name| {
             fonts
                 .db
@@ -687,10 +710,18 @@ pub fn font_families() -> &'static [&'static str] {
     fonts().names
 }
 pub fn font_name(name: &str) -> &'static str {
-    fonts()
+    font_name_in(name, &fonts())
+}
+
+fn font_name_in(name: &str, fonts: &Fonts) -> &'static str {
+    let sans = fonts
+        .db
+        .family_name(&resvg::usvg::fontdb::Family::SansSerif);
+    fonts
         .names
         .iter()
         .find(|n| **n == name)
+        .or_else(|| fonts.names.iter().find(|n| **n == sans))
         .copied()
         .unwrap_or("Arial")
 }

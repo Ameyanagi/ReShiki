@@ -33,8 +33,19 @@ Jupyter displays each object as SVG.
 
 Use explicit constructors `from_smiles(text)`, `from_molfile(text)`,
 `from_inchi(text)`, `from_cdxml(text)` and `from_name(name, online=False)`.
-Names resolve offline. `online=True` raises `NotImplementedError` because the
-existing PubChem client is part of the desktop app.
+Names resolve offline by default. Pass `online=True` to look up a complete name
+in PubChem instead:
+
+```python
+aspirin = reshiki.Molecule.from_name("aspirin", online=True)
+```
+
+Online lookup requires a unique complete-name match and imports stereospecific
+SMILES without dropping components. ReShiki verifies that layout preserves its
+molecular identity; ambiguous or unsupported results raise `ValueError`.
+Connection failures and request timeouts raise their corresponding Python
+exceptions. Each network request has a 15-second timeout. Offline lookup never
+contacts PubChem.
 
 `reshiki.parse(text, format=None)` detects the input format. `Drawing.open(path)`
 uses a file's extension, including extensionless POSCAR and CONTCAR names. It
@@ -62,6 +73,44 @@ analysis = reshiki.properties("CCO")
 Create a reusable `reshiki.Style("JACS / ACS", font_size=12)`, pass it as
 `style=` to a render method, or supply overrides directly, such as
 `molecule.svg(font_size=12)`. Overrides use points for physical dimensions.
+
+Bind a style once to reuse it across constructors and functional exports:
+
+```python
+custom_style = reshiki.with_style("JACS / ACS", font_family="sans-serif", font_size=12)
+aspirin = custom_style.Molecule.from_smiles("CC(=O)Oc1ccccc1C(=O)O")
+named = custom_style.Molecule.from_name("aspirin", online=True)
+svg = custom_style.render("CCO", "svg", width=300)
+pngs = custom_style.render_many(["CCO", "c1ccccc1O"], width=300)
+```
+
+The context offers `Drawing`, `Molecule` and `Reaction` constructors and the same
+`parse`, `render`, `convert` and `render_many` operations as the module. Returned
+objects keep their normal types. The equivalent object-first form is
+`reshiki.Molecule.from_smiles(text).with_style(custom_style.style)`.
+
+Contexts are immutable. `custom_style.with_style(font_size=14)` combines new
+overrides with the saved settings; the latest value for a setting wins. Passing
+an explicit style name or `Style` selects a new base. Per-call export overrides
+take precedence over the context's settings. Configuration can be applied before
+or after construction; `clean()` remains an operation on the drawing.
+Saved styles include explicit default values, so applying a reset context also
+turns off settings already enabled on a drawing. Keyword-only updates to an
+individual drawing preserve its other settings.
+
+Labels use the requested font when available, then generic sans-serif. Native
+builds include a final sans-serif fallback, so installed Liberation Sans is not
+required. After installing system fonts, restart Python or the Jupyter kernel
+before rendering again.
+
+The same aspirin drawing exported at 600 dpi illustrates the fallback behavior.
+The before images use PyPI 0.14.0; the after images use the corrected renderer.
+Each pair shares the same physical scale and white framing.
+
+| Font environment      | Before                                                                                                     | After                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| No discoverable fonts | ![Aspirin loses atom labels without system fonts](images/python-headless-fonts/no-fonts-before.png)        | ![Bundled sans fallback retains all aspirin labels](images/python-headless-fonts/no-fonts-after.png) |
+| Arial unavailable     | ![Aspirin uses a CJK fallback before the correction](images/python-headless-fonts/system-fonts-before.png) | ![Aspirin uses the generic sans-serif fallback](images/python-headless-fonts/system-fonts-after.png) |
 
 PNG size follows the style's physical bond length and its default resolution.
 Use `dpi=` to set resolution, or `width=` and/or `height=` to fit a pixel box

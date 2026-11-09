@@ -2,13 +2,26 @@ use reshiki_io::document_styles::{self, Preset};
 use reshiki_model::{document::Document, style::DrawingStyle};
 use serde_json::{Map, Value};
 
+fn complete_style_value(style: &DrawingStyle) -> Result<Value, String> {
+    // Preserve the native serializer's f32 dimension representation.
+    let serialized = serde_json::to_string(style).map_err(|error| error.to_string())?;
+    let mut value: Value = serde_json::from_str(&serialized).map_err(|error| error.to_string())?;
+    // Native documents omit defaults; a saved Python style replaces settings
+    // on existing drawings and must carry those defaults explicitly.
+    value["center_chain_double_bonds"] = style.center_chain_double_bonds.into();
+    value["two_wedge_stereocentres"] = style.two_wedge_stereocentres.into();
+    value["ring_fusion_hydrogens"] = style.ring_fusion_hydrogens.into();
+    value["wavy_unknown_alkenes"] = style.wavy_unknown_alkenes.into();
+    value["charge_before_radical"] = style.charge_before_radical.into();
+    value["hydrogen_isotopes"] =
+        serde_json::to_value(style.hydrogen_isotopes).map_err(|error| error.to_string())?;
+    Ok(value)
+}
+
 pub fn presets() -> Result<String, String> {
     let mut values = Map::new();
     for preset in Preset::ALL.into_iter().chain([Preset::Presentation]) {
-        values.insert(
-            preset.to_string(),
-            serde_json::to_value(preset.style()).map_err(|error| error.to_string())?,
-        );
+        values.insert(preset.to_string(), complete_style_value(&preset.style())?);
     }
     serde_json::to_string(&values).map_err(|error| error.to_string())
 }
@@ -21,7 +34,8 @@ pub fn named(name: &str, overrides: &str) -> Result<String, String> {
             preset.to_string().eq_ignore_ascii_case(name) || preset.id().eq_ignore_ascii_case(name)
         })
         .ok_or_else(|| format!("Unknown drawing style {name:?}"))?;
-    serde_json::to_string(&merge(&preset.style(), overrides)?).map_err(|error| error.to_string())
+    let style = merge(&preset.style(), overrides)?;
+    serde_json::to_string(&complete_style_value(&style)?).map_err(|error| error.to_string())
 }
 
 pub fn merge(base: &DrawingStyle, overrides: &str) -> Result<DrawingStyle, String> {
@@ -30,12 +44,8 @@ pub fn merge(base: &DrawingStyle, overrides: &str) -> Result<DrawingStyle, Strin
     let overrides = overrides
         .as_object()
         .ok_or("Style overrides must be an object")?;
-    let mut value = serde_json::to_value(base).map_err(|error| error.to_string())?;
+    let mut value = complete_style_value(base)?;
     let fields = value.as_object_mut().ok_or("Invalid drawing style")?;
-    // Omitted from serialized styles while false.
-    fields
-        .entry("center_chain_double_bonds")
-        .or_insert(false.into());
     let mut bond_length_changed = false;
     for (key, value) in overrides {
         let field = match key.as_str() {
@@ -48,15 +58,7 @@ pub fn merge(base: &DrawingStyle, overrides: &str) -> Result<DrawingStyle, Strin
             "bond_spacing" => "bond_spacing_ratio",
             other => other,
         };
-        if !fields.contains_key(field)
-            && !matches!(
-                field,
-                "two_wedge_stereocentres"
-                    | "ring_fusion_hydrogens"
-                    | "wavy_unknown_alkenes"
-                    | "hydrogen_isotopes"
-            )
-        {
+        if !fields.contains_key(field) {
             return Err(format!("Unknown style option {key:?}"));
         }
         if field == "bond_length_pt" {

@@ -103,8 +103,6 @@ def test_explicit_and_automatic_molecular_constructors(fixtures: Path) -> None:
 
 def test_offline_name_resolution() -> None:
     assert reshiki.Molecule.from_name("ethanol").properties().formula == "C2H6O"
-    with pytest.raises(NotImplementedError, match="(?i)(pubchem|online)"):
-        reshiki.Molecule.from_name("ethanol", online=True)
 
 
 def test_reaction_smiles_and_rxn(fixtures: Path) -> None:
@@ -188,7 +186,7 @@ def test_chain_double_bond_centering_style_overrides() -> None:
     centered = reshiki.Style("JACS / ACS", center_chain_double_bonds=True)
     assert centered.values["center_chain_double_bonds"] is True
     uncentered = reshiki.Style("JACS / ACS", center_chain_double_bonds=False)
-    assert "center_chain_double_bonds" not in uncentered.values
+    assert uncentered.values["center_chain_double_bonds"] is False
     molecule = reshiki.Molecule.from_smiles("CC=CC").with_style(centered)
     assert molecule.properties().formula == "C4H8"
     assert "<svg" in molecule.svg()

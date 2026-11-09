@@ -1,5 +1,103 @@
 //! Fonts added at runtime, as the browser build does with a page's fonts.
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn generic_sans_fallback_precedes_cjk_without_replacing_requested_families() {
+    use resvg::usvg::fontdb::{Database, Language};
+
+    let mut db = Database::new();
+    for name in ["Noto Sans CJK JP", "Local Sans", "Requested Font"] {
+        db.load_font_data(include_bytes!("../../fonts/LiberationSans-Regular.ttf").to_vec());
+        let mut face = db.faces().last().unwrap().clone();
+        db.remove_face(face.id);
+        face.families = vec![(name.into(), Language::English_UnitedStates)];
+        db.push_face_info(face);
+    }
+    db.set_sans_serif_family("Local Sans");
+    super::font::load_bundled(&mut db);
+    let fonts = super::Fonts {
+        names: super::family_names(&db),
+        db: std::sync::Arc::new(db),
+        added: vec![],
+    };
+    let style = crate::typography::TextStyle::default();
+    assert_eq!(super::font_name_in("Arial", &fonts), "Local Sans");
+    for c in "CHO".chars() {
+        assert_eq!(super::glyph_metrics_in(c, &style, &fonts).0, "Local Sans");
+    }
+    for family in ["Noto Sans CJK JP", "Requested Font"] {
+        let requested = crate::typography::TextStyle {
+            family: family.into(),
+            ..style.clone()
+        };
+        assert_eq!(super::glyph_metrics_in('O', &requested, &fonts).0, family);
+        assert_eq!(super::font_name_in(family, &fonts), family);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn missing_generic_family_uses_an_installed_sans_before_the_bundle() {
+    use resvg::usvg::fontdb::{Database, Family, Language, Query};
+
+    let mut db = Database::new();
+    db.load_font_data(include_bytes!("../../fonts/LiberationSans-Regular.ttf").to_vec());
+    let mut face = db.faces().next().unwrap().clone();
+    db.remove_face(face.id);
+    face.families = vec![("Local Sans".into(), Language::English_UnitedStates)];
+    db.push_face_info(face);
+    assert!(
+        db.query(&Query {
+            families: &[Family::SansSerif],
+            ..Default::default()
+        })
+        .is_none()
+    );
+    super::font::load_bundled(&mut db);
+    assert_eq!(db.family_name(&Family::SansSerif), "Local Sans");
+    assert!(
+        db.query(&Query {
+            families: &[Family::Name("Arial")],
+            ..Default::default()
+        })
+        .is_none()
+    );
+    let fonts = super::Fonts {
+        names: super::family_names(&db),
+        db: std::sync::Arc::new(db),
+        added: vec![],
+    };
+    assert_eq!(
+        super::glyph_metrics_in('O', &crate::typography::TextStyle::default(), &fonts).0,
+        "Local Sans"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn bundled_sans_supplies_glyphs_missing_from_installed_faces() {
+    use resvg::usvg::fontdb::Database;
+
+    let mut db = Database::new();
+    db.load_font_data(
+        include_bytes!("../../../../tests/fixtures/font-export-103/static-400.subset.ttf").to_vec(),
+    );
+    let family = db.faces().next().unwrap().families[0].0.clone();
+    db.set_sans_serif_family(&family);
+    super::font::load_bundled(&mut db);
+    let fonts = super::Fonts {
+        names: super::family_names(&db),
+        db: std::sync::Arc::new(db),
+        added: vec![],
+    };
+    let style = crate::typography::TextStyle::default();
+    assert_eq!(super::glyph_metrics_in('N', &style, &fonts).0, family);
+    assert_eq!(
+        super::glyph_metrics_in('C', &style, &fonts).0,
+        "Liberation Sans"
+    );
+}
+
 #[test]
 fn missing_named_families_use_an_installed_face_for_label_metrics() {
     let mut db = resvg::usvg::fontdb::Database::new();
@@ -142,7 +240,7 @@ fn added_fonts_join_measurement_and_export() {
     assert!(font_families().contains(&family));
     // Labels whose font lacks a glyph look it up there last.
     let fonts = super::fonts();
-    let order: Vec<_> = super::fallback_families("Arial", &fonts.added).collect();
+    let order: Vec<_> = super::fallback_families("Arial", &fonts.db, &fonts.added).collect();
     assert_eq!(order.first(), Some(&"Arial"));
     assert!(order.contains(&family));
     assert!(order.ends_with(&fonts.added));
