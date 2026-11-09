@@ -15,6 +15,10 @@ def verify_wheel(wheel, licenses=LICENSES):
         for path in licenses.rglob("*")
         if path.is_file()
     }
+    if "THIRD-PARTY-NOTICES.txt" not in expected:
+        raise ValueError(
+            f"No generated notices in {licenses}; run scripts/license_notices.py first"
+        )
     with zipfile.ZipFile(wheel) as archive:
         metadata_path = next(
             name for name in archive.namelist() if name.endswith(".dist-info/METADATA")

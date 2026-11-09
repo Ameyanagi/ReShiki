@@ -39,6 +39,11 @@ class PythonWheelNoticeTests(unittest.TestCase):
     def test_matching_files_and_declarations_pass(self):
         verify_wheel(self.wheel(), self.licenses)
 
+    def test_missing_generated_notices_are_rejected(self):
+        (self.licenses / "THIRD-PARTY-NOTICES.txt").unlink()
+        with self.assertRaisesRegex(ValueError, "No generated notices"):
+            verify_wheel(self.wheel(files={}, declarations={}), self.licenses)
+
     def test_missing_or_extra_file_is_rejected(self):
         for name in self.files:
             files = {key: content for key, content in self.files.items() if key != name}
