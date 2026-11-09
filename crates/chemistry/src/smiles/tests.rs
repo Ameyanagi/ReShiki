@@ -449,6 +449,70 @@ fn other_stereochemistry_errors_keep_the_smiles_context() {
 }
 
 #[test]
+fn cx_degenerate_coordinates_preserve_smiles_configuration() -> anyhow::Result<()> {
+    use crate::kekulize::Direction;
+
+    let molecule = "C[C@H](O)F";
+    let plain = super::read(molecule)?;
+    let wedged = super::read(&format!("{molecule} |wU:1.0|"))?;
+    for extension in [
+        "(),wU:1.0",
+        "(0,0,;0,0,;0,0,;0,0,),wU:1.0",
+        "(1,2,;1,2,;1,2,;1,2,),wU:1.0",
+        "(1,2,3;1,2,3;1,2,3;1,2,3)",
+        "()",
+    ] {
+        let imported = super::read(&format!("{molecule} |{extension}|"))?;
+        let state = &imported.prepared.state;
+        assert!(imported.conformers.is_empty(), "{extension}");
+        assert_eq!(super::canonical_smiles(state)?, molecule, "{extension}");
+        assert_eq!(
+            serde_json::to_value(&state.metadata.atoms)?,
+            serde_json::to_value(&plain.prepared.state.metadata.atoms)?,
+            "{extension}"
+        );
+        let expected = if extension.contains("wU") {
+            assert_eq!(state.directions.first(), Some(&Direction::Wedge));
+            &wedged
+        } else {
+            &plain
+        };
+        assert_eq!(
+            serde_json::to_value(&imported)?,
+            serde_json::to_value(expected)?,
+            "{extension}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn cx_single_atom_coordinates_keep_the_conformer() -> anyhow::Result<()> {
+    use crate::stereo::Point3;
+
+    for (coordinates, position, is_3d) in [
+        ("0,0,", Point3::default(), false),
+        (
+            "1,2,3",
+            Point3 {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+            true,
+        ),
+    ] {
+        let imported = super::read(&format!("C |({coordinates})|"))?;
+        assert_eq!(imported.conformers.len(), 1, "{coordinates}");
+        let conformer = imported.conformers.first().ok_or(Error::Limit)?;
+        assert_eq!(conformer.positions, [position], "{coordinates}");
+        assert_eq!(conformer.is_3d, is_3d, "{coordinates}");
+    }
+    assert!(super::read("C |()|")?.conformers.is_empty());
+    Ok(())
+}
+
+#[test]
 fn cx_binol_wedges_match_independent_axial_cip_labels() -> anyhow::Result<()> {
     // RDKit 2026.03.6 MOL/CX readers and AssignCIPLabels independently give
     // P for this ring wedge and M for its hash (chemistry coordinates: Y up).

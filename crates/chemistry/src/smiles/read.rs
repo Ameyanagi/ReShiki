@@ -125,6 +125,9 @@ impl Annotations {
                     .insert(name, value);
             }
             cx::Event::Coordinates(points) => {
+                if points.is_empty() {
+                    return Ok(());
+                }
                 self.spend(parsed.graph.atoms.len())?;
                 let mut positions = vec![Point3::default(); parsed.graph.atoms.len()];
                 let mut marked = false;
@@ -142,6 +145,9 @@ impl Annotations {
                         }
                     }
                     marked |= fields.get(2).is_some_and(|s| !s.is_empty());
+                }
+                if positions.len() > 1 && positions.iter().all(|p| Some(p) == positions.first()) {
+                    return Ok(());
                 }
                 let is_3d = marked && positions.iter().any(|p| p.z.abs() > 1e-3);
                 self.context.conformers.push(Conformer { positions, is_3d });
