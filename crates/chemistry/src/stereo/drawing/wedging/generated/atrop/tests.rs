@@ -310,6 +310,63 @@ fn axis_repair_keeps_a_carrier_also_used_by_an_allene() -> TestResult {
 }
 
 #[test]
+fn axis_repair_does_not_configure_an_unspecified_allene() -> TestResult {
+    // Same molecule with both axes stereo 6 and the allene left open: the
+    // first wedges that read both axes back also configure the allene.
+    let prepared = crate::smiles::prepare("CC(N(C)C(=C)C)=C=CC")?.state;
+    let properties = WedgeProperties {
+        attachment_points: vec![false; prepared.graph.atoms.len()],
+        valences: prepared.valences,
+    };
+    let mut state = WedgeState {
+        graph: prepared.graph,
+        metadata: prepared.metadata,
+        directions: prepared.directions,
+        rings: prepared.rings,
+    };
+    for axis in [1, 3] {
+        at_mut(&mut state.metadata.bonds, axis)
+            .map_err(anyhow::Error::msg)?
+            .stereo = 6;
+    }
+    let conformer = Conformer {
+        is_3d: false,
+        positions: [
+            (1.0, 1.0),
+            (0.0, 0.0),
+            (0.0, -1.0),
+            (1.0, -2.0),
+            (-1.0, -1.0),
+            (-2.0, -1.0),
+            (-2.0, -2.0),
+            (-1.0, 0.0),
+            (-2.0, 0.0),
+            (-3.0, 1.0),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point3 { x, y, z: 0.0 })
+        .collect(),
+    };
+    let repaired =
+        wedge_molecule(&state, &properties, &conformer, false).map_err(anyhow::Error::msg)?;
+    // Whatever is returned must not configure the allene. Without a
+    // preserving choice the reference comes back and import refuses it.
+    let seen = readback(&repaired, &conformer)?;
+    assert_eq!(
+        at(&seen.atoms, 7).map_err(anyhow::Error::msg)?.chiral_tag,
+        0
+    );
+    let reference = wedging::wedge_molecule(&state, &properties, Some(&conformer), false)
+        .map_err(anyhow::Error::msg)?;
+    let mut work = Work(50_000_000);
+    assert!(
+        preserves_stereo(&repaired, &conformer, &mut work).map_err(anyhow::Error::msg)?
+            || repaired.directions == reference.directions
+    );
+    Ok(())
+}
+
+#[test]
 fn avoiding_axis_ends_must_not_leave_a_tetrahedrane_centre_unwedged() -> TestResult {
     let (state, properties, conformer) = tetrahedrane_fixture().map_err(anyhow::Error::msg)?;
     let raw = wedging::wedge_molecule(&state, &properties, Some(&conformer), false)

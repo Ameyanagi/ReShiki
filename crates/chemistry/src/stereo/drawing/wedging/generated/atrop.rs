@@ -119,8 +119,10 @@ fn preserves_selected_stereo(
         .all(|(atom, (expected, actual))| {
             if !includes(atom) {
                 true
-            } else if expected.chiral_tag == 5 {
-                actual.chiral_tag == 5 && expected.chiral_permutation == actual.chiral_permutation
+            } else if expected.chiral_tag == 5 || actual.chiral_tag == 5 {
+                // A repair must neither lose nor add allene configuration.
+                expected.chiral_tag == actual.chiral_tag
+                    && expected.chiral_permutation == actual.chiral_permutation
             } else {
                 !tetrahedral(expected.chiral_tag) || expected.chiral_tag == actual.chiral_tag
             }
