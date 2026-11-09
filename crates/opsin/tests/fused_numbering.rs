@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingNumberer.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SSSRFinder.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/FusedRingNumbererTest.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/FusedRingNumbererFunctionsTest.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/SSSRTest.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | crates/opsin/tests/fused_numbering.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 //! All active examples from pinned FusedRingNumbererTest (MIT Daniel Lowe).
 use opsin::{ParseOptions, Parser, Status, fused_ring_numberer, graph::Graph, smiles};
 use serde_json::{Value, json};

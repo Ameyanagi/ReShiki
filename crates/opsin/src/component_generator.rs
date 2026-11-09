@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/component_generator.rs | 0d10886c93f6f7aa673f4179739143986d392a01
+// Source: ReShiki | crates/opsin/src/component_generator.rs | bfce35014e5c5a0062ea26a3381a883c5acc829d
+// Source: ReShiki | crates/opsin/src/component_generator.rs | e9070973b81ee6fcca8d9b3a7727eae3bc0b6858
+// Source: ReShiki | crates/opsin/src/component_generator.rs | 0f54ffbd7a22f4f2d8975e2de8238774fb47152d
+// Source: ReShiki | crates/opsin/src/component_generator.rs | 85a6e78dddda974214203edbfde720e88596d70f
+// Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md.
+
 //! Ordered destructive semantic parsing, ported from OPSIN `ComponentGenerator`.
 //! Source: OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
 //! Phane skeleton and locant updates: upstream main, 42e87ac6.

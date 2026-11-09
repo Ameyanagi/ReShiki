@@ -36,11 +36,13 @@ annotation-interval ordering are retained. The exported table SHA256 is recorded
 in `manifest.json`; the regenerated tables include the forward/reverse `phaneLocants` recognizer and shared locant
 and stereochemistry grammar changes.
 
-The native `regexTokens.xml` extensions (locanted axial and unlocanted Xi/xi
-descriptors) change only `token-69`, the stereochemistry bracket recognizer, and
-`token-reversed-69`. The checked table is a full export with the checked
-`regexTokens.xml` as a development resource override; every other entry equals
-the pristine export of the pinned jar. Cargo reads the checked binary directly.
+The documented export process attributes the native `regexTokens.xml`
+extensions (locanted axial and unlocanted Xi/xi descriptors) to `token-69`,
+the stereochemistry bracket recognizer, and `token-reversed-69`. The checked
+table is a full export with the checked `regexTokens.xml` as a development
+resource override. The claim that every other entry equals a pristine export
+of the pinned jar has not been independently reproduced by the read-only
+provenance audit; it remains an export-process claim. Cargo reads the checked binary directly.
 Frozen upstream oracle fixtures are unchanged.
 
 After editing `regexTokens.xml`, regenerate the table and every hash that pins
@@ -121,6 +123,9 @@ Compile each development exporter with the pinned JAR and the compiled
 ExportFrontend class on its classpath; the latter supplies JSON quoting. Run
 from a fresh working directory with absolute input/output paths. Exporter
 source and every checked fixture hash are recorded in `manifest.json`.
+Its historical `ExportDfa.java.txt` hash predates the Phase A step 2
+provenance-comment correction; the exporter body is unchanged and
+`PROVENANCE-nazuchem.toml` at the repository root records its current hash.
 Compressed JSONL uses gzip level 9 with timestamp zero and an empty filename.
 
 The resource fingerprint is SHA256 over each resource in sorted UTF-8 path

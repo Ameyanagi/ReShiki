@@ -1,3 +1,26 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/perception.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/chalcogen_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/nitrogen_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/perception.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/molecule.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_polycyclic_descriptors.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/exploratory/test_phosphinic_acid.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_replacement_parents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_principal_group_breadth.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_acids.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_citation_compatibility.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Consolidated openclatura functional-group, chalcogen and nitrogen-role adaptation with stricter local state checks and local regression tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Structural functional-group detectors in the same priority order as Openclatura.
 use super::molecule::{AtomSet, Molecule};
 use super::nomenclature::{
@@ -42,6 +65,9 @@ pub struct FunctionalGroupDescriptor {
     pub shared_atoms: Vec<usize>,
 }
 impl FunctionalGroupDescriptor {
+    // Provenance: fn FunctionalGroupDescriptor::atom_ids | adapted
+    // Source: openclatura | src/openclatura/perception.py::PerceivedGroup.atom_ids
+    // Source: openclatura | src/openclatura/chalcogen_roles.py::FunctionalGroupDescriptor.atom_ids
     pub fn atom_ids(&self) -> AtomSet {
         self.centers
             .iter()
@@ -57,6 +83,8 @@ impl FunctionalGroupDescriptor {
             )
             .collect()
     }
+    // Provenance: fn FunctionalGroupDescriptor::ligands_with_role | adapted
+    // Source: openclatura | src/openclatura/chalcogen_roles.py::FunctionalGroupDescriptor.ligands_with_role
     pub fn ligands_with_role(&self, role: LigandRole) -> Vec<&ChalcogenLigand> {
         self.ligands.iter().filter(|l| l.role == role).collect()
     }
@@ -71,6 +99,12 @@ pub struct PerceivedGroup {
     pub descriptor: Option<FunctionalGroupDescriptor>,
     pub resolved_rule: Option<FunctionalGroupRule>,
 }
+// Provenance: impl PerceivedGroup | adapted
+// Source: openclatura | src/openclatura/perception.py::PerceivedGroup dataclass fields key/is_principal_candidate/attachment_carbon/atoms_involved/resolved_rule
+// Source: openclatura | src/openclatura/perception.py::PerceivedGroup.atom_ids
+// Source: openclatura | src/openclatura/chalcogen_roles.py::FunctionalGroupDescriptor.atom_ids
+// Source: openclatura | src/openclatura/perception.py::PerceivedGroup.prefix
+// Source: openclatura | src/openclatura/perception.py::inline in _builtin_perceive_groups
 impl PerceivedGroup {
     pub fn new(
         key: impl Into<String>,
@@ -104,6 +138,8 @@ impl PerceivedGroup {
             .copied()
     }
 }
+// Provenance: fn desc_group | adapted
+// Source: openclatura | src/openclatura/perception.py::inline in _acyl_chalcogen_group
 fn desc_group(
     key: String,
     rule: Option<FunctionalGroupRule>,
@@ -118,12 +154,18 @@ fn desc_group(
     }
     g
 }
+// Provenance: fn is_chalcogen | adapted
+// Source: openclatura | src/openclatura/chalcogen_roles.py::Chalcogen enum values
 fn is_chalcogen(s: &str) -> bool {
     matches!(s, "O" | "S" | "Se" | "Te" | "Po")
 }
+// Provenance: fn is_halogen | adapted
+// Source: openclatura | src/openclatura/perception.py::inline in _acyl_chalcogen_group
 fn is_halogen(s: &str) -> bool {
     matches!(s, "F" | "Cl" | "Br" | "I")
 }
+// Provenance: fn classify_chalcogen_ligand | adapted
+// Source: openclatura | src/openclatura/chalcogen_roles.py::classify_chalcogen_ligand
 pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Option<ChalcogenLigand> {
     let atom = m.atoms.get(&a)?;
     if !is_chalcogen(&atom.symbol) {
@@ -174,6 +216,8 @@ pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Optio
         attachment_atom: attachment,
     })
 }
+// Provenance: fn terminal_double | adapted
+// Source: openclatura | src/openclatura/perception.py::_terminal_double_chalcogen
 fn terminal_double(m: &Molecule, c: usize, used: &AtomSet) -> Option<ChalcogenLigand> {
     let ds = m
         .get_neighbors(c)
@@ -184,6 +228,8 @@ fn terminal_double(m: &Molecule, c: usize, used: &AtomSet) -> Option<ChalcogenLi
         .collect::<Vec<_>>();
     (ds.len() == 1).then(|| ds[0].clone())
 }
+// Provenance: fn cyclic_atoms | adapted
+// Source: openclatura | src/openclatura/chains.py::get_cyclic_atoms
 fn cyclic_atoms(m: &Molecule) -> AtomSet {
     // An edge is cyclic exactly when its endpoints remain connected without it.
     let mut out = AtomSet::new();
@@ -207,6 +253,8 @@ fn cyclic_atoms(m: &Molecule) -> AtomSet {
     }
     out
 }
+// Provenance: fn connected_without | adapted
+// Source: openclatura | src/openclatura/perception.py::_connected_without_bridge
 fn connected_without(m: &Molecule, start: usize, target: usize, blocked: &AtomSet) -> bool {
     let mut seen = blocked.clone();
     seen.insert(start);
@@ -223,6 +271,8 @@ fn connected_without(m: &Molecule, start: usize, target: usize, blocked: &AtomSe
     }
     false
 }
+// Provenance: fn closes_ring | adapted
+// Source: openclatura | src/openclatura/perception.py::_closes_ring_back_to
 fn closes_ring(m: &Molecule, c: usize, hetero: usize, double: usize, cyclic: &AtomSet) -> bool {
     let mut seen = AtomSet::from([c, double]);
     let mut todo = VecDeque::from([hetero]);
@@ -238,6 +288,8 @@ fn closes_ring(m: &Molecule, c: usize, hetero: usize, double: usize, cyclic: &At
     }
     false
 }
+// Provenance: fn external_attachment | adapted
+// Source: openclatura | src/openclatura/perception.py::inline in _acyl_chalcogen_group
 fn external_attachment(m: &Molecule, c: usize, cyclic: &AtomSet) -> (usize, bool) {
     let rings = m
         .get_neighbors(c)
@@ -251,6 +303,8 @@ fn external_attachment(m: &Molecule, c: usize, cyclic: &AtomSet) -> (usize, bool
         (c, false)
     }
 }
+// Provenance: fn descriptor | adapted
+// Source: openclatura | src/openclatura/chalcogen_roles.py::FunctionalGroupDescriptor fields family/derivative/centers/ligands/attachment_atom/is_external
 fn descriptor(
     family: &str,
     derivative: &str,
@@ -269,11 +323,15 @@ fn descriptor(
         ..Default::default()
     }
 }
+// Provenance: fn rank | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::_element_rank
 fn rank(element: &str) -> i64 {
     section("chalcogen_elements")[element]["rank"]
         .as_i64()
         .unwrap_or(4)
 }
+// Provenance: fn infix | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::_replacement_infix
 fn infix(elements: &[String]) -> String {
     let mut es = elements
         .iter()
@@ -300,12 +358,16 @@ fn infix(elements: &[String]) -> String {
         })
         .collect()
 }
+// Provenance: fn template | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::inline in resolve_acyl_rule
 fn template(name: &str, values: &[(&str, String)]) -> String {
     format_template(
         section("chalcogen_templates")[name].as_str().unwrap_or(""),
         values,
     )
 }
+// Provenance: fn format_template | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::inline in resolve_acyl_rule
 fn format_template(t: &str, values: &[(&str, String)]) -> String {
     let mut result = t.to_owned();
     for (k, v) in values {
@@ -313,6 +375,8 @@ fn format_template(t: &str, values: &[(&str, String)]) -> String {
     }
     result
 }
+// Provenance: fn simple_key | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::simple_group_key
 fn simple_key(family: &str, derivative: &str, element: &str, external: bool) -> Option<String> {
     section("chalcogen_simple_group_keys")
         .as_array()?
@@ -327,6 +391,8 @@ fn simple_key(family: &str, derivative: &str, element: &str, external: bool) -> 
         .as_str()
         .map(str::to_owned)
 }
+// Provenance: fn dynamic_rule | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::inline in resolve_acyl_rule
 fn dynamic_rule(
     key: &str,
     policy: &serde_json::Value,
@@ -344,6 +410,8 @@ fn dynamic_rule(
     r.suffix_multiplier_positions = vec![0];
     r
 }
+// Provenance: fn resolve_acyl | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::resolve_acyl_rule
 fn resolve_acyl(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGroupRule>) {
     let double = &d.ligands[0];
     let single = d.ligands.get(1);
@@ -467,6 +535,8 @@ fn resolve_acyl(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGrou
     }
     (key, Some(r))
 }
+// Provenance: fn peroxo_infix | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::_peroxo_infix
 fn peroxo_infix(a: &str, b: &str) -> String {
     if a == "O" && b == "O" {
         return template("peroxo", &[]);
@@ -488,6 +558,8 @@ fn peroxo_infix(a: &str, b: &str) -> String {
         template("replaced_peroxo", &[("replacement", replacement)])
     }
 }
+// Provenance: fn resolve_peroxy | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::resolve_peroxy_acyl_rule
 fn resolve_peroxy(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGroupRule>) {
     let ds = &d.ligands;
     let es = ds.iter().map(|l| l.element.clone()).collect::<Vec<_>>();
@@ -565,6 +637,8 @@ fn resolve_peroxy(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGr
     );
     (key, Some(r))
 }
+// Provenance: fn hydrazide_ns | adapted
+// Source: openclatura | src/openclatura/perception.py::_hydrazide_nitrogens
 fn hydrazide_ns(m: &Molecule, c: usize, n: usize, cyclic: &AtomSet) -> Option<Vec<usize>> {
     if cyclic.contains(&n) || m.atoms[&n].charge != 0 {
         return None;
@@ -618,6 +692,8 @@ fn hydrazide_ns(m: &Molecule, c: usize, n: usize, cyclic: &AtomSet) -> Option<Ve
     }
     Some(vec![n, t])
 }
+// Provenance: fn is_nitro_n | adapted
+// Source: openclatura | src/openclatura/perception.py::_is_nitroso_or_nitro_nitrogen
 fn is_nitro_n(m: &Molecule, n: usize, parent: usize) -> bool {
     if m.atoms[&n].symbol != "N" || m.atoms[&n].total_h_count != 0 {
         return false;
@@ -633,6 +709,8 @@ fn is_nitro_n(m: &Molecule, n: usize, parent: usize) -> bool {
             .iter()
             .all(|&x| m.atoms[&x].symbol == "O" && m.degree(x) == 1)
 }
+// Provenance: fn urea_ns | adapted
+// Source: openclatura | src/openclatura/perception.py::_urea_nitrogens
 fn urea_ns(m: &Molecule, c: usize, ns: &[usize], cyclic: &AtomSet) -> Option<Vec<usize>> {
     if cyclic.contains(&c) || ns.len() != 2 || m.degree(c) != 3 {
         return None;
@@ -653,6 +731,8 @@ fn urea_ns(m: &Molecule, c: usize, ns: &[usize], cyclic: &AtomSet) -> Option<Vec
     ns.sort();
     Some(ns)
 }
+// Provenance: fn plain_amine_n | adapted
+// Source: openclatura | src/openclatura/perception.py::_plain_amine_nitrogen
 fn plain_amine_n(m: &Molecule, n: usize, c: usize, cyclic: &AtomSet) -> bool {
     !cyclic.contains(&n)
         && m.atoms[&n].charge == 0
@@ -667,6 +747,8 @@ fn plain_amine_n(m: &Molecule, n: usize, c: usize, cyclic: &AtomSet) -> bool {
                     }))
         })
 }
+// Provenance: fn amidine | adapted
+// Source: openclatura | src/openclatura/perception.py::_amidine_group
 fn amidine(
     m: &Molecule,
     c: usize,
@@ -717,11 +799,15 @@ fn amidine(
         atoms,
     ))
 }
+// Provenance: fn has_multiple | adapted
+// Source: openclatura | src/openclatura/molecule.py::has_non_h_multiple_bond_neighbor
 fn has_multiple(m: &Molecule, a: usize, allowed: &AtomSet) -> bool {
     m.get_neighbors(a)
         .iter()
         .any(|&n| !allowed.contains(&n) && m.atoms[&n].symbol != "H" && m.bond_order(a, n) > 1)
 }
+// Provenance: fn amidino_tail | adapted
+// Source: openclatura | src/openclatura/nitrogen_roles.py::amidinohydrazone_tail_atoms
 fn amidino_tail(m: &Molecule, n: usize, allowed: &AtomSet) -> AtomSet {
     for &c in m.get_neighbors(n) {
         if allowed.contains(&c) || !m.atoms[&c].is_carbon() || m.bond_order(n, c) != 2 {
@@ -739,6 +825,8 @@ fn amidino_tail(m: &Molecule, n: usize, allowed: &AtomSet) -> AtomSet {
     }
     AtomSet::new()
 }
+// Provenance: fn terminal_imino | adapted
+// Source: openclatura | src/openclatura/nitrogen_roles.py::_has_terminal_imino_substituent
 fn terminal_imino(m: &Molecule, n: usize, allowed: &AtomSet) -> bool {
     m.get_neighbors(n).iter().any(|&c| {
         !allowed.contains(&c)
@@ -750,6 +838,9 @@ fn terminal_imino(m: &Molecule, n: usize, allowed: &AtomSet) -> bool {
                     .all(|&x| x == n || m.atoms[&x].symbol == "H"))
     })
 }
+// Provenance: fn hydrazone_key_attachment | adapted
+// Source: openclatura | src/openclatura/nitrogen_roles.py::_hydrazone_key
+// Source: openclatura | src/openclatura/nitrogen_roles.py::_hydrazone_attachment
 fn hydrazone_key_attachment(
     m: &Molecule,
     c: usize,
@@ -795,6 +886,8 @@ fn hydrazone_key_attachment(
     };
     (key.into(), attach)
 }
+// Provenance: fn nitrogen_chain_roles | adapted
+// Source: openclatura | src/openclatura/nitrogen_roles.py::nitrogen_chain_roles
 fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> Vec<PerceivedGroup> {
     let mut roles = Vec::new();
     let mut blocked = consumed.clone();
@@ -999,6 +1092,8 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
     });
     roles
 }
+// Provenance: fn carbonyl_group | adapted
+// Source: openclatura | src/openclatura/perception.py::_carbonyl_chalcogen_group
 fn carbonyl_group(
     c: usize,
     attachment: usize,
@@ -1022,6 +1117,8 @@ fn carbonyl_group(
         ),
     ))
 }
+// Provenance: fn acyl_group | adapted
+// Source: openclatura | src/openclatura/perception.py::_acyl_chalcogen_group
 fn acyl_group(
     m: &Molecule,
     c: usize,
@@ -1270,6 +1367,8 @@ fn acyl_group(
     let (key, rule) = resolve_acyl(&desc);
     Some(vec![desc_group(key, rule, attachment, atoms, desc)])
 }
+// Provenance: fn leaving_descriptor | adapted
+// Source: openclatura | src/openclatura/perception.py::_leaving_group_descriptor
 fn leaving_descriptor(kind: &str, atoms: Vec<usize>) -> LeavingGroupDescriptor {
     LeavingGroupDescriptor {
         kind: kind.into(),
@@ -1277,6 +1376,8 @@ fn leaving_descriptor(kind: &str, atoms: Vec<usize>) -> LeavingGroupDescriptor {
         atom_ids: atoms,
     }
 }
+// Provenance: fn pseudohalide_group | adapted
+// Source: openclatura | src/openclatura/perception.py::_acyl_pseudohalide_group
 fn pseudohalide_group(
     m: &Molecule,
     c: usize,
@@ -1372,6 +1473,8 @@ fn pseudohalide_group(
     let (key, rule) = resolve_acyl(&d);
     Some(desc_group(key, rule, attach, atoms, d))
 }
+// Provenance: fn cyclic_imide | adapted
+// Source: openclatura | src/openclatura/perception.py::_cyclic_imide_group
 fn cyclic_imide(
     m: &Molecule,
     n: usize,
@@ -1423,6 +1526,8 @@ fn cyclic_imide(
     );
     Some(desc_group(key, Some(rule), cs[0], atoms, d))
 }
+// Provenance: fn is_complete_acyl_end | adapted
+// Source: openclatura | src/openclatura/chalcogen_roles.py::is_complete_acyl_end
 fn is_complete_acyl_end(m: &Molecule, center: usize, double: usize, linkage: usize) -> bool {
     let atom = &m.atoms[&center];
     if !atom.is_carbon()
@@ -1468,6 +1573,8 @@ fn is_complete_acyl_end(m: &Molecule, center: usize, double: usize, linkage: usi
 }
 
 /// Characteristic groups named with an anionic suffix or prefix (P-72.2.2).
+// Provenance: fn is_anionic_group_key | adapted
+// Source: openclatura | src/openclatura/perception.py::ANIONIC_SUFFIX_GROUP_KEYS module constant
 pub(super) fn is_anionic_group_key(key: &str) -> bool {
     matches!(
         key,
@@ -1475,6 +1582,8 @@ pub(super) fn is_anionic_group_key(key: &str) -> bool {
     )
 }
 
+// Provenance: fn anhydride_groups | adapted
+// Source: openclatura | src/openclatura/perception.py::_chalcogen_anhydride_groups
 fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
     let mut groups = Vec::new();
     let mut seen = BTreeSet::new();
@@ -1605,6 +1714,8 @@ fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
     }
     groups
 }
+// Provenance: fn central_group | adapted
+// Source: openclatura | src/openclatura/perception.py::_central_chalcogen_derivative
 fn central_group(
     m: &Molecule,
     c: usize,
@@ -1755,6 +1866,8 @@ fn central_group(
     let (key, rule) = resolve_central(&d)?;
     Some(desc_group(key, rule, anchor, group_atoms, d))
 }
+// Provenance: fn resolve_central | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::resolve_central_acid_rule
 fn resolve_central(d: &FunctionalGroupDescriptor) -> Option<(String, Option<FunctionalGroupRule>)> {
     let central = d.central_element.as_deref()?;
     let doubles = d
@@ -1931,6 +2044,8 @@ fn resolve_central(d: &FunctionalGroupDescriptor) -> Option<(String, Option<Func
     let rule = dynamic_rule(&key, policy, Some(prefix), Some(suffix), seniority, true);
     Some((key, Some(rule)))
 }
+// Provenance: fn composable_groups | adapted
+// Source: openclatura | src/openclatura/perception.py::_composable_chalcogen_linkage_groups
 fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     let mut result = Vec::new();
     for b in m.bonds.values() {
@@ -2032,6 +2147,8 @@ fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     result
 }
 /// Perceive characteristic groups. Detector order and atom consumption follow Python.
+// Provenance: fn perceive_groups | adapted
+// Source: openclatura | src/openclatura/perception.py::perceive_groups
 pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     let mut groups = composable_groups(m);
     let mut consumed = AtomSet::new();
@@ -2829,6 +2946,8 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/perception.rs::tests
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
@@ -2854,6 +2973,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes | adapted
+    // Source: ReShiki | src/naming/openclatura/perception.rs::tests::cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes
+    // Source: openclatura | tests/roundtrip/test_polycyclic_descriptors.py::test_roundtrip
+    // Source: openclatura | tests/exploratory/test_phosphinic_acid.py::test_cyclic_phosphorus_is_not_claimed_the_ring_stays_the_parent
+    // Source: openclatura | tests/roundtrip/test_replacement_parents.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cyclic_heteroatom_oxo_and_hydroxy_groups_use_senior_suffixes() {
         use crate::naming::{NameStatus, verify_identity};
 
@@ -2988,6 +3114,19 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::detects_group_priority_and_exocyclic_attachment | adapted
+    // Source: ReShiki | src/naming/openclatura/perception.rs::tests::detects_group_priority_and_exocyclic_attachment
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/roundtrip/test_principal_group_breadth.py::test_roundtrip
+    // Source: openclatura | tests/roundtrip/test_acids.py::test_roundtrip
+    // Source: openclatura | tests/unit/test_analysis.py::test_azinic_acid_is_distinguished_from_a_nitro_group
+    // Source: openclatura | tests/unit/test_analysis.py::test_anhydride_shortcut_binds_acid_halves_and_core_separately
+    // Source: openclatura | tests/unit/test_analysis.py::test_a_zwitterion_keeps_the_anion_as_the_suffix
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_shared_chalcogen_ligand_classifier
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_central_chalcogen_acids_and_derivatives_share_one_topology
+    // Source: openclatura | tests/unit/test_chalcogen_citation_compatibility.py::test_mixed_site_anhydrides_keep_both_acyl_ends
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn detects_group_priority_and_exocyclic_attachment() {
         for (smiles, key) in [
             ("CCO", "alcohol"),

@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Origin: original
+// Source: ReShiki | crates/opsin/src/automaton.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/AutomatonInitialiser.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ResourceManager.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | crates/opsin/provenance/ExportDfa.java.txt | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright 2017 Daniel Lowe
+// Unresolved: Header names dk.brics automata but does not declare whether implementation is original or adapted. No identified copied dk.brics code; independent originality of standard DFA stepping cannot be proved from these repository records.
+
 //! Checked native tables of upstream dk.brics automata; no Java serialization.
 use crate::InitializationError;
 use std::collections::BTreeMap;

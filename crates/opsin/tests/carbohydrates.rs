@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentProcessor.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/tests/carbohydrates.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Source: OPSIN | opsin-core/src/main/resources/uk/ac/cam/ch/wwmm/opsin/resources/carbohydrates.xml | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 // Source-derived construction tests for ComponentProcessor.java 1446–1950,
 // OPSIN 2.9.0 b91b610af5ab07560fedb20730d7aef46bb2bca0. Resource SMILES and
 // labels are copied from carbohydrates.xml. No Java or network is required.

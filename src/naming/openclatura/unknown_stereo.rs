@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: ReShiki | src/naming/openclatura/unknown_stereo.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/evaluations/test_check_regression.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! Explicitly unknown stereogenic units transported in private atom maps.
 //! The structure used for identity omits only these units' configurations.
 use super::{Name, graph_io, molecule::Molecule};
@@ -8,10 +16,14 @@ const UNKNOWN_ATOM: i32 = 900_001;
 const UNKNOWN_BOND: i32 = 900_002;
 const UNKNOWN_BOTH: i32 = 900_003;
 
+// Provenance: fn atom_marker | original
+// Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::atom_marker
 fn atom_marker(map: i32) -> bool {
     matches!(map, UNKNOWN_ATOM | UNKNOWN_BOTH)
 }
 
+// Provenance: fn bond_marker | original
+// Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::bond_marker
 fn bond_marker(map: i32) -> bool {
     matches!(map, UNKNOWN_BOND | UNKNOWN_BOTH)
 }
@@ -19,6 +31,8 @@ fn bond_marker(map: i32) -> bool {
 /// Attach unknown descriptors after the ordinary graph/CIP import. A detached
 /// full CIP trial distinguishes pseudoasymmetric ξ from ordinary Ξ wherever
 /// the remaining specified stereochemistry makes that distinction possible.
+// Provenance: fn annotate | original
+// Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::annotate
 pub(super) fn annotate(state: &perception::State, mol: &mut Molecule) -> Result<(), String> {
     let maps: Vec<_> = state
         .metadata
@@ -58,6 +72,8 @@ pub(super) fn annotate(state: &perception::State, mol: &mut Molecule) -> Result<
 
 /// An early hook in the ordinary entry point. Ordinary atom maps have no
 /// naming meaning; only the reserved markers emitted by document_identity do.
+// Provenance: fn name_smiles | original
+// Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::name_smiles
 pub(super) fn name_smiles(
     smiles: &str,
     style: crate::naming::IsotopeStyle,
@@ -141,6 +157,8 @@ pub(super) fn name_smiles(
     Ok(Some(normal))
 }
 
+// Provenance: fn without_unknown_descriptors | original
+// Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::without_unknown_descriptors
 fn without_unknown_descriptors(raw: &str) -> String {
     let mut text = String::with_capacity(raw.len());
     let mut groups = Vec::new();
@@ -205,6 +223,8 @@ fn without_unknown_descriptors(raw: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    // Provenance: fn tests::round_trip | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::round_trip
     fn round_trip(input: &str, expected: &str, omitted: &[&str], explicit: &str) {
         let name = super::super::name_smiles(input, &Default::default()).unwrap();
         assert_eq!(name.text, expected);
@@ -233,6 +253,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::wavy_tetrahedral_unit_retains_the_known_neighbour | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::wavy_tetrahedral_unit_retains_the_known_neighbour
     fn wavy_tetrahedral_unit_retains_the_known_neighbour() {
         round_trip(
             "C[CH:900001](O)[C@H](Cl)C",
@@ -243,6 +265,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::either_double_bond_names_the_unspecified_unit | adapted
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::either_double_bond_names_the_unspecified_unit
+    // Source: openclatura | tests/unit/test_analysis.py::test_unsaturation_interfix_survives_a_locant_set
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn either_double_bond_names_the_unspecified_unit() {
         round_trip(
             "C[CH:900002]=[CH:900002]C",
@@ -253,6 +280,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unlocanted_unknown_descriptors_round_trip | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::unlocanted_unknown_descriptors_round_trip
     fn unlocanted_unknown_descriptors_round_trip() {
         for (input, expected, omitted, explicit) in [
             (
@@ -298,6 +327,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::locanted_pseudoasymmetric_unknown_descriptor_is_retained | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::locanted_pseudoasymmetric_unknown_descriptor_is_retained
     fn locanted_pseudoasymmetric_unknown_descriptor_is_retained() {
         round_trip(
             "O=C(O)[C@H](O)[CH:900001](O)[C@H](O)C(=O)O",
@@ -308,6 +339,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::blue_book_p91_3_unknown_macrocycle | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::blue_book_p91_3_unknown_macrocycle
     fn blue_book_p91_3_unknown_macrocycle() {
         round_trip(
             "Cl[C:900002]1=[CH:900002]CCCCCCCCCC1",
@@ -318,6 +351,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::incomplete_explicit_forms_keep_the_unspecified_name_and_count_units | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::incomplete_explicit_forms_keep_the_unspecified_name_and_count_units
     fn incomplete_explicit_forms_keep_the_unspecified_name_and_count_units() {
         use crate::naming::{NameReason, NameStatus};
         for (input, expected, located, units, explicit) in [
@@ -368,6 +403,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::ordinary_maps_do_not_request_unknown_stereochemistry | adapted
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::ordinary_maps_do_not_request_unknown_stereochemistry
+    // Source: openclatura | tests/evaluations/test_check_regression.py::test_unchanged_cached_names_do_not_invoke_opsin
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn ordinary_maps_do_not_request_unknown_stereochemistry() {
         let name = super::super::name_smiles("[CH3:1][CH2:2][OH:3]", &Default::default()).unwrap();
         assert_eq!(name.text, "ethanol");
@@ -376,6 +416,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::enantiomorphic_ligands_use_lowercase_unknown_descriptor | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::enantiomorphic_ligands_use_lowercase_unknown_descriptor
     fn enantiomorphic_ligands_use_lowercase_unknown_descriptor() {
         let smiles = "[CH:900001](O)(C[C@H](F)C)C[C@@H](F)C";
         let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
@@ -396,6 +438,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::descriptor_omission_preserves_nested_groups_and_known_stereo | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::descriptor_omission_preserves_nested_groups_and_known_stereo
     fn descriptor_omission_preserves_nested_groups_and_known_stereo() {
         for (raw, omitted) in [
             ("(Ξ)-bromochlorofluoromethane", "bromochlorofluoromethane"),
@@ -417,6 +461,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::symmetric_numbering_keeps_warning_locants_in_the_displayed_name | original
+    // Source: ReShiki | src/naming/openclatura/unknown_stereo.rs::tests::symmetric_numbering_keeps_warning_locants_in_the_displayed_name
     fn symmetric_numbering_keeps_warning_locants_in_the_displayed_name() {
         let smiles = "C[CH:900001](Cl)CC[C@H](Cl)C";
         let name = super::super::name_smiles(smiles, &Default::default()).unwrap();

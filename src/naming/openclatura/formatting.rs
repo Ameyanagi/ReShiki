@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/formatting.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/formatting.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_stems.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_functional_rendering_regressions.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura fragment/multiplier formatting with local preferred-prefix and enclosure rules.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Name-fragment formatting helpers.
 use super::{
     assembly_parts::AssemblyParts,
@@ -9,6 +21,8 @@ use std::sync::LazyLock;
 
 /// The phenylamino spelling of the retained anilino prefixes (P-62.2.1.1.1), for
 /// contractions that read the ligands of an amino prefix, as in phenylcarbamoyl.
+// Provenance: fn phenylamino_spelling | original
+// Source: ReShiki | src/naming/openclatura/formatting.rs::phenylamino_spelling
 pub fn phenylamino_spelling(name: &str) -> &str {
     match name {
         "anilino" => "phenylamino",
@@ -16,6 +30,8 @@ pub fn phenylamino_spelling(name: &str) -> &str {
         _ => name,
     }
 }
+// Provenance: fn strip_outer_parentheses | port
+// Source: openclatura | src/openclatura/formatting.py::strip_outer_parentheses
 pub fn strip_outer_parentheses(name: &str) -> String {
     if name.starts_with('(') && name.ends_with(')') {
         name[1..name.len() - 1].into()
@@ -25,9 +41,13 @@ pub fn strip_outer_parentheses(name: &str) -> String {
 }
 static BASIC_MULTIPLIERS: LazyLock<Vec<String>> =
     LazyLock::new(|| (2..=1000).map(multipliers::basic).collect());
+// Provenance: fn starts_with_multiplier | adapted
+// Source: openclatura | src/openclatura/formatting.py::_starts_with_multiplier
 pub fn starts_with_multiplier(name: &str) -> bool {
     BASIC_MULTIPLIERS.iter().any(|m| name.starts_with(m))
 }
+// Provenance: fn is_complex_prefix | adapted
+// Source: openclatura | src/openclatura/formatting.py::is_complex_prefix
 pub fn is_complex_prefix(name: &str) -> bool {
     name.contains('(')
         || name.starts_with(|c: char| c.is_ascii_digit())
@@ -35,6 +55,8 @@ pub fn is_complex_prefix(name: &str) -> bool {
         || name.contains(' ')
         || starts_with_multiplier(name)
 }
+// Provenance: fn is_composite_prefix | port
+// Source: openclatura | src/openclatura/formatting.py::is_composite_prefix
 pub fn is_composite_prefix(name: &str) -> bool {
     for ending in ["ylidyne", "ylidene", "yl"] {
         if let Some(before) = name.strip_suffix(ending) {
@@ -43,6 +65,8 @@ pub fn is_composite_prefix(name: &str) -> bool {
     }
     name.contains("yl")
 }
+// Provenance: fn needs_complex_multiplier | adapted
+// Source: openclatura | src/openclatura/formatting.py::needs_complex_multiplier
 pub fn needs_complex_multiplier(name: &str) -> bool {
     is_composite_prefix(name)
         || (name.ends_with("yl") && name.contains("oxy"))
@@ -59,9 +83,13 @@ pub fn needs_complex_multiplier(name: &str) -> bool {
         .contains(&name)
 }
 /// P-16.3.4(d): keep multiplied `dec` groups distinct from longer chains.
+// Provenance: fn needs_simple_multiplier_parentheses | original
+// Source: ReShiki | src/naming/openclatura/formatting.rs::needs_simple_multiplier_parentheses
 pub fn needs_simple_multiplier_parentheses(name: &str) -> bool {
     name.starts_with("dec")
 }
+// Provenance: fn format_multiplier | adapted
+// Source: openclatura | src/openclatura/formatting.py::format_multiplier
 pub fn format_multiplier(name: &str, count: usize, safe_enclose: bool) -> String {
     let complex = is_complex_prefix(name) || (count > 1 && needs_complex_multiplier(name));
     if count == 1 {
@@ -83,6 +111,8 @@ pub fn format_multiplier(name: &str, count: usize, safe_enclose: bool) -> String
     }
 }
 
+// Provenance: fn count_names | port
+// Source: openclatura | src/openclatura/formatting.py::count_names
 pub fn count_names(names: &[String]) -> BTreeMap<String, usize> {
     let mut result = BTreeMap::new();
     for name in names {
@@ -90,6 +120,8 @@ pub fn count_names(names: &[String]) -> BTreeMap<String, usize> {
     }
     result
 }
+// Provenance: fn format_counted_prefixes | port
+// Source: openclatura | src/openclatura/formatting.py::format_counted_prefixes
 pub fn format_counted_prefixes(names: &[String]) -> String {
     let counts = count_names(names);
     let safe = counts.len() > 1 || counts.keys().any(|n| is_complex_prefix(n));
@@ -98,6 +130,8 @@ pub fn format_counted_prefixes(names: &[String]) -> String {
         .map(|(n, c)| format_multiplier(n, *c, safe))
         .collect()
 }
+// Provenance: fn format_center_ligands_by | adapted
+// Source: openclatura | src/openclatura/formatting.py::format_center_ligands
 pub fn format_center_ligands_by<K: Ord>(names: &[String], sort_key: impl Fn(&str) -> K) -> String {
     let counts = count_names(names);
     let mut ordered: Vec<_> = counts.keys().collect();
@@ -130,6 +164,8 @@ pub fn format_center_ligands_by<K: Ord>(names: &[String], sort_key: impl Fn(&str
     }
     rendered
 }
+// Provenance: fn substituted_alkoxy_prefix | adapted
+// Source: openclatura | src/openclatura/formatting.py::substituted_alkoxy_prefix
 pub fn substituted_alkoxy_prefix(branch: &str, parts: &AssemblyParts) -> Option<String> {
     // P-63.2.2.2: the retained parent, not a suffix of a nested prefix, must
     // be methyl, ethyl, propyl, butyl or phenyl. tert-Butoxy is not substitutable.
@@ -168,6 +204,8 @@ pub fn substituted_alkoxy_prefix(branch: &str, parts: &AssemblyParts) -> Option<
         format!("({prefix}{stem}oxy)")
     })
 }
+// Provenance: fn oxy_prefix_from_branch | adapted
+// Source: openclatura | src/openclatura/formatting.py::oxy_prefix_from_branch
 pub fn oxy_prefix_from_branch(branch: &str) -> String {
     let branch = strip_outer_parentheses(branch);
     if let Some(name) = super::nomenclature::RULES
@@ -179,6 +217,8 @@ pub fn oxy_prefix_from_branch(branch: &str) -> String {
     }
     format_element_substituent("", &branch, "oxy", false)
 }
+// Provenance: fn format_element_substituent | adapted
+// Source: openclatura | src/openclatura/formatting.py::format_element_substituent
 pub fn format_element_substituent(
     stereo_prefix: &str,
     branch: &str,
@@ -217,10 +257,17 @@ pub fn format_element_substituent(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/formatting.rs::tests
 mod tests {
     use super::format_multiplier;
 
     #[test]
+    // Provenance: fn tests::simple_dec_prefixes_keep_basic_multipliers_and_parentheses | adapted
+    // Source: ReShiki | src/naming/openclatura/formatting.rs::tests::simple_dec_prefixes_keep_basic_multipliers_and_parentheses
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_starts_with_multiplier_true_positives
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn simple_dec_prefixes_keep_basic_multipliers_and_parentheses() {
         for (name, count, expected) in [
             ("decyl", 1, "decyl"),
@@ -234,6 +281,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::oxy_prefix_keeps_parent_hydride_acyl_enclosed | adapted
+    // Source: ReShiki | src/naming/openclatura/formatting.rs::tests::oxy_prefix_keeps_parent_hydride_acyl_enclosed
+    // Source: openclatura | tests/unit/test_stems.py::test_substituted_alkoxy_prefix_rejects_unrelated_branches
+    // Source: openclatura | tests/unit/test_functional_rendering_regressions.py::test_multiplier_preserves_ligand_boundaries
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_starts_with_multiplier_true_positives
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn oxy_prefix_keeps_parent_hydride_acyl_enclosed() {
         // P-16.5.1.4: (methanethioyl)oxy, as in (cyclohexanecarbonyl)sulfanyl (P-57.4).
         assert_eq!(

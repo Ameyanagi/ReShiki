@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original
+// Source: ReShiki | src/naming/openclatura/isotope_naming.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! Isotopically substituted structures (P-82), never sample-label notation.
 //!
 //! The component engine supplies the parent locants. Only those positions,

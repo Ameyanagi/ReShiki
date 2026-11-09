@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: openclatura | src/openclatura/fusion/numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Changes: Openclatura completed numbering, parent pi graph and exhaustive maximum-matching implementation adapted to Rust.
+// Unresolved: A direct OPSIN source contribution to the generic perimeter numbering expression is not independently proven. Upstream openclatura source and transitive parser-construction dependency are established; avoid labelling this solely an OPSIN port.
+
 //! Completed-system fused-parent numbering and non-cumulative bond assignments.
 use super::super::{
     chains::canonical_ranks,

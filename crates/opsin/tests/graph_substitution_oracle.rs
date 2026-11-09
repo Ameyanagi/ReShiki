@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FragmentTools.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/AmbiguityChecker.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/tests/graph_substitution_oracle.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 //! Frozen FragmentTools progressive substitution / AmbiguityChecker oracle.
 //! OPSIN 2.9.0, MIT Daniel Lowe/contributors; source
 //! b91b610af5ab07560fedb20730d7aef46bb2bca0; official Maven jar SHA256

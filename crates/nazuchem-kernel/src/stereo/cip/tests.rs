@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-2-Clause AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Source: SiMolecule centres | core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java | d4b2ca46228bdf8814ff0c1f00465be4085af8c9
+// Copyright (c) 2020 John Mayfield
+// Changes: Rust adaptation; ledger-marked local functions; pass explicit default import budgets; format affected calls.
+
 // Copied from crates/chemistry/src/stereo/cip/tests.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3; changed: pass explicit default import budgets; format affected calls
 use super::*;
 use crate::{
@@ -8,6 +15,8 @@ use crate::{
     stereo::perception::Properties,
 };
 
+// Provenance: fn chain | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::chain
 fn chain(n: usize) -> anyhow::Result<State> {
     let graph = Graph {
         atoms: vec![
@@ -39,6 +48,8 @@ fn chain(n: usize) -> anyhow::Result<State> {
 }
 
 #[test]
+// Provenance: fn rejects_malformed_graph_caches_and_indices | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::rejects_malformed_graph_caches_and_indices
 fn rejects_malformed_graph_caches_and_indices() -> anyhow::Result<()> {
     let valid = chain(4)?;
     let mut bad = valid.clone();
@@ -78,6 +89,8 @@ fn rejects_malformed_graph_caches_and_indices() -> anyhow::Result<()> {
 }
 
 #[test]
+// Provenance: fn deep_chain_is_iterative_and_preserves_the_input | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::deep_chain_is_iterative_and_preserves_the_input
 fn deep_chain_is_iterative_and_preserves_the_input() -> anyhow::Result<()> {
     let mut input = chain(100_000)?;
     input.graph.atoms[99_999].isotope = 13;
@@ -93,6 +106,8 @@ fn deep_chain_is_iterative_and_preserves_the_input() -> anyhow::Result<()> {
 }
 
 #[test]
+// Provenance: fn partial_bond_returns_a_typed_error_without_changing_the_input | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::partial_bond_returns_a_typed_error_without_changing_the_input
 fn partial_bond_returns_a_typed_error_without_changing_the_input() -> anyhow::Result<()> {
     let mut input = chain(2)?;
     input.graph.bonds[0].order = 7;
@@ -108,6 +123,8 @@ fn partial_bond_returns_a_typed_error_without_changing_the_input() -> anyhow::Re
 }
 
 #[test]
+// Provenance: fn negative_mancude_fractions_average_the_complete_part_independent_of_order | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::negative_mancude_fractions_average_the_complete_part_independent_of_order
 fn negative_mancude_fractions_average_the_complete_part_independent_of_order() -> anyhow::Result<()>
 {
     // IUPAC P-92.1.4.4 gives every cyclopentadienide duplicate Z = 24/5.
@@ -145,6 +162,8 @@ fn negative_mancude_fractions_average_the_complete_part_independent_of_order() -
 }
 
 #[test]
+// Provenance: fn equivalent_cyclopentadienide_axis_ligands_do_not_receive_helicity | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::equivalent_cyclopentadienide_axis_ligands_do_not_receive_helicity
 fn equivalent_cyclopentadienide_axis_ligands_do_not_receive_helicity() -> anyhow::Result<()> {
     let mut state = crate::smiles::read(
         "OC1=C(C=CC=C1)[C-]1C=CC=C1",
@@ -170,6 +189,8 @@ fn equivalent_cyclopentadienide_axis_ligands_do_not_receive_helicity() -> anyhow
 }
 
 #[test]
+// Provenance: fn complete_labeling_bounds_retained_graphs_and_selection_without_partial_edits | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::complete_labeling_bounds_retained_graphs_and_selection_without_partial_edits
 fn complete_labeling_bounds_retained_graphs_and_selection_without_partial_edits()
 -> anyhow::Result<()> {
     let mut state = chain(20_000)?;
@@ -197,6 +218,8 @@ fn complete_labeling_bounds_retained_graphs_and_selection_without_partial_edits(
 }
 
 #[test]
+// Provenance: fn complete_labeling_without_centers_preserves_large_graph_and_uninitialized_rings | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::complete_labeling_without_centers_preserves_large_graph_and_uninitialized_rings
 fn complete_labeling_without_centers_preserves_large_graph_and_uninitialized_rings()
 -> anyhow::Result<()> {
     let state = chain(100_000)?;
@@ -209,6 +232,8 @@ fn complete_labeling_without_centers_preserves_large_graph_and_uninitialized_rin
 }
 
 #[test]
+// Provenance: fn long_stereo_chain_labels_every_center | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::long_stereo_chain_labels_every_center
 fn long_stereo_chain_labels_every_center() -> anyhow::Result<()> {
     // 400 centres once exhausted the storage of graphs retained for all centres.
     let text = format!("C{}", "[C@H](O)C".repeat(400));
@@ -229,6 +254,8 @@ fn long_stereo_chain_labels_every_center() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Provenance: fn allene_state | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::allene_state
 fn allene_state(text: &str, center: usize, permutation: u32) -> anyhow::Result<State> {
     let mut state = crate::smiles::read(text, &crate::budget::Budget::default())?
         .prepared
@@ -239,6 +266,9 @@ fn allene_state(text: &str, center: usize, permutation: u32) -> anyhow::Result<S
 }
 
 #[test]
+// Provenance: fn extended_tetrahedral_labels_the_central_atom_with_exact_helicity | adapted
+// Source: SiMolecule centres | core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java::ExtendedTetrahedral.setPrimaryLabel
+// Source: SiMolecule centres | core/src/main/java/com/simolecule/centres/config/ExtendedTetrahedral.java::ExtendedTetrahedral.label2
 fn extended_tetrahedral_labels_the_central_atom_with_exact_helicity() -> anyhow::Result<()> {
     // Centres ExtendedTetrahedral LEFT=1/RIGHT=2 maps priority-ordered
     // [near high, near low, far high, far low] to P/M respectively. Its SMILES
@@ -275,6 +305,8 @@ fn extended_tetrahedral_labels_the_central_atom_with_exact_helicity() -> anyhow:
 }
 
 #[test]
+// Provenance: fn extended_tetrahedral_identical_terminal_ligands_clear_the_label | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::extended_tetrahedral_identical_terminal_ligands_clear_the_label
 fn extended_tetrahedral_identical_terminal_ligands_clear_the_label() -> anyhow::Result<()> {
     for (text, center) in [("CC(C)=C=CC", 3), ("FC(F)=C=C(Cl)Br", 3)] {
         let mut state = allene_state(text, center, 1)?;
@@ -290,6 +322,8 @@ fn extended_tetrahedral_identical_terminal_ligands_clear_the_label() -> anyhow::
 }
 
 #[test]
+// Provenance: fn extended_tetrahedral_survives_bond_order_and_endpoint_permutations | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::extended_tetrahedral_survives_bond_order_and_endpoint_permutations
 fn extended_tetrahedral_survives_bond_order_and_endpoint_permutations() -> anyhow::Result<()> {
     let original = allene_state("FC(Cl)=C=C(I)Br", 3, 1)?;
     for swap_near in [false, true] {
@@ -322,6 +356,8 @@ fn extended_tetrahedral_survives_bond_order_and_endpoint_permutations() -> anyho
 }
 
 #[test]
+// Provenance: fn extended_tetrahedral_labels_an_auxiliary_center_after_rerooting | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::extended_tetrahedral_labels_an_auxiliary_center_after_rerooting
 fn extended_tetrahedral_labels_an_auxiliary_center_after_rerooting() -> anyhow::Result<()> {
     use configuration::Configuration;
     use digraph::{Descriptor, Digraph};
@@ -351,6 +387,8 @@ fn extended_tetrahedral_labels_an_auxiliary_center_after_rerooting() -> anyhow::
 }
 
 #[test]
+// Provenance: fn extended_tetrahedral_uses_pseudo_helicity_for_one_enantiomorphic_pair | original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/tests.rs::extended_tetrahedral_uses_pseudo_helicity_for_one_enantiomorphic_pair
 fn extended_tetrahedral_uses_pseudo_helicity_for_one_enantiomorphic_pair() -> anyhow::Result<()> {
     let state = allene_state("C([C@H](F)Cl)([C@@H](F)Cl)=C=C(I)Br", 7, 1)?;
     let result = label::assign(&state, &Default::default())?;

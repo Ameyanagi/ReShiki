@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Origin: port
+// Source: openclatura | src/openclatura/fusion/citation_numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_citation_numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+
 //! A fusion citation must identify one locant-labelled skeletal graph.
 use super::super::molecule::Molecule;
 use std::collections::{BTreeMap, BTreeSet};

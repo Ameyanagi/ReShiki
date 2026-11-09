@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/canonical_ranks.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/chains.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_canonical_ranks.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura chain/ring enumeration plus Morgan ranks from a second upstream module.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Carbon-chain enumeration and audited ring systems from Python `chains.py`.
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -34,11 +47,15 @@ pub struct PolycycleDescriptorCandidate {
 }
 
 impl PolycycleDescriptorCandidate {
+    // Provenance: fn PolycycleDescriptorCandidate::descriptor_allowed | adapted
+    // Source: openclatura | src/openclatura/chains.py::PolycycleDescriptorCandidate.descriptor_allowed
     pub fn descriptor_allowed(&self) -> bool {
         !self.is_von_baeyer || !self.numberings.is_empty()
     }
 }
 
+// Provenance: fn audited_von_baeyer_numberings | adapted
+// Source: openclatura | src/openclatura/chains.py::_audited_von_baeyer_numberings
 fn audited_von_baeyer_numberings(
     descriptor: &str,
     paths: &[Vec<usize>],
@@ -54,6 +71,8 @@ fn audited_von_baeyer_numberings(
 
 /// Preserve every reconstructable numbering of the first accepted descriptor,
 /// so heteroatom, unsaturation and substituent rules settle its orientation.
+// Provenance: fn polyspiro_or_von_baeyer_candidate | adapted
+// Source: openclatura | src/openclatura/chains.py::_polyspiro_or_von_baeyer_candidate
 pub fn polyspiro_or_von_baeyer_candidate(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -187,6 +206,8 @@ pub fn polyspiro_or_von_baeyer_candidate(
     }
 }
 
+// Provenance: fn first_retained_path | adapted
+// Source: openclatura | src/openclatura/chains.py::_first_retained_path
 fn first_retained_path(mol: &Molecule, paths: &[Vec<usize>]) -> Option<Vec<usize>> {
     paths
         .iter()
@@ -196,6 +217,8 @@ fn first_retained_path(mol: &Molecule, paths: &[Vec<usize>]) -> Option<Vec<usize
 
 /// Cycle membership in the induced graph. This deliberately tests membership,
 /// rather than using the 2-core (which can also contain bridges between rings).
+// Provenance: fn get_cyclic_atoms | adapted
+// Source: openclatura | src/openclatura/chains.py::get_cyclic_atoms
 pub fn get_cyclic_atoms(mol: &Molecule, exclude_atoms: &AtomSet) -> AtomSet {
     let valid: AtomSet = mol
         .atoms
@@ -213,6 +236,8 @@ pub fn get_cyclic_atoms(mol: &Molecule, exclude_atoms: &AtomSet) -> AtomSet {
         .collect()
 }
 
+// Provenance: fn find_all_carbon_paths | adapted
+// Source: openclatura | src/openclatura/chains.py::find_all_carbon_paths
 pub fn find_all_carbon_paths(
     mol: &Molecule,
     exclude_atoms: &AtomSet,
@@ -288,6 +313,8 @@ struct RingBlock {
 }
 
 /// Ring blocks and spiro merging in upstream `find_ring_systems` order.
+// Provenance: fn find_ring_systems | adapted
+// Source: openclatura | src/openclatura/chains.py::find_ring_systems
 pub fn find_ring_systems(
     mol: &Molecule,
     exclude_atoms: &AtomSet,
@@ -556,6 +583,8 @@ pub fn find_ring_systems(
     Ok(merge_polyspiro_ring_systems(mol, systems))
 }
 
+// Provenance: fn confirmed_fusion_numbering_paths | adapted
+// Source: openclatura | src/openclatura/chains.py::_confirmed_fusion_numbering_paths
 fn confirmed_fusion_numbering_paths(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -578,6 +607,8 @@ fn confirmed_fusion_numbering_paths(
         .collect())
 }
 
+// Provenance: fn fallback_bicyclo_paths | adapted
+// Source: openclatura | src/openclatura/chains.py::_fallback_monospiro_or_bicyclo_system
 fn fallback_bicyclo_paths(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -675,6 +706,8 @@ fn fallback_bicyclo_paths(
 
 /// Keep upstream's final overlap merge for ring systems split around a
 /// multi-spiro parent. Separate cycles connected by a bridge never overlap.
+// Provenance: fn merge_polyspiro_ring_systems | adapted
+// Source: openclatura | src/openclatura/chains.py::merge_polyspiro_ring_systems
 fn merge_polyspiro_ring_systems(mol: &Molecule, systems: Vec<RingSystem>) -> Vec<RingSystem> {
     let mut result = Vec::new();
     let mut seen = BTreeSet::new();
@@ -726,6 +759,8 @@ fn merge_polyspiro_ring_systems(mol: &Molecule, systems: Vec<RingSystem>) -> Vec
     result
 }
 
+// Provenance: fn ranking_order | port
+// Source: openclatura | src/openclatura/canonical_ranks.py::_order
 fn ranking_order(mol: &Molecule, u: usize, v: usize) -> usize {
     match mol.get_bond(u, v) {
         None => 0,
@@ -734,6 +769,8 @@ fn ranking_order(mol: &Molecule, u: usize, v: usize) -> usize {
     }
 }
 
+// Provenance: fn rank_invariants | port
+// Source: openclatura | src/openclatura/canonical_ranks.py::_ranks_from_invariants
 fn rank_invariants<T: Ord>(invariants: BTreeMap<usize, T>) -> BTreeMap<usize, usize> {
     let ordering: BTreeMap<&T, usize> = invariants
         .values()
@@ -749,6 +786,8 @@ fn rank_invariants<T: Ord>(invariants: BTreeMap<usize, T>) -> BTreeMap<usize, us
 }
 
 /// Python's Morgan equivalence ranks, including aromatic-order normalization.
+// Provenance: fn canonical_ranks | port
+// Source: openclatura | src/openclatura/canonical_ranks.py::canonical_ranks
 pub fn canonical_ranks(mol: &Molecule, atom_ids: Option<&AtomSet>) -> BTreeMap<usize, usize> {
     let all_atoms;
     let atoms = match atom_ids {
@@ -821,6 +860,8 @@ pub fn canonical_ranks(mol: &Molecule, atom_ids: Option<&AtomSet>) -> BTreeMap<u
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/chains.rs::tests
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
@@ -842,6 +883,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::carbon_paths_keep_only_maximal_leaf_to_leaf_walks | adapted
+    // Source: ReShiki | src/naming/openclatura/chains.rs::tests::carbon_paths_keep_only_maximal_leaf_to_leaf_walks
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn carbon_paths_keep_only_maximal_leaf_to_leaf_walks() {
         let mol = read_smiles("CCC(C)CC", &Default::default()).unwrap();
         let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
@@ -881,6 +927,11 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::cutting_a_ring_breaks_its_cycle_membership | adapted
+    // Source: ReShiki | src/naming/openclatura/chains.rs::tests::cutting_a_ring_breaks_its_cycle_membership
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_spiro_side_that_is_not_a_ring_abstains
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cutting_a_ring_breaks_its_cycle_membership() {
         let mol = read_smiles("C1CCCCC1", &Default::default()).unwrap();
         assert!(get_cyclic_atoms(&mol, &AtomSet::from([0])).is_empty());
@@ -1026,6 +1077,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::aromatic_morgan_ranks_preserve_ring_symmetry | adapted
+    // Source: ReShiki | src/naming/openclatura/chains.rs::tests::aromatic_morgan_ranks_preserve_ring_symmetry
+    // Source: openclatura | tests/unit/test_canonical_ranks.py::test_subgraph_ranks_ignore_atoms_outside_the_selected_parent
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn aromatic_morgan_ranks_preserve_ring_symmetry() {
         let mol = read_smiles("c1ccccc1", &Default::default()).unwrap();
         assert_eq!(
@@ -1063,6 +1119,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::public_naming_bounds_exhaustive_branched_chain_search | adapted
+    // Source: ReShiki | src/naming/openclatura/chains.rs::tests::public_naming_bounds_exhaustive_branched_chain_search
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn public_naming_bounds_exhaustive_branched_chain_search() {
         use super::super::name_smiles;
         use std::time::{Duration, Instant};

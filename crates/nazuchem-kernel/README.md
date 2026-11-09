@@ -5,7 +5,7 @@ the transitive chemistry modules used by OPSIN and openclatura from ReShiki at
 `be63a799aa03a83dc6ec74bb294f4d42b89298d3`, preserving the existing algorithms,
 platform sort policies, attribution comments, and relevant unit tests.
 
-The module inventory records 88 copied Rust module files and 27,886 original
+The module inventory records 88 copied Rust module files and 27,886 copied
 source lines, plus the required `AtomFacts`, `Element`, atomic table exports,
 module declarations, and crate attributes from the original root. The unused
 generated-wedging module and the host allocation-measurement test stay outside
@@ -13,11 +13,21 @@ the extraction. Four existing JSON test fixtures are copied without changes.
 
 Molecular perception is adapted from RDKit under BSD-3-Clause. Extended
 tetrahedral CIP code is adapted from SiMolecule centres under BSD-2-Clause.
-Original ReShiki/nazuchem code uses MIT OR Apache-2.0. The complete existing
-upstream notices remain at the repository root in `licenses/rdkit/` and
-`licenses/centres/`; the per-crate notice packaging and full provenance audit
-are scheduled for naming-split step 2. The current manifest retains the
-chemistry crate's existing license expression during step 1.
+Apple and Windows sorting policies adapt LLVM libc++ and Microsoft STL under
+Apache-2.0 WITH LLVM-exception. Original ReShiki/nazuchem code uses
+MIT OR Apache-2.0. Complete applicable third-party texts and notices travel
+with this crate in `licenses/rdkit/`, `licenses/centres/` and `licenses/stdlib/`;
+`LICENSE-MIT` and `LICENSE-APACHE` cover the local contributions. Root copies
+remain because ReShiki also retains the chemistry implementations.
+
+The manifest combines these established terms as
+`(MIT OR Apache-2.0) AND BSD-3-Clause AND BSD-2-Clause AND (Apache-2.0 WITH LLVM-exception)`.
+This expression does not resolve the source/licensing allocation of
+`native_order/linux_sort.rs` and `native_order/sort_common.rs`: their ledger
+licences remain `NOASSERTION`, pending the owner's sort-policy decision.
+`publish = false` remains in force. `PROVENANCE-nazuchem.toml` at the repository
+root records per-file ancestry, local function boundaries and the unresolved
+facts; the crate's `NOTICE` explains its incorporated scope.
 
 `budget::Budget` is explicit at entry points that perform aromaticity
 perception, including SMILES import, sanitization, and stereo axis validation.

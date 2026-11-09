@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/von_baeyer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/von_baeyer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/graph_kernel.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Consolidated openclatura legacy/main-ring and independent von-Baeyer searches with original Rust Python-order adapter and local bounds/tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Extended von Baeyer discovery from upstream `chains.py` and `von_baeyer.py`.
 //! Candidate ranking never substitutes for reconstruction: callers retain only
 //! paths whose descriptor rebuilds every edge of the parent skeleton.
@@ -32,6 +44,9 @@ struct LegacyBridge {
     endpoints: [usize; 2],
 }
 
+// Provenance: fn python_adjacency | adapted
+// Source: openclatura | src/openclatura/chains.py::get_von_baeyer_descriptor_candidates
+// Source: openclatura | src/openclatura/graph_kernel.py::adjacency_from_edges
 fn python_adjacency(adj: &Adjacency) -> OrderedAdjacency {
     // Upstream divergence: upstream inserts neighbors in tuple-edge-set order.
     // Rebuilding from sorted IDs retains integer-table traversal, but a hash
@@ -44,6 +59,8 @@ fn python_adjacency(adj: &Adjacency) -> OrderedAdjacency {
         .collect()
 }
 
+// Provenance: fn bridge_interior_path | adapted
+// Source: openclatura | src/openclatura/chains.py::_bridge_interior_path
 fn bridge_interior_path(
     adj: &OrderedAdjacency,
     nodes: &AtomSet,
@@ -68,6 +85,8 @@ fn bridge_interior_path(
     Vec::new()
 }
 
+// Provenance: fn largest_cycles_walk | adapted
+// Source: openclatura | src/openclatura/chains.py::inline in _largest_cycles_from_cycle_space
 fn largest_cycles_walk(atoms: &AtomSet, adj: &OrderedAdjacency) -> Option<Vec<Vec<usize>>> {
     let mut states = 0;
     let mut longest = 0;
@@ -106,12 +125,16 @@ fn largest_cycles_walk(atoms: &AtomSet, adj: &OrderedAdjacency) -> Option<Vec<Ve
     Some(cycles)
 }
 
+// Provenance: fn xor_mask | adapted
+// Source: openclatura | src/openclatura/chains.py::inline in _largest_cycles_from_cycle_space
 fn xor_mask(target: &mut [u64], source: &[u64]) {
     for (target, source) in target.iter_mut().zip(source) {
         *target ^= source;
     }
 }
 
+// Provenance: fn cycle_path_from_mask | adapted
+// Source: openclatura | src/openclatura/chains.py::_cycle_path_from_edges
 fn cycle_path_from_mask(mask: &[u64], edges: &[(usize, usize)]) -> Option<Vec<usize>> {
     let mut adj: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (index, &(left, right)) in edges.iter().enumerate() {
@@ -148,6 +171,8 @@ fn cycle_path_from_mask(mask: &[u64], edges: &[(usize, usize)]) -> Option<Vec<us
     (path.len() == adj.len()).then_some(path)
 }
 
+// Provenance: fn largest_cycles_from_cycle_space | adapted
+// Source: openclatura | src/openclatura/chains.py::_largest_cycles_from_cycle_space
 fn largest_cycles_from_cycle_space(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -239,6 +264,8 @@ fn largest_cycles_from_cycle_space(
     best
 }
 
+// Provenance: fn main_ring_division | adapted
+// Source: openclatura | src/openclatura/chains.py::_main_ring_division
 fn main_ring_division(
     bridge: &LegacyBridge,
     position: &BTreeMap<usize, usize>,
@@ -252,6 +279,8 @@ fn main_ring_division(
 
 /// Upstream main-ring search, in preference order. The per-call walk and
 /// cycle-space bounds deliberately abstain on an unmanageable graph.
+// Provenance: fn descriptor_candidates | adapted
+// Source: openclatura | src/openclatura/chains.py::get_von_baeyer_descriptor_candidates
 pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<DescriptorPaths> {
     let adj = adjacency_from_edges(atoms, edges);
     let ordered_adj = python_adjacency(&adj);
@@ -354,6 +383,8 @@ pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<Descriptor
         .collect()
 }
 
+// Provenance: fn legacy_from_candidate | adapted
+// Source: openclatura | src/openclatura/chains.py::_von_baeyer_from_candidate
 fn legacy_from_candidate(
     ring: &[usize],
     bridges: &[LegacyBridge],
@@ -460,6 +491,8 @@ fn legacy_from_candidate(
         .collect()
 }
 
+// Provenance: fn secondary_numbering_key | adapted
+// Source: openclatura | src/openclatura/chains.py::_secondary_bridge_numbering_key
 fn secondary_numbering_key(
     length: usize,
     first: usize,
@@ -505,6 +538,8 @@ pub struct VonBaeyerCandidate {
 
 /// The independent audited decomposition used when the main-ring search has
 /// no reconstructable descriptor. Limits match upstream's bounded scope.
+// Provenance: fn find_von_baeyer_candidates | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::find_von_baeyer_candidates
 pub fn find_von_baeyer_candidates(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -588,6 +623,8 @@ pub fn find_von_baeyer_candidates(
     candidates
 }
 
+// Provenance: fn simple_paths_between | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::_simple_paths_between
 fn simple_paths_between(start: usize, end: usize, adj: &Adjacency) -> Vec<Vec<usize>> {
     let mut paths = Vec::new();
     let mut stack = vec![(start, vec![start])];
@@ -611,6 +648,8 @@ fn simple_paths_between(start: usize, end: usize, adj: &Adjacency) -> Vec<Vec<us
     paths
 }
 
+// Provenance: fn build_candidate | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::inline in _build_candidates_for_decomposition
 fn build_candidate(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -727,6 +766,8 @@ fn build_candidate(
     })
 }
 
+// Provenance: fn classify_secondary | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::_classify_secondary_bridges
 fn classify_secondary(
     atoms: &AtomSet,
     edges: &EdgeSet,
@@ -811,6 +852,8 @@ fn classify_secondary(
     Some(bridges)
 }
 
+// Provenance: fn component_path | adapted
+// Source: openclatura | src/openclatura/von_baeyer.py::_component_path
 fn component_path(component: &AtomSet, first: usize, second: usize, edges: &EdgeSet) -> Vec<usize> {
     let adj = adjacency_from_edges(component, edges);
     let ends: AtomSet = component
@@ -841,6 +884,8 @@ fn component_path(component: &AtomSet, first: usize, second: usize, edges: &Edge
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/von_baeyer.rs::tests
 mod tests {
     use super::super::{graph_io::read_smiles, polycycle_topology::edges_within_atoms};
     use super::*;
@@ -868,6 +913,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::legacy_and_independent_search_offer_only_audited_parent_numberings | adapted
+    // Source: ReShiki | src/naming/openclatura/von_baeyer.rs::tests::legacy_and_independent_search_offer_only_audited_parent_numberings
+    // Source: openclatura | tests/unit/test_analysis.py::test_von_baeyer_polycycle_keeps_descriptor_source_numbering
+    // Source: openclatura | tests/unit/test_analysis.py::test_ring_descriptor_rendering_is_registry_backed
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn legacy_and_independent_search_offer_only_audited_parent_numberings() {
         let mol = read_smiles("C1NC23COC12C=CC3", &Default::default()).unwrap();
         let atoms = mol.atoms.keys().copied().collect();

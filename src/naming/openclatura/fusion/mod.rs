@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original
+// Source: ReShiki | src/naming/openclatura/fusion/mod.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! Audited graph decomposition, numbering and bond-state proofs for fused parents.
 use std::{cell::RefCell, collections::VecDeque};
 

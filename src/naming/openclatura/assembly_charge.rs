@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/assembly_charge.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/ionic_naming.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura parent-charge assembly reworked for local structured anion suffixes.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Charge suffix assembly on supported chain and monocyclic parents.
 use super::{
     assembly_parts::{AssemblyParts, ParentChargeItem},
@@ -7,6 +16,8 @@ use super::{
     spelling,
 };
 use std::collections::BTreeSet;
+// Provenance: fn positive_parent_n_charges | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::positive_parent_n_charges
 pub fn positive_parent_n_charges(parts: &AssemblyParts) -> Vec<&ParentChargeItem> {
     parts
         .parent_charges
@@ -14,6 +25,8 @@ pub fn positive_parent_n_charges(parts: &AssemblyParts) -> Vec<&ParentChargeItem
         .filter(|c| c.symbol == "N" && c.charge > 0)
         .collect()
 }
+// Provenance: fn has_ionic_retained_parent | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::has_ionic_retained_parent
 pub fn has_ionic_retained_parent(parts: &AssemblyParts) -> bool {
     parts
         .retained_name
@@ -21,6 +34,8 @@ pub fn has_ionic_retained_parent(parts: &AssemblyParts) -> bool {
         .is_some_and(|n| RULES.charges.retained_ionic_n_parents.contains_key(n))
         && !positive_parent_n_charges(parts).is_empty()
 }
+// Provenance: fn inferred_ionic_retained_parent | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::inferred_ionic_retained_parent
 pub fn inferred_ionic_retained_parent(parts: &AssemblyParts) -> Option<String> {
     if parts.retained_name.is_some()
         || !parts.is_simple_ring()
@@ -44,6 +59,8 @@ pub fn inferred_ionic_retained_parent(parts: &AssemblyParts) -> Option<String> {
         .get(&parts.parent_length)
         .cloned()
 }
+// Provenance: fn has_retained_like_parent | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::has_retained_like_parent
 pub fn has_retained_like_parent(parts: &AssemblyParts) -> bool {
     parts.retained_name.is_some()
         || parts
@@ -53,6 +70,8 @@ pub fn has_retained_like_parent(parts: &AssemblyParts) -> bool {
         || parts.parent_hydride.is_none() && parts.fusion_plan.is_some()
         || inferred_ionic_retained_parent(parts).is_some()
 }
+// Provenance: fn fusion_plan | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::fusion_parent_charge_name_operations
 fn fusion_plan(parts: &AssemblyParts) -> Option<&super::fusion::model::FusionParentPlan> {
     parts
         .parent_hydride
@@ -64,6 +83,8 @@ fn fusion_plan(parts: &AssemblyParts) -> Option<&super::fusion::model::FusionPar
                 .filter(|_| parent.is_fusion_parent())
         })
 }
+// Provenance: fn single_charged_replacement_locants | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::single_charged_replacement_locants
 pub fn single_charged_replacement_locants(parts: &AssemblyParts) -> BTreeSet<String> {
     if parts.retained_name.is_some() || inferred_ionic_retained_parent(parts).is_some() {
         return BTreeSet::new();
@@ -84,6 +105,8 @@ pub fn single_charged_replacement_locants(parts: &AssemblyParts) -> BTreeSet<Str
         BTreeSet::new()
     }
 }
+// Provenance: fn parent_charge_suffix | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::parent_charge_name_operations
 pub fn parent_charge_suffix(parts: &AssemblyParts) -> String {
     if let Some(suffix) = fusion_parent_charge_suffix(parts) {
         return suffix;
@@ -130,6 +153,8 @@ pub fn parent_charge_suffix(parts: &AssemblyParts) -> String {
     spelling::join(&cation, &anion)
 }
 
+// Provenance: fn has_parent_anion_suffix | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::fusion_parent_charge_name_operations
 pub fn has_parent_anion_suffix(parts: &AssemblyParts) -> bool {
     parts.anion_suffix.is_some()
         || fusion_plan(parts).is_some_and(|plan| {
@@ -141,6 +166,8 @@ pub fn has_parent_anion_suffix(parts: &AssemblyParts) -> bool {
         })
 }
 
+// Provenance: fn parent_anion_cites_locants | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::fusion_parent_charge_name_operations
 pub fn parent_anion_cites_locants(parts: &AssemblyParts) -> bool {
     parts
         .anion_suffix
@@ -149,6 +176,8 @@ pub fn parent_anion_cites_locants(parts: &AssemblyParts) -> bool {
         || parts.anion_suffix.is_none() && has_parent_anion_suffix(parts)
 }
 
+// Provenance: fn fusion_parent_charge_suffix | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::fusion_parent_charge_name_operations
 fn fusion_parent_charge_suffix(parts: &AssemblyParts) -> Option<String> {
     let plan = fusion_plan(parts).filter(|plan| plan.audit.confirmed())?;
     if !plan
@@ -201,6 +230,8 @@ fn fusion_parent_charge_suffix(parts: &AssemblyParts) -> Option<String> {
 }
 
 /// Check the graph-bound charge proof before any parent suffix is rendered.
+// Provenance: fn prepare_fusion_charge_assembly | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::prepare_fusion_charge_assembly
 pub fn prepare_fusion_charge_assembly(parts: &mut AssemblyParts) -> Result<(), String> {
     let Some(plan) = fusion_plan(parts) else {
         return Ok(());
@@ -302,6 +333,8 @@ pub fn prepare_fusion_charge_assembly(parts: &mut AssemblyParts) -> Result<(), S
     }
     Ok(())
 }
+// Provenance: fn append_charge_suffixes_to_terminal | adapted
+// Source: openclatura | src/openclatura/assembly_charge.py::append_charge_suffixes_to_terminal
 pub fn append_charge_suffixes_to_terminal(parts: &AssemblyParts, terminal: &str) -> (String, bool) {
     let charge = parent_charge_suffix(parts);
     let cites_locants = !charge.is_empty();

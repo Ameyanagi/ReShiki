@@ -1,5 +1,19 @@
+// SPDX-License-Identifier: BSD-3-Clause AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: RDKit | Code/GraphMol/Chirality.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/FindStereo.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/stereo/perception/atoms.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Copyright (c) 2006-2015, Rational Discovery LLC, Greg Landrum, and Julie Penzotti and others
+// Changes: Rust adaptation; ledger-marked local functions; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 // Copied unchanged from crates/chemistry/src/stereo/perception/atoms.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3
 use super::*;
+// Provenance: impl Context | adapted
+// Source: RDKit | Code/GraphMol/Chirality.cpp::is_regular_h
+// Source: RDKit | Code/GraphMol/Chirality.cpp::Chirality::detail::has_protium_neighbor
+// Source: RDKit | Code/GraphMol/FindStereo.cpp::Chirality::detail::isAtomPotentialTetrahedralCenter
+// Source: RDKit | Code/GraphMol/Chirality.cpp::isAtomPotentialChiralCenter
+// Source: RDKit | Code/GraphMol/Chirality.cpp::assignAtomChiralCodes
 impl Context {
     /// An H or ¹H with one neighbour and nothing else attached: the same CIP
     /// ligand as an implicit H (P-92.3), whatever the bond type (single,
@@ -186,6 +200,8 @@ impl Context {
     }
 }
 
+// Provenance: fn permutation_odd | original
+// Source: ReShiki | crates/chemistry/src/stereo/perception/atoms.rs::permutation_odd
 fn permutation_odd(order: &[(u32, usize)], work: &mut Work) -> Result<bool, String> {
     let mut tree = vec![0u32; order.len() + 1];
     let mut odd = false;

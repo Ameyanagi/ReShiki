@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: port
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SuffixApplier.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SuffixApplier.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Copyright Daniel Lowe and contributors; MIT (see the retained license).
+// Copyright 2017 Daniel Lowe
+
 //! Ordered suffix effects translated from OPSIN `SuffixApplier.java`.
 //!
 //! Source: OPSIN 2.9.0, commit b91b610af5ab07560fedb20730d7aef46bb2bca0.

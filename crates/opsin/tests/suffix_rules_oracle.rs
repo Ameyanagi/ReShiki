@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: original
+// Source: ReShiki | crates/opsin/tests/suffix_rules_oracle.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SuffixRules.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | crates/opsin/tests/fixtures/suffix-rule-golden.jsonl | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright 2017 Daniel Lowe
+
 //! Complete suffix applicability selection and ordered metadata from pinned OPSIN.
 use opsin::suffix_rules::SuffixRules;
 use serde_json::{Value, json};

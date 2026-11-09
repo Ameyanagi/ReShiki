@@ -31,3 +31,12 @@ compensated float summation from Python/bltinmodule.c, builtin_sum_impl, to
 preserve selection cleanup orientation. Its norm calculations reuse the audited
 arrow specialization; neither operation includes or invokes the Python
 interpreter.
+
+The separate adaptation in src/naming/openclatura/python_int_set.rs follows
+CPython 3.12 Objects/setobject.c: integer-set probing, copying, difference,
+and resizing policies. It retains the Python-2.0 terms in the accompanying
+complete LICENSE (including the licence history). This adaptation records
+only the 3.12 series: its exact patch release/commit is unresolved. The
+3.12.12 / 4a5632fb pin above applies to the numeric adaptations, and is not
+asserted for python_int_set.rs. The integer-set implementation is safe Rust
+and neither includes nor invokes the Python interpreter.

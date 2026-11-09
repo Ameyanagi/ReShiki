@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PreProcessor.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StringTools.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/PreProcessorTest.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | crates/opsin/tests/preprocessing.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 use opsin::preprocess::preprocess;
 
 #[test]

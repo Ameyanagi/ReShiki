@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original
+// Source: ReShiki | crates/chemistry/src/cx/number.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+
 //! Validate the lexical_cast<double> coordinate spellings used by CX readers.
 //! Hexadecimal input needs separate range checks; no FFI or locale state.
 // Copied unchanged from crates/chemistry/src/cx/number.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3

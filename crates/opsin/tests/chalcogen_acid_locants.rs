@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SuffixApplier.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FunctionalReplacement.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/ChalcogenAcidLocantTest.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | crates/opsin/tests/chalcogen_acid_locants.rs | 5c3d90c2852227ad644ac07ad91300f032c697f5
+// Source: OPSIN | opsin-core/src/test/resources/uk/ac/cam/ch/wwmm/opsin/chalcogenAcidLocants.txt | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 //! Upstream ChalcogenAcidLocantTest: acidic hydrogens must stay on the specified elements.
 use opsin::{ParseOptions, Parser, Status, graph::Element};
 

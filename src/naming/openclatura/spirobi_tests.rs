@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/data/fused_emission_examples.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! P-24.3 spirobi forms, numbering, certification, and reconstruction.
 use super::{component_namer, graph_io, molecule::Molecule, name_smiles};
 use crate::naming::{NameReason, NameStatus};
@@ -210,6 +217,11 @@ const UNCONVERTED_BOUNDARIES: &[Case] = &[
 ];
 
 #[test]
+// Provenance: fn spirobi_matrix_names_and_statuses | adapted
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::spirobi_matrix_names_and_statuses
+// Source: openclatura | tests/data/fused_emission_examples.json::<fixture data>
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn spirobi_matrix_names_and_statuses() {
     for &(row, smiles, expected, status) in MATRIX {
         let actual = name_smiles(smiles, &Default::default())
@@ -220,6 +232,8 @@ fn spirobi_matrix_names_and_statuses() {
 }
 
 #[test]
+// Provenance: fn spirobi_controls_keep_names_and_statuses | original
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::spirobi_controls_keep_names_and_statuses
 fn spirobi_controls_keep_names_and_statuses() {
     for &(row, smiles, expected, status) in CONTROLS {
         let actual = name_smiles(smiles, &Default::default())
@@ -230,6 +244,8 @@ fn spirobi_controls_keep_names_and_statuses() {
 }
 
 #[test]
+// Provenance: fn spirobi_suffixes_are_elided_but_remain_unverified | original
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::spirobi_suffixes_are_elided_but_remain_unverified
 fn spirobi_suffixes_are_elided_but_remain_unverified() {
     // One -ol elides the parent terminal e; multiplied -diol retains it.
     // Correct text alone does not certify principal-suffix spirobi naming.
@@ -242,6 +258,8 @@ fn spirobi_suffixes_are_elided_but_remain_unverified() {
 }
 
 #[test]
+// Provenance: fn spirobi_scope_boundaries_keep_generic_spiro_names | original
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::spirobi_scope_boundaries_keep_generic_spiro_names
 fn spirobi_scope_boundaries_keep_generic_spiro_names() {
     for &(row, smiles, expected, status) in UNCONVERTED_BOUNDARIES {
         let actual = name_smiles(smiles, &Default::default())
@@ -252,6 +270,11 @@ fn spirobi_scope_boundaries_keep_generic_spiro_names() {
 }
 
 #[test]
+// Provenance: fn spirobi_target_names_reconstruct_matrix_graphs | adapted
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::spirobi_target_names_reconstruct_matrix_graphs
+// Source: openclatura | tests/data/fused_emission_examples.json::<fixture data>
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn spirobi_target_names_reconstruct_matrix_graphs() {
     let parser = opsin::Parser::new().unwrap();
     for &(row, smiles, expected, _) in MATRIX
@@ -279,6 +302,8 @@ fn spirobi_target_names_reconstruct_matrix_graphs() {
 
 // Rebuild the same graph through the ordinary Molecule construction helpers,
 // changing IDs and bond insertion order instead of reusing a cached SMILES.
+// Provenance: fn relabel | original
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::relabel
 fn relabel(source: &Molecule, order: &[usize], reverse_bonds: bool) -> Molecule {
     let ids: BTreeMap<_, _> = order
         .iter()
@@ -335,6 +360,11 @@ fn relabel(source: &Molecule, order: &[usize], reverse_bonds: bool) -> Molecule 
 }
 
 #[test]
+// Provenance: fn spirobi_atom_ids_do_not_choose_component_priming | adapted
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::spirobi_atom_ids_do_not_choose_component_priming
+// Source: openclatura | tests/data/fused_emission_examples.json::<fixture data>
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn spirobi_atom_ids_do_not_choose_component_priming() {
     for &(row, smiles, expected, status) in MATRIX.iter().filter(|case| {
         ["D1", "D3", "D4", "D10"].contains(&case.0) || case.0.starts_with("unsaturation-")
@@ -370,6 +400,8 @@ fn spirobi_atom_ids_do_not_choose_component_priming() {
 }
 
 #[test]
+// Provenance: fn spirobi_mixed_unsaturation_elides_in_citation_order | original
+// Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::spirobi_mixed_unsaturation_elides_in_citation_order
 fn spirobi_mixed_unsaturation_elides_in_citation_order() {
     let parser = opsin::Parser::new().unwrap();
     for expected in [

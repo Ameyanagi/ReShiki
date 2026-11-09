@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/retained_derivative_hydrogen.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/retained_derivative_hydrogen.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_retained_derivative_carbon_hydrogen.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura retained-oxo hydrogen reconstruction, returning a narrower native proof result, with local Rust tests that include adapted upstream cases.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Exact oxo reconstruction for retained parents with unresolved carbon H.
 use super::{
     fusion::{
@@ -11,6 +21,8 @@ use super::{
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Only reconstruct a retained tautomer when oxo substitution explains every delta.
+// Provenance: fn prove_retained_oxo_carbon_hydrogen | adapted
+// Source: openclatura | src/openclatura/retained_derivative_hydrogen.py::prove_retained_oxo_carbon_hydrogen
 pub fn prove_retained_oxo_carbon_hydrogen(
     mol: &Molecule,
     template: &RetainedGraphTemplate,
@@ -147,11 +159,18 @@ pub fn prove_retained_oxo_carbon_hydrogen(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/retained_derivative_hydrogen.rs::tests
 mod tests {
     use super::super::molecule::{Atom, Bond};
     use super::*;
 
     #[test]
+    // Provenance: fn tests::exact_oxo_admission_preserves_intrinsic_sites_and_rejects_extra_reduction | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_derivative_hydrogen.rs::tests::exact_oxo_admission_preserves_intrinsic_sites_and_rejects_extra_reduction
+    // Source: openclatura | tests/unit/test_retained_derivative_carbon_hydrogen.py::test_graph_proof_preserves_capacity_and_reconstructs_all_bonds
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn exact_oxo_admission_preserves_intrinsic_sites_and_rejects_extra_reduction() {
         for (parent, oxo, nitrogen) in [
             ("1H-1,4-benzodiazepine", "5", "4"),

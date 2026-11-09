@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/functional_prefixes.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/functional_prefixes.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura characteristic-prefix handlers consolidated into a Rust dispatcher.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Characteristic groups cited as prefixes, in upstream registry order.
 use super::{
     assembly_parts::{RenderedSubstituentName, SubstituentItem},
@@ -19,12 +30,16 @@ pub struct PrefixContext<'a> {
     pub sub_exclude: &'a AtomSet,
 }
 
+// Provenance: fn chalcogen_term | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::_element_data
 fn chalcogen_term(element: &str, field: &str) -> Result<&'static str, String> {
     super::nomenclature::section("chalcogen_elements")[element][field]
         .as_str()
         .ok_or_else(|| format!("openclatura: {element} {field} not ported"))
 }
 
+// Provenance: fn element_ligand | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::inline in ester_prefix_handler
 fn element_ligand(branch: RenderedSubstituentName, element: &str) -> Result<String, String> {
     // Upstream divergence: amidooxy contractions change the attachment of N-acyl aminooxy ligands.
     let plain = strip_outer_parentheses(&branch.text);
@@ -42,6 +57,8 @@ fn element_ligand(branch: RenderedSubstituentName, element: &str) -> Result<Stri
     ))
 }
 
+// Provenance: fn central_linkage_prefix | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::central_linkage_prefix
 fn central_linkage_prefix(group: &PerceivedGroup) -> Option<&'static str> {
     let descriptor = group.descriptor.as_ref()?;
     let element = descriptor.central_element.as_deref()?;
@@ -56,6 +73,9 @@ fn central_linkage_prefix(group: &PerceivedGroup) -> Option<&'static str> {
         .as_str()
 }
 
+// Provenance: fn descriptor_ester_prefix | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::ester_prefix_handler
+// Source: openclatura | src/openclatura/functional_prefixes.py::central_ester_prefix_handler
 fn descriptor_ester_prefix(
     context: &PrefixContext<'_>,
     group: &PerceivedGroup,
@@ -102,6 +122,8 @@ fn descriptor_ester_prefix(
     )))
 }
 
+// Provenance: fn central_chalcogen_linkage_prefix | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::central_chalcogen_linkage_prefix_handler
 fn central_chalcogen_linkage_prefix(
     context: &PrefixContext<'_>,
     group: &PerceivedGroup,
@@ -167,6 +189,10 @@ fn central_chalcogen_linkage_prefix(
     ))
 }
 
+// Provenance: fn nitrogen_group_prefix | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::amidine_prefix_handler
+// Source: openclatura | src/openclatura/functional_prefixes.py::hydrazide_prefix_handler
+// Source: openclatura | src/openclatura/functional_prefixes.py::hydrazine_prefix_handler
 fn nitrogen_group_prefix(
     context: &PrefixContext<'_>,
     group: &PerceivedGroup,
@@ -268,6 +294,8 @@ fn nitrogen_group_prefix(
     Ok(format!("({stereo}{prefixes}{base})"))
 }
 
+// Provenance: fn ester_prefix_from_group | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::ester_prefix_from_group
 pub fn ester_prefix_from_group(
     mol: &Molecule,
     group: &PerceivedGroup,
@@ -296,6 +324,8 @@ pub fn ester_prefix_from_group(
     Ok(format!("({}{suffix})", branch.into_oxy_prefix()))
 }
 
+// Provenance: fn amide_prefix_from_group | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::amide_prefix_from_group
 pub fn amide_prefix_from_group(
     mol: &Molecule,
     group: &PerceivedGroup,
@@ -330,6 +360,8 @@ pub fn amide_prefix_from_group(
     ))
 }
 
+// Provenance: fn prefix_from_group | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::prefix_from_group
 pub fn prefix_from_group(
     context: &PrefixContext<'_>,
     group: &PerceivedGroup,
@@ -489,6 +521,8 @@ pub fn prefix_from_group(
     })
 }
 
+// Provenance: fn collect_component_prefix_substituents | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::collect_component_prefix_substituents
 pub fn collect_component_prefix_substituents(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -554,10 +588,17 @@ pub fn collect_component_prefix_substituents(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/functional_prefixes.rs::tests
 mod tests {
     use super::super::name_smiles;
 
     #[test]
+    // Provenance: fn tests::acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key | adapted
+    // Source: ReShiki | src/naming/openclatura/functional_prefixes.rs::tests::acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key
+    // Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key() {
         for (smiles, derivative, expected) in [
             ("CC(=O)[O-]", "anion", "carboxylato"),

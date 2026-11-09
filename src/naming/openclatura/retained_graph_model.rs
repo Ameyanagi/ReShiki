@@ -1,14 +1,33 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/retained_graph_model.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/retained_fused_templates.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/retained_graph_model.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura retained graph records and metadata, with original serde default-value glue.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Shared, dependency-free records for numbered retained parent graphs.
 use super::{assembly_parts::RetainedParentMetadata, molecule::AtomSet, rules::elements};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
+// Provenance: fn carbon_symbol | adapted
+// Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphAtomTemplate.symbol
+// Source: openclatura | src/openclatura/retained_fused_templates.py::_atom_template
 fn carbon_symbol() -> String {
     "C".into()
 }
+// Provenance: fn aromatic | adapted
+// Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphAtomTemplate.aromatic
+// Source: openclatura | src/openclatura/retained_fused_templates.py::_atom_template
 fn aromatic() -> bool {
     true
 }
+// Provenance: fn aromatic_bond_class | adapted
+// Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphBondTemplate.bond_class
+// Source: openclatura | src/openclatura/retained_fused_templates.py::_bond_template
 fn aromatic_bond_class() -> String {
     "aromatic".into()
 }
@@ -39,6 +58,8 @@ pub struct RetainedGraphAtomTemplate {
     pub required_stereo: bool,
 }
 impl RetainedGraphAtomTemplate {
+    // Provenance: fn RetainedGraphAtomTemplate::resolved_pi_capacity | adapted
+    // Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphAtomTemplate.resolved_pi_capacity
     pub fn resolved_pi_capacity(&self) -> usize {
         if self.saturated || self.forced_single {
             return 0;
@@ -75,6 +96,11 @@ pub struct RetainedGraphTemplate {
     pub indicated_hydrogen_count_override: Option<usize>,
     pub pre_descriptor_selection: bool,
 }
+// Provenance: impl RetainedGraphTemplate | adapted
+// Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphTemplate.atom_by_locant
+// Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphTemplate.indicated_hydrogen_count
+// Source: openclatura | src/openclatura/retained_graph_model.py::RetainedGraphTemplate.output_name
+// Source: openclatura | src/openclatura/retained_fused_templates.py::retained_parent_metadata
 impl RetainedGraphTemplate {
     pub fn atom_by_locant(&self) -> BTreeMap<String, RetainedGraphAtomTemplate> {
         self.atoms

@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/data/fused_emission_examples.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_retained_parent_precedence_and_order.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! P-24.5 monospiro names from different components (issue #980).
 use super::{component_namer, graph_io, molecule::Molecule, name_smiles};
 use crate::naming::{NameReason, NameStatus};
@@ -188,6 +196,8 @@ const CONTROLS: &[Case] = &[
     ),
 ];
 
+// Provenance: fn assert_names_and_statuses | original
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::assert_names_and_statuses
 fn assert_names_and_statuses(cases: &[Case]) {
     let mut failures = Vec::new();
     for &(row, smiles, expected, status) in cases {
@@ -204,12 +214,19 @@ fn assert_names_and_statuses(cases: &[Case]) {
 }
 
 #[test]
+// Provenance: fn heterospiro_matrix_names_and_statuses | original
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_matrix_names_and_statuses
 fn heterospiro_matrix_names_and_statuses() {
     assert_eq!(MATRIX.len(), 17);
     assert_names_and_statuses(MATRIX);
 }
 
 #[test]
+// Provenance: fn heterospiro_controls_keep_names_and_statuses | adapted
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_controls_keep_names_and_statuses
+// Source: openclatura | tests/data/fused_emission_examples.json::<fixture data>
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn heterospiro_controls_keep_names_and_statuses() {
     // PR #919's benzimidazole control is intentionally corrected. The new
     // heterogeneous composition must not certify hydrogenated spirobi.
@@ -218,6 +235,8 @@ fn heterospiro_controls_keep_names_and_statuses() {
 
 // These neutral, achiral cases need no stereo metadata. Rebuild their graph
 // with sparse atom IDs and independently changed bond IDs and insertion order.
+// Provenance: fn relabel | original
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::relabel
 fn relabel(source: &Molecule, order: &[usize], reverse_bonds: bool) -> Molecule {
     let ids: BTreeMap<_, _> = order
         .iter()
@@ -245,6 +264,11 @@ fn relabel(source: &Molecule, order: &[usize], reverse_bonds: bool) -> Molecule 
 }
 
 #[test]
+// Provenance: fn heterospiro_atom_ids_do_not_choose_junction_hydrogen_or_prime_scope | adapted
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_atom_ids_do_not_choose_junction_hydrogen_or_prime_scope
+// Source: openclatura | tests/data/fused_emission_examples.json::<fixture data>
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn heterospiro_atom_ids_do_not_choose_junction_hydrogen_or_prime_scope() {
     // Cover junction versus suffix numbering, carbonyl-consumed indicated H,
     // primed N added H, paired carbonyls and fusion-letter primes.
@@ -288,6 +312,11 @@ fn heterospiro_atom_ids_do_not_choose_junction_hydrogen_or_prime_scope() {
 }
 
 #[test]
+// Provenance: fn heterospiro_aromatic_and_kekule_inputs_have_the_same_name_and_status | adapted
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_aromatic_and_kekule_inputs_have_the_same_name_and_status
+// Source: openclatura | tests/data/fused_emission_examples.json::<fixture data>
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn heterospiro_aromatic_and_kekule_inputs_have_the_same_name_and_status() {
     for (row, kekule) in [
         ("B1", "O=C1CCCC2(C1)CCC1=CC=CC=C12"),
@@ -314,6 +343,11 @@ fn heterospiro_aromatic_and_kekule_inputs_have_the_same_name_and_status() {
 }
 
 #[test]
+// Provenance: fn heterospiro_fallbacks_require_completed_hydrogen_proof | adapted
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_fallbacks_require_completed_hydrogen_proof
+// Source: openclatura | tests/unit/test_retained_parent_precedence_and_order.py::test_those_names_are_order_invariant
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn heterospiro_fallbacks_require_completed_hydrogen_proof() {
     assert_names_and_statuses(&[
         (
@@ -350,6 +384,8 @@ fn heterospiro_fallbacks_require_completed_hydrogen_proof() {
 }
 
 #[test]
+// Provenance: fn heterospiro_hydrogen_and_suffixes_on_both_components | original
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_hydrogen_and_suffixes_on_both_components
 fn heterospiro_hydrogen_and_suffixes_on_both_components() {
     assert_names_and_statuses(&[
         (
@@ -367,6 +403,8 @@ fn heterospiro_hydrogen_and_suffixes_on_both_components() {
     ]);
 }
 
+// Provenance: fn assert_names_statuses_and_structures | original
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::assert_names_statuses_and_structures
 fn assert_names_statuses_and_structures(cases: &[Case]) {
     assert_names_and_statuses(cases);
     let parser = opsin::Parser::new().unwrap();
@@ -385,6 +423,8 @@ fn assert_names_statuses_and_structures(cases: &[Case]) {
 }
 
 #[test]
+// Provenance: fn heterospiro_cross_component_hydrogen_allocation_stays_unverified | original
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_cross_component_hydrogen_allocation_stays_unverified
 fn heterospiro_cross_component_hydrogen_allocation_stays_unverified() {
     assert_names_statuses_and_structures(&[(
         "two fused suffix contexts need joint P-58.2.3.1 allocation",
@@ -395,6 +435,8 @@ fn heterospiro_cross_component_hydrogen_allocation_stays_unverified() {
 }
 
 #[test]
+// Provenance: fn heterospiro_parent_descriptors_keep_fallback_names | original
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_parent_descriptors_keep_fallback_names
 fn heterospiro_parent_descriptors_keep_fallback_names() {
     assert_names_statuses_and_structures(&[
         (
@@ -419,6 +461,8 @@ fn heterospiro_parent_descriptors_keep_fallback_names() {
 }
 
 #[test]
+// Provenance: fn heterospiro_substituents_keep_spelling_and_downgrade_hydrogen | original
+// Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::heterospiro_substituents_keep_spelling_and_downgrade_hydrogen
 fn heterospiro_substituents_keep_spelling_and_downgrade_hydrogen() {
     assert_names_statuses_and_structures(&[
         (

@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted
+// Source: RDKit | Code/GraphMol/new_canon.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/new_canon.h | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/Atropisomers.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/ranking.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Copyright (C) 2014 Greg Landrum; adapted from Roger Sayle's pseudocode.
+// Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
+// Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 //! Canonical partition ranking adapted from RDKit new_canon.cpp/.h.
 //! Copyright (C) 2014 Greg Landrum; adapted from Roger Sayle's pseudocode.
 //! Atropisomer neighbor ordering from Atropisomers.cpp, Copyright (C)

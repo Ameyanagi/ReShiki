@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/component_modifiers.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/component_modifiers.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura ester/N-substituent logic split into collected state with local late-numbering modifiers.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Ester alcohol fragments and principal-group N substituents.
 use super::{
     assembly_parts::{AssemblyParts, SubstituentItem},
@@ -30,6 +39,8 @@ pub struct ComponentFrontModifiers {
 }
 
 impl ComponentFrontModifiers {
+    // Provenance: fn ComponentFrontModifiers::acid_isotopes | original
+    // Source: ReShiki | src/naming/openclatura/component_modifiers.rs::ComponentFrontModifiers::acid_isotopes
     pub fn acid_isotopes(&self, source: Option<&Molecule>) -> Vec<(usize, String, u16)> {
         source
             .filter(|_| self.mixed_diester)
@@ -54,6 +65,8 @@ impl ComponentFrontModifiers {
             })
     }
 
+    // Provenance: fn ComponentFrontModifiers::numbering_modifiers | original
+    // Source: ReShiki | src/naming/openclatura/component_modifiers.rs::ComponentFrontModifiers::numbering_modifiers
     pub fn numbering_modifiers(&self) -> BTreeMap<usize, String> {
         if self.mixed_diester {
             self.modifiers
@@ -65,6 +78,8 @@ impl ComponentFrontModifiers {
         }
     }
 
+    // Provenance: fn ComponentFrontModifiers::add_to_parts | adapted
+    // Source: openclatura | src/openclatura/component_modifiers.py::add_component_front_modifiers
     pub fn add_to_parts(
         &self,
         mol: &Molecule,
@@ -90,6 +105,8 @@ impl ComponentFrontModifiers {
     }
 }
 
+// Provenance: fn collect_component_front_modifiers | adapted
+// Source: openclatura | src/openclatura/component_modifiers.py::add_component_front_modifiers
 pub fn collect_component_front_modifiers(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -209,6 +226,8 @@ pub struct NumberingNSubstituents {
 }
 
 impl NumberingNSubstituents {
+    // Provenance: fn NumberingNSubstituents::numbering_modifiers | original
+    // Source: ReShiki | src/naming/openclatura/component_modifiers.rs::NumberingNSubstituents::numbering_modifiers
     pub fn numbering_modifiers(&self) -> BTreeMap<usize, Vec<String>> {
         let mut names: BTreeMap<_, Vec<_>> = self
             .sites
@@ -226,6 +245,9 @@ impl NumberingNSubstituents {
         names
     }
 
+    // Provenance: fn NumberingNSubstituents::add_to_parts | adapted
+    // Source: openclatura | src/openclatura/component_modifiers.py::n_substituent_locant
+    // Source: openclatura | src/openclatura/component_modifiers.py::add_component_n_substituents
     pub fn add_to_parts(
         mut self,
         parts: &mut AssemblyParts,
@@ -253,6 +275,9 @@ impl NumberingNSubstituents {
 /// Precollect ordinary amine/amide branches without detaching their nitrogen
 /// labels from the corresponding parent carbon. Other nitrogen suffix systems
 /// retain their specialized local ordering below.
+// Provenance: fn collect_numbering_n_substituents | adapted
+// Source: openclatura | src/openclatura/component_modifiers.py::n_substituent_locant
+// Source: openclatura | src/openclatura/component_modifiers.py::add_component_n_substituents
 pub fn collect_numbering_n_substituents(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -310,6 +335,8 @@ pub fn collect_numbering_n_substituents(
     }))
 }
 
+// Provenance: fn nitrogen_rank | adapted
+// Source: openclatura | src/openclatura/component_modifiers.py::_nitrogen_alphabetical_rank
 fn nitrogen_rank(
     mol: &Molecule,
     n: usize,
@@ -338,6 +365,8 @@ fn nitrogen_rank(
     })
 }
 
+// Provenance: fn n_substituent_locant | adapted
+// Source: openclatura | src/openclatura/component_modifiers.py::n_substituent_locant
 pub fn n_substituent_locant(
     key: &str,
     group_count: usize,
@@ -365,6 +394,8 @@ pub fn n_substituent_locant(
     format!("N{}", "'".repeat(primes))
 }
 
+// Provenance: fn add_component_n_substituents | adapted
+// Source: openclatura | src/openclatura/component_modifiers.py::add_component_n_substituents
 pub fn add_component_n_substituents(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -518,6 +549,8 @@ pub fn add_component_n_substituents(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/component_modifiers.rs::tests
 mod tests {
     use super::*;
     use crate::naming::openclatura::graph_io::read_smiles;

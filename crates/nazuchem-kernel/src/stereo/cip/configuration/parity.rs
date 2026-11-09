@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted
+// Source: RDKit | Code/GraphMol/CIPLabeler/configs/Configuration.h | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/stereo/cip/configuration/parity.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Copyright (c) 2006-2015, Rational Discovery LLC, Greg Landrum, and Julie Penzotti and others
+// Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 // Copied unchanged from crates/chemistry/src/stereo/cip/configuration/parity.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3
 use super::{Error, invalid};
 

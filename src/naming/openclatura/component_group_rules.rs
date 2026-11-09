@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/group_atom_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/component_group_rules.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/component_group_rules.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura parent preprocessing and atom roles with local external-chain carboxylic selection.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Functional-group atom roles and preprocessing of parent candidates.
 use super::molecule::{AtomSet, Molecule};
 use super::nomenclature::RULES;
@@ -13,6 +24,8 @@ pub struct ExternalCarboxylicParent {
 
 /// P-65.1.2.2.1: compare chains with the carboxy carbons outside the parent,
 /// retaining this mode only when the chosen chain carries more than two groups.
+// Provenance: fn external_chain_carboxylic_parent | original
+// Source: ReShiki | src/naming/openclatura/component_group_rules.rs::external_chain_carboxylic_parent
 pub fn external_chain_carboxylic_parent(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -183,6 +196,8 @@ pub fn external_chain_carboxylic_parent(
 
 /// The registry's ring-carboxylate key also represents neutral esters, so the
 /// descriptor, rather than that key alone, establishes an acid anion prefix.
+// Provenance: fn is_carboxylate_group | original
+// Source: ReShiki | src/naming/openclatura/component_group_rules.rs::is_carboxylate_group
 pub fn is_carboxylate_group(g: &PerceivedGroup) -> bool {
     g.descriptor.as_ref().is_some_and(|d| {
         d.family == "acyl"
@@ -192,6 +207,8 @@ pub fn is_carboxylate_group(g: &PerceivedGroup) -> bool {
     })
 }
 
+// Provenance: fn is_carboxylic_acid_group | original
+// Source: ReShiki | src/naming/openclatura/component_group_rules.rs::is_carboxylic_acid_group
 pub fn is_carboxylic_acid_group(g: &PerceivedGroup) -> bool {
     g.descriptor.as_ref().is_some_and(|d| {
         d.family == "acyl"
@@ -201,12 +218,16 @@ pub fn is_carboxylic_acid_group(g: &PerceivedGroup) -> bool {
     })
 }
 
+// Provenance: fn bridge_oxygen | port
+// Source: openclatura | src/openclatura/group_atom_roles.py::bridge_oxygen
 pub fn bridge_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     g.atoms_involved
         .iter()
         .copied()
         .find(|n| m.degree(*n) == 2 && m.atoms[n].symbol == "O")
 }
+// Provenance: fn ester_single_oxygen | port
+// Source: openclatura | src/openclatura/group_atom_roles.py::ester_single_oxygen
 pub fn ester_single_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     if let Some(d) = &g.descriptor
         && let Some(l) = d.ligands.iter().find(|l| l.role == LigandRole::CarbonLink)
@@ -218,6 +239,8 @@ pub fn ester_single_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
         .copied()
         .find(|n| m.atoms[n].symbol == "O" && (m.degree(*n) == 2 || m.atoms[n].charge == -1))
 }
+// Provenance: fn peroxy_ester_single_oxygen | port
+// Source: openclatura | src/openclatura/group_atom_roles.py::peroxy_ester_single_oxygen
 pub fn peroxy_ester_single_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     g.atoms_involved.iter().copied().find(|n| {
         m.atoms[n].symbol == "O"
@@ -225,6 +248,8 @@ pub fn peroxy_ester_single_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<us
             && m.degree(*n) == 2
     })
 }
+// Provenance: fn ester_or_peroxy_single_oxygen | port
+// Source: openclatura | src/openclatura/group_atom_roles.py::ester_or_peroxy_single_oxygen
 pub fn ester_or_peroxy_single_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     if RULES.prefixes.peroxy_ester_groups.contains(&g.key) {
         peroxy_ester_single_oxygen(m, g)
@@ -232,18 +257,24 @@ pub fn ester_or_peroxy_single_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option
         ester_single_oxygen(m, g)
     }
 }
+// Provenance: fn sulfonyl_sulfur | port
+// Source: openclatura | src/openclatura/group_atom_roles.py::sulfonyl_sulfur
 pub fn sulfonyl_sulfur(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     g.atoms_involved
         .iter()
         .copied()
         .find(|n| m.atoms[n].symbol == "S")
 }
+// Provenance: fn amide_nitrogen | port
+// Source: openclatura | src/openclatura/group_atom_roles.py::amide_nitrogen
 pub fn amide_nitrogen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     g.atoms_involved
         .iter()
         .copied()
         .find(|n| m.atoms[n].symbol == "N")
 }
+// Provenance: fn hydrazone_characteristic_carbon | port
+// Source: openclatura | src/openclatura/group_atom_roles.py::hydrazone_characteristic_carbon
 pub fn hydrazone_characteristic_carbon(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     g.atoms_involved
         .iter()
@@ -255,6 +286,8 @@ pub fn hydrazone_characteristic_carbon(m: &Molecule, g: &PerceivedGroup) -> Opti
                 .find(|c| m.atoms[c].is_carbon() && m.bond_order(n, *c) == 2)
         })
 }
+// Provenance: fn group_carbon_off_attachment | port
+// Source: openclatura | src/openclatura/group_atom_roles.py::group_carbon_off_attachment
 pub fn group_carbon_off_attachment(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     let c = g
         .atoms_involved
@@ -266,6 +299,8 @@ pub fn group_carbon_off_attachment(m: &Molecule, g: &PerceivedGroup) -> Option<u
         .any(|a| a.is_carbon() && a.idx != c)
         .then_some(c)
 }
+// Provenance: fn retarget_external_carbonyl_groups | adapted
+// Source: openclatura | src/openclatura/component_group_rules.py::retarget_external_carbonyl_groups
 pub fn retarget_external_carbonyl_groups(
     m: &Molecule,
     groups: &mut [PerceivedGroup],
@@ -311,6 +346,8 @@ pub fn retarget_external_carbonyl_groups(
         }
     }
 }
+// Provenance: fn exclude_nonparent_group_atoms | adapted
+// Source: openclatura | src/openclatura/component_group_rules.py::exclude_nonparent_group_atoms
 pub fn exclude_nonparent_group_atoms(
     m: &Molecule,
     groups: &[PerceivedGroup],
@@ -372,6 +409,8 @@ pub fn exclude_nonparent_group_atoms(
         exclude.extend(atoms.into_iter().filter(|n| !cyclic.contains(n)));
     }
 }
+// Provenance: fn principal_involved_atoms | adapted
+// Source: openclatura | src/openclatura/component_group_rules.py::principal_involved_atoms
 pub fn principal_involved_atoms(
     m: &Molecule,
     groups: &[PerceivedGroup],
@@ -401,6 +440,8 @@ pub fn principal_involved_atoms(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/component_group_rules.rs::tests
 mod tests {
     use super::*;
 
@@ -489,6 +530,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::external_carboxylic_chains_require_three_groups_on_one_principal_chain | adapted
+    // Source: ReShiki | src/naming/openclatura/component_group_rules.rs::tests::external_carboxylic_chains_require_three_groups_on_one_principal_chain
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn external_carboxylic_chains_require_three_groups_on_one_principal_chain() {
         for smiles in [
             "OC(=O)CC(=O)O",

@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted
+// Source: RDKit | Code/GraphMol/SmilesParse/SmilesParse.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/SmilesParse/CXSmilesOps.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/smiles/read.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Copyright (C) 2001-2022 Greg Landrum and contributors.
+// Changes: Rust adaptation; forward an explicit borrowed Budget through molecule/reaction import and sanitization.
+
 //! Default SMILES import annotations adapted from SmilesParse.cpp and
 //! CXSmilesOps.cpp, Copyright (C) 2001-2022 Greg Landrum and contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.

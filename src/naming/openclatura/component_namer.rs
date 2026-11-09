@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/component_namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/spiro_subgraph.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/component_namer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura component decision pipeline with local derivation, isotope and spiro projection adapters.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! The plain-name component pipeline, retaining upstream decision order.
 use super::{
     assembly_parts::SubstituentItem,
@@ -34,6 +46,8 @@ use super::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+// Provenance: fn name_component | adapted
+// Source: openclatura | src/openclatura/component_namer.py::name_component
 pub(super) fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Result<String, String> {
     name_component_with_citation(mol, component_atoms, None, None).map(|name| name.text)
 }
@@ -52,6 +66,8 @@ pub(super) enum Derivation {
     },
 }
 
+// Provenance: impl Derivation | original
+// Source: ReShiki | src/naming/openclatura/component_namer.rs::Derivation
 impl Derivation {
     pub(super) fn component_splits(&self) -> &BTreeSet<Edge> {
         match self {
@@ -71,6 +87,8 @@ pub(super) struct ComponentName {
     pub derivation: Derivation,
 }
 
+// Provenance: fn name_component_with_citation | original
+// Source: ReShiki | src/naming/openclatura/component_namer.rs::name_component_with_citation
 pub(super) fn name_component_with_citation(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -121,6 +139,8 @@ pub(super) struct IsotopeParentName {
     pub derivation: Derivation,
 }
 
+// Provenance: fn name_component_with_atom_locants | original
+// Source: ReShiki | src/naming/openclatura/component_namer.rs::name_component_with_atom_locants
 pub(super) fn name_component_with_atom_locants(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -177,6 +197,11 @@ enum ComponentResult {
     Plan(Box<ParentAssemblyPlan>, AtomSet, BTreeSet<Edge>),
 }
 
+// Provenance: fn build_spiro_component_parts | adapted
+// Source: openclatura | src/openclatura/spiro_subgraph.py::plan_graph_spiro_side
+// Source: ReShiki | src/naming/openclatura/component_namer.rs::build_spiro_component_parts
+// Changes: return ParentAssemblyPlan directly instead of capturing it before rendering;
+// wrap the shared pipeline in a candidate transaction and add prioritize_junction control.
 pub(super) fn build_spiro_component_parts(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -208,6 +233,8 @@ pub(super) fn build_spiro_component_parts(
 }
 
 /// Apply the same shortcut precedence when auditing competing parent choices.
+// Provenance: fn structural_parent | adapted
+// Source: openclatura | src/openclatura/component_namer.py::inline in name_component
 pub(super) fn structural_parent(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -246,6 +273,8 @@ pub(super) fn structural_parent(
     })
 }
 
+// Provenance: fn component_pipeline | adapted
+// Source: openclatura | src/openclatura/component_namer.py::name_component
 fn component_pipeline(
     mol: &Molecule,
     component_atoms: &AtomSet,
@@ -636,6 +665,8 @@ fn component_pipeline(
     ))
 }
 
+// Provenance: fn render_component_parent | original
+// Source: ReShiki | src/naming/openclatura/component_namer.rs::render_component_parent
 pub(super) fn render_component_parent(
     mol: &Molecule,
     parts: &mut super::assembly_parts::AssemblyParts,
@@ -645,6 +676,8 @@ pub(super) fn render_component_parent(
     render_component_and_parent(mol, parts, numbered, locants).map(|(name, _)| name)
 }
 
+// Provenance: fn render_component_and_parent | adapted
+// Source: openclatura | src/openclatura/component_namer.py::inline in name_component
 fn render_component_and_parent(
     mol: &Molecule,
     parts: &mut super::assembly_parts::AssemblyParts,
@@ -702,6 +735,8 @@ fn render_component_and_parent(
 }
 
 #[allow(clippy::too_many_arguments)]
+// Provenance: fn collect_component_branch_substituents | adapted
+// Source: openclatura | src/openclatura/component_namer.py::collect_component_branch_substituents
 fn collect_component_branch_substituents(
     mol: &Molecule,
     path: &[usize],
@@ -769,6 +804,8 @@ fn collect_component_branch_substituents(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/component_namer.rs::tests
 mod tests {
     #[test]
     fn external_carboxylic_parent_names_keep_multiplicities_and_maximize_groups() {
@@ -809,6 +846,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::external_carboxylic_parent_fallbacks_keep_dioic_names | adapted
+    // Source: ReShiki | src/naming/openclatura/component_namer.rs::tests::external_carboxylic_parent_fallbacks_keep_dioic_names
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn external_carboxylic_parent_fallbacks_keep_dioic_names() {
         for (smiles, expected) in [
             ("OC(=O)CC(=O)O", "propanedioic acid"),
@@ -856,6 +898,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::charged_retained_fallback_requires_citable_donor_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/component_namer.rs::tests::charged_retained_fallback_requires_citable_donor_hydrogen
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage10_retained_fused_ring_n_charge_uses_graph_operation_renderer
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn charged_retained_fallback_requires_citable_donor_hydrogen() {
         for smiles in ["C1=N[NH2+]c2ccccc21", "C1=Nc2ccccc2[NH2+]1"] {
             assert!(

@@ -1,3 +1,20 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/subgraph_tools.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/additive.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/subtractive.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/trace_helpers.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/subgraph_tools.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_spiro_shared_parent_pipeline.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_wrappers.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_replacement_morphology.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/arylGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Consolidated openclatura branch/stereo/replacement/unsaturation/substituent helpers with local fidelity checks and tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Graph-fragment helpers shared by component and recursive substituent naming.
 
 use std::collections::{BTreeMap, VecDeque};
@@ -9,6 +26,8 @@ use super::molecule::{AtomSet, Molecule};
 use super::ring_parent::ParentHydrideKind;
 
 /// Return the connected branch reached without crossing the parent boundary.
+// Provenance: fn subgraph_component | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::subgraph_component
 pub fn subgraph_component(mol: &Molecule, start_idx: usize, exclude_atoms: &AtomSet) -> AtomSet {
     let mut visited = exclude_atoms.clone();
     let mut component = AtomSet::new();
@@ -29,6 +48,8 @@ pub fn subgraph_component(mol: &Molecule, start_idx: usize, exclude_atoms: &Atom
 
 /// Collect bond descriptors at their numbered parent locant (P-93.5.7.1
 /// for a biaryl axis, including an axis crossing into a substituent).
+// Provenance: fn emit_bond_stereo | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::emit_bond_stereo
 pub fn emit_bond_stereo(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -39,6 +60,8 @@ pub fn emit_bond_stereo(
     emit_bond_stereo_except(mol, parts, numbered_path, locants, upstream_atom, None);
 }
 
+// Provenance: fn emit_bond_stereo_except | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::emit_bond_stereo
 pub(super) fn emit_bond_stereo_except(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -102,6 +125,8 @@ pub(super) fn emit_bond_stereo_except(
 }
 
 /// Add the selected parent's replacement and explicit multiple-bond features.
+// Provenance: fn add_parent_features | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::add_parent_features
 pub fn add_parent_features(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -306,6 +331,8 @@ pub fn add_parent_features(
 }
 
 /// Collect retained-parent hydrogen citations using the parent bond model.
+// Provenance: fn add_indicated_hydrogens | adapted
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 pub fn add_indicated_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -317,6 +344,8 @@ pub fn add_indicated_hydrogens(
 
 /// Merge same-name branch citations before parent promotion, as the upstream
 /// add_substituent_trace does even when no trace metadata is requested.
+// Provenance: fn add_substituent | adapted
+// Source: openclatura | src/openclatura/trace_helpers.py::add_substituent_trace
 pub fn add_substituent(
     parts: &mut AssemblyParts,
     mut item: super::assembly_parts::SubstituentItem,
@@ -343,6 +372,8 @@ pub fn add_substituent(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/subgraph_tools.rs::tests
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
@@ -393,6 +424,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::skeletal_replacement_handoff_keeps_heteroatom_prefixes | adapted
+    // Source: ReShiki | src/naming/openclatura/subgraph_tools.rs::tests::skeletal_replacement_handoff_keeps_heteroatom_prefixes
+    // Source: openclatura | tests/unit/test_analysis.py::test_parser_grammar_records_charge_and_heteroatom_tokens
+    // Source: openclatura | tests/unit/test_spiro_shared_parent_pipeline.py::test_typed_replacements_are_projected_from_parts_without_parsing
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn skeletal_replacement_handoff_keeps_heteroatom_prefixes() {
         use super::super::ring_parent::RingParent;
         let mol = read_smiles("O1CCCC1", &Default::default()).unwrap();
@@ -428,6 +465,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::bridge_prefix_and_parent_model_own_their_multiple_bonds | adapted
+    // Source: ReShiki | src/naming/openclatura/subgraph_tools.rs::tests::bridge_prefix_and_parent_model_own_their_multiple_bonds
+    // Source: openclatura | tests/unit/test_fusion_wrappers.py::test_arbitrary_length_and_unsaturated_carbo_bridges_use_typed_path_bonds
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn bridge_prefix_and_parent_model_own_their_multiple_bonds() {
         use super::super::{
             fusion::wrappers::plan_bridged_fusion_wrapper, ring_parent::RingParent,
@@ -449,6 +491,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::same_name_spiro_branches_keep_their_graph_metadata | adapted
+    // Source: ReShiki | src/naming/openclatura/subgraph_tools.rs::tests::same_name_spiro_branches_keep_their_graph_metadata
+    // Source: openclatura | tests/unit/test_replacement_morphology.py::test_hantzsch_widman_elision_remains_separate
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn same_name_spiro_branches_keep_their_graph_metadata() {
         use super::super::{assembly_parts::SubstituentItem, assembly_spiro::SpiroAssembly};
         let mut parts = AssemblyParts::new(6);
@@ -478,6 +525,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_parent_does_not_absorb_unrepresented_extra_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/subgraph_tools.rs::tests::retained_parent_does_not_absorb_unrepresented_extra_hydrogen
+    // Source: openclatura | tests/data/parser_xml_resources/arylGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_parent_does_not_absorb_unrepresented_extra_hydrogen() {
         for (smiles, symbol, name) in [
             ("S1CCCC1", "S", "thiolane"),

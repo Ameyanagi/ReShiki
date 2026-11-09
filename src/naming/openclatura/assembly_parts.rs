@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/assembly_parts.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/name_operations.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/ring_parent.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/assembly_parts.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted Openclatura assembly records with local anion, isotope and stereo state.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Structured inputs for the plain-name assembly path.
 use super::molecule::AtomSet;
 use std::collections::{BTreeMap, BTreeSet};
@@ -8,6 +19,8 @@ pub struct RenderedSubstituentName {
     pub outer_parentheses_optional: bool,
     pub oxy_prefix: Option<String>,
 }
+// Provenance: impl RenderedSubstituentName | original
+// Source: ReShiki | src/naming/openclatura/assembly_parts.rs::RenderedSubstituentName
 impl RenderedSubstituentName {
     pub fn into_oxy_prefix(self) -> String {
         self.oxy_prefix
@@ -25,6 +38,8 @@ pub struct SubstituentItem {
     pub spiro: Option<Box<super::assembly_spiro::SpiroAssembly>>,
 }
 impl SubstituentItem {
+    // Provenance: fn SubstituentItem::new | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::SubstituentItem
     pub fn new(name: impl Into<String>, locants: Vec<String>) -> Self {
         Self {
             name: name.into(),
@@ -51,6 +66,8 @@ pub struct PrincipalGroupItem {
     pub external_substitution_sites: bool,
 }
 impl PrincipalGroupItem {
+    // Provenance: fn PrincipalGroupItem::new | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::PrincipalGroupItem
     pub fn new(key: impl Into<String>, locants: Vec<String>) -> Self {
         Self {
             key: key.into(),
@@ -170,17 +187,23 @@ pub struct AssemblyParts {
     pub locanted_total_hydrogenation: bool,
 }
 impl Default for AssemblyParts {
+    // Provenance: fn <AssemblyParts as Default>::default | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts
     fn default() -> Self {
         Self::new(0)
     }
 }
 impl AssemblyParts {
+    // Provenance: fn AssemblyParts::is_ring_assembly | original
+    // Source: ReShiki | src/naming/openclatura/assembly_parts.rs::AssemblyParts::is_ring_assembly
     pub fn is_ring_assembly(&self) -> bool {
         self.parent_hydride
             .as_ref()
             .is_some_and(|parent| parent.assembly.is_some())
     }
 
+    // Provenance: fn AssemblyParts::new | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts
     pub fn new(parent_length: usize) -> Self {
         Self {
             parent_length,
@@ -249,10 +272,14 @@ impl AssemblyParts {
         }
     }
 
+    // Provenance: fn AssemblyParts::is_simple_ring | adapted
+    // Source: openclatura | src/openclatura/assembly_parts.py::AssemblyParts fields is_ring/is_bicycle/is_spiro/is_polycycle
     pub fn is_simple_ring(&self) -> bool {
         self.is_ring && !self.is_bicycle && !self.is_spiro && !self.is_polycycle
     }
 
+    // Provenance: fn AssemblyParts::stereochemical_locants | original
+    // Source: ReShiki | src/naming/openclatura/assembly_parts.rs::AssemblyParts::stereochemical_locants
     pub(super) fn stereochemical_locants(&self, locants: &[String]) -> String {
         locants
             .iter()
@@ -261,6 +288,8 @@ impl AssemblyParts {
             .join(",")
     }
 
+    // Provenance: fn AssemblyParts::stereochemical_locant | original
+    // Source: ReShiki | src/naming/openclatura/assembly_parts.rs::AssemblyParts::stereochemical_locant
     pub(super) fn stereochemical_locant(&self, locant: &str) -> String {
         self.endo_exo_descriptors.get(locant).map_or_else(
             || locant.to_owned(),

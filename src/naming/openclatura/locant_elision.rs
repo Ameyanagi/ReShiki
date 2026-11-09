@@ -1,3 +1,18 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/locant_elision.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.golden.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/groupStemsAllowingInlineSuffixes.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_directed_entry_layout.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura decorated-graph elision search extended by local capacity, stereo and ester equivalence proofs.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Exact graph proofs for optional constitutional locants.
 //!
 //! Constitutional and stereochemical locants share the same decorated-parent
@@ -31,6 +46,10 @@ struct Graph {
     automorphisms: Vec<Vec<usize>>,
     substituent_capacity: Vec<usize>,
 }
+// Provenance: fn graph | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_parent_symmetry_context
+// Source: openclatura | src/openclatura/locant_elision.py::_base_node_labels
+// Source: openclatura | src/openclatura/locant_elision.py::_adjacency
 fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
     let mut locants: Vec<_> = parts
         .parent_atom_symbols_by_locant
@@ -153,12 +172,19 @@ fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
         substituent_capacity,
     })
 }
+// Provenance: fn labels_match | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_has_parent_set_automorphism_mapping
+// Source: ReShiki | src/naming/openclatura/locant_elision.rs::labels_match
+// Changes: extract the node-label and bond-order compatibility predicate into a
+// Rust helper over the local Graph representation and normalized edge keys.
 fn labels_match(g: &Graph, p: &[usize]) -> bool {
     (0..g.nodes.len()).all(|i| g.nodes[i] == g.nodes[p[i]])
         && g.edges
             .iter()
             .all(|(&(a, b), &o)| g.edges.get(&normalize_edge(p[a], p[b])) == Some(&o))
 }
+// Provenance: fn retained_parent_attachment_is_ambiguous | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::retained_parent_attachment_is_ambiguous
 pub fn retained_parent_attachment_is_ambiguous(parts: &AssemblyParts, locs: &[String]) -> bool {
     if parts.retained_name.is_none() || !parts.is_simple_ring() || locs.len() != 1 {
         return false;
@@ -180,6 +206,8 @@ pub fn retained_parent_attachment_is_ambiguous(parts: &AssemblyParts, locs: &[St
         .collect();
     orbit.len() < g.nodes.len()
 }
+// Provenance: fn substituent_locant_set_is_unique | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::substituent_locant_set_is_unique
 pub fn substituent_locant_set_is_unique(
     parts: &AssemblyParts,
     locs: &[String],
@@ -257,6 +285,8 @@ pub fn substituent_locant_set_is_unique(
         })
     })
 }
+// Provenance: fn consume | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_SearchBudget.consume
 fn consume(budget: &mut usize) -> Option<()> {
     if *budget == 0 {
         None
@@ -265,7 +295,11 @@ fn consume(budget: &mut usize) -> Option<()> {
         Some(())
     }
 }
+// Provenance: fn combinations | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::inline in _candidate_positions
 fn combinations<T: Clone>(items: &[T], k: usize, budget: &mut usize) -> Option<Vec<Vec<T>>> {
+    // Provenance: fn combinations::recur | adapted
+    // Source: openclatura | src/openclatura/locant_elision.py::inline in _candidate_positions
     fn recur<T: Clone>(
         items: &[T],
         k: usize,
@@ -293,7 +327,11 @@ fn combinations<T: Clone>(items: &[T], k: usize, budget: &mut usize) -> Option<V
     Some(out)
 }
 /// Placements of `k` prefixes on nodes, at most `bounds[i]` on node `i`.
+// Provenance: fn multisets | original
+// Source: ReShiki | src/naming/openclatura/locant_elision.rs::multisets
 fn multisets(bounds: &[usize], k: usize, budget: &mut usize) -> Option<Vec<Vec<Position>>> {
+    // Provenance: fn multisets::recur | original
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::multisets::recur
     fn recur(
         bounds: &[usize],
         node: usize,
@@ -323,6 +361,8 @@ fn multisets(bounds: &[usize], k: usize, budget: &mut usize) -> Option<Vec<Vec<P
     Some(out)
 }
 /// Hydrogens each node gives up to the cited unsaturation.
+// Provenance: fn unsaturation_load | original
+// Source: ReShiki | src/naming/openclatura/locant_elision.rs::unsaturation_load
 fn unsaturation_load(g: &Graph, features: &[Feature]) -> Vec<usize> {
     let mut load = vec![0; g.nodes.len()];
     for f in features.iter().filter(|f| f.category == "unsaturation") {
@@ -336,6 +376,8 @@ fn unsaturation_load(g: &Graph, features: &[Feature]) -> Vec<usize> {
     }
     load
 }
+// Provenance: fn supported | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_supported_simple_parent
 fn supported(parts: &AssemblyParts) -> bool {
     // P-65.6.3.3.1: a single ester alcohol component leaves acid locant elision intact.
     let single_ester_modifier = parts.principal_group.as_ref().is_some_and(|group| {
@@ -367,6 +409,8 @@ fn supported(parts: &AssemblyParts) -> bool {
             .keys()
             .all(|l| !l.is_empty() && l.chars().all(|c| c.is_ascii_digit()))
 }
+// Provenance: fn features | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_feature_groups
 fn features(parts: &AssemblyParts, g: &Graph) -> Vec<Feature> {
     let mut result = Vec::new();
     let mut subs: BTreeMap<String, Vec<Position>> = BTreeMap::new();
@@ -445,6 +489,8 @@ type Decoration = (
     Vec<Vec<(String, String)>>,
     BTreeMap<Edge, Vec<(String, String)>>,
 );
+// Provenance: fn decorate | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_decorated_labels
 fn decorate(g: &Graph, groups: &[Feature]) -> Decoration {
     let mut nodes = vec![vec![]; g.nodes.len()];
     let mut edges: BTreeMap<_, _> = g.edges.keys().map(|e| (*e, vec![])).collect();
@@ -465,6 +511,8 @@ fn decorate(g: &Graph, groups: &[Feature]) -> Decoration {
     }
     (nodes, edges)
 }
+// Provenance: fn signature | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_position_signature
 fn signature(p: &Position, g: &Graph) -> String {
     match p {
         Position::Node(i) => format!("{:?}", g.nodes[*i]),
@@ -475,6 +523,8 @@ fn signature(p: &Position, g: &Graph) -> String {
         }
     }
 }
+// Provenance: fn isomorphic | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_isomorphic
 fn isomorphic<'a>(
     g: &Graph,
     actual: &'a Decoration,
@@ -535,6 +585,8 @@ fn isomorphic<'a>(
     let target_ranks = ranks(candidate, &target_adj);
     let mut target_order: Vec<_> = (0..n).collect();
     target_order.sort_by_key(|&i| target_ranks[i]);
+    // Provenance: fn isomorphic::search | adapted
+    // Source: openclatura | src/openclatura/locant_elision.py::_isomorphic.search
     fn search(
         graphs: (&Graph, &Decoration, &Decoration),
         adjacency: (&LabeledAdjacency<'_>, &LabeledAdjacency<'_>),
@@ -605,6 +657,9 @@ fn isomorphic<'a>(
 
 /// P-65.6.3.3.2.1: the two alcohol assignments coincide only when the
 /// complete acid component admits an exchange of its ester carbonyl sites.
+// Provenance: fn ester_sites_are_equivalent | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_elision_is_safe
+// Source: openclatura | src/openclatura/locant_elision.py::_decorated_labels
 pub fn ester_sites_are_equivalent(
     mol: &super::molecule::Molecule,
     acid_atoms: &super::molecule::AtomSet,
@@ -688,6 +743,8 @@ pub fn ester_sites_are_equivalent(
     isomorphic(&g, &actual, &candidate, &mut budget) == Some(true)
 }
 
+// Provenance: fn stereo_positions | original
+// Source: ReShiki | src/naming/openclatura/locant_elision.rs::stereo_positions
 fn stereo_positions(parts: &AssemblyParts, g: &Graph, atom: bool) -> Vec<Position> {
     if atom {
         return g
@@ -730,6 +787,9 @@ fn stereo_positions(parts: &AssemblyParts, g: &Graph, atom: bool) -> Vec<Positio
 
 /// P-91.3: a lone descriptor is unambiguous only when every possible unit of
 /// that kind belongs to the same orbit of the substituted parent.
+// Provenance: fn single_stereo_locant_is_unambiguous | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_elision_is_safe
+// Source: openclatura | src/openclatura/locant_elision.py::_candidate_positions
 pub fn single_stereo_locant_is_unambiguous(parts: &AssemblyParts) -> bool {
     let distinct: BTreeSet<_> = parts.stereo_features.iter().collect();
     let Some((locant, descriptor)) = distinct.first().copied().filter(|_| distinct.len() == 1)
@@ -804,6 +864,8 @@ pub fn single_stereo_locant_is_unambiguous(parts: &AssemblyParts) -> bool {
 
 /// Functional-class shortcuts use the same proof on their complete molecular
 /// word, whose constituent parents otherwise have separate assembly plans.
+// Provenance: fn bond_stereo_locant_is_unambiguous | original
+// Source: ReShiki | src/naming/openclatura/locant_elision.rs::bond_stereo_locant_is_unambiguous
 pub fn bond_stereo_locant_is_unambiguous(mol: &super::molecule::Molecule, bond: usize) -> bool {
     let mut parts = AssemblyParts::new(mol.atoms.len());
     parts.stereogenic_atom_ids = mol.stereogenic_atoms.clone();
@@ -835,6 +897,8 @@ pub fn bond_stereo_locant_is_unambiguous(mol: &super::molecule::Molecule, bond: 
     single_stereo_locant_is_unambiguous(&parts)
 }
 
+// Provenance: fn safe | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_elision_is_safe
 fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Option<bool> {
     let actual = decorate(g, all);
     let load = unsaturation_load(g, all);
@@ -877,6 +941,8 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
     {
         return Some(false);
     }
+    // Provenance: fn safe::visit | adapted
+    // Source: openclatura | src/openclatura/locant_elision.py::inline in _elision_is_safe
     fn visit(
         graph: (&Graph, &Decoration, &[usize]),
         all: &[Feature],
@@ -935,6 +1001,8 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         budget,
     )
 }
+// Provenance: fn apply_redundant_locant_elision | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::apply_redundant_locant_elision
 pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
     if !parts.omit_redundant_locants || !supported(parts) {
         return;
@@ -1061,6 +1129,8 @@ pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests
 mod tests {
     use super::super::assembly_parts::{PrincipalGroupItem, UnsaturationItem};
     use super::*;
@@ -1145,6 +1215,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::acid_prefix_elision_requires_proven_ester_site_equivalence | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::acid_prefix_elision_requires_proven_ester_site_equivalence
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_is_substituted_alkyl_ligand
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn acid_prefix_elision_requires_proven_ester_site_equivalence() {
         let mut parts = parent(3, false, false);
         parts.parent_atom_hydrogens_by_locant =
@@ -1198,6 +1273,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::single_ester_acid_component_omits_only_redundant_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::single_ester_acid_component_omits_only_redundant_locants
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn single_ester_acid_component_omits_only_redundant_locants() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
@@ -1263,6 +1343,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unsaturated_parent_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::unsaturated_parent_locants
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/data/parser_xml_resources/groupStemsAllowingInlineSuffixes.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn unsaturated_parent_locants() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [
@@ -1322,6 +1408,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::cumulene_locant_elision_controls | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::cumulene_locant_elision_controls
+    // Source: openclatura | tests/unit/test_locant_elision.py::test_simple_ring_and_chain_unsaturation_can_elide_unique_locants
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cumulene_locant_elision_controls() {
         for (smiles, expected) in [
             ("C=C=C=C", "butatriene"),
@@ -1373,6 +1465,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::parents_without_suffixes_omit_locants_only_when_no_isomer_exists | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::parents_without_suffixes_omit_locants_only_when_no_isomer_exists
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn parents_without_suffixes_omit_locants_only_when_no_isomer_exists() {
         // P-14.3.4.4, P-14.3.4.5; issue #949.
         for (smiles, expected) in [
@@ -1430,6 +1527,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::stereo_equivalence_uses_path_and_ring_automorphisms | adapted
+    // Source: ReShiki | src/naming/openclatura/locant_elision.rs::tests::stereo_equivalence_uses_path_and_ring_automorphisms
+    // Source: openclatura | tests/unit/test_fusion_directed_entry_layout.py::test_directed_entry_congeners_roundtrip_without_core_name_lookups
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn stereo_equivalence_uses_path_and_ring_automorphisms() {
         for (n, ring, candidates) in [(401, false, vec![1, 401]), (32, true, (1..=32).collect())] {
             let mut parts = parent(n, ring, false);

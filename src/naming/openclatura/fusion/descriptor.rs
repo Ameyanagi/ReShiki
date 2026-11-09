@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/fusion/descriptor.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fusion/descriptor.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_fusion_descriptor.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_systematic_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura component-cover/descriptor/citation planner with substantial local benzo-component and alphabetical-citation extensions.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Bounded, graph-proved systematic fusion citations and pure rendering.
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -35,6 +46,8 @@ pub struct DescriptorOptions {
     pub enforce_interoperability_limits: bool,
 }
 impl Default for DescriptorOptions {
+    // Provenance: fn <DescriptorOptions as Default>::default | adapted
+    // Source: openclatura | src/openclatura/fusion/descriptor.py::inline in iter_fusion_name_asts
     fn default() -> Self {
         let support = &fusion_nomenclature_config().rules.support;
         Self {
@@ -107,6 +120,8 @@ struct Candidate {
     ast: FusionNameAst,
 }
 
+// Provenance: fn component_sides | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::component_sides
 pub fn component_sides(spec: &FusionComponentSpec) -> Result<Vec<ComponentSide>, String> {
     let order = &spec.peripheral_order;
     if order.len() < 3 {
@@ -125,6 +140,8 @@ pub fn component_sides(spec: &FusionComponentSpec) -> Result<Vec<ComponentSide>,
         })
         .collect())
 }
+// Provenance: fn component_bond_locant_sets | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::component_bond_locant_sets
 pub fn component_bond_locant_sets(spec: &FusionComponentSpec) -> BTreeSet<BTreeSet<String>> {
     spec.bonds()
         .iter()
@@ -135,6 +152,8 @@ pub fn component_bond_locant_sets(spec: &FusionComponentSpec) -> BTreeSet<BTreeS
         })
         .collect()
 }
+// Provenance: fn build_fusion_name_ast | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::build_fusion_name_ast
 pub fn build_fusion_name_ast(
     mol: &Molecule,
     matches: &[FusionComponentMatch],
@@ -158,6 +177,8 @@ pub struct FusionNameAstIter<'a> {
     budget_exhausted: usize,
     terminal: bool,
 }
+// Provenance: fn iter_fusion_name_asts | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::iter_fusion_name_asts
 pub fn iter_fusion_name_asts<'a>(
     mol: &'a Molecule,
     matches: &[FusionComponentMatch],
@@ -247,6 +268,8 @@ pub fn iter_fusion_name_asts<'a>(
 }
 impl Iterator for FusionNameAstIter<'_> {
     type Item = Result<FusionNameAst, String>;
+    // Provenance: fn <FusionNameAstIter<'_> as Iterator>::next | adapted
+    // Source: openclatura | src/openclatura/fusion/descriptor.py::inline in iter_fusion_name_asts
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Some(ast) = self.pending.pop_front() {
@@ -335,6 +358,8 @@ impl Iterator for FusionNameAstIter<'_> {
     }
 }
 
+// Provenance: fn benzoheterocycle_candidates | original
+// Source: ReShiki | src/naming/openclatura/fusion/descriptor.rs::benzoheterocycle_candidates
 fn benzoheterocycle_candidates(
     mol: &Molecule,
     original: &Candidate,
@@ -490,6 +515,8 @@ fn benzoheterocycle_candidates(
     }
     Ok(result)
 }
+// Provenance: fn occurrence_option_key | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_occurrence_option_key
 fn occurrence_option_key(option: &OccurrenceOption) -> (usize, i64, Vec<usize>, &str, Vec<usize>) {
     (
         *option.face_ids.first().unwrap_or(&0),
@@ -499,12 +526,16 @@ fn occurrence_option_key(option: &OccurrenceOption) -> (usize, i64, Vec<usize>, 
         option.atom_ids.iter().copied().collect(),
     )
 }
+// Provenance: fn local_map_key | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_local_map_key
 fn local_map_key(mapping: &[(String, usize)]) -> Vec<(LocantKey, usize)> {
     mapping
         .iter()
         .map(|(locant, atom)| (retained_locant_sort_key(locant), *atom))
         .collect()
 }
+// Provenance: fn occurrence_options | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_occurrence_options
 fn occurrence_options(
     matches: &[FusionComponentMatch],
     registry: &FusionComponentRegistry,
@@ -567,6 +598,8 @@ fn occurrence_options(
     options.sort_by(|left, right| occurrence_option_key(left).cmp(&occurrence_option_key(right)));
     Ok(options)
 }
+// Provenance: fn exact_component_covers | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_exact_component_covers
 fn exact_component_covers(
     options: &[OccurrenceOption],
     target: &BTreeSet<usize>,
@@ -588,6 +621,10 @@ fn exact_component_covers(
     if by_face.values().any(Vec::is_empty) {
         return Err("component matches do not cover every fusion face".into());
     }
+    // Provenance: fn exact_component_covers::visit | adapted
+    // Source: openclatura | src/openclatura/fusion/descriptor.py::_exact_component_covers.visit
+    // Source: openclatura | src/openclatura/fusion/descriptor.py::_compatible_mapping_assignments.visit
+    // Source: openclatura | src/openclatura/fusion/descriptor.py::_tree_citation_scope_supported.visit
     fn visit(
         options: &[OccurrenceOption],
         target: &BTreeSet<usize>,
@@ -656,6 +693,8 @@ fn exact_component_covers(
     }
     Ok(covers)
 }
+// Provenance: fn scope_for_match | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_scope_for_match
 fn scope_for_match(
     mol: &Molecule,
     matched: &FusionComponentMatch,
@@ -675,6 +714,8 @@ fn scope_for_match(
     }
     component_scope(matched.occurrence_id, atoms.into_values(), edges)
 }
+// Provenance: fn prepare_component_selection | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_prepare_component_selection
 fn prepare_component_selection(
     mol: &Molecule,
     mut options: Vec<OccurrenceOption>,
@@ -752,6 +793,8 @@ fn prepare_component_selection(
         hidden_parent_variants,
     }))
 }
+// Provenance: fn cover_node_key | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_cover_node_key
 fn cover_node_key(
     node: usize,
     adjacency: &BTreeMap<usize, Vec<usize>>,
@@ -764,6 +807,8 @@ fn cover_node_key(
         node,
     )
 }
+// Provenance: fn parent_location_key | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_parent_location_key
 fn parent_location_key(
     orders: &BTreeMap<usize, usize>,
     roots: &[usize],
@@ -804,6 +849,8 @@ fn parent_location_key(
         attached_component_preference: ComparisonKey::tuple(attached),
     }
 }
+// Provenance: fn pre_mapping_location_key | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_pre_mapping_location_key
 fn pre_mapping_location_key(key: &ParentLocationKey) -> (usize, usize, Vec<i64>) {
     (
         key.incomplete_system,
@@ -811,6 +858,9 @@ fn pre_mapping_location_key(key: &ParentLocationKey) -> (usize, usize, Vec<i64>)
         key.attachment_count_by_order.clone(),
     )
 }
+// Provenance: fn citation_topology | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_CitationTopology
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_citation_topology
 fn citation_topology(
     adjacency: &BTreeMap<usize, Vec<usize>>,
     roots: Vec<usize>,
@@ -897,6 +947,8 @@ fn citation_topology(
         location_key,
     }
 }
+// Provenance: fn multiparent_root_sets | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_multiparent_root_sets
 fn multiparent_root_sets(
     roots: &[usize],
     graph: &CoverGraph<usize>,
@@ -928,6 +980,8 @@ fn multiparent_root_sets(
         vec![roots]
     }
 }
+// Provenance: fn root_sets | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::inline in _candidates_for_component_selection
 fn root_sets(
     roots: &[usize],
     prepared: &PreparedSelection,
@@ -952,6 +1006,8 @@ fn root_sets(
     }
     sets
 }
+// Provenance: fn citation_grammar_supported | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_citation_grammar_supported
 fn citation_grammar_supported(
     topology: &CitationTopology,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -998,6 +1054,8 @@ fn citation_grammar_supported(
     }
     true
 }
+// Provenance: fn eligible_roots | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::inline in _candidates_for_component_selection
 fn eligible_roots(prepared: &PreparedSelection) -> BTreeMap<ComparisonKey, Vec<usize>> {
     let mut roots: BTreeMap<ComparisonKey, Vec<usize>> = BTreeMap::new();
     for matched in &prepared.matches {
@@ -1011,6 +1069,8 @@ fn eligible_roots(prepared: &PreparedSelection) -> BTreeMap<ComparisonKey, Vec<u
     }
     roots
 }
+// Provenance: fn selection_preference_tiers | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_selection_preference_tiers
 fn selection_preference_tiers(
     prepared: &PreparedSelection,
     policy: &DescriptorOptions,
@@ -1046,6 +1106,8 @@ fn selection_preference_tiers(
     result.sort();
     result
 }
+// Provenance: fn candidates_for_selection | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_candidates_for_component_selection
 fn candidates_for_selection(
     mol: &Molecule,
     prepared: &PreparedSelection,
@@ -1149,6 +1211,8 @@ pub struct HostSideProjection {
     sides: Vec<ComponentSide>,
     side_edges: Vec<Edge>,
 }
+// Provenance: fn host_side_projection | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::host_side_projection
 pub fn host_side_projection(
     host: &FusionComponentMatch,
     spec: &FusionComponentSpec,
@@ -1165,6 +1229,9 @@ pub fn host_side_projection(
         side_edges,
     })
 }
+// Provenance: fn classify_ordered_fusion_interface | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::classify_ordered_fusion_interface
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_classify_ordered_fusion_interface
 pub fn classify_ordered_fusion_interface(
     attached: &FusionComponentMatch,
     host: &FusionComponentMatch,
@@ -1176,6 +1243,8 @@ pub fn classify_ordered_fusion_interface(
     let projection = host_side_projection(host, host_spec).ok()?;
     classify_with_projection(attached, host, attached_spec, interface, mol, &projection)
 }
+// Provenance: fn classify_with_projection | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_classify_ordered_fusion_interface
 fn classify_with_projection(
     attached: &FusionComponentMatch,
     host: &FusionComponentMatch,
@@ -1292,6 +1361,8 @@ fn classify_with_projection(
         start,
     ))
 }
+// Provenance: fn classified_join | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_classified_join
 fn classified_join(
     attached: &FusionComponentMatch,
     host: &FusionComponentMatch,
@@ -1310,6 +1381,8 @@ fn classified_join(
     )
     .map(|(interface, rank)| (FusionJoin { order, interface }, rank))
 }
+// Provenance: fn deduplicate_interface_equivalent_maps | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_deduplicate_interface_equivalent_maps
 fn deduplicate_interface_equivalent_maps(
     mapping_sets: &[Vec<FusionComponentMatch>],
     interfaces: &BTreeMap<Edge, FusionInterface<usize>>,
@@ -1350,18 +1423,24 @@ fn deduplicate_interface_equivalent_maps(
         })
         .collect()
 }
+// Provenance: fn attached_locant_key | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_attached_locant_key
 fn attached_locant_key(join: &FusionJoin) -> Vec<LocantKey> {
     join.attached_locants()
         .iter()
         .map(|l| retained_locant_sort_key(&l.text))
         .collect()
 }
+// Provenance: fn join_preference_key | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_join_preference_key
 fn join_preference_key(join: &FusionJoin, side_rank: usize) -> JoinKey {
     (join.order, side_rank, attached_locant_key(join))
 }
 /// FR-4.5(a-d) / P-25.3.4.2.4(a-d) compare each complete locant tier
 /// before considering the next one. Sets retain repeated locants, and numeric
 /// locants retain multiplicative primes. FR-4.6 omission happens in rendering.
+// Provenance: fn first_order_locant_key | original
+// Source: ReShiki | src/naming/openclatura/fusion/descriptor.rs::first_order_locant_key
 fn first_order_locant_key(
     citation_order: &[usize],
     joins: &BTreeMap<usize, FusionJoin>,
@@ -1410,6 +1489,8 @@ fn first_order_locant_key(
         attached_locants_citation,
     }
 }
+// Provenance: fn higher_order_locant_key | original
+// Source: ReShiki | src/naming/openclatura/fusion/descriptor.rs::higher_order_locant_key
 fn higher_order_locant_key(
     citation_order: &[usize],
     joins: &BTreeMap<usize, FusionJoin>,
@@ -1446,6 +1527,8 @@ fn higher_order_locant_key(
         })
         .collect()
 }
+// Provenance: fn ordered_children | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_ordered_children
 fn ordered_children(
     parents: &BTreeMap<usize, usize>,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -1486,6 +1569,8 @@ struct TreeState {
     prefix: Vec<JoinKey>,
     todo: Vec<TreeWork>,
 }
+// Provenance: fn best_tree_mapping_candidate | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_best_tree_mapping_candidate
 fn best_tree_mapping_candidate(
     mapping_sets: &[Vec<FusionComponentMatch>],
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -1687,6 +1772,8 @@ fn best_tree_mapping_candidate(
     }
     Ok(best)
 }
+// Provenance: fn compatible_mapping_candidates | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_compatible_mapping_assignments
 fn compatible_mapping_candidates(
     mapping_sets: &[Vec<FusionComponentMatch>],
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -1762,6 +1849,8 @@ fn compatible_mapping_candidates(
     }
     Ok(result)
 }
+// Provenance: fn multiplicative_groups | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_multiplicative_groups
 fn multiplicative_groups(
     children: &BTreeMap<usize, Vec<usize>>,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -1796,6 +1885,8 @@ fn multiplicative_groups(
     groups.sort_by(|a, b| a.occurrence_ids.cmp(&b.occurrence_ids));
     (depths, groups)
 }
+// Provenance: fn build_citation_tree | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_build_citation_tree
 fn build_citation_tree(root: usize, children: &BTreeMap<usize, Vec<usize>>) -> FusionCitationNode {
     FusionCitationNode {
         occurrence_id: root,
@@ -1807,6 +1898,8 @@ fn build_citation_tree(root: usize, children: &BTreeMap<usize, Vec<usize>>) -> F
             .collect(),
     }
 }
+// Provenance: fn postorder_children | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_preorder_children
 fn postorder_children(root: &FusionCitationNode) -> Vec<usize> {
     let mut result = Vec::new();
     for child in &root.children {
@@ -1815,10 +1908,16 @@ fn postorder_children(root: &FusionCitationNode) -> Vec<usize> {
     }
     result
 }
+// Provenance: fn tree_citation_scope_supported | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_tree_citation_scope_supported
 fn tree_citation_scope_supported(
     root: &FusionCitationNode,
     groups: &[FusionMultiplicityGroup],
 ) -> bool {
+    // Provenance: fn tree_citation_scope_supported::visit | adapted
+    // Source: openclatura | src/openclatura/fusion/descriptor.py::_exact_component_covers.visit
+    // Source: openclatura | src/openclatura/fusion/descriptor.py::_compatible_mapping_assignments.visit
+    // Source: openclatura | src/openclatura/fusion/descriptor.py::_tree_citation_scope_supported.visit
     fn visit<'a>(
         node: &FusionCitationNode,
         depth: usize,
@@ -1853,6 +1952,8 @@ fn tree_citation_scope_supported(
         .collect();
     visit(root, 0, &group_by_member, &mut BTreeSet::new(), &mut 0)
 }
+// Provenance: fn with_prime_depths | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_with_prime_depths
 fn with_prime_depths(mut join: FusionJoin, depths: &BTreeMap<usize, usize>) -> FusionJoin {
     let a = depths
         .get(&join.attached_occurrence())
@@ -1880,6 +1981,8 @@ fn with_prime_depths(mut join: FusionJoin, depths: &BTreeMap<usize, usize>) -> F
     }
     join
 }
+// Provenance: fn closing_join_direction | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_closing_join_direction
 fn closing_join_direction(
     pair: Edge,
     topology: &CitationTopology,
@@ -1911,6 +2014,8 @@ fn closing_join_direction(
     });
     (nodes[1], nodes[0])
 }
+// Provenance: fn build_candidate | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_build_candidate
 fn build_candidate(
     matches: &[FusionComponentMatch],
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -2125,6 +2230,8 @@ fn build_candidate(
     };
     Some(Candidate { score, ast })
 }
+// Provenance: fn alphabetic_index | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_alphabetic_index
 fn alphabetic_index(index: usize) -> String {
     let mut value = index + 1;
     let mut letters = Vec::new();
@@ -2135,6 +2242,8 @@ fn alphabetic_index(index: usize) -> String {
     letters.into_iter().rev().collect()
 }
 
+// Provenance: fn render_fusion_name | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::render_fusion_name
 pub fn render_fusion_name(
     ast: &FusionNameAst,
     registry: &FusionComponentRegistry,
@@ -2154,6 +2263,8 @@ struct FusionPrefixCitationKey {
     indacene_markers: Vec<String>,
 }
 
+// Provenance: fn fusion_prefix_citation_key | original
+// Source: ReShiki | src/naming/openclatura/fusion/descriptor.rs::fusion_prefix_citation_key
 fn fusion_prefix_citation_key(prefix: &str) -> FusionPrefixCitationKey {
     let mut key = FusionPrefixCitationKey::default();
     let (prefix, marker) = prefix
@@ -2203,6 +2314,8 @@ fn fusion_prefix_citation_key(prefix: &str) -> FusionPrefixCitationKey {
     key
 }
 
+// Provenance: fn fusion_group_multiplier | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::inline in render_fusion_name_parts.render_children
 fn fusion_group_multiplier(
     group: &FusionMultiplicityGroup,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -2220,6 +2333,8 @@ fn fusion_group_multiplier(
 
 /// Finalize FR-3.6 order before scope validation, priming, and rendering. Each
 /// branch is compared as a whole, after ordering its own attached components.
+// Provenance: fn order_citation_tree | original
+// Source: ReShiki | src/naming/openclatura/fusion/descriptor.rs::order_citation_tree
 fn order_citation_tree(
     node: &mut FusionCitationNode,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -2282,6 +2397,8 @@ fn order_citation_tree(
     key
 }
 
+// Provenance: fn add_citation_prime_depths | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::inline in _build_candidate
 fn add_citation_prime_depths(
     node: &FusionCitationNode,
     order: usize,
@@ -2296,6 +2413,8 @@ fn add_citation_prime_depths(
 }
 
 /// Ordered citation pieces. Atom/bond bindings are not consumed by the plain-name route.
+// Provenance: fn render_fusion_name_parts | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::render_fusion_name_parts
 pub fn render_fusion_name_parts(
     ast: &FusionNameAst,
     registry: &FusionComponentRegistry,
@@ -2409,6 +2528,8 @@ pub fn render_fusion_name_parts(
         omit_join: bool,
     }
     impl Renderer<'_> {
+        // Provenance: fn render_fusion_name_parts::Renderer::attachment | adapted
+        // Source: openclatura | src/openclatura/fusion/descriptor.py::render_fusion_name_parts.attachment
         fn attachment(&mut self, node: &FusionCitationNode) -> Result<Vec<String>, String> {
             let mut pieces = self.children(node)?;
             let spec = &self.specs[&node.occurrence_id];
@@ -2440,6 +2561,8 @@ pub fn render_fusion_name_parts(
             ));
             Ok(pieces)
         }
+        // Provenance: fn render_fusion_name_parts::Renderer::children | adapted
+        // Source: openclatura | src/openclatura/fusion/descriptor.py::render_fusion_name_parts.render_children
         fn children(&mut self, node: &FusionCitationNode) -> Result<Vec<String>, String> {
             let mut pieces = Vec::new();
             for child in &node.children {
@@ -2508,6 +2631,8 @@ pub fn render_fusion_name_parts(
     pieces.push(parent_component_name(&specs[&root.occurrence_id]));
     Ok(pieces)
 }
+// Provenance: fn parent_component_name | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_parent_component_name
 fn parent_component_name(spec: &FusionComponentSpec) -> String {
     let locants = &spec.template.default_indicated_h;
     if locants.is_empty() {
@@ -2524,6 +2649,8 @@ fn parent_component_name(spec: &FusionComponentSpec) -> String {
         .unwrap_or(&spec.parent_name)
         .to_owned()
 }
+// Provenance: fn citation_node | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_citation_node
 fn citation_node(root: &FusionCitationNode, occurrence: usize) -> Option<&FusionCitationNode> {
     if root.occurrence_id == occurrence {
         return Some(root);
@@ -2532,6 +2659,8 @@ fn citation_node(root: &FusionCitationNode, occurrence: usize) -> Option<&Fusion
         .iter()
         .find_map(|c| citation_node(c, occurrence))
 }
+// Provenance: fn combine_rendered_descriptors | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_combine_rendered_descriptors
 fn combine_rendered_descriptors(
     descriptors: &[String],
     higher_order: bool,
@@ -2547,6 +2676,8 @@ fn combine_rendered_descriptors(
     };
     format!("[{}]", interiors.join(separator))
 }
+// Provenance: fn render_descriptor | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_render_descriptor
 fn render_descriptor(descriptor: &FusionDescriptor, omit: bool) -> String {
     if omit
         && matches!(
@@ -2567,6 +2698,8 @@ fn render_descriptor(descriptor: &FusionDescriptor, omit: bool) -> String {
         descriptor.render()
     }
 }
+// Provenance: fn omit_attached_locants | adapted
+// Source: openclatura | src/openclatura/fusion/descriptor.py::_omit_attached_locants
 fn omit_attached_locants(
     registry: &FusionComponentRegistry,
     key: &str,
@@ -2580,6 +2713,14 @@ fn omit_attached_locants(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | adapted
+// Source: openclatura | tests/unit/test_fusion_descriptor.py::_component_graph
+// Source: openclatura | tests/unit/test_fusion_descriptor.py::test_identical_leaf_components_form_one_primed_multiplicative_group
+// Source: openclatura | tests/unit/test_fusion_descriptor.py::test_polycomponent_tree_orders_attached_components_by_seniority
+// Source: openclatura | tests/unit/test_fusion_descriptor.py::test_multiplicative_interfaces_use_typed_component_automorphism_orbits
+// Source: openclatura | tests/integration/test_systematic_fusion.py::test_systematic_fusion_round_trips_through_opsin
+// Source: openclatura | tests/unit/test_fusion_descriptor.py::_build
+// Source: openclatura | tests/unit/test_fusion_descriptor.py::test_two_component_ortho_fusion_is_derived_from_exact_shared_edges
 mod tests {
     use super::super::super::molecule::{Atom, Bond};
     use super::super::registry::fusion_component_registry;

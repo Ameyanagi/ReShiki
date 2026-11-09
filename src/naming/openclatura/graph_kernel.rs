@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/graph_kernel.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/graph_kernel.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura iterative graph blocks and connected components with local Rust tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Undirected graph blocks ported from Python `graph_kernel.py`.
 use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
@@ -6,10 +15,14 @@ use super::molecule::{AtomSet, Molecule};
 pub type Edge = (usize, usize);
 pub type EdgeSet = BTreeSet<Edge>;
 
+// Provenance: fn normalize_edge | port
+// Source: openclatura | src/openclatura/graph_kernel.py::normalize_edge
 pub fn normalize_edge(first: usize, second: usize) -> Edge {
     (first.min(second), first.max(second))
 }
 
+// Provenance: fn adjacency_from_edges | port
+// Source: openclatura | src/openclatura/graph_kernel.py::adjacency_from_edges
 pub fn adjacency_from_edges(nodes: &AtomSet, edges: &EdgeSet) -> BTreeMap<usize, AtomSet> {
     let mut adjacency: BTreeMap<_, _> = nodes.iter().map(|&node| (node, AtomSet::new())).collect();
     for &(first, second) in edges {
@@ -19,6 +32,8 @@ pub fn adjacency_from_edges(nodes: &AtomSet, edges: &EdgeSet) -> BTreeMap<usize,
     adjacency
 }
 
+// Provenance: fn connected_components | port
+// Source: openclatura | src/openclatura/graph_kernel.py::connected_components
 pub fn connected_components(nodes: &AtomSet, edges: &EdgeSet) -> Vec<AtomSet> {
     let adjacency = adjacency_from_edges(nodes, edges);
     let mut seen = AtomSet::new();
@@ -48,6 +63,8 @@ pub fn connected_components(nodes: &AtomSet, edges: &EdgeSet) -> Vec<AtomSet> {
 /// One-edge bridge blocks are retained; spiro blocks share their articulation
 /// atom, while fused and bridged rings remain one cyclic block. The iterative
 /// Tarjan walk and final block ordering follow upstream `graph_kernel.py`.
+// Provenance: fn biconnected_edge_components | port
+// Source: openclatura | src/openclatura/graph_kernel.py::biconnected_edge_components
 pub fn biconnected_edge_components(mol: &Molecule, nodes: &AtomSet) -> Vec<EdgeSet> {
     let adjacency: BTreeMap<usize, Vec<usize>> = nodes
         .iter()
@@ -132,6 +149,8 @@ pub fn biconnected_edge_components(mol: &Molecule, nodes: &AtomSet) -> Vec<EdgeS
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/graph_kernel.rs::tests
 mod tests {
     use super::super::molecule::{Atom, Bond};
     use super::*;

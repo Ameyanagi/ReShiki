@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted
+// Source: RDKit | Code/GraphMol/MolOps.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/QueryOps.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/normalize/metals.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
+// Copyright (C) 2003-2021.
+// Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 //! Organometallic normalization from RDKit MolOps.cpp (2026.03.6).
 //! Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 //! Metal classification from QueryOps.cpp, Copyright (C) 2003-2021.

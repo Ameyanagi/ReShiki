@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/ring_parent.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/ring_parent.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura audited ring-parent handoff with original ring-assembly constructor and local wrapper-hydrogen divergence.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Audited parent-hydride handoff for fusion, replacement and composition.
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -37,6 +46,21 @@ pub struct RingParent {
     pub replacement_fusion_state: Option<ReplacementFusionState>,
 }
 
+// Provenance: impl RingParent | adapted
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent dataclass fields
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.from_retained_locant_maps
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.from_fusion_plan
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.from_fusion_wrapper
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.as_skeletal_replacement_fusion
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.is_systematic_fusion
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.is_skeletal_replacement_fusion
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.is_fusion_parent
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.uses_fusion_plan
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.audit_ok
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.base_name
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.bond_model
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.derivative_state
+// Source: openclatura | src/openclatura/ring_parent.py::RingParent.proof_locant_maps
 impl RingParent {
     fn new(kind: ParentHydrideKind, atoms: AtomSet) -> Self {
         Self {

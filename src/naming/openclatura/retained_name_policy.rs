@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/retained_name_policy.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/retained_name_policy.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura retained-parent spelling/hydrogenation policies with local serde/debug glue and regression tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Preferred retained spellings and explicitly declared hydrogenation policies.
 use super::{formatting::format_multiplier, locants::retained_locant_sort_key as parse_locant};
 use serde::{Deserialize, de::IgnoredAny};
@@ -13,6 +23,10 @@ pub struct RetainedHydrogenationPolicy {
     pub hydro_locants: Vec<String>,
     pub indicated_hydrogen_locants: Vec<String>,
 }
+// Provenance: impl RetainedHydrogenationPolicy | adapted
+// Source: openclatura | src/openclatura/retained_name_policy.py::RetainedHydrogenationPolicy.relocated
+// Source: openclatura | src/openclatura/retained_name_policy.py::render
+// Source: openclatura | src/openclatura/retained_name_policy.py::RetainedHydrogenationPolicy.render
 impl RetainedHydrogenationPolicy {
     pub fn relocated(&self, suffix_locants: &BTreeSet<String>) -> Self {
         let mut moved: Vec<_> = self
@@ -94,6 +108,8 @@ pub struct RetainedParentNamePolicy {
     _reason: IgnoredAny,
 }
 
+// Provenance: impl <RetainedParentNamePolicy as std::fmt::Debug> | original
+// Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::<RetainedParentNamePolicy as std::fmt::Debug>
 impl std::fmt::Debug for RetainedParentNamePolicy {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -114,10 +130,15 @@ struct RetainedParentNamePolicyData {
     _bluebook_rule: IgnoredAny,
     parents: Vec<RetainedParentNamePolicy>,
 }
+// Provenance: fn all_contexts | adapted
+// Source: openclatura | src/openclatura/retained_name_policy.py::RetainedParentNamePolicy.preferred_contexts
+// Source: openclatura | src/openclatura/retained_name_policy.py::_policy_from_data
 fn all_contexts() -> Vec<String> {
     vec!["all".into()]
 }
 impl RetainedParentNamePolicy {
+    // Provenance: fn RetainedParentNamePolicy::output_name | adapted
+    // Source: openclatura | src/openclatura/retained_name_policy.py::RetainedParentNamePolicy.output_name
     pub fn output_name(&self, context: &str) -> String {
         self.context_names.get(context).cloned().unwrap_or_else(|| {
             if self
@@ -148,12 +169,19 @@ static POLICIES: LazyLock<Vec<RetainedParentNamePolicy>> = LazyLock::new(|| {
     }
     rows
 });
+// Provenance: fn retained_parent_name_policies | adapted
+// Source: openclatura | src/openclatura/retained_name_policy.py::retained_parent_name_policies
 pub fn retained_parent_name_policies() -> &'static [RetainedParentNamePolicy] {
     &POLICIES
 }
+// Provenance: fn retained_parent_name_policy | adapted
+// Source: openclatura | src/openclatura/retained_name_policy.py::RetainedParentNamePolicy
+// Source: openclatura | src/openclatura/retained_name_policy.py::retained_parent_name_policy
 pub fn retained_parent_name_policy(name: &str) -> Option<&'static RetainedParentNamePolicy> {
     POLICIES.iter().find(|p| p.template_name == name)
 }
+// Provenance: fn retained_parent_output_name | adapted
+// Source: openclatura | src/openclatura/retained_name_policy.py::retained_parent_output_name
 pub fn retained_parent_output_name(
     name: &str,
     context: &str,
@@ -164,6 +192,8 @@ pub fn retained_parent_output_name(
         retained_parent_name_policy(name).map_or_else(|| name.into(), |p| p.output_name(context));
     render_retained_hydrogen_state(&name, default_indicated_h, indicated_h)
 }
+// Provenance: fn render_retained_hydrogen_state | adapted
+// Source: openclatura | src/openclatura/retained_name_policy.py::render_retained_hydrogen_state
 pub fn render_retained_hydrogen_state(
     name: &str,
     default_indicated_h: &[String],
@@ -191,10 +221,17 @@ pub fn render_retained_hydrogen_state(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::tests
 mod tests {
     use crate::naming::{NameReason, NameStatus, verify_identity};
 
     #[test]
+    // Provenance: fn tests::selected_hydrogen_replaces_the_source_parent_descriptor | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::tests::selected_hydrogen_replaces_the_source_parent_descriptor
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage10_fused_ion_template_registry_is_data_backed_and_gated
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn selected_hydrogen_replaces_the_source_parent_descriptor() {
         assert_eq!(
             super::render_retained_hydrogen_state("1H-indole", &[], Some(&["2".into()])),
@@ -215,6 +252,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::benzoheterocycle_locants_survive_substitution_fusion_and_spiro | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::tests::benzoheterocycle_locants_survive_substitution_fusion_and_spiro
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage3_retained_fused_pin_forms_and_indicated_hydrogens_are_validated
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn benzoheterocycle_locants_survive_substitution_fusion_and_spiro() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected, status) in [
@@ -331,6 +373,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_parent_indicated_hydrogen_survives_replacement | adapted
+    // Source: ReShiki | src/naming/openclatura/retained_name_policy.rs::tests::retained_parent_indicated_hydrogen_survives_replacement
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage3_retained_fused_pin_forms_and_indicated_hydrogens_are_validated
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_parent_indicated_hydrogen_survives_replacement() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [

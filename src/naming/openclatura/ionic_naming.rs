@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/ionic_naming.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/ionic_naming.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura ionic spelling logic reworked as structured anion preparation with local identity guards.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Graph-backed ionic spelling changes from upstream `ionic_naming.py`.
 use super::{
     assembly_parts::{AnionSuffix, AssemblyParts},
@@ -16,6 +27,8 @@ struct ChargeSite {
 }
 
 /// Admit oxo protonation only where the naming grammar preserves its charge.
+// Provenance: fn validate_heteroatom_oxo_charge_states | original
+// Source: ReShiki | src/naming/openclatura/ionic_naming.rs::validate_heteroatom_oxo_charge_states
 pub(super) fn validate_heteroatom_oxo_charge_states(mol: &Molecule) -> Result<(), String> {
     for (&id, atom) in &mol.atoms {
         // Upstream divergence: neutral imine suffixes do not encode a terminal
@@ -70,6 +83,8 @@ pub(super) fn validate_heteroatom_oxo_charge_states(mol: &Molecule) -> Result<()
     Ok(())
 }
 
+// Provenance: fn sites | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::parent_charge_sites
 fn sites(
     mol: &Molecule,
     path: &[usize],
@@ -95,6 +110,7 @@ fn sites(
 }
 
 /// Select the supported parent-anion operations before changing the neutral citation plan.
+// Provenance: fn prepare_anion_parent | adapted
 pub(super) fn prepare_anion_parent(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -176,6 +192,8 @@ pub(super) fn prepare_anion_parent(
 }
 
 /// Reject parent charges the assembled name does not cite.
+// Provenance: fn validate_anionic_parent | original
+// Source: ReShiki | src/naming/openclatura/ionic_naming.rs::validate_anionic_parent
 pub(super) fn validate_anionic_parent(
     mol: &Molecule,
     path: &[usize],
@@ -221,6 +239,8 @@ pub(super) fn validate_anionic_parent(
     Ok(())
 }
 
+// Provenance: fn validate_retained_chalcogen_cation_pi_state | original
+// Source: ReShiki | src/naming/openclatura/ionic_naming.rs::validate_retained_chalcogen_cation_pi_state
 fn validate_retained_chalcogen_cation_pi_state(
     mol: &Molecule,
     path: &[usize],
@@ -275,6 +295,9 @@ fn validate_retained_chalcogen_cation_pi_state(
     Ok(())
 }
 
+// Provenance: fn ring_nitrogen_zwitterion | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::apply_ring_parent_nitrogen_zwitterion_stack
+// Source: openclatura | src/openclatura/ionic_naming.py::_is_unsaturated_ring_parent
 fn ring_nitrogen_zwitterion(
     mol: &Molecule,
     parts: &AssemblyParts,
@@ -311,6 +334,8 @@ fn ring_nitrogen_zwitterion(
         })
 }
 
+// Provenance: fn adjacent_or_conjugated | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::_charged_nitrogens_are_adjacent_or_conjugated
 fn adjacent_or_conjugated(mol: &Molecule, parent: &AtomSet, anion: usize, cation: usize) -> bool {
     if mol.get_neighbors(anion).contains(&cation) {
         return true;
@@ -340,11 +365,15 @@ fn adjacent_or_conjugated(mol: &Molecule, parent: &AtomSet, anion: usize, cation
     false
 }
 
+// Provenance: fn word_boundary | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::inline in apply_cationic_imino_parent_prefixes
 fn word_boundary(text: &str, end: usize) -> bool {
     text.get(end..)
         .and_then(|s| s.chars().next())
         .is_none_or(|c| !c.is_alphanumeric() && c != '_')
 }
+// Provenance: fn ascii_left_boundary | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::inline in apply_cationic_imino_parent_prefixes
 fn ascii_left_boundary(text: &str, start: usize) -> bool {
     start == 0
         || text
@@ -353,6 +382,8 @@ fn ascii_left_boundary(text: &str, start: usize) -> bool {
             .is_none_or(|b| !b.is_ascii_alphanumeric())
 }
 
+// Provenance: fn nitrogen_has_carbon_double | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::inline in apply_cationic_imino_parent_prefixes
 fn nitrogen_has_carbon_double(mol: &Molecule, idx: usize) -> Option<usize> {
     mol.get_neighbors(idx).iter().copied().find(|&n| {
         mol.atoms.get(&n).is_some_and(|a| a.is_carbon())
@@ -360,6 +391,8 @@ fn nitrogen_has_carbon_double(mol: &Molecule, idx: usize) -> Option<usize> {
     })
 }
 
+// Provenance: fn belongs_to_parent_scope | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::is_top_level_span
 fn belongs_to_parent_scope(name: &str, position: usize) -> bool {
     let mut scope = name;
     let mut scope_start = 0;
@@ -383,6 +416,8 @@ fn belongs_to_parent_scope(name: &str, position: usize) -> bool {
     depth == 0
 }
 
+// Provenance: fn apply_cationic_imino_parent_prefixes | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::apply_cationic_imino_parent_prefixes
 pub(super) fn apply_cationic_imino_parent_prefixes(
     name: &str,
     mol: &Molecule,
@@ -430,6 +465,8 @@ pub(super) fn apply_cationic_imino_parent_prefixes(
     Ok(updated)
 }
 
+// Provenance: fn apply_cationic_imino_names | adapted
+// Source: openclatura | src/openclatura/ionic_naming.py::apply_cationic_imino_names
 pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<String, String> {
     let first = mol
         .atoms
@@ -451,6 +488,7 @@ pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<S
 
 /// The accepted ammonio fallback cites its methylidene ligand on N while the
 /// ligand and its attachment graph are still available to the renderer.
+// Provenance: fn cationic_methylidene_fallback | adapted
 pub(super) fn cationic_methylidene_fallback(
     mol: &Molecule,
     nitrogen: usize,
@@ -480,6 +518,8 @@ pub(super) fn cationic_methylidene_fallback(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/ionic_naming.rs::tests
 mod tests {
     use super::super::molecule::{Atom, Bond};
     use super::*;
@@ -533,6 +573,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::external_ligands_cannot_lose_charge_or_chalcogen_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/ionic_naming.rs::tests::external_ligands_cannot_lose_charge_or_chalcogen_hydrogen
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_optional_charge_separation_collapses
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn external_ligands_cannot_lose_charge_or_chalcogen_hydrogen() {
         use super::super::graph_io::read_smiles;
         for smiles in ["[O-][SH]1c2ccc3cc1ccc3c2", "[N-]=C1CCCCC1"] {
@@ -557,6 +602,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::cationic_imino_spelling_uses_the_ligand_graph | adapted
+    // Source: ReShiki | src/naming/openclatura/ionic_naming.rs::tests::cationic_imino_spelling_uses_the_ligand_graph
+    // Source: openclatura | tests/unit/test_analysis.py::test_pyopsin_regression_names_preserve_cationic_imino_charge
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cationic_imino_spelling_uses_the_ligand_graph() {
         let mut mol = Molecule::new();
         for (idx, symbol, charge) in [(0, "N", 1), (1, "C", 0), (2, "N", 0), (3, "O", 0)] {

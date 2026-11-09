@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/fusion/planner.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fusion/planner.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/roundtrip/test_bridges.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_systematic_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura audited fusion planner with separate local benzo-parent planning, spiro entry and localized-pi refusal proof.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Audited systematic fusion planning in upstream candidate and rule order.
 use super::super::{
     locants::retained_locant_sort_key as locant_key,
@@ -42,6 +53,8 @@ type Specs = BTreeMap<usize, FusionComponentSpec>;
 
 /// Only a confirmed plan enters naming. An audited abstention preserves the
 /// legacy route, while an unported branch cannot silently choose a different name.
+// Provenance: fn plan_fusion_parent | adapted
+// Source: openclatura | src/openclatura/fusion/planner.py::plan_fusion_parent
 pub fn plan_fusion_parent(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
     if let Some(cached) = mol.fusion_plan_cache.borrow().get(atoms) {
         return cached.clone();
@@ -55,6 +68,8 @@ pub fn plan_fusion_parent(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
 
 /// Component-local indicated H cannot discard a valid lower spiro junction.
 /// This context is kept outside the ordinary isolated-parent plan cache.
+// Provenance: fn plan_fusion_parent_for_spiro | original
+// Source: ReShiki | src/naming/openclatura/fusion/planner.rs::plan_fusion_parent_for_spiro
 pub(in super::super) fn plan_fusion_parent_for_spiro(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -62,6 +77,7 @@ pub(in super::super) fn plan_fusion_parent_for_spiro(
     plan_uncached(mol, atoms, true)
 }
 
+// Provenance: fn rejected | adapted
 fn rejected(error: String) -> PlanResult {
     if error.starts_with("openclatura:") && error.contains("not ported") {
         Err(error)
@@ -70,6 +86,8 @@ fn rejected(error: String) -> PlanResult {
     }
 }
 
+// Provenance: fn plan_uncached | adapted
+// Source: openclatura | src/openclatura/fusion/planner.py::_plan_uncached
 fn plan_uncached(mol: &Molecule, atoms: &AtomSet, spiro_component: bool) -> PlanResult {
     let config = fusion_nomenclature_config();
     let support = &config.rules.support;
@@ -164,6 +182,8 @@ fn plan_uncached(mol: &Molecule, atoms: &AtomSet, spiro_component: bool) -> Plan
 }
 
 #[allow(clippy::too_many_arguments)]
+// Provenance: fn plan_numbered_candidate | adapted
+// Source: openclatura | src/openclatura/fusion/planner.py::_plan_numbered_candidate
 pub(super) fn plan_numbered_candidate(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -402,6 +422,8 @@ pub(super) fn plan_numbered_candidate(
     Ok(Some(plan))
 }
 
+// Provenance: fn plan_benzoheterocycle | adapted
+// Source: openclatura | src/openclatura/fusion/planner.py::_complete_fusion_plan
 fn plan_benzoheterocycle(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -473,6 +495,8 @@ fn plan_benzoheterocycle(
     Ok(Some(plan))
 }
 
+// Provenance: fn component_specs | adapted
+// Source: openclatura | src/openclatura/fusion/planner.py::inline in _abstract_graph
 fn component_specs(
     ast: &FusionNameAst,
     registry: &FusionComponentRegistry,
@@ -484,6 +508,8 @@ fn component_specs(
 }
 
 #[allow(clippy::too_many_arguments)]
+// Provenance: fn complete_fusion_plan | adapted
+// Source: openclatura | src/openclatura/fusion/planner.py::_complete_fusion_plan
 fn complete_fusion_plan(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -756,6 +782,8 @@ fn complete_fusion_plan(
     Ok(Some(plan))
 }
 
+// Provenance: fn cited_indicated_hydrogens | adapted
+// Source: openclatura | src/openclatura/fusion/planner.py::_cited_indicated_hydrogens
 fn cited_indicated_hydrogens(
     mol: &Molecule,
     ast: &FusionNameAst,
@@ -825,6 +853,8 @@ fn cited_indicated_hydrogens(
     Ok(result)
 }
 
+// Provenance: fn standard_valence_parent | adapted
+// Source: openclatura | src/openclatura/fusion/planner.py::_standard_valence_parent
 fn standard_valence_parent(mol: &Molecule, atoms: &AtomSet) -> bool {
     atoms.iter().all(|&id| {
         let atom = &mol.atoms[&id];
@@ -850,6 +880,8 @@ fn standard_valence_parent(mol: &Molecule, atoms: &AtomSet) -> bool {
 // alternating 4n cycle with a nonaromatic bond can retain its skeleton and
 // hydrogens while reconstructing a different localized double-bond arrangement.
 // Aromatic endpoints do not make an explicit inter-ring bond aromatic.
+// Provenance: fn unresolved_localized_pi_cycle | original
+// Source: ReShiki | src/naming/openclatura/fusion/planner.rs::unresolved_localized_pi_cycle
 fn unresolved_localized_pi_cycle(
     mol: &Molecule,
     model: &ParentBondModel,
@@ -963,11 +995,14 @@ fn unresolved_localized_pi_cycle(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/fusion/planner.rs::tests
 mod tests {
     use super::super::super::graph_io::read_smiles;
     use super::*;
 
     #[test]
+    // Provenance: fn tests::higher_order_components_preserve_intrinsic_numbering_and_identity | adapted
     fn higher_order_components_preserve_intrinsic_numbering_and_identity() {
         for (smiles, expected) in [
             (
@@ -1030,6 +1065,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::localized_nonaromatic_pi_alternatives_require_a_citation_witness | adapted
+    // Source: ReShiki | src/naming/openclatura/fusion/planner.rs::tests::localized_nonaromatic_pi_alternatives_require_a_citation_witness
+    // Source: openclatura | tests/roundtrip/test_bridges.py::test_roundtrip
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_multiple_indicated_hydrogens_are_graph_derived_and_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn localized_nonaromatic_pi_alternatives_require_a_citation_witness() {
         for text in [
             "C1=CC2=CC3=C(C=CN4CN=CCC34)C2=N1",

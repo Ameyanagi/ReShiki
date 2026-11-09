@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/fusion/mancude.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fusion/mancude.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_fusion_pi_redistribution.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura parent bond-state and hydrogen derivative proofs, extended by local protonated-H and suffix-composition entry points.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Compare observed bonding with an exhaustive parent-hydride bond model.
 use super::super::{
     assembly_parts::HydroOperation,
@@ -23,6 +33,8 @@ pub struct ParentBondDelta {
     pub composition_model: Option<ParentBondModel>,
 }
 impl ParentBondDelta {
+    // Provenance: fn ParentBondDelta::hydrogenated_atom_ids | adapted
+    // Source: openclatura | src/openclatura/fusion/mancude.py::ParentBondDelta.hydrogenated_atom_ids
     pub(super) fn hydrogenated_atom_ids(&self) -> AtomSet {
         self.hydrogenated_edges
             .iter()
@@ -70,6 +82,8 @@ pub struct ParentDerivativeState {
     pub alkylidene_operations: Vec<ExternalPiOperation>,
 }
 impl ParentDerivativeState {
+    // Provenance: fn ParentDerivativeState::external_pi_operations | adapted
+    // Source: openclatura | src/openclatura/fusion/mancude.py::ParentDerivativeState.external_pi_operations
     pub(super) fn external_pi_operations(&self) -> impl Iterator<Item = &ExternalPiOperation> {
         self.oxo_operations
             .iter()
@@ -93,20 +107,28 @@ pub struct ParentDerivativeOptions<'a> {
     pub allow_pi_redistribution: Option<bool>,
     pub compose_retained_external_pi: bool,
 }
+// Provenance: fn touches | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::inline in _external_pi_parent_delta
 fn touches(edge: Edge, sites: &AtomSet) -> bool {
     sites.contains(&edge.0) || sites.contains(&edge.1)
 }
+// Provenance: fn parent_degree | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::inline in prove_pi_redistribution
 pub(super) fn parent_degree(mol: &Molecule, atoms: &AtomSet, id: usize) -> usize {
     mol.get_neighbors(id)
         .iter()
         .filter(|n| atoms.contains(n))
         .count()
 }
+// Provenance: fn all_single | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::inline in _single_bonded_parent_nitrogen
 pub(super) fn all_single(mol: &Molecule, id: usize) -> bool {
     mol.get_neighbors(id)
         .iter()
         .all(|&n| mol.get_bond(id, n).is_some_and(|b| b.order == 1))
 }
+// Provenance: fn bonding_number | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::inline in prove_pi_redistribution
 fn bonding_number(mol: &Molecule, id: usize) -> usize {
     mol.atoms[&id].total_h_count
         + mol
@@ -116,6 +138,8 @@ fn bonding_number(mol: &Molecule, id: usize) -> usize {
             .sum::<usize>()
 }
 
+// Provenance: fn indicated_hydrogen_parent_bond_model | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::indicated_hydrogen_parent_bond_model
 pub(super) fn indicated_hydrogen_parent_bond_model(
     graph: &FusionGraph,
     sites: &AtomSet,
@@ -139,6 +163,8 @@ pub(super) fn indicated_hydrogen_parent_bond_model(
     }
     parent_bond_model(&constrained)
 }
+// Provenance: fn single_site_parent_model | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_single_site_parent_model
 pub(super) fn single_site_parent_model(
     model: &ParentBondModel,
     sites: &AtomSet,
@@ -167,6 +193,8 @@ pub(super) fn single_site_parent_model(
     };
     indicated_hydrogen_parent_bond_model(&graph, sites)
 }
+// Provenance: fn saturated_nitrogen_hydrogen_sites | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::saturated_nitrogen_hydrogen_sites
 pub(super) fn saturated_nitrogen_hydrogen_sites(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -200,6 +228,8 @@ pub(super) fn saturated_nitrogen_hydrogen_sites(
     }
     indicated.clone()
 }
+// Provenance: fn has_complete_saturated_hydrogenation | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::has_complete_saturated_hydrogenation
 pub(super) fn has_complete_saturated_hydrogenation(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -236,6 +266,8 @@ pub(super) fn has_complete_saturated_hydrogenation(
             .all(|(e, o)| *o == 1 || (*o == 2 && edges.contains(e)))
 }
 /// A charged sigma N citation must preserve ring pi count and hydrogen sites.
+// Provenance: fn protonated_hydrogenation_is_complete | original
+// Source: ReShiki | src/naming/openclatura/fusion/mancude.rs::protonated_hydrogenation_is_complete
 pub(super) fn protonated_hydrogenation_is_complete(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -303,6 +335,8 @@ pub(super) fn protonated_hydrogenation_is_complete(
             }))
 }
 
+// Provenance: fn single_bonded_parent_nitrogen | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_single_bonded_parent_nitrogen
 fn single_bonded_parent_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> bool {
     let atom = &mol.atoms[&id];
     atom.symbol == "N"
@@ -311,6 +345,8 @@ fn single_bonded_parent_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> 
         && atom.total_h_count + mol.degree(id) == 3
         && all_single(mol, id)
 }
+// Provenance: fn five_membered_single_nitrogen | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_five_membered_single_nitrogen
 fn five_membered_single_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> bool {
     if !single_bonded_parent_nitrogen(mol, atoms, id) {
         return false;
@@ -334,11 +370,15 @@ fn five_membered_single_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> 
                 .any(|third| mol.get_bond(second, third).is_some())
         })
 }
+// Provenance: fn is_added_hydrogen_nitrogen | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::is_added_hydrogen_nitrogen
 pub(super) fn is_added_hydrogen_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> bool {
     atoms.contains(&id)
         && !mol.atoms[&id].is_aromatic
         && single_bonded_parent_nitrogen(mol, atoms, id)
 }
+// Provenance: fn nitrogen_composition_parent_model | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_nitrogen_composition_parent_model
 pub(super) fn nitrogen_composition_parent_model(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -410,6 +450,8 @@ pub(super) fn nitrogen_composition_parent_model(
     Ok(constrained)
 }
 
+// Provenance: fn compare_actual_parent_to_implied_parent | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::compare_actual_parent_to_implied_parent
 pub(in super::super) fn compare_actual_parent_to_implied_parent(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -578,6 +620,8 @@ pub(in super::super) fn compare_actual_parent_to_implied_parent(
     Ok(Some(delta))
 }
 
+// Provenance: fn prove_pi_redistribution | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::prove_pi_redistribution
 pub(super) fn prove_pi_redistribution(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -755,6 +799,8 @@ pub(super) fn prove_pi_redistribution(
         final_assignment,
     }))
 }
+// Provenance: fn spiro_carbon_sites | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_spiro_carbon_sites
 pub(in super::super) fn spiro_carbon_sites(mol: &Molecule, atoms: &AtomSet) -> AtomSet {
     let mut sites = AtomSet::new();
     for &id in atoms {
@@ -794,6 +840,8 @@ pub(in super::super) fn spiro_carbon_sites(mol: &Molecule, atoms: &AtomSet) -> A
     }
     sites
 }
+// Provenance: fn external_pi_parent_delta | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_external_pi_parent_delta
 fn external_pi_parent_delta(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -816,6 +864,8 @@ fn external_pi_parent_delta(
 
 /// Compose oxo suffix sites before assigning added and residual hydro hydrogen.
 /// Preserve the complete proof, including any required pi redistribution.
+// Provenance: fn suffix_hydrogen_state | original
+// Source: ReShiki | src/naming/openclatura/fusion/mancude.rs::suffix_hydrogen_state
 pub(in super::super) fn suffix_hydrogen_state(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -828,6 +878,8 @@ pub(in super::super) fn suffix_hydrogen_state(
     external_pi_parent_state(mol, atoms, model, suffix, locants, false, true)
 }
 
+// Provenance: fn external_pi_parent_state | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_external_pi_parent_delta
 fn external_pi_parent_state(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1026,6 +1078,8 @@ fn external_pi_parent_state(
     }
     Ok(Some(selected))
 }
+// Provenance: fn fixed_carbon_hydro_operations | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_fixed_carbon_hydro_operations
 fn fixed_carbon_hydro_operations(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1068,6 +1122,9 @@ fn fixed_carbon_hydro_operations(
         ..Default::default()
     }]
 }
+// Provenance: fn parent_derivative_state | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::ParentDerivativeState
+// Source: openclatura | src/openclatura/fusion/mancude.py::parent_derivative_state
 pub(in super::super) fn parent_derivative_state(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -1220,6 +1277,9 @@ pub(in super::super) fn parent_derivative_state(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | adapted
+// Source: openclatura | tests/unit/test_fusion_pi_redistribution.py::_model
+// Source: openclatura | tests/unit/test_fusion_pi_redistribution.py::test_alternating_path_hydrogenation_is_not_specific_to_polycarbon_parent
 mod tests {
     use super::super::super::molecule::{Atom, Bond};
     use super::*;

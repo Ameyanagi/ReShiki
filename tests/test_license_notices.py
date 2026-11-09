@@ -12,6 +12,52 @@ from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, write_notices
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_workspace_kernel_collects_nested_terms_with_either_manifest_expression(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in PROJECT_FILES:
+                (root / name).write_text(f"Project {name}")
+            (root / "licenses/rust").mkdir(parents=True)
+            (root / "licenses/rust/manifest.json").write_text("{}")
+            source = root / "crates/nazuchem-kernel"
+            source.mkdir(parents=True)
+            terms = {
+                "LICENSE-MIT": "Complete local MIT terms",
+                "NOTICE": "Kernel source attribution and unresolved sort policy",
+                "licenses/rdkit/LICENSE": "Complete RDKit BSD-3-Clause terms",
+                "licenses/centres/LICENSE": "Complete centres BSD-2-Clause terms",
+                "licenses/stdlib/llvm-LICENSE": "Complete LLVM terms and exception",
+                "licenses/stdlib/msvc-LICENSE": "Complete Microsoft terms and exception",
+            }
+            for relative, text in terms.items():
+                target = source / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text)
+            package = {
+                "id": "kernel",
+                "name": "nazuchem-kernel",
+                "version": "0.1.0",
+                "manifest_path": str(source / "Cargo.toml"),
+            }
+            for expression in (
+                "MIT OR Apache-2.0",
+                "(MIT OR Apache-2.0) AND BSD-3-Clause AND BSD-2-Clause "
+                "AND (Apache-2.0 WITH LLVM-exception)",
+            ):
+                with self.subTest(expression=expression):
+                    package["license"] = expression
+                    (source / "Cargo.toml").write_text(f'license = "{expression}"\n')
+                    write_notices(
+                        root,
+                        root / "output",
+                        {"packages": [package], "workspace_members": ["kernel"]},
+                    )
+                    result = (root / "output" / THIRD_PARTY_FILE).read_text()
+                    for relative, text in terms.items():
+                        self.assertIn(f"nazuchem-kernel@0.1.0/{relative}", result)
+                        self.assertIn(text, result)
+                    self.assertNotIn("Original workspace crate:", result)
+
     def test_separately_licensed_workspace_port_keeps_its_own_terms(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

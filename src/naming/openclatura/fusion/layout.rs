@@ -1,3 +1,17 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/fusion/layout.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingNumberer.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: openclatura | src/openclatura/fusion/model.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/fusion/layout.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_fusion_layout.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_large_ring_port_layout.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright 2017 Daniel Lowe
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura exact intrinsic-layout and OPSIN-compatibility layout port, plus a separate local parser-numbering refusal gate.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Exact integer intrinsic fused-ring layouts and parser compatibility witnesses.
 use super::super::{
     graph_kernel::normalize_edge, locants::retained_locant_sort_key, molecule::AtomSet,
@@ -26,9 +40,13 @@ pub(crate) struct Budget {
     pub used: usize,
 }
 impl Budget {
+    // Provenance: fn Budget::new | adapted
+    // Source: openclatura | src/openclatura/fusion/layout.py::_Budget dataclass fields limit/used
     pub fn new(limit: usize) -> Self {
         Self { limit, used: 0 }
     }
+    // Provenance: fn Budget::spend | adapted
+    // Source: openclatura | src/openclatura/fusion/layout.py::_Budget.spend
     pub fn spend(&mut self) -> Result<(), String> {
         self.used += 1;
         if self.used > self.limit {
@@ -41,6 +59,7 @@ impl Budget {
         }
     }
 }
+// Provenance: fn gcd | adapted
 fn gcd(mut a: i64, mut b: i64) -> i64 {
     while b != 0 {
         let r = a % b;
@@ -49,6 +68,7 @@ fn gcd(mut a: i64, mut b: i64) -> i64 {
     }
     a.abs()
 }
+// Provenance: fn lcm | adapted
 fn lcm(a: i64, b: i64) -> i64 {
     if a == 0 || b == 0 {
         0
@@ -56,6 +76,8 @@ fn lcm(a: i64, b: i64) -> i64 {
         a / gcd(a, b) * b
     }
 }
+// Provenance: fn shapes_for | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_shapes_for
 fn shapes_for(size: usize, system: &str) -> Vec<RingShapeSpec> {
     fusion_nomenclature_config()
         .ring_shapes
@@ -66,6 +88,8 @@ fn shapes_for(size: usize, system: &str) -> Vec<RingShapeSpec> {
         .cloned()
         .collect()
 }
+// Provenance: fn all_atoms | adapted
+// Source: openclatura | src/openclatura/fusion/model.py::FaceModel fields faces/Face.atom_cycle
 fn all_atoms(model: &FaceModel) -> AtomSet {
     model
         .faces
@@ -73,6 +97,8 @@ fn all_atoms(model: &FaceModel) -> AtomSet {
         .flat_map(|f| f.atom_cycle.iter().copied())
         .collect()
 }
+// Provenance: fn adjacent | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::inline in _partial_layout_is_valid
 fn adjacent(model: &FaceModel) -> Adjacent {
     model
         .face_adjacency
@@ -80,12 +106,17 @@ fn adjacent(model: &FaceModel) -> Adjacent {
         .map(|&(a, b, _)| normalize_edge(a, b))
         .collect()
 }
+// Provenance: fn order_map | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::inline in _search_layouts
 fn order_map(orders: &Orders) -> BTreeMap<usize, &[usize]> {
     orders
         .iter()
         .map(|(id, order)| (*id, order.as_slice()))
         .collect()
 }
+// Provenance: fn preferred_intrinsic_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::preferred_intrinsic_layouts
+// Source: openclatura | src/openclatura/fusion/layout.py::_preferred_intrinsic_layouts
 pub fn preferred_intrinsic_layouts(
     model: &FaceModel,
     budget: usize,
@@ -106,6 +137,8 @@ struct PreferredLayoutCacheKey {
 thread_local! {
     static PREFERRED_LAYOUT_CACHE: super::ThreadLocalCache<PreferredLayoutCacheKey, Vec<FusedLayout>> = const { super::ThreadLocalCache::new() };
 }
+// Provenance: fn preferred_intrinsic_layouts_with_options | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_preferred_intrinsic_layouts
 fn preferred_intrinsic_layouts_with_options(
     model: &FaceModel,
     budget: usize,
@@ -145,6 +178,8 @@ fn preferred_intrinsic_layouts_with_options(
     });
     Ok(layouts)
 }
+// Provenance: fn intrinsic_fused_layouts_with_options | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::intrinsic_fused_layouts
 fn intrinsic_fused_layouts_with_options(
     model: &FaceModel,
     search_budget: usize,
@@ -267,6 +302,8 @@ struct SearchState {
     clippy::expect_used,
     reason = "placed orders and validated adjacency refer to faces in this model"
 )]
+// Provenance: fn model_face | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::inline in intrinsic_fused_layouts
 fn model_face(model: &FaceModel, id: usize) -> &Face {
     model
         .faces
@@ -274,6 +311,8 @@ fn model_face(model: &FaceModel, id: usize) -> &Face {
         .find(|face| face.id == id)
         .expect("placed and adjacent face IDs belong to the face model")
 }
+// Provenance: fn search_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_search_layouts
 fn search_layouts(
     model: &FaceModel,
     orders: &Orders,
@@ -387,6 +426,8 @@ fn search_layouts(
     }
     Ok(())
 }
+// Provenance: fn valid_face_adjacency | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_valid_face_adjacency
 fn valid_face_adjacency(model: &FaceModel) -> bool {
     let known = model.faces.iter().map(|f| f.id).collect::<AtomSet>();
     let Some(&first) = known.first() else {
@@ -417,6 +458,8 @@ fn valid_face_adjacency(model: &FaceModel) -> bool {
     }
     seen == known
 }
+// Provenance: fn next_face | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_next_face
 fn next_face(model: &FaceModel, orders: &Orders) -> Option<(usize, usize, usize)> {
     let rank = orders
         .iter()
@@ -444,6 +487,8 @@ fn next_face(model: &FaceModel, orders: &Orders) -> Option<(usize, usize, usize)
     }
     options.into_iter().min().map(|(_, _, f, n, e)| (f, n, e))
 }
+// Provenance: fn edge_endpoints | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_edge_endpoints
 fn edge_endpoints(face: &Face, edge: usize) -> Option<(usize, usize)> {
     let index = face.edge_cycle.iter().position(|&e| e == edge)?;
     Some((
@@ -451,6 +496,8 @@ fn edge_endpoints(face: &Face, edge: usize) -> Option<(usize, usize)> {
         face.atom_cycle[(index + 1) % face.size],
     ))
 }
+// Provenance: fn oriented_cycle | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_oriented_cycle
 fn oriented_cycle(cycle: &[usize], offset: usize, reverse: bool) -> Vec<usize> {
     let mut order = cycle.to_vec();
     if reverse {
@@ -459,6 +506,8 @@ fn oriented_cycle(cycle: &[usize], offset: usize, reverse: bool) -> Vec<usize> {
     order.rotate_left(offset);
     order
 }
+// Provenance: fn orders_starting_with_edge | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_orders_starting_with_edge
 fn orders_starting_with_edge(cycle: &[usize], ends: (usize, usize)) -> Vec<Vec<usize>> {
     let mut result = vec![];
     for reverse in [false, true] {
@@ -471,6 +520,8 @@ fn orders_starting_with_edge(cycle: &[usize], ends: (usize, usize)) -> Vec<Vec<u
     }
     result
 }
+// Provenance: fn place_shape | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_place_shape
 fn place_shape(
     shape: &RingShapeSpec,
     order: &[usize],
@@ -497,10 +548,14 @@ fn place_shape(
         }))
         .collect()
 }
+// Provenance: fn opposite_side | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_opposite_side
 fn opposite_side(a: Point, b: Point, c: Point, d: Point) -> bool {
     let (c, d) = (cross(a, b, c), cross(a, b, d));
     c != 0 && d != 0 && (c > 0) != (d > 0)
 }
+// Provenance: fn partial_layout_is_valid | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_partial_layout_is_valid
 fn partial_layout_is_valid(
     model: &FaceModel,
     orders: &Orders,
@@ -558,6 +613,8 @@ fn partial_layout_is_valid(
     }
     true
 }
+// Provenance: fn model_boundary_is_consistent | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_model_boundary_is_consistent
 fn model_boundary_is_consistent(model: &FaceModel) -> bool {
     let mut mult = BTreeMap::new();
     let mut perimeter = BTreeSet::new();
@@ -580,6 +637,8 @@ fn model_boundary_is_consistent(model: &FaceModel) -> bool {
         .collect::<BTreeSet<_>>();
     perimeter == geometric && geometric == cycle_edges(&model.outer_boundary)
 }
+// Provenance: fn audit_layout | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_audit_layout
 fn audit_layout(
     model: &FaceModel,
     orders: &Orders,
@@ -591,9 +650,13 @@ fn audit_layout(
         && (incremental || partial_layout_is_valid(model, orders, positions, None))
         && model_boundary_is_consistent(model)
 }
+// Provenance: fn cross | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_cross
 pub(crate) fn cross(a: Point, b: Point, c: Point) -> i128 {
     (b.0 - a.0) as i128 * (c.1 - a.1) as i128 - (b.1 - a.1) as i128 * (c.0 - a.0) as i128
 }
+// Provenance: fn segments_intersect | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_segments_intersect
 pub(crate) fn segments_intersect(a: Point, b: Point, c: Point, d: Point) -> bool {
     let (one, two, three, four) = (
         cross(a, b, c),
@@ -610,6 +673,8 @@ pub(crate) fn segments_intersect(a: Point, b: Point, c: Point, d: Point) -> bool
         || (four == 0 && on(c, d, b))
         || ((one > 0) != (two > 0) && (three > 0) != (four > 0))
 }
+// Provenance: fn polygon_center_strictly_inside | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_polygon_center_strictly_inside
 fn polygon_center_strictly_inside(source: &[Point], polygon: &[Point]) -> bool {
     let n = source.len() as i128;
     let (x, y) = source.iter().fold((0i128, 0i128), |(x, y), &(a, b)| {
@@ -624,6 +689,8 @@ fn polygon_center_strictly_inside(source: &[Point], polygon: &[Point]) -> bool {
         .collect::<Vec<_>>();
     signs.iter().all(|&v| v > 0) || signs.iter().all(|&v| v < 0)
 }
+// Provenance: fn ring_axis_center | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_ring_axis_center
 fn ring_axis_center(order: &[usize], positions: &Positions) -> Point {
     let mut centers = BTreeSet::new();
     let edges = (0..order.len())
@@ -663,6 +730,8 @@ fn ring_axis_center(order: &[usize], positions: &Positions) -> Point {
         )
     }
 }
+// Provenance: fn normalize_integer_layout | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_normalize_integer_layout
 fn normalize_integer_layout(positions: &Positions, centers: &Positions) -> (Positions, Positions) {
     let x = positions.values().map(|p| p.0).min().unwrap_or(0);
     let y = positions.values().map(|p| p.1).min().unwrap_or(0);
@@ -685,6 +754,8 @@ fn normalize_integer_layout(positions: &Positions, centers: &Positions) -> (Posi
     }
     (positions, centers)
 }
+// Provenance: fn normalized_embedding_geometry | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_normalized_embedding_geometry
 fn normalized_embedding_geometry(
     orders: &Orders,
     positions: &Positions,
@@ -707,6 +778,8 @@ fn normalized_embedding_geometry(
         .collect();
     normalize_integer_layout(&integer, &centers)
 }
+// Provenance: fn intrinsic_embedding_key | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_intrinsic_embedding_key
 fn intrinsic_embedding_key(
     orders: &Orders,
     shapes: &Shapes,
@@ -732,6 +805,8 @@ fn intrinsic_embedding_key(
         distances,
     )
 }
+// Provenance: fn layout_distortion | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_layout_distortion
 fn layout_distortion(orders: &Orders, shapes: &Shapes, positions: &Positions, system: &str) -> i64 {
     let scales = orders
         .iter()
@@ -766,6 +841,8 @@ fn layout_distortion(orders: &Orders, shapes: &Shapes, positions: &Positions, sy
             .filter(|&&(p, q)| p * smallest.1 > smallest.0 * q)
             .count() as i64
 }
+// Provenance: fn direction_grid_centers | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_direction_grid_centers
 fn direction_grid_centers(centers: &Positions, adjacent: &Adjacent) -> Option<Positions> {
     let mut neighbors: BTreeMap<_, Vec<_>> = centers.keys().map(|&f| (f, vec![])).collect();
     for &(a, b) in adjacent {
@@ -807,6 +884,8 @@ fn direction_grid_centers(centers: &Positions, adjacent: &Adjacent) -> Option<Po
         None
     }
 }
+// Provenance: fn center_row_orientation_score | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_center_row_orientation_score
 pub(crate) fn center_row_orientation_score(centers: &Positions, row: &[usize]) -> [i64; 3] {
     let middle = row.len() / 2;
     let axis_x = if row.len() % 2 == 1 {
@@ -837,6 +916,8 @@ pub(crate) fn center_row_orientation_score(centers: &Positions, row: &[usize]) -
     }
     [-ur, ll, -above]
 }
+// Provenance: fn opsin_occupied_row_orientation | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_opsin_occupied_row_orientation
 pub(crate) fn opsin_occupied_row_orientation(centers: &Positions) -> Vec<i64> {
     let mut groups: BTreeMap<(i64, i64), Vec<usize>> = BTreeMap::new();
     for (&f, &(x, y)) in centers {
@@ -868,6 +949,8 @@ pub(crate) fn opsin_occupied_row_orientation(centers: &Positions) -> Vec<i64> {
     clippy::unwrap_used,
     reason = "face orders are simple cycles with at least three positioned atoms"
 )]
+// Provenance: fn orientation_score | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_orientation_score
 fn orientation_score(
     centers: &Positions,
     adjacent: &Adjacent,
@@ -942,6 +1025,8 @@ fn orientation_score(
     result.extend(orientation);
     result
 }
+// Provenance: fn opsin_pentagon_chain | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_opsin_pentagon_chain
 fn opsin_pentagon_chain(orders: &Orders, adjacent: &Adjacent) -> Option<Vec<usize>> {
     if adjacent.len() + 1 != orders.len() {
         return None;
@@ -994,6 +1079,8 @@ fn opsin_pentagon_chain(orders: &Orders, adjacent: &Adjacent) -> Option<Vec<usiz
     }
     Some(path)
 }
+// Provenance: fn opsin_ring_map_tree | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_opsin_ring_map_tree
 fn opsin_ring_map_tree(model: &FaceModel) -> bool {
     opsin_pentagon_chain(
         &model
@@ -1021,6 +1108,8 @@ fn opsin_ring_map_tree(model: &FaceModel) -> bool {
     clippy::unwrap_used,
     reason = "adjacency is derived from placed orders; retain the original panic if an endpoint is missing"
 )]
+// Provenance: fn two_port_pentagon_axes | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_two_port_pentagon_axes
 fn two_port_pentagon_axes(orders: &Orders, centers: &Positions, adjacent: &Adjacent) -> Positions {
     if adjacent.len() + 1 != orders.len() {
         return centers.clone();
@@ -1067,6 +1156,8 @@ fn two_port_pentagon_axes(orders: &Orders, centers: &Positions, adjacent: &Adjac
         centers.clone()
     }
 }
+// Provenance: fn materialize_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_materialize_layouts
 fn materialize_layouts(
     orders: &Orders,
     shapes: &Shapes,
@@ -1200,6 +1291,8 @@ fn materialize_layouts(
     sort_layouts(&mut result);
     result
 }
+// Provenance: fn sort_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_layout_sort_key
 fn sort_layouts(layouts: &mut [FusedLayout]) {
     layouts.sort_by_key(|l| {
         let mut shapes = l
@@ -1217,6 +1310,8 @@ fn sort_layouts(layouts: &mut [FusedLayout]) {
         (l.orientation_score.clone(), shapes, geometry)
     });
 }
+// Provenance: fn subdivided_face_model | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_subdivided_face_model
 fn subdivided_face_model(model: &FaceModel, faces: Vec<Face>, removed: &AtomSet) -> FaceModel {
     let mut owners: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for f in &faces {
@@ -1241,6 +1336,8 @@ fn subdivided_face_model(model: &FaceModel, faces: Vec<Face>, removed: &AtomSet)
         ..model.clone()
     }
 }
+// Provenance: fn expand_proxy_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_expand_proxy_layouts
 fn expand_proxy_layouts(
     model: &FaceModel,
     layouts: Vec<FusedLayout>,
@@ -1306,6 +1403,8 @@ fn expand_proxy_layouts(
     clippy::unwrap_used,
     reason = "targets have one fusion edge from their own edge cycle, and proxy faces are cloned from the original model"
 )]
+// Provenance: fn terminal_ring_proxy_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_terminal_ring_proxy_layouts
 fn terminal_ring_proxy_layouts(
     model: &FaceModel,
     budget: usize,
@@ -1414,6 +1513,8 @@ fn terminal_ring_proxy_layouts(
     clippy::unwrap_used,
     reason = "the port gate selects exactly two edges from this face, and proxy faces are cloned from the original model"
 )]
+// Provenance: fn two_port_large_ring_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_two_port_large_ring_layouts
 fn two_port_large_ring_layouts(
     model: &FaceModel,
     budget: usize,
@@ -1591,6 +1692,8 @@ fn two_port_large_ring_layouts(
     clippy::unwrap_used,
     reason = "the gate requires one fusion edge, and both faces are proved to contain it before cycle positioning"
 )]
+// Provenance: fn ordinary_large_bicycle_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_ordinary_large_bicycle_layouts
 fn ordinary_large_bicycle_layouts(
     model: &FaceModel,
     budget: usize,
@@ -1717,6 +1820,8 @@ fn ordinary_large_bicycle_layouts(
     sort_layouts(&mut layouts);
     Ok(layouts)
 }
+// Provenance: fn opsin_construction_atom_order | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::opsin_construction_atom_order
 pub fn opsin_construction_atom_order(
     ast: &FusionNameAst,
     specs: &BTreeMap<usize, FusionComponentSpec>,
@@ -1834,6 +1939,8 @@ pub fn opsin_construction_atom_order(
     Some(result)
 }
 /// Whether the face topology lies within the independently certified parser-numbering tier.
+// Provenance: fn parser_numbering_is_supported | original
+// Source: ReShiki | src/naming/openclatura/fusion/layout.rs::parser_numbering_is_supported
 pub fn parser_numbering_is_supported(model: &FaceModel) -> bool {
     // Upstream divergence: a plane embedding does not certify OPSIN's construction-dependent perimeter.
     // Coupled large rings or a large ring with three fusion ports need more proof.
@@ -1855,6 +1962,8 @@ pub fn parser_numbering_is_supported(model: &FaceModel) -> bool {
     !coupled_large_rings && !branched_large_ring
 }
 
+// Provenance: fn can_use_component_entry_layout | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::can_use_component_entry_layout
 pub fn can_use_component_entry_layout(model: &FaceModel) -> bool {
     model.faces.len() == 4
         && model.face_adjacency.len() == 3
@@ -1872,6 +1981,8 @@ pub fn can_use_component_entry_layout(model: &FaceModel) -> bool {
                 })
             })
 }
+// Provenance: fn symmetric_terminal_shape | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_symmetric_terminal_shape
 fn symmetric_terminal_shape(size: usize) -> Option<RingShapeSpec> {
     if size % 2 == 1 {
         return None;
@@ -1898,6 +2009,8 @@ fn symmetric_terminal_shape(size: usize) -> Option<RingShapeSpec> {
         None
     }
 }
+// Provenance: fn cited_terminal_cycle | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_cited_terminal_cycle
 fn cited_terminal_cycle(
     model: &FaceModel,
     ast: &FusionNameAst,
@@ -1964,6 +2077,8 @@ fn cited_terminal_cycle(
     }
     Some(cycle.into_iter().rev().collect())
 }
+// Provenance: fn entry_direction_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_entry_direction_layouts
 fn entry_direction_layouts(
     model: &FaceModel,
     ast: &FusionNameAst,
@@ -2060,6 +2175,8 @@ fn entry_direction_layouts(
     }
     Ok(Some(layouts))
 }
+// Provenance: fn component_entry_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::component_entry_layouts
 pub fn component_entry_layouts(
     model: &FaceModel,
     ast: &FusionNameAst,
@@ -2325,6 +2442,8 @@ pub fn component_entry_layouts(
     }
     entry_direction_layouts(model, ast, specs, search_budget)
 }
+// Provenance: fn ordered_construction_layouts | adapted
+// Source: openclatura | src/openclatura/fusion/layout.py::_ordered_construction_layouts
 fn ordered_construction_layouts(
     model: &FaceModel,
     ast: &FusionNameAst,
@@ -2403,6 +2522,11 @@ fn ordered_construction_layouts(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | adapted
+// Source: openclatura | tests/unit/test_fusion_layout.py::test_layout_preference_is_invariant_to_input_atom_ids
+// Source: openclatura | tests/unit/test_fusion_layout.py::_geometry_signature
+// Source: openclatura | tests/unit/test_fusion_large_ring_port_layout.py::_selection
+// Source: openclatura | tests/unit/test_fusion_large_ring_port_layout.py::test_macro88584_expanded_geometry_reproduces_both_opsin_perimeters
 mod tests {
     use super::*;
     use crate::naming::openclatura::{
@@ -2510,6 +2634,8 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::coupled_and_branched_large_rings_need_an_extra_parser_witness | original
+    // Source: ReShiki | src/naming/openclatura/fusion/layout.rs::tests::coupled_and_branched_large_rings_need_an_extra_parser_witness
     fn coupled_and_branched_large_rings_need_an_extra_parser_witness() {
         use crate::naming::openclatura::molecule::{Atom, Bond, Molecule};
         let model = |cycles: Vec<Vec<usize>>| {

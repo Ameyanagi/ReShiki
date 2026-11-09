@@ -3,7 +3,9 @@ name = "nazuchem-kernel"
 version = "0.1.0"
 edition = "2024"
 publish = false
-license = "MIT OR Apache-2.0"
+# Established terms; native_order/{linux_sort,sort_common}.rs remain NOASSERTION
+# pending the owner's sort-policy decision. This crate is not publishable yet.
+license = "(MIT OR Apache-2.0) AND BSD-3-Clause AND BSD-2-Clause AND (Apache-2.0 WITH LLVM-exception)"
 description = "Internal molecular perception kernel for nazuchem, adapted from RDKit and centres"
 
 [dependencies]

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original
+// Source: ReShiki | crates/chemistry/src/stereo/drawing/tests.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+
 // Copied unchanged from crates/chemistry/src/stereo/drawing/tests.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3
 use super::*;
 use crate::graph::{Atom, Bond};

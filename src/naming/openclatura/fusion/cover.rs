@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+// Origin: port
+// Source: openclatura | src/openclatura/fusion/cover.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+
 //! Exact component overlap graphs and their independently checked topology.
 use std::collections::{BTreeMap, BTreeSet};
 

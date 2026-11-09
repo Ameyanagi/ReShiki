@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentProcessor.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentProcessor.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/component_processor_carbohydrates.rs | d9b9bafe8f8c9d3d24b6233c14682d63b58269b2
+// Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md.
+
 //! Carbohydrate construction from OPSIN `ComponentProcessor.java`, lines 1446–1950.
 //!
 //! Source: OPSIN 2.9.0, commit b91b610af5ab07560fedb20730d7aef46bb2bca0.

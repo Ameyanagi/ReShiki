@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/small_ring_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/small_ring_stereo.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Adapted openclatura local numbered-ring isotope CIP fallback, using the native graph adapter, with original Rust regression tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Scoped small-ring descriptors, including upstream's local isotope tie break.
 use super::{
     assembly_parts::AssemblyParts,
@@ -6,6 +15,8 @@ use super::{
 };
 use std::collections::BTreeMap;
 
+// Provenance: fn scoped_small_ring_stereo_features | adapted
+// Source: openclatura | src/openclatura/small_ring_stereo.py::scoped_small_ring_stereo_features
 pub fn scoped_small_ring_stereo_features(
     mol: &Molecule,
     parts: &AssemblyParts,
@@ -79,6 +90,8 @@ pub fn scoped_small_ring_stereo_features(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/small_ring_stereo.rs::tests
 mod tests {
     use super::*;
     use crate::naming::openclatura::graph_io::read_smiles;

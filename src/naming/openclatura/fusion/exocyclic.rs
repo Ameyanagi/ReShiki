@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: openclatura | src/openclatura/fusion/exocyclic.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Changes: Openclatura exocyclic ligand checks extended locally for neutral phosphorus lambda5 oxides.
+
 //! Graph-bound external pi ligands supported by parent composition.
 use super::super::molecule::Molecule;
 

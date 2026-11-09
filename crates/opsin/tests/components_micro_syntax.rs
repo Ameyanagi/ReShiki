@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/ComponentGeneration_ProcesslocantsTest.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/ComponentGeneration_StereochemistryTest.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/ComponentGeneration_AmbiguitiesAndIrregularitiesTest.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/test/java/uk/ac/cam/ch/wwmm/opsin/ComponentGeneration_MiscTest.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/tests/components_micro_syntax.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 //! Source-derived regression cases from OPSIN 2.9.0
 //! ComponentGeneration_ProcesslocantsTest, StereochemistryTest,
 //! AmbiguitiesAndIrregularitiesTest and MiscTest (MIT).

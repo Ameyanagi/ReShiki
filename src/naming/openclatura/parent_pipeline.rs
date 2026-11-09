@@ -1,3 +1,20 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/parent_pipeline.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/audit/relative_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_systematic_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_descriptor.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_polycycles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fused_bonds.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura parent planning adapted to native graph/CIP with original rendered-parent status policy and ring-face parity proof.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Shared parent numbering and assembly preparation (plain-name path).
 use std::collections::BTreeMap;
 
@@ -13,6 +30,8 @@ use crate::naming::{NameReason, NameStatus};
 /// Assess only a parent that has entered a successfully rendered name.
 /// Fusion and wrapper plans are also cached and tried speculatively, so their
 /// construction and numbering routines must not mutate the name assessment.
+// Provenance: fn mark_rendered_parent_status | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::mark_rendered_parent_status
 pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts) {
     // Retained-name exceptions are vetoed separately below.
     let audited = match parts.parent_hydride.as_ref().map(|parent| parent.kind) {
@@ -72,6 +91,8 @@ pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts)
     }
 }
 
+// Provenance: fn mark_parent_hydride_status | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::mark_parent_hydride_status
 fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
     if let Some(assembly) = &parent.assembly {
         mol.record_ring_assembly(&assembly.junction_bond_ids);
@@ -92,6 +113,8 @@ fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
     }
 }
 
+// Provenance: fn mark_fusion_plan_status | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::mark_fusion_plan_status
 fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionParentPlan) {
     if plan.ast.plan_kind == "benzoheterocycle" {
         mol.mark_benzo_fusion_alternative();
@@ -140,6 +163,8 @@ fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionPa
     }
 }
 
+// Provenance: fn mark_retained_parent_status | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::mark_retained_parent_status
 fn mark_retained_parent_status(mol: &Molecule, name: &str) {
     if matches!(name, "porphyrin" | "corrin" | "gonane") {
         mol.mark_name(NameStatus::Unverified(NameReason::UnauditedParent));
@@ -148,6 +173,8 @@ fn mark_retained_parent_status(mol: &Molecule, name: &str) {
 
 /// Apply the retained-parent eligibility checks before sharing a retained
 /// identity between component and recursive-substituent assembly.
+// Provenance: fn resolve_retained_parent | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::resolve_retained_parent
 pub fn resolve_retained_parent(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -178,6 +205,8 @@ pub fn resolve_retained_parent(
     Some(retained)
 }
 
+// Provenance: fn resolve_parent_hydride_plan | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::resolve_parent_hydride_plan
 pub fn resolve_parent_hydride_plan(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -207,6 +236,8 @@ pub struct ParentAssemblyPlan {
 }
 
 #[allow(clippy::too_many_arguments)]
+// Provenance: fn build_parent_assembly_plan | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::build_parent_assembly_plan
 pub fn build_parent_assembly_plan(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -231,6 +262,8 @@ pub fn build_parent_assembly_plan(
 }
 
 #[allow(clippy::too_many_arguments)]
+// Provenance: fn build_parent_assembly_plan_with_modifiers | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::build_parent_assembly_plan
 pub fn build_parent_assembly_plan_with_modifiers(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -286,6 +319,8 @@ pub fn build_parent_assembly_plan_with_modifiers(
 }
 
 #[allow(clippy::too_many_arguments)]
+// Provenance: fn build_parent_assembly_plan_with_parent | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::build_parent_assembly_plan
 pub fn build_parent_assembly_plan_with_parent(
     mol: &Molecule,
     selection: &ParentSelection,
@@ -615,6 +650,8 @@ pub fn build_parent_assembly_plan_with_parent(
 }
 
 #[allow(clippy::too_many_arguments)]
+// Provenance: fn build_parent_parts | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::build_parent_parts
 fn build_parent_parts(
     mol: &Molecule,
     numbered_path: &[usize],
@@ -746,6 +783,8 @@ fn build_parent_parts(
     Ok(parts)
 }
 
+// Provenance: fn add_relative_ring_stereo | adapted
+// Source: openclatura | src/openclatura/parent_pipeline.py::_add_relative_ring_stereo
 fn add_relative_ring_stereo(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -833,6 +872,10 @@ fn add_relative_ring_stereo(
     Ok(())
 }
 
+// Provenance: fn relative_ring_face | adapted
+// Source: openclatura | src/openclatura/audit/relative_stereo.py::_face_parity
+// Source: openclatura | src/openclatura/audit/relative_stereo.py::_permutation_sign
+// Source: openclatura | src/openclatura/audit/relative_stereo.py::ring_face_relation
 fn relative_ring_face(
     mol: &Molecule,
     parts: &AssemblyParts,
@@ -882,11 +925,19 @@ fn relative_ring_face(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests
 mod tests {
     use super::super::name_smiles;
     use super::*;
 
     #[test]
+    // Provenance: fn tests::selected_retained_templates_keep_their_preference_status | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::selected_retained_templates_keep_their_preference_status
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_retained_complete_system_matrix_precedes_systematic_fusion
+    // Source: openclatura | tests/unit/test_analysis.py::test_gonane_retained_stereo_requires_only_the_configurations_implied_by_the_parent
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn selected_retained_templates_keep_their_preference_status() {
         for (name, expected) in [
             (
@@ -923,6 +974,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unregistered_retained_fusion_status_is_deferred_until_rendering | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::unregistered_retained_fusion_status_is_deferred_until_rendering
+    // Source: openclatura | tests/unit/test_fusion_descriptor.py::test_third_order_intermediate_component_citation_is_opsin_compatible
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn unregistered_retained_fusion_status_is_deferred_until_rendering() {
         use super::super::{
             fusion::{model::FusionComponentMatch, planner::plan_fusion_parent},
@@ -999,6 +1055,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls
+    // Source: openclatura | tests/roundtrip/test_polycycles.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn complete_hydrogenation_veto_keeps_unlocanted_and_partial_controls() {
         for (smiles, text, status) in [
             (
@@ -1024,6 +1085,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::rendered_units_veto_unaudited_parent_choices | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::rendered_units_veto_unaudited_parent_choices
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Source: openclatura | tests/unit/test_locant_elision.py::test_nonconstitutional_and_unsupported_parent_locants_are_unchanged
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn rendered_units_veto_unaudited_parent_choices() {
         for (smiles, text, status) in [
             (
@@ -1176,6 +1243,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::relative_ring_fallback_is_explicitly_not_preferred | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::relative_ring_fallback_is_explicitly_not_preferred
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_flipped_parent_relative_stereo_binding_is_not_confirmed
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn relative_ring_fallback_is_explicitly_not_preferred() {
         let mut mol =
             super::super::graph_io::read_smiles("C[C@H]1C[C@@H](C)C1", &Default::default())
@@ -1204,6 +1276,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::spiro_parents_keep_descriptor_numbering_and_internal_bond_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_pipeline.rs::tests::spiro_parents_keep_descriptor_numbering_and_internal_bond_locants
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn spiro_parents_keep_descriptor_numbering_and_internal_bond_locants() {
         for (smiles, expected) in [
             ("C1CCC2(CC1)CCCC2", "spiro[4.5]decane"),

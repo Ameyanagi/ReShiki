@@ -1,5 +1,19 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/principal_suffixes.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/principal_suffixes.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/data/parser_xml_resources/suffixes.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/carboxylicAcids.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Ported principal-suffix word-position rendering, locally extended for suffix elision and bis(aminium), with local test extensions with adapted upstream cases.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Programmatic rendering of equivalent principal-group suffixes.
 use super::{nomenclature::FunctionalGroupRule, rules::multipliers};
+// Provenance: fn render_principal_suffix | adapted
+// Source: openclatura | src/openclatura/principal_suffixes.py::render_principal_suffix
 pub fn render_principal_suffix(rule: &FunctionalGroupRule, count: usize) -> String {
     let Some(suffix) = rule.suffix.as_ref() else {
         return String::new();
@@ -31,11 +45,20 @@ pub fn render_principal_suffix(rule: &FunctionalGroupRule, count: usize) -> Stri
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/principal_suffixes.rs::tests
 mod tests {
     use super::super::nomenclature::RULES;
     use super::*;
 
     #[test]
+    // Provenance: fn tests::equivalent_principal_groups_use_suffix_specific_elision | adapted
+    // Source: ReShiki | src/naming/openclatura/principal_suffixes.rs::tests::equivalent_principal_groups_use_suffix_specific_elision
+    // Source: openclatura | tests/data/parser_xml_resources/suffixes.json::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_name_assembly_binds_every_final_token_to_graph_metadata
+    // Source: openclatura | tests/data/parser_xml_resources/carboxylicAcids.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn equivalent_principal_groups_use_suffix_specific_elision() {
         for (key, count, expected) in [
             ("ketone", 1, "one"),

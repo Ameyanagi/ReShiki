@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted
+// Source: RDKit | Code/GraphMol/MolOps.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/sanitize.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
+// Changes: Rust adaptation; forward an explicit borrowed Budget to aromaticity.
+
 //! Default graph sanitization order from RDKit MolOps.cpp (2026.03.6).
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.

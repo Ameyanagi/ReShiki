@@ -1,3 +1,18 @@
+// SPDX-License-Identifier: Python-2.0 AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: CPython | Objects/setobject.c | 3.12 (exact patch/commit unresolved)
+// Source: ReShiki | src/naming/openclatura/python_int_set.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+// 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023 Python Software Foundation;
+// All Rights Reserved
+// Copyright (c) 1995-2001 Corporation for National Research Initiatives; All Rights Reserved
+// Copyright (c) 1991 - 1995, Stichting Mathematisch Centrum Amsterdam,
+// The Netherlands. All rights reserved.
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: CPython integer-set algorithm adaptation for Python-compatible traversal, plus original Rust collection glue and regression tests.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+// Unresolved: Header records only CPython 3.12, not a patch/commit. Repository NOTICE pin 3.12.12 / 4a5632fb applies to other files and does not prove this file used that exact source. Replace the unresolved source ref after provenance confirmation.
+
 //! CPython integer-set traversal for upstream rules whose final tie follows a set.
 //! Atom IDs have their integer value as their Python hash. This mirrors the
 //! insertion, table-copy and difference paths of CPython 3.12 `Objects/setobject.c`.
@@ -18,6 +33,8 @@ pub struct PythonIntSet {
 }
 
 impl Default for PythonIntSet {
+    // Provenance: fn <PythonIntSet as Default>::default | adapted
+    // Source: CPython | Objects/setobject.c::make_new_set
     fn default() -> Self {
         Self {
             slots: vec![Slot::Empty; 8],
@@ -28,6 +45,8 @@ impl Default for PythonIntSet {
 }
 
 impl FromIterator<usize> for PythonIntSet {
+    // Provenance: fn <PythonIntSet as FromIterator<usize>>::from_iter | adapted
+    // Source: CPython | Objects/setobject.c::set_update_internal
     fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
         let mut result = Self::default();
         for value in iter {
@@ -37,6 +56,17 @@ impl FromIterator<usize> for PythonIntSet {
     }
 }
 
+// Provenance: impl PythonIntSet | adapted
+// Source: CPython | Objects/setobject.c::set_next
+// Source: CPython | Objects/setobject.c::set_lookkey
+// Source: CPython | Objects/setobject.c::set_add_entry
+// Source: CPython | Objects/setobject.c::set_discard_entry
+// Source: CPython | Objects/setobject.c::inline in set_add_entry
+// Source: CPython | Objects/setobject.c::set_table_resize
+// Source: CPython | Objects/setobject.c::set_merge
+// Source: CPython | Objects/setobject.c::set_copy
+// Source: CPython | Objects/setobject.c::set_difference
+// Source: CPython | Objects/setobject.c::set_difference_update_internal
 impl PythonIntSet {
     pub fn iter(&self) -> impl Iterator<Item = usize> + '_ {
         self.slots.iter().filter_map(|slot| match slot {
@@ -150,6 +180,8 @@ impl PythonIntSet {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/python_int_set.rs::tests
 mod tests {
     use super::PythonIntSet;
 

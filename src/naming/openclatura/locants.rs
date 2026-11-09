@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/locants.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/locants.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura typed system/atom/bond locants with local compound-locant ordering.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Atom and multiple-bond locants for acyclic and monocyclic parents.
 pub use super::assembly_utils::parse_locant;
 use super::molecule::{AtomSet, Molecule};
@@ -13,6 +22,8 @@ pub struct SystemLocant {
 }
 #[cfg(test)]
 impl SystemLocant {
+    // Provenance: fn SystemLocant::render | port
+    // Source: openclatura | src/openclatura/locants.py::SystemLocant.render
     pub fn render(&self, unicode_superscript: bool) -> String {
         let mut text = format!("{}{}", self.base, self.fusion_suffix);
         if let Some(distance) = self.interior_distance {
@@ -31,6 +42,8 @@ impl SystemLocant {
         text
     }
 }
+// Provenance: fn parse_system_locant | adapted
+// Source: openclatura | src/openclatura/locants.py::parse_system_locant
 pub fn parse_system_locant(value: &str) -> Result<SystemLocant, String> {
     let mut normalized = String::new();
     let mut in_superscript = false;
@@ -75,6 +88,8 @@ pub fn parse_system_locant(value: &str) -> Result<SystemLocant, String> {
         interior_distance,
     })
 }
+// Provenance: fn retained_locant_sort_key | adapted
+// Source: openclatura | src/openclatura/locants.py::retained_locant_sort_key
 pub fn retained_locant_sort_key(value: &str) -> LocantKey {
     if let Ok(locant) = parse_system_locant(value) {
         if locant.fusion_suffix.is_empty()
@@ -124,6 +139,8 @@ pub fn retained_locant_sort_key(value: &str) -> LocantKey {
         0,
     )
 }
+// Provenance: fn canonical_locant_pair | port
+// Source: openclatura | src/openclatura/locants.py::canonical_locant_pair
 pub fn canonical_locant_pair(left: &str, right: &str) -> (String, String) {
     if retained_locant_sort_key(left) <= retained_locant_sort_key(right) {
         (left.into(), right.into())
@@ -132,6 +149,8 @@ pub fn canonical_locant_pair(left: &str, right: &str) -> (String, String) {
     }
 }
 
+// Provenance: fn get_atom_locants | port
+// Source: openclatura | src/openclatura/locants.py::get_atom_locants
 pub fn get_atom_locants(oriented_path: &[usize], target_indices: &AtomSet) -> Vec<usize> {
     oriented_path
         .iter()
@@ -140,6 +159,8 @@ pub fn get_atom_locants(oriented_path: &[usize], target_indices: &AtomSet) -> Ve
         .collect()
 }
 
+// Provenance: fn get_bond_locants | port
+// Source: openclatura | src/openclatura/locants.py::get_bond_locants
 pub fn get_bond_locants(
     mol: &Molecule,
     oriented_path: &[usize],
@@ -185,6 +206,8 @@ pub fn get_bond_locants(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/locants.rs::tests
 mod tests {
     use super::*;
 

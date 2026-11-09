@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: port
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentProcessor.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentProcessor.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
+// Copyright 2017 Daniel Lowe
+
 //! Ring-family passes from OPSIN `ComponentProcessor.java` (2826–3924).
 //!
 //! Source: OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.

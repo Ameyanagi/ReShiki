@@ -1,11 +1,26 @@
+// SPDX-License-Identifier: NOASSERTION
+// Origin: mixed ReShiki sort helpers and LLVM libc++/Microsoft STL heap policies; exact source allocation remains unresolved.
+//   Microsoft STL, stl/inc/__msvc_heap_algorithms.hpp @ vs-2022-17.13 / MSVC 14.43.34808.
+//   LLVM libc++, libcxx/include/__algorithm/make_heap.h @ llvmorg-20.1.8 / Apple MacOSX26.2 SDK.
+//   LLVM libc++, libcxx/include/__algorithm/pop_heap.h @ llvmorg-20.1.8 / Apple MacOSX26.2 SDK.
+//   LLVM libc++, libcxx/include/__algorithm/push_heap.h @ llvmorg-20.1.8 / Apple MacOSX26.2 SDK.
+//   LLVM libc++, libcxx/include/__algorithm/sort_heap.h @ llvmorg-20.1.8 / Apple MacOSX26.2 SDK.
+//   ReShiki, crates/chemistry/src/native_order/sort_common.rs @ be63a799aa03a83dc6ec74bb294f4d42b89298d3.
+// Copyright (c) Microsoft Corporation.
+// Copyright (c) 2003-2019 University of Illinois at Urbana-Champaign.
+// Changes: Rust adaptation; ledger-marked local functions; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+// Unresolved: Known LLVM/MSVC policies and generic storage helpers are interleaved; exact source/independent-origin allocation for adjust/heap is not documented, so no complete license expression is asserted.
+
 //! Checked storage operations shared by the reference sorting policies.
 // Copied unchanged from crates/chemistry/src/native_order/sort_common.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3
 use super::{Error, at, at_mut};
 pub(super) type Entry = (i32, usize);
 
+// Original nazuchem code (not in Microsoft STL/LLVM libc++; ledger-classified local helpers; file source allocation unresolved).
 pub(super) fn key(values: &[Entry], i: usize) -> Result<i32, Error> {
     Ok(at(values, i)?.0)
 }
+// Original nazuchem code (not in Microsoft STL/LLVM libc++; ledger-classified local helpers; file source allocation unresolved).
 pub(super) fn swap(values: &mut [Entry], a: usize, b: usize) -> Result<(), Error> {
     let first = *at(values, a)?;
     let second = *at(values, b)?;
@@ -13,6 +28,7 @@ pub(super) fn swap(values: &mut [Entry], a: usize, b: usize) -> Result<(), Error
     *at_mut(values, b)? = first;
     Ok(())
 }
+// Adapted from crates/chemistry/src/native_order/sort_common.rs::insert (local Rust boundary; exact upstream function mapping not recorded).
 pub(super) fn insert(values: &mut [Entry], first: usize, last: usize) -> Result<(), Error> {
     for i in first + 1..last {
         let value = *at(values, i)?;
@@ -26,6 +42,7 @@ pub(super) fn insert(values: &mut [Entry], first: usize, last: usize) -> Result<
     Ok(())
 }
 
+// Adapted from crates/chemistry/src/native_order/sort_common.rs::adjust (local Rust boundary; exact upstream function mapping not recorded).
 fn adjust(
     values: &mut [Entry],
     base: usize,
@@ -61,6 +78,7 @@ fn adjust(
     *at_mut(values, base + hole)? = value;
     Ok(())
 }
+// Adapted from crates/chemistry/src/native_order/sort_common.rs::heap (local Rust boundary; exact upstream function mapping not recorded).
 pub(super) fn heap(
     values: &mut [Entry],
     base: usize,

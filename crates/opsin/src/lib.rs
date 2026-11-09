@@ -1,3 +1,20 @@
+// SPDX-License-Identifier: MIT
+// Origin: mixed
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ParseRules.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/lib.rs | 89f30ab6d32736a8beccf3bab9c355c68f178f00
+// Source: ReShiki | crates/opsin/src/lib.rs | 2df788dc456793c687b934afd6d4b317e3c73ef8
+// Source: ReShiki | crates/opsin/src/lib.rs | 777cdd3f98dfb955e165b17e352d3ce6da768b0c
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
+
 //! Native Rust migration of OPSIN main, commit 42e87ac6.
 //!
 //! The embedded resources and annotation algorithm are ported from the pinned
@@ -86,6 +103,9 @@ pub struct Structure {
     pub principal_parent_atoms: Vec<graph::AtomId>,
 }
 
+// Provenance: impl Structure | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/OpsinResult.java::getExtendedSmiles
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SMILESWriter.java::writeExtendedSmilesLayer
 impl Structure {
     /// Semantic CXSMILES retains atom labels, enhanced stereo and polymers.
     /// Cosmetic atom values (including locants) are intentionally excluded.
@@ -127,6 +147,11 @@ pub struct Parser {
     budget: Budget,
 }
 
+// Provenance: impl Parser | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::getInstance
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java::NameToStructure
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::parseWord
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/Tokeniser.java::tokenize
 impl Parser {
     /// Initialize a parser with an unbounded chemistry budget.
     /// Hosts that limit chemistry analysis should use [`Self::with_budget`].

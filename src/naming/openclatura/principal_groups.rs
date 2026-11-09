@@ -1,3 +1,13 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/principal_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/principal_groups.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/roundtrip/test_acids.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura principal-group partition/suffix attachment with original skeletal-anion demotion and neutral-amide candidate policies.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Principal characteristic-group selection and suffix assembly.
 use super::{
     assembly_parts::{AssemblyParts, PrincipalGroupItem},
@@ -10,6 +20,8 @@ use super::{
 };
 use std::collections::BTreeMap;
 
+// Provenance: fn component_groups | adapted
+// Source: openclatura | src/openclatura/principal_groups.py::component_groups
 pub fn component_groups(mol: &Molecule, atoms: &AtomSet) -> Vec<PerceivedGroup> {
     perceive_groups(mol)
         .into_iter()
@@ -20,6 +32,8 @@ pub fn component_groups(mol: &Molecule, atoms: &AtomSet) -> Vec<PerceivedGroup> 
 /// P-41: a skeletal anionic suffix is senior to neutral characteristic groups.
 /// Apply this before excluding group atoms and enumerating parent chains: a
 /// nitrile cited as cyano contributes no carbon to the parent skeleton.
+// Provenance: fn demote_neutral_suffixes_for_skeletal_anion | original
+// Source: ReShiki | src/naming/openclatura/principal_groups.rs::demote_neutral_suffixes_for_skeletal_anion
 pub fn demote_neutral_suffixes_for_skeletal_anion(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -85,6 +99,8 @@ pub fn demote_neutral_suffixes_for_skeletal_anion(
     }
 }
 
+// Provenance: fn neutral_anion_seniority | original
+// Source: ReShiki | src/naming/openclatura/principal_groups.rs::neutral_anion_seniority
 fn neutral_anion_seniority(group: &PerceivedGroup) -> Option<&[i64]> {
     let neutral = match group.key.as_str() {
         "olate" => Some("alcohol"),
@@ -100,6 +116,8 @@ fn neutral_anion_seniority(group: &PerceivedGroup) -> Option<&[i64]> {
 }
 
 /// P-44.1: neutral amide and carboxamide share a principal class; amidium does not.
+// Provenance: fn is_neutral_amide | original
+// Source: ReShiki | src/naming/openclatura/principal_groups.rs::is_neutral_amide
 pub fn is_neutral_amide(mol: &Molecule, group: &PerceivedGroup) -> bool {
     matches!(group.key.as_str(), "amide" | "ring_amide")
         && group
@@ -113,6 +131,8 @@ pub fn is_neutral_amide(mol: &Molecule, group: &PerceivedGroup) -> bool {
 /// The isotope adapter places labels through the parent's locant map, so a
 /// stripped-isotope parent keeps the selected amide rather than moving a
 /// labelled carbon into a substituent.
+// Provenance: fn selects_neutral_amides | original
+// Source: ReShiki | src/naming/openclatura/principal_groups.rs::selects_neutral_amides
 pub fn selects_neutral_amides(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -128,6 +148,8 @@ pub fn selects_neutral_amides(
 
 /// Equivalent amide and anionic suffix classes remain candidates until
 /// P-44.1 or P-72.7 chooses their parent.
+// Provenance: fn candidate_principal_attachments | adapted
+// Source: openclatura | src/openclatura/principal_groups.py::partition_principal_and_prefix_groups
 pub fn candidate_principal_attachments(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -160,6 +182,8 @@ pub fn candidate_principal_attachments(
         .collect()
 }
 
+// Provenance: fn component_principal_key | adapted
+// Source: openclatura | src/openclatura/principal_groups.py::component_principal_key
 pub fn component_principal_key(
     mol: &Molecule,
     groups: &[PerceivedGroup],
@@ -224,6 +248,8 @@ pub fn component_principal_key(
         .map(|(g, _)| g.key.clone())
 }
 
+// Provenance: fn partition_principal_and_prefix_groups | adapted
+// Source: openclatura | src/openclatura/principal_groups.py::partition_principal_and_prefix_groups
 pub fn partition_principal_and_prefix_groups(
     groups: &[PerceivedGroup],
     key: Option<&str>,
@@ -240,6 +266,8 @@ pub fn partition_principal_and_prefix_groups(
     (principal, prefixes)
 }
 
+// Provenance: fn add_component_principal_group | adapted
+// Source: openclatura | src/openclatura/principal_groups.py::add_component_principal_group
 pub fn add_component_principal_group(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -310,6 +338,8 @@ pub fn add_component_principal_group(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/principal_groups.rs::tests
 mod tests {
     use super::*;
 
@@ -434,6 +464,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::skeletal_anion_demotion_keeps_cationic_suffixes_and_added_hydrogen_boundary | adapted
+    // Source: ReShiki | src/naming/openclatura/principal_groups.rs::tests::skeletal_anion_demotion_keeps_cationic_suffixes_and_added_hydrogen_boundary
+    // Source: openclatura | tests/roundtrip/test_acids.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn skeletal_anion_demotion_keeps_cationic_suffixes_and_added_hydrogen_boundary() {
         use super::super::graph_io::read_smiles;
         for (smiles, key) in [

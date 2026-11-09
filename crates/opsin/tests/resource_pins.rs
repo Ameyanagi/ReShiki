@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Origin: original
+// Source: ReShiki | crates/opsin/tests/resource_pins.rs | 8022c4129f19cde7a8a953cdda46900f799a1277
+
 //! The embedded resources match provenance/manifest.json and RESOURCE_FINGERPRINT.
 //! After a grammar change or a conflicted merge, run
 //! `uv run --no-project python scripts/regenerate_opsin_grammar.py`

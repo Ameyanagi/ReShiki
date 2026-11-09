@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT
+// Origin: mixed
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/build_state.rs | 777cdd3f98dfb955e165b17e352d3ce6da768b0c
+// Source: ReShiki | crates/opsin/src/build_state.rs | 89f30ab6d32736a8beccf3bab9c355c68f178f00
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FragmentManager.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md. Original function boundaries are marked below.
+
 //! Per-name state shared by OPSIN construction passes.
 use crate::{
     Budget, OpsinWarning, ParseOptions, ParsingError, WarningKind,
@@ -20,6 +32,10 @@ pub struct BuildState {
     pub(crate) principal_parent_atoms: Vec<AtomId>,
 }
 
+// Provenance: impl BuildState | adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::BuildState
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::addWarning
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/BuildState.java::addIsAmbiguous
 impl BuildState {
     /// Create interpretation state with an unbounded chemistry budget.
     pub fn new(options: ParseOptions) -> Self {
@@ -65,6 +81,9 @@ impl BuildState {
 }
 
 impl OmittedSpaceContext for BuildState {
+    // Provenance: fn <BuildState as OmittedSpaceContext>::fragment_facts | adapted
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java::getAtomForEachSubstitutableHydrogen
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/WordRulesOmittedSpaceCorrector.java::substitutionWouldBeAmbiguous
     fn fragment_facts(&self, fragment: FragmentId) -> Result<FragmentFacts, ParsingError> {
         let graph = self.graph();
         let analysis = crate::stereo_analyser::analyse(graph, fragment)
@@ -99,6 +118,8 @@ impl OmittedSpaceContext for BuildState {
             substitutable_hydrogen_environments: environments,
         })
     }
+    // Provenance: fn <BuildState as OmittedSpaceContext>::clone_element | adapted
+    // Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FragmentManager.java::cloneElement
     fn clone_element(
         &mut self,
         arena: &mut Arena,

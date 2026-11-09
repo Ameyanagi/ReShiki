@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: port
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingBuilder.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/FusedRingBuilder.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Copyright Daniel Lowe and OPSIN contributors; MIT (LICENSE).
+// Copyright 2017 Daniel Lowe
+
 //! Full OPSIN `FusedRingBuilder` fusion-descriptor and graph rewrites.
 //! 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
 //! Phane fusion boundary: upstream commit 42e87ac6.

@@ -118,9 +118,11 @@ Amido prefixes retain locants when the real nitrogen supplies another
 substitution site, including prefixes assembled through a temporary acid.
 These locant changes cost six fast text-parity matches; the structure round-trip
 ratchet is 424/434 and parity is 421/431 after excluding annotated bad goldens,
-with zero wrong structures. Frozen upstream
-names remain unchanged in the corpus. Changed port expectations, including
-`aminoacetic acid` in `rules_cases.tsv`, are checked by OPSIN round trip.
+with zero wrong structures. The corpus retains its upstream source attribution,
+with later corrections and local expectation overrides documented below and
+in the fixture history; it is not a pristine upstream snapshot. Changed port
+expectations, including `aminoacetic acid` in `rules_cases.tsv`, are checked by
+OPSIN round trip.
 
 ## Checks
 

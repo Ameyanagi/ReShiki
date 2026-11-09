@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/special_cases.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/charge_pair_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/amine_oxides.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Upstream nitrogen-chalcogenide neutral-parent algorithm with local locants and status preservation.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+// Unresolved: The commit that added this describes it as a local feature and contains no explicit port attribution; structural correspondence to upstream nitrogen_chalcogenide_result establishes conservative adaptation ancestry, not a verbatim translation claim.
+
 //! P-62.5 / P-74.2.1.2: functional-class names of amine and imine chalcogenides.
 use super::{
     Name,
@@ -7,6 +19,8 @@ use super::{
 };
 use crate::naming::{NameReason, NameStatus};
 
+// Provenance: fn sites | adapted
+// Source: openclatura | src/openclatura/charge_pair_roles.py::_classify_charge_pair
 fn sites(mol: &Molecule) -> Vec<(usize, usize)> {
     mol.atoms
         .iter()
@@ -36,6 +50,8 @@ fn sites(mol: &Molecule) -> Vec<(usize, usize)> {
         .collect()
 }
 
+// Provenance: fn name | adapted
+// Source: openclatura | src/openclatura/special_cases.py::nitrogen_chalcogenide_result
 pub(super) fn name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Name>, String> {
     let sites = sites(mol);
     let [(n, ch)] = sites.as_slice() else {
@@ -134,6 +150,8 @@ pub(super) fn name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Name>, Stri
     Ok(result)
 }
 
+// Provenance: fn assess_zwitterion | original
+// Source: ReShiki | src/naming/openclatura/amine_oxides.rs::assess_zwitterion
 pub(super) fn assess_zwitterion(mol: &Molecule, parts: &AssemblyParts) {
     // P-74.2.1.2: assess the ionic treatment still cited after template consumption.
     if sites(mol).iter().any(|&(n, _)| {
@@ -153,6 +171,8 @@ pub(super) fn assess_zwitterion(mol: &Molecule, parts: &AssemblyParts) {
     }
 }
 
+// Provenance: fn assess_cationic_prefix | original
+// Source: ReShiki | src/naming/openclatura/amine_oxides.rs::assess_cationic_prefix
 pub(super) fn assess_cationic_prefix(mol: &Molecule, nitrogen: usize) {
     if sites(mol).iter().any(|&(n, _)| n == nitrogen) {
         mol.mark_name(NameStatus::NotPreferred(NameReason::AmineOxideZwitterion));

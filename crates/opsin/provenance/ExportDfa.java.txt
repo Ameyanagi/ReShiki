@@ -1,5 +1,9 @@
 // Development-only migration record. This file is never compiled by Cargo.
-// Run with the pinned, unmodified OPSIN 2.9.0 development oracle.
+// Current export: pinned OPSIN main (3.0-SNAPSHOT), commit
+// 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91, using the checked regexTokens.xml
+// as a native grammar resource override. The original exporter used OPSIN 2.9.0.
+// See provenance/README.md and scripts/regenerate_opsin_grammar.py for the
+// pinned JAR, runtime and override process; this record is not a Cargo input.
 package uk.ac.cam.ch.wwmm.opsin;
 
 import dk.brics.automaton.RunAutomaton;

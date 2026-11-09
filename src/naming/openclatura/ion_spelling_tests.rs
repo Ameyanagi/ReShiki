@@ -1,7 +1,31 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: ReShiki | src/naming/openclatura/ion_spelling_tests.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_retained_fused_production.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_parents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/arylGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 use super::name_smiles;
 use crate::naming::{NameReason, NameStatus};
 
 #[test]
+// Provenance: fn ion_spelling_matrix | adapted
+// Source: ReShiki | src/naming/openclatura/ion_spelling_tests.rs::ion_spelling_matrix
+// Source: openclatura | tests/unit/test_analysis.py::test_azinic_acid_is_not_named_as_a_nitro_compound
+// Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+// Source: openclatura | tests/unit/test_analysis.py::test_spiro_side_retained_ionic_ring_locants_are_registry_derived
+// Source: openclatura | tests/unit/test_analysis.py::test_a_zwitterion_keeps_the_anion_as_the_suffix
+// Source: openclatura | tests/roundtrip/test_fused_parents.py::test_roundtrip
+// Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_requested_fused_parent_name_is_invariant_to_atom_order
+// Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+// Source: openclatura | tests/data/parser_xml_resources/arylGroups.json::<fixture data>
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn ion_spelling_matrix() {
     // Only unsubstituted cationic N prefixes use azaniumyl/azaniumylidene.
     // Substituted N keeps the accepted ammonio/iminio alternative and CationPrefix.

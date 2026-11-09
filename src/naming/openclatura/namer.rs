@@ -1,3 +1,18 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/namer.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_acids.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/arylSubstituents.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura recursive substituent pipeline with local scope, status and acid attachment preservation.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Recursive substituent naming, following the upstream plain-name pipeline.
 use super::assembly_parts::{AssemblyParts, RenderedSubstituentName, SubstituentItem};
 use super::assembly_prefixes::substituent_sort_key;
@@ -26,6 +41,8 @@ use super::subgraph_tools::{
 use std::collections::BTreeMap;
 
 /// Name a branch from its attachment atom and an explicit parent boundary.
+// Provenance: fn name_subgraph_with_upstream | adapted
+// Source: openclatura | src/openclatura/namer.py::name_subgraph
 pub(super) fn name_subgraph_with_upstream(
     mol: &Molecule,
     start_idx: usize,
@@ -36,6 +53,8 @@ pub(super) fn name_subgraph_with_upstream(
 }
 
 /// Name a branch whose attachment-bond descriptor is cited by the caller.
+// Provenance: fn name_subgraph_without_attachment_stereo | original
+// Source: ReShiki | src/naming/openclatura/namer.rs::name_subgraph_without_attachment_stereo
 pub(super) fn name_subgraph_without_attachment_stereo(
     mol: &Molecule,
     start: usize,
@@ -47,6 +66,8 @@ pub(super) fn name_subgraph_without_attachment_stereo(
         .map(|name| name.text)
 }
 
+// Provenance: fn direct_amide_prefix | adapted
+// Source: openclatura | src/openclatura/namer.py::_direct_amide_subgraph_prefix
 fn direct_amide_prefix(
     mol: &Molecule,
     group: &PerceivedGroup,
@@ -90,6 +111,9 @@ fn direct_amide_prefix(
     )))
 }
 
+// Provenance: fn direct_subgraph_prefix | adapted
+// Source: openclatura | src/openclatura/namer.py::DirectSubgraphPrefix
+// Source: openclatura | src/openclatura/namer.py::_direct_subgraph_prefix
 fn direct_subgraph_prefix(
     mol: &Molecule,
     start: usize,
@@ -183,6 +207,8 @@ fn direct_subgraph_prefix(
     Ok(None)
 }
 
+// Provenance: fn select_subgraph_parent | adapted
+// Source: openclatura | src/openclatura/namer.py::_select_subgraph_parent
 pub(super) fn select_subgraph_parent(
     mol: &Molecule,
     start: usize,
@@ -210,6 +236,8 @@ pub(super) fn select_subgraph_parent(
         .ok_or_else(|| "openclatura: no recursive chain parent".into())
 }
 
+// Provenance: fn collect_subgraph_substituents | adapted
+// Source: openclatura | src/openclatura/namer.py::_collect_subgraph_substituents
 fn collect_subgraph_substituents(
     mol: &Molecule,
     parent_path: &[usize],
@@ -314,6 +342,8 @@ fn collect_subgraph_substituents(
     Ok(mapping)
 }
 
+// Provenance: fn finalize_subgraph_name | adapted
+// Source: openclatura | src/openclatura/namer.py::_finalize_subgraph_name
 fn finalize_subgraph_name(mut name: String, parts: &AssemblyParts) -> String {
     if parts
         .principal_group
@@ -343,6 +373,8 @@ fn finalize_subgraph_name(mut name: String, parts: &AssemblyParts) -> String {
     format!("({name})")
 }
 
+// Provenance: fn name_subgraph_rendered | adapted
+// Source: openclatura | src/openclatura/namer.py::name_subgraph
 pub(super) fn name_subgraph_rendered(
     mol: &Molecule,
     start: usize,
@@ -353,6 +385,8 @@ pub(super) fn name_subgraph_rendered(
     name_subgraph_rendered_except_stereo(mol, start, exclude, upstream, None, acid_prefix_mode)
 }
 
+// Provenance: fn name_subgraph_rendered_except_stereo | adapted
+// Source: openclatura | src/openclatura/namer.py::name_subgraph
 fn name_subgraph_rendered_except_stereo(
     mol: &Molecule,
     start: usize,
@@ -558,6 +592,8 @@ fn name_subgraph_rendered_except_stereo(
     })
 }
 
+// Provenance: fn simple_rooted_carbanion | adapted
+// Source: openclatura | src/openclatura/namer.py::_simple_rooted_carbanion_substituent_name
 fn simple_rooted_carbanion(
     mol: &Molecule,
     parts: &AssemblyParts,
@@ -598,6 +634,8 @@ fn simple_rooted_carbanion(
     })
 }
 
+// Provenance: fn acid_name_to_amido | adapted
+// Source: openclatura | src/openclatura/namer.py::_acid_name_to_amido
 fn acid_name_to_amido(acid: &str) -> Option<String> {
     if ["di", "tri", "tetra"].iter().any(|m| {
         ["oic acid", "carboxylic acid"]
@@ -620,6 +658,8 @@ fn acid_name_to_amido(acid: &str) -> Option<String> {
     None
 }
 
+// Provenance: fn acylamino_amido_prefix | adapted
+// Source: openclatura | src/openclatura/namer.py::_acylamino_amido_prefix
 fn acylamino_amido_prefix(
     mol: &Molecule,
     nitrogen: usize,
@@ -733,6 +773,10 @@ fn acylamino_amido_prefix(
 
 /// Names `acid_atoms` with `center` capped by a hydroxy group, or None when
 /// another acid group could take the suffix or the acid cannot be named.
+// Provenance: fn capped_acid_name | adapted
+// Source: openclatura | src/openclatura/namer.py::_acylamino_amido_prefix
+// Source: openclatura | src/openclatura/namer.py::_competing_acid_reachable
+// Source: openclatura | src/openclatura/namer.py::_neutralize_charge_separated_oxo
 pub(super) fn capped_acid_name(
     mol: &Molecule,
     center: usize,
@@ -815,6 +859,8 @@ pub(super) fn capped_acid_name(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/namer.rs::tests
 mod tests {
     use super::{
         AssemblyParts, BTreeMap, name_subgraph_with_upstream,
@@ -842,6 +888,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::public_naming_bounds_recursion_on_a_two_mebibyte_stack | adapted
+    // Source: ReShiki | src/naming/openclatura/namer.rs::tests::public_naming_bounds_recursion_on_a_two_mebibyte_stack
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn public_naming_bounds_recursion_on_a_two_mebibyte_stack() {
         std::thread::Builder::new()
             .stack_size(2 * 1024 * 1024)
@@ -881,6 +932,18 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::recursive_substituent_names_preserve_attachment_and_boundary | adapted
+    // Source: ReShiki | src/naming/openclatura/namer.rs::tests::recursive_substituent_names_preserve_attachment_and_boundary
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_is_substituted_alkyl_ligand
+    // Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_recursive_substituent_tree_tokens_keep_nested_scopes_local
+    // Source: openclatura | tests/unit/test_analysis.py::test_postprocessing_updates_binding_terms
+    // Source: openclatura | tests/unit/test_analysis.py::test_linear_polyspiro_ring_systems_use_dispiro_parent_not_partial_spiro
+    // Source: openclatura | tests/roundtrip/test_acids.py::test_roundtrip
+    // Source: openclatura | tests/data/parser_xml_resources/arylSubstituents.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn recursive_substituent_names_preserve_attachment_and_boundary() -> Result<(), String> {
         let methyl = read_smiles("C", &Default::default())?;
         assert_eq!(

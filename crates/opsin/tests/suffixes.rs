@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SuffixApplier.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/tests/suffixes.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 // OPSIN 2.9.0 SuffixApplier source-grounded phase fixtures.
 // Expected graph edits and exact failure text follow SuffixApplier.java and
 // the embedded suffix rules at commit b91b610af5ab07560fedb20730d7aef46bb2bca0.

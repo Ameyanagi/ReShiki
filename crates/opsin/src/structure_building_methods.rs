@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: port
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingMethods.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuildingMethods.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
+// Copyright 2017 Daniel Lowe
+
 //! OPSIN's ordered fragment assembly operations.
 //! Port of `StructureBuildingMethods.java`, OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
 //! Shared phane compound locants: upstream main, 42e87ac6.

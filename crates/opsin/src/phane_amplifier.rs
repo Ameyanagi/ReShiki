@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Origin: port
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/PhaneAmplifier.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
+// Copyright 2017 Daniel Lowe
+
 //! Amplification of simplified phane skeletons from OPSIN `PhaneAmplifier.java`.
 //!
 //! Source: upstream main, 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91,

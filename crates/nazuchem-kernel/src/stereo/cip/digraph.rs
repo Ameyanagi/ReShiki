@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Origin: adapted
+// Source: RDKit | Code/GraphMol/CIPLabeler/Digraph.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/Node.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: RDKit | Code/GraphMol/CIPLabeler/Edge.cpp | 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+// Source: ReShiki | crates/chemistry/src/stereo/cip/digraph.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+// Copyright (C) 2020 Schrödinger, LLC. BSD-3-Clause; see licenses/rdkit/.
+// Changes: Rust adaptation; the internal chemistry-to-kernel copy and any extraction changes remain recorded below.
+
 //! CIP expansion adapted from RDKit Digraph.cpp, Node.cpp and Edge.cpp.
 //! Copyright (C) 2020 Schrödinger, LLC. BSD-3-Clause; see licenses/rdkit/.
 // Copied unchanged from crates/chemistry/src/stereo/cip/digraph.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3

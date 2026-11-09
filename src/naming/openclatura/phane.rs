@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original
+// Source: ReShiki | src/naming/openclatura/phane.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 //! Cyclic phanes with disjoint monocyclic mancude amplificants (PhI-2/PhI-3).
 use super::{
     graph_kernel::{Edge, adjacency_from_edges, connected_components, normalize_edge},

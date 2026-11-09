@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentProcessor.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/tests/processing_rings.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Copyright 2017 Daniel Lowe
+// Changes: Rust graph/tree construction and regression harness around source-derived cases/assertions; local regressions retained.
+
 // Java-free phase fixtures derived from OPSIN 2.9.0 ComponentProcessor.java
 // (2826–3924), its specialHwRings table, and upstream spiro/hwRings examples.
 // These assert graph topology and locant behavior independently of final

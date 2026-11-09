@@ -1,9 +1,22 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: OPSIN | opsin-inchi/src/test/resources/uk/ac/cam/ch/wwmm/opsin/phanes.txt | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright 2017 Daniel Lowe
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Original Rust phane test harness with explicit OPSIN phane-oracle fixture selectors and assertions. Adapted openclatura control cases are marked below.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 use super::*;
 use crate::naming::{NameReason, NameStatus, openclatura::graph_io, verify_identity};
 
 const PARA: &str = "C1Cc2ccc(cc2)CCc2ccc1cc2";
 const META: &str = "C1Cc2cccc(c2)CCc2cccc1c2";
 
+// Provenance: fn round_trip | original
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs::round_trip
 fn round_trip(smiles: &str, name: &str) -> Result<(), String> {
     let parsed = opsin::Parser::new()
         .map_err(|e| e.to_string())?
@@ -23,6 +36,8 @@ fn round_trip(smiles: &str, name: &str) -> Result<(), String> {
     verify_identity(smiles, &actual)
 }
 
+// Provenance: fn fixture_smiles | original
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs::fixture_smiles
 fn fixture_smiles(name: &str) -> Result<String, String> {
     let inchi = include_str!("../../../../crates/opsin/tests/fixtures/upstream-inchi/phanes.txt")
         .lines()
@@ -34,6 +49,8 @@ fn fixture_smiles(name: &str) -> Result<String, String> {
 }
 
 #[test]
+// Provenance: fn cyclic_phane_names_reconstruct_exactly | original
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs::cyclic_phane_names_reconstruct_exactly
 fn cyclic_phane_names_reconstruct_exactly() -> Result<(), String> {
     for (smiles, expected) in [
         (PARA, "1,4(1,4)-dibenzenacyclohexaphane"),
@@ -84,6 +101,11 @@ fn cyclic_phane_names_reconstruct_exactly() -> Result<(), String> {
 }
 
 #[test]
+// Provenance: fn declines_out_of_scope_graphs | adapted
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs::declines_out_of_scope_graphs
+// Source: openclatura | tests/unit/test_analysis.py::test_biphenyl_is_graph_selected_not_exact_name_rewritten
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn declines_out_of_scope_graphs() -> Result<(), String> {
     for smiles in [
         "CC1Cc2ccc(cc2)CCc2ccc1cc2",
@@ -114,6 +136,8 @@ fn declines_out_of_scope_graphs() -> Result<(), String> {
 }
 
 #[test]
+// Provenance: fn mixed_attachment_sets_follow_amplificant_seniority | original
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs::mixed_attachment_sets_follow_amplificant_seniority
 fn mixed_attachment_sets_follow_amplificant_seniority() -> Result<(), String> {
     // Pyridine/benzene/pyridine/pyridine/benzene/pyridine, each separated by CH2.
     // PhI-3.2.2 compares the pyridine attachment sets before the benzene sets.
@@ -127,6 +151,8 @@ fn mixed_attachment_sets_follow_amplificant_seniority() -> Result<(), String> {
 }
 
 #[test]
+// Provenance: fn failed_ordinary_name_falls_back_to_unverified_phane | original
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs::failed_ordinary_name_falls_back_to_unverified_phane
 fn failed_ordinary_name_falls_back_to_unverified_phane() -> Result<(), String> {
     let named = super::super::name_smiles(PARA, &Default::default())?;
     assert_eq!(named.text, "1,4(1,4)-dibenzenacyclohexaphane");
@@ -136,6 +162,8 @@ fn failed_ordinary_name_falls_back_to_unverified_phane() -> Result<(), String> {
 }
 
 #[test]
+// Provenance: fn names_independent_upstream_inchi_graphs | mixed
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs::names_independent_upstream_inchi_graphs
 fn names_independent_upstream_inchi_graphs() -> Result<(), String> {
     let seven = "1(1,3),4(1,4)-dibenzenacycloheptaphane";
     verify_identity("C1CCc2cccc(c2)CCc2ccc1cc2", &fixture_smiles(seven)?)?;
@@ -156,6 +184,8 @@ fn names_independent_upstream_inchi_graphs() -> Result<(), String> {
 }
 
 #[test]
+// Provenance: fn ordinary_names_with_phane_alternatives_are_never_preferred | original
+// Source: ReShiki | src/naming/openclatura/phane/tests.rs::ordinary_names_with_phane_alternatives_are_never_preferred
 fn ordinary_names_with_phane_alternatives_are_never_preferred() -> Result<(), String> {
     for smiles in [META] {
         let named = super::super::name_smiles(smiles, &Default::default())?;

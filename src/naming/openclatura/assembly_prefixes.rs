@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/assembly_prefixes.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/assembly_prefixes.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura prefix grouping/elision renderer with local alphanumeric and cage descriptor handling.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Prefix grouping, alphabetization and protective parentheses.
 use super::{
     assembly_parts::AssemblyParts,
@@ -9,6 +18,8 @@ use super::{
 };
 use std::collections::BTreeMap;
 
+// Provenance: fn ignored_prefix_len | adapted
+// Source: openclatura | src/openclatura/assembly_prefixes.py::inline in substituent_sort_key
 fn ignored_prefix_len(text: &str) -> usize {
     // The registry's prefix pattern recognizes locant lists and italic descriptors.
     let Some(end) = text.find(['-', ')']) else {
@@ -48,6 +59,8 @@ fn ignored_prefix_len(text: &str) -> usize {
 /// prefixes, which break ties (P-14.5.3, P-14.5.4). The bracketed heteroatom
 /// locants of a fusion prefix such as [1,3]thiazolo are initial locants;
 /// stereodescriptors such as (1R) take no part.
+// Provenance: fn substituent_sort_key | adapted
+// Source: openclatura | src/openclatura/assembly_prefixes.py::substituent_sort_key
 pub fn substituent_sort_key(name: &str) -> (String, String) {
     let lowercase = name.to_lowercase();
     let mut text = lowercase.as_str();
@@ -73,6 +86,8 @@ pub fn substituent_sort_key(name: &str) -> (String, String) {
         text = &text[n..];
     }
 }
+// Provenance: fn group_offers_second_position | adapted
+// Source: openclatura | src/openclatura/assembly_prefixes.py::_groups_offering_a_second_position
 fn group_offers_second_position(key: &str) -> bool {
     RULES
         .functional_groups
@@ -86,6 +101,8 @@ fn group_offers_second_position(key: &str) -> bool {
                 .any(|m| s.contains(m))
         })
 }
+// Provenance: fn substituent_locant_string | adapted
+// Source: openclatura | src/openclatura/assembly_prefixes.py::substituent_locant_string
 fn substituent_locant_string(
     parts: &AssemblyParts,
     locs: &[String],
@@ -158,6 +175,8 @@ fn substituent_locant_string(
     }
     locs.join(",")
 }
+// Provenance: fn outer_parentheses_are_redundant | adapted
+// Source: openclatura | src/openclatura/assembly_prefixes.py::_outer_parentheses_are_redundant
 fn outer_parentheses_are_redundant(name: &str) -> bool {
     let inner = &name[1..name.len() - 1];
     let mut depth = 0_i32;
@@ -198,6 +217,8 @@ fn outer_parentheses_are_redundant(name: &str) -> bool {
     };
     only_locants && !starts_with_multiplier(&inner[end + 1..])
 }
+// Provenance: fn format_substituent_prefixes | adapted
+// Source: openclatura | src/openclatura/assembly_prefixes.py::format_substituent_prefixes
 pub fn format_substituent_prefixes(parts: &AssemblyParts) -> (String, bool) {
     let mut grouped: BTreeMap<&str, Vec<_>> = BTreeMap::new();
     let mut names = Vec::new();
@@ -298,6 +319,8 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> (String, bool) {
     }
     (rendered, cites_numeric_locants)
 }
+// Provenance: fn format_replacement_prefixes | adapted
+// Source: openclatura | src/openclatura/assembly_prefixes.py::format_replacement_prefixes
 pub fn format_replacement_prefixes(parts: &AssemblyParts) -> (String, bool) {
     if super::assembly_charge::inferred_ionic_retained_parent(parts).is_some() {
         return (String::new(), false);
@@ -347,6 +370,8 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> (String, bool) {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/assembly_prefixes.rs::tests
 mod tests {
     #[test]
     fn outer_parentheses_keep_unlocanted_stereo_scoped_to_the_substituent() {

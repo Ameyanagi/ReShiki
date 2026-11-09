@@ -1,4 +1,51 @@
-//! Native Rust port of openclatura 0.4.3 (MIT), plain-name pipeline.
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/engine.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/mod.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/component_namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/charges.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_stereo.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.golden.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fused_bonds.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_replacement_parents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_polyoxide_chains.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_all_chalcogen_acyl_regressions.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_oxyacids.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_locant_elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_polycycles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_role_models.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_principal_group_breadth.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/exploratory/test_group14_ether_ligand_parent_selection.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/arylGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/nonCarboxylicAcids.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_citation_compatibility.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/functionalTerms.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/fusion_pin_cases.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_alkenes_alkynes.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_structural_roles.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/multipliers.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_von_baeyer_candidate_audit.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_retained_fused_production.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_parents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_retained_bridge_h_relocation.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_rules_tables.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/integration/test_systematic_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_wrappers.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_p13_fusion.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Port entry sequence surrounded by local naming routes, assessment, result types and alternatives.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
+//! Plain-name pipeline that began as a port of openclatura 0.4.3, extended in ReShiki.
 //! Attribution and license terms are in `licenses/openclatura/`.
 //!
 //! Supports chains, monocycles, retained and systematic fused parents, pure
@@ -110,6 +157,9 @@ pub(super) struct Verification {
 }
 
 #[cfg(test)]
+// Provenance: fn name_smiles | adapted
+// Source: openclatura | src/openclatura/namer.py::name_smiles
+// Source: openclatura | src/openclatura/engine.py::Namer.name_smiles
 pub(super) fn name_smiles(
     smiles: &str,
     budget: &nazuchem_kernel::budget::Budget,
@@ -117,6 +167,8 @@ pub(super) fn name_smiles(
     name_smiles_with_style(smiles, crate::naming::IsotopeStyle::Iupac, budget)
 }
 
+// Provenance: fn name_smiles_with_style | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::name_smiles_with_style
 pub(super) fn name_smiles_with_style(
     smiles: &str,
     style: crate::naming::IsotopeStyle,
@@ -155,6 +207,8 @@ pub(super) fn name_smiles_with_style(
 
 /// The name with Ra/Sa for M/P in every locanted stereodescriptor group, such
 /// as (1M,2R) -> (1Ra,2R); descriptor groups are innermost parentheses.
+// Provenance: fn general_axial_name | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::general_axial_name
 fn general_axial_name(text: &str) -> Option<String> {
     let mut out = String::with_capacity(text.len() + 4);
     let mut rest = text;
@@ -197,6 +251,9 @@ fn general_axial_name(text: &str) -> Option<String> {
     (out != text).then_some(out)
 }
 
+// Provenance: fn name_routes | adapted
+// Source: openclatura | src/openclatura/namer.py::name_smiles
+// Source: openclatura | src/openclatura/namer.py::name_component
 fn name_routes(
     smiles: &str,
     style: crate::naming::IsotopeStyle,
@@ -344,6 +401,8 @@ fn name_routes(
 }
 
 /// Keep the isotope parent on the ordinary engine's existing validation path.
+// Provenance: fn validate_parent | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::validate_parent
 pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
     ionic_naming::validate_heteroatom_oxo_charge_states(mol)?;
     // Upstream divergence: nitrogen stereocentres and ring stereocentres with a
@@ -367,6 +426,8 @@ pub(super) fn validate_parent(mol: &molecule::Molecule) -> Result<(), String> {
     Ok(())
 }
 
+// Provenance: fn assess_derivation | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::assess_derivation
 fn assess_derivation(mol: &molecule::Molecule, derivation: &component_namer::Derivation) {
     species::assess_anion_parent(mol, derivation);
     species::assess_cation_parent(mol, derivation);
@@ -412,6 +473,8 @@ fn assess_derivation(mol: &molecule::Molecule, derivation: &component_namer::Der
 /// compound locants, counts as a level (P-16.5.4.1.3), and a mark that would
 /// directly follow or precede one of the same kind moves up a level
 /// (P-16.5.4.1.5).
+// Provenance: fn nest_enclosing_marks | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::nest_enclosing_marks
 pub(super) fn nest_enclosing_marks(name: &str) -> String {
     // Per open group: its start, the deepest counted level inside it, and the
     // levels of counted groups that start right after it opens and end right
@@ -484,6 +547,8 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
 /// counts as a unit, which can only overcount heterounits such as -SiH2-O-SiH2-;
 /// terminal B, Al, Ga, In, Tl, Si, Ge, Sn, Pb, P, As, Sb and Bi count too (P-51.4.1.4). Only the cited
 /// principal group's atoms are excluded.
+// Provenance: fn requires_skeletal_replacement | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::requires_skeletal_replacement
 fn requires_skeletal_replacement(
     mol: &molecule::Molecule,
     derivation: &component_namer::Derivation,
@@ -547,6 +612,9 @@ fn requires_skeletal_replacement(
 /// P-51.1.5 / P-51.3.1: multiply identical senior parents, including all
 /// substituents, suffixes and their attachment positions. P-15.3 permits an
 /// asymmetric central group, but its concatenated arms must be identical.
+// Provenance: fn has_multiplicative_pin | adapted
+// Source: openclatura | src/openclatura/component_namer.py::name_component
+// Source: openclatura | src/openclatura/component_namer.py::select_component_parent
 fn has_multiplicative_pin(
     mol: &molecule::Molecule,
     derivation: &component_namer::Derivation,
@@ -655,6 +723,8 @@ fn has_multiplicative_pin(
     false
 }
 
+// Provenance: fn multiplicative_bond | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::multiplicative_bond
 fn multiplicative_bond(
     mol: &molecule::Molecule,
     u: usize,
@@ -666,6 +736,9 @@ fn multiplicative_bond(
 
 /// A rooted graph proof preserves complete parent units and configuration
 /// (P-51.3.1, P-45.6.2), rather than comparing unrooted hydrides or global ranks.
+// Provenance: fn identical_multiplicative_branches | adapted
+// Source: openclatura | src/openclatura/locant_elision.py::_isomorphic
+// Source: openclatura | src/openclatura/locant_elision.py::_has_parent_set_automorphism_mapping
 fn identical_multiplicative_branches(
     mol: &molecule::Molecule,
     left: &molecule::AtomSet,
@@ -716,6 +789,8 @@ fn identical_multiplicative_branches(
             )
         })
         .collect();
+    // Provenance: fn identical_multiplicative_branches::matches | adapted
+    // Source: openclatura | src/openclatura/locant_elision.py::_isomorphic
     fn matches(
         mol: &molecule::Molecule,
         candidates: &BTreeMap<usize, Vec<usize>>,
@@ -758,6 +833,8 @@ fn identical_multiplicative_branches(
 /// cannot number. Systems compare as parent hydrides, so
 /// substituents count as hydrogen; different systems keep the substitutive
 /// PIN, cyclohexylbenzene (P-61.2.2).
+// Provenance: fn has_ring_assembly | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::has_ring_assembly
 fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
     ring_assembly::assembly_junctions(mol)
         .iter()
@@ -767,6 +844,8 @@ fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
 /// Removing or adding a hydron does not change the parent hydride, so a
 /// pyrrolide joined to a pyrrole still has a ring assembly parent (P-28,
 /// P-72.2.2.1, P-73.1).
+// Provenance: fn has_anionic_ring_assembly | adapted
+// Source: openclatura | src/openclatura/fusion/charges.py::fusion_component_charge_parent
 fn has_anionic_ring_assembly(mol: &molecule::Molecule) -> bool {
     if mol.atoms.values().all(|atom| atom.charge != -1) {
         return false;
@@ -791,6 +870,8 @@ fn has_anionic_ring_assembly(mol: &molecule::Molecule) -> bool {
 /// Count nonbonding electrons on the main-group elements that can carry
 /// tetrahedral tags. Attached hydrogens also consume bonding electrons:
 /// a three-neighbour Si–H centre has four bonds and no lone pair.
+// Provenance: fn has_nonbonding_pair | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::has_nonbonding_pair
 fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
     let outer_electrons = match atom.symbol.as_str() {
         "C" | "Si" | "Ge" | "Sn" | "Pb" => 4,
@@ -806,11 +887,18 @@ fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/mod.rs::tests
 mod tests {
     use super::{name_smiles, nest_enclosing_marks};
     use std::io::Write;
 
     #[test]
+    // Provenance: fn tests::naming_routes_use_the_supplied_reservation_policy | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::naming_routes_use_the_supplied_reservation_policy
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn naming_routes_use_the_supplied_reservation_policy() {
         let budget =
             nazuchem_kernel::budget::Budget::new(usize::MAX, usize::MAX, None, usize::MAX, |_| {
@@ -848,6 +936,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::azine_spelling_preserves_alkene_control | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::azine_spelling_preserves_alkene_control
+    // Source: openclatura | tests/roundtrip/test_stereo.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn azine_spelling_preserves_alkene_control() {
         let name = name_smiles("C/C=C/C", &Default::default()).unwrap();
         assert_eq!(name.text, "(2E)-but-2-ene");
@@ -855,6 +948,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::alkoxy_contractions_preserve_parent_components | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::alkoxy_contractions_preserve_parent_components
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn alkoxy_contractions_preserve_parent_components() {
         for (smiles, expected) in [
             ("OC(=O)COC(C)C", "[(propan-2-yl)oxy]acetic acid"),
@@ -924,6 +1022,34 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::allow_list_status_matrix | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::allow_list_status_matrix
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_anhydride_bridges_and_acyl_sites_are_independent
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Source: openclatura | tests/roundtrip/test_replacement_parents.py::test_roundtrip
+    // Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Source: openclatura | tests/unit/test_analysis.py::test_group_13_14_central_atoms_have_a_parent_hydride
+    // Source: openclatura | tests/unit/test_polyoxide_chains.py::test_substituted_oxygen_chains_use_the_oxidane_parent
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_self_audit_confirms_modelled_names
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_ether_analogues_reuse_generic_heteroatom_subgraph_naming
+    // Source: openclatura | tests/unit/test_all_chalcogen_acyl_regressions.py::test_reported_name_regressions
+    // Source: openclatura | tests/unit/test_analysis.py::test_nitrogen_chain_roles_make_cyclic_hydrazines_prefixes
+    // Source: openclatura | tests/unit/test_analysis.py::test_component_shortcuts_are_final_binding_audited
+    // Source: openclatura | tests/unit/test_analysis.py::test_anhydride_shortcut_binds_acid_halves_and_core_separately
+    // Source: openclatura | tests/unit/test_analysis.py::test_a_zwitterion_keeps_the_anion_as_the_suffix
+    // Source: openclatura | tests/roundtrip/test_oxyacids.py::test_roundtrip
+    // Source: openclatura | tests/unit/test_locant_elision.py::test_nonconstitutional_and_unsupported_parent_locants_are_unchanged
+    // Source: openclatura | tests/roundtrip/test_polycycles.py::test_roundtrip
+    // Source: openclatura | tests/roundtrip/test_role_models.py::test_roundtrip
+    // Source: openclatura | tests/roundtrip/test_principal_group_breadth.py::test_roundtrip
+    // Source: openclatura | tests/exploratory/test_group14_ether_ligand_parent_selection.py::test_ring_ligand_does_not_outrank_the_mononuclear_hydride_parent
+    // Source: openclatura | tests/exploratory/test_group14_ether_ligand_parent_selection.py::test_a_genuine_principal_group_elsewhere_still_blocks_the_hydride_parent
+    // Source: openclatura | tests/data/parser_xml_resources/arylGroups.json::<fixture data>
+    // Source: openclatura | tests/data/parser_xml_resources/nonCarboxylicAcids.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn allow_list_status_matrix() {
         use crate::naming::{NameReason, NameStatus};
         for (smiles, expected_name, expected_status) in [
@@ -1384,6 +1510,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::senior_structural_hydrides_keep_preferred_names | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::senior_structural_hydrides_keep_preferred_names
+    // Source: openclatura | tests/exploratory/test_group14_ether_ligand_parent_selection.py::test_ring_ligand_does_not_outrank_the_mononuclear_hydride_parent
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn senior_structural_hydrides_keep_preferred_names() {
         for (smiles, expected) in [
             ("P(c1ccccc1)(c1ccccc1)c1ccccc1", "triphenylphosphane"),
@@ -1405,6 +1536,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::multiplicative_pin_requires_identical_complete_rooted_senior_units | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::multiplicative_pin_requires_identical_complete_rooted_senior_units
+    // Source: openclatura | tests/unit/test_analysis.py::test_anhydride_shortcut_binds_acid_halves_and_core_separately
+    // Source: openclatura | tests/unit/test_polyoxide_chains.py::test_lone_oxygen_atoms_are_untouched
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn multiplicative_pin_requires_identical_complete_rooted_senior_units() {
         for smiles in [
             // Equal parents, different attachment locants (P-51.3.1(3)).
@@ -1466,6 +1603,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anhydride_names_need_acid_halves | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::anhydride_names_need_acid_halves
+    // Source: openclatura | tests/unit/test_analysis.py::test_anhydride_shortcut_binds_acid_halves_and_core_separately
+    // Source: openclatura | tests/unit/test_chalcogen_citation_compatibility.py::test_mixed_site_anhydrides_keep_both_acyl_ends
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anhydride_names_need_acid_halves() {
         // Upstream names this "2-(((hydroxy)(thioxo)methyl)sulfanyl)acetonitrile
         // 4-methylbenzoic thioanhydride", which OPSIN reads as two compounds.
@@ -1477,6 +1620,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::enclosing_marks_nest_by_what_they_enclose | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::enclosing_marks_nest_by_what_they_enclose
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn enclosing_marks_nest_by_what_they_enclose() {
         for (smiles, expected) in [
             (
@@ -1578,6 +1726,25 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::controls_keep_their_names_and_preference_status | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::controls_keep_their_names_and_preference_status
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Source: openclatura | tests/data/parser_xml_resources/functionalTerms.json::<fixture data>
+    // Source: openclatura | tests/unit/test_polyoxide_chains.py::test_the_other_heteroatom_chains_are_unchanged
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_self_audit_confirms_modelled_names
+    // Source: openclatura | tests/data/fusion_pin_cases.json::<fixture data>
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_sulfur_ylide_resonance_compare_accepts_lambda_fallback_graph
+    // Source: openclatura | tests/unit/test_analysis.py::test_anhydride_shortcut_binds_acid_halves_and_core_separately
+    // Source: openclatura | tests/unit/test_polyoxide_chains.py::test_oxygen_chains_do_not_displace_a_senior_heteroatom_chain
+    // Source: openclatura | tests/roundtrip/test_alkenes_alkynes.py::test_roundtrip
+    // Source: openclatura | tests/roundtrip/test_replacement_parents.py::test_roundtrip
+    // Source: openclatura | tests/unit/test_chalcogen_structural_roles.py::test_acyl_pseudohalide_owns_complete_leaving_unit
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrile_chalcogenides_use_zwitterion_priority_and_class_names
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_dynamic_chalcogen_rules_compose_with_existing_parent_and_modifier_paths
+    // Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn controls_keep_their_names_and_preference_status() {
         use crate::naming::NameStatus;
         for (smiles, expected) in [
@@ -1786,6 +1953,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::ring_assemblies_are_preferred_numbered_parents_and_round_trip | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::ring_assemblies_are_preferred_numbered_parents_and_round_trip
+    // Source: openclatura | tests/unit/test_analysis.py::test_biphenyl_is_graph_selected_not_exact_name_rewritten
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn ring_assemblies_are_preferred_numbered_parents_and_round_trip() {
         use crate::naming::NameStatus;
         for (smiles, expected) in [
@@ -2209,6 +2381,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::locanted_assembly_hydrides_are_enclosed_for_two_through_six_units | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::locanted_assembly_hydrides_are_enclosed_for_two_through_six_units
+    // Source: openclatura | tests/data/parser_xml_resources/multipliers.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn locanted_assembly_hydrides_are_enclosed_for_two_through_six_units() {
         // P-28.2.1 and P-16.5 separate the component's locants from those
         // identifying the junctions, independently of the unit multiplier.
@@ -2291,6 +2468,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::preferred_von_baeyer_controls_do_not_report_fusion_fallback | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::preferred_von_baeyer_controls_do_not_report_fusion_fallback
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Source: openclatura | tests/unit/test_von_baeyer_candidate_audit.py::test_the_preferred_candidate_is_still_offered_first
+    // Source: openclatura | tests/roundtrip/test_polycycles.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn preferred_von_baeyer_controls_do_not_report_fusion_fallback() {
         use crate::naming::NameStatus;
         for (smiles, expected) in [
@@ -2481,6 +2665,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::fusion_retained_component_controls_remain_preferred | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::fusion_retained_component_controls_remain_preferred
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Source: openclatura | tests/roundtrip/test_fused_parents.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn fusion_retained_component_controls_remain_preferred() {
         use crate::naming::NameStatus;
         for (smiles, expected) in [
@@ -2512,6 +2702,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips
+    // Source: openclatura | tests/unit/test_retained_bridge_h_relocation.py::test_retained_wrapper_consumes_matched_h_metadata
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips() {
         use crate::naming::NameStatus;
         // Issue #969: P-25.3.2.4 selects the senior retained component;
@@ -2579,6 +2775,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::known_departures_keep_their_names_and_report_the_rule_family | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::known_departures_keep_their_names_and_report_the_rule_family
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_peroxide_linkages_preserve_both_chalcogen_sites
+    // Source: openclatura | tests/unit/test_rules_tables.py::test_anhydride_half_citations_are_structured_rule_data
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_self_audit_confirms_modelled_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn known_departures_keep_their_names_and_report_the_rule_family() {
         use crate::naming::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
@@ -2741,6 +2944,15 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::unchecked_paths_keep_their_names_and_report_the_uncertainty | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::unchecked_paths_keep_their_names_and_report_the_uncertainty
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_retained_complete_system_matrix_precedes_systematic_fusion
+    // Source: openclatura | tests/unit/test_fusion_wrappers.py::test_bridged_fusion_wrapper_uses_retained_parent_locants
+    // Source: openclatura | tests/unit/test_fusion_wrappers.py::test_bridge_wrapper_composes_with_shared_parent_derivative_operations
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Source: openclatura | tests/roundtrip/test_p13_fusion.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn unchecked_paths_keep_their_names_and_report_the_uncertainty() {
         use crate::naming::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
@@ -2799,6 +3011,15 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_and_systematic_fused_parents_follow_parent_precedence | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::retained_and_systematic_fused_parents_follow_parent_precedence
+    // Source: openclatura | tests/roundtrip/test_fused_parents.py::test_fused_parent_suite_pin_claims_are_explicit_and_evidence_backed
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_parent_uses_data_backed_preferred_name
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_retained_complete_system_matrix_precedes_systematic_fusion
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_multiple_indicated_hydrogens_are_graph_derived_and_roundtrip
+    // Source: openclatura | tests/integration/test_systematic_fusion.py::test_positive_heteroatom_charge_is_audited_as_a_locanted_parent_operation
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_and_systematic_fused_parents_follow_parent_precedence() {
         for (smiles, expected) in [
             ("c1ccc2ccccc2c1", "naphthalene"),
@@ -2844,6 +3065,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::spiro_parents_and_substituents_follow_oracle_names | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::spiro_parents_and_substituents_follow_oracle_names
+    // Source: openclatura | tests/unit/test_fused_bonds.py::test_fused_bonds_match_the_cycle_count
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn spiro_parents_and_substituents_follow_oracle_names() {
         for (smiles, expected) in [
             ("C1CCC2(CC1)CCCC2", "spiro[4.5]decane"),
@@ -2885,6 +3111,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::declines_unrendered_group_and_attachment_features | adapted
+    // Source: ReShiki | src/naming/openclatura/mod.rs::tests::declines_unrendered_group_and_attachment_features
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_polonium_is_parseable_but_has_an_explicit_unvalidated_boundary
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn declines_unrendered_group_and_attachment_features() {
         for smiles in [
             "CC(=[Po])[OH]",

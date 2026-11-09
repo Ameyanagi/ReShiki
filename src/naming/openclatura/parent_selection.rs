@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/parent_selection.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/component_namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/numbering.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_chalcogen_functional_groups.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Inherited parent scoring/candidate pipeline with original anion, ring-assembly and exchanged-arm stereochemical preference extensions.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Parent preference criteria, in the Python registry's comparison order.
 use super::{
     assembly_prefixes::substituent_sort_key,
@@ -23,6 +36,10 @@ pub struct ParentSelection {
     pub ring_assembly: Option<RingAssembly>,
 }
 
+// Provenance: impl ParentSelection | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSelection.primary_path
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSelection.atom_set
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSelection.requires_fixed_substituent_start
 impl ParentSelection {
     pub fn primary_path(&self) -> &[usize] {
         self.paths.first().map(Vec::as_slice).unwrap_or(&[])
@@ -64,6 +81,9 @@ struct ParentScore {
 }
 
 impl ParentScore {
+    // Provenance: fn ParentScore::principal_preference | adapted
+    // Source: openclatura | src/openclatura/parent_selection.py::_prefer_spiro_backbone_components
+    // Source: openclatura | src/openclatura/parent_selection.py::ParentSeniorityProfile.criterion_value
     fn principal_preference(&self) -> (i64, i64, i64, [i64; 19], i64, i64) {
         (
             self.anionic_centres,
@@ -84,6 +104,8 @@ struct ParentGroups<'a> {
 
 /// P-72.7(a): skeletal anions and anionic suffixes each contribute their
 /// negatively charged atoms once, even when perceived groups overlap.
+// Provenance: fn anionic_centres | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::anionic_centres
 fn anionic_centres(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) -> AtomSet {
     parent
         .iter()
@@ -105,10 +127,14 @@ fn anionic_centres(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) 
 }
 
 #[cfg(test)]
+// Provenance: fn anionic_centre_count | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::anionic_centre_count
 fn anionic_centre_count(mol: &Molecule, parent: &AtomSet, groups: &[PerceivedGroup]) -> usize {
     anionic_centres(mol, parent, groups).len()
 }
 
+// Provenance: fn score | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::ParentCandidate.build
 fn score(
     mol: &Molecule,
     path: &[usize],
@@ -269,6 +295,8 @@ fn score(
     }
 }
 
+// Provenance: fn select_principal_parent | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::select_principal_parent
 pub fn select_principal_parent(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -307,6 +335,8 @@ struct ArmTree {
     branches: Vec<(usize, bool, ArmTree)>,
 }
 
+// Provenance: fn arm_tree | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::arm_tree
 fn arm_tree(
     mol: &Molecule,
     atom: usize,
@@ -358,6 +388,8 @@ fn arm_tree(
 
 /// Bounded P-44.4.1.12.2: one R/S centre in otherwise identical exchanged
 /// terminal arms. This does not implement like/unlike pairs or E/Z seniority.
+// Provenance: fn prefer_single_centre_exchanged_arms | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::prefer_single_centre_exchanged_arms
 fn prefer_single_centre_exchanged_arms(
     mol: &Molecule,
     candidates: &mut [(ParentScore, ParentSelection)],
@@ -509,6 +541,10 @@ fn prefer_single_centre_exchanged_arms(
 
 /// Compare the cited anion with actual competing parents, using the same
 /// P-72.7 score as selection. Atom-order tie-breaks cannot certify a PIN.
+// Provenance: fn anion_parent_is_senior | adapted
+// Source: openclatura | src/openclatura/component_namer.py::name_component
+// Source: openclatura | src/openclatura/component_namer.py::select_component_parent
+// Source: openclatura | src/openclatura/parent_selection.py::select_principal_parent
 pub(super) fn anion_parent_is_senior(
     mol: &Molecule,
     parent: &AtomSet,
@@ -565,6 +601,8 @@ pub(super) fn anion_parent_is_senior(
     })
 }
 
+// Provenance: fn select_principal_parent_with_excluded | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::select_principal_parent
 pub fn select_principal_parent_with_excluded(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -589,6 +627,9 @@ pub fn select_principal_parent_with_excluded(
 
 /// P-15.3 / P-51.3.1: multiplicative units must tie on parent seniority,
 /// before substituent counts, locants and citation order select one parent.
+// Provenance: fn senior_parent_candidates | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::select_principal_parent
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSeniorityProfile.score_tuple
 pub(super) fn senior_parent_candidates(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -618,6 +659,8 @@ pub(super) fn senior_parent_candidates(
         .collect()
 }
 
+// Provenance: fn parent_candidates | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::inline in select_principal_parent
 fn parent_candidates(
     mol: &Molecule,
     chains: &[Vec<usize>],
@@ -777,6 +820,9 @@ fn parent_candidates(
     candidates
 }
 
+// Provenance: fn prefer_assembly_substituent_citation | adapted
+// Source: openclatura | src/openclatura/numbering.py::choose_parent_numbering
+// Source: openclatura | src/openclatura/numbering.py::_substituent_citation_locants
 fn prefer_assembly_substituent_citation(
     candidates: &mut [(ParentScore, ParentSelection)],
     mol: &Molecule,
@@ -862,6 +908,7 @@ fn prefer_assembly_substituent_citation(
     }
 }
 
+// Provenance: fn ring_kind | adapted
 fn ring_kind(system: &RingSystem) -> usize {
     // P-44.2.2.2: spiro, cyclic phane, fused, bridged fused,
     // nonfused bridged, linear phane, assembly.
@@ -884,6 +931,9 @@ fn ring_kind(system: &RingSystem) -> usize {
     }
 }
 
+// Provenance: fn prefer_ring_or_chain_class | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::ELEMENT_SENIORITY
+// Source: openclatura | src/openclatura/parent_selection.py::ParentSeniorityProfile.criterion_value
 fn prefer_ring_or_chain_class(
     candidates: &mut Vec<(ParentScore, ParentSelection)>,
     mol: &Molecule,
@@ -926,6 +976,8 @@ fn prefer_ring_or_chain_class(
     }
 }
 
+// Provenance: fn ring_count_for_system | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::_ring_count_for_system
 fn ring_count_for_system(mol: &Molecule, system: &RingSystem) -> usize {
     if system.is_polycycle {
         let edges = system
@@ -948,6 +1000,8 @@ fn ring_count_for_system(mol: &Molecule, system: &RingSystem) -> usize {
 
 /// Spiro-connected components compete for the shared backbone before their
 /// element seniority is compared. Principal-group coverage still comes first.
+// Provenance: fn prefer_spiro_backbone_components | adapted
+// Source: openclatura | src/openclatura/parent_selection.py::_prefer_spiro_backbone_components
 fn prefer_spiro_backbone_components(
     candidates: &mut Vec<(ParentScore, ParentSelection)>,
     systems: &[RingSystem],
@@ -1016,6 +1070,8 @@ fn prefer_spiro_backbone_components(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/parent_selection.rs::tests
 mod tests {
     use super::super::{
         chains::{find_all_carbon_paths, find_ring_systems},
@@ -1294,6 +1350,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::perceived_anionic_suffix_atoms_are_counted_once | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_selection.rs::tests::perceived_anionic_suffix_atoms_are_counted_once
+    // Source: openclatura | tests/data/parser_xml_resources/simpleGroups.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn perceived_anionic_suffix_atoms_are_counted_once() {
         for smiles in [
             "C[O-]",
@@ -1323,6 +1384,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre | adapted
+    // Source: ReShiki | src/naming/openclatura/parent_selection.rs::tests::neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre
+    // Source: openclatura | tests/unit/test_chalcogen_functional_groups.py::test_nitrile_chalcogenides_use_zwitterion_priority_and_class_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn neutral_nitrile_oxide_does_not_add_an_anionic_suffix_centre() {
         let mol = read_smiles("CC#[N+][O-]", &Default::default()).unwrap();
         let groups = super::super::perception::perceive_groups(&mol);

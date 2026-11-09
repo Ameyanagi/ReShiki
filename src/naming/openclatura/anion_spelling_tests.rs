@@ -1,6 +1,16 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs | 327d32fed63a5b3df15b7b8dc5ab84a7c36e0865
+// Copyright (c) 2026 lamalab-org
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/data/parser_xml_resources/groupStemsAllowingInlineSuffixes.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+
 use super::name_smiles;
 use crate::naming::{NameReason, NameStatus};
 
+// Provenance: fn name | original
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::name
 fn name(smiles: &str) -> Result<super::Name, String> {
     // Match the CLI's canonical input boundary without changing numbering.
     name_smiles(
@@ -9,6 +19,8 @@ fn name(smiles: &str) -> Result<super::Name, String> {
     )
 }
 
+// Provenance: fn assert_name_and_round_trip | original
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::assert_name_and_round_trip
 fn assert_name_and_round_trip(
     parser: &opsin::Parser,
     smiles: &str,
@@ -34,6 +46,11 @@ fn assert_name_and_round_trip(
 }
 
 #[test]
+// Provenance: fn anion_spelling_matrix | adapted
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::anion_spelling_matrix
+// Source: openclatura | tests/unit/test_analysis.py::test_charge_separated_sulfonium_ylide_requires_single_bond
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn anion_spelling_matrix() {
     // Check ionic spelling through the public pipeline, including the parent,
     // suffix and numbering corrections from P-72.7, P-41 and P-72.5.3.
@@ -146,6 +163,12 @@ fn anion_spelling_matrix() {
 }
 
 #[test]
+// Provenance: fn zwitterion_suffix_order_preserves_numbering_status_and_identity | adapted
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::zwitterion_suffix_order_preserves_numbering_status_and_identity
+// Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+// Source: openclatura | tests/data/parser_xml_resources/groupStemsAllowingInlineSuffixes.json::<fixture data>
+// Test provenance: upstream inputs/expected names with local assertions and extensions;
+// exact matches are conservatively adapted; independent ancestry is not established.
 fn zwitterion_suffix_order_preserves_numbering_status_and_identity() {
     // P-74.1.1: cite cations first while anionic centres retain low locants
     // and the neutral parent's indicated hydrogen remains explicit.
@@ -278,6 +301,8 @@ fn zwitterion_suffix_order_preserves_numbering_status_and_identity() {
 }
 
 #[test]
+// Provenance: fn anion_spelling_supports_charge_citations_on_chains_and_rings | original
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::anion_spelling_supports_charge_citations_on_chains_and_rings
 fn anion_spelling_supports_charge_citations_on_chains_and_rings() {
     // The low-locant and neutral-suffix rules admit these former row-32
     // refusals without changing their molecular identity.
@@ -296,6 +321,8 @@ fn anion_spelling_supports_charge_citations_on_chains_and_rings() {
 }
 
 #[test]
+// Provenance: fn retained_anion_parents_compose_supported_charge_sites | original
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::retained_anion_parents_compose_supported_charge_sites
 fn retained_anion_parents_compose_supported_charge_sites() {
     for smiles in [
         // Needs added hydrogen, `3,6-dihydropyridin-1(2H)-ide` (P-72.2.2.1.1).
@@ -374,6 +401,8 @@ fn retained_anion_parents_compose_supported_charge_sites() {
 }
 
 #[test]
+// Provenance: fn ketone_anions_needing_added_hydrogen_are_not_claimed_preferred | original
+// Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::ketone_anions_needing_added_hydrogen_are_not_claimed_preferred
 fn ketone_anions_needing_added_hydrogen_are_not_claimed_preferred() {
     // Oxo on a mancude ring anion needs added hydrogen (`pyridin-1(2H)-ide`,
     // P-72.2.2.1.1, P-58.2.2), which is not composed yet.

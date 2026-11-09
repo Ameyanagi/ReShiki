@@ -1,3 +1,17 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/assembly_parent.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/assembly_parent.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_directed_entry_layout.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.golden.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura retained/stem/tail renderer with local ion, assembly and preferred-parent extensions.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Parent stems, unsaturation and principal/substituent tails.
 use super::{
     assembly_charge::{
@@ -15,6 +29,8 @@ use super::{
     spelling,
 };
 
+// Provenance: fn functional_ring_parent | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::RETAINED_FUNCTIONAL_PARENTS
 fn functional_ring_parent(name: &str, key: &str) -> Option<String> {
     if name != "benzene" {
         return None;
@@ -58,10 +74,14 @@ fn functional_ring_parent(name: &str, key: &str) -> Option<String> {
     }
     None
 }
+// Provenance: fn halide_word | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::_halide_word
 fn halide_word(key: &str) -> Option<&'static str> {
     let suffix = RULES.functional_groups.get(key)?.suffix.as_deref()?;
     suffix.strip_prefix("oyl ")
 }
+// Provenance: fn retained_chain_name | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::_retained_chain_parent
 fn retained_chain_name(length: usize, key: &str, count: usize) -> Option<String> {
     if let Some(name) =
         RULES
@@ -125,6 +145,8 @@ fn retained_chain_name(length: usize, key: &str, count: usize) -> Option<String>
     }
     None
 }
+// Provenance: fn absorbed_chain_branch | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::_absorbed_retained_chain_branch
 fn absorbed_chain_branch(
     parts: &AssemblyParts,
     key: &str,
@@ -170,6 +192,8 @@ fn absorbed_chain_branch(
     text.strip_suffix("amino")
         .map(|prefix| (format!("{prefix}{word}"), 0))
 }
+// Provenance: fn promote_retained_hydride_name | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::promote_benzene_retained_name
 pub fn promote_retained_hydride_name(parts: &mut AssemblyParts) {
     // P-31.1.2.1 permits acetylene only for unmodified, neutral HC≡CH.
     if !parts.is_ring
@@ -263,6 +287,8 @@ pub fn promote_retained_hydride_name(parts: &mut AssemblyParts) {
 }
 /// Select the retained anion parent before promotion so a missed application
 /// remains visible to the derivation assessor.
+// Provenance: fn select_retained_anion_name | original
+// Source: ReShiki | src/naming/openclatura/assembly_parent.rs::select_retained_anion_name
 pub fn select_retained_anion_name(parts: &mut AssemblyParts) {
     let Some(group) = parts.principal_group.as_ref() else {
         return;
@@ -320,6 +346,8 @@ pub fn select_retained_anion_name(parts: &mut AssemblyParts) {
         }
     }
 }
+// Provenance: fn promote_retained_functional_parent | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::promote_retained_functional_parent
 pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(), String> {
     let Some(group) = parts.principal_group.as_ref() else {
         return Ok(());
@@ -445,6 +473,8 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(
     }
     Ok(())
 }
+// Provenance: fn substituent_attachment_kind | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::substituent_attachment_kind
 fn substituent_attachment_kind(parts: &AssemblyParts) -> &'static str {
     match parts.attachment_order {
         3 => "triple",
@@ -453,6 +483,8 @@ fn substituent_attachment_kind(parts: &AssemblyParts) -> &'static str {
         _ => "single",
     }
 }
+// Provenance: fn promote_acyl_substituent_name | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::promote_acyl_substituent_name
 pub fn promote_acyl_substituent_name(parts: &mut AssemblyParts) {
     if !parts.is_substituent
         || parts.is_acyl_substituent
@@ -499,6 +531,8 @@ pub fn promote_acyl_substituent_name(parts: &mut AssemblyParts) {
     parts.acyl_infix = infix;
     parts.substituents.remove(index);
 }
+// Provenance: fn promote_carbamimidoyl | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::promote_carbamimidoyl_substituent_name
 fn promote_carbamimidoyl(parts: &mut AssemblyParts) {
     if !parts.is_substituent
         || parts.retained_substituent_name.is_some()
@@ -572,6 +606,8 @@ fn promote_carbamimidoyl(parts: &mut AssemblyParts) {
     }
     parts.substituents.clear();
 }
+// Provenance: fn promote_retained_substituent_name | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::promote_retained_substituent_name
 pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
     promote_carbamimidoyl(parts);
     if !parts.is_substituent
@@ -628,6 +664,8 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
         parts.substituents.remove(0);
     }
 }
+// Provenance: fn parent_stem_and_terminal | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::parent_stem_and_terminal
 pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String), String> {
     if let Some(parent) = parts
         .parent_hydride
@@ -813,6 +851,8 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
     ))
 }
 
+// Provenance: fn split_parent_terminal | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::parent_stem_and_terminal
 fn split_parent_terminal(name: &str) -> (String, String) {
     if let Some(stem) = name.strip_suffix('e') {
         (stem.into(), "e".into())
@@ -820,6 +860,8 @@ fn split_parent_terminal(name: &str) -> (String, String) {
         (name.into(), String::new())
     }
 }
+// Provenance: fn format_unsaturations | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::format_unsaturations
 pub fn format_unsaturations(
     parts: &AssemblyParts,
     stem: &str,
@@ -858,6 +900,8 @@ pub fn format_unsaturations(
     }
     (stem, pieces.concat(), cites_locants)
 }
+// Provenance: fn always_print_substituent_locant | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::always_print_substituent_locant
 pub fn always_print_substituent_locant(parts: &AssemblyParts) -> bool {
     if parts.isotope_explicit_locants {
         return true;
@@ -901,6 +945,8 @@ pub(super) struct ParentTail {
     pub(super) cites_locants: bool,
 }
 
+// Provenance: fn format_substituent_tail | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::format_substituent_tail
 pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> ParentTail {
     let kind = substituent_attachment_kind(parts);
     let mut suffix = RULES.assembly.substituent_attachment_suffixes[kind].clone();
@@ -1065,6 +1111,8 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
         cites_locants: cites_locants || attachment_cites_locants || charge_cites_locants,
     }
 }
+// Provenance: fn sole_group_redundant | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::_sole_group_locant_is_redundant
 pub(super) fn sole_group_redundant(parts: &AssemblyParts) -> bool {
     if parts
         .substituents
@@ -1085,6 +1133,8 @@ pub(super) fn sole_group_redundant(parts: &AssemblyParts) -> bool {
     }
     !parts.is_substituent && parts.parent_length == 2
 }
+// Provenance: fn suffix_modifiers | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::_format_principal_suffix_modifiers
 fn suffix_modifiers(parts: &AssemblyParts) -> String {
     let mut grouped = std::collections::BTreeMap::new();
     for m in &parts.principal_suffix_modifiers {
@@ -1117,6 +1167,8 @@ fn suffix_modifiers(parts: &AssemblyParts) -> String {
         })
         .collect()
 }
+// Provenance: fn format_principal_suffix | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::format_principal_suffix
 pub fn format_principal_suffix(
     parts: &AssemblyParts,
     terminal: &str,
@@ -1194,6 +1246,8 @@ pub fn format_principal_suffix(
         cites_locants || modifier_cites_locants,
     ))
 }
+// Provenance: fn redundant_unsaturation | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::_parent_unsaturation_locants_are_redundant
 fn redundant_unsaturation(parts: &AssemblyParts) -> bool {
     if parts.isotope_explicit_locants {
         return false;
@@ -1216,6 +1270,8 @@ fn redundant_unsaturation(parts: &AssemblyParts) -> bool {
         && parts.principal_group.is_none()
         && parts.parent_charges.is_empty()
 }
+// Provenance: fn format_parent_tail | adapted
+// Source: openclatura | src/openclatura/assembly_parent.py::format_parent_tail
 pub(super) fn format_parent_tail(
     parts: &AssemblyParts,
     stem: &str,
@@ -1276,6 +1332,8 @@ pub(super) fn format_parent_tail(
     })
 }
 
+// Provenance: fn assembly_suffix_stem | original
+// Source: ReShiki | src/naming/openclatura/assembly_parent.rs::assembly_suffix_stem
 fn assembly_suffix_stem(parts: &AssemblyParts, elide: bool) -> String {
     let name = parts.retained_name.as_deref().unwrap_or_default();
     if elide {
@@ -1290,6 +1348,8 @@ fn assembly_suffix_stem(parts: &AssemblyParts, elide: bool) -> String {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests
 mod tests {
     use super::super::assembly_parts::{SubstituentItem, UnsaturationItem};
     use super::*;
@@ -1310,6 +1370,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::methylbenzene_retained_names_follow_ring_separation | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::methylbenzene_retained_names_follow_ring_separation
+    // Source: openclatura | tests/unit/test_analysis.py::test_stage10_retained_fused_ion_derivatives_keep_substituents_on_candidate_parent
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn methylbenzene_retained_names_follow_ring_separation() {
         for (locants, expected) in [
             (vec!["1"], "toluene"),
@@ -1339,6 +1405,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::methylbenzene_retained_names_require_plain_methyl_substitution | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::methylbenzene_retained_names_require_plain_methyl_substitution
+    // Source: openclatura | tests/exploratory/test_parenthesis_functions_direct.py::test_is_substituted_alkyl_ligand
+    // Source: openclatura | tests/unit/test_analysis.py::test_locanted_stereochemical_substituent_keeps_disambiguating_parentheses
+    // Source: openclatura | tests/unit/test_fusion_directed_entry_layout.py::test_directed_entry_congeners_roundtrip_without_core_name_lookups
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn methylbenzene_retained_names_require_plain_methyl_substitution() {
         for locants in [vec!["1", "2", "3"], vec!["1", "3", "5"]] {
             let mut parts = methylbenzene_parts(&locants);
@@ -1373,6 +1446,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::methylbenzene_retained_names_exclude_functional_ionic_and_isotope_parents | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::methylbenzene_retained_names_exclude_functional_ionic_and_isotope_parents
+    // Source: openclatura | tests/fixtures/diverse_corpus.golden.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn methylbenzene_retained_names_exclude_functional_ionic_and_isotope_parents() {
         use super::super::assembly_parts::{ParentChargeItem, PrincipalGroupItem};
         type Guard = fn(&mut AssemblyParts);
@@ -1421,6 +1499,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::acetylene_is_reserved_for_the_unmodified_parent | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::acetylene_is_reserved_for_the_unmodified_parent
+    // Source: openclatura | tests/unit/test_analysis.py::test_public_api_golden_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn acetylene_is_reserved_for_the_unmodified_parent() {
         for (smiles, expected) in [
             ("C#C", "acetylene"),
@@ -1457,6 +1540,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anion_composition_preserves_the_full_hydride_until_each_join | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::anion_composition_preserves_the_full_hydride_until_each_join
+    // Source: openclatura | tests/unit/test_analysis.py::test_simple_monocyclic_retained_ring_specs_are_data_driven
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anion_composition_preserves_the_full_hydride_until_each_join() {
         use super::super::assembly_parts::{AnionSuffix, PrincipalGroupItem};
         let mut parts = AssemblyParts::new(6);
@@ -1484,6 +1572,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anion_substituents_keep_full_hydrides_and_elide_before_attachment | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::anion_substituents_keep_full_hydrides_and_elide_before_attachment
+    // Source: openclatura | tests/unit/test_analysis.py::test_ambiguous_ring_connection_stems_keep_attachment_locants
+    // Source: openclatura | tests/unit/test_analysis.py::test_is_composite_prefix
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anion_substituents_keep_full_hydrides_and_elide_before_attachment() {
         use super::super::assembly_parts::AnionSuffix;
         let mut parts = AssemblyParts::new(3);
@@ -1510,6 +1604,12 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anion_charge_stacks_cite_cations_first_and_keep_cation_only_spelling | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::anion_charge_stacks_cite_cations_first_and_keep_cation_only_spelling
+    // Source: openclatura | tests/unit/test_analysis.py::test_ambiguous_ring_connection_stems_keep_attachment_locants
+    // Source: openclatura | tests/unit/test_analysis.py::test_general_retained_ring_recognizer_uses_templates_only_for_fused_systems
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anion_charge_stacks_cite_cations_first_and_keep_cation_only_spelling() {
         use super::super::assembly_parts::{AnionSuffix, ParentChargeItem};
         let mut parts = AssemblyParts::new(5);
@@ -1556,6 +1656,13 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::cation_suffixes_keep_e_before_multipliers_and_elide_before_ium | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::cation_suffixes_keep_e_before_multipliers_and_elide_before_ium
+    // Source: openclatura | tests/unit/test_analysis.py::test_spiro_side_retained_ionic_ring_locants_are_registry_derived
+    // Source: openclatura | tests/unit/test_analysis.py::test_simple_monocyclic_retained_ring_specs_are_data_driven
+    // Source: openclatura | tests/unit/test_analysis.py::test_general_retained_ring_recognizer_uses_templates_only_for_fused_systems
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn cation_suffixes_keep_e_before_multipliers_and_elide_before_ium() {
         use super::super::assembly_parts::ParentChargeItem;
         for (parent, symbol, locants, expected) in [
@@ -1581,6 +1688,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anilinium_absorbs_one_aminium_group_and_keeps_substituent_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/assembly_parent.rs::tests::anilinium_absorbs_one_aminium_group_and_keeps_substituent_locants
+    // Source: openclatura | tests/unit/test_analysis.py::test_locanted_stereochemical_substituent_keeps_disambiguating_parentheses
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anilinium_absorbs_one_aminium_group_and_keeps_substituent_locants() {
         use super::super::assembly_parts::{PrincipalGroupItem, SubstituentItem};
         let mut parts = AssemblyParts::new(6);

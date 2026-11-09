@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Origin: original
+// Source: ReShiki | crates/opsin/tests/components_oracle.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/ComponentGenerator.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | crates/opsin/tests/fixtures/component-golden.jsonl.gz | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright 2017 Daniel Lowe
+
 //! Frozen intermediate tree transformations from the pinned OPSIN source.
 //! This gate starts from supplied upstream trees, independently of native
 //! frontend behavior. Test execution and fixture decompression are Rust only.

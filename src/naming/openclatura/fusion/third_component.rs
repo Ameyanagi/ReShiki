@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: openclatura | src/openclatura/fusion/third_component.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Changes: Openclatura P-25.5 carbon-skeleton replacement planner adapted to Rust proof handoffs.
+
 //! P-25.5 skeletal replacement after an audited cyclic component cover.
 //!
 //! The cyclic citation proves applicability only. The emitted parent is planned

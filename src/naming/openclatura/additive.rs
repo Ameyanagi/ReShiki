@@ -1,3 +1,28 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/additive.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/additive.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | src/openclatura/fusion/mancude.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/fusion/indicated_hydrogen.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/retained_derivative_hydrogen.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_retained_fused_production.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_intrinsic_h_suffix.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_carbon_h_oxo_composition.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_audit_reconstruction.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_fusion_component_h_citation.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fusion_hydrogenation_regressions.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fusion_bridge_derivatives.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_parent_hydride_handoff.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_retained_parent_precedence_and_order.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/roundtrip/test_fused_parents.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura hydrogen-role collection extended by local complete-parent suffix/lambda proofs.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Indicated and additive hydrogen for retained parents.
 use super::{
     assembly_parts::{AssemblyParts, HydroOperation},
@@ -12,6 +37,8 @@ type Site = (String, usize);
 /// The bridge-prefix oxo composition is known to choose different added-H
 /// locants for equivalent input atom orders. Keep this uncertainty on that
 /// rendered route rather than all retained or additive-hydrogen parents.
+// Provenance: fn has_atom_order_sensitive_bridge_hydrogen | original
+// Source: ReShiki | src/naming/openclatura/additive.rs::has_atom_order_sensitive_bridge_hydrogen
 pub(super) fn has_atom_order_sensitive_bridge_hydrogen(parts: &AssemblyParts) -> bool {
     parts
         .parent_hydride
@@ -29,6 +56,8 @@ pub(super) fn has_atom_order_sensitive_bridge_hydrogen(parts: &AssemblyParts) ->
         })
 }
 
+// Provenance: fn parent_indicated_hydrogen_quota | adapted
+// Source: openclatura | src/openclatura/additive.py::parent_indicated_hydrogen_quota
 pub fn parent_indicated_hydrogen_quota(parts: &AssemblyParts) -> Option<usize> {
     let plan = if let Some(parent) = &parts.parent_hydride {
         parent
@@ -55,6 +84,8 @@ pub fn parent_indicated_hydrogen_quota(parts: &AssemblyParts) -> Option<usize> {
         .map(|metadata| metadata.indicated_hydrogen_count)
 }
 
+// Provenance: fn name_indicated_hydrogen_locants | adapted
+// Source: openclatura | src/openclatura/additive.py::_name_indicated_hydrogen_locants
 pub fn name_indicated_hydrogen_locants(name: Option<&str>) -> BTreeSet<String> {
     let Some((run, _)) = name.and_then(|s| s.split_once('-')) else {
         return BTreeSet::new();
@@ -71,6 +102,8 @@ pub fn name_indicated_hydrogen_locants(name: Option<&str>) -> BTreeSet<String> {
     locants.unwrap_or_default()
 }
 
+// Provenance: fn operation | adapted
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 fn operation(key: &str, sites: &[Site]) -> HydroOperation {
     HydroOperation {
         key: key.into(),
@@ -84,6 +117,8 @@ fn operation(key: &str, sites: &[Site]) -> HydroOperation {
         ..Default::default()
     }
 }
+// Provenance: fn add_citations | adapted
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 fn add_citations(parts: &mut AssemblyParts, key: &str, sites: &[Site]) {
     for site in sites {
         parts.indicated_hydrogens.push(site.0.clone());
@@ -92,10 +127,14 @@ fn add_citations(parts: &mut AssemblyParts, key: &str, sites: &[Site]) {
             .push(operation(key, std::slice::from_ref(site)));
     }
 }
+// Provenance: fn sort_sites | adapted
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 fn sort_sites(sites: &mut [Site]) {
     sites.sort_by_key(|s| parse_locant(&s.0));
 }
 
+// Provenance: fn ring_bonds | adapted
+// Source: openclatura | src/openclatura/additive.py::inline in _is_oxo_ring_site
 fn ring_bonds<'a>(mol: &'a Molecule, idx: usize, ring: &AtomSet) -> Vec<&'a super::molecule::Bond> {
     mol.get_neighbors(idx)
         .iter()
@@ -103,6 +142,8 @@ fn ring_bonds<'a>(mol: &'a Molecule, idx: usize, ring: &AtomSet) -> Vec<&'a supe
         .filter_map(|&n| mol.get_bond(idx, n))
         .collect()
 }
+// Provenance: fn saturated_ring_site | adapted
+// Source: openclatura | src/openclatura/additive.py::_is_saturated_ring_site
 fn saturated_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
     let bonds = ring_bonds(mol, idx, ring);
     !bonds.is_empty()
@@ -113,6 +154,8 @@ fn saturated_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
             .filter(|n| !ring.contains(n))
             .all(|&n| mol.get_bond(idx, n).is_none_or(|b| b.order <= 1))
 }
+// Provenance: fn exocyclic_double_bond_site | adapted
+// Source: openclatura | src/openclatura/additive.py::_exocyclic_double_bond_site
 fn exocyclic_double_bond_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
     let bonds = ring_bonds(mol, idx, ring);
     mol.atoms[&idx].is_carbon()
@@ -124,6 +167,8 @@ fn exocyclic_double_bond_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> boo
             .filter(|n| !ring.contains(n))
             .any(|&n| mol.get_bond(idx, n).is_some_and(|b| b.order == 2))
 }
+// Provenance: fn oxo_ring_site | adapted
+// Source: openclatura | src/openclatura/additive.py::_is_oxo_ring_site
 fn oxo_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
     exocyclic_double_bond_site(mol, idx, ring)
         && mol
@@ -135,6 +180,8 @@ fn oxo_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> bool {
                     && mol.get_bond(idx, n).is_some_and(|b| b.order == 2)
             })
 }
+// Provenance: fn respell_indicated_hydrogen | adapted
+// Source: openclatura | src/openclatura/additive.py::_respell_indicated_hydrogen
 fn respell_indicated_hydrogen(name: &str, sites: &BTreeSet<String>) -> String {
     if name_indicated_hydrogen_locants(Some(name)).is_empty() {
         return name.into();
@@ -153,6 +200,8 @@ fn respell_indicated_hydrogen(name: &str, sites: &BTreeSet<String>) -> String {
             .join(",")
     )
 }
+// Provenance: fn fold_stem_hydro_prefix | adapted
+// Source: openclatura | src/openclatura/additive.py::_fold_stem_hydro_prefix
 fn fold_stem_hydro_prefix(parts: &mut AssemblyParts, locants: &BTreeMap<usize, String>) {
     let Some(name) = parts.retained_name.as_deref() else {
         return;
@@ -199,6 +248,8 @@ fn fold_stem_hydro_prefix(parts: &mut AssemblyParts, locants: &BTreeMap<usize, S
     (op.locants, op.atom_ids) = merged.into_iter().unzip();
     parts.retained_name = Some(rest.into());
 }
+// Provenance: fn declared_split | adapted
+// Source: openclatura | src/openclatura/additive.py::_declared_indicated_hydrogen_split
 fn declared_split(
     pool: &[Site],
     defaults: &BTreeSet<String>,
@@ -224,6 +275,8 @@ fn declared_split(
     sort_sites(&mut surplus);
     Some((held, surplus))
 }
+// Provenance: fn relocate_preferred_hydrogenation | adapted
+// Source: openclatura | src/openclatura/additive.py::_relocate_preferred_hydrogenation
 fn relocate_preferred_hydrogenation(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -250,6 +303,8 @@ fn relocate_preferred_hydrogenation(
 }
 
 /// Collect hydrogen roles after the retained graph and its numbering are proved.
+// Provenance: fn add_indicated_hydrogens | adapted
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 pub fn add_indicated_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -275,6 +330,8 @@ pub fn add_indicated_hydrogens(
     validate_retained_hydrogen_sites(mol, parts)
 }
 
+// Provenance: fn validate_retained_hydrogen_sites | original
+// Source: ReShiki | src/naming/openclatura/additive.rs::validate_retained_hydrogen_sites
 fn validate_retained_hydrogen_sites(mol: &Molecule, parts: &AssemblyParts) -> Result<(), String> {
     let Some(metadata) = parts
         .retained_parent_metadata
@@ -313,6 +370,8 @@ fn validate_retained_hydrogen_sites(mol: &Molecule, parts: &AssemblyParts) -> Re
     Ok(())
 }
 
+// Provenance: fn collect_indicated_hydrogens | adapted
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 fn collect_indicated_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -699,6 +758,8 @@ fn collect_indicated_hydrogens(
     Ok(())
 }
 
+// Provenance: fn recast_ring_ketone_hydrogens | adapted
+// Source: openclatura | src/openclatura/additive.py::_recast_ring_ketone_hydrogens
 fn recast_ring_ketone_hydrogens(parts: &mut AssemblyParts, locants: &BTreeMap<usize, String>) {
     if parts
         .parent_hydride
@@ -770,6 +831,8 @@ fn recast_ring_ketone_hydrogens(parts: &mut AssemblyParts, locants: &BTreeMap<us
     }
 }
 
+// Provenance: fn add_proved_parent_hydrogens | adapted
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 fn add_proved_parent_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -887,6 +950,8 @@ fn add_proved_parent_hydrogens(
 
 // P-58.2.3.1.1: relocate intrinsic indicated H to suffix sites before
 // assigning residual hydro prefixes, preserving the parent's hydrogen quota.
+// Provenance: fn suffix_hydrogen_citations | original
+// Source: ReShiki | src/naming/openclatura/additive.rs::suffix_hydrogen_citations
 fn suffix_hydrogen_citations(
     mol: &Molecule,
     atoms: &AtomSet,
@@ -932,6 +997,9 @@ fn suffix_hydrogen_citations(
         .collect()
 }
 
+// Provenance: fn suffix_hydrogen_rank | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_external_pi_parent_delta
+// Source: openclatura | src/openclatura/fusion/indicated_hydrogen.py::intrinsic_carbon_parent_model
 fn suffix_hydrogen_rank(
     indicated: &[String],
     suffix: &BTreeSet<String>,
@@ -980,6 +1048,8 @@ type SuffixHydrogenState = (
     super::fusion::mancude::ParentDerivativeState,
 );
 
+// Provenance: fn systematic_suffix_hydrogen_state | adapted
+// Source: openclatura | src/openclatura/additive.py::parent_indicated_hydrogen_quota
 pub(super) fn systematic_suffix_hydrogen_state(
     mol: &Molecule,
     plan: &super::fusion::model::FusionParentPlan,
@@ -1019,6 +1089,9 @@ pub(super) fn systematic_suffix_hydrogen_state(
     )
 }
 
+// Provenance: fn parent_pi_atoms | adapted
+// Source: openclatura | src/openclatura/fusion/mancude.py::_external_pi_parent_delta
+// Source: openclatura | src/openclatura/fusion/indicated_hydrogen.py::intrinsic_carbon_parent_model
 fn parent_pi_atoms(model: &super::fusion::model::ParentBondModel) -> AtomSet {
     // Atoms that can never carry a parent double bond are inherently
     // saturated, not movable indicated-H sites (e.g. carbon between two O).
@@ -1035,6 +1108,10 @@ fn parent_pi_atoms(model: &super::fusion::model::ParentBondModel) -> AtomSet {
         .collect()
 }
 
+// Provenance: fn graph_suffix_hydrogen_state | adapted
+// Source: openclatura | src/openclatura/fusion/indicated_hydrogen.py::intrinsic_carbon_parent_model
+// Source: openclatura | src/openclatura/fusion/mancude.py::indicated_hydrogen_parent_bond_model
+// Source: openclatura | src/openclatura/additive.py::parent_indicated_hydrogen_quota
 pub(super) fn graph_suffix_hydrogen_state(
     mol: &Molecule,
     graph: &super::fusion::model::FusionGraph,
@@ -1123,6 +1200,9 @@ pub(super) fn graph_suffix_hydrogen_state(
         .map(|(_, indicated, model, state)| (indicated, model, state)))
 }
 
+// Provenance: fn apply_parent_hydrogen_state | adapted
+// Source: openclatura | src/openclatura/additive.py::_apply_retained_oxo_carbon_hydrogen
+// Source: openclatura | src/openclatura/additive.py::add_indicated_hydrogens
 fn apply_parent_hydrogen_state(
     parts: &mut AssemblyParts,
     indicated: Vec<String>,
@@ -1169,6 +1249,8 @@ fn apply_parent_hydrogen_state(
     parts.parent_derivative_state = Some(state);
 }
 
+// Provenance: fn apply_lambda_parent_hydrogens | original
+// Source: ReShiki | src/naming/openclatura/additive.rs::apply_lambda_parent_hydrogens
 fn apply_lambda_parent_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -1239,6 +1321,8 @@ fn apply_lambda_parent_hydrogens(
     Ok(true)
 }
 
+// Provenance: fn retained_suffix_hydrogen_state | adapted
+// Source: openclatura | src/openclatura/retained_derivative_hydrogen.py::prove_retained_oxo_carbon_hydrogen
 pub(super) fn retained_suffix_hydrogen_state(
     mol: &Molecule,
     template: &super::retained_graph_model::RetainedGraphTemplate,
@@ -1286,6 +1370,8 @@ pub(super) fn retained_suffix_hydrogen_state(
         .map(|(_, indicated, model, state)| (indicated, model, state)))
 }
 
+// Provenance: fn apply_suffix_hydrogens | adapted
+// Source: openclatura | src/openclatura/additive.py::_apply_retained_oxo_carbon_hydrogen
 fn apply_suffix_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
@@ -1432,8 +1518,16 @@ fn apply_suffix_hydrogens(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/additive.rs::tests
 mod tests {
     #[test]
+    // Provenance: fn tests::ring_ketone_numbering_compares_suffix_before_added_hydrogen | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::ring_ketone_numbering_compares_suffix_before_added_hydrogen
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_hydrocarbon_uses_data_backed_preferred_name
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn ring_ketone_numbering_compares_suffix_before_added_hydrogen() {
         use crate::naming::{NameStatus, verify_identity};
         let parser = opsin::Parser::new().unwrap();
@@ -1492,6 +1586,18 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::suffix_hydrogen_names_are_preferred_and_round_trip | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::suffix_hydrogen_names_are_preferred_and_round_trip
+    // Source: openclatura | tests/unit/test_fusion_intrinsic_h_suffix.py::test_fused_heteroketone_does_not_duplicate_indicated_h
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_imide_route_marker_preserves_retained_fused_parent
+    // Source: openclatura | tests/unit/test_fusion_carbon_h_oxo_composition.py::test_carbon_h_oxo_grammar_and_public_names_roundtrip_exactly
+    // Source: openclatura | tests/unit/test_audit_reconstruction.py::test_self_audit_confirms_modelled_names
+    // Source: openclatura | tests/unit/test_fusion_component_h_citation.py::test_indene_fusion_citation_and_bindings_are_atom_order_invariant
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_hydrocarbon_uses_data_backed_preferred_name
+    // Source: openclatura | tests/roundtrip/test_fusion_hydrogenation_regressions.py::test_hydro_metadata_survives_recursive_carbon_branch_assembly
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn suffix_hydrogen_names_are_preferred_and_round_trip() {
         use crate::naming::{NameStatus, verify_identity};
         let parser = opsin::Parser::new().unwrap();
@@ -1641,6 +1747,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::bridge_oxo_composition_does_not_invent_hydrogenation | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::bridge_oxo_composition_does_not_invent_hydrogenation
+    // Source: openclatura | tests/roundtrip/test_fusion_bridge_derivatives.py::test_bridge_oxo_operation_not_counted_twice_as_hydrogenation
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn bridge_oxo_composition_does_not_invent_hydrogenation() {
         assert_eq!(
             super::super::name_smiles("C12C(C=C(C3=CC=CC=C13)O2)=O", &Default::default())
@@ -1651,6 +1762,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_derivatives_use_bond_consistent_hydrogen_states | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::retained_derivatives_use_bond_consistent_hydrogen_states
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_parent_uses_data_backed_preferred_name
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_derivatives_use_bond_consistent_hydrogen_states() {
         for (smiles, expected) in [
             // The generic external-pi fallback does not own suffix or
@@ -1675,6 +1791,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::supplied_retained_bond_model_collects_hydrogenated_edges | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::supplied_retained_bond_model_collects_hydrogenated_edges
+    // Source: openclatura | tests/unit/test_parent_hydride_handoff.py::test_parent_hydride_handoff_preserves_names
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn supplied_retained_bond_model_collects_hydrogenated_edges() {
         use super::super::fusion::numbering::{parent_bond_graph, parent_bond_model};
         use super::*;
@@ -1708,6 +1829,14 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::retained_fused_hydrogen_roles_keep_source_ordering | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::retained_fused_hydrogen_roles_keep_source_ordering
+    // Source: openclatura | tests/unit/test_analysis.py::test_caffeine_uses_the_retained_purine_dione_parent
+    // Source: openclatura | tests/unit/test_retained_parent_precedence_and_order.py::test_the_symmetric_tie_gives_the_first_cited_prefix_the_low_locant
+    // Source: openclatura | tests/roundtrip/test_fused_hydrocarbon_retained.py::test_hydrogenated_hydrocarbon_uses_data_backed_preferred_name
+    // Source: openclatura | tests/roundtrip/test_fused_parents.py::test_roundtrip
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_fused_hydrogen_roles_keep_source_ordering() {
         for (smiles, expected) in [
             ("C1CC2=CC=CC=C2C1", "2,3-dihydro-1H-indene"),
@@ -1744,6 +1873,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/additive.rs::tests::xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants
+    // Source: openclatura | tests/roundtrip/test_retained_fused_production.py::test_expected_retained_rings_are_registered
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants() {
         let parser = opsin::Parser::new().unwrap();
         for (smiles, expected) in [

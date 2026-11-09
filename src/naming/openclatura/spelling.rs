@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/rules/elision.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/suffix_stack.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/spelling.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/fixtures/diverse_corpus.csv | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | tests/exploratory/test_fixed_parenthesization_bugs.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Refactored openclatura terminal-e/anion-suffix spelling into structured Rust composition, with local regression tests that include adapted upstream cases.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Text-only suffix composition at parent and derivative boundaries.
 use super::rules::multipliers;
 
@@ -7,6 +20,8 @@ use super::rules::multipliers;
 ///
 /// P-16.7.1(a), P-72.5.3, P-72.6.3 and P-74.1.1: for example,
 /// `pent-1-yn-1-id-5-oate`, `cyclohexan-1-ide-4-sulfonate` and `methanidyl`.
+// Provenance: fn join | adapted
+// Source: openclatura | src/openclatura/rules/elision.py::elide_terminal_e
 pub(super) fn join(head: &str, tail: &str) -> String {
     let word = tail
         .strip_prefix('-')
@@ -21,6 +36,9 @@ pub(super) fn join(head: &str, tail: &str) -> String {
 }
 
 /// Render locanted anion operations or the bare suffix for an empty run.
+// Provenance: fn anion_suffix | adapted
+// Source: openclatura | src/openclatura/suffix_stack.py::_operation_text
+// Source: openclatura | src/openclatura/suffix_stack.py::suffix_operation_spelling
 pub(super) fn anion_suffix(locants: &[String]) -> String {
     let suffix = if locants.len() > 1 {
         format!("{}ide", multipliers::basic(locants.len()))
@@ -35,10 +53,19 @@ pub(super) fn anion_suffix(locants: &[String]) -> String {
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/spelling.rs::tests
 mod tests {
     use super::*;
 
     #[test]
+    // Provenance: fn tests::suffix_join_uses_the_immediately_following_word | adapted
+    // Source: ReShiki | src/naming/openclatura/spelling.rs::tests::suffix_join_uses_the_immediately_following_word
+    // Source: openclatura | tests/fixtures/diverse_corpus.csv::<fixture data>
+    // Source: openclatura | tests/unit/test_analysis.py::test_ambiguous_ring_connection_stems_keep_attachment_locants
+    // Source: openclatura | tests/exploratory/test_fixed_parenthesization_bugs.py::test_ring_azanide_anion_is_unaffected_by_the_fix
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn suffix_join_uses_the_immediately_following_word() {
         for (head, tail, expected) in [
             ("methane", "ide", "methanide"),
@@ -67,6 +94,11 @@ mod tests {
     }
 
     #[test]
+    // Provenance: fn tests::anion_suffix_formats_locants_and_multiplicity | adapted
+    // Source: ReShiki | src/naming/openclatura/spelling.rs::tests::anion_suffix_formats_locants_and_multiplicity
+    // Source: openclatura | tests/unit/test_analysis.py::test_suffix_stack_places_tested_parent_anion_before_terminal_suffix_stack
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn anion_suffix_formats_locants_and_multiplicity() {
         for (locants, expected) in [
             (vec!["1"], "-1-ide"),

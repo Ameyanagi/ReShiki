@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Origin: adapted
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuilder.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/StructureBuilder.java | b91b610af5ab07560fedb20730d7aef46bb2bca0
+// Source: ReShiki | crates/opsin/src/structure_builder.rs | 89f30ab6d32736a8beccf3bab9c355c68f178f00
+// Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
+// Copyright 2017 Daniel Lowe
+// Changes: Rust ownership, arena/container and error-handling adaptation; integrated native changes are documented in PORTING.md.
+
 //! OPSIN word-rule assembly and finalization.
 //! Port of `StructureBuilder.java`, OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).

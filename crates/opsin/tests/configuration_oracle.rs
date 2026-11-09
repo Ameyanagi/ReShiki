@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Origin: original
+// Source: ReShiki | crates/opsin/tests/configuration_oracle.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructure.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/NameToStructureConfig.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | crates/opsin/tests/fixtures/configuration-golden.jsonl.gz | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright 2017 Daniel Lowe
+
 //! Exact pinned configuration behavior across all five flags and their interactions.
 use flate2::read::GzDecoder;
 use opsin::{ParseOptions, Parser, Status};

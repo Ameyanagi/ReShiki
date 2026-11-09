@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Origin: original
+// Source: ReShiki | crates/chemistry/src/stereo/cip/digraph/visits.rs | be63a799aa03a83dc6ec74bb294f4d42b89298d3
+
 //! Persistent visit maps share unchanged branches instead of copying an entire
 //! molecule-sized byte vector for every CIP node. Indices never escape the arena.
 // Copied unchanged from crates/chemistry/src/stereo/cip/digraph/visits.rs at be63a799aa03a83dc6ec74bb294f4d42b89298d3

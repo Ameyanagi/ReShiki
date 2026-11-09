@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/spiro_subgraph.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/subgraph_tools.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/namer.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/spiro_subgraph.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/unit/test_analysis.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura graph-backed spiro projection consolidated with moved branch helpers, plus original heterogeneous-junction and multiple-attachment safeguards.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
 //! Shared component planning at a graph-proved spiro boundary.
 use super::{
     assembly_parts::AssemblyParts,
@@ -10,6 +22,8 @@ use std::collections::{BTreeSet, VecDeque};
 
 /// Bounded P-24.5 context shared by main and projected-component numbering.
 /// Identical skeletons keep the independently composed spirobi route.
+// Provenance: fn heterogeneous_spiro_junction | original
+// Source: ReShiki | src/naming/openclatura/spiro_subgraph.rs::heterogeneous_spiro_junction
 pub(super) fn heterogeneous_spiro_junction(mol: &Molecule) -> Option<usize> {
     if mol.is_isotope_parent()
         || mol
@@ -102,6 +116,8 @@ pub(super) fn heterogeneous_spiro_junction(mol: &Molecule) -> Option<usize> {
     .then_some(junction)
 }
 
+// Provenance: fn require_single_parent_attachment | original
+// Source: ReShiki | src/naming/openclatura/spiro_subgraph.rs::require_single_parent_attachment
 pub fn require_single_parent_attachment(
     mol: &Molecule,
     component: &AtomSet,
@@ -122,6 +138,8 @@ pub fn require_single_parent_attachment(
     Ok(())
 }
 
+// Provenance: fn find_spiro_side_pair | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::find_spiro_side_pair
 pub fn find_spiro_side_pair(
     mol: &Molecule,
     junction: usize,
@@ -151,6 +169,8 @@ pub fn find_spiro_side_pair(
     }
     None
 }
+// Provenance: fn spiro_side_component | adapted
+// Source: openclatura | src/openclatura/subgraph_tools.py::spiro_side_component
 pub fn spiro_side_component(
     mol: &Molecule,
     junction: usize,
@@ -175,6 +195,8 @@ pub fn spiro_side_component(
     component.insert(junction);
     component
 }
+// Provenance: fn polycyclic_side_core | adapted
+// Source: openclatura | src/openclatura/spiro_subgraph.py::_polycyclic_side_core
 pub fn polycyclic_side_core(
     mol: &Molecule,
     side_atoms: &AtomSet,
@@ -189,11 +211,15 @@ pub fn polycyclic_side_core(
         .collect();
     if cores.len() == 1 { cores.pop() } else { None }
 }
+// Provenance: fn has_retained_fused_parent | adapted
+// Source: openclatura | src/openclatura/spiro_subgraph.py::_has_retained_fused_parent
 fn has_retained_fused_parent(mol: &Molecule, core: &AtomSet) -> bool {
     super::retained_fused_templates::match_retained_graph_templates(mol, core, true)
         .iter()
         .any(|m| !m.template.name.contains('['))
 }
+// Provenance: fn project_spiro_side_molecule | adapted
+// Source: openclatura | src/openclatura/spiro_subgraph.py::_project_spiro_side_molecule
 fn project_spiro_side_molecule(mol: &Molecule, side_atoms: &AtomSet, junction: usize) -> Molecule {
     let mut side = mol.subgraph(side_atoms);
     let atom = &mol.atoms[&junction];
@@ -214,6 +240,8 @@ fn project_spiro_side_molecule(mol: &Molecule, side_atoms: &AtomSet, junction: u
     }
     side
 }
+// Provenance: fn plan_graph_spiro_side | adapted
+// Source: openclatura | src/openclatura/spiro_subgraph.py::plan_graph_spiro_side
 pub fn plan_graph_spiro_side(
     mol: &Molecule,
     side_atoms: &AtomSet,
@@ -224,6 +252,8 @@ pub fn plan_graph_spiro_side(
     mol.candidate(|| graph_spiro_side(mol, side_atoms, junction, required_core, prefix_only))
 }
 
+// Provenance: fn graph_spiro_side | adapted
+// Source: openclatura | src/openclatura/spiro_subgraph.py::plan_graph_spiro_side
 fn graph_spiro_side(
     mol: &Molecule,
     side_atoms: &AtomSet,
@@ -326,6 +356,8 @@ fn graph_spiro_side(
     }
     Ok(result)
 }
+// Provenance: fn plan_substituted_fusion_spiro_side | adapted
+// Source: openclatura | src/openclatura/spiro_subgraph.py::plan_substituted_fusion_spiro_side
 pub fn plan_substituted_fusion_spiro_side(
     mol: &Molecule,
     side_atoms: &AtomSet,
@@ -339,6 +371,8 @@ pub fn plan_substituted_fusion_spiro_side(
     }
     plan_graph_spiro_side(mol, side_atoms, junction, Some(&core), false)
 }
+// Provenance: fn spiro_subgraph_assembly | adapted
+// Source: openclatura | src/openclatura/namer.py::_spiro_subgraph_assembly
 pub fn spiro_subgraph_assembly(
     mol: &Molecule,
     junction: usize,
@@ -352,6 +386,8 @@ pub fn spiro_subgraph_assembly(
 }
 
 #[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/spiro_subgraph.rs::tests
 mod tests {
     use super::super::molecule::{Atom, Bond};
     use super::*;
@@ -376,6 +412,12 @@ mod tests {
         );
     }
     #[test]
+    // Provenance: fn tests::graph_sides_keep_bridged_parent_names_and_side_group_locants | adapted
+    // Source: ReShiki | src/naming/openclatura/spiro_subgraph.rs::tests::graph_sides_keep_bridged_parent_names_and_side_group_locants
+    // Source: openclatura | tests/unit/test_analysis.py::test_pyopsin_regression_names_use_parseable_spiro_and_formamido_forms
+    // Source: openclatura | tests/unit/test_analysis.py::test_mixed_spiro_bicyclo_side_suffixes_and_replacement_locants_are_component_scoped
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
     fn graph_sides_keep_bridged_parent_names_and_side_group_locants() {
         for (smiles, expected) in [
             (
