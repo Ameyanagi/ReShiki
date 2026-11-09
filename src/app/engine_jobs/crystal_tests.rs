@@ -8,6 +8,7 @@ fn cached_analysis() -> Analysis {
     // are never used as an oracle for chemistry.
     Analysis {
         smiles: String::new(),
+        smiles_notice: None,
         formula: String::new(),
         display_formula: String::new(),
         mass_percent: vec![],

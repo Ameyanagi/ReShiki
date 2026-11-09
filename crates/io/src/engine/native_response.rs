@@ -127,6 +127,8 @@ struct Draft {
 }
 
 pub(crate) const ALLENE_INCHI_NOTICE: &str = "Allene InChI and InChIKey require an ordinary 2D depiction; use stereochemical SMILES or MOL export";
+pub const SMILES_AXIAL_NOTICE: &str =
+    "SMILES has no notation for atropisomer axes; the axial configuration was dropped.";
 
 fn has_allene_stereo(molecule: &molecular::Molecule) -> bool {
     molecule
@@ -516,6 +518,14 @@ fn complete_analysis(
     let properties = chemistry::properties(&graph.atom_facts().map_err(Error::Chemistry)?)
         .map_err(Error::Chemistry)?;
     Ok(Analysis {
+        smiles_notice: (!smiles.is_empty()
+            && molecule
+                .state
+                .metadata
+                .bonds
+                .iter()
+                .any(|bond| matches!(bond.stereo, 6 | 7)))
+        .then(|| SMILES_AXIAL_NOTICE.into()),
         smiles,
         formula: properties.formula,
         display_formula: properties.display_formula,
@@ -581,12 +591,11 @@ fn finish(
             return Err(Error::Exotic);
         }
         response.output = Some(match format {
-            "smiles" => response
-                .analysis
-                .as_ref()
-                .ok_or(Error::Empty)?
-                .smiles
-                .clone(),
+            "smiles" => {
+                let analysis = response.analysis.as_ref().ok_or(Error::Empty)?;
+                response.warnings.extend(analysis.smiles_notice.clone());
+                analysis.smiles.clone()
+            }
             "inchi" => response
                 .analysis
                 .as_ref()
@@ -637,6 +646,8 @@ fn encode_drawing(
     }
 }
 
+#[cfg(test)]
+mod axial_tests;
 #[cfg(test)]
 mod distance_tests;
 #[cfg(test)]
