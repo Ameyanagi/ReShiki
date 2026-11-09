@@ -1376,18 +1376,6 @@ async fn coordinate_free_wedge_flags_follow_the_tag() -> anyhow::Result<()> {
             );
         }
     }
-    // A wavy flag next to a wedge flag keeps the flags on the layout (#1049):
-    // the drawing must not lose the tagged centre's stereobond.
-    let text = "C[C@H](N)C(=O)O |w:0.0,wD:1.1|";
-    let mut visible = drawn(&import("smiles", text).await?);
-    for atom in &mut visible.atoms {
-        atom.stereo = None;
-    }
-    assert_eq!(
-        smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
-        "C[C@H](N)C(=O)O",
-        "{text}"
-    );
     // An axial flag has no tag to defer to: the molecule reader takes the
     // configuration from it, and the drawing is wedged from that.
     let binol = "c1(-c2c(O)c3c(cc2)cccc3)c(O)c2c(cc1)cccc2";
@@ -1406,6 +1394,305 @@ async fn coordinate_free_wedge_flags_follow_the_tag() -> anyhow::Result<()> {
         axes.push(labels);
     }
     assert_ne!(axes[0], axes[1]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn coordinate_free_wedge_flags_respect_wavy_stereo_semantics() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let import = async |format: &str, text: &str| {
+        engine
+            .request(Request::import(format, text))
+            .await
+            .map_err(anyhow::Error::msg)
+    };
+    const ALANINE: &str = "C[C@H](N)C(=O)O";
+    for (source, wave, wedge, bare, inchi, wavy_single) in [
+        // A wave ending at the tagged atom preserves its configuration.
+        (
+            ALANINE,
+            "w:0.0",
+            "1.1",
+            ALANINE,
+            Some("InChI=1S/C3H7NO2/c1-2(4)3(5)6/h2H,4H2,1H3,(H,5,6)/t2-/m0/s1"),
+            Some((1, 2)),
+        ),
+        // The wave disappears with its explicit hydrogen during preparation.
+        (
+            "C1[C@@H](F)CC[C@H]1O[H]",
+            "w:7.7",
+            "1.0",
+            "C1[C@@H](F)CC[C@H]1O",
+            Some("InChI=1S/C5H9FO/c6-4-1-2-5(7)3-4/h4-5,7H,1-3H2/t4-,5+/m0/s1"),
+            None,
+        ),
+        // A wave beginning at the tagged atom explicitly clears that tag.
+        (
+            ALANINE,
+            "w:1.0",
+            "1.2",
+            "CC(N)C(=O)O",
+            Some("InChI=1S/C3H7NO2/c1-2(4)3(5)6/h2H,4H2,1H3,(H,5,6)"),
+            Some((2, 1)),
+        ),
+        // The wave makes the adjacent alkene unknown, leaving the far-end tag.
+        (
+            "C[C@H](N)/C=C/C",
+            "w:3.2",
+            "1.0",
+            "C[C@H](N)C=CC",
+            None,
+            Some((4, 2)),
+        ),
+    ] {
+        let stated =
+            smiles::write::write(&smiles::read(bare)?.prepared.state, Default::default())?.text;
+        for format in ["smiles", "naming_smiles"] {
+            let expected = import(format, bare).await?;
+            let expected_analysis = expected.analysis.as_ref().unwrap();
+            let wave_only = import(format, &format!("{source} |{wave}|")).await?;
+            let wave_analysis = wave_only.analysis.as_ref().unwrap();
+            assert_eq!(
+                wave_analysis.inchi, expected_analysis.inchi,
+                "{source}/{wave}/{format}"
+            );
+            assert_eq!(
+                wave_analysis.smiles, expected_analysis.smiles,
+                "{source}/{wave}/{format}"
+            );
+            if let Some(inchi) = inchi {
+                assert_eq!(wave_analysis.inchi, inchi, "{source}/{wave}/{format}");
+            } else {
+                assert!(
+                    !wave_analysis.inchi.contains("/b"),
+                    "{source}/{wave}/{format}"
+                );
+            }
+            let mut visible = wave_only.document.unwrap();
+            for atom in &mut visible.atoms {
+                atom.stereo = None;
+            }
+            assert_eq!(
+                smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?
+                    .text,
+                wave_analysis.smiles,
+                "{source}/{wave}/{format}: wave-only visible drawing stereochemistry"
+            );
+            for flag in ["wU", "wD"] {
+                let text = format!("{source} |{wave},{flag}:{wedge}|");
+                let imported = import(format, &text).await?;
+                let analysis = imported.analysis.as_ref().unwrap();
+                assert_eq!(analysis.inchi, wave_analysis.inchi, "{text}/{format}");
+                assert_eq!(analysis.smiles, wave_analysis.smiles, "{text}/{format}");
+                let mut visible = imported.document.unwrap();
+                assert_eq!(
+                    visible
+                        .bonds
+                        .iter()
+                        .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                        .map(|bond| (bond.a, bond.b))
+                        .collect::<Vec<_>>(),
+                    wavy_single.into_iter().collect::<Vec<_>>(),
+                    "{text}/{format}: wavy single-bond direction"
+                );
+                for atom in &mut visible.atoms {
+                    atom.stereo = None;
+                }
+                assert_eq!(
+                    smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?
+                        .text,
+                    stated,
+                    "{text}/{format}: visible drawing stereochemistry"
+                );
+                if source == ALANINE && bare == ALANINE {
+                    let xml = crate::exchange::drawing::write(&visible, Default::default())?;
+                    let reopened = import("cdxml", &xml).await?;
+                    let analysis = reopened.analysis.as_ref().unwrap();
+                    assert_eq!(
+                        analysis.inchi, wave_analysis.inchi,
+                        "{text}/{format}: CDXML"
+                    );
+                    assert_eq!(
+                        analysis.smiles, wave_analysis.smiles,
+                        "{text}/{format}: CDXML"
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn coordinate_free_wavy_flags_keep_visible_fused_and_adjacent_stereo() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    for (bare, flags, waves) in [
+        // Add fusion H before choosing wedges so their directions stay correct.
+        (
+            "C1CC[C@H]2CCCC[C@@H]2C1",
+            "w:2.2,4.3,wU:8.9",
+            [(3, 4), (5, 4)],
+        ),
+        // Leave the only available bond for the wave-constrained centre.
+        (
+            "F[C@H](Cl)[C@]([C@H](F)Br)([C@H](Cl)Br)[C@H](F)I",
+            "w:0.0,2.1,wU:1.2,3.3",
+            [(1, 2), (3, 2)],
+        ),
+    ] {
+        let stated =
+            smiles::write::write(&smiles::read(bare)?.prepared.state, Default::default())?.text;
+        let text = format!("{bare} |{flags}|");
+        for format in ["smiles", "naming_smiles"] {
+            let imported = engine
+                .request(Request::import(format, &text))
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let analysis = imported.analysis.unwrap();
+            assert_eq!(analysis.smiles, stated, "{text}/{format}: analysis");
+            let mut visible = imported.document.unwrap();
+            assert_eq!(
+                visible
+                    .bonds
+                    .iter()
+                    .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                    .map(|bond| (bond.a, bond.b))
+                    .collect::<Vec<_>>(),
+                waves,
+                "{text}/{format}: wavy single-bond direction"
+            );
+            for atom in &mut visible.atoms {
+                atom.stereo = None;
+            }
+            // Normalize the graph H added for the drawing to the implicit H
+            // representation used for analysis, retaining the read-back stereo.
+            let visible_smiles =
+                smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?
+                    .text;
+            let normalized = smiles::prepare(&visible_smiles)?.state;
+            assert_eq!(
+                smiles::write::write(&normalized, Default::default())?.text,
+                analysis.smiles,
+                "{text}/{format}: visible drawing stereochemistry"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn wavy_imports_keep_all_five_visible_sulfoxide_configurations() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let bare = "O=[S@]([C@H](F)[C@]([2H])(Cl)Br)[C@H](Cl)[C@]([2H])(F)I";
+    let text = format!("{bare} |w:3.2,9.8|");
+    let stated = smiles::read(bare)?.prepared.state;
+    assert_eq!(
+        stated
+            .metadata
+            .atoms
+            .iter()
+            .filter(|atom| matches!(atom.chiral_tag, 1 | 2))
+            .count(),
+        5
+    );
+    let expected = smiles::write::write(&stated, Default::default())?.text;
+    for format in ["smiles", "naming_smiles", "prepared"] {
+        let request = if format == "prepared" {
+            Request::import_prepared(smiles::read(&text)?.prepared)
+        } else {
+            Request::import(format, &text)
+        };
+        let imported = engine.request(request).await.map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            imported.analysis.unwrap().smiles,
+            expected,
+            "{format}: analysis"
+        );
+        let mut visible = imported.document.unwrap();
+        assert_eq!(
+            visible
+                .bonds
+                .iter()
+                .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                .map(|bond| (bond.a, bond.b))
+                .collect::<Vec<_>>(),
+            [(4, 3), (10, 9)],
+            "{format}: incoming waves"
+        );
+        assert_eq!(
+            visible
+                .bonds
+                .iter()
+                .filter(|bond| matches!(bond.display.as_str(), "wedge" | "hash"))
+                .count(),
+            5,
+            "{format}: every centre needs a visible stereobond"
+        );
+        assert_eq!(
+            visible
+                .bonds
+                .iter()
+                .filter(|bond| { bond.a == 2 && matches!(bond.display.as_str(), "wedge" | "hash") })
+                .count(),
+            1,
+            "{format}: sulfur needs an outgoing stereobond"
+        );
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        let read_back = molecular::prepare(&visible)?.state;
+        assert_eq!(
+            read_back
+                .metadata
+                .atoms
+                .iter()
+                .filter(|atom| matches!(atom.chiral_tag, 1 | 2))
+                .count(),
+            5,
+            "{format}: all five configurations must be visible"
+        );
+        assert_eq!(
+            smiles::write::write(&read_back, Default::default())?.text,
+            expected,
+            "{format}: visible drawing stereochemistry"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn prepared_import_keeps_visible_wavy_bridgehead_stereo() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let bare = "O=C1C[C@H]2CC[C@@H]1C2";
+    let text = format!("{bare} |w:7.7|");
+    let source = smiles::read(&text)?;
+    let imported = engine
+        .request(Request::import_prepared(source.prepared))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let analysis = imported.analysis.unwrap();
+    let stated =
+        smiles::write::write(&smiles::read(bare)?.prepared.state, Default::default())?.text;
+    assert_eq!(analysis.smiles, stated, "{text}: analysis");
+    let mut visible = imported.document.unwrap();
+    assert_eq!(
+        visible
+            .bonds
+            .iter()
+            .filter(|bond| bond.order == 1 && bond.display == "wavy")
+            .map(|bond| (bond.a, bond.b))
+            .collect::<Vec<_>>(),
+        [(8, 7)],
+        "{text}: wavy single-bond direction"
+    );
+    for atom in &mut visible.atoms {
+        atom.stereo = None;
+    }
+    assert_eq!(
+        smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+        analysis.smiles,
+        "{text}: visible drawing stereochemistry"
+    );
     Ok(())
 }
 

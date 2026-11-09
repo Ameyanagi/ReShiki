@@ -236,12 +236,11 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             // layout replaces (#1037). Without coordinates the @/@@ tags state
             // the configuration (#1044); smiles::read has already taken any
             // axial configuration from the flags. Either way, draw wedges again
-            // from the stereo. A wavy bond left after preparation would stop
-            // that redraw at a tagged centre, so such inputs still read the
-            // flags on the layout (#1049).
+            // from the stereo, keeping wavy bonds' unknown stereo (#1049).
             let directions = &mut imported.prepared.state.directions;
-            let tag_wins =
-                imported.conformers.is_empty() && !directions.contains(&Direction::Unknown);
+            // Parity keeps the wavy exclusion from #1044.
+            let tag_wins = imported.conformers.is_empty()
+                && (molecular::refine() || !directions.contains(&Direction::Unknown));
             if tag_wins || imported.conformers.iter().any(|c| !c.is_3d) {
                 for direction in directions {
                     if matches!(direction, Direction::Wedge | Direction::Hash) {

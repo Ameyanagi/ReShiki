@@ -16,6 +16,7 @@ mod tests;
 // small coupled cages without an unbounded interactive import search.
 const READBACK_LIMIT: usize = 256;
 
+/// A wave marks only its begin atom; its tagged far end still needs a wedge (#1049).
 /// The normal generated drawing is authoritative whenever it reads back.
 /// Failed or exhausted searches retain it: import owns the refusal policy,
 /// while other callers may discard or restore these wedges afterwards.
@@ -26,8 +27,14 @@ pub fn wedge_molecule(
     two_bonds: bool,
 ) -> Result<WedgeState, String> {
     let mut work = Work(50_000_000);
-    let mut ctx =
-        super::super::with_context(input, properties, Some(conformer), two_bonds, &mut work)?;
+    let mut ctx = super::super::with_context(
+        input,
+        properties,
+        Some(conformer),
+        two_bonds,
+        true,
+        &mut work,
+    )?;
     let reference = prefer_ring_wedges(&ctx.state, properties, conformer)?;
     if conformer.is_3d
         || !input
@@ -168,8 +175,11 @@ fn search(
         .collect();
     for (bond, &direction) in input.graph.bonds.iter().zip(&input.directions) {
         work.spend(1)?;
-        if wedged(direction) || direction == Direction::Unknown {
-            // Match the reference chooser's fixed-input convention.
+        if direction == Direction::Unknown {
+            // A generated wave fixes only its begin atom (#1049).
+            *at_mut(&mut eligible, bond.a)? = false;
+        } else if wedged(direction) {
+            // Match the reference chooser's fixed-wedge convention.
             let atom = if tetrahedral(at(&input.metadata.atoms, bond.a)?.chiral_tag) {
                 bond.a
             } else {
