@@ -462,7 +462,7 @@ pub(crate) async fn real<'a>(value: &'a str) {
 
     def test_unicode_append_to_real_mixed_file_is_rejected(self):
         repository = Path(__file__).resolve().parents[1]
-        path = "src/naming/openclatura/principal_suffixes.rs"
+        path = "crates/nazuchem-s2n/src/principal_suffixes.rs"
         ledger = tomllib.loads((repository / LEDGER_NAME).read_text(encoding="utf-8"))
         entry = next(item for item in ledger["file"] if item["path"] == path)
         text = (repository / path).read_text(encoding="utf-8")
@@ -473,7 +473,7 @@ pub(crate) async fn real<'a>(value: &'a str) {
 
     def test_upstream_test_injected_into_original_region_requires_an_inventory_decision(self):
         repository = Path(__file__).resolve().parents[1]
-        path = "src/naming/openclatura/principal_suffixes.rs"
+        path = "crates/nazuchem-s2n/src/principal_suffixes.rs"
         ledger = tomllib.loads((repository / LEDGER_NAME).read_text(encoding="utf-8"))
         entry = next(item for item in ledger["file"] if item["path"] == path)
         text = (repository / path).read_text(encoding="utf-8")

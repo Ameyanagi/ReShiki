@@ -1,6 +1,6 @@
 # Provenance for the files that will form the nazuchem library.
-# Phase A step 3 removes app_chemistry.rs and the unlisted app-only kernel_bridge.rs;
-# the latter's two original InChI test helpers are inlined into their existing callers.
+# Phase A step 4 moves openclatura source/data into nazuchem-s2n.
+# Historical source paths and unresolved source/licensing decisions remain unchanged.
 # Source audit: 2026-11-09; owner decisions and source-pin gaps remain explicit below.
 # NOASSERTION is not a licence grant. Test-only fixtures are excluded from packages.
 
@@ -4000,7 +4000,7 @@ notes = "Original provenance metadata recording OPSIN/ChEBI sources, adaptations
 sha256 = "445f3b43fef84f19e6791b11dafa22f58de9b26e3ea3fc5694d1f5e6cc1121c6"
 
 [[file]]
-path = "src/naming/openclatura/additive.rs"
+path = "crates/nazuchem-s2n/src/additive.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4064,7 +4064,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/amine_oxide_tests.rs"
+path = "crates/nazuchem-s2n/src/amine_oxide_tests.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4100,7 +4100,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/amine_oxides.rs"
+path = "crates/nazuchem-s2n/src/amine_oxides.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4118,7 +4118,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/anion_parent_tests.rs"
+path = "crates/nazuchem-s2n/src/anion_parent_tests.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
@@ -4127,7 +4127,7 @@ sources = [
 notes = "Local P-72.7 anion parent-choice and identity matrix."
 
 [[file]]
-path = "src/naming/openclatura/anion_spelling_tests.rs"
+path = "crates/nazuchem-s2n/src/anion_spelling_tests.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4151,7 +4151,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/assembler.rs"
+path = "crates/nazuchem-s2n/src/assembler.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4198,7 +4198,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/assembly_charge.rs"
+path = "crates/nazuchem-s2n/src/assembly_charge.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4222,7 +4222,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/assembly_parent.rs"
+path = "crates/nazuchem-s2n/src/assembly_parent.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4271,7 +4271,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/assembly_parts.rs"
+path = "crates/nazuchem-s2n/src/assembly_parts.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4294,7 +4294,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/assembly_prefixes.rs"
+path = "crates/nazuchem-s2n/src/assembly_prefixes.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4314,7 +4314,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/assembly_spiro.rs"
+path = "crates/nazuchem-s2n/src/assembly_spiro.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4384,7 +4384,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/assembly_utils.rs"
+path = "crates/nazuchem-s2n/src/assembly_utils.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4402,7 +4402,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/chains.rs"
+path = "crates/nazuchem-s2n/src/chains.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4436,7 +4436,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/component_group_rules.rs"
+path = "crates/nazuchem-s2n/src/component_group_rules.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4466,7 +4466,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/component_modifiers.rs"
+path = "crates/nazuchem-s2n/src/component_modifiers.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4489,7 +4489,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/component_namer.rs"
+path = "crates/nazuchem-s2n/src/component_namer.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4517,7 +4517,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/data/bluebook/p25_retained.tsv"
+path = "crates/nazuchem-s2n/src/data/bluebook/p25_retained.tsv"
 origin = "data"
 license = "NOASSERTION"
 sources = [
@@ -4527,7 +4527,7 @@ notes = "Pending owner decision: IUPAC table reuse permission/licensing. Transcr
 sha256 = "96d98dafccc76d1bb0edc1742284caaa4ddd5b7e95ba7497efa218cf256be27e"
 
 [[file]]
-path = "src/naming/openclatura/data/elements.json"
+path = "crates/nazuchem-s2n/src/data/elements.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4537,7 +4537,7 @@ notes = "openclatura element table; unused substituent_prefix fields removed by 
 sha256 = "10abc5b208d7a9e21b9b608da77791992b443c09c2c711b8235b15dbee462309"
 
 [[file]]
-path = "src/naming/openclatura/data/fused_ion_templates.json"
+path = "crates/nazuchem-s2n/src/data/fused_ion_templates.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4549,7 +4549,7 @@ notes = "openclatura fused-ion audit registry; unused metadata pruned; cites OPS
 sha256 = "c1ed9f2fce1aac3e38114e17bda5a2f673d27a2881ba09faaaaf22c3ed626c87"
 
 [[file]]
-path = "src/naming/openclatura/data/fusion_component_construction.json"
+path = "crates/nazuchem-s2n/src/data/fusion_component_construction.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4560,7 +4560,7 @@ notes = "Byte-identical openclatura copy; source explicitly cites OPSIN 2.9.0 fu
 sha256 = "5742f6a5601f915733549a0f348c03e39e87d055ccf42197f22475d738fcdc89"
 
 [[file]]
-path = "src/naming/openclatura/data/fusion_components.json"
+path = "crates/nazuchem-s2n/src/data/fusion_components.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4570,7 +4570,7 @@ notes = "openclatura registry extended with retained-component status and additi
 sha256 = "da3485653a90b3d9a99df6949c59597b21946e27d6ea86faf1ce7e04933872a6"
 
 [[file]]
-path = "src/naming/openclatura/data/fusion_composite_bridges.json"
+path = "crates/nazuchem-s2n/src/data/fusion_composite_bridges.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4580,7 +4580,7 @@ notes = "Byte-identical openclatura rule registry; verification explicitly says 
 sha256 = "795ff7e87b020b996f79d8f8807587a772dbc6e61a3a74375c71dbdd85dc04d0"
 
 [[file]]
-path = "src/naming/openclatura/data/fusion_entry_geometry.json"
+path = "crates/nazuchem-s2n/src/data/fusion_entry_geometry.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4591,7 +4591,7 @@ notes = "Byte-identical openclatura table derived from OPSIN 2.9.0 FusedRingNumb
 sha256 = "7bc33a80698763c72c9e597af1e93e3166bc3a7598e58c54ab108bdb1bb32339"
 
 [[file]]
-path = "src/naming/openclatura/data/heteroatom_substituents.json"
+path = "crates/nazuchem-s2n/src/data/heteroatom_substituents.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4601,7 +4601,7 @@ notes = "openclatura substituent registry; unused ligand_prefixes/join metadata 
 sha256 = "fe6fc3a745a5c0d76609c9a371541e00c7bc94cb6695e8e5e21f95bbb2fa7031"
 
 [[file]]
-path = "src/naming/openclatura/data/namer_rules.json"
+path = "crates/nazuchem-s2n/src/data/namer_rules.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4611,7 +4611,7 @@ notes = "openclatura rules adapted for ion spellings, retained parents, alkoxy c
 sha256 = "9674180e0cd3e0ed94c829b8ee35968da6394a1238670ff58e6bebf94403c632"
 
 [[file]]
-path = "src/naming/openclatura/data/parser_grammar_snapshot.json"
+path = "crates/nazuchem-s2n/src/data/parser_grammar_snapshot.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4633,7 +4633,7 @@ notes = "openclatura runtime snapshot derived from six OPSIN XML resources; reta
 sha256 = "41a6df6b9580342499c2d3de8632dae144badba3688726677efd4b3f23daf98e"
 
 [[file]]
-path = "src/naming/openclatura/data/retained_fused_graph_templates.json"
+path = "crates/nazuchem-s2n/src/data/retained_fused_graph_templates.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4644,7 +4644,7 @@ notes = "openclatura locanted graph templates expanded from base_templates with 
 sha256 = "5fc06f4cc3127b074fcf22a82dd9779627ac4da854061eacbdd5ca2b0e123c42"
 
 [[file]]
-path = "src/naming/openclatura/data/retained_fused_hydrocarbon_templates.json"
+path = "crates/nazuchem-s2n/src/data/retained_fused_hydrocarbon_templates.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4656,7 +4656,7 @@ notes = "openclatura generated OPSIN-CML graph data; typed fields normalized; so
 sha256 = "ba381e4a16192b2513637146c4917528ece44a073d8e02ba4a3caa794290c66c"
 
 [[file]]
-path = "src/naming/openclatura/data/retained_fused_localized_pi.json"
+path = "crates/nazuchem-s2n/src/data/retained_fused_localized_pi.json"
 origin = "data"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4666,7 +4666,7 @@ notes = "Local localized-pi registry explicitly based on OPSIN 2.9.0 arylGroups.
 sha256 = "c351b2aaa8390c3196af2c97208a85df147118347067aabdd7b6244116116c38"
 
 [[file]]
-path = "src/naming/openclatura/data/retained_fused_series.json"
+path = "crates/nazuchem-s2n/src/data/retained_fused_series.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4676,7 +4676,7 @@ notes = "openclatura acene/polyaphene series registry with unused bounds/spellin
 sha256 = "055759f9c446f8f8b0d79bec93c47866b7b15f3e088323d59180dd72dfada21d"
 
 [[file]]
-path = "src/naming/openclatura/data/retained_macrocycle_templates.json"
+path = "crates/nazuchem-s2n/src/data/retained_macrocycle_templates.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4688,7 +4688,7 @@ notes = "openclatura generated porphyrin/corrin OPSIN-CML data; typed fields nor
 sha256 = "5d44a35517f8df9908b5c1dd5d1778253085ef0496080d32f3258a87ea330796"
 
 [[file]]
-path = "src/naming/openclatura/data/retained_parent_name_policy.json"
+path = "crates/nazuchem-s2n/src/data/retained_parent_name_policy.json"
 origin = "data"
 license = "MIT"
 sources = [
@@ -4698,7 +4698,7 @@ notes = "openclatura parent-output policy extended with hydrogenation/bridged-na
 sha256 = "38822cfcb3660edd6bdd1886ff24a7f2851ddd134728b3ab627b923bde329b93"
 
 [[file]]
-path = "src/naming/openclatura/endo_exo_stereo.rs"
+path = "crates/nazuchem-s2n/src/endo_exo_stereo.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
@@ -4707,7 +4707,7 @@ sources = [
 notes = "Local winding-based cage coordinates for endo/exo/syn/anti alternatives."
 
 [[file]]
-path = "src/naming/openclatura/formatting.rs"
+path = "crates/nazuchem-s2n/src/formatting.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4739,7 +4739,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/functional_prefixes.rs"
+path = "crates/nazuchem-s2n/src/functional_prefixes.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4765,7 +4765,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fused_ion_templates.rs"
+path = "crates/nazuchem-s2n/src/fused_ion_templates.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4790,7 +4790,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/audit.rs"
+path = "crates/nazuchem-s2n/src/fusion/audit.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -4799,7 +4799,7 @@ sources = [
 notes = "Openclatura fusion-proof auditor translated and reorganized; includes local standalone-benzo audit branches and stricter reconstruction checks."
 
 [[file]]
-path = "src/naming/openclatura/fusion/charges.rs"
+path = "crates/nazuchem-s2n/src/fusion/charges.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4820,7 +4820,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/citation_numbering.rs"
+path = "crates/nazuchem-s2n/src/fusion/citation_numbering.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -4830,7 +4830,7 @@ sources = [
 notes = "Translation of the locant-labelled skeletal-graph agreement check, with a compact Rust test."
 
 [[file]]
-path = "src/naming/openclatura/fusion/citation_pi.rs"
+path = "crates/nazuchem-s2n/src/fusion/citation_pi.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -4839,7 +4839,7 @@ sources = [
 notes = "Direct translation of openclatura citation pi dead-end witnesses; OPSIN behavior is the compatibility target, not a local new algorithm."
 
 [[file]]
-path = "src/naming/openclatura/fusion/citation_pi_donor.rs"
+path = "crates/nazuchem-s2n/src/fusion/citation_pi_donor.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -4848,7 +4848,7 @@ sources = [
 notes = "Translation of charged-parent sigma-donor citation pi witnesses."
 
 [[file]]
-path = "src/naming/openclatura/fusion/component_hydrogen.rs"
+path = "crates/nazuchem-s2n/src/fusion/component_hydrogen.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -4857,7 +4857,7 @@ sources = [
 notes = "Openclatura local component carbon-H consumption proof translated to Rust collections."
 
 [[file]]
-path = "src/naming/openclatura/fusion/composite_bridges.rs"
+path = "crates/nazuchem-s2n/src/fusion/composite_bridges.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -4866,7 +4866,7 @@ sources = [
 notes = "Translation of the finite bridge-construction table model and validators."
 
 [[file]]
-path = "src/naming/openclatura/fusion/config.rs"
+path = "crates/nazuchem-s2n/src/fusion/config.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -4875,7 +4875,7 @@ sources = [
 notes = "Openclatura policy/search/ring-shape schema adapted to typed serde configuration."
 
 [[file]]
-path = "src/naming/openclatura/fusion/construction_order.rs"
+path = "crates/nazuchem-s2n/src/fusion/construction_order.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -4887,7 +4887,7 @@ sources = [
 notes = "Openclatura translation of an explicitly OPSIN-derived stable construction/SSSR/ring-direction enumeration."
 
 [[file]]
-path = "src/naming/openclatura/fusion/cover.rs"
+path = "crates/nazuchem-s2n/src/fusion/cover.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -4896,7 +4896,7 @@ sources = [
 notes = "Translation of openclatura generic component-cover graph and independent cover proof."
 
 [[file]]
-path = "src/naming/openclatura/fusion/descriptor.rs"
+path = "crates/nazuchem-s2n/src/fusion/descriptor.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -4969,7 +4969,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/entry_geometry.rs"
+path = "crates/nazuchem-s2n/src/fusion/entry_geometry.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -4980,7 +4980,7 @@ sources = [
 notes = "Openclatura entry-direction search and cache adapted to Rust; includes OPSIN-derived direction tables and direction composition."
 
 [[file]]
-path = "src/naming/openclatura/fusion/exocyclic.rs"
+path = "crates/nazuchem-s2n/src/fusion/exocyclic.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -4989,7 +4989,7 @@ sources = [
 notes = "Openclatura exocyclic ligand checks extended locally for neutral phosphorus lambda5 oxides."
 
 [[file]]
-path = "src/naming/openclatura/fusion/external_pi_consumption.rs"
+path = "crates/nazuchem-s2n/src/fusion/external_pi_consumption.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -4998,7 +4998,7 @@ sources = [
 notes = "Translation of the openclatura paired external-pi alternating-path witness."
 
 [[file]]
-path = "src/naming/openclatura/fusion/faces.rs"
+path = "crates/nazuchem-s2n/src/fusion/faces.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5041,7 +5041,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/indicated_hydrogen.rs"
+path = "crates/nazuchem-s2n/src/fusion/indicated_hydrogen.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -5051,7 +5051,7 @@ sources = [
 notes = "Openclatura component pi-budget and intrinsic carbon-H algorithms, with local candidate/neutral-parent/suffix adaptations."
 
 [[file]]
-path = "src/naming/openclatura/fusion/layout.rs"
+path = "crates/nazuchem-s2n/src/fusion/layout.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5122,7 +5122,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/mancude.rs"
+path = "crates/nazuchem-s2n/src/fusion/mancude.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5159,7 +5159,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/mod.rs"
+path = "crates/nazuchem-s2n/src/fusion/mod.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
@@ -5168,7 +5168,7 @@ sources = [
 notes = "Original Rust module wiring and bounded per-thread cache; upstream Python __init__.py uses a different lazy-export design."
 
 [[file]]
-path = "src/naming/openclatura/fusion/model.rs"
+path = "crates/nazuchem-s2n/src/fusion/model.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5207,7 +5207,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/numbering.rs"
+path = "crates/nazuchem-s2n/src/fusion/numbering.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -5216,7 +5216,7 @@ sources = [
 notes = "Openclatura completed numbering, parent pi graph and exhaustive maximum-matching implementation adapted to Rust. Unresolved: A direct OPSIN source contribution to the generic perimeter numbering expression is not independently proven. Upstream openclatura source and transitive parser-construction dependency are established; avoid labelling this solely an OPSIN port."
 
 [[file]]
-path = "src/naming/openclatura/fusion/planner.rs"
+path = "crates/nazuchem-s2n/src/fusion/planner.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5244,7 +5244,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/registry.rs"
+path = "crates/nazuchem-s2n/src/fusion/registry.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5319,7 +5319,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/fusion/replacement_state.rs"
+path = "crates/nazuchem-s2n/src/fusion/replacement_state.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -5328,7 +5328,7 @@ sources = [
 notes = "Translation of the openclatura carbon-parent replacement hydrogen/pi balance proof."
 
 [[file]]
-path = "src/naming/openclatura/fusion/rules.rs"
+path = "crates/nazuchem-s2n/src/fusion/rules.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -5338,7 +5338,7 @@ sources = [
 notes = "Openclatura fusion eligibility/seniority/interface identity rules, with rewritten graph automorphism adapter and local seniority/multiplier adjustments."
 
 [[file]]
-path = "src/naming/openclatura/fusion/third_component.rs"
+path = "crates/nazuchem-s2n/src/fusion/third_component.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -5347,7 +5347,7 @@ sources = [
 notes = "Openclatura P-25.5 carbon-skeleton replacement planner adapted to Rust proof handoffs."
 
 [[file]]
-path = "src/naming/openclatura/fusion/valence.rs"
+path = "crates/nazuchem-s2n/src/fusion/valence.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -5356,7 +5356,7 @@ sources = [
 notes = "Openclatura graph-derived lambda descriptors with a local refusal of unsupported lambda/H fusion states."
 
 [[file]]
-path = "src/naming/openclatura/fusion/wrappers.rs"
+path = "crates/nazuchem-s2n/src/fusion/wrappers.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -5365,7 +5365,7 @@ sources = [
 notes = "Openclatura bridged/spiro fused-parent wrapper planner with local validation, suffix-numbering and unsupported-state adaptations."
 
 [[file]]
-path = "src/naming/openclatura/graph_io.rs"
+path = "crates/nazuchem-s2n/src/graph_io.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5395,7 +5395,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/graph_kernel.rs"
+path = "crates/nazuchem-s2n/src/graph_kernel.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5412,7 +5412,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/heteroatom_subgraphs.rs"
+path = "crates/nazuchem-s2n/src/heteroatom_subgraphs.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5463,7 +5463,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/heterospiro.rs"
+path = "crates/nazuchem-s2n/src/heterospiro.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
@@ -5472,7 +5472,7 @@ sources = [
 notes = "Local completed-parent hydrogen and suffix composition for unlike spiro components."
 
 [[file]]
-path = "src/naming/openclatura/heterospiro_tests.rs"
+path = "crates/nazuchem-s2n/src/heterospiro_tests.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5505,7 +5505,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/identity_validation.rs"
+path = "crates/nazuchem-s2n/src/identity_validation.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5535,7 +5535,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/ion_spelling_tests.rs"
+path = "crates/nazuchem-s2n/src/ion_spelling_tests.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5553,7 +5553,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/ionic_naming.rs"
+path = "crates/nazuchem-s2n/src/ionic_naming.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5584,7 +5584,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/isotope_naming.rs"
+path = "crates/nazuchem-s2n/src/isotope_naming.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
@@ -5593,7 +5593,7 @@ sources = [
 notes = "Local P-82 isotope-parent stripping, automorphism numbering and descriptor placement."
 
 [[file]]
-path = "src/naming/openclatura/locant_elision.rs"
+path = "crates/nazuchem-s2n/src/locant_elision.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5641,7 +5641,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/locants.rs"
+path = "crates/nazuchem-s2n/src/locants.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5660,7 +5660,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/mod.rs"
+path = "crates/nazuchem-s2n/src/lib.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5722,7 +5722,7 @@ parts = [
   { origin = "original", sources = [{ project = "ReShiki", path = "src/naming/openclatura/mod.rs", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "MIT OR Apache-2.0", symbol = "has_ring_assembly" }], items = ["fn has_ring_assembly"] },
   { origin = "adapted", sources = [{ project = "openclatura", ref = "90dc5bcb4910c196122ec0405d06a32929a8f308", path = "src/openclatura/fusion/charges.py", license = "MIT", symbol = "fusion_component_charge_parent" }], items = ["fn has_anionic_ring_assembly"], notes = "The neutral matching view restores each -1 atom to charge 0 and increments total_h_count/explicit_h_count, matching fusion/charges.py::fusion_component_charge_parent (18-27). Rust broadens beyond valence-checked C/N, also deprotonates +1 H-bearing atoms, and then applies the new ring-assembly discovery/status test." },
   { origin = "original", sources = [{ project = "ReShiki", path = "src/naming/openclatura/mod.rs", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "MIT OR Apache-2.0", symbol = "has_nonbonding_pair" }], items = ["fn has_nonbonding_pair"] },
-  { items = ["mod tests"], origin = "original", sources = [{ project = "ReShiki", path = "src/naming/openclatura/mod.rs", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "MIT OR Apache-2.0", symbol = "tests" }], members = { "mod tests" = ["fn tests::naming_routes_use_the_supplied_reservation_policy", "fn tests::symmetric_azine_ylidene_spelling_keeps_unaudited_status", "fn tests::azine_spelling_preserves_alkene_control", "fn tests::alkoxy_contractions_preserve_parent_components", "fn tests::skeletal_replacement_counts_heterounits_and_the_cited_group", "fn tests::allow_list_status_matrix", "fn tests::axial_general_names_leave_nuclide_groups_alone", "fn tests::axial_general_alternatives_cover_ordinary_unknown_isotope_and_salt_paths", "fn tests::complete_senior_parents_need_multiplicative_pin_status_and_round_trip", "fn tests::multiplicative_pin_accepts_simple_cores_and_identical_concatenated_arms", "fn tests::senior_structural_hydrides_keep_preferred_names", "fn tests::multiplicative_pin_requires_identical_complete_rooted_senior_units", "fn tests::unequal_or_junior_multiplicative_units_keep_preferred_names_and_round_trip", "fn tests::anhydride_names_need_acid_halves", "fn tests::enclosing_marks_nest_by_what_they_enclose", "fn tests::enclosing_marks_follow_the_blue_book_examples", "fn tests::controls_keep_their_names_and_preference_status", "fn tests::ring_assemblies_are_preferred_numbered_parents_and_round_trip", "fn tests::linear_phane_assemblies_keep_nonpreferred_status_and_round_trip", "fn tests::linear_phane_status_respects_functional_class_components_and_round_trips", "fn tests::linear_phane_status_respects_oxoacid_ester_components_and_round_trips", "fn tests::substituent_amine_sulfide_is_cited_as_a_prefix", "fn tests::tied_ring_assemblies_choose_the_senior_component_and_round_trip", "fn tests::unsupported_ring_assembly_keeps_substitutive_name_and_status", "fn tests::composite_quaterpyridine_and_assembly_substituent_locants_round_trip", "fn tests::symmetric_polyspiro_assembly_junctions_use_every_equivalent_numbering", "fn tests::locanted_assembly_hydrides_are_enclosed_for_two_through_six_units", "fn tests::fused_heterocycle_assemblies_keep_parent_locants_and_indicated_hydrogen", "fn tests::preferred_von_baeyer_controls_do_not_report_fusion_fallback", "fn tests::pheno_fusion_components_choose_preferred_parents_and_round_trip", "fn tests::pheno_fusion_derivatives_preserve_main_names_and_statuses", "fn tests::fusion_retained_component_controls_remain_preferred", "fn tests::fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips", "fn tests::fusion_registered_carbazole_keeps_existing_layout_status", "fn tests::known_departures_keep_their_names_and_report_the_rule_family", "fn tests::unchecked_paths_keep_their_names_and_report_the_uncertainty", "fn tests::retained_and_systematic_fused_parents_follow_parent_precedence", "fn tests::angular_oxazole_thiazole_acetic_acid_round_trips", "fn tests::spiro_parents_and_substituents_follow_oracle_names", "fn tests::unsupported_spiro_topologies_decline", "fn tests::declines_unrendered_group_and_attachment_features", "fn tests::tetrahedral_group_four_ring_hydrides_have_no_lone_pair", "fn tests::parity_file"] } },
+  { items = ["mod tests"], origin = "original", sources = [{ project = "ReShiki", path = "src/naming/openclatura/mod.rs", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "MIT OR Apache-2.0", symbol = "tests" }], members = { "mod tests" = ["fn tests::naming_routes_use_the_supplied_reservation_policy", "fn tests::symmetric_azine_ylidene_spelling_keeps_unaudited_status", "fn tests::azine_spelling_preserves_alkene_control", "fn tests::alkoxy_contractions_preserve_parent_components", "fn tests::skeletal_replacement_counts_heterounits_and_the_cited_group", "fn tests::allow_list_status_matrix", "fn tests::axial_general_names_leave_nuclide_groups_alone", "fn tests::axial_general_alternatives_cover_ordinary_unknown_isotope_and_salt_paths", "fn tests::complete_senior_parents_need_multiplicative_pin_status_and_round_trip", "fn tests::multiplicative_pin_accepts_simple_cores_and_identical_concatenated_arms", "fn tests::senior_structural_hydrides_keep_preferred_names", "fn tests::multiplicative_pin_requires_identical_complete_rooted_senior_units", "fn tests::unequal_or_junior_multiplicative_units_keep_preferred_names_and_round_trip", "fn tests::anhydride_names_need_acid_halves", "fn tests::enclosing_marks_nest_by_what_they_enclose", "fn tests::enclosing_marks_follow_the_blue_book_examples", "fn tests::controls_keep_their_names_and_preference_status", "fn tests::ring_assemblies_are_preferred_numbered_parents_and_round_trip", "fn tests::linear_phane_assemblies_keep_nonpreferred_status_and_round_trip", "fn tests::linear_phane_status_respects_functional_class_components_and_round_trips", "fn tests::linear_phane_status_respects_oxoacid_ester_components_and_round_trips", "fn tests::substituent_amine_sulfide_is_cited_as_a_prefix", "fn tests::tied_ring_assemblies_choose_the_senior_component_and_round_trip", "fn tests::unsupported_ring_assembly_keeps_substitutive_name_and_status", "fn tests::composite_quaterpyridine_and_assembly_substituent_locants_round_trip", "fn tests::symmetric_polyspiro_assembly_junctions_use_every_equivalent_numbering", "fn tests::locanted_assembly_hydrides_are_enclosed_for_two_through_six_units", "fn tests::fused_heterocycle_assemblies_keep_parent_locants_and_indicated_hydrogen", "fn tests::preferred_von_baeyer_controls_do_not_report_fusion_fallback", "fn tests::pheno_fusion_derivatives_preserve_main_names_and_statuses", "fn tests::fusion_retained_component_controls_remain_preferred", "fn tests::fusion_intrinsic_carbon_hydrogen_relocation_is_preferred_and_round_trips", "fn tests::fusion_registered_carbazole_keeps_existing_layout_status", "fn tests::known_departures_keep_their_names_and_report_the_rule_family", "fn tests::unchecked_paths_keep_their_names_and_report_the_uncertainty", "fn tests::retained_and_systematic_fused_parents_follow_parent_precedence", "fn tests::angular_oxazole_thiazole_acetic_acid_round_trips", "fn tests::spiro_parents_and_substituents_follow_oracle_names", "fn tests::unsupported_spiro_topologies_decline", "fn tests::declines_unrendered_group_and_attachment_features", "fn tests::tetrahedral_group_four_ring_hydrides_have_no_lone_pair", "fn tests::parity_file"] } },
   { items = ["fn tests::naming_routes_use_the_supplied_reservation_policy"], origin = "adapted", sources = [{ project = "ReShiki", path = "src/naming/openclatura/mod.rs", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "MIT OR Apache-2.0", symbol = "tests::naming_routes_use_the_supplied_reservation_policy" }, { project = "openclatura", path = "tests/unit/test_analysis.py", ref = "90dc5bcb4910c196122ec0405d06a32929a8f308", license = "MIT", symbol = "test_public_api_golden_names" }], notes = "Conservatively adapted exact upstream test inputs/expected names; exact coincidence does not establish independent ancestry. Local harness, assertions, status checks and additional cases remain local extensions. Conservative test-data attribution required by the requested audit rule: shared SMILES/chemical-name literals are attributed even when common chemistry or independent introduction is plausible. Implementation ancestry is uncertain; this decision attributes the test data and does not assert a mechanical port." },
   { items = ["fn tests::azine_spelling_preserves_alkene_control"], origin = "adapted", sources = [{ project = "ReShiki", path = "src/naming/openclatura/mod.rs", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "MIT OR Apache-2.0", symbol = "tests::azine_spelling_preserves_alkene_control" }, { project = "openclatura", path = "tests/roundtrip/test_stereo.py", ref = "90dc5bcb4910c196122ec0405d06a32929a8f308", license = "MIT", symbol = "test_roundtrip" }], notes = "Conservatively adapted exact upstream test inputs/expected names; exact coincidence does not establish independent ancestry. Local harness, assertions, status checks and additional cases remain local extensions. Conservative test-data attribution required by the requested audit rule: shared SMILES/chemical-name literals are attributed even when common chemistry or independent introduction is plausible. Implementation ancestry is uncertain; this decision attributes the test data and does not assert a mechanical port." },
   { items = ["fn tests::alkoxy_contractions_preserve_parent_components"], origin = "adapted", sources = [{ project = "ReShiki", path = "src/naming/openclatura/mod.rs", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "MIT OR Apache-2.0", symbol = "tests::alkoxy_contractions_preserve_parent_components" }, { project = "openclatura", path = "tests/fixtures/diverse_corpus.csv", ref = "90dc5bcb4910c196122ec0405d06a32929a8f308", license = "MIT", symbol = "<fixture data>" }], notes = "Conservatively adapted exact upstream test inputs/expected names; exact coincidence does not establish independent ancestry. Local harness, assertions, status checks and additional cases remain local extensions. Conservative test-data attribution required by the requested audit rule: shared SMILES/chemical-name literals are attributed even when common chemistry or independent introduction is plausible. Implementation ancestry is uncertain; this decision attributes the test data and does not assert a mechanical port. Fixture-to-consuming-test function mapping is uncertain; the exact upstream fixture path is cited directly." },
@@ -5745,7 +5745,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/molecule.rs"
+path = "crates/nazuchem-s2n/src/molecule.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5806,7 +5806,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/namer.rs"
+path = "crates/nazuchem-s2n/src/namer.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5840,7 +5840,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/nomenclature.rs"
+path = "crates/nazuchem-s2n/src/nomenclature.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -5854,7 +5854,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/numbering.rs"
+path = "crates/nazuchem-s2n/src/numbering.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5900,7 +5900,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/parent_pipeline.rs"
+path = "crates/nazuchem-s2n/src/parent_pipeline.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5939,7 +5939,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/parent_selection.rs"
+path = "crates/nazuchem-s2n/src/parent_selection.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -5975,7 +5975,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/perception.rs"
+path = "crates/nazuchem-s2n/src/perception.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6048,7 +6048,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/phane.rs"
+path = "crates/nazuchem-s2n/src/phane.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
@@ -6057,7 +6057,7 @@ sources = [
 notes = "Original graph-collapse and amplificant-numbering implementation for cyclic phane alternatives and linear-phane status detection."
 
 [[file]]
-path = "src/naming/openclatura/phane/tests.rs"
+path = "crates/nazuchem-s2n/src/phane/tests.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6068,17 +6068,15 @@ sources = [
 notes = "Original Rust phane test harness with explicit OPSIN phane-oracle fixture selectors and assertions."
 parts = [
   { origin = "original", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/phane/tests.rs", license = "MIT OR Apache-2.0", symbol = "round_trip" }], items = ["fn round_trip"] },
-  { origin = "original", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/phane/tests.rs", license = "MIT OR Apache-2.0", symbol = "fixture_smiles" }], items = ["fn fixture_smiles"] },
   { origin = "original", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/phane/tests.rs", license = "MIT OR Apache-2.0", symbol = "cyclic_phane_names_reconstruct_exactly" }], items = ["fn cyclic_phane_names_reconstruct_exactly"] },
   { origin = "adapted", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/phane/tests.rs", license = "MIT OR Apache-2.0", symbol = "declines_out_of_scope_graphs" }, { project = "openclatura", path = "tests/unit/test_analysis.py", ref = "90dc5bcb4910c196122ec0405d06a32929a8f308", license = "MIT", symbol = "test_biphenyl_is_graph_selected_not_exact_name_rewritten" }], items = ["fn declines_out_of_scope_graphs"], notes = "Conservatively adapted exact upstream test inputs/expected names; exact coincidence does not establish independent ancestry. Local harness, assertions, status checks and additional cases remain local extensions. Conservative test-data attribution required by the requested audit rule: shared SMILES/chemical-name literals are attributed even when common chemistry or independent introduction is plausible. Implementation ancestry is uncertain; this decision attributes the test data and does not assert a mechanical port." },
   { origin = "original", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/phane/tests.rs", license = "MIT OR Apache-2.0", symbol = "mixed_attachment_sets_follow_amplificant_seniority" }], items = ["fn mixed_attachment_sets_follow_amplificant_seniority"] },
   { origin = "original", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/phane/tests.rs", license = "MIT OR Apache-2.0", symbol = "failed_ordinary_name_falls_back_to_unverified_phane" }], items = ["fn failed_ordinary_name_falls_back_to_unverified_phane"] },
-  { origin = "mixed", sources = [{ project = "OPSIN", ref = "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91", path = "opsin-inchi/src/test/resources/uk/ac/cam/ch/wwmm/opsin/phanes.txt", license = "MIT", symbol = "module scope (mapping uncertain)" }, { project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/phane/tests.rs", license = "MIT OR Apache-2.0", symbol = "names_independent_upstream_inchi_graphs" }], items = ["fn names_independent_upstream_inchi_graphs"] },
   { origin = "original", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/phane/tests.rs", license = "MIT OR Apache-2.0", symbol = "ordinary_names_with_phane_alternatives_are_never_preferred" }], items = ["fn ordinary_names_with_phane_alternatives_are_never_preferred"] },
 ]
 
 [[file]]
-path = "src/naming/openclatura/polycycle_topology.rs"
+path = "crates/nazuchem-s2n/src/polycycle_topology.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6125,7 +6123,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/principal_groups.rs"
+path = "crates/nazuchem-s2n/src/principal_groups.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6149,7 +6147,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/principal_suffixes.rs"
+path = "crates/nazuchem-s2n/src/principal_suffixes.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6167,7 +6165,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/python_int_set.rs"
+path = "crates/nazuchem-s2n/src/python_int_set.rs"
 origin = "mixed"
 license = "Python-2.0 AND (MIT OR Apache-2.0)"
 sources = [
@@ -6183,7 +6181,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/radical_ions.rs"
+path = "crates/nazuchem-s2n/src/radical_ions.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6205,11 +6203,10 @@ parts = [
   { items = ["fn tests::same_atom_recovery_removes_only_charge_and_radical"], origin = "adapted", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/radical_ions.rs", license = "MIT OR Apache-2.0", symbol = "tests::same_atom_recovery_removes_only_charge_and_radical" }, { project = "openclatura", path = "tests/fixtures/diverse_corpus.csv", ref = "90dc5bcb4910c196122ec0405d06a32929a8f308", license = "MIT", symbol = "<fixture data>" }], notes = "Conservatively adapted exact upstream test inputs/expected names; exact coincidence does not establish independent ancestry. Local harness, assertions, status checks and additional cases remain local extensions. Conservative test-data attribution required by the requested audit rule: shared SMILES/chemical-name literals are attributed even when common chemistry or independent introduction is plausible. Implementation ancestry is uncertain; this decision attributes the test data and does not assert a mechanical port. Fixture-to-consuming-test function mapping is uncertain; the exact upstream fixture path is cited directly." },
   { items = ["fn tests::neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph"], origin = "original", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/radical_ions.rs", license = "MIT OR Apache-2.0", symbol = "tests::neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph" }] },
   { items = ["fn tests::recovery_does_not_add_hydrogen_or_search_remote_resonance_forms"], origin = "adapted", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/radical_ions.rs", license = "MIT OR Apache-2.0", symbol = "tests::recovery_does_not_add_hydrogen_or_search_remote_resonance_forms" }, { project = "openclatura", path = "tests/unit/test_analysis.py", ref = "90dc5bcb4910c196122ec0405d06a32929a8f308", license = "MIT", symbol = "test_public_api_golden_names" }], notes = "Conservatively adapted exact upstream test inputs/expected names; exact coincidence does not establish independent ancestry. Local harness, assertions, status checks and additional cases remain local extensions. Conservative test-data attribution required by the requested audit rule: shared SMILES/chemical-name literals are attributed even when common chemistry or independent introduction is plausible. Implementation ancestry is uncertain; this decision attributes the test data and does not assert a mechanical port." },
-  { items = ["fn tests::drawn_localized_benzene_radical_cation_recovers_benzene"], origin = "adapted", sources = [{ project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "src/naming/openclatura/radical_ions.rs", license = "MIT OR Apache-2.0", symbol = "tests::drawn_localized_benzene_radical_cation_recovers_benzene" }, { project = "openclatura", path = "tests/integration/test_describer.py", ref = "90dc5bcb4910c196122ec0405d06a32929a8f308", license = "MIT", symbol = "test_describe_handles_benzene_without_functional_group" }], notes = "Conservatively adapted exact upstream test inputs/expected names; exact coincidence does not establish independent ancestry. Local harness, assertions, status checks and additional cases remain local extensions. Conservative test-data attribution required by the requested audit rule: shared SMILES/chemical-name literals are attributed even when common chemistry or independent introduction is plausible. Implementation ancestry is uncertain; this decision attributes the test data and does not assert a mechanical port." },
 ]
 
 [[file]]
-path = "src/naming/openclatura/radical_naming.rs"
+path = "crates/nazuchem-s2n/src/radical_naming.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6254,7 +6251,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/retained_derivative_hydrogen.rs"
+path = "crates/nazuchem-s2n/src/retained_derivative_hydrogen.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6270,7 +6267,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/retained_fused_production.rs"
+path = "crates/nazuchem-s2n/src/retained_fused_production.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6293,7 +6290,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/retained_fused_templates.rs"
+path = "crates/nazuchem-s2n/src/retained_fused_templates.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6346,7 +6343,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/retained_graph_model.rs"
+path = "crates/nazuchem-s2n/src/retained_graph_model.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6364,7 +6361,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/retained_name_policy.rs"
+path = "crates/nazuchem-s2n/src/retained_name_policy.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6389,7 +6386,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/retained_specs.rs"
+path = "crates/nazuchem-s2n/src/retained_specs.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -6398,7 +6395,7 @@ sources = [
 notes = "Direct Rust translation of openclatura retained attachment spelling and ambiguous-connection locant policy."
 
 [[file]]
-path = "src/naming/openclatura/ring_assembly.rs"
+path = "crates/nazuchem-s2n/src/ring_assembly.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6463,7 +6460,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/ring_parent.rs"
+path = "crates/nazuchem-s2n/src/ring_parent.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6476,7 +6473,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/ring_renderer.rs"
+path = "crates/nazuchem-s2n/src/ring_renderer.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6497,7 +6494,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/rules/bonds.rs"
+path = "crates/nazuchem-s2n/src/rules/bonds.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -6506,7 +6503,7 @@ sources = [
 notes = "Direct port of openclatura bond suffix constants and multiplied unsaturation infix rendering."
 
 [[file]]
-path = "src/naming/openclatura/rules/elements.rs"
+path = "crates/nazuchem-s2n/src/rules/elements.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -6515,7 +6512,7 @@ sources = [
 notes = "Adapted openclatura element schema/charge limits using a typed immutable Rust JSON loader."
 
 [[file]]
-path = "src/naming/openclatura/rules/elision.rs"
+path = "crates/nazuchem-s2n/src/rules/elision.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -6524,7 +6521,7 @@ sources = [
 notes = "Direct port of openclatura vowel-start testing and terminal-a Hantzsch-Widman elision."
 
 [[file]]
-path = "src/naming/openclatura/rules/mod.rs"
+path = "crates/nazuchem-s2n/src/rules/mod.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
@@ -6533,7 +6530,7 @@ sources = [
 notes = "Original Rust module registration for the ported rules; the upstream rules package initializer is empty."
 
 [[file]]
-path = "src/naming/openclatura/rules/multipliers.rs"
+path = "crates/nazuchem-s2n/src/rules/multipliers.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6561,7 +6558,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/rules/retained.rs"
+path = "crates/nazuchem-s2n/src/rules/retained.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6612,7 +6609,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/rules/stems.rs"
+path = "crates/nazuchem-s2n/src/rules/stems.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -6621,7 +6618,7 @@ sources = [
 notes = "Adapted openclatura established chain-stem constants, numerical generation and terminal-alkyl stem lookup."
 
 [[file]]
-path = "src/naming/openclatura/salt_anion_spelling_tests.rs"
+path = "crates/nazuchem-s2n/src/salt_anion_spelling_tests.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6637,7 +6634,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/small_ring_stereo.rs"
+path = "crates/nazuchem-s2n/src/small_ring_stereo.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6651,7 +6648,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/special_cases.rs"
+path = "crates/nazuchem-s2n/src/special_cases.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6751,7 +6748,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/species.rs"
+path = "crates/nazuchem-s2n/src/species.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6815,7 +6812,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/spelling.rs"
+path = "crates/nazuchem-s2n/src/spelling.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6836,7 +6833,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/spiro_subgraph.rs"
+path = "crates/nazuchem-s2n/src/spiro_subgraph.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6864,7 +6861,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/spirobi.rs"
+path = "crates/nazuchem-s2n/src/spirobi.rs"
 origin = "original"
 license = "MIT OR Apache-2.0"
 sources = [
@@ -6873,7 +6870,7 @@ sources = [
 notes = "Original P-24.3 composer for identical polycyclic spiro components, using attributed component renderers by calls."
 
 [[file]]
-path = "src/naming/openclatura/spirobi_tests.rs"
+path = "crates/nazuchem-s2n/src/spirobi_tests.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6897,7 +6894,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/subgraph_tools.rs"
+path = "crates/nazuchem-s2n/src/subgraph_tools.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6928,7 +6925,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/unknown_stereo.rs"
+path = "crates/nazuchem-s2n/src/unknown_stereo.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -6971,7 +6968,7 @@ parts = [
 ]
 
 [[file]]
-path = "src/naming/openclatura/von_baeyer.rs"
+path = "crates/nazuchem-s2n/src/von_baeyer.rs"
 origin = "mixed"
 license = "MIT AND (MIT OR Apache-2.0)"
 sources = [
@@ -7269,3 +7266,168 @@ sources = [
   { project = "ReShiki", path = "src/naming/openclatura/unknown_stereo.rs", ref = "0d10886c93f6f7aa673f4179739143986d392a01", license = "MIT OR Apache-2.0" },
 ]
 notes = "New Phase A step 3 parity and denied-budget assertions. Original ReShiki radical, malformed-axis and pseudoasymmetric cases are reused with their introduction commits recorded; binol is a local drawing fixture independently checked against RDKit, not a copied RDKit implementation. JSON conversion is confined to these cross-type tests; engine calls use kernel State directly."
+
+[[file]]
+path = "crates/nazuchem-s2n/Cargo.toml"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { "project" = "Nazuchem/ReShiki", "path" = "crates/nazuchem-s2n/Cargo.toml", "ref" = "Phase A step 4 (local extraction)", "license" = "MIT OR Apache-2.0" },
+]
+notes = "Phase A step 4 local extraction documentation and package metadata. Established terms do not resolve the retained Blue Book table; publish = false remains in force."
+sha256 = "3c60364045883dc756495dd91dc44d82c48193b23a542837c240ccc8394f4b55"
+
+[[file]]
+path = "crates/nazuchem-s2n/LICENSE"
+origin = "copy"
+license = "MIT OR Apache-2.0"
+sources = [
+  { "project" = "Nazuchem/ReShiki", "path" = "LICENSE", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
+]
+notes = "Crate-local complete licence copied byte-for-byte from the repository root; third-party terms retain their separate scope."
+sha256 = "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab"
+
+[[file]]
+path = "crates/nazuchem-s2n/LICENSE-APACHE"
+origin = "copy"
+license = "Apache-2.0"
+sources = [
+  { "project" = "Nazuchem/ReShiki", "path" = "LICENSE-APACHE", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "Apache-2.0" },
+]
+notes = "Crate-local complete licence copied byte-for-byte from the repository root; third-party terms retain their separate scope."
+sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+
+[[file]]
+path = "crates/nazuchem-s2n/LICENSE-MIT"
+origin = "copy"
+license = "MIT"
+sources = [
+  { "project" = "Nazuchem/ReShiki", "path" = "LICENSE-MIT", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT" },
+]
+notes = "Crate-local complete licence copied byte-for-byte from the repository root; third-party terms retain their separate scope."
+sha256 = "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+
+[[file]]
+path = "crates/nazuchem-s2n/NOTICE"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { "project" = "Nazuchem/ReShiki", "path" = "crates/nazuchem-s2n/NOTICE", "ref" = "Phase A step 4 (local extraction)", "license" = "MIT OR Apache-2.0" },
+]
+notes = "Phase A step 4 local extraction documentation and package metadata. Established terms do not resolve the retained Blue Book table; publish = false remains in force."
+sha256 = "8f32bb85672f769ea4d6f485b03da7e684ba75ab1c15f985cb91b0d67c68b171"
+
+[[file]]
+path = "crates/nazuchem-s2n/README.md"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { "project" = "Nazuchem/ReShiki", "path" = "crates/nazuchem-s2n/README.md", "ref" = "Phase A step 4 (local extraction)", "license" = "MIT OR Apache-2.0" },
+]
+notes = "Phase A step 4 local extraction documentation and package metadata. Established terms do not resolve the retained Blue Book table; publish = false remains in force."
+sha256 = "4f7364b2a3d3ce0a995785a5cf4d55067cee1e278033d0e09fdbd6fab01f9e79"
+
+[[file]]
+path = "crates/nazuchem-s2n/licenses/cpython/LICENSE"
+origin = "copy"
+license = "Python-2.0"
+sources = [
+  { "project" = "CPython", "path" = "licenses/cpython/LICENSE", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "Python-2.0" },
+]
+notes = "Crate-local complete upstream terms/notice copied byte-for-byte from licenses/cpython/LICENSE. The crate NOTICE qualifies historical path references, incorporated scope and unresolved upstream pins."
+sha256 = "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+
+[[file]]
+path = "crates/nazuchem-s2n/licenses/cpython/NOTICE"
+origin = "copy"
+license = "Python-2.0"
+sources = [
+  { "project" = "CPython", "path" = "licenses/cpython/NOTICE", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "Python-2.0" },
+]
+notes = "Crate-local complete upstream terms/notice copied byte-for-byte from licenses/cpython/NOTICE. The crate NOTICE qualifies historical path references, incorporated scope and unresolved upstream pins."
+sha256 = "aacc8aa61d679ab70d08a0b9b0ba658013f574c9e7c1442b17b843f7ac2a21ad"
+
+[[file]]
+path = "crates/nazuchem-s2n/licenses/openclatura/LICENSE"
+origin = "copy"
+license = "MIT"
+sources = [
+  { "project" = "openclatura", "path" = "licenses/openclatura/LICENSE", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT" },
+]
+notes = "Crate-local complete upstream terms/notice copied byte-for-byte from licenses/openclatura/LICENSE. The crate NOTICE qualifies historical path references, incorporated scope and unresolved upstream pins."
+sha256 = "ad516fd7a236924e80aedb55ad8d9c446e3e4882947b6b8bfcfdc53cb6a4e455"
+
+[[file]]
+path = "crates/nazuchem-s2n/licenses/openclatura/NOTICE"
+origin = "copy"
+license = "MIT"
+sources = [
+  { "project" = "openclatura", "path" = "licenses/openclatura/NOTICE", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT" },
+]
+notes = "Crate-local complete upstream terms/notice copied byte-for-byte from licenses/openclatura/NOTICE. The crate NOTICE qualifies historical path references, incorporated scope and unresolved upstream pins."
+sha256 = "91e03be9047f65abf4a62dd1c0b19a32452a2b4d3378e474276659890953e8eb"
+
+[[file]]
+path = "crates/nazuchem-s2n/licenses/opsin/LICENSE"
+origin = "copy"
+license = "MIT"
+sources = [
+  { "project" = "OPSIN", "path" = "crates/opsin/LICENSE", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT" },
+]
+notes = "Crate-local complete upstream terms/notice copied byte-for-byte from crates/opsin/LICENSE. The crate NOTICE qualifies historical path references, incorporated scope and unresolved upstream pins."
+sha256 = "aeeafe2053175a5b34cb2ded4410581ccd36b82c734315be1a7a81c6f9fb4834"
+
+[[file]]
+path = "crates/nazuchem-s2n/licenses/opsin/NOTICE"
+origin = "copy"
+license = "MIT"
+sources = [
+  { "project" = "OPSIN", "path" = "crates/opsin/NOTICE", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT" },
+]
+notes = "Crate-local complete upstream terms/notice copied byte-for-byte from crates/opsin/NOTICE. The crate NOTICE qualifies historical path references, incorporated scope and unresolved upstream pins."
+sha256 = "371633076e5aaabf178dfc2ed38fb4c652b2bacee4a0d20c903ad894e3de634a"
+
+[[file]]
+path = "crates/nazuchem-s2n/src/identity.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { "project" = "ReShiki", "path" = "src/naming.rs", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
+  { "project" = "ReShiki", "path" = "src/naming/reverse.rs", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
+  { "project" = "ReShiki", "path" = "src/naming/local.rs", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
+  { "project" = "ReShiki", "path" = "src/naming/tests.rs", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
+  { "project" = "ReShiki", "path" = "crates/model/src/molecule_names.rs", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
+]
+notes = "Original ReShiki naming admission, canonical identity verification and alternative verification moved onto kernel State with an injected Budget. Preserves the private atom-token admission regression and original rejection/verification policy."
+
+[[file]]
+path = "src/naming/s2n_integration_tests.rs"
+origin = "mixed"
+license = "MIT AND (MIT OR Apache-2.0)"
+sources = [
+  { "project" = "ReShiki", "ref" = "5f559fd482e237307a589dfcb7ea333cee0a6e13", "path" = "src/naming/openclatura/phane/tests.rs", "license" = "MIT OR Apache-2.0" },
+  { "project" = "OPSIN", "ref" = "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91", "path" = "opsin-inchi/src/test/resources/uk/ac/cam/ch/wwmm/opsin/phanes.txt", "license" = "MIT" },
+  { "project" = "ReShiki", "ref" = "5f559fd482e237307a589dfcb7ea333cee0a6e13", "path" = "src/naming/openclatura/radical_ions.rs", "license" = "MIT OR Apache-2.0" },
+  { "project" = "openclatura", "path" = "tests/integration/test_describer.py", "ref" = "90dc5bcb4910c196122ec0405d06a32929a8f308", "license" = "MIT" },
+  { "project" = "ReShiki", "path" = "src/naming/openclatura/mod.rs", "ref" = "5f559fd482e237307a589dfcb7ea333cee0a6e13", "license" = "MIT OR Apache-2.0" },
+  { "project" = "ReShiki", "path" = "src/naming/s2n_integration_tests.rs", "ref" = "Phase A step 4 (local extraction)", "license" = "MIT OR Apache-2.0" },
+]
+notes = "Application document and upstream-InChI integration tests retained in ReShiki after extracting the host-neutral engine. Individual functions preserve their previous source attribution; phane_name is a local test wrapper."
+parts = [
+  { "origin" = "original", "sources" = [{ "project" = "ReShiki", "ref" = "5f559fd482e237307a589dfcb7ea333cee0a6e13", "path" = "src/naming/openclatura/phane/tests.rs", "license" = "MIT OR Apache-2.0", "symbol" = "fixture_smiles" }], "items" = ["fn fixture_smiles"] },
+  { "origin" = "mixed", "sources" = [{ "project" = "OPSIN", "ref" = "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91", "path" = "opsin-inchi/src/test/resources/uk/ac/cam/ch/wwmm/opsin/phanes.txt", "license" = "MIT", "symbol" = "module scope (mapping uncertain)" }, { "project" = "ReShiki", "ref" = "5f559fd482e237307a589dfcb7ea333cee0a6e13", "path" = "src/naming/openclatura/phane/tests.rs", "license" = "MIT OR Apache-2.0", "symbol" = "names_independent_upstream_inchi_graphs" }], "items" = ["fn names_independent_upstream_inchi_graphs"] },
+  { "origin" = "original", "sources" = [{ "project" = "ReShiki", "ref" = "5f559fd482e237307a589dfcb7ea333cee0a6e13", "path" = "src/naming/openclatura/phane/tests.rs", "license" = "MIT OR Apache-2.0", "symbol" = "round_trip" }], "items" = ["fn round_trip"] },
+  { "items" = ["fn drawn_localized_benzene_radical_cation_recovers_benzene"], "origin" = "adapted", "sources" = [{ "project" = "ReShiki", "ref" = "5f559fd482e237307a589dfcb7ea333cee0a6e13", "path" = "src/naming/openclatura/radical_ions.rs", "license" = "MIT OR Apache-2.0", "symbol" = "tests::drawn_localized_benzene_radical_cation_recovers_benzene" }, { "project" = "openclatura", "path" = "tests/integration/test_describer.py", "ref" = "90dc5bcb4910c196122ec0405d06a32929a8f308", "license" = "MIT", "symbol" = "test_describe_handles_benzene_without_functional_group" }], "notes" = "Conservatively adapted exact upstream test inputs/expected names; exact coincidence does not establish independent ancestry. Local harness, assertions, status checks and additional cases remain local extensions. Conservative test-data attribution required by the requested audit rule: shared SMILES/chemical-name literals are attributed even when common chemistry or independent introduction is plausible. Implementation ancestry is uncertain; this decision attributes the test data and does not assert a mechanical port." },
+  { "origin" = "original", "sources" = [{ "project" = "ReShiki", "path" = "src/naming/openclatura/mod.rs", "ref" = "5f559fd482e237307a589dfcb7ea333cee0a6e13", "license" = "MIT OR Apache-2.0", "symbol" = "tests::pheno_fusion_components_choose_preferred_parents_and_round_trip" }], "items" = ["fn pheno_fusion_components_choose_preferred_parents_and_round_trip"] },
+  { "origin" = "original", "sources" = [{ "project" = "ReShiki", "path" = "src/naming/s2n_integration_tests.rs", "ref" = "Phase A step 4 (local extraction)", "license" = "MIT OR Apache-2.0", "symbol" = "phane_name" }], "items" = ["fn phane_name"] },
+]
+
+[[file]]
+path = "crates/nazuchem-s2n/src/test_support.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { "project" = "ReShiki", "path" = "src/naming/local.rs", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
+  { "project" = "ReShiki", "path" = "src/naming/worker.rs", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
+]
+notes = "Test-only original ReShiki strict-import and generated-name verification adapters use direct OPSIN parsing and kernel identity checks. Preserves mode-specific options while removing the application worker and document boundary."

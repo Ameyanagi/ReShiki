@@ -3,7 +3,7 @@ use crate::{
     chemistry,
     document::Document,
     editing,
-    molecule_names::{self, IdentityRejection, MAX_NAMING_ATOMS, MAX_SMILES_BYTES, is_tetrahedral},
+    molecule_names::{self, IdentityRejection, MAX_NAMING_ATOMS},
 };
 pub use nazuchem_ir::{AlternativeName, IsotopeStyle, NameReason, NameStatus};
 use std::collections::{HashMap, HashSet};
@@ -34,8 +34,8 @@ pub use catalog::{Alias, AliasSource, aliases_for_smiles};
 mod client;
 mod local;
 mod online;
+pub use nazuchem_s2n as openclatura;
 pub use online::resolve_name_online;
-pub mod openclatura;
 mod reverse;
 mod symbols;
 /// Translate explicit one-letter peptide input into its three-letter title.
@@ -43,7 +43,11 @@ pub fn peptide_sequence(name: &str) -> Result<String, Error> {
     symbols::peptide_sequence(name)
 }
 #[cfg(test)]
+use molecule_names::is_tetrahedral;
+#[cfg(test)]
 mod s2n_harness;
+#[cfg(test)]
+mod s2n_integration_tests;
 pub mod worker;
 #[cfg(not(target_arch = "wasm32"))]
 pub use {
@@ -301,79 +305,7 @@ fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<Strin
 /// stereo. Reserved axis markers carry biaryl configuration; other maps and
 /// atom order are not molecular identity.
 pub fn canonical_smiles(text: &str) -> Result<String, String> {
-    if text.len() > MAX_SMILES_BYTES || text.contains('|') || text.contains('>') {
-        return Err(
-            "Naming requires ordinary molecular SMILES without reaction or CX extensions".into(),
-        );
-    }
-    bound_atom_tokens(text)?;
-    // Native import cleans unusable winding and can discard non-tetrahedral
-    // classes. Check the raw graph first, before that cleanup changes identity.
-    // Unlike canonical_identity, this raw check intentionally covers atoms only.
-    let raw = chemistry::smiles::parse(text).map_err(|e| e.to_string())?;
-    if raw.metadata.atoms.iter().any(|m| m.chiral_tag > 2) {
-        return Err("Naming does not support allene or coordination stereo classes; no plain graph was substituted".into());
-    }
-    let specified_atoms = raw
-        .metadata
-        .atoms
-        .iter()
-        .filter(|m| is_tetrahedral(m.chiral_tag))
-        .count();
-    let imported = chemistry::smiles::read(text).map_err(|e| e.to_string())?;
-    if imported.dropped_cumulene_ez {
-        return Err("Naming does not support cumulene E/Z configuration yet; no less specific name was substituted".into());
-    }
-    if specified_atoms
-        != imported
-            .prepared
-            .state
-            .metadata
-            .atoms
-            .iter()
-            .filter(|m| is_tetrahedral(m.chiral_tag))
-            .count()
-    {
-        return Err("Native import could not retain every specified tetrahedral center; no name or graph was assigned".into());
-    }
-    let state = molecule_names::apply_axis_markers(&imported.prepared.state)
-        .map_err(|_| "Naming received invalid biaryl axis markers".to_owned())?;
-    canonical_state(&state)
-}
-
-/// Reject oversized output before native sanitization/ranking can allocate or
-/// expand a graph. Bracket atoms count once; Cl/Br are two-character atoms.
-fn bound_atom_tokens(text: &str) -> Result<(), String> {
-    let bytes = text.as_bytes();
-    let mut i = 0;
-    let mut atoms = 0usize;
-    while let Some(&b) = bytes.get(i) {
-        if b == b'[' {
-            atoms += 1;
-            let end = bytes
-                .get(i + 1..)
-                .and_then(|s| s.iter().position(|&b| b == b']'))
-                .ok_or("Unclosed naming SMILES atom")?;
-            i += end + 2;
-        } else {
-            if b.is_ascii_alphabetic() || b == b'*' {
-                atoms += 1;
-                if (b == b'C' && bytes.get(i + 1) == Some(&b'l'))
-                    || (b == b'B' && bytes.get(i + 1) == Some(&b'r'))
-                {
-                    i += 1;
-                }
-            }
-            i += 1;
-        }
-        if atoms > MAX_NAMING_ATOMS {
-            return Err(
-                "Naming supports at most 512 input atom tokens; no oversized graph was imported"
-                    .into(),
-            );
-        }
-    }
-    Ok(())
+    nazuchem_s2n::canonical_smiles(text, &kernel_budget())
 }
 
 /// Require complete molecules or salt ions. Abbreviation selection expands to
@@ -588,10 +520,7 @@ pub fn plain_smiles(identity: &str) -> String {
 }
 
 pub fn verify_identity(expected: &str, actual: &str) -> Result<(), String> {
-    if canonical_smiles(expected)? != canonical_smiles(actual)? {
-        return Err("The source structure differs in connectivity, charge, isotope, tautomer or stereochemistry. No name was assigned".into());
-    }
-    Ok(())
+    nazuchem_s2n::verify_identity(expected, actual, &kernel_budget())
 }
 
 #[cfg(test)]

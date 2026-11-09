@@ -1,0 +1,18 @@
+[package]
+name = "nazuchem-s2n"
+version = "0.1.0"
+edition = "2024"
+publish = false
+# Established terms; Blue Book-derived tables remain NOASSERTION pending the
+# owner's source/licensing decision. This crate is not publishable yet.
+license = "MIT AND (MIT OR Apache-2.0) AND Python-2.0"
+description = "Structure-to-name library begun as a port of openclatura 0.4.3, extended in ReShiki"
+
+[dependencies]
+nazuchem-ir = { path = "../nazuchem-ir" }
+nazuchem-kernel = { path = "../nazuchem-kernel" }
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[dev-dependencies]
+opsin = { path = "../opsin" }

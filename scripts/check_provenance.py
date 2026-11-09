@@ -25,7 +25,7 @@ REQUIRED_ROOTS = (
     "crates/nazuchem-ir",
     "crates/nazuchem-kernel",
     "crates/opsin",
-    "src/naming/openclatura",
+    "crates/nazuchem-s2n",
 )
 REQUIRED_FIXTURES = (
     "src/naming/catalog/data.json",

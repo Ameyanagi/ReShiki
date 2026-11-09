@@ -30,6 +30,7 @@ members = [
   "crates/chemistry",
   "crates/nazuchem-ir",
   "crates/nazuchem-kernel",
+  "crates/nazuchem-s2n",
   "crates/depict-math",
   "crates/io",
   "crates/mcp",
@@ -74,6 +75,7 @@ iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 [dependencies]
 nazuchem-ir = { path = "crates/nazuchem-ir" }
 nazuchem-kernel = { path = "crates/nazuchem-kernel" }
+nazuchem-s2n = { path = "crates/nazuchem-s2n" }
 opsin = { path = "crates/opsin" }
 reshiki-geometry = { path = "native/geometry" }
 accesskit = "=0.24.1"
