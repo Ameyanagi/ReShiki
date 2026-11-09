@@ -788,14 +788,24 @@ async fn cxsmiles_refuses_axes_added_by_retained_wedges_beside_wavy_doubles() ->
         );
         assert_eq!(state.directions[1], Direction::Unknown);
         assert_eq!(state.directions[6], Direction::Wedge);
-        let error = engine
-            .request(Request::import("smiles", text))
-            .await
-            .unwrap_err();
-        assert!(
-            error.contains("The drawing cannot keep this structure's atropisomer axes"),
-            "{error}"
-        );
+        match engine.request(Request::import("smiles", text)).await {
+            // #1049 redraws coordinate-free wedges from the stereo.
+            Ok(response) if read.conformers.is_empty() => assert!(
+                document::prepare(response.document.as_ref().unwrap())?
+                    .state
+                    .metadata
+                    .bonds
+                    .iter()
+                    .all(|b| !matches!(b.stereo, 6 | 7))
+            ),
+            result => {
+                let error = result.unwrap_err();
+                assert!(
+                    error.contains("The drawing cannot keep this structure's atropisomer axes"),
+                    "{error}"
+                );
+            }
+        }
         let unwedged = text.replace("wU:0.6,", "");
         let response = engine
             .request(Request::import("smiles", &unwedged))
