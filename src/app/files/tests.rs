@@ -313,20 +313,48 @@ fn edits_during_a_save_reopen_the_pending_dialog() {
     assert_eq!(app.tab.doc, edited);
 }
 
-/// The CLI and app agree on their supported molecular file extensions.
+#[test]
+fn prepare_rejects_unsupported_files_and_shows_the_reason() {
+    let contents = b"caffeine\n     RDKit          2D\n\n 14 15  0  0  0  0  0  0  0  0999 V2000\n";
+    for (name, expected) in [
+        ("simple.sdf", "Can't import .sdf"),
+        ("simple.SDF", "Can't import .sdf"),
+        ("notes.txt", "Can't import .txt"),
+        ("drawing", "Can't import this file"),
+    ] {
+        let path = std::path::Path::new(name);
+        let error = prepare(path, contents.to_vec()).unwrap_err();
+        assert_eq!(error, expected, "{name}");
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::FilePrepared(Some((path.into(), Err(error)))));
+        assert!(app.error);
+        assert_eq!(app.status, expected, "{name}");
+    }
+}
+
+#[test]
+fn prepare_preserves_smiles_extensions() {
+    for name in ["drawing.smi", "drawing.smiles", "drawing.SMI"] {
+        assert!(
+            matches!(
+                prepare(std::path::Path::new(name), b"C".to_vec()).unwrap(),
+                Prepared::Import { format: "smiles", contents } if contents == "C"
+            ),
+            "{name}"
+        );
+    }
+}
+
+/// The CLI and app agree on molecular file extensions the app opens.
 /// Crystal inputs are recognized but rejected by the CLI argument parser.
 #[test]
 fn cli_input_formats_match_the_app() {
     let native = Document::default().file_json().unwrap();
     for extension in [
         "rsk", "RSK", "reshiki", "moruno", "mol", "rxn", "rsmi", "cdxml", "CDXML", "cdx", "inchi",
-        "smi", "smiles", "txt", "",
+        "smi", "smiles",
     ] {
-        let path = if extension.is_empty() {
-            PathBuf::from("drawing")
-        } else {
-            PathBuf::from(format!("drawing.{extension}"))
-        };
+        let path = PathBuf::from(format!("drawing.{extension}"));
         let contents = if reshiki::compatibility::is_native_extension(extension) {
             native.clone()
         } else {
