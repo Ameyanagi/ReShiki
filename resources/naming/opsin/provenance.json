@@ -2,7 +2,7 @@
   "schema": 1,
   "nazuchem": {
     "repository": "https://github.com/Ameyanagi/nazuchem",
-    "rev": "f418fea6747aad48d9f5cb020b00b8afc55cbb31"
+    "rev": "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3"
   },
   "opsin": {
     "repository": "https://github.com/dan2097/opsin",

@@ -52,10 +52,10 @@ default-members = [
 version = "0.14.0"
 
 [workspace.dependencies]
-nazuchem-ir = { git = "https://github.com/Ameyanagi/nazuchem", rev = "f418fea6747aad48d9f5cb020b00b8afc55cbb31" }
-nazuchem-kernel = { git = "https://github.com/Ameyanagi/nazuchem", rev = "f418fea6747aad48d9f5cb020b00b8afc55cbb31" }
-nazuchem-n2s = { git = "https://github.com/Ameyanagi/nazuchem", rev = "f418fea6747aad48d9f5cb020b00b8afc55cbb31" }
-nazuchem-s2n = { git = "https://github.com/Ameyanagi/nazuchem", rev = "f418fea6747aad48d9f5cb020b00b8afc55cbb31" }
+nazuchem-ir = { git = "https://github.com/Ameyanagi/nazuchem", rev = "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3" }
+nazuchem-kernel = { git = "https://github.com/Ameyanagi/nazuchem", rev = "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3" }
+nazuchem-n2s = { git = "https://github.com/Ameyanagi/nazuchem", rev = "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3" }
+nazuchem-s2n = { git = "https://github.com/Ameyanagi/nazuchem", rev = "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }

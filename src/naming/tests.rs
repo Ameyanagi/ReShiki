@@ -922,6 +922,7 @@ async fn iupac_audit_cases() {
                     NameStatus::Preferred => "preferred",
                     NameStatus::NotPreferred(_) => "not_preferred",
                     NameStatus::Unverified(_) => "unverified",
+                    _ => "unverified",
                 },
             ),
             Err(_) => (String::new(), "refuse"),

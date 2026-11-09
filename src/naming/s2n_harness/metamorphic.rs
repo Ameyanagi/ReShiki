@@ -358,6 +358,7 @@ fn issue_953_ester_and_n_substituent_numbering_matrix() {
                     NameStatus::Preferred => "preferred",
                     NameStatus::NotPreferred(_) => "not_preferred",
                     NameStatus::Unverified(_) => "unverified",
+                    _ => "unverified",
                 };
                 if (name.as_str(), status) != (expected_name, expected_status) {
                     errors.push(format!(
