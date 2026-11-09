@@ -445,6 +445,105 @@ fn imported_smiles(text: &str) -> anyhow::Result<Box<Prepared>> {
     Ok(prepared)
 }
 
+#[test]
+fn paclitaxel_import_inner_rail_clears_both_ends_and_the_c15_bridge() -> anyhow::Result<()> {
+    use crate::{document::Point, graphics::segment_distance, scene::Primitive};
+
+    let imported = imported_smiles(
+        "CC1=C2[C@H](C(=O)[C@@]3([C@H](C[C@@H]4[C@]([C@H]3[C@@H]([C@@](C2(C)C)(C[C@@H]1OC(=O)[C@@H]([C@H](C5=CC=CC=C5)NC(=O)C6=CC=CC=C6)O)O)OC(=O)C7=CC=CC=C7)(CO4)OC(=O)C)O)C)OC(=O)C",
+    )?;
+    let doc = &imported.document; // Default import layout, without cleanup.
+    let neighbors = |id| {
+        doc.bonds
+            .iter()
+            .filter(|bond| bond.a == id || bond.b == id)
+            .map(|bond| if bond.a == id { bond.b } else { bond.a })
+            .collect::<Vec<_>>()
+    };
+    // C15 has two terminal methyls; C11=C12 is the adjacent ring C=C.
+    let c15 = doc
+        .atoms
+        .iter()
+        .find(|atom| {
+            atom.element == "C"
+                && neighbors(atom.id).len() == 4
+                && neighbors(atom.id)
+                    .iter()
+                    .filter(|&&id| doc.atom(id).unwrap().element == "C" && neighbors(id).len() == 1)
+                    .count()
+                    == 2
+        })
+        .expect("The fixture must have the C15 gem-dimethyl bridge");
+    let double = doc
+        .bonds
+        .iter()
+        .find(|bond| {
+            bond.order == 2
+                && [bond.a, bond.b]
+                    .iter()
+                    .all(|&id| doc.atom(id).unwrap().element == "C")
+                && [bond.a, bond.b]
+                    .iter()
+                    .any(|id| neighbors(c15.id).contains(id))
+        })
+        .expect("The fixture must have C11=C12 adjacent to C15");
+    let a = doc.atom(double.a).unwrap().position;
+    let b = doc.atom(double.b).unwrap().position;
+    let length = a.distance(b);
+    let (ux, uy) = ((b.x - a.x) / length, (b.y - a.y) / length);
+    let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+    let offset = |p: Point| ux * (p.y - a.y) - uy * (p.x - a.x);
+    let along = |p: Point| ux * (p.x - a.x) + uy * (p.y - a.y);
+    let rails = crate::scene::primitives(doc)
+        .into_iter()
+        .filter_map(|primitive| match primitive {
+            Primitive::Line(p, q, _)
+                if (offset(p).abs() - spacing).abs() < 0.001
+                    && (offset(q) - offset(p)).abs() < 0.001
+                    && [p, q].iter().all(|&p| (0. ..=length).contains(&along(p))) =>
+            {
+                Some((p, q))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rails.len(),
+        1,
+        "The scene must retain the C11=C12 inner rail"
+    );
+    let (p, q) = rails[0];
+    let cross =
+        |a: Point, b: Point, c: Point| (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    for end in [double.a, double.b] {
+        for next in neighbors(end)
+            .into_iter()
+            .filter(|&id| id != double.a && id != double.b)
+        {
+            let origin = doc.atom(end).unwrap().position;
+            let other = doc.atom(next).unwrap().position;
+            // Rule out crossings before measuring endpoint-to-segment distances.
+            assert!(
+                cross(p, q, origin) * cross(p, q, other) > 0.
+                    || cross(origin, other, p) * cross(origin, other, q) > 0.
+            );
+            let gap = [
+                segment_distance(p, origin, other),
+                segment_distance(q, origin, other),
+                segment_distance(origin, p, q),
+                segment_distance(other, p, q),
+            ]
+            .into_iter()
+            .fold(f32::INFINITY, f32::min);
+            assert!(
+                gap >= spacing - 0.001,
+                "C11=C12 inner rail crowds bond {end}-{next}: {gap} < {spacing}"
+            );
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn imported_butenes_retain_specified_or_unspecified_stereo_through_exports()
 -> anyhow::Result<()> {

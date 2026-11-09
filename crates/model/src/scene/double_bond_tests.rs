@@ -521,6 +521,97 @@ fn small_ring_inner_rail_endpoints_follow_bisectors_and_large_rings_keep_their_t
 }
 
 #[test]
+fn short_acute_neighbor_keeps_the_inner_rail_and_its_clearance() {
+    use crate::graphics::segment_distance;
+
+    let doc = chain(
+        &[(0., 0.), (42., 0.), (9.84808, 1.73648)],
+        &[(0, 1, 2), (0, 2, 1)],
+    );
+    let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+    let (a, b) = primitives(&doc)
+        .into_iter()
+        .find_map(|p| match p {
+            Primitive::Line(a, b, _)
+                if (a.y - spacing).abs() < 0.001 && (b.y - spacing).abs() < 0.001 =>
+            {
+                Some((a, b))
+            }
+            _ => None,
+        })
+        .expect("The short neighbor must not erase the inner rail");
+    let (origin, end) = (doc.atoms[0].position, doc.atoms[2].position);
+    let gap = [
+        segment_distance(a, origin, end),
+        segment_distance(b, origin, end),
+        segment_distance(origin, a, b),
+        segment_distance(end, a, b),
+    ]
+    .into_iter()
+    .fold(f32::INFINITY, f32::min);
+    assert!(gap >= spacing - 0.001, "Inner rail crowds neighbor: {gap}");
+}
+
+#[test]
+fn ring_inner_rail_clears_an_acute_second_neighbor_at_either_end() {
+    // A bridge can meet the rail past the usual ring neighbor's setback.
+    for (side, endpoint) in [(-1., 0), (-1., 1), (1., 0), (1., 1)] {
+        let mut doc = chain(
+            &[
+                (0., 0.),
+                (42., 0.),
+                (63., 36. * side),
+                (42., 72. * side),
+                (0., 72. * side),
+                (-21., 36. * side),
+            ],
+            &[
+                (0, 1, 2),
+                (1, 2, 1),
+                (2, 3, 1),
+                (3, 4, 1),
+                (4, 5, 1),
+                (5, 0, 1),
+            ],
+        );
+        let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+        let inner = |doc: &Document| {
+            primitives(doc)
+                .into_iter()
+                .find_map(|p| match p {
+                    Primitive::Line(a, b, _)
+                        if (a.y - spacing * side).abs() < 0.001
+                            && (b.y - spacing * side).abs() < 0.001 =>
+                    {
+                        Some(if a.x < b.x { [a, b] } else { [b, a] })
+                    }
+                    _ => None,
+                })
+                .expect("The ring must retain its inner rail")
+        };
+        let normal = inner(&doc);
+        let origin = doc.atoms[endpoint].position;
+        let direction = if endpoint == 0 { 1. } else { -1. };
+        let angle = 25_f32.to_radians();
+        let bridge = doc.add_atom(
+            "C",
+            origin.offset(42. * angle.cos() * direction, 42. * angle.sin() * side),
+        );
+        doc.add_bond(doc.atoms[endpoint].id, bridge, 1, "plain");
+        let ends = inner(&doc);
+        assert!(ends[1 - endpoint].distance(normal[1 - endpoint]) < 0.001);
+        let (dx, dy) = (angle.cos() * direction, angle.sin() * side);
+        let gap = side
+            * direction
+            * (dy * (ends[endpoint].x - origin.x) - dx * (ends[endpoint].y - origin.y));
+        assert!(
+            gap >= spacing - 0.001,
+            "Inner rail touches the bridge: side={side}, endpoint={endpoint}, gap={gap}"
+        );
+    }
+}
+
+#[test]
 fn forced_terminal_offset_leaves_the_bare_end_untrimmed() {
     let mut doc = chain(&[(0., 0.), (42., 0.), (-21., 36.)], &[(0, 1, 2), (0, 2, 1)]);
     doc.bonds[0].double_position = DoublePosition::Right;

@@ -103,8 +103,13 @@ pub(crate) fn bond_rails(faces: &FaceIndex<'_>, bond: &Bond) -> Vec<BondRail> {
                                 };
                                 // cot(theta/2) = (|v| + dot(u,v)) / |cross(u,v)|.
                                 (across > 0.001).then(|| {
-                                    (spacing * (length + along) / across)
-                                        .clamp(spacing * 0.75, spacing * 2.)
+                                    let mut setback = spacing * (length + along) / across;
+                                    // Beyond the finite neighbor, clear its endpoint instead of its line.
+                                    if setback * along + spacing * across > length * length {
+                                        setback = along
+                                            + (across * (2. * spacing - across)).max(0.).sqrt();
+                                    }
+                                    setback.max(spacing * 0.75)
                                 })
                             })
                             .fold(0., f32::max)
