@@ -13,12 +13,14 @@ if TYPE_CHECKING or __package__:
     from .cxsmiles_cases import cases as interaction_cases
     from .perception_reference import snapshot
     from .smiles_prepare_reference import all_cases as bare_cases
+    from .support.cx_stereo_groups import renumber
     from .valence_reference import ORDERS
 else:
     from cxsmarts_reference import cases as cx_cases
     from cxsmiles_cases import cases as interaction_cases
     from perception_reference import snapshot
     from smiles_prepare_reference import all_cases as bare_cases
+    from support.cx_stereo_groups import renumber
     from valence_reference import ORDERS
 
 
@@ -59,46 +61,61 @@ def prepared_snapshot(mol):
     return snapshot(observed, "symmetric")
 
 
+def observe(text):
+    try:
+        mol = Chem.MolFromSmiles(text)
+        if (
+            mol is None
+            or any(a.HasQuery() for a in mol.GetAtoms())
+            or any(b.HasQuery() for b in mol.GetBonds())
+            or any(b.GetBondType() not in ORDERS.values() for b in mol.GetBonds())
+        ):
+            raise ValueError("Invalid or query SMILES")
+        conformers = []
+        for conf in mol.GetConformers():
+            points = [
+                dict(zip(("x", "y", "z"), conf.GetAtomPosition(a.GetIdx()), strict=True))
+                for a in mol.GetAtoms()
+            ]
+            # JSON null represents nonfinite coordinates in the Rust serializer.
+            points = [
+                {k: v if math.isfinite(v) else None for k, v in point.items()} for point in points
+            ]
+            conformers.append(dict(positions=points, is_3d=conf.Is3D()))
+        expected = dict(
+            prepared=dict(
+                state=prepared_snapshot(mol),
+                dummy_labels=[
+                    a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
+                    for a in mol.GetAtoms()
+                ],
+            ),
+            conformers=conformers,
+            name=mol.GetProp("_Name") if mol.HasProp("_Name") else None,
+        )
+        failure = None
+    except (ValueError, RuntimeError, OverflowError) as error:
+        expected, failure = None, str(error)
+    return dict(expected=expected, failure=failure)
+
+
 def main():
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     for name, text in cases():
-        try:
-            mol = Chem.MolFromSmiles(text)
-            if (
-                mol is None
-                or any(a.HasQuery() for a in mol.GetAtoms())
-                or any(b.HasQuery() for b in mol.GetBonds())
-                or any(b.GetBondType() not in ORDERS.values() for b in mol.GetBonds())
-            ):
-                raise ValueError("Invalid or query SMILES")
-            conformers = []
-            for conf in mol.GetConformers():
-                points = [
-                    dict(zip(("x", "y", "z"), conf.GetAtomPosition(a.GetIdx()), strict=True))
-                    for a in mol.GetAtoms()
-                ]
-                # JSON null represents nonfinite coordinates in the Rust serializer.
-                points = [
-                    {k: v if math.isfinite(v) else None for k, v in point.items()}
-                    for point in points
-                ]
-                conformers.append(dict(positions=points, is_3d=conf.Is3D()))
-            expected = dict(
-                prepared=dict(
-                    state=prepared_snapshot(mol),
-                    dummy_labels=[
-                        a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
-                        for a in mol.GetAtoms()
-                    ],
-                ),
-                conformers=conformers,
-                name=mol.GetProp("_Name") if mol.HasProp("_Name") else None,
-            )
-            failure = None
-        except (ValueError, RuntimeError, OverflowError) as error:
-            expected, failure = None, str(error)
-        print(json.dumps(dict(name=name, text=text, expected=expected, failure=failure)))
+        original = observe(text)
+        alternate = None
+        if normalized := renumber(text):
+            rewritten, identities = normalized
+            observed = observe(rewritten)
+            if observed["expected"] is not None:
+                for group in observed["expected"]["prepared"]["state"]["metadata"]["groups"]:
+                    group["read_id"] = identities.get(
+                        (group["kind"], group["read_id"]), group["read_id"]
+                    )
+            if observed["expected"] != original["expected"]:
+                alternate = dict(name=name, text=rewritten, **observed)
+        print(json.dumps(dict(name=name, text=text, **original, renumbered=alternate)))
 
 
 if __name__ == "__main__":
