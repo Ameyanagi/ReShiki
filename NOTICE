@@ -9,7 +9,6 @@ of adaptations, copyright notices, and license texts are recorded in:
 
   nazuchem dependency     Naming engines and their molecular perception kernel
                           https://github.com/Ameyanagi/nazuchem
-  licenses/nazuchem/      Preserved facade and dependency provenance notice
   licenses/rdkit/          Molecular algorithms, data, and reference fixtures
   licenses/centres/        Extended-tetrahedral CIP configuration (BSD-2-Clause)
   licenses/openclatura/    Structure-to-name port, rule tables, and fixtures (MIT)

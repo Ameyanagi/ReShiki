@@ -11,7 +11,8 @@
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Keep document and InChI integration checks in ReShiki after extracting the naming engine.
 // Local contributions: MIT OR Apache-2.0; see NOTICE and
-// https://github.com/Ameyanagi/nazuchem/blob/f418fea6747aad48d9f5cb020b00b8afc55cbb31/PROVENANCE-nazuchem.toml.
+// PROVENANCE-nazuchem.toml at the nazuchem revision pinned in Cargo.toml:
+// https://github.com/Ameyanagi/nazuchem/blob/main/PROVENANCE-nazuchem.toml.
 
 //! Application integrations for the extracted structure-to-name library.
 

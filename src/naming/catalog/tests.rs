@@ -173,6 +173,30 @@ fn pinned_resource(file: &str) -> &'static str {
 }
 
 #[test]
+fn opsin_provenance_pins_every_retained_file() {
+    use sha2::{Digest, Sha256};
+
+    let provenance: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../resources/naming/opsin/provenance.json"
+    ))
+    .unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let files = provenance["files"].as_array().unwrap();
+    assert!(!files.is_empty());
+    for file in files {
+        let path = file["path"].as_str().unwrap();
+        let bytes = std::fs::read(root.join(path))
+            .unwrap_or_else(|error| panic!("Cannot read {path}: {error}"));
+        assert_eq!(file["bytes"], bytes.len(), "{path}");
+        assert_eq!(
+            file["sha256"],
+            format!("{:x}", Sha256::digest(&bytes)),
+            "{path}"
+        );
+    }
+}
+
+#[test]
 fn catalog_provenance_pins_the_shipping_data_and_all_cited_resources() {
     use sha2::{Digest, Sha256};
 

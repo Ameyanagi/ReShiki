@@ -30,7 +30,7 @@ name, openclatura text for parity, decline reason) for analysis, and
 `{fast,full}-status.tsv` with the [PIN status](chemical-naming-rust.md#preferred-iupac-name-status)
 of every named row: check, SMILES, status (`preferred`, `not_preferred` or
 `unverified`) and reason. The ignored `parity_file` test in
-[`nazuchem-s2n/src/lib.rs`](https://github.com/Ameyanagi/nazuchem/blob/f418fea6747aad48d9f5cb020b00b8afc55cbb31/crates/nazuchem-s2n/src/lib.rs) names the SMILES in `OPENCLATURA_PARITY` and
+[`nazuchem-s2n/src/lib.rs`](https://github.com/Ameyanagi/nazuchem/blob/main/crates/nazuchem-s2n/src/lib.rs) names the SMILES in `OPENCLATURA_PARITY` and
 adds the same status and reason columns to each `different` row it writes.
 Run that engine test in a nazuchem checkout at ReShiki's pinned revision.
 
@@ -220,7 +220,7 @@ conservative checks on stereo the OPSIN reading can invert: stereocentres
 ranked through a mancude-ring duplicate atom (RDKit's CIP labels and OPSIN can
 disagree there), nitrogen centres and ring centres with a lone pair (P, As,
 S+). Lines marked `Upstream divergence` in the
-[`nazuchem-s2n` sources](https://github.com/Ameyanagi/nazuchem/tree/f418fea6747aad48d9f5cb020b00b8afc55cbb31/crates/nazuchem-s2n/src) list every
+[`nazuchem-s2n` sources](https://github.com/Ameyanagi/nazuchem/tree/main/crates/nazuchem-s2n/src) list every
 such decline. The remaining
 `mr_assembly` and `mr_spiro` rows need fused parents (`naphthalene`,
 `spiro[indene-1,1'-indene]`). Previous rules-namer baseline: structure 145,

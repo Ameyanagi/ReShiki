@@ -24,9 +24,8 @@ class LicenseNoticeTests(unittest.TestCase):
             )
         )
         runtime_names = {"nazuchem-ir", "nazuchem-kernel", "nazuchem-n2s", "nazuchem-s2n"}
-        naming_names = runtime_names | {"nazuchem"}
-        packages = [p for p in metadata["packages"] if p["name"] in naming_names]
-        self.assertTrue(runtime_names <= {p["name"] for p in packages})
+        packages = [p for p in metadata["packages"] if p["name"].startswith("nazuchem")]
+        self.assertEqual({p["name"] for p in packages}, runtime_names)
         workspace = tomllib.loads((repository / "Cargo.toml").read_text())["workspace"]
         declaration = workspace["dependencies"]["nazuchem-ir"]
         self.assertEqual(declaration["git"], "https://github.com/Ameyanagi/nazuchem")
@@ -43,22 +42,7 @@ class LicenseNoticeTests(unittest.TestCase):
         self.assertEqual(len(packages), len(sources))
         self.assertEqual(len({source.parent for source in sources.values()}), 1)
 
-        # The unused facade is not a production dependency. Its sibling manifest
-        # in the same fetched revision supplies source-only notice coverage.
-        if "nazuchem" not in sources:
-            source = sources["nazuchem-ir"].parent / "nazuchem"
-            manifest = source / "Cargo.toml"
-            declaration = tomllib.loads(manifest.read_text())["package"]
-            self.assertEqual(declaration["name"], "nazuchem")
-            packages.append(
-                {
-                    **declaration,
-                    "source": git_source,
-                    "manifest_path": str(manifest),
-                }
-            )
-            sources["nazuchem"] = source
-        self.assertEqual(set(sources), naming_names)
+        self.assertEqual(set(sources), runtime_names)
         self.assertEqual(
             next(p["license"] for p in packages if p["name"] == "nazuchem-s2n"),
             "MIT AND (MIT OR Apache-2.0) AND Python-2.0",
@@ -77,6 +61,7 @@ class LicenseNoticeTests(unittest.TestCase):
                 {"packages": packages, "workspace_members": metadata["workspace_members"]},
             )
             result = (root / "output" / THIRD_PARTY_FILE).read_bytes()
+            self.assertFalse((root / "licenses/nazuchem").exists())
             opsin_source = sources["nazuchem-n2s"]
             root_terms = {name: repository / name for name in ("LICENSE-MIT", "LICENSE-APACHE")}
             # License grants remain identical to the retained root copies.
@@ -118,33 +103,44 @@ class LicenseNoticeTests(unittest.TestCase):
             copies = {
                 "nazuchem-ir": root_terms,
                 "nazuchem-s2n": {
+                    "LICENSE": repository / "LICENSE",
                     **root_terms,
                     **openclatura_terms,
                     **opsin_terms,
                     **cpython_terms,
                 },
-                "nazuchem-kernel": {**root_terms, **kernel_terms},
-                "nazuchem-n2s": {"LICENSE": opsin_source / "LICENSE"},
-                "nazuchem": {
+                "nazuchem-kernel": {
+                    "LICENSE": repository / "LICENSE",
                     **root_terms,
-                    **opsin_terms,
-                    **openclatura_terms,
-                    **cpython_terms,
                     **kernel_terms,
                 },
+                "nazuchem-n2s": {"LICENSE": opsin_source / "LICENSE"},
             }
+            expected_labels = set()
             for package in packages:
                 name, version = package["name"], package["version"]
                 for relative, upstream in copies[name].items():
                     with self.subTest(component=name, relative=relative):
                         expected = upstream.read_bytes()
                         self.assertEqual((sources[name] / relative).read_bytes(), expected)
-                        self.assertIn(f"{name}@{version}/{relative}".encode(), result)
+                        label = f"{name}@{version}/{relative}"
+                        expected_labels.add(label)
+                        self.assertIn(label.encode(), result)
                         self.assertIn(expected, result)
                 for relative in ("NOTICE", "Cargo.toml"):
                     with self.subTest(component=name, relative=relative):
-                        self.assertIn(f"{name}@{version}/{relative}".encode(), result)
+                        label = f"{name}@{version}/{relative}"
+                        expected_labels.add(label)
+                        self.assertIn(label.encode(), result)
                         self.assertIn((sources[name] / relative).read_bytes(), result)
+            # All 26 crate-local license/notice files and four Cargo manifests
+            # must be indexed directly from the four production dependencies.
+            index = result.split(b"\nCOMPLETE TEXTS\n", 1)[0].decode()
+            actual_labels = {
+                line.strip() for line in index.splitlines() if line.startswith("  nazuchem")
+            }
+            self.assertEqual(len(expected_labels), 30)
+            self.assertEqual(actual_labels, expected_labels)
             self.assertIn(f"source: {json.dumps(git_source)}".encode(), result)
             self.assertNotIn(b"Original workspace crate:", result)
             self.assertNotIn(b"Separately licensed workspace component:", result)

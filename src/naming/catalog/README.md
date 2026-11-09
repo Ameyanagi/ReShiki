@@ -63,7 +63,7 @@ accessed 11 October 2026. It identifies the explicit S graph
 `C[C@H](O)C(=O)O`; ChEBI attributes this synonym to NIST. ChEBI website data is
 [CC BY 4.0](https://www.ebi.ac.uk/chebi/about). The source attribution and full
 legal code are in [licenses/name-aliases](../../../licenses/name-aliases/NOTICE).
-OPSIN's [MIT license](https://github.com/Ameyanagi/nazuchem/blob/f418fea6747aad48d9f5cb020b00b8afc55cbb31/crates/nazuchem-n2s/LICENSE) remains separate from
+OPSIN's [MIT license](https://github.com/Ameyanagi/nazuchem/blob/main/crates/nazuchem-n2s/LICENSE) remains separate from
 ReShiki's original MIT OR Apache-2.0 integration code. Binary packaging
 includes these notices through the existing license collector.
 
