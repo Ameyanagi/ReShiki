@@ -193,6 +193,7 @@ class AgentDependencyTests(unittest.TestCase):
             "MIT/Apache-2.0",
             "(MIT OR Apache-2.0) AND Unicode-3.0",
             "BSD-2-Clause OR BSD-3-Clause OR ISC OR Zlib",
+            "MIT AND (MIT OR Apache-2.0) AND Python-2.0",
         ):
             with self.subTest(expression=expression):
                 self.assertTrue(license_allowed(expression))

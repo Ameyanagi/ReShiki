@@ -1,0 +1,711 @@
+// SPDX-License-Identifier: MIT AND (MIT OR Apache-2.0)
+// Origin: mixed
+// Source: openclatura | src/openclatura/functional_prefixes.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Source: ReShiki | src/naming/openclatura/functional_prefixes.rs | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json | 90dc5bcb4910c196122ec0405d06a32929a8f308
+// Copyright (c) 2026 lamalab-org
+// Copyright (c) 2026 Ameyanagi and ReShiki contributors
+// Changes: Openclatura characteristic-prefix handlers consolidated into a Rust dispatcher.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+
+//! Characteristic groups cited as prefixes, in upstream registry order.
+use super::{
+    assembly_parts::{RenderedSubstituentName, SubstituentItem},
+    assembly_prefixes::substituent_sort_key,
+    component_group_rules::{amide_nitrogen, ester_or_peroxy_single_oxygen, is_carboxylate_group},
+    formatting::{format_center_ligands_by, format_multiplier, strip_outer_parentheses},
+    molecule::{AtomSet, Molecule, bond_ids_within},
+    namer::{name_subgraph_rendered, name_subgraph_with_upstream},
+    nomenclature::RULES,
+    perception::{LigandRole, PerceivedGroup},
+    subgraph_tools::subgraph_component,
+};
+use nazuchem_ir::{NameReason, NameStatus};
+use std::collections::BTreeMap;
+
+pub struct PrefixContext<'a> {
+    pub mol: &'a Molecule,
+    pub parent_path: &'a [usize],
+    pub sub_exclude: &'a AtomSet,
+}
+
+// Provenance: fn chalcogen_term | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::_element_data
+fn chalcogen_term(element: &str, field: &str) -> Result<&'static str, String> {
+    super::nomenclature::section("chalcogen_elements")[element][field]
+        .as_str()
+        .ok_or_else(|| format!("openclatura: {element} {field} not ported"))
+}
+
+// Provenance: fn element_ligand | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::inline in ester_prefix_handler
+fn element_ligand(branch: RenderedSubstituentName, element: &str) -> Result<String, String> {
+    // Upstream divergence: amidooxy contractions change the attachment of N-acyl aminooxy ligands.
+    let plain = strip_outer_parentheses(&branch.text);
+    if plain.ends_with("amido") && !super::formatting::is_complex_prefix(&plain) {
+        return Err("openclatura: amido chalcogen-ligand attachment is not supported".into());
+    }
+    if element == "O" {
+        return Ok(branch.into_oxy_prefix());
+    }
+    Ok(super::formatting::format_element_substituent(
+        "",
+        &branch.text,
+        chalcogen_term(element, "substituent_suffix")?,
+        false,
+    ))
+}
+
+// Provenance: fn central_linkage_prefix | adapted
+// Source: openclatura | src/openclatura/chalcogen_vocabulary.py::central_linkage_prefix
+fn central_linkage_prefix(group: &PerceivedGroup) -> Option<&'static str> {
+    let descriptor = group.descriptor.as_ref()?;
+    let element = descriptor.central_element.as_deref()?;
+    let count = descriptor.ligands_with_role(LigandRole::DoubleBonded).len();
+    super::nomenclature::section("chalcogen_central_acid_origins")
+        .as_array()?
+        .iter()
+        .find(|r| {
+            r["element"].as_str() == Some(element)
+                && r["double_bond_count"].as_u64() == Some(count as u64)
+        })?["linkage_prefix"]
+        .as_str()
+}
+
+// Provenance: fn descriptor_ester_prefix | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::ester_prefix_handler
+// Source: openclatura | src/openclatura/functional_prefixes.py::central_ester_prefix_handler
+fn descriptor_ester_prefix(
+    context: &PrefixContext<'_>,
+    group: &PerceivedGroup,
+) -> Result<Option<String>, String> {
+    let Some(d) = &group.descriptor else {
+        return Ok(None);
+    };
+    let doubles = d.ligands_with_role(LigandRole::DoubleBonded);
+    let linkers: Vec<_> = d
+        .ligands
+        .iter()
+        .filter(|l| l.role != LigandRole::DoubleBonded)
+        .collect();
+    let Some(terminal) = linkers.last() else {
+        return Ok(None);
+    };
+    let Some(root) = terminal.attachment_atom else {
+        return Ok(None);
+    };
+    if doubles.len() != 1 && d.family != "central_acid" {
+        return Ok(None);
+    }
+    let mut blocked = context.sub_exclude.clone();
+    blocked.insert(terminal.atom);
+    let branch = name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom), false)?;
+    let mut ligand = element_ligand(branch, &terminal.element)?;
+    for linker in linkers[..linkers.len() - 1].iter().rev() {
+        ligand = element_ligand(
+            RenderedSubstituentName {
+                text: ligand,
+                ..Default::default()
+            },
+            &linker.element,
+        )?;
+    }
+    let base = if d.family == "central_acid" {
+        central_linkage_prefix(group).unwrap_or("")
+    } else {
+        chalcogen_term(&doubles[0].element, "acyl_center_prefix")?
+    };
+    Ok(Some(format!(
+        "({}{base})",
+        strip_outer_parentheses(&ligand)
+    )))
+}
+
+// Provenance: fn central_chalcogen_linkage_prefix | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::central_chalcogen_linkage_prefix_handler
+fn central_chalcogen_linkage_prefix(
+    context: &PrefixContext<'_>,
+    group: &PerceivedGroup,
+) -> Result<String, String> {
+    let d = group
+        .descriptor
+        .as_ref()
+        .ok_or("openclatura: missing central linkage descriptor")?;
+    let bridge: Vec<_> = d
+        .ligands
+        .iter()
+        .filter(|l| l.role != LigandRole::DoubleBonded)
+        .collect();
+    let Some(base) = central_linkage_prefix(group) else {
+        return Ok(group.prefix().unwrap_or("").into());
+    };
+    if bridge.len() != 2 {
+        return Ok(group.prefix().unwrap_or("").into());
+    }
+    let terminal = bridge[1];
+    let terminal_text = if terminal.role == LigandRole::HydrogenBearing {
+        let key = super::nomenclature::section("chalcogen_simple_group_keys")
+            .as_array()
+            .and_then(|rows| {
+                rows.iter().find(|r| {
+                    r["family"].as_str() == Some("hydroxy")
+                        && r["derivative"].as_str() == Some("alcohol")
+                        && r["element"].as_str() == Some(terminal.element.as_str())
+                })
+            })
+            .and_then(|r| r["key"].as_str());
+        key.and_then(|k| RULES.functional_groups.cited_prefix_for(k))
+            .unwrap_or_default()
+    } else if matches!(
+        terminal.role,
+        LigandRole::CarbonLink | LigandRole::HeteroatomLink
+    ) {
+        if let Some(root) = terminal.attachment_atom {
+            let mut blocked = context.sub_exclude.clone();
+            blocked.insert(terminal.atom);
+            element_ligand(
+                name_subgraph_rendered(context.mol, root, &blocked, Some(terminal.atom), false)?,
+                &terminal.element,
+            )?
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+    if terminal_text.is_empty() {
+        return Ok(group.prefix().unwrap_or("").into());
+    }
+    Ok(format!(
+        "({}{base})",
+        element_ligand(
+            RenderedSubstituentName {
+                text: terminal_text,
+                ..Default::default()
+            },
+            &bridge[0].element
+        )?
+    ))
+}
+
+// Provenance: fn nitrogen_group_prefix | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::amidine_prefix_handler
+// Source: openclatura | src/openclatura/functional_prefixes.py::hydrazide_prefix_handler
+// Source: openclatura | src/openclatura/functional_prefixes.py::hydrazine_prefix_handler
+fn nitrogen_group_prefix(
+    context: &PrefixContext<'_>,
+    group: &PerceivedGroup,
+) -> Result<String, String> {
+    let mol = context.mol;
+    let hydrazine = group.key == "hydrazine";
+    let amidine = matches!(group.key.as_str(), "amidine" | "ring_amidine");
+    let mut ns: Vec<_> = group
+        .atoms_involved
+        .iter()
+        .copied()
+        .filter(|i| mol.atoms[i].symbol == "N")
+        .collect();
+    let core = group
+        .atoms_involved
+        .iter()
+        .copied()
+        .find(|i| mol.atoms[i].is_carbon() && ns.iter().any(|&n| mol.get_bond(*i, n).is_some()))
+        .unwrap_or(group.attachment_carbon);
+    ns.sort_by_key(|&n| {
+        if amidine {
+            mol.bond_order(n, core)
+        } else {
+            usize::from(mol.get_bond(n, core).is_none())
+        }
+    });
+    let stereo = if amidine {
+        ns.last()
+            .and_then(|&n| mol.get_bond(n, core))
+            .and_then(|b| b.stereo.as_ref())
+            .map(|s| format!("({s})-"))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let base = if hydrazine {
+        "hydrazinyl"
+    } else if amidine {
+        "carbamimidoyl"
+    } else {
+        "hydrazinecarbonyl"
+    };
+    let mut names: Vec<(String, Vec<String>)> = Vec::new();
+    for (index, &n) in ns.iter().take(2).enumerate() {
+        let loc = if hydrazine || amidine {
+            if index == 0 { "N" } else { "N'" }
+        } else if index == 0 {
+            "1"
+        } else {
+            "2"
+        };
+        for &root in mol.get_neighbors(n) {
+            if root == core
+                || group.atoms_involved.contains(&root)
+                || mol.atoms[&root].symbol == "H"
+            {
+                continue;
+            }
+            let mut blocked = context.sub_exclude.clone();
+            blocked.insert(n);
+            let text = name_subgraph_with_upstream(mol, root, &blocked, Some(n))?;
+            if let Some((_, locants)) = names.iter_mut().find(|(name, _)| name == &text) {
+                locants.push(loc.into());
+            } else {
+                names.push((text, vec![loc.into()]));
+            }
+        }
+    }
+    if names.is_empty() {
+        return Ok(if stereo.is_empty() {
+            base.into()
+        } else {
+            format!("({stereo}{base})")
+        });
+    }
+    if !hydrazine {
+        names.sort_by_key(|(name, _)| substituent_sort_key(name));
+    }
+    let prefixes = names
+        .into_iter()
+        .map(|(name, locs)| {
+            format!(
+                "{}-{}",
+                locs.join(","),
+                format_multiplier(
+                    &name,
+                    locs.len(),
+                    super::formatting::is_complex_prefix(&name)
+                )
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("-");
+    let base = if !hydrazine && !amidine {
+        "hydrazine-1-carbonyl"
+    } else {
+        base
+    };
+    Ok(format!("({stereo}{prefixes}{base})"))
+}
+
+// Provenance: fn ester_prefix_from_group | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::ester_prefix_from_group
+pub fn ester_prefix_from_group(
+    mol: &Molecule,
+    group: &PerceivedGroup,
+    exclude: &AtomSet,
+    suffix: &str,
+) -> Result<String, String> {
+    let Some(oxygen) = ester_or_peroxy_single_oxygen(mol, group) else {
+        return Ok(String::new());
+    };
+    let Some(&root) = mol
+        .get_neighbors(oxygen)
+        .iter()
+        .find(|n| !group.atoms_involved.contains(n))
+    else {
+        return Ok(String::new());
+    };
+    let mut blocked = exclude.clone();
+    blocked.insert(oxygen);
+    let branch = name_subgraph_rendered(mol, root, &blocked, Some(oxygen), false)?;
+    if RULES.prefixes.peroxy_ester_groups.contains(&group.key) {
+        return Ok(format!(
+            "({}peroxycarbonyl)",
+            format_multiplier(&strip_outer_parentheses(&branch.text), 1, false)
+        ));
+    }
+    Ok(format!("({}{suffix})", branch.into_oxy_prefix()))
+}
+
+// Provenance: fn amide_prefix_from_group | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::amide_prefix_from_group
+pub fn amide_prefix_from_group(
+    mol: &Molecule,
+    group: &PerceivedGroup,
+    exclude: &AtomSet,
+) -> Result<String, String> {
+    let Some(nitrogen) = amide_nitrogen(mol, group) else {
+        return Ok(String::new());
+    };
+    let base = group
+        .resolved_rule
+        .as_ref()
+        .and_then(|r| r.prefix.as_deref())
+        .unwrap_or("");
+    let mut blocked = exclude.clone();
+    blocked.insert(nitrogen);
+    let subs: Vec<_> = mol
+        .get_neighbors(nitrogen)
+        .iter()
+        .filter(|n| !group.atoms_involved.contains(n) && mol.atoms[n].symbol != "H")
+        .copied()
+        .collect();
+    if subs.is_empty() {
+        return Ok(base.into());
+    }
+    let names = subs
+        .into_iter()
+        .map(|n| name_subgraph_with_upstream(mol, n, &blocked, Some(nitrogen)))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(format!(
+        "({}{base})",
+        format_center_ligands_by(&names, substituent_sort_key)
+    ))
+}
+
+// Provenance: fn prefix_from_group | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::prefix_from_group
+pub fn prefix_from_group(
+    context: &PrefixContext<'_>,
+    group: &PerceivedGroup,
+) -> Result<String, String> {
+    let Some(rule) = group
+        .resolved_rule
+        .as_ref()
+        .or_else(|| RULES.functional_groups.get(&group.key))
+    else {
+        return Ok(String::new());
+    };
+    let families = &rule.families;
+    // P-72.6.1: an acid anion cited as a prefix remains carboxylato. The
+    // ester-like registry family is shared with neutral carboxylate esters.
+    if is_carboxylate_group(group) {
+        return Ok("carboxylato".into());
+    }
+    if RULES.functional_groups.get(&group.key).is_none()
+        && let Some(d) = &group.descriptor
+        && d.family == "central_acid"
+    {
+        if d.ligands
+            .iter()
+            .filter(|l| l.role != LigandRole::DoubleBonded)
+            .count()
+            == 2
+        {
+            return central_chalcogen_linkage_prefix(context, group);
+        }
+        if rule.has_capability("ester_like")
+            && let Some(prefix) = descriptor_ester_prefix(context, group)?
+        {
+            return Ok(prefix);
+        }
+    }
+    if families.contains("direct_prefix") {
+        return Ok(RULES
+            .functional_groups
+            .cited_prefix_for(&group.key)
+            .unwrap_or_default());
+    }
+    if matches!(
+        group.key.as_str(),
+        "hydrazide" | "ring_hydrazide" | "amidine" | "ring_amidine" | "hydrazine"
+    ) {
+        return nitrogen_group_prefix(context, group);
+    }
+    if group.key == "imino_prefix" || group.key == "iminium" {
+        let base = if group.key == "iminium" {
+            "iminio"
+        } else {
+            "imino"
+        };
+        let Some(n) = amide_nitrogen(context.mol, group) else {
+            return Ok(base.into());
+        };
+        let roots: Vec<_> = context
+            .mol
+            .get_neighbors(n)
+            .iter()
+            .copied()
+            .filter(|r| {
+                *r != group.attachment_carbon
+                    && !group.atoms_involved.contains(r)
+                    && context.mol.atoms[r].symbol != "H"
+            })
+            .collect();
+        if group.key == "iminium" {
+            super::amine_oxides::assess_cationic_prefix(context.mol, n);
+            if context.mol.get_neighbors(n).iter().all(|&neighbor| {
+                neighbor == group.attachment_carbon || context.mol.atoms[&neighbor].symbol == "H"
+            }) {
+                return Ok("azaniumylidene".into());
+            }
+            context
+                .mol
+                .mark_name(NameStatus::Unverified(NameReason::CationPrefix));
+        }
+        if roots.is_empty() {
+            return Ok(base.into());
+        }
+        let mut blocked = context.sub_exclude.clone();
+        blocked.insert(n);
+        let names = roots
+            .into_iter()
+            .map(|r| name_subgraph_with_upstream(context.mol, r, &blocked, Some(n)))
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(format!(
+            "({}{base})",
+            format_center_ligands_by(&names, substituent_sort_key)
+        ));
+    }
+    if families.contains("sulfonyl") {
+        let name = ester_prefix_from_group(context.mol, group, context.sub_exclude, "sulfonyl")?;
+        return Ok(if name.is_empty() {
+            "sulfo".into()
+        } else {
+            name
+        });
+    }
+    if families.contains("peroxy_acid") {
+        // Upstream divergence: hydroperoxycarbonyl duplicates a center already in the parent.
+        if group.descriptor.as_ref().is_none_or(|descriptor| {
+            descriptor
+                .centers
+                .iter()
+                .any(|center| context.parent_path.contains(center))
+        }) {
+            return Err("openclatura: peroxy-acid prefix overlaps its parent carbon".into());
+        }
+        return Ok("hydroperoxycarbonyl".into());
+    }
+    if rule.has_capability("acyl_leaving_group") {
+        return Ok(rule
+            .prefix
+            .as_ref()
+            .map(|s| format!("({s})"))
+            .unwrap_or_default());
+    }
+    if families.contains("cyano_prefix") {
+        return Ok("cyano".into());
+    }
+    if families.contains("carboxy_prefix") {
+        return Ok("carboxy".into());
+    }
+    if families.contains("amide_like") || rule.has_capability("amide_like") {
+        return amide_prefix_from_group(context.mol, group, context.sub_exclude);
+    }
+    if families.contains("ester_like") || rule.has_capability("ester_like") {
+        if !RULES.prefixes.peroxy_ester_groups.contains(&group.key)
+            && let Some(prefix) = descriptor_ester_prefix(context, group)?
+        {
+            return Ok(prefix);
+        }
+        return ester_prefix_from_group(context.mol, group, context.sub_exclude, "carbonyl");
+    }
+    Ok(if context.parent_path.contains(&group.attachment_carbon) {
+        if group.key == "aminium"
+            && !amide_nitrogen(context.mol, group).is_some_and(|n| {
+                context.mol.get_neighbors(n).iter().all(|&neighbor| {
+                    neighbor == group.attachment_carbon
+                        || context.mol.atoms[&neighbor].symbol == "H"
+                })
+            })
+        {
+            if let Some(n) = amide_nitrogen(context.mol, group) {
+                super::amine_oxides::assess_cationic_prefix(context.mol, n);
+            }
+            context
+                .mol
+                .mark_name(NameStatus::Unverified(NameReason::CationPrefix));
+            return Ok("ammonio".into());
+        }
+        rule.prefix.clone().unwrap_or_default()
+    } else {
+        String::new()
+    })
+}
+
+// Provenance: fn collect_component_prefix_substituents | adapted
+// Source: openclatura | src/openclatura/functional_prefixes.py::collect_component_prefix_substituents
+pub fn collect_component_prefix_substituents(
+    mol: &Molecule,
+    groups: &[PerceivedGroup],
+    path: &[usize],
+    exclude: &AtomSet,
+) -> Result<(BTreeMap<usize, Vec<SubstituentItem>>, AtomSet), String> {
+    let parent: AtomSet = path.iter().copied().collect();
+    let mut mapping: BTreeMap<usize, Vec<SubstituentItem>> = BTreeMap::new();
+    let mut handled = AtomSet::new();
+    let context = PrefixContext {
+        mol,
+        parent_path: path,
+        sub_exclude: exclude,
+    };
+    for group in groups {
+        if group
+            .resolved_rule
+            .as_ref()
+            .is_some_and(|r| r.families.contains("prefix_skip"))
+            || !parent.contains(&group.attachment_carbon)
+        {
+            continue;
+        }
+        let name = prefix_from_group(&context, group)?;
+        if name.is_empty() {
+            continue;
+        }
+        let mut atoms = group.atoms_involved.clone();
+        for &idx in &group.atoms_involved {
+            for &n in mol.get_neighbors(idx) {
+                if n != group.attachment_carbon
+                    && !group.atoms_involved.contains(&n)
+                    && !parent.contains(&n)
+                    && !exclude.contains(&n)
+                    && mol.atoms[&n].symbol != "H"
+                {
+                    let mut blocked = exclude.clone();
+                    blocked.insert(idx);
+                    atoms.extend(subgraph_component(mol, n, &blocked));
+                }
+            }
+        }
+        let mut bond_atoms = atoms.clone();
+        bond_atoms.insert(group.attachment_carbon);
+        let mut item = SubstituentItem::new(name, vec![]);
+        // Cyano is a simple characteristic prefix even when its parent
+        // locant is omitted and another substituent is cited beside it.
+        item.outer_parentheses_optional = matches!(group.key.as_str(), "nitrile" | "ring_nitrile");
+        item.bond_ids = bond_ids_within(mol, &bond_atoms);
+        item.charge_atom_ids = atoms
+            .iter()
+            .copied()
+            .filter(|i| mol.atoms[i].charge != 0)
+            .collect();
+        item.atom_ids = atoms;
+        mapping
+            .entry(group.attachment_carbon)
+            .or_default()
+            .push(item);
+        handled.extend(&group.atoms_involved);
+    }
+    Ok((mapping, handled))
+}
+
+#[cfg(test)]
+// Provenance: mod tests | original
+// Source: ReShiki | src/naming/openclatura/functional_prefixes.rs::tests
+mod tests {
+    use super::super::name_smiles;
+
+    #[test]
+    // Provenance: fn tests::acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key | adapted
+    // Source: ReShiki | src/naming/openclatura/functional_prefixes.rs::tests::acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key
+    // Source: openclatura | tests/data/parser_xml_resources/simpleSubstituents.json::<fixture data>
+    // Test provenance: upstream inputs/expected names with local assertions and extensions;
+    // exact matches are conservatively adapted; independent ancestry is not established.
+    fn acid_anion_prefix_uses_its_charge_descriptor_not_the_shared_ester_key() {
+        for (smiles, derivative, expected) in [
+            ("CC(=O)[O-]", "anion", "carboxylato"),
+            ("COC(=O)c1ccccc1", "ester", "(methoxycarbonyl)"),
+        ] {
+            let mol = super::super::graph_io::read_smiles(smiles, &Default::default()).unwrap();
+            let group = super::super::perception::perceive_groups(&mol)
+                .into_iter()
+                .find(|g| {
+                    g.descriptor
+                        .as_ref()
+                        .is_some_and(|d| d.family == "acyl" && d.derivative == derivative)
+                })
+                .unwrap();
+            let context = super::PrefixContext {
+                mol: &mol,
+                parent_path: &[group.attachment_carbon],
+                sub_exclude: &super::AtomSet::from([group.attachment_carbon]),
+            };
+            assert_eq!(
+                super::prefix_from_group(&context, &group).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn external_acid_groups_are_cited_before_recursive_parent_assembly() {
+        for (smiles, expected) in [
+            (
+                "[O-]C(=O)c1ccccc1-c1[n-]cc(C(=O)[O-])c1",
+                "5-(2-carboxylatophenyl)-1H-pyrrol-1-ide-3-carboxylate",
+            ),
+            (
+                "[O-]C(=O)c1ccccc1CC(=O)[O-]",
+                "2-(carboxylatomethyl)benzoate",
+            ),
+            (
+                "O=C([O-])c1ccc(cc1)Oc1ccc(cc1)C(=O)[O-]",
+                "4-(4-carboxylatophenoxy)benzoate",
+            ),
+            ("[O-]C(=O)c1ccccc1CC(=O)O", "2-(carboxymethyl)benzoate"),
+            (
+                "[O-]C(=O)c1cc([NH3+])ccc1CC(=O)O",
+                "5-azaniumyl-2-(carboxymethyl)benzoate",
+            ),
+        ] {
+            // Exercise the same canonical input boundary as the CLI.
+            let canonical = crate::test_support::canonical_smiles(smiles).unwrap();
+            assert_eq!(
+                name_smiles(&canonical, &Default::default()).unwrap().text,
+                expected,
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn unsubstituted_aminium_prefix_uses_azaniumyl() {
+        let mol = super::super::graph_io::read_smiles("C[NH3+]", &Default::default()).unwrap();
+        let group = super::super::perception::perceive_groups(&mol)
+            .into_iter()
+            .find(|group| group.key == "aminium")
+            .unwrap();
+        let context = super::PrefixContext {
+            mol: &mol,
+            parent_path: &[group.attachment_carbon],
+            sub_exclude: &super::AtomSet::new(),
+        };
+        assert_eq!(
+            super::prefix_from_group(&context, &group).unwrap(),
+            "azaniumyl"
+        );
+        assert_eq!(
+            mol.name_status(),
+            nazuchem_ir::NameStatus::Unverified(nazuchem_ir::NameReason::UnauditedPath)
+        );
+    }
+
+    #[test]
+    fn peroxy_ester_prefix_encloses_only_complex_ligands() {
+        for (smiles, expected) in [
+            ("COOC(=O)CC(=O)O", "(methylperoxycarbonyl)acetic acid"),
+            (
+                "CC(C)OOC(=O)CC(=O)O",
+                "[(propan-2-yl)peroxycarbonyl]acetic acid",
+            ),
+        ] {
+            let name = name_smiles(smiles, &Default::default()).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            let parsed = crate::test_support::parse_strict(&name.text).unwrap();
+            assert_eq!(
+                crate::test_support::canonical_smiles(smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
+                "{}",
+                name.text
+            );
+        }
+    }
+
+    #[test]
+    fn peroxy_carbamate_keeps_competing_ester_prefix_route() {
+        assert_eq!(
+            name_smiles("COOC(=O)N1[C@H](C=O)CC[C@H]1C(=O)O", &Default::default())
+                .map(|name| name.text)
+                .as_deref(),
+            Ok("(2S,5S)-5-formyl-1-[(methoxyoxy)carbonyl]pyrrolidine-2-carboxylic acid")
+        );
+    }
+}

@@ -1,0 +1,47 @@
+nazuchem-s2n source provenance
+=============================
+
+This structure-to-name engine began as a port of openclatura 0.4.3, extended
+in ReShiki, where it previously lived in src/naming/openclatura/. Source headers
+and the repository-root PROVENANCE-nazuchem.toml preserve the original ancestry
+and function-level boundaries; packaging it as a library does not make
+incorporated algorithms original nazuchem code.
+
+openclatura 0.4.3, commit 90dc5bcb4910c196122ec0405d06a32929a8f308:
+https://github.com/lamalab-org/openclatura
+Copyright (c) 2026 lamalab-org. Complete MIT terms and source/data attribution
+are in licenses/openclatura/LICENSE and licenses/openclatura/NOTICE.
+
+OPSIN by Daniel Lowe:
+https://github.com/dan2097/opsin
+Copyright 2017 Daniel Lowe. Incorporated nomenclature registries include
+material from OPSIN 2.9.0, commit b91b610af5ab07560fedb20730d7aef46bb2bca0,
+and data inherited through openclatura whose generating OPSIN revision was
+not recorded. In particular, fusion_entry_geometry.json derives from OPSIN
+2.9.0 FusedRingNumberer.java; it records parser compatibility, not IUPAC PIN
+certification. Retained macrocycle and fused-hydrocarbon template generation
+has no recorded OPSIN revision; the current n2s port pin is not asserted for
+those data. Complete MIT terms and the existing broader port notice are in
+licenses/opsin/LICENSE and licenses/opsin/NOTICE. The per-file ledger records
+the incorporated sources and unresolved pins.
+
+src/python_int_set.rs adapts CPython 3.12 Objects/setobject.c under
+Python-2.0. Its exact patch release/commit is unresolved. The complete licence
+and history are in licenses/cpython/LICENSE; licenses/cpython/NOTICE retains
+the existing attribution and distinguishes this source from the independently
+pinned numeric adaptations elsewhere in ReShiki. This safe Rust code does
+not include or invoke the Python interpreter.
+
+The copied upstream notices retain their original ReShiki path references
+and broader inventories. References to src/naming/openclatura/ in them now
+identify this crate's src/; they do not assert that every listed ReShiki
+component is incorporated here. Root copies remain for ReShiki's retained
+implementations and reference corpora.
+
+Original ReShiki/nazuchem code uses MIT OR Apache-2.0; see LICENSE-MIT and
+LICENSE-APACHE. Pending owner decision: src/data/bluebook/p25_retained.tsv
+retains NOASSERTION for its unresolved IUPAC table reuse permission/licensing
+and unpinned web revision. The manifest expression records established terms
+only, not a grant for unresolved material; publish = false is retained.
+PubChem-derived reference corpora retained outside this crate are test-only;
+their unresolved source terms are not covered by the local dual-licence grant.

@@ -2786,6 +2786,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nazuchem-s2n"
+version = "0.1.0"
+dependencies = [
+ "nazuchem-ir",
+ "nazuchem-kernel",
+ "opsin",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3915,6 +3926,7 @@ dependencies = [
  "js-sys",
  "nazuchem-ir",
  "nazuchem-kernel",
+ "nazuchem-s2n",
  "open",
  "opsin",
  "pdf-writer",

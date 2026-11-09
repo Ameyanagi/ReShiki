@@ -4,6 +4,7 @@ import hashlib
 import json
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -12,6 +13,67 @@ from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, write_notices
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_checked_in_naming_components_collect_complete_crate_local_terms(self):
+        repository = Path(__file__).resolve().parents[1]
+        packages = []
+        for name in ("nazuchem-s2n", "nazuchem-kernel", "opsin"):
+            manifest = repository / "crates" / name / "Cargo.toml"
+            declaration = tomllib.loads(manifest.read_text())["package"]
+            packages.append(
+                {
+                    "id": name,
+                    "name": name,
+                    "version": declaration["version"],
+                    "license": declaration["license"],
+                    "manifest_path": str(manifest),
+                }
+            )
+        self.assertEqual(packages[0]["license"], "MIT AND (MIT OR Apache-2.0) AND Python-2.0")
+        # The source tree has no root upstream terms in this miniature release.
+        # All third-party bytes must therefore arrive through crate-local files.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in PROJECT_FILES:
+                (root / name).write_text(f"Project {name}")
+            (root / "licenses/rust").mkdir(parents=True)
+            (root / "licenses/rust/manifest.json").write_text("{}")
+            write_notices(
+                root,
+                root / "output",
+                {"packages": packages, "workspace_members": [p["id"] for p in packages]},
+            )
+            result = (root / "output" / THIRD_PARTY_FILE).read_bytes()
+            copies = {
+                "nazuchem-s2n": {
+                    "licenses/openclatura/LICENSE": "licenses/openclatura/LICENSE",
+                    "licenses/openclatura/NOTICE": "licenses/openclatura/NOTICE",
+                    "licenses/opsin/LICENSE": "crates/opsin/LICENSE",
+                    "licenses/opsin/NOTICE": "crates/opsin/NOTICE",
+                    "licenses/cpython/LICENSE": "licenses/cpython/LICENSE",
+                    "licenses/cpython/NOTICE": "licenses/cpython/NOTICE",
+                },
+                "nazuchem-kernel": {
+                    "licenses/rdkit/LICENSE": "licenses/rdkit/LICENSE",
+                    "licenses/centres/LICENSE": "licenses/centres/LICENSE",
+                    "licenses/stdlib/llvm-LICENSE": "licenses/stdlib/llvm-LICENSE",
+                    "licenses/stdlib/msvc-LICENSE": "licenses/stdlib/msvc-LICENSE",
+                },
+                "opsin": {"LICENSE": "crates/opsin/LICENSE"},
+            }
+            for package in packages:
+                name, version = package["name"], package["version"]
+                for relative, upstream in copies[name].items():
+                    with self.subTest(component=name, relative=relative):
+                        expected = (repository / upstream).read_bytes()
+                        self.assertEqual(
+                            (repository / "crates" / name / relative).read_bytes(), expected
+                        )
+                        self.assertIn(f"{name}@{version}/{relative}".encode(), result)
+                        self.assertIn(expected, result)
+                self.assertIn(f"{name}@{version}/NOTICE".encode(), result)
+                self.assertIn((repository / "crates" / name / "NOTICE").read_bytes(), result)
+            self.assertNotIn(b"Original workspace crate:", result)
+
     def test_workspace_kernel_collects_nested_terms_with_either_manifest_expression(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
