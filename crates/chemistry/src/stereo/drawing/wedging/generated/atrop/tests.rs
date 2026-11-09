@@ -276,9 +276,15 @@ fn axis_repair_keeps_a_carrier_also_used_by_an_allene() -> TestResult {
         .collect(),
     };
     let mut work = Work(50_000_000);
-    let mut context =
-        wedging::with_context(&state, &properties, Some(&conformer), false, &mut work)
-            .map_err(anyhow::Error::msg)?;
+    let mut context = wedging::with_context(
+        &state,
+        &properties,
+        Some(&conformer),
+        false,
+        true,
+        &mut work,
+    )
+    .map_err(anyhow::Error::msg)?;
     // C1->C0 is allocated for an axis, then reused by the allene without
     // any allene choice. Ownership cannot be inferred from the chooser map.
     assert!(matches!(context.choices.get(&0), Some(Choice::Atrop(_))));
@@ -552,8 +558,15 @@ fn axis_repair_includes_a_center_without_a_reference_carrier() -> TestResult {
         .collect(),
     };
     let mut work = Work(50_000_000);
-    let context = wedging::with_context(&state, &properties, Some(&conformer), false, &mut work)
-        .map_err(anyhow::Error::msg)?;
+    let context = wedging::with_context(
+        &state,
+        &properties,
+        Some(&conformer),
+        false,
+        true,
+        &mut work,
+    )
+    .map_err(anyhow::Error::msg)?;
     // The first three centres claim every carrier of atom 3. It must enter
     // the movable closure even though the reference chooser skipped it.
     for (bond, atom) in [(3, 0), (4, 1), (5, 2)] {
@@ -596,9 +609,15 @@ fn axis_repair_includes_a_center_without_a_reference_carrier() -> TestResult {
 fn atrop_search_stops_when_its_work_budget_is_exhausted() -> TestResult {
     let (state, properties, conformer) = tetrahedrane_fixture().map_err(anyhow::Error::msg)?;
     let mut setup = Work(50_000_000);
-    let mut context =
-        wedging::with_context(&state, &properties, Some(&conformer), false, &mut setup)
-            .map_err(anyhow::Error::msg)?;
+    let mut context = wedging::with_context(
+        &state,
+        &properties,
+        Some(&conformer),
+        false,
+        true,
+        &mut setup,
+    )
+    .map_err(anyhow::Error::msg)?;
     context.state =
         prefer_ring_wedges(&context.state, &properties, &conformer).map_err(anyhow::Error::msg)?;
     let reference = context.state.clone();
@@ -632,9 +651,15 @@ fn atrop_search_caps_whole_molecule_readbacks() -> TestResult {
     // Coincident ends cannot define the first axis, regardless of wedges.
     conformer.positions[5] = conformer.positions[4];
     let mut work = Work(50_000_000);
-    let mut context =
-        wedging::with_context(&state, &properties, Some(&conformer), false, &mut work)
-            .map_err(anyhow::Error::msg)?;
+    let mut context = wedging::with_context(
+        &state,
+        &properties,
+        Some(&conformer),
+        false,
+        true,
+        &mut work,
+    )
+    .map_err(anyhow::Error::msg)?;
     let reference =
         prefer_ring_wedges(&context.state, &properties, &conformer).map_err(anyhow::Error::msg)?;
     context.state = reference.clone();
@@ -687,9 +712,15 @@ fn moved_centers_recover_a_valid_second_wedge() -> TestResult {
     };
     for (two_bonds, count) in [(false, 1), (true, 2)] {
         let mut work = Work(50_000_000);
-        let mut context =
-            wedging::with_context(&state, &properties, Some(&conformer), two_bonds, &mut work)
-                .map_err(anyhow::Error::msg)?;
+        let mut context = wedging::with_context(
+            &state,
+            &properties,
+            Some(&conformer),
+            two_bonds,
+            true,
+            &mut work,
+        )
+        .map_err(anyhow::Error::msg)?;
         context.state = prefer_ring_wedges(&context.state, &properties, &conformer)
             .map_err(anyhow::Error::msg)?;
         // Exercise retry restoration even if this reference already reads
@@ -711,6 +742,103 @@ fn moved_centers_recover_a_valid_second_wedge() -> TestResult {
                 .filter(|(bond, direction)| bond.a == 0 && wedged(**direction))
                 .count(),
             count
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn axis_repair_keeps_the_tagged_far_end_of_an_incoming_wave_movable() -> TestResult {
+    let prepared = crate::smiles::prepare("[C@](N(C)C(=C)C)(F)(Cl)Br")?.state;
+    let properties = WedgeProperties {
+        attachment_points: vec![false; prepared.graph.atoms.len()],
+        valences: prepared.valences,
+    };
+    let mut state = WedgeState {
+        graph: prepared.graph,
+        metadata: prepared.metadata,
+        directions: prepared.directions,
+        rings: prepared.rings,
+    };
+    at_mut(&mut state.metadata.bonds, 2)
+        .map_err(anyhow::Error::msg)?
+        .stereo = 6; // N1-C3, beside the cardinal centre C0.
+    let wave = 5;
+    let edge = at_mut(&mut state.graph.bonds, wave).map_err(anyhow::Error::msg)?;
+    assert_eq!((edge.a, edge.b), (0, 6));
+    std::mem::swap(&mut edge.a, &mut edge.b);
+    *at_mut(&mut state.directions, wave).map_err(anyhow::Error::msg)? = Direction::Unknown;
+    let conformer = Conformer {
+        is_3d: false,
+        positions: [
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (1.0, 1.0),
+            (2.0, -1.0),
+            (3.0, -1.0),
+            (2.0, -2.0),
+            (0.0, 1.0),
+            (-1.0, 0.0),
+            (0.0, -1.0),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point3 { x, y, z: 0.0 })
+        .collect(),
+    };
+    for two_bonds in [false, true] {
+        let mut work = Work(50_000_000);
+        let generated = wedge_molecule(&state, &properties, &conformer, two_bonds)
+            .map_err(anyhow::Error::msg)?;
+        assert!(preserves_stereo(&generated, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+        assert_eq!(
+            at(&generated.graph.bonds, wave).map_err(anyhow::Error::msg)?,
+            at(&state.graph.bonds, wave).map_err(anyhow::Error::msg)?
+        );
+        assert_eq!(
+            *at(&generated.directions, wave).map_err(anyhow::Error::msg)?,
+            Direction::Unknown
+        );
+        let mut context = wedging::with_context(
+            &state,
+            &properties,
+            Some(&conformer),
+            two_bonds,
+            true,
+            &mut work,
+        )
+        .map_err(anyhow::Error::msg)?;
+        // Force a missing-centre retry even when the generated reference
+        // already reads back. An incoming wave must not make C0 fixed.
+        for (edge, direction) in context
+            .state
+            .graph
+            .bonds
+            .iter()
+            .zip(&mut context.state.directions)
+        {
+            if edge.a == 0 && wedged(*direction) {
+                *direction = Direction::None;
+            }
+        }
+        let missing = readback(&context.state, &conformer)?;
+        assert_eq!(
+            at(&missing.atoms, 0)
+                .map_err(anyhow::Error::msg)?
+                .chiral_tag,
+            0
+        );
+        let mut readbacks = READBACK_LIMIT;
+        let repaired = search(&state, &mut context, two_bonds, &mut readbacks, &mut work)
+            .map_err(anyhow::Error::msg)?
+            .ok_or_else(|| anyhow::anyhow!("Incoming wave incorrectly fixed its tagged far end"))?;
+        assert!(preserves_stereo(&repaired, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+        assert_eq!(
+            at(&repaired.graph.bonds, wave).map_err(anyhow::Error::msg)?,
+            at(&state.graph.bonds, wave).map_err(anyhow::Error::msg)?
+        );
+        assert_eq!(
+            *at(&repaired.directions, wave).map_err(anyhow::Error::msg)?,
+            Direction::Unknown
         );
     }
     Ok(())

@@ -18,7 +18,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     f64::consts::PI,
 };
 
@@ -207,15 +207,18 @@ impl<'a> Context<'a> {
             + usize::from(at(&self.state.graph.atoms, atom)?.explicit_hydrogens)
             + at(&self.properties.valences, atom)?.implicit_hydrogens as usize)
     }
-    fn choose_tetrahedral(&mut self, work: &mut Work) -> Result<(), String> {
+    fn choose_tetrahedral(&mut self, work: &mut Work, wavy_begin_only: bool) -> Result<(), String> {
         let n = self.state.graph.atoms.len();
         let mut counts = vec![100i64; n];
+        let constrained = wavy_begin_only && self.state.directions.contains(&Direction::Unknown);
         for (i, b) in self.state.graph.bonds.iter().enumerate() {
             work.spend(1)?;
             if wedged(self.direction(i)?) || self.direction(i)? == Direction::Unknown {
                 if tetrahedral(self.tag(b.a)?) {
                     put(&mut counts, b.a, 101)?;
-                } else if tetrahedral(self.tag(b.b)?) {
+                } else if tetrahedral(self.tag(b.b)?)
+                    && !(wavy_begin_only && self.direction(i)? == Direction::Unknown)
+                {
                     put(&mut counts, b.b, 101)?;
                 }
             }
@@ -262,7 +265,35 @@ impl<'a> Context<'a> {
                 }
             }
         }
-        for i in order {
+        let mut available = vec![0; n];
+        let mut remaining = BTreeSet::new();
+        if constrained {
+            for (atom, (&score, available)) in counts.iter().zip(&mut available).enumerate() {
+                work.spend(1)?;
+                if score >= 100 {
+                    continue;
+                }
+                for &bond in at(&self.adjacent, atom)? {
+                    work.spend(1)?;
+                    if at(&self.state.graph.bonds, bond)?.order == 1
+                        && !self.choices.contains_key(&bond)
+                        && self.direction(bond)? != Direction::Unknown
+                    {
+                        *available += 1;
+                    }
+                }
+                remaining.insert((*available, score, atom));
+            }
+        }
+        for atom in order {
+            let i = if constrained {
+                let Some((_, _, atom)) = remaining.pop_first() else {
+                    break;
+                };
+                atom
+            } else {
+                atom
+            };
             work.spend(1)?;
             if *at(&counts, i)? > 100 {
                 continue;
@@ -273,7 +304,10 @@ impl<'a> Context<'a> {
             let mut best: Option<(i64, usize)> = None;
             for &b in at(&self.adjacent, i)? {
                 work.spend(1)?;
-                if at(&self.state.graph.bonds, b)?.order != 1 || self.choices.contains_key(&b) {
+                if at(&self.state.graph.bonds, b)?.order != 1
+                    || self.choices.contains_key(&b)
+                    || (wavy_begin_only && self.direction(b)? == Direction::Unknown)
+                {
                     continue;
                 }
                 let other = self.other(b, i)?;
@@ -300,6 +334,21 @@ impl<'a> Context<'a> {
             }
             if let Some((_, b)) = best {
                 self.choices.insert(b, Choice::Atom(i));
+                if constrained {
+                    // Only the reserved bond's endpoints lose a candidate (#1049).
+                    let bond = at(&self.state.graph.bonds, b)?;
+                    for atom in [bond.a, bond.b] {
+                        work.spend(1)?;
+                        let score = *at(&counts, atom)?;
+                        let available = available
+                            .get_mut(atom)
+                            .ok_or("Missing wedge availability")?;
+                        if remaining.remove(&(*available, score, atom)) {
+                            *available -= 1;
+                            remaining.insert((*available, score, atom));
+                        }
+                    }
+                }
             }
         }
         Ok(())
@@ -444,18 +493,19 @@ fn with_work(
     two_bonds: bool,
     work: &mut Work,
 ) -> Result<WedgeState, String> {
-    Ok(with_context(input, properties, conformer, two_bonds, work)?.state)
+    Ok(with_context(input, properties, conformer, two_bonds, false, work)?.state)
 }
 fn with_context<'a>(
     input: &WedgeState,
     properties: &'a WedgeProperties,
     conformer: Option<&'a Conformer>,
     two_bonds: bool,
+    wavy_begin_only: bool,
     work: &mut Work,
 ) -> Result<Context<'a>, String> {
     let conf = conformer.ok_or("No conformer available for bond wedging")?;
     let mut ctx = Context::new(input, properties, conf, true, work)?;
-    ctx.choose_tetrahedral(work)?;
+    ctx.choose_tetrahedral(work, wavy_begin_only)?;
     ctx.choose_atrop(work)?;
     ctx.choose_allene(work)?;
     for (bond, choice) in ctx.choices.clone() {
