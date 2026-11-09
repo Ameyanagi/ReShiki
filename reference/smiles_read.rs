@@ -74,7 +74,8 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
     let mut all_failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
-        let result = smiles::read(&case.text);
+        // Compare RDKit's reading for every input, including failure artifacts (#1042).
+        let result = smiles::read_dropping_flagged_ez(&case.text);
         let failure = match (&result, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
