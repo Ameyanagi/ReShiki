@@ -82,7 +82,7 @@ sources = [
   { project = "SiMolecule centres", path = "licenses/centres/NOTICE", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "BSD-2-Clause" },
 ]
 notes = "Crate-local complete licence text/notice copied from repository root; local NOTICE records the exact incorporated scope."
-sha256 = "b4a64783f0daa9ec04d4f662354d69071ff801a3b66b72fab437517cf7132d9c"
+sha256 = "cba7ecd76e77ea0c44ddf3ac404fca326f95ac4eb39a70b77fe8c17840e5c00d"
 
 [[file]]
 path = "crates/nazuchem-kernel/licenses/rdkit/LICENSE"
@@ -102,7 +102,7 @@ sources = [
   { project = "RDKit", path = "licenses/rdkit/NOTICE", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "BSD-3-Clause" },
 ]
 notes = "Crate-local complete licence text/notice copied from repository root; local NOTICE records the exact incorporated scope."
-sha256 = "953fb3583c61c86e6d7741036e822399a0652b91e953a52c0d2e9a3c917222b9"
+sha256 = "cfd653d345f0a028867f57ea6178180114e4d5df81b453150445a3d01de15fab"
 
 [[file]]
 path = "crates/nazuchem-kernel/licenses/stdlib/NOTICE"
@@ -112,7 +112,7 @@ sources = [
   { project = "LLVM libc++ / Microsoft STL", path = "licenses/stdlib/NOTICE", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", license = "Apache-2.0 WITH LLVM-exception" },
 ]
 notes = "Crate-local complete licence text/notice copied from repository root; local NOTICE records the exact incorporated scope."
-sha256 = "b9747156cdff708eddfcf77cb212cdb5f67dd3992683fda832ee0eeffd3be165"
+sha256 = "5eaa80d3b0b2265e65cd041c04bdaa6167fbaee92c294c789efad7ad2a968e2d"
 
 [[file]]
 path = "crates/nazuchem-kernel/licenses/stdlib/llvm-LICENSE"

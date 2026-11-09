@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import tomllib
 import unicodedata
@@ -636,11 +637,37 @@ def check_provenance(root: Path, ledger_path: Path | None = None) -> list[str]:
         if not directory.is_dir():
             errors.append(f"{prefix}: required provenance directory does not exist")
             continue
-        required.update(
-            path.relative_to(root).as_posix() for path in directory.rglob("*") if path.is_file()
-        )
+        required.update(inventory(root, prefix))
     errors.extend(f"{path}: missing ledger entry" for path in sorted(required - recorded.keys()))
     return errors
+
+
+def inventory(root: Path, prefix: str) -> set[str]:
+    """Files git would commit under prefix (ignored local files such as .DS_Store excluded)."""
+    try:
+        listed = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "ls-files",
+                "-z",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "--",
+                prefix,
+            ],
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (OSError, subprocess.CalledProcessError):
+        return {
+            path.relative_to(root).as_posix()
+            for path in (root / prefix).rglob("*")
+            if path.is_file()
+        }
+    return {path for path in listed.split("\0") if path and (root / path).is_file()}
 
 
 def main(argv: list[str] | None = None) -> int:
