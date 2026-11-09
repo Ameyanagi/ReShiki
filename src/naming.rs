@@ -282,6 +282,9 @@ impl Identity {
     }
 }
 
+// Intentionally mirrors nazuchem_s2n::identity::canonical_state on ReShiki's
+// State type. The public canonical_smiles API reparses text and applies input
+// admission checks, so it cannot replace this prepared-state adapter.
 fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<String, String> {
     if state.graph.atoms.is_empty() || state.graph.atoms.len() > MAX_NAMING_ATOMS {
         return Err("Naming supports molecular graphs with 1–512 atoms".into());

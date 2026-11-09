@@ -6,17 +6,15 @@
 
 //! Test-only equivalents of strict import and generated-name verification.
 //!
-//! Both modes start with OPSIN's strict options. Generated-name verification
-//! additionally permits radicals and a single relative-stereo CX group, exactly
-//! as the application adapters do. No worker protocol or document types cross
-//! the library boundary.
+//! Both modes start with OPSIN's strict options and reject all OPSIN warnings,
+//! which is stricter than ReShiki's import policy. They perform no symbol or
+//! retained-name expansion. Generated-name verification additionally permits
+//! radicals and a single relative-stereo CX group. No worker protocol or
+//! document types cross the library boundary.
 
+use crate::identity::{canonical_state, relative_stereo_smiles};
 use nazuchem_ir::NameStatus;
 use nazuchem_kernel::{budget::Budget, smiles};
-
-pub(crate) struct Parsed {
-    pub(crate) smiles: String,
-}
 
 pub(crate) fn canonical_smiles(text: &str) -> Result<String, String> {
     crate::canonical_smiles(text, &Budget::default())
@@ -34,19 +32,17 @@ pub(crate) fn verify_alternative_identity(
     crate::verify_alternative_identity(expected, actual, status, &Budget::default())
 }
 
-pub(crate) fn parse_strict(name: &str) -> Result<Parsed, String> {
+pub(crate) fn parse_strict(name: &str) -> Result<String, String> {
     parse(name, false)
 }
 
-pub(crate) fn parse_generated(name: &str) -> Result<Parsed, String> {
+pub(crate) fn parse_generated(name: &str) -> Result<String, String> {
     parse(name, true)
 }
 
-fn parse(name: &str, generation: bool) -> Result<Parsed, String> {
+fn parse(name: &str, generation: bool) -> Result<String, String> {
     if name.is_empty() || name.len() > 2_048 || name.chars().any(char::is_control) {
-        return Err(
-            "Enter a chemical name of at most 2048 bytes without control characters".into(),
-        );
+        return Err("Chemical names must contain 1–2048 bytes without control characters".into());
     }
     let budget = Budget::default();
     let parser = opsin::Parser::with_budget(budget.clone()).map_err(|error| error.to_string())?;
@@ -143,8 +139,7 @@ fn parse(name: &str, generation: bool) -> Result<Parsed, String> {
         }) {
             return Err("Native and OPSIN CIP assignments disagree on the biaryl axis".into());
         }
-        text = nazuchem_kernel::identity::canonical_identity(&state, &budget)
-            .map_err(|error| format!("{error:?}"))?;
+        text = canonical_state(&state, &budget)?;
     }
     if !generation
         && smiles::prepare(&canonical, &budget)
@@ -177,21 +172,14 @@ fn parse(name: &str, generation: bool) -> Result<Parsed, String> {
             .collect::<Vec<_>>()
             .join(".");
     }
-    Ok(Parsed { smiles: text })
-}
-
-fn relative_stereo_smiles(text: &str) -> Option<&str> {
-    let (graph, group) = text.split_once(" |o")?;
-    let (number, atoms) = group.strip_suffix('|')?.split_once(':')?;
-    let digits = |value: &str| !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
-    (digits(number) && atoms.split(',').all(digits)).then_some(graph)
+    Ok(text)
 }
 
 #[test]
 fn strict_and_generated_parsing_keep_radical_modes_separate() {
     assert!(parse_strict("methyl").is_err());
     let parsed = parse_generated("methyl").unwrap();
-    verify_identity("[CH3]", &parsed.smiles).unwrap();
+    verify_identity("[CH3]", &parsed).unwrap();
 }
 
 #[test]
@@ -199,10 +187,10 @@ fn generated_relative_stereo_keeps_the_semantic_group() {
     let name = "5-endo,7-anti-dimethylbicyclo[2.2.1]heptan-2-exo-ol";
     assert!(parse_strict(name).is_err());
     let parsed = parse_generated(name).unwrap();
-    assert!(relative_stereo_smiles(&parsed.smiles).is_some());
+    assert!(relative_stereo_smiles(&parsed).is_some());
     verify_alternative_identity(
         "O[C@H]1C[C@@H]2[C@H](C)C[C@H]1[C@H]2C",
-        &parsed.smiles,
+        &parsed,
         NameStatus::NotPreferred(nazuchem_ir::NameReason::EndoExoStereo),
     )
     .unwrap();

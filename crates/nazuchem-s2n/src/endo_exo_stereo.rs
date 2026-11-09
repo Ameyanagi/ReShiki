@@ -278,11 +278,11 @@ mod tests {
         let result = if relative {
             crate::test_support::verify_alternative_identity(
                 expected,
-                &parsed.smiles,
+                &parsed,
                 NameStatus::NotPreferred(NameReason::EndoExoStereo),
             )
         } else {
-            crate::test_support::verify_identity(expected, &parsed.smiles)
+            crate::test_support::verify_identity(expected, &parsed)
         };
         result.unwrap_or_else(|error| panic!("{name}: {error}"));
     }

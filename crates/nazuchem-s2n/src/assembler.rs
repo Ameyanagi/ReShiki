@@ -920,7 +920,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name.text).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(smiles).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{}",
                 name.text
             );
@@ -945,7 +945,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name.text).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(smiles).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{}",
                 name.text
             );
@@ -975,7 +975,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name.text).unwrap();
             assert_eq!(
                 input,
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{}",
                 name.text
             );
@@ -1025,7 +1025,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name.text).unwrap();
             assert_eq!(
                 input,
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{}",
                 name.text
             );
@@ -1078,7 +1078,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name.text).unwrap();
             assert_eq!(
                 input,
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{}",
                 name.text
             );
@@ -1100,7 +1100,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name.text).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(smiles).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{}",
                 name.text
             );
@@ -1169,7 +1169,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name.text).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(smiles).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{smiles}: {}",
                 name.text
             );

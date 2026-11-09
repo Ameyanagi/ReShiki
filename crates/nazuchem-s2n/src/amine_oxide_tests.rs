@@ -275,7 +275,7 @@ fn amine_oxide_keeps_source_stereo_alternatives() {
             (&alternative.name, alternative.status),
         ] {
             let parsed = crate::test_support::parse_generated(text).unwrap();
-            crate::test_support::verify_alternative_identity(smiles, &parsed.smiles, status)
+            crate::test_support::verify_alternative_identity(smiles, &parsed, status)
                 .unwrap_or_else(|error| panic!("{text}: {error}"));
         }
     }
@@ -462,7 +462,7 @@ fn amine_oxide_unknown_stereo_does_not_certify_zwitterionic_alternatives() {
     for text in [&actual.text, &explicit.name] {
         let parsed = crate::test_support::parse_strict(text).unwrap();
         assert_eq!(
-            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(&parsed).unwrap(),
             canonical_smiles(smiles).unwrap(),
             "{text}"
         );
@@ -542,7 +542,7 @@ fn amine_oxide_ambiguous_ring_locants_remain_unverified() {
         );
         let parsed = crate::test_support::parse_strict(&actual.text).unwrap();
         assert_eq!(
-            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(&parsed).unwrap(),
             identity,
             "{smiles}: {}",
             actual.text
@@ -565,7 +565,7 @@ fn amine_oxide_functional_class_names_round_trip() {
             .unwrap_or_else(|error| panic!("{row}: {}: {error}", actual.text));
         assert_eq!(
             canonical_smiles(smiles).unwrap(),
-            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(&parsed).unwrap(),
             "{row}: {}",
             actual.text
         );
@@ -598,7 +598,7 @@ fn amine_oxide_functional_class_names_preserve_remote_carbon_stereo() {
         let parsed = crate::test_support::parse_strict(&actual.text).unwrap();
         let identity = canonical_smiles(smiles).unwrap();
         assert_eq!(
-            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(&parsed).unwrap(),
             identity,
             "{}",
             actual.text
@@ -649,7 +649,7 @@ fn amine_oxide_keeps_source_carbon_stereo_when_neutral_priorities_reverse() {
         assert_eq!(actual.status, NameStatus::Preferred);
         let parsed = crate::test_support::parse_strict(&actual.text).unwrap();
         assert_eq!(
-            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(&parsed).unwrap(),
             canonical_smiles(smiles).unwrap(),
             "{}",
             actual.text
@@ -673,7 +673,7 @@ fn amine_oxide_nitrones_keep_opposite_double_bond_stereo() {
         assert_eq!(actual.status, NameStatus::Preferred);
         let parsed = crate::test_support::parse_strict(&actual.text).unwrap();
         assert_eq!(
-            canonical_smiles(&parsed.smiles).unwrap(),
+            canonical_smiles(&parsed).unwrap(),
             canonical_smiles(smiles).unwrap(),
             "{}",
             actual.text

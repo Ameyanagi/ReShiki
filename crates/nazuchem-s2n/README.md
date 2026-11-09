@@ -1,8 +1,8 @@
 # nazuchem-s2n
 
 Structure-to-name engine that began as a port of openclatura 0.4.3, extended
-in ReShiki. Phase A step 4 moves that implementation into this crate while
-preserving its SMILES input, `Name` output, naming rules and regression data.
+in ReShiki. This crate provides its SMILES input, `Name` output, naming rules
+and regression data as a reusable library.
 It uses `nazuchem-ir` for shared result vocabulary and `nazuchem-kernel` for
 molecular perception and canonical identity. Entry points that perform
 perception accept an explicit `Budget`; `Budget::default()` is unbounded.
@@ -10,8 +10,7 @@ perception accept an explicit `Budget`; `Budget::default()` is unbounded.
 The library performs no I/O, creates no threads and has no process-wide
 mutable state. Fusion retains bounded thread-local caches. Worst-case time
 on adversarial input is unbounded; hosts needing hard limits should supervise
-requests externally. ReShiki supplies its resolved host budget and retains
-worker supervision. Tests use a development dependency on the Rust port of
+requests externally. Tests use a development dependency on the Rust port of
 OPSIN; app document and InChI integration checks stay in ReShiki.
 
 The source and registries incorporate openclatura MIT material, OPSIN MIT

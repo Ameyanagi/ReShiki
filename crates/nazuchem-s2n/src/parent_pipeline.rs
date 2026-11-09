@@ -1179,7 +1179,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(text).unwrap();
             assert_eq!(
                 identity,
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{smiles}: {text}"
             );
         }
@@ -1388,7 +1388,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(smiles).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{name}",
             );
         }
@@ -1416,7 +1416,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(&name).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(smiles).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{name}",
             );
         }
@@ -1451,7 +1451,7 @@ mod tests {
         let parsed = crate::test_support::parse_strict(&name).unwrap();
         assert_eq!(
             crate::test_support::canonical_smiles(smiles).unwrap(),
-            crate::test_support::canonical_smiles(&parsed.smiles).unwrap()
+            crate::test_support::canonical_smiles(&parsed).unwrap()
         );
     }
 }

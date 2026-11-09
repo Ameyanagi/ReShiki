@@ -12,7 +12,7 @@
 
 //! Neutral radicals whose subtractive P-71 names have exact parser identities.
 //!
-//! https://iupac.qmul.ac.uk/BlueBook/P7.html, P-71.2.1–P-71.3.4.
+//! <https://iupac.qmul.ac.uk/BlueBook/P7.html>, P-71.2.1–P-71.3.4.
 //! A virtual excluded bond reuses the ordinary substituent renderer without
 //! discarding the free-valence order. More elaborate radical characteristic
 //! groups and radical ions are deliberately rejected before ordinary naming.

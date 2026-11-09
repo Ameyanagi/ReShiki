@@ -2,11 +2,10 @@ nazuchem-s2n source provenance
 =============================
 
 This structure-to-name engine began as a port of openclatura 0.4.3, extended
-in ReShiki. Phase A step 4 moves src/naming/openclatura/ to this crate's src/,
-renaming mod.rs to lib.rs. Source headers and the repository-root
-PROVENANCE-nazuchem.toml preserve the original ancestry and function-level
-boundaries; this extraction does not make incorporated algorithms original
-nazuchem code.
+in ReShiki, where it previously lived in src/naming/openclatura/. Source headers
+and the repository-root PROVENANCE-nazuchem.toml preserve the original ancestry
+and function-level boundaries; packaging it as a library does not make
+incorporated algorithms original nazuchem code.
 
 openclatura 0.4.3, commit 90dc5bcb4910c196122ec0405d06a32929a8f308:
 https://github.com/lamalab-org/openclatura

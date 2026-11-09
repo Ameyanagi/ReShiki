@@ -242,7 +242,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(name).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(input).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{name}"
             );
         }
@@ -389,7 +389,7 @@ mod tests {
                 let parsed = crate::test_support::parse_strict(text).unwrap();
                 assert_eq!(
                     crate::test_support::canonical_smiles(input).unwrap(),
-                    crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                    crate::test_support::canonical_smiles(&parsed).unwrap(),
                     "{text}"
                 );
             }
@@ -423,7 +423,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(candidate).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(smiles).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{candidate}"
             );
         }
@@ -464,7 +464,7 @@ mod tests {
             let parsed = crate::test_support::parse_strict(candidate).unwrap();
             assert_eq!(
                 crate::test_support::canonical_smiles(smiles).unwrap(),
-                crate::test_support::canonical_smiles(&parsed.smiles).unwrap(),
+                crate::test_support::canonical_smiles(&parsed).unwrap(),
                 "{candidate}"
             );
         }

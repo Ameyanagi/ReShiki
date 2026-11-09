@@ -22,7 +22,7 @@ fn is_tetrahedral(tag: u8) -> bool {
     matches!(tag, 1 | 2)
 }
 
-fn canonical_state(
+pub(crate) fn canonical_state(
     state: &chemistry::stereo::perception::State,
     budget: &Budget,
 ) -> Result<String, String> {
@@ -183,7 +183,7 @@ pub fn verify_alternative_identity(
 
 /// Check only the syntax of a single relative CX group in a generation reply.
 /// Reverse verification checks its parsed membership before accepting identity.
-fn relative_stereo_smiles(smiles: &str) -> Option<&str> {
+pub(crate) fn relative_stereo_smiles(smiles: &str) -> Option<&str> {
     let (graph, group) = smiles.split_once(" |o")?;
     let (number, atoms) = group.strip_suffix('|')?.split_once(':')?;
     let digits = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
