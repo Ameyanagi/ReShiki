@@ -10,6 +10,7 @@ use crate::{
         self, cdxml, depict, document as molecular,
         inchi::{helper, output},
         kekulize::Direction,
+        layout_refinement::{self, ComponentRow},
         molfile, reaction, smiles,
         stereo::{Point3, perception::State},
     },
@@ -102,6 +103,13 @@ struct Prepared {
     /// RDKit reads them, even where the drawing is a projection of them.
     file_xyz: bool,
 }
+
+struct Layout {
+    positions: Vec<Point3>,
+    warnings: Vec<String>,
+    row: ComponentRow,
+}
+
 enum Preparation {
     Complete(Box<Prepared>),
     Drawing(Box<Document>, Vec<String>),
@@ -206,8 +214,9 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         "prepared" => {
             let imported = request.prepared.ok_or(Error::Parse)?;
             let mut molecule = molecule(imported.state)?;
-            let warnings = layout(&mut molecule, &[])?;
-            let mut prepared = finish_molecule(molecule, &imported.dummy_labels, drawing_options)?;
+            let (warnings, row) = layout(&mut molecule, &[])?;
+            let mut prepared =
+                finish_molecule(molecule, &imported.dummy_labels, drawing_options, &row)?;
             prepared.warnings.extend(warnings);
             prepared
         }
@@ -241,13 +250,17 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 }
             }
             let mut molecule = molecule(imported.prepared.state)?;
-            let mut warnings = layout(&mut molecule, &imported.reaction_properties)?;
+            let (mut warnings, row) = layout(&mut molecule, &imported.reaction_properties)?;
             // Import perception does not keep cumulene E/Z; say so.
             if imported.dropped_cumulene_ez {
                 warnings.push(CUMULENE_EZ_NOTICE.into());
             }
-            let mut prepared =
-                finish_molecule(molecule, &imported.prepared.dummy_labels, drawing_options)?;
+            let mut prepared = finish_molecule(
+                molecule,
+                &imported.prepared.dummy_labels,
+                drawing_options,
+                &row,
+            )?;
             prepared.warnings.extend(warnings);
             prepared
         }
@@ -310,7 +323,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             }
             let mut scene = cdxml::assemble_cdxml(&prepared)?;
             if scene.conformer_3d.is_none() {
-                warnings.extend(layout(&mut scene.molecule, &[])?);
+                warnings.extend(layout(&mut scene.molecule, &[])?.0);
                 scene.conformer_3d = Some(false);
             }
             let imported = scene.into_document()?;
@@ -393,10 +406,7 @@ fn molecule(state: State) -> Result<molecular::Molecule, Error> {
     })
 }
 
-fn coordinates(
-    state: &State,
-    properties: &[Vec<(Vec<u8>, Vec<u8>)>],
-) -> Result<chain_layout::Layout, Error> {
+fn coordinates(state: &State, properties: &[Vec<(Vec<u8>, Vec<u8>)>]) -> Result<Layout, Error> {
     let ranks = if properties.is_empty() {
         vec![depict::ranks::AtomProperties::default(); state.graph.atoms.len()]
     } else {
@@ -420,7 +430,7 @@ fn coordinates(
     )?;
     let positions = template_retry::improve(state, &ranks, conformer.positions, 1.5);
     let mut layout = chain_layout::improve(state, &ranks, positions);
-    if molecular::refine() {
+    let row = if molecular::refine() {
         chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
         // Input wedge flags are read against these coordinates, so a reflection
         // would invert them (#1037). Rotation and translation keep their meaning.
@@ -431,29 +441,37 @@ fn coordinates(
         {
             chemistry::layout_refinement::conventional_orientation(state, &mut layout.positions);
         }
-        chemistry::layout_refinement::arrange_components(state, &mut layout.positions);
-    }
-    Ok(layout)
+        layout_refinement::arrange_components(state, &mut layout.positions)
+    } else {
+        ComponentRow::default()
+    };
+    Ok(Layout {
+        positions: layout.positions,
+        warnings: layout.warnings,
+        row,
+    })
 }
 
 fn layout(
     molecule: &mut molecular::Molecule,
     properties: &[Vec<(Vec<u8>, Vec<u8>)>],
-) -> Result<Vec<String>, Error> {
+) -> Result<(Vec<String>, ComponentRow), Error> {
     molecular::validate_molecule(molecule)?;
     let layout = coordinates(&molecule.state, properties)?;
     molecule.positions = layout.positions;
-    Ok(layout.warnings)
+    Ok((layout.warnings, layout.row))
 }
 
 fn finish_molecule(
-    molecule: molecular::Molecule,
+    mut molecule: molecular::Molecule,
     labels: &[Option<String>],
     options: molecular::DrawingOptions,
+    row: &ComponentRow,
 ) -> Result<Prepared, Error> {
     let drawing = molecular::for_generated(&molecule, labels, options)?;
     let labels = drawing.labels()?;
-    let document = drawing.finish(labels)?;
+    let mut document = drawing.finish(labels)?;
+    layout_refinement::space_component_labels(row, &mut molecule, &mut document);
     document.validate().map_err(Error::Document)?;
     // An axis end reads a wedge from a neighbouring centre as its own, as
     // RDKit does, so some fresh layouts' wedges hide an axis (#1056). Refuse
@@ -518,9 +536,10 @@ fn prepare_inchi(
     }
     let mut molecule = molecule(state)?;
     let mut warnings = imported.diagnostics;
-    warnings.extend(layout(&mut molecule, &[])?);
+    let (layout_warnings, row) = layout(&mut molecule, &[])?;
+    warnings.extend(layout_warnings);
     let labels = vec![None; molecule.ids.len()];
-    let mut prepared = finish_molecule(molecule, &labels, options)?;
+    let mut prepared = finish_molecule(molecule, &labels, options, &row)?;
     prepared.warnings.extend(warnings);
     Ok(prepared)
 }
