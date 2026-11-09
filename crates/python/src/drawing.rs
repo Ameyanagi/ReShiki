@@ -185,3 +185,64 @@ pub async fn from_name(name: &str) -> Result<(Vec<u8>, String), String> {
         .map_err(|error| error.to_string())?;
     serialize(read(smiles.into_bytes(), "smiles").await?)
 }
+
+/// Import an external database graph only if every stated chemical feature
+/// survives native preparation and layout. Use the app's shared identity rules.
+pub async fn parse_online_smiles(text: &str) -> Result<(Vec<u8>, String), String> {
+    use reshiki_model::{
+        chemistry::{document, smiles},
+        molecule_names::{MAX_NAMING_ATOMS, MAX_SMILES_BYTES, canonical_identity, is_tetrahedral},
+    };
+    if text.is_empty()
+        || text.len() > MAX_SMILES_BYTES
+        || text.contains(['|', '>'])
+        || text.chars().any(char::is_whitespace)
+    {
+        return Err(
+            "PubChem requires ordinary molecular SMILES without reaction or CX extensions".into(),
+        );
+    }
+    // Preparation may clean impossible tetrahedral winding or discard unsupported
+    // stereo. Admit the raw external graph before either operation can do so.
+    let raw = smiles::parse(text).map_err(|error| error.to_string())?;
+    if raw.graph.atoms.is_empty() || raw.graph.atoms.len() > MAX_NAMING_ATOMS {
+        return Err("PubChem lookup supports molecular graphs with 1–512 atoms".into());
+    }
+    if raw.metadata.atoms.iter().any(|atom| atom.chiral_tag > 2) {
+        return Err("PubChem returned unsupported allene or coordination stereochemistry; no structure was substituted".into());
+    }
+    let specified = raw
+        .metadata
+        .atoms
+        .iter()
+        .filter(|atom| is_tetrahedral(atom.chiral_tag))
+        .count();
+    let source = smiles::read(text).map_err(|error| error.to_string())?;
+    if source.dropped_cumulene_ez
+        || specified
+            != source
+                .prepared
+                .state
+                .metadata
+                .atoms
+                .iter()
+                .filter(|atom| is_tetrahedral(atom.chiral_tag))
+                .count()
+    {
+        return Err("Native import could not retain every specified stereocenter; no PubChem structure was accepted".into());
+    }
+    let expected = canonical_identity(&source.prepared.state)
+        .map_err(|error| format!("PubChem returned unsupported chemical semantics: {error:?}"))?;
+    let imported = read(text.as_bytes().to_vec(), "smiles").await?;
+    let actual = document::prepare(&imported).map_err(|error| error.to_string())?;
+    let actual = canonical_identity(&actual.state).map_err(|error| {
+        format!("Native import could not retain PubChem chemical semantics: {error:?}")
+    })?;
+    if actual != expected {
+        return Err(
+            "Native import changed the PubChem molecular identity; no structure was accepted"
+                .into(),
+        );
+    }
+    serialize(imported)
+}

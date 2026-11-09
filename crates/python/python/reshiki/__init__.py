@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
 from types import MappingProxyType, ModuleType
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, Iterable, Literal, Mapping, TypeAlias, TypeVar, cast
 
 from . import _native
 
@@ -27,6 +27,7 @@ __all__ = [
     "Molecule",
     "Reaction",
     "Style",
+    "StyleContext",
     "Properties",
     "RenderResults",
     "parse",
@@ -35,6 +36,7 @@ __all__ = [
     "properties",
     "render_many",
     "styles",
+    "with_style",
     "excel",
 ]
 
@@ -241,12 +243,14 @@ class Drawing:
 
     @classmethod
     def from_name(cls: type[_D], name: str, *, online: bool = False) -> _D:
-        """Resolve a chemical name offline with OPSIN.
+        """Resolve a chemical name with OPSIN, or PubChem when ``online=True``."""
+        if not isinstance(online, bool):
+            raise TypeError("online must be a boolean")
+        if online:
+            from ._online import from_name
 
-        Online PubChem name lookup is reserved for a follow-up release; passing
-        ``online=True`` currently raises ``NotImplementedError``.
-        """
-        return _from_constructor(cls, _native.from_name(name, online))
+            return _from_constructor(cls, from_name(name))
+        return _from_constructor(cls, _native.from_name(name))
 
     def clean(self: _D) -> _D:
         """Return a drawing with freshly generated chemical coordinates."""
@@ -486,6 +490,145 @@ def render_many(
         ),
         failures,
     )
+
+
+@dataclass(frozen=True)
+class _DrawingConstructors(Generic[_D]):
+    _drawing_type: type[_D]
+    _style: Style
+
+    def open(self, path: str | PathLike[str], *, format: str | None = None) -> _D:
+        return self._drawing_type.open(path, format=format).with_style(self._style)
+
+    def from_smiles(self, smiles: str) -> _D:
+        return self._drawing_type.from_smiles(smiles).with_style(self._style)
+
+    def from_molfile(self, molfile: str | bytes) -> _D:
+        return self._drawing_type.from_molfile(molfile).with_style(self._style)
+
+    def from_inchi(self, inchi: str) -> _D:
+        return self._drawing_type.from_inchi(inchi).with_style(self._style)
+
+    def from_cdxml(self, cdxml: str | bytes) -> _D:
+        return self._drawing_type.from_cdxml(cdxml).with_style(self._style)
+
+    def from_name(self, name: str, *, online: bool = False) -> _D:
+        return self._drawing_type.from_name(name, online=online).with_style(self._style)
+
+
+class _MoleculeConstructors(_DrawingConstructors[Molecule]):
+    def from_rdkit(self, molecule: Any) -> Molecule:
+        return self._drawing_type.from_rdkit(molecule).with_style(self._style)
+
+
+class _ReactionConstructors(_DrawingConstructors[Reaction]):
+    def from_rxn(self, rxn: str | bytes) -> Reaction:
+        return self._drawing_type.from_rxn(rxn).with_style(self._style)
+
+
+_DrawingType: TypeAlias = Drawing
+
+
+@dataclass(frozen=True, init=False)
+class StyleContext:
+    """Reusable style settings for constructors and functional exports.
+
+    Create one with :func:`with_style`, then use, for example,
+    ``custom.Molecule.from_smiles("CCO")`` or ``custom.render("CCO", "svg")``.
+    Returned drawings retain the normal :class:`Molecule`, :class:`Reaction`
+    and :class:`Drawing` types.
+    """
+
+    _style: Style = field(repr=False)
+
+    def __init__(self, style: str | Style | None = None, **overrides: Any) -> None:
+        if style is None or isinstance(style, str):
+            resolved = Style("JACS / ACS" if style is None else style, **overrides)
+        else:
+            values = json.loads(cast(str, _style_json(style, overrides)))
+            resolved = Style(**values)
+        object.__setattr__(self, "_style", resolved)
+
+    @property
+    def style(self) -> Style:
+        """The validated style shared by this context's operations."""
+        return self._style
+
+    @property
+    def Drawing(self) -> _DrawingConstructors[_DrawingType]:
+        return _DrawingConstructors(Drawing, self._style)
+
+    @property
+    def Molecule(self) -> _MoleculeConstructors:
+        return _MoleculeConstructors(Molecule, self._style)
+
+    @property
+    def Reaction(self) -> _ReactionConstructors:
+        return _ReactionConstructors(Reaction, self._style)
+
+    def with_style(self, style: str | Style | None = None, **overrides: Any) -> StyleContext:
+        """Derive a context; keyword-only changes keep this context's settings.
+
+        An explicit style name or :class:`Style` selects a new base. Keyword
+        overrides are applied last, without changing this context.
+        """
+        return StyleContext(self._style if style is None else style, **overrides)
+
+    def parse(self, data: str | bytes, format: str | None = None) -> _DrawingType:
+        return parse(data, format).with_style(self._style)
+
+    def render(
+        self,
+        input: _DrawingType | str | bytes | PathLike[str],
+        format: str = "png",
+        *,
+        style: str | Style | None = None,
+        **options: Any,
+    ) -> bytes | str:
+        return render(input, format, style=self._style if style is None else style, **options)
+
+    def convert(
+        self,
+        input: _DrawingType | str | bytes | PathLike[str],
+        *,
+        to: str,
+        style: str | Style | None = None,
+        **options: Any,
+    ) -> bytes | str:
+        return convert(input, to=to, style=self._style if style is None else style, **options)
+
+    def render_many(
+        self,
+        inputs: Iterable[_DrawingType | str | bytes | PathLike[str]],
+        format: str = "png",
+        *,
+        errors: Literal["none", "raise"] = "none",
+        style: str | Style | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        dpi: float | None = None,
+        **overrides: Any,
+    ) -> RenderResults:
+        return render_many(
+            inputs,
+            format,
+            errors=errors,
+            style=self._style if style is None else style,
+            width=width,
+            height=height,
+            dpi=dpi,
+            **overrides,
+        )
+
+
+def with_style(style: str | Style | None = None, **overrides: Any) -> StyleContext:
+    """Bind a named style and/or overrides to reusable constructors and exports.
+
+    For example, ``custom = reshiki.with_style(font_size=12)`` followed by
+    ``custom.Molecule.from_smiles("CCO")`` applies that style at construction.
+    Module defaults and existing drawings are unchanged.
+    """
+    return StyleContext(style, **overrides)
 
 
 def __getattr__(name: str) -> ModuleType:

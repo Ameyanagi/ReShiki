@@ -103,8 +103,6 @@ def test_explicit_and_automatic_molecular_constructors(fixtures: Path) -> None:
 
 def test_offline_name_resolution() -> None:
     assert reshiki.Molecule.from_name("ethanol").properties().formula == "C2H6O"
-    with pytest.raises(NotImplementedError, match="(?i)(pubchem|online)"):
-        reshiki.Molecule.from_name("ethanol", online=True)
 
 
 def test_reaction_smiles_and_rxn(fixtures: Path) -> None:

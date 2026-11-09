@@ -6,11 +6,7 @@ mod drawing;
 mod render;
 mod styles;
 
-use pyo3::{
-    exceptions::{PyNotImplementedError, PyValueError},
-    prelude::*,
-    types::PyBytes,
-};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyBytes};
 use rayon::prelude::*;
 use reshiki_model::document::Document;
 
@@ -31,15 +27,18 @@ fn parse(py: Python<'_>, data: Vec<u8>, format: &str) -> PyResult<(Py<PyBytes>, 
     Ok((bytes(py, data), kind))
 }
 
-#[pyfunction(signature = (name, online=false))]
-fn from_name(py: Python<'_>, name: &str, online: bool) -> PyResult<(Py<PyBytes>, String)> {
-    if online {
-        return Err(PyNotImplementedError::new_err(
-            "Online PubChem name lookup requires a headless client in a follow-up; use offline names with online=False",
-        ));
-    }
+#[pyfunction]
+fn from_name(py: Python<'_>, name: &str) -> PyResult<(Py<PyBytes>, String)> {
     let (data, kind) = py
         .detach(|| drawing::run(drawing::from_name(name)))
+        .map_err(PyValueError::new_err)?;
+    Ok((bytes(py, data), kind))
+}
+
+#[pyfunction]
+fn parse_online_smiles(py: Python<'_>, smiles: &str) -> PyResult<(Py<PyBytes>, String)> {
+    let (data, kind) = py
+        .detach(|| drawing::run(drawing::parse_online_smiles(smiles)))
         .map_err(PyValueError::new_err)?;
     Ok((bytes(py, data), kind))
 }
@@ -143,6 +142,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(version, module)?)?;
     module.add_function(wrap_pyfunction!(parse, module)?)?;
     module.add_function(wrap_pyfunction!(from_name, module)?)?;
+    module.add_function(wrap_pyfunction!(parse_online_smiles, module)?)?;
     module.add_function(wrap_pyfunction!(clean, module)?)?;
     module.add_function(wrap_pyfunction!(with_style, module)?)?;
     module.add_function(wrap_pyfunction!(list_styles, module)?)?;
