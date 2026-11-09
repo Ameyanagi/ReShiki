@@ -53,18 +53,18 @@ pub fn wedge_molecule(
     )
 }
 
-fn preserves_stereo(
+fn read_stereo(
     state: &WedgeState,
     conformer: &Conformer,
     work: &mut Work,
-) -> Result<bool, String> {
+) -> Result<Metadata, String> {
     let (n, e) = (state.graph.atoms.len(), state.graph.bonds.len());
     let rings: usize = state.rings.atoms.iter().map(Vec::len).sum();
     let doubles = state.graph.bonds.iter().filter(|b| b.order == 2).count();
     // Readback repeats validation, valences, electronic perception and
     // metadata copies. Allene perception also scans all bonds per candidate;
     // the number of double bonds bounds those candidates. Precharge both
-    // costs, even when a failed tetrahedral check skips axis perception.
+    // costs before reconstructing the drawing's centres and axes.
     work.spend(
         n.saturating_add(e)
             .saturating_add(rings)
@@ -78,21 +78,6 @@ fn preserves_stereo(
         Some(&conformer.positions),
         true,
     )?;
-    if !state
-        .metadata
-        .atoms
-        .iter()
-        .zip(&drawn.metadata.atoms)
-        .all(|(expected, actual)| {
-            if expected.chiral_tag == 5 {
-                actual.chiral_tag == 5 && expected.chiral_permutation == actual.chiral_permutation
-            } else {
-                !tetrahedral(expected.chiral_tag) || expected.chiral_tag == actual.chiral_tag
-            }
-        })
-    {
-        return Ok(false);
-    }
     let seen = detect_atropisomers(
         &drawn.graph,
         &drawn.metadata,
@@ -102,24 +87,44 @@ fn preserves_stereo(
     .map_err(|error| error.to_string())?;
     // Match drawing preparation: provisional axes in small rings are not
     // atropisomers. Recompute hybridizations from the cleared readback too.
-    let seen = atropisomers(
+    atropisomers(
         &drawn.graph,
         &seen,
         &vec![Hybridization::Unspecified; drawn.graph.atoms.len()],
         &state.rings.atoms,
-    )?;
+    )
+}
+
+fn preserves_stereo(
+    state: &WedgeState,
+    conformer: &Conformer,
+    work: &mut Work,
+) -> Result<bool, String> {
+    let seen = read_stereo(state, conformer, work)?;
     Ok(state
         .metadata
-        .bonds
+        .atoms
         .iter()
-        .zip(&seen.bonds)
+        .zip(&seen.atoms)
         .all(|(expected, actual)| {
-            if matches!(expected.stereo, 6 | 7) || matches!(actual.stereo, 6 | 7) {
-                expected.stereo == actual.stereo
+            if expected.chiral_tag == 5 {
+                actual.chiral_tag == 5 && expected.chiral_permutation == actual.chiral_permutation
             } else {
-                true
+                !tetrahedral(expected.chiral_tag) || expected.chiral_tag == actual.chiral_tag
             }
-        }))
+        })
+        && state
+            .metadata
+            .bonds
+            .iter()
+            .zip(&seen.bonds)
+            .all(|(expected, actual)| {
+                if matches!(expected.stereo, 6 | 7) || matches!(actual.stereo, 6 | 7) {
+                    expected.stereo == actual.stereo
+                } else {
+                    true
+                }
+            }))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -136,17 +141,38 @@ fn search(
     readbacks: &mut usize,
     work: &mut Work,
 ) -> Result<Option<WedgeState>, String> {
-    let mut centers = Vec::new();
-    for (&bond, &choice) in &ctx.choices {
-        if let Choice::Atom(atom) = choice {
-            centers.push((atom, bond));
+    // A centre can lack a reference choice when earlier centres claimed all
+    // its carriers. Include every tetrahedral centre except fixed input ones.
+    let mut eligible: Vec<_> = input
+        .metadata
+        .atoms
+        .iter()
+        .map(|atom| tetrahedral(atom.chiral_tag))
+        .collect();
+    for (bond, &direction) in input.graph.bonds.iter().zip(&input.directions) {
+        work.spend(1)?;
+        if wedged(direction) || direction == Direction::Unknown {
+            // Match the reference chooser's fixed-input convention.
+            let atom = if tetrahedral(at(&input.metadata.atoms, bond.a)?.chiral_tag) {
+                bond.a
+            } else {
+                bond.b
+            };
+            *at_mut(&mut eligible, atom)? = false;
         }
     }
-    centers.sort_unstable();
-    let mut chosen = vec![false; input.graph.atoms.len()];
-    for &(atom, _) in &centers {
-        *at_mut(&mut chosen, atom)? = true;
+    let mut originals = vec![None; input.graph.atoms.len()];
+    for (&bond, &choice) in &ctx.choices {
+        if let Choice::Atom(atom) = choice {
+            *at_mut(&mut originals, atom)? = Some(bond);
+        }
     }
+    let mut centers: Vec<_> = eligible
+        .iter()
+        .zip(originals)
+        .enumerate()
+        .filter_map(|(atom, (&eligible, original))| eligible.then_some((atom, original)))
+        .collect();
     let mut axis_ends = vec![false; input.graph.atoms.len()];
     for (bond, meta) in input.graph.bonds.iter().zip(&input.metadata.bonds) {
         work.spend(1)?;
@@ -173,7 +199,7 @@ fn search(
         for &bond in at(&ctx.adjacent, atom)? {
             work.spend(1)?;
             let other = ctx.other(bond, atom)?;
-            if *at(&chosen, other)? && !*at(&movable, other)? {
+            if *at(&eligible, other)? && !*at(&movable, other)? {
                 *at_mut(&mut movable, other)? = true;
                 pending.push(other);
             }
@@ -181,8 +207,31 @@ fn search(
     }
     centers.retain(|&(atom, _)| movable.get(atom).copied().unwrap_or(false));
     let center_count = centers.len();
+    let reference = read_stereo(&ctx.state, ctx.conf, work)?;
+    let mut axes = Vec::new();
+    let mut movable_axis_ends = vec![false; input.graph.atoms.len()];
+    for (axis, metadata) in input.metadata.bonds.iter().enumerate() {
+        work.spend(1)?;
+        if !matches!(metadata.stereo, 6 | 7) {
+            continue;
+        }
+        let edge = at(&input.graph.bonds, axis)?;
+        let mut affected = at(&reference.bonds, axis)?.stereo != metadata.stereo;
+        for atom in [edge.a, edge.b] {
+            for &bond in at(&ctx.adjacent, atom)? {
+                work.spend(1)?;
+                affected |= *at(&movable, ctx.other(bond, atom)?)?;
+            }
+        }
+        if affected {
+            axes.push(axis);
+            *at_mut(&mut movable_axis_ends, edge.a)? = true;
+            *at_mut(&mut movable_axis_ends, edge.b)? = true;
+        }
+    }
     // Keep input wedges and allene carriers fixed. The optional second centre
-    // wedge may have added more than one movable bond.
+    // wedge may have added more than one movable bond. Valid axes outside
+    // the repair retain their reference carriers and add no search choices.
     for (bond, edge) in ctx.state.graph.bonds.iter_mut().enumerate() {
         work.spend(1)?;
         let original = *at(&input.directions, bond)?;
@@ -197,7 +246,8 @@ fn search(
                 return Ok(None);
             }
         } else if (*at(&movable, edge.a)?
-            || matches!(ctx.choices.get(&bond), Some(Choice::Atrop(_))))
+            || (*at(&movable_axis_ends, edge.a)?
+                && matches!(ctx.choices.get(&bond), Some(Choice::Atrop(_)))))
             && wedged(*at(&ctx.state.directions, bond)?)
         {
             *at_mut(&mut ctx.state.directions, bond)? = Direction::None;
@@ -211,7 +261,7 @@ fn search(
             work.spend(1)?;
             bonds.push((
                 *at(&axis_ends, ctx.other(bond, atom)?)?,
-                bond != original,
+                Some(bond) != original,
                 bond,
             ));
         }
@@ -237,11 +287,8 @@ fn search(
         }
         alternatives.push(choices);
     }
-    for (axis, metadata) in input.metadata.bonds.iter().enumerate() {
+    for axis in axes {
         work.spend(1)?;
-        if !matches!(metadata.stereo, 6 | 7) {
-            continue;
-        }
         let edge = at(&input.graph.bonds, axis)?;
         // A centre or fixed input wedge may already define this axis. Both
         // directions must be tried because another axis can share a carrier.

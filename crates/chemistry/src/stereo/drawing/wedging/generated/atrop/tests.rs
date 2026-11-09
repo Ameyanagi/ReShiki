@@ -218,6 +218,142 @@ fn avoiding_axis_ends_must_not_leave_a_tetrahedrane_centre_unwedged() -> TestRes
 }
 
 #[test]
+fn axis_repair_includes_a_center_without_a_reference_carrier() -> TestResult {
+    let mut atoms: Vec<_> = (12..=16)
+        .map(|isotope| Atom {
+            atomic_number: 6,
+            isotope,
+            no_implicit: true,
+            ..Atom::default()
+        })
+        .collect();
+    atoms
+        .get_mut(3)
+        .ok_or_else(|| anyhow::anyhow!("Missing core atom 3"))?
+        .explicit_hydrogens = 1;
+    for (atomic_number, explicit_hydrogens) in [(7, 0), (6, 0), (6, 2), (6, 3), (6, 3)] {
+        atoms.push(Atom {
+            atomic_number,
+            explicit_hydrogens,
+            no_implicit: true,
+            ..Atom::default()
+        });
+    }
+    let graph = Graph {
+        atoms,
+        bonds: [
+            (0, 1, 1),
+            (0, 2, 1),
+            (1, 2, 1),
+            (0, 3, 1),
+            (1, 3, 1),
+            (2, 3, 1),
+            (0, 4, 1),
+            (1, 4, 1),
+            (2, 4, 1),
+            (4, 5, 1),
+            (5, 6, 1),
+            (6, 7, 2),
+            (5, 8, 1),
+            (6, 9, 1),
+        ]
+        .into_iter()
+        .map(|(a, b, order)| Bond {
+            a,
+            b,
+            order,
+            aromatic: false,
+        })
+        .collect(),
+    };
+    let properties = WedgeProperties {
+        valences: graph.provisional_valences().map_err(anyhow::Error::msg)?,
+        attachment_points: vec![false; graph.atoms.len()],
+    };
+    let mut metadata = Metadata::unspecified(&graph);
+    for (atom, tag) in metadata.atoms.iter_mut().zip([1, 1, 1, 1, 2]) {
+        atom.chiral_tag = tag;
+    }
+    at_mut(&mut metadata.bonds, 10)
+        .map_err(anyhow::Error::msg)?
+        .stereo = 6; // N5-C6.
+    let state = WedgeState {
+        directions: vec![Direction::None; graph.bonds.len()],
+        graph,
+        metadata,
+        rings: RingCache {
+            kind: RingKind::Symmetric,
+            atoms: vec![
+                vec![0, 1, 2],
+                vec![0, 1, 3],
+                vec![0, 2, 3],
+                vec![1, 2, 3],
+                vec![0, 1, 4],
+                vec![0, 2, 4],
+                vec![1, 2, 4],
+            ],
+        },
+    };
+    let conformer = Conformer {
+        is_3d: false,
+        positions: [
+            (-2.0, -1.0),
+            (2.0, -1.0),
+            (0.0, 2.0),
+            (0.0, 0.0),
+            (4.0, 3.0),
+            (8.0, 4.0),
+            (9.0, 7.0),
+            (11.0, 8.0),
+            (8.0, 1.0),
+            (7.0, 8.0),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point3 { x, y, z: 0.0 })
+        .collect(),
+    };
+    let mut work = Work(50_000_000);
+    let context = wedging::with_context(&state, &properties, Some(&conformer), false, &mut work)
+        .map_err(anyhow::Error::msg)?;
+    // The first three centres claim every carrier of atom 3. It must enter
+    // the movable closure even though the reference chooser skipped it.
+    for (bond, atom) in [(3, 0), (4, 1), (5, 2)] {
+        assert!(
+            matches!(context.choices.get(&bond), Some(Choice::Atom(center)) if *center == atom)
+        );
+    }
+    assert!(
+        !context
+            .choices
+            .values()
+            .any(|choice| matches!(choice, Choice::Atom(3)))
+    );
+    let reference =
+        prefer_ring_wedges(&context.state, &properties, &conformer).map_err(anyhow::Error::msg)?;
+    let lost = readback(&reference, &conformer)?;
+    assert_eq!(
+        at(&lost.atoms, 3).map_err(anyhow::Error::msg)?.chiral_tag,
+        0
+    );
+    assert_ne!(at(&lost.bonds, 10).map_err(anyhow::Error::msg)?.stereo, 6);
+
+    let repaired =
+        wedge_molecule(&state, &properties, &conformer, false).map_err(anyhow::Error::msg)?;
+    assert!(preserves_stereo(&repaired, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+    let read = readback(&repaired, &conformer)?;
+    assert_eq!(
+        read.atoms
+            .iter()
+            .take(5)
+            .map(|atom| atom.chiral_tag)
+            .collect::<Vec<_>>(),
+        [1, 1, 1, 1, 2]
+    );
+    assert_eq!(at(&read.bonds, 10).map_err(anyhow::Error::msg)?.stereo, 6);
+    Ok(())
+}
+
+#[test]
 fn atrop_search_stops_when_its_work_budget_is_exhausted() -> TestResult {
     let (state, properties, conformer) = tetrahedrane_fixture().map_err(anyhow::Error::msg)?;
     let mut setup = Work(50_000_000);

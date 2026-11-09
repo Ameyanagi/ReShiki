@@ -248,7 +248,11 @@ fn assert_stereo_readback(
         .zip(&drawn.metadata.atoms)
         .enumerate()
     {
-        assert_eq!(expected.chiral_tag, actual.chiral_tag, "atom {atom}");
+        // A wedged axis-end amine reads as a provisional centre; only the
+        // source's centres must survive.
+        if expected.chiral_tag != 0 {
+            assert_eq!(expected.chiral_tag, actual.chiral_tag, "atom {atom}");
+        }
     }
     let read = chemistry::stereo::detect_atropisomers(
         &drawn.graph,
@@ -441,6 +445,101 @@ fn independent_centers_do_not_exhaust_axis_repair() -> anyhow::Result<()> {
                     && bond.b == 14
                     && matches!(direction, Direction::Wedge | Direction::Hash)
             })
+    );
+    Ok(())
+}
+
+#[test]
+fn independent_axes_do_not_exhaust_inverted_center_repair() -> anyhow::Result<()> {
+    let (mut input, mut properties, mut conformer) = wedge_input(&inverted_molecule()?);
+    let first_bond = input.graph.bonds.len();
+    let mut independent = smiles::prepare("CN(CC)C(=C)C")?.state;
+    let axis = independent
+        .graph
+        .bonds
+        .iter()
+        .position(|bond| (bond.a == 1 && bond.b == 4) || (bond.a == 4 && bond.b == 1))
+        .ok_or_else(|| anyhow::anyhow!("Missing independent N1-C4 axis"))?;
+    independent
+        .metadata
+        .bonds
+        .get_mut(axis)
+        .ok_or_else(|| anyhow::anyhow!("Missing independent axis metadata"))?
+        .stereo = 6;
+    independent.directions.fill(Direction::None);
+    let positions = [
+        (-1.0, 1.0),
+        (0.0, 0.0),
+        (-1.0, -1.0),
+        (-2.0, -1.0),
+        (1.0, 0.0),
+        (2.0, 1.0),
+        (2.0, -1.0),
+    ]
+    .map(|(x, y)| Point3 { x, y, z: 0.0 });
+    for _ in 0..3 {
+        append_fixture(
+            &mut input,
+            &mut properties,
+            &mut conformer,
+            &independent,
+            &positions,
+        );
+    }
+    assert_eq!((input.graph.atoms.len(), input.graph.bonds.len()), (41, 38));
+    assert_eq!(
+        input
+            .metadata
+            .bonds
+            .iter()
+            .filter(|bond| matches!(bond.stereo, 6 | 7))
+            .count(),
+        4
+    );
+    let reference = reference_wedges(&input, &properties, &conformer)?;
+    assert_eq!(
+        reference
+            .directions
+            .iter()
+            .skip(first_bond)
+            .filter(|direction| matches!(direction, Direction::Wedge | Direction::Hash))
+            .count(),
+        3
+    );
+    // C11->C12 leaves the inverted centre undefined. Clearing the three
+    // valid independent axes used to add 7^3 = 343 failed leaves before
+    // C11->C15, exhausting the fixed 256-readback limit.
+    let generated = wedging::generated::wedge_molecule(&input, &properties, &conformer, false)
+        .map_err(anyhow::Error::msg)?;
+    assert_stereo_readback(&input, &generated, &conformer)?;
+    assert!(
+        generated
+            .graph
+            .bonds
+            .iter()
+            .zip(&generated.directions)
+            .any(|(bond, direction)| {
+                bond.a == 10
+                    && bond.b == 14
+                    && matches!(direction, Direction::Wedge | Direction::Hash)
+            })
+    );
+    // Retain every independent bond's reference orientation and direction.
+    assert_eq!(
+        generated
+            .graph
+            .bonds
+            .iter()
+            .zip(&generated.directions)
+            .skip(first_bond)
+            .collect::<Vec<_>>(),
+        reference
+            .graph
+            .bonds
+            .iter()
+            .zip(&reference.directions)
+            .skip(first_bond)
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
