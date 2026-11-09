@@ -22,3 +22,24 @@ build receives input method text; vendor/iced_winit/UPSTREAM.json lists the
 upstream file hashes and every local change. Copyright 2019 Héctor Ramón,
 Iced contributors; licensed under MIT (vendor/iced_winit/LICENSE, the same text
 as LICENSE in this directory).
+
+Patched iced_widget
+===================
+
+vendor/iced_widget is iced_widget 0.14.2 from crates.io
+(https://github.com/iced-rs/iced/tree/54abf81d13fec06d4d9ac754b03ce2c3313e8a1f/widget),
+patched so text input and editor carets stop blinking after 10 idle seconds and
+stay visible. vendor/iced_widget/UPSTREAM.json lists the upstream file hashes
+and every local change. Copyright 2019 Héctor Ramón, Iced contributors;
+licensed under MIT (vendor/iced_widget/LICENSE, the same text as LICENSE in
+this directory).
+
+Patched iced_wgpu
+=================
+
+vendor/iced_wgpu is iced_wgpu 0.14.0 from crates.io
+(https://github.com/iced-rs/iced/tree/3997291f318a8bc06fa522f5579836fb3feb94df/wgpu),
+patched so MSAA targets shrink as well as grow with the window.
+vendor/iced_wgpu/UPSTREAM.json lists the upstream file hashes and every local
+change. Copyright 2019 Héctor Ramón, Iced contributors; licensed under MIT
+(vendor/iced_wgpu/LICENSE, the same text as LICENSE in this directory).

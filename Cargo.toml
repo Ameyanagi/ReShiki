@@ -328,6 +328,10 @@ svg2pdf = { path = "vendor/svg2pdf" }
 smithay-clipboard = { path = "vendor/smithay-clipboard" }
 # Take a browser page's input method composition into Iced's text fields.
 iced_winit = { path = "vendor/iced_winit" }
+# Stop text carets blinking after 10 idle seconds, so an idle window stops redrawing.
+iced_widget = { path = "vendor/iced_widget" }
+# Resize MSAA targets with the window, including when it shrinks.
+iced_wgpu = { path = "vendor/iced_wgpu" }
 # Give Iced's text fields the system clipboard in the browser.
 window_clipboard = { path = "vendor/window_clipboard" }
 
