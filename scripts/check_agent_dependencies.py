@@ -51,6 +51,7 @@ LICENSES = frozenset(
         "ISC",
         "Zlib",
         "Unicode-3.0",
+        "Python-2.0",
     }
 )
 JSON_WIDTH = 100
