@@ -2984,7 +2984,7 @@ mod tests {
         use crate::test_support::verify_identity;
         use nazuchem_ir::NameStatus;
 
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             ("O=S1CCCC1", "1lambda^4-thiolan-1-one"),
             ("O=S1CCCCC1", "1lambda^4-thian-1-one"),
@@ -3089,10 +3089,10 @@ mod tests {
                     .iter()
                     .map(|alternative| alternative.name.as_str()),
             ) {
-                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                let parsed = parser.parse(candidate, &nazuchem_n2s::ParseOptions::strict());
                 assert_eq!(
                     parsed.status,
-                    opsin::Status::Success,
+                    nazuchem_n2s::Status::Success,
                     "{candidate}: {}",
                     parsed.message
                 );

@@ -354,11 +354,11 @@ mod tests {
             NameStatus::Unverified(NameReason::UnauditedPath),
             "{smiles}"
         );
-        let parsed = opsin::Parser::new()
+        let parsed = nazuchem_n2s::Parser::new()
             .map_err(|error| error.to_string())?
             .parse(
                 &name.text,
-                &opsin::ParseOptions {
+                &nazuchem_n2s::ParseOptions {
                     allow_radicals: true,
                     ..Default::default()
                 },

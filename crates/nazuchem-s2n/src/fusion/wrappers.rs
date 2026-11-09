@@ -1677,7 +1677,7 @@ mod tests {
         use crate::test_support::verify_identity;
         use nazuchem_ir::{NameReason, NameStatus};
 
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             (
                 "Nc1cc(C)c2c(c1)C1CCC2O1",
@@ -1694,10 +1694,10 @@ mod tests {
                 name.status,
                 NameStatus::Unverified(NameReason::BridgedFusedParent)
             );
-            let parsed = parser.parse(expected, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(expected, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{expected}: {}",
                 parsed.message
             );
@@ -1719,7 +1719,7 @@ mod tests {
         use crate::test_support::verify_identity;
         use nazuchem_ir::{NameReason, NameStatus};
 
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             (
                 "O=C1C2CN1c1ccccc12",
@@ -1740,10 +1740,10 @@ mod tests {
                 name.status,
                 NameStatus::Unverified(NameReason::BridgedFusedParent)
             );
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{expected}: {}",
                 parsed.message
             );

@@ -276,17 +276,17 @@ fn spirobi_scope_boundaries_keep_generic_spiro_names() {
 // Test provenance: upstream inputs/expected names with local assertions and extensions;
 // exact matches are conservatively adapted; independent ancestry is not established.
 fn spirobi_target_names_reconstruct_matrix_graphs() {
-    let parser = opsin::Parser::new().unwrap();
+    let parser = nazuchem_n2s::Parser::new().unwrap();
     for &(row, smiles, expected, _) in MATRIX
         .iter()
         .chain(CONTROLS)
         .chain(SUFFIX_BOUNDARIES)
         .chain(UNCONVERTED_BOUNDARIES)
     {
-        let parsed = parser.parse(expected, &opsin::ParseOptions::strict());
+        let parsed = parser.parse(expected, &nazuchem_n2s::ParseOptions::strict());
         assert_eq!(
             parsed.status,
-            opsin::Status::Success,
+            nazuchem_n2s::Status::Success,
             "{row}: {}",
             parsed.message
         );
@@ -403,13 +403,18 @@ fn spirobi_atom_ids_do_not_choose_component_priming() {
 // Provenance: fn spirobi_mixed_unsaturation_elides_in_citation_order | original
 // Source: ReShiki | src/naming/openclatura/spirobi_tests.rs::spirobi_mixed_unsaturation_elides_in_citation_order
 fn spirobi_mixed_unsaturation_elides_in_citation_order() {
-    let parser = opsin::Parser::new().unwrap();
+    let parser = nazuchem_n2s::Parser::new().unwrap();
     for expected in [
         "2,2'-spirobi[bicyclo[5.2.1]decane]-5,5'-dien-3-yne",
         "2,2'-spirobi[bicyclo[5.2.1]decan]-3-en-5,5'-diyne",
     ] {
-        let parsed = parser.parse(expected, &opsin::ParseOptions::strict());
-        assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
+        let parsed = parser.parse(expected, &nazuchem_n2s::ParseOptions::strict());
+        assert_eq!(
+            parsed.status,
+            nazuchem_n2s::Status::Success,
+            "{}",
+            parsed.message
+        );
         let smiles = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
         let source = graph_io::read_smiles(&smiles, &Default::default()).unwrap();
         let ids: Vec<_> = source.atoms.keys().copied().collect();

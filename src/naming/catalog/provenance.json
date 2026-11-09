@@ -17,71 +17,71 @@
     },
     "resources": [
       {
-        "path": "crates/opsin/resources/xml/alkanes.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/alkanes.xml",
         "sha256": "2b047195ac805959da5410d3b96f896abb98ec51e502714f8cb6dbed08241fb8"
       },
       {
-        "path": "crates/opsin/resources/xml/aminoAcids.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/aminoAcids.xml",
         "sha256": "2829fc6ba1562f090f38c2f89488255fc6d0a709251a502005759121462880fd"
       },
       {
-        "path": "crates/opsin/resources/xml/arylGroups.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/arylGroups.xml",
         "sha256": "16b7b7c03673499fcfd6ee0bee17c7bd1583224cebf2fd9e409e6610e840a7e8"
       },
       {
-        "path": "crates/opsin/resources/xml/arylSubstituents.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/arylSubstituents.xml",
         "sha256": "a6c26a40a518e770d5bd443d6f705c9d98bf78c302b0dacc2f7a94795d0e412f"
       },
       {
-        "path": "crates/opsin/resources/xml/carbohydrateSuffixes.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/carbohydrateSuffixes.xml",
         "sha256": "8f6a0d37c0b2cc608a416fd6557937c6538326eaa9263c8eb2285093769c3df5"
       },
       {
-        "path": "crates/opsin/resources/xml/carbohydrates.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/carbohydrates.xml",
         "sha256": "7d015e7f3480f4f84612251bb5a6f0734253cf7ed4d383983f97637ac897d86d"
       },
       {
-        "path": "crates/opsin/resources/xml/carboxylicAcids.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/carboxylicAcids.xml",
         "sha256": "b66b6479ad98c75cbc4875e3c09cdb5a3bdce1ddd87977dbfd95fd9d9840b24f"
       },
       {
-        "path": "crates/opsin/resources/xml/functionalTerms.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/functionalTerms.xml",
         "sha256": "1aff14ca9925c609780c50e82d8c6b4b555848155504972c96a5c50ab1451257"
       },
       {
-        "path": "crates/opsin/resources/xml/groupStemsAllowingInlineSuffixes.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/groupStemsAllowingInlineSuffixes.xml",
         "sha256": "573b2dbb02ea17e90f22a8f432233507d38713f368aa5f9ee4f5cd3ee7adaac1"
       },
       {
-        "path": "crates/opsin/resources/xml/inlineSuffixes.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/inlineSuffixes.xml",
         "sha256": "9d5ce3bc345dd15ed6a8be0a6b46a22007b1801c190519164f45369eb0c37a9c"
       },
       {
-        "path": "crates/opsin/resources/xml/miscTokens.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/miscTokens.xml",
         "sha256": "c46a740d8d94b45a07aa1327891183430809809ed119b86fed8e374967649709"
       },
       {
-        "path": "crates/opsin/resources/xml/multipliers.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/multipliers.xml",
         "sha256": "c2401556d2111cf7dbd94a2e6d6ec5dc96bdee999373a892bbdd08d62e62ed12"
       },
       {
-        "path": "crates/opsin/resources/xml/simpleCyclicGroups.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/simpleCyclicGroups.xml",
         "sha256": "9d2529668f7c1e59ba3d0b2ac276b4b9f11f31467f26295362729aec608e586d"
       },
       {
-        "path": "crates/opsin/resources/xml/simpleGroups.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/simpleGroups.xml",
         "sha256": "1c776c51de9fe2e2114042e1ee4fc7afe8906b685346d88c2a94c33fd106bd61"
       },
       {
-        "path": "crates/opsin/resources/xml/simpleSubstituents.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/simpleSubstituents.xml",
         "sha256": "41348a77f2135ad2047f836b52ca2c5db983bcb26c44e04e1694818d24066876"
       },
       {
-        "path": "crates/opsin/resources/xml/suffixes.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/suffixes.xml",
         "sha256": "6a76924255cceee29e99917d5808c4ae904d071243cf367d387f977992634b08"
       },
       {
-        "path": "crates/opsin/resources/xml/unsaturators.xml",
+        "path": "crates/nazuchem-n2s/resources/xml/unsaturators.xml",
         "sha256": "d528b967c52d64a434563dc237d0a28e0784d1916784772381fe545c9bdf6bc1"
       }
     ]

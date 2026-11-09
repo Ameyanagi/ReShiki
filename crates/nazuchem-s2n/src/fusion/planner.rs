@@ -1034,10 +1034,15 @@ mod tests {
             let name = crate::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected);
             assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred);
-            let parsed = opsin::Parser::new()
+            let parsed = nazuchem_n2s::Parser::new()
                 .unwrap()
-                .parse(&name.text, &opsin::ParseOptions::strict());
-            assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
+                .parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                nazuchem_n2s::Status::Success,
+                "{}",
+                parsed.message
+            );
             assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
             let round_trip = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
             crate::test_support::verify_identity(smiles, &round_trip).unwrap();

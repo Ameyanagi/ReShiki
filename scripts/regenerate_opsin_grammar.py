@@ -1,6 +1,6 @@
 """Regenerate the OPSIN DFA table and every hash that pins it from regexTokens.xml.
 
-Run after editing crates/opsin/resources/xml/regexTokens.xml, or after a merge
+Run after editing crates/nazuchem-n2s/resources/xml/regexTokens.xml, or after a merge
 conflict in the generated files: merge regexTokens.xml and any prose by hand,
 then rerun. Conflict hunks that differ only in hashes are resolved here, and
 git keeps one side of automata.bin. --check verifies without writing.
@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CRATE = ROOT / "crates/opsin"
+CRATE = ROOT / "crates/nazuchem-n2s"
 MANIFEST = CRATE / "provenance/manifest.json"
 AUTOMATA = CRATE / "resources/automata.bin"
 OVERRIDE = "resources/uk/ac/cam/ch/wwmm/opsin/resources/regexTokens.xml"
@@ -98,7 +98,7 @@ def main():
         raise SystemExit(
             "Pass --jar or set OPSIN_JAR to the pinned OPSIN development oracle "
             f"opsin-core-3.0-SNAPSHOT-jar-with-dependencies.jar (SHA256 {JAR_SHA256}); "
-            "see crates/opsin/provenance/README.md."
+            "see crates/nazuchem-n2s/provenance/README.md."
         )
     if (digest := sha256(args.jar.read_bytes())) != JAR_SHA256:
         raise SystemExit(f"{args.jar} has SHA256 {digest}, not the pinned {JAR_SHA256}.")

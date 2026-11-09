@@ -407,12 +407,12 @@ fn heterospiro_hydrogen_and_suffixes_on_both_components() {
 // Source: ReShiki | src/naming/openclatura/heterospiro_tests.rs::assert_names_statuses_and_structures
 fn assert_names_statuses_and_structures(cases: &[Case]) {
     assert_names_and_statuses(cases);
-    let parser = opsin::Parser::new().unwrap();
+    let parser = nazuchem_n2s::Parser::new().unwrap();
     for &(row, smiles, expected, _) in cases {
-        let parsed = parser.parse(expected, &opsin::ParseOptions::strict());
+        let parsed = parser.parse(expected, &nazuchem_n2s::ParseOptions::strict());
         assert_eq!(
             parsed.status,
-            opsin::Status::Success,
+            nazuchem_n2s::Status::Success,
             "{row}: {}",
             parsed.message
         );

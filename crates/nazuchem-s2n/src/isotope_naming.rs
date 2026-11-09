@@ -345,12 +345,12 @@ fn with_descriptor(
 
 #[cfg(test)]
 fn verify(smiles: &str, name: &str) -> Result<(), String> {
-    let parser = opsin::Parser::new().map_err(|e| e.to_string())?;
-    let result = parser.parse(name, &opsin::ParseOptions::strict());
+    let parser = nazuchem_n2s::Parser::new().map_err(|e| e.to_string())?;
+    let result = parser.parse(name, &nazuchem_n2s::ParseOptions::strict());
     if result
         .warnings
         .iter()
-        .any(|warning| warning.kind == opsin::WarningKind::StereochemistryIgnored)
+        .any(|warning| warning.kind == nazuchem_n2s::WarningKind::StereochemistryIgnored)
     {
         return Err(
             "openclatura: isotope naming could not preserve the specified CIP stereochemistry"

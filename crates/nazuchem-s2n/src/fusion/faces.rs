@@ -1086,9 +1086,9 @@ mod tests {
     // Provenance: fn tests::benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit | original
     // Source: ReShiki | src/naming/openclatura/fusion/faces.rs::tests::benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit
     fn benzoheterobicycles_prove_nine_and_ten_member_faces_without_raising_search_limit() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (name, size) in [("1-benzoxonine", 9), ("2H-1-benzoxecine", 10)] {
-            let parsed = parser.parse(name, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(name, &nazuchem_n2s::ParseOptions::strict());
             let smiles = parsed
                 .structure
                 .unwrap_or_else(|| panic!("{name}: {}", parsed.message))

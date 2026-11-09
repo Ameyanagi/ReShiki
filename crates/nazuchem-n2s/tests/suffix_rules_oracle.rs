@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: MIT
+// Origin: original
+// Source: ReShiki | crates/opsin/tests/suffix_rules_oracle.rs | 0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9
+// Source: OPSIN | opsin-core/src/main/java/uk/ac/cam/ch/wwmm/opsin/SuffixRules.java | 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
+// Source: ReShiki | crates/opsin/tests/fixtures/suffix-rule-golden.jsonl | 5f559fd482e237307a589dfcb7ea333cee0a6e13
+// Copyright 2017 Daniel Lowe
+
+//! Complete suffix applicability selection and ordered metadata from pinned OPSIN.
+use nazuchem_n2s::suffix_rules::SuffixRules;
+use serde_json::{Value, json};
+
+#[test]
+fn all_pinned_suffix_rule_queries_match_ordered_metadata_and_errors() {
+    let rules = SuffixRules::new().unwrap();
+    let mut count = 0;
+    for line in include_str!("fixtures/suffix-rule-golden.jsonl").lines() {
+        let expected: Value = serde_json::from_str(line).unwrap();
+        let group_type = expected["group_type"].as_str().unwrap();
+        let suffix = expected["suffix"].as_str().unwrap();
+        let subtype = expected["sub_type"].as_str();
+        let (selected, error) = match rules.rule_tags(group_type, suffix, subtype) {
+            Ok(selected) => (
+                json!(
+                    selected
+                        .iter()
+                        .map(|rule| json!({"kind":rule.kind.as_str(),"attributes":rule.attributes}))
+                        .collect::<Vec<_>>()
+                ),
+                Value::Null,
+            ),
+            Err(error) => (Value::Null, json!(error.to_string())),
+        };
+        assert_eq!(
+            rules.is_group_type_with_specific_suffix_rules(group_type),
+            expected["specific_group_type"].as_bool().unwrap(),
+            "{group_type}"
+        );
+        assert_eq!(
+            selected, expected["rules"],
+            "{group_type} {suffix} {subtype:?}"
+        );
+        assert_eq!(
+            error, expected["error"],
+            "{group_type} {suffix} {subtype:?}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 997);
+}

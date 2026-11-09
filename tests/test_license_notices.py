@@ -16,7 +16,7 @@ class LicenseNoticeTests(unittest.TestCase):
     def test_checked_in_naming_components_collect_complete_crate_local_terms(self):
         repository = Path(__file__).resolve().parents[1]
         packages = []
-        for name in ("nazuchem-s2n", "nazuchem-kernel", "opsin"):
+        for name in ("nazuchem-s2n", "nazuchem-kernel", "nazuchem-n2s", "nazuchem"):
             manifest = repository / "crates" / name / "Cargo.toml"
             declaration = tomllib.loads(manifest.read_text())["package"]
             packages.append(
@@ -47,8 +47,8 @@ class LicenseNoticeTests(unittest.TestCase):
                 "nazuchem-s2n": {
                     "licenses/openclatura/LICENSE": "licenses/openclatura/LICENSE",
                     "licenses/openclatura/NOTICE": "licenses/openclatura/NOTICE",
-                    "licenses/opsin/LICENSE": "crates/opsin/LICENSE",
-                    "licenses/opsin/NOTICE": "crates/opsin/NOTICE",
+                    "licenses/opsin/LICENSE": "crates/nazuchem-n2s/LICENSE",
+                    "licenses/opsin/NOTICE": "crates/nazuchem-n2s/NOTICE",
                     "licenses/cpython/LICENSE": "licenses/cpython/LICENSE",
                     "licenses/cpython/NOTICE": "licenses/cpython/NOTICE",
                 },
@@ -58,7 +58,19 @@ class LicenseNoticeTests(unittest.TestCase):
                     "licenses/stdlib/llvm-LICENSE": "licenses/stdlib/llvm-LICENSE",
                     "licenses/stdlib/msvc-LICENSE": "licenses/stdlib/msvc-LICENSE",
                 },
-                "opsin": {"LICENSE": "crates/opsin/LICENSE"},
+                "nazuchem-n2s": {"LICENSE": "crates/nazuchem-n2s/LICENSE"},
+                "nazuchem": {
+                    "licenses/opsin/LICENSE": "crates/nazuchem-n2s/LICENSE",
+                    "licenses/opsin/NOTICE": "crates/nazuchem-n2s/NOTICE",
+                    "licenses/openclatura/LICENSE": "licenses/openclatura/LICENSE",
+                    "licenses/openclatura/NOTICE": "licenses/openclatura/NOTICE",
+                    "licenses/cpython/LICENSE": "licenses/cpython/LICENSE",
+                    "licenses/cpython/NOTICE": "licenses/cpython/NOTICE",
+                    "licenses/rdkit/LICENSE": "licenses/rdkit/LICENSE",
+                    "licenses/centres/LICENSE": "licenses/centres/LICENSE",
+                    "licenses/stdlib/llvm-LICENSE": "licenses/stdlib/llvm-LICENSE",
+                    "licenses/stdlib/msvc-LICENSE": "licenses/stdlib/msvc-LICENSE",
+                },
             }
             for package in packages:
                 name, version = package["name"], package["version"]
@@ -128,7 +140,7 @@ class LicenseNoticeTests(unittest.TestCase):
             (root / "licenses/rust").mkdir(parents=True)
             (root / "licenses/rust/manifest.json").write_text("{}")
             packages = []
-            for name, license_name in [("reshiki", "MIT OR Apache-2.0"), ("opsin", "MIT")]:
+            for name, license_name in [("reshiki", "MIT OR Apache-2.0"), ("nazuchem-n2s", "MIT")]:
                 source = root / name
                 source.mkdir()
                 (source / "Cargo.toml").write_text(f'name = "{name}"\nlicense = "{license_name}"\n')
@@ -143,17 +155,17 @@ class LicenseNoticeTests(unittest.TestCase):
                 )
             upstream = b"Original OPSIN copyright and complete MIT terms\r\n"
             attribution = b"Ported from the pinned upstream source, not original project code.\n"
-            (root / "opsin/LICENSE").write_bytes(upstream)
-            (root / "opsin/NOTICE").write_bytes(attribution)
+            (root / "nazuchem-n2s/LICENSE").write_bytes(upstream)
+            (root / "nazuchem-n2s/NOTICE").write_bytes(attribution)
             write_notices(
                 root,
                 root / "output",
-                {"packages": packages, "workspace_members": ["reshiki", "opsin"]},
+                {"packages": packages, "workspace_members": ["reshiki", "nazuchem-n2s"]},
             )
             result = (root / "output" / THIRD_PARTY_FILE).read_bytes()
-            self.assertIn(b"opsin@1/LICENSE", result)
-            self.assertIn(b"opsin@1/NOTICE", result)
-            self.assertIn(b"opsin@1/Cargo.toml", result)
+            self.assertIn(b"nazuchem-n2s@1/LICENSE", result)
+            self.assertIn(b"nazuchem-n2s@1/NOTICE", result)
+            self.assertIn(b"nazuchem-n2s@1/Cargo.toml", result)
             self.assertIn(upstream, result)
             self.assertIn(attribution, result)
             self.assertEqual(result.count(b"Original workspace crate:"), 1)

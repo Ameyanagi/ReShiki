@@ -1,0 +1,17 @@
+nazuchem-ir source provenance
+=============================
+
+This crate extracts the original ReShiki shared naming vocabulary from
+src/naming.rs at commit 8e09fa7f89e47d8465772eabf2ef7f2ea491af3a.
+The types, rule-assessment text and serialization attributes are original
+ReShiki code, licensed MIT OR Apache-2.0. See LICENSE-MIT and LICENSE-APACHE.
+
+Git history records the introduction of NameStatus and NameReason in
+001003b2444f8cec530b7f2b06f193d7b9c9b92c, AlternativeName in
+0d10886c93f6f7aa673f4179739143986d392a01 and IsotopeStyle in
+381ac4164154afecf04bb4a89d8eef32eeb52190. Later ReShiki commits extend
+these declarations and their messages; the extraction preserves the pinned
+source's complete current definitions.
+
+This crate contains shared vocabulary only. The naming engines' ported
+algorithms and chemistry kernel are outside this crate.

@@ -38,7 +38,7 @@ i_overlay = "9.1.0"
 [dev-dependencies]
 nazuchem-kernel = { path = "../nazuchem-kernel" }
 anyhow = "1"
-opsin = { path = "../opsin" }
+nazuchem-n2s = { path = "../nazuchem-n2s" }
 reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

@@ -1,0 +1,21 @@
+[package]
+name = "nazuchem"
+version = "0.1.0"
+edition = "2024"
+publish = false
+# Established terms from the facade and its engines/kernel. The dependencies'
+# unresolved sort-policy and Blue Book provenance remains pending; see NOTICE.
+license = "(MIT OR Apache-2.0) AND MIT AND BSD-3-Clause AND BSD-2-Clause AND (Apache-2.0 WITH LLVM-exception) AND Python-2.0"
+description = "Chemical naming with a Rust port of OPSIN and an extended openclatura 0.4.3 port"
+readme = "README.md"
+
+[features]
+default = ["n2s", "s2n"]
+n2s = ["dep:nazuchem-n2s"]
+s2n = ["dep:nazuchem-s2n"]
+
+[dependencies]
+nazuchem-ir = { path = "../nazuchem-ir" }
+nazuchem-kernel = { path = "../nazuchem-kernel" }
+nazuchem-n2s = { path = "../nazuchem-n2s", optional = true }
+nazuchem-s2n = { path = "../nazuchem-s2n", optional = true }

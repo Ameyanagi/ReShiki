@@ -151,9 +151,9 @@ fn splitting_indicated_hydrogen_locant_preserves_in_word_font_change() {
 async fn indole_preview() -> Result<Preview, String> {
     // The real OPSIN parser and native importer run in-process; no application
     // executable, display server or installed fonts are required.
-    let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
-    let parsed = parser.parse("5-chloro-1H-indole", &opsin::ParseOptions::strict());
-    assert_eq!(parsed.status, opsin::Status::Success);
+    let parser = nazuchem_n2s::Parser::new().map_err(|error| error.to_string())?;
+    let parsed = parser.parse("5-chloro-1H-indole", &nazuchem_n2s::ParseOptions::strict());
+    assert_eq!(parsed.status, nazuchem_n2s::Status::Success);
     let (smiles, atoms) = parsed
         .structure
         .ok_or("No parsed indole")?

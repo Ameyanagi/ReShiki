@@ -3,7 +3,7 @@ use crate::{
     atom_labels::{self, refresh::Refresh},
     document::{AtomStereo, Point},
 };
-use opsin::graph::{Element, StereoReference};
+use nazuchem_n2s::graph::{Element, StereoReference};
 
 /// Independent name-to-graph oracle. OPSIN retains locants and explicit H
 /// references; copy its parity directly, without the steroid display algorithm.
@@ -15,12 +15,12 @@ fn named(name: &str) -> (Document, HashMap<String, u64>) {
     } else {
         name
     };
-    let result = opsin::Parser::new()
+    let result = nazuchem_n2s::Parser::new()
         .unwrap()
-        .parse(source, &opsin::ParseOptions::strict());
+        .parse(source, &nazuchem_n2s::ParseOptions::strict());
     assert_eq!(
         result.status,
-        opsin::Status::Success,
+        nazuchem_n2s::Status::Success,
         "{name}: {}",
         result.message
     );

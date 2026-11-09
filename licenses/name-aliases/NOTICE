@@ -5,7 +5,7 @@ src/naming/catalog/data.json are selected and adapted from OPSIN 3.0-SNAPSHOT:
 https://github.com/dan2097/opsin
 Pinned commit: 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91
 Copyright 2017 Daniel Lowe. Licensed under MIT. The complete original license
-is crates/opsin/LICENSE and is included in binary distribution notices.
+is crates/nazuchem-n2s/LICENSE and is included in binary distribution notices.
 
 This finite catalog expands selected retained names and cited functional-class
 rules into complete names. Some resource tokens are stems, not complete names.

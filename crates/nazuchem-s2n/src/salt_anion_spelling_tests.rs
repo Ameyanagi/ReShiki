@@ -22,7 +22,7 @@ use nazuchem_ir::{NameReason, NameStatus};
 fn salt_anion_spelling_matrix() {
     // Retained ion spelling and salt ordering share the public naming pipeline
     // with the P-72.7 parent-choice rules.
-    let parser = opsin::Parser::new().unwrap();
+    let parser = nazuchem_n2s::Parser::new().unwrap();
     let mut failures = Vec::new();
     for (row, smiles, expected, status) in [
         (
@@ -264,8 +264,8 @@ fn salt_anion_spelling_matrix() {
                 actual.text, actual.status
             ));
         }
-        let parsed = parser.parse(&actual.text, &opsin::ParseOptions::strict());
-        if parsed.status != opsin::Status::Success {
+        let parsed = parser.parse(&actual.text, &nazuchem_n2s::ParseOptions::strict());
+        if parsed.status != nazuchem_n2s::Status::Success {
             failures.push(format!("{row}: OPSIN: {}", parsed.message));
             continue;
         }

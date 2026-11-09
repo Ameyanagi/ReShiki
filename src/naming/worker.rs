@@ -14,10 +14,10 @@ pub(super) const OUTPUT_LIMIT: usize = 65_536;
 pub(super) const MAX_NAME_BYTES: usize = 2_048;
 pub const HEAP_BYTES: usize = 96 * 1024 * 1024;
 pub(super) const BACKEND: &str = "opsin-rust";
-pub(super) const PORT_VERSION: &str = opsin::PORT_VERSION;
-pub(super) const UPSTREAM_VERSION: &str = opsin::UPSTREAM_VERSION;
-pub(super) const UPSTREAM_COMMIT: &str = opsin::UPSTREAM_COMMIT;
-pub(super) const RESOURCE_FINGERPRINT: &str = opsin::RESOURCE_FINGERPRINT;
+pub(super) const PORT_VERSION: &str = nazuchem_n2s::PORT_VERSION;
+pub(super) const UPSTREAM_VERSION: &str = nazuchem_n2s::UPSTREAM_VERSION;
+pub(super) const UPSTREAM_COMMIT: &str = nazuchem_n2s::UPSTREAM_COMMIT;
+pub(super) const RESOURCE_FINGERPRINT: &str = nazuchem_n2s::RESOURCE_FINGERPRINT;
 pub(super) const OPTIONS: &str = "strict-semantic-cx1";
 pub(super) const GENERATION_OPTIONS: &str = "generation-radicals-semantic-cx1";
 
@@ -128,23 +128,23 @@ fn parse(name: String, generation: bool) -> Result<Response, String> {
         "Enter a chemical name of at most 2048 bytes without control characters",
     )?;
     // Grammar initialization is inside the bounded native allocator, never a foreign runtime.
-    let parser = opsin::Parser::with_budget(crate::naming::kernel_budget())
+    let parser = nazuchem_n2s::Parser::with_budget(crate::naming::kernel_budget())
         .map_err(|error| error.to_string())?;
-    let mut options = opsin::ParseOptions::strict();
+    let mut options = nazuchem_n2s::ParseOptions::strict();
     options.allow_radicals = generation;
     let result = parser.parse(&name, &options);
     let status = match result.status {
-        opsin::Status::Success => ParserStatus::Success,
-        opsin::Status::Warning => ParserStatus::Warning,
-        opsin::Status::Failure => ParserStatus::Failure,
+        nazuchem_n2s::Status::Success => ParserStatus::Success,
+        nazuchem_n2s::Status::Warning => ParserStatus::Warning,
+        nazuchem_n2s::Status::Failure => ParserStatus::Failure,
     };
     let warnings: Vec<ParserWarning> = result
         .warnings
         .into_iter()
         .map(|warning| ParserWarning {
             kind: match warning.kind {
-                opsin::WarningKind::AppearsAmbiguous => "APPEARS_AMBIGUOUS",
-                opsin::WarningKind::StereochemistryIgnored => "STEREOCHEMISTRY_IGNORED",
+                nazuchem_n2s::WarningKind::AppearsAmbiguous => "APPEARS_AMBIGUOUS",
+                nazuchem_n2s::WarningKind::StereochemistryIgnored => "STEREOCHEMISTRY_IGNORED",
             }
             .into(),
             message: warning.message,

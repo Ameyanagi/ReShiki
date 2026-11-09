@@ -24,8 +24,9 @@ LEDGER_NAME = "PROVENANCE-nazuchem.toml"
 REQUIRED_ROOTS = (
     "crates/nazuchem-ir",
     "crates/nazuchem-kernel",
-    "crates/opsin",
+    "crates/nazuchem-n2s",
     "crates/nazuchem-s2n",
+    "crates/nazuchem",
 )
 REQUIRED_FIXTURES = (
     "src/naming/catalog/data.json",

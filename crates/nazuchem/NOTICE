@@ -1,0 +1,44 @@
+nazuchem facade and dependency provenance
+========================================
+
+The facade is original Nazuchem/ReShiki code, Copyright (c) 2026 Ameyanagi
+and ReShiki contributors, licensed MIT OR Apache-2.0. See LICENSE-MIT and
+LICENSE-APACHE. The facade calls the separately attributed engines and
+kernel; it does not replace their licenses or origins.
+
+Name to structure: nazuchem-n2s is a Rust port of OPSIN by Daniel Lowe,
+Copyright 2017 Daniel Lowe, under MIT. The port began at OPSIN 2.9.0,
+commit b91b610af5ab07560fedb20730d7aef46bb2bca0, and tracks upstream main
+42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91. Complete terms and the port's
+notice are in licenses/opsin/LICENSE and licenses/opsin/NOTICE.
+
+Structure to name: nazuchem-s2n began as a port of openclatura 0.4.3,
+commit 90dc5bcb4910c196122ec0405d06a32929a8f308, extended in ReShiki.
+Copyright (c) 2026 lamalab-org; MIT. It also incorporates OPSIN-derived
+registries and a CPython 3.12 integer-set adaptation under Python-2.0.
+Complete openclatura and CPython terms, notices and CPython license history
+are in licenses/openclatura/ and licenses/cpython/. The engine scope notice
+in licenses/nazuchem-s2n/NOTICE qualifies inherited OPSIN generation pins,
+the unresolved CPython patch revision, and historical ReShiki source paths.
+
+Molecular perception: nazuchem-kernel adapts RDKit under BSD-3-Clause,
+SiMolecule centres under BSD-2-Clause, and LLVM libc++/Microsoft STL under
+Apache-2.0 WITH LLVM-exception. Complete terms and upstream copyright
+notices are in licenses/rdkit/, licenses/centres/ and licenses/stdlib/.
+licenses/nazuchem-kernel/NOTICE records exact revisions and incorporated
+scope. Shared naming vocabulary is original ReShiki code under MIT OR
+Apache-2.0; its history is in licenses/nazuchem-ir/NOTICE.
+
+The package expression ANDs the facade's original-code choice with the
+established expressions of its engines and kernel:
+(MIT OR Apache-2.0) AND MIT AND BSD-3-Clause AND BSD-2-Clause AND
+(Apache-2.0 WITH LLVM-exception) AND Python-2.0.
+This applies the dependency terms even when one optional engine is disabled.
+It is not a grant for unresolved material: kernel native_order/linux_sort.rs
+and sort_common.rs and s2n data/bluebook/p25_retained.tsv remain NOASSERTION,
+pending their owner's source/licensing decisions. publish = false remains
+in force. The repository-root PROVENANCE-nazuchem.toml retains those facts.
+
+Copied notices retain historical paths and broader ReShiki inventories.
+The per-file ledger and dependency scope notices identify the incorporated
+subset. Root notices remain in ReShiki while it retains those implementations.

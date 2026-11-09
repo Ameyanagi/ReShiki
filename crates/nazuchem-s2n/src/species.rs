@@ -679,7 +679,7 @@ mod tests {
     // Provenance: fn tests::anionic_parents_precede_neutral_groups_and_roundtrip_complete_salts | original
     // Source: ReShiki | src/naming/openclatura/species.rs::tests::anionic_parents_precede_neutral_groups_and_roundtrip_complete_salts
     fn anionic_parents_precede_neutral_groups_and_roundtrip_complete_salts() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected, status) in [
             (
                 "[Na+].Oc1ccccc1[C-]1C=CC=C1",
@@ -833,10 +833,10 @@ mod tests {
                 .unwrap_or_else(|error| panic!("{smiles}: {error}"));
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, status, "{smiles}");
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{}: {}",
                 name.text,
                 parsed.message
@@ -935,7 +935,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn balanced_salts_roundtrip_as_complete_graphs() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected, status) in [
             ("CC(=O)[O-].[Na+]", "sodium acetate", NameStatus::Preferred),
             (
@@ -988,10 +988,10 @@ mod tests {
                 .unwrap_or_else(|e| panic!("{smiles}: {e}"));
             assert_eq!(name.text, expected);
             assert_eq!(name.status, status, "{smiles}");
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{}: {}",
                 name.text,
                 parsed.message

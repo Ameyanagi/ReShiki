@@ -3228,12 +3228,12 @@ mod tests {
     }
 
     fn assert_strict_fusion_name_identity(smiles: &str, name: &crate::Name) -> Result<(), String> {
-        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+        let parser = nazuchem_n2s::Parser::new().map_err(|error| error.to_string())?;
         for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
-            let parsed = parser.parse(text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{text}: {}",
                 parsed.message
             );
@@ -3382,14 +3382,14 @@ mod tests {
                 assert_eq!(render_fusion_name(&ast, registry).unwrap(), expected);
             }
         }
-        let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+        let parser = nazuchem_n2s::Parser::new().map_err(|error| error.to_string())?;
         let mut graphs = Vec::new();
         for name in [
             "furo[2',3':4,5]thieno[2,3-b]pyridine",
             "furo[3',2':2,3]thieno[5,4-b]pyridine",
         ] {
-            let parsed = parser.parse(name, &opsin::ParseOptions::strict());
-            assert_eq!(parsed.status, opsin::Status::Success, "{name}");
+            let parsed = parser.parse(name, &nazuchem_n2s::ParseOptions::strict());
+            assert_eq!(parsed.status, nazuchem_n2s::Status::Success, "{name}");
             assert!(parsed.warnings.is_empty(), "{name}: {:?}", parsed.warnings);
             graphs.push(
                 parsed

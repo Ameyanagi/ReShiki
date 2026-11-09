@@ -31,13 +31,14 @@ members = [
   "crates/nazuchem-ir",
   "crates/nazuchem-kernel",
   "crates/nazuchem-s2n",
+  "crates/nazuchem",
   "crates/depict-math",
   "crates/io",
   "crates/mcp",
   "crates/model",
   "crates/metafile",
   "crates/web-worker",
-  "crates/opsin",
+  "crates/nazuchem-n2s",
   "crates/process-heap",
   "crates/web",
   "crates/python",
@@ -76,7 +77,7 @@ iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 nazuchem-ir = { path = "crates/nazuchem-ir" }
 nazuchem-kernel = { path = "crates/nazuchem-kernel" }
 nazuchem-s2n = { path = "crates/nazuchem-s2n" }
-opsin = { path = "crates/opsin" }
+nazuchem-n2s = { path = "crates/nazuchem-n2s" }
 reshiki-geometry = { path = "native/geometry" }
 accesskit = "=0.24.1"
 reshiki-process-heap = { path = "crates/process-heap" }
