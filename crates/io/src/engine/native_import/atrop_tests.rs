@@ -74,9 +74,14 @@ fn fresh_wedges_that_hide_an_axis_are_refused() -> anyhow::Result<()> {
     let mut fresh = drawn.clone();
     fresh.state.directions.fill(Direction::None);
     let labels = vec![None; fresh.ids.len()];
-    let error = finish_molecule(fresh.clone(), &labels, Default::default())
-        .err()
-        .ok_or_else(|| anyhow::anyhow!("Hidden axis accepted"))?;
+    let error = finish_molecule(
+        fresh.clone(),
+        &labels,
+        Default::default(),
+        &ComponentRow::default(),
+    )
+    .err()
+    .ok_or_else(|| anyhow::anyhow!("Hidden axis accepted"))?;
     assert!(error.to_string().contains("atropisomer axis"), "{error}");
     // In the Linux layout the reference wedges keep it.
     fresh.positions = molecule([
@@ -102,7 +107,7 @@ fn fresh_wedges_that_hide_an_axis_are_refused() -> anyhow::Result<()> {
         (-98.76, -43.04),
     ])?
     .positions;
-    let prepared = finish_molecule(fresh, &labels, Default::default())?;
+    let prepared = finish_molecule(fresh, &labels, Default::default(), &ComponentRow::default())?;
     assert_eq!(
         axes(&molecular::prepare(&prepared.document)?)?,
         axes(&drawn)?
