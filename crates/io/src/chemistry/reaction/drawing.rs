@@ -61,8 +61,14 @@ impl Drawing {
         }
         let mut doc = Document::default();
         for (part, labels) in self.parts.into_iter().zip(labels) {
+            let axis_free = axes(part.drawing.molecule()).is_empty();
             let positions: Vec<_> = part.positions.into_iter().map(Position::point).collect();
             let mut drawing = part.drawing.finish_at(labels, &positions)?;
+            if axis_free && crate::chemistry::crossed_double_has_axis(&drawing) {
+                return Err(invalid(
+                    "The drawing cannot keep this reaction's atropisomer axes",
+                ));
+            }
             if let [atom] = drawing.atoms.as_mut_slice()
                 && atom.element == "O"
                 && atom.label_h == 2

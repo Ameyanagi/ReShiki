@@ -474,6 +474,11 @@ fn finish_molecule(
         )
         .into());
     }
+    if expected.is_empty() && chemistry::crossed_double_has_axis(&document) {
+        return Err(Error::Document(
+            "The drawing cannot keep this structure's atropisomer axes".into(),
+        ));
+    }
     Ok(Prepared {
         molecule,
         document,

@@ -331,10 +331,21 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
     .map_err(Error::Stereo)?;
     // Axis wedges are drawing input, so every prepare perceives them afresh.
     // Remove provisional tags on small rings, as sanitized file imports do.
+    // For axes only, a crossed double bond is EITHERDOUBLE, not the unknown
+    // single-bond direction that hides an axis at its endpoint.
+    let directions: Vec<_> = sanitized
+        .directions
+        .iter()
+        .zip(&document.bonds)
+        .map(|(&direction, bond)| match direction {
+            Direction::Unknown if bond.order == 2 => Direction::EitherDouble,
+            direction => direction,
+        })
+        .collect();
     if let Ok(metadata) = stereo::detect_atropisomers(
         &drawn.graph,
         &drawn.metadata,
-        &sanitized.directions,
+        &directions,
         Some(&stereo::wedging::Conformer {
             positions: input.positions.clone(),
             is_3d: false,

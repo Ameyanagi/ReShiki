@@ -21,6 +21,19 @@ impl Imported {
         let mut document =
             drawing.finish_with(labels, |document| imported.restore_xyz(document))?;
         let restored = imported.restore_haworth(&mut document);
+        if imported
+            .molecule
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .all(|bond| !matches!(bond.stereo, 6 | 7))
+            && crate::chemistry::crossed_double_has_axis(&document)
+        {
+            return Err(Error::Document(
+                "The drawing cannot keep this MOL file's atropisomer axes".into(),
+            ));
+        }
         let molecule = if restored {
             document::prepare(&document)?
         } else {
