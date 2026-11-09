@@ -1629,42 +1629,104 @@ async fn crystal_controls_offer_the_same_settings_in_every_display() -> Result<(
     Ok(())
 }
 
-/// The least distance between the ink boxes of NaCl's repeated ion labels,
-/// measured in their half-widths and half-heights; one means no overlap.
-fn repeated_ion_separation(doc: &Document) -> f32 {
+/// NaCl's least ink clearance with a horizontal word space, and the median
+/// gap to each label's nearest neighbour in a substantially overlapping row,
+/// in spaces.
+fn repeated_ion_separation(doc: &Document) -> (f32, f32) {
     use reshiki::scene::Primitive;
-    let boxes: Vec<_> = reshiki::scene::primitives(doc)
-        .into_iter()
-        .filter_map(|p| match &p {
-            Primitive::Opacity { primitive, .. }
-                if matches!(primitive.as_ref(), Primitive::Text { text, .. } if matches!(text.as_str(), "Na" | "Cl")) =>
-            {
-                let ink = reshiki::scene::label_ink_boxes(&[p]);
-                ink.into_iter().reduce(|(lo, hi), (other_lo, other_hi)| {
-                    (
-                        Point::new(lo.x.min(other_lo.x), lo.y.min(other_lo.y)),
-                        Point::new(hi.x.max(other_hi.x), hi.y.max(other_hi.y)),
-                    )
-                })
-            }
-            _ => None,
-        })
-        .collect();
+    let mut boxes: Vec<(Point, Point, f32)> = vec![];
+    let mut black = 0;
+    // The black labels paint over pale copies of the editable cell. Keep
+    // their actual ink once, without counting the paper halos as labels.
+    for p in reshiki::scene::primitives(doc).into_iter().rev() {
+        let (text, pale) = match &p {
+            Primitive::Opacity { primitive, .. } => (primitive.as_ref(), true),
+            primitive => (primitive, false),
+        };
+        let Primitive::Text {
+            text, size, style, ..
+        } = text
+        else {
+            continue;
+        };
+        if !matches!(text.as_str(), "Na" | "Cl") {
+            continue;
+        }
+        let (lo, hi) = reshiki::scene::label_ink_boxes(std::slice::from_ref(&p))
+            .into_iter()
+            .reduce(|(lo, hi), (other_lo, other_hi)| {
+                (
+                    Point::new(lo.x.min(other_lo.x), lo.y.min(other_lo.y)),
+                    Point::new(hi.x.max(other_hi.x), hi.y.max(other_hi.y)),
+                )
+            })
+            .unwrap();
+        black += usize::from(!pale);
+        if pale
+            && boxes
+                .iter()
+                .any(|(l, h, _)| lo.distance(*l) < 1e-3 && hi.distance(*h) < 1e-3)
+        {
+            continue;
+        }
+        let space = reshiki::style::styled_text_width(" ", *size, style);
+        boxes.push((lo, hi, space));
+    }
+    assert_eq!(black, doc.atoms.len());
     assert_eq!(
         boxes.len(),
         models3d::shown_sites(doc, &doc.models[0]).len()
     );
     let mut least = f32::INFINITY;
-    for (i, (lo, hi)) in boxes.iter().enumerate() {
-        for (other_lo, other_hi) in &boxes[i + 1..] {
-            let dx = ((lo.x + hi.x) - (other_lo.x + other_hi.x)).abs();
-            let dy = ((lo.y + hi.y) - (other_lo.y + other_hi.y)).abs();
-            let width = hi.x - lo.x + other_hi.x - other_lo.x;
-            let height = hi.y - lo.y + other_hi.y - other_lo.y;
-            least = least.min((dx / width).max(dy / height));
+    let mut row_gaps = vec![f32::INFINITY; boxes.len()];
+    for (i, (lo, hi, space)) in boxes.iter().enumerate() {
+        for (j, (other_lo, other_hi, other_space)) in boxes.iter().enumerate().skip(i + 1) {
+            let dx = ((lo.x + hi.x) - (other_lo.x + other_hi.x)).abs() / 2.;
+            let dy = ((lo.y + hi.y) - (other_lo.y + other_hi.y)).abs() / 2.;
+            let width = (hi.x - lo.x + other_hi.x - other_lo.x) / 2.;
+            let height = (hi.y - lo.y + other_hi.y - other_lo.y) / 2.;
+            let space = space.max(*other_space);
+            least = least.min((dx / (width + space)).max(dy / height));
+            // Substantially overlapping rows can read as joined words.
+            if dy <= height / 2. {
+                let gap = (dx - width) / space;
+                row_gaps[i] = row_gaps[i].min(gap);
+                row_gaps[j] = row_gaps[j].min(gap);
+            }
         }
     }
-    least
+    row_gaps.sort_by(f32::total_cmp);
+    (least, row_gaps[row_gaps.len() / 2])
+}
+
+#[test]
+fn nacl_repeat_labels_have_word_space_in_the_2d_scene() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read(
+        "cif",
+        include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+    )
+    .unwrap()
+    .0;
+    app.tab.selected = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
+    let mut clearances = vec![];
+    for repeat in [[2, 1, 1], [2, 2, 1], [2, 2, 2]] {
+        set(&mut app, Setting::Repeat(repeat));
+        let automatic = repeated_ion_separation(&app.tab.doc);
+        let mut along_c = app.tab.doc.clone();
+        models3d::look_along(&mut along_c, 0, models3d::Along::C);
+        let reference = repeated_ion_separation(&along_c);
+        clearances.push((repeat, app.tab.doc.models[0].along, automatic, reference));
+    }
+    assert!(
+        clearances
+            .iter()
+            .all(|(_, _, automatic, reference)| automatic.0 >= 1.
+                && automatic.1 + 1e-3 >= reference.1),
+        "scene label clearances (repeat, direction, automatic, c): {clearances:?}"
+    );
 }
 
 #[test]
@@ -1693,8 +1755,8 @@ fn nacl_repeats_choose_a_clear_view_and_keep_an_explicit_direction() {
     models3d::look_along(&mut along_c, 0, models3d::Along::C);
     let reference = repeated_ion_separation(&along_c);
     assert!(
-        automatic + 1e-3 >= reference || automatic >= 1.,
-        "{automatic} < {reference}"
+        automatic.0 >= 1. && automatic.1 + 1e-3 >= reference.1,
+        "{automatic:?} < {reference:?}"
     );
     let after = app.tab.doc.clone();
     set(&mut app, Setting::Repeat([2, 2, 2]));
