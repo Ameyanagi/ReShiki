@@ -151,7 +151,7 @@ substituted functional groups, bicyclic/spiro systems, heterocycles, phane
 (cyclophane) names such as `1,4(1,4)-dibenzenacyclohexaphane`, supported
 absolute R/S and E/Z stereo, isotopes and formal charge. It follows unreleased
 OPSIN main at commit `42e87ac6` rather than the 2.9.0 release; the
-[commit ledger](../crates/nazuchem-n2s/PORTING.md#upstream-commits-after-290) lists
+[commit ledger](https://github.com/Ameyanagi/nazuchem/blob/main/crates/nazuchem-n2s/PORTING.md#upstream-commits-after-290) lists
 what changed. The editor accepts a graph with at most 512 atoms across all
 components. ReShiki verifies the editable graph before inserting it. The
 specific retained name `(+)-lactic acid` is normalized
@@ -219,14 +219,16 @@ Examples of the exact OPSIN expansions are:
 ### Structure to name
 
 Abbreviated groups are expanded for naming. Showing an already named molecule
-reuses its caption. Names come from a Rust port of
+reuses its caption. Names come from `nazuchem-s2n` in the external
+[nazuchem repository](https://github.com/Ameyanagi/nazuchem), which began as a Rust port of
 [openclatura](https://github.com/lamalab-org/openclatura) 0.4.3 by lamalab-org
-(MIT license; commit `90dc5bcb`), in `src/naming/openclatura/`. The port follows
-the Python modules and rule order, and its JSON rule tables in
-`src/naming/openclatura/data/` are byte-identical to upstream. RDKit's part is
-done by `crates/chemistry`: SMILES parsing, kekulization, ring perception,
-stereo perception and the CIP labeler, including r/s. The copyright and license
-are in `licenses/openclatura/` and `NOTICE`.
+(MIT license; commit `90dc5bcb`), extended in ReShiki. Its source, rule tables
+and per-file provenance now live in that repository, at the nazuchem revision
+pinned in `Cargo.toml`. `nazuchem-kernel` supplies the
+RDKit-derived SMILES parsing, kekulization, ring perception, stereo perception
+and CIP labeler, including r/s. The dependency retains complete upstream
+notices and license texts; ReShiki's retained attribution records are in
+`licenses/openclatura/` and `NOTICE`.
 
 The port names molecular graphs of up to 512 atoms: chains, monocycles,
 heterocycles, ring assemblies, spiro systems, von Baeyer (bicyclo, tricyclo)

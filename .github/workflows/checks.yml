@@ -164,8 +164,6 @@ jobs:
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
-      - name: Check naming provenance headers, function markers and data hashes
-        run: uv run --locked python scripts/check_provenance.py
   python-package:
     name: Python package (headless wheel)
     needs: scope
@@ -475,10 +473,10 @@ jobs:
         # The catalog lays groups out with the native depiction port at run
         # time; this replaces the former per-platform capture workflow.
         run: "cargo test --locked -p reshiki-model --lib --target ${{ matrix.target }} chemistry::abbreviations::"
-      - name: Check native Rust naming backend and process portability
-        run: cargo check --locked -p nazuchem-n2s -p reshiki-process --all-targets --target ${{ matrix.target }}
-      - name: Test the native Rust naming backend and process limits on the matching host
-        run: cargo test --locked -p nazuchem-n2s -p reshiki-process --target ${{ matrix.target }}
+      - name: Check native process portability
+        run: cargo check --locked -p reshiki-process --all-targets --target ${{ matrix.target }}
+      - name: Test native process limits on the matching host
+        run: cargo test --locked -p reshiki-process --target ${{ matrix.target }}
   reference:
     needs: scope
     if: needs.scope.outputs.live == 'true'

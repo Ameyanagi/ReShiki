@@ -38,14 +38,11 @@ tests/fixtures/drawing-tools-integration/native-combined-v1/ax/06-nmr-palette-mo
 tests/fixtures/drawing-tools-integration/native-combined-v1/ax/07-nmr-carbon-both-252.ax.txt -text whitespace=-blank-at-eol
 tests/fixtures/drawing-tools-integration/native-combined-v1/origins/ethyl-acetate-carbon-desktop.tsv -text whitespace=-blank-at-eol
 
-# Preserve the pinned OPSIN license and oracle fixtures byte-for-byte.
-crates/nazuchem-n2s/LICENSE -text
-crates/nazuchem-s2n/licenses/opsin/LICENSE -text
-crates/nazuchem/licenses/opsin/LICENSE -text
-# Generated from regexTokens.xml: never diff or merge it. After a conflict, merge
-# the XML and run scripts/regenerate_opsin_grammar.py.
-crates/nazuchem-n2s/resources/automata.bin binary
-crates/nazuchem-n2s/tests/fixtures/** -text
+# Preserve the selected OPSIN data and upstream license byte-for-byte.
+resources/naming/opsin/LICENSE -text
+resources/naming/opsin/elementaryAtoms.xml -text
+tests/fixtures/naming/opsin/xml/** -text
+tests/fixtures/naming/opsin/phanes.txt -text
 
 # Preserve the two original local/parser test stdout records.
 tests/fixtures/retained-plus-lactic-acid/local-tests.log -text whitespace=-blank-at-eof

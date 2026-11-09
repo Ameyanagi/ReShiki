@@ -15,12 +15,14 @@ invalid molecular identity remains an error.
 ## Sources and adaptation
 
 Each alias in [data.json](data.json) cites a source. OPSIN aliases are selected
-from the bundled OPSIN MIT resources, pinned to OPSIN `3.0-SNAPSHOT`
+from the OPSIN MIT resources in the pinned external nazuchem dependency,
+pinned to OPSIN `3.0-SNAPSHOT`
 (commit `42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91`, the resource hashes and
 fingerprint in [provenance.json](provenance.json)). The initial small-molecule
 selection used OPSIN 2.9.0 (`b91b610af5ab07560fedb20730d7aef46bb2bca0`);
 its original pin remains in the provenance, while every shipping alias is
-validated against the current bundled parser and resources. Alias source links
+validated against the pinned nazuchem parser and retained
+[source-evidence fixtures](../../../tests/fixtures/naming/opsin/README.md). Alias source links
 point at the current pin. Evidence gives exact resource files and token
 spellings. A stem can require a cited suffix or functional class to form the
 complete alias: for example, `ethyl alcohol` combines `eth`, `yl` and `alcohol`.
@@ -61,7 +63,7 @@ accessed 11 October 2026. It identifies the explicit S graph
 `C[C@H](O)C(=O)O`; ChEBI attributes this synonym to NIST. ChEBI website data is
 [CC BY 4.0](https://www.ebi.ac.uk/chebi/about). The source attribution and full
 legal code are in [licenses/name-aliases](../../../licenses/name-aliases/NOTICE).
-OPSIN's [MIT license](../../../crates/nazuchem-n2s/LICENSE) remains separate from
+OPSIN's [MIT license](https://github.com/Ameyanagi/nazuchem/blob/main/crates/nazuchem-n2s/LICENSE) remains separate from
 ReShiki's original MIT OR Apache-2.0 integration code. Binary packaging
 includes these notices through the existing license collector.
 

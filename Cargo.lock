@@ -2768,18 +2768,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "nazuchem"
-version = "0.1.0"
-dependencies = [
- "nazuchem-ir",
- "nazuchem-kernel",
- "nazuchem-n2s",
- "nazuchem-s2n",
-]
-
-[[package]]
 name = "nazuchem-ir"
 version = "0.1.0"
+source = "git+https://github.com/Ameyanagi/nazuchem?rev=f418fea6747aad48d9f5cb020b00b8afc55cbb31#f418fea6747aad48d9f5cb020b00b8afc55cbb31"
 dependencies = [
  "serde",
 ]
@@ -2787,10 +2778,9 @@ dependencies = [
 [[package]]
 name = "nazuchem-kernel"
 version = "0.1.0"
+source = "git+https://github.com/Ameyanagi/nazuchem?rev=f418fea6747aad48d9f5cb020b00b8afc55cbb31#f418fea6747aad48d9f5cb020b00b8afc55cbb31"
 dependencies = [
- "anyhow",
  "serde",
- "serde_json",
  "thiserror 2.0.20",
  "web-time",
 ]
@@ -2798,22 +2788,20 @@ dependencies = [
 [[package]]
 name = "nazuchem-n2s"
 version = "0.1.0"
+source = "git+https://github.com/Ameyanagi/nazuchem?rev=f418fea6747aad48d9f5cb020b00b8afc55cbb31#f418fea6747aad48d9f5cb020b00b8afc55cbb31"
 dependencies = [
- "flate2",
  "nazuchem-kernel",
  "regex",
  "roxmltree",
- "serde_json",
- "sha2",
 ]
 
 [[package]]
 name = "nazuchem-s2n"
 version = "0.1.0"
+source = "git+https://github.com/Ameyanagi/nazuchem?rev=f418fea6747aad48d9f5cb020b00b8afc55cbb31#f418fea6747aad48d9f5cb020b00b8afc55cbb31"
 dependencies = [
  "nazuchem-ir",
  "nazuchem-kernel",
- "nazuchem-n2s",
  "serde",
  "serde_json",
 ]

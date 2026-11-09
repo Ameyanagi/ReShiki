@@ -44,21 +44,10 @@ class CheckScopeTests(unittest.TestCase):
                 self.assertTrue(needs_geometry(["src/app.rs", path]))
         self.assertTrue(needs_geometry(None))
 
-    def test_provenance_inputs_always_run_repository_python_checks(self):
+    def test_naming_integration_inputs_require_native_checks(self):
         for path in (
-            "PROVENANCE-nazuchem.toml",
-            "scripts/check_provenance.py",
-            "tests/test_check_provenance.py",
-            "crates/nazuchem-kernel/src/lib.rs",
-            "crates/nazuchem-kernel/licenses/rdkit/LICENSE",
-            "crates/nazuchem-n2s/resources/new.xml",
-            "crates/nazuchem-n2s/NOTICE",
-            "crates/nazuchem/Cargo.toml",
-            "crates/nazuchem/src/lib.rs",
-            "crates/nazuchem-s2n/src/new.rs",
-            "crates/nazuchem-s2n/src/data/new.json",
-            "crates/nazuchem-s2n/src/test_support.rs",
-            "crates/nazuchem-s2n/licenses/cpython/LICENSE",
+            "Cargo.toml",
+            "Cargo.lock",
             "src/naming/catalog/data.json",
             "tests/fixtures/s2n/baseline.tsv",
             "tests/fixtures/openclatura/graph_oracle.json",

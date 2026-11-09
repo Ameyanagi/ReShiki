@@ -10,7 +10,9 @@
 // Copyright 2017 Daniel Lowe
 // Copyright (c) 2026 Ameyanagi and ReShiki contributors
 // Changes: Keep document and InChI integration checks in ReShiki after extracting the naming engine.
-// Local contributions: MIT OR Apache-2.0; see NOTICE and PROVENANCE-nazuchem.toml.
+// Local contributions: MIT OR Apache-2.0; see NOTICE and
+// PROVENANCE-nazuchem.toml at the nazuchem revision pinned in Cargo.toml:
+// https://github.com/Ameyanagi/nazuchem/blob/main/PROVENANCE-nazuchem.toml.
 
 //! Application integrations for the extracted structure-to-name library.
 
@@ -20,7 +22,7 @@ use nazuchem_s2n::name_smiles;
 // Provenance: fn fixture_smiles | original
 // Source: ReShiki | src/naming/openclatura/phane/tests.rs::fixture_smiles
 fn fixture_smiles(name: &str) -> Result<String, String> {
-    let inchi = include_str!("../../crates/nazuchem-n2s/tests/fixtures/upstream-inchi/phanes.txt")
+    let inchi = include_str!("../../tests/fixtures/naming/opsin/phanes.txt")
         .lines()
         .filter_map(|line| line.split_once('\t'))
         .find(|(fixture, _)| *fixture == name)
