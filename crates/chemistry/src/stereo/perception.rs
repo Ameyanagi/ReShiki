@@ -206,7 +206,33 @@ pub fn perceive_preserving_bonds(
         input,
         options,
         None,
-        Some(authoritative),
+        BondStereo::Preserve(authoritative),
+        true,
+        &mut Work(50_000_000),
+    )
+}
+
+/// Validate atom winding with authoritative cis/trans bond configurations.
+/// Double bonds use stereo 4/5 relative to their stored carriers, 1 for unknown,
+/// or 0 for unspecified. Configurations are normalized to legacy Z/E (2/3)
+/// during assignment so they participate in the ordinary ligand refinement.
+/// Cleanup keeps the input bond metadata until assignment, and no other bond
+/// configurations are inferred. Callers must separately validate admission.
+pub fn perceive_bond_configurations(input: &State, options: Options) -> Result<State, String> {
+    if input
+        .graph
+        .bonds
+        .iter()
+        .zip(&input.metadata.bonds)
+        .any(|(bond, meta)| bond.order == 2 && !matches!(meta.stereo, 0 | 1 | 4 | 5))
+    {
+        return Err("Authoritative bond configurations require cis/trans carriers".into());
+    }
+    with_work_preserving(
+        input,
+        options,
+        None,
+        BondStereo::Configurations,
         true,
         &mut Work(50_000_000),
     )
@@ -285,6 +311,11 @@ pub fn perceive_file_queries(
 ) -> Result<State, String> {
     with_work(input, options, Some(queries), true, &mut Work(50_000_000))
 }
+enum BondStereo<'a> {
+    Directions,
+    Preserve(&'a [bool]),
+    Configurations,
+}
 fn with_work(
     input: &State,
     options: Options,
@@ -292,7 +323,14 @@ fn with_work(
     allene_axes: bool,
     work: &mut Work,
 ) -> Result<State, String> {
-    with_work_preserving(input, options, queries, None, allene_axes, work)
+    with_work_preserving(
+        input,
+        options,
+        queries,
+        BondStereo::Directions,
+        allene_axes,
+        work,
+    )
 }
 /// `allene_axes` runs full CIP, with its own limits, to clear allene windings
 /// that have no axis.
@@ -300,7 +338,7 @@ fn with_work_preserving(
     input: &State,
     options: Options,
     queries: Option<&[bool]>,
-    authoritative: Option<&[bool]>,
+    bond_stereo: BondStereo<'_>,
     allene_axes: bool,
     work: &mut Work,
 ) -> Result<State, String> {
@@ -347,7 +385,23 @@ fn with_work_preserving(
     }
     let mut ctx = Context::new(input.clone(), work)?;
     ctx.queries = queries.map(<[bool]>::to_vec);
-    ctx.authoritative_bonds = authoritative.map(<[bool]>::to_vec);
+    match bond_stereo {
+        BondStereo::Directions => {}
+        BondStereo::Preserve(authoritative) => {
+            ctx.authoritative_bonds = Some(authoritative.to_vec());
+        }
+        BondStereo::Configurations => {
+            ctx.authoritative_bonds = Some(
+                input
+                    .graph
+                    .bonds
+                    .iter()
+                    .map(|bond| bond.order == 2)
+                    .collect(),
+            );
+            ctx.bond_configurations = true;
+        }
+    }
     if !options.force && ctx.state.properties.done.is_some() {
         return Ok(ctx.state);
     }
@@ -385,7 +439,11 @@ fn with_work_preserving(
         let order = at(&ctx.state.graph.bonds, i)?.order;
         if options.clean {
             put(&mut ctx.state.properties.bond_codes, i, None)?;
-            if matches!(order, 2 | 4) && !ctx.detectable(i)? {
+            let authoritative = ctx
+                .authoritative_bonds
+                .as_ref()
+                .is_some_and(|mask| mask.get(i).copied().unwrap_or(false));
+            if !authoritative && matches!(order, 2 | 4) && !ctx.detectable(i)? {
                 if *at(&ctx.state.directions, i)? == Direction::EitherDouble {
                     put(&mut ctx.state.directions, i, Direction::None)?;
                 }
@@ -400,7 +458,7 @@ fn with_work_preserving(
                     meta.stereo_atoms.clear();
                 }
                 continue;
-            } else if order == 2 {
+            } else if !authoritative && order == 2 {
                 let dir = *at(&ctx.state.directions, i)?;
                 let meta = ctx
                     .state
@@ -420,18 +478,23 @@ fn with_work_preserving(
         }
         if !has_bonds && order == 2 {
             let bond = at(&ctx.state.graph.bonds, i)?;
-            let mut specified = false;
-            for atom in [bond.a, bond.b] {
-                for &other in at(&ctx.neighbors, atom)? {
-                    work.spend(1)?;
-                    if directed(*at(&ctx.state.directions, other)?) {
-                        has_bonds = true;
-                        specified = true;
+            let mut specified = ctx.bond_configurations
+                && matches!(at(&ctx.state.metadata.bonds, i)?.stereo, 4 | 5);
+            if specified {
+                has_bonds = true;
+            } else {
+                for atom in [bond.a, bond.b] {
+                    for &other in at(&ctx.neighbors, atom)? {
+                        work.spend(1)?;
+                        if directed(*at(&ctx.state.directions, other)?) {
+                            has_bonds = true;
+                            specified = true;
+                            break;
+                        }
+                    }
+                    if has_bonds {
                         break;
                     }
-                }
-                if has_bonds {
-                    break;
                 }
             }
             if !potential_bonds && !specified && ctx.detectable(i)? {
@@ -528,6 +591,7 @@ struct Context {
     state: State,
     queries: Option<Vec<bool>>,
     authoritative_bonds: Option<Vec<bool>>,
+    bond_configurations: bool,
     neighbors: Vec<Vec<usize>>,
     pairs: HashMap<(usize, usize), usize>,
     ranks: Vec<u32>,
@@ -562,6 +626,7 @@ impl Context {
             state,
             queries: None,
             authoritative_bonds: None,
+            bond_configurations: false,
             neighbors,
             pairs,
             ranks: Vec::new(),

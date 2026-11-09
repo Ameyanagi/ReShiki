@@ -138,6 +138,8 @@ pub struct Record {
     pub omitted_units: usize,
     pub smiles: String,
     pub canonical_smiles: String,
+    /// Prepared name-import chemistry; depiction consumes this without reparsing text.
+    pub prepared: Option<chemistry::smiles::Prepared>,
     pub locants: Option<Locants>,
     /// Curated offline aliases, separate from the generated systematic name.
     /// Every entry identifies its source and the exact matched chemical graph.

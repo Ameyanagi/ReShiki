@@ -8,7 +8,11 @@ use std::{
     path::PathBuf,
 };
 
-pub(super) const PROTOCOL: u32 = 6;
+pub(super) const PROTOCOL: u32 = 7;
+// Phase B 10b measured 4,933 snapshot requests and Parse/Verify for 1,788
+// distinct OPSIN oracle names: largest request 349 B, response 18,371 B
+// (Verify undecadictane); snapshot maximum 8,072 B. Both caps stay unchanged.
+// See docs/structure-to-name-harness.md for the reproducible measurement.
 pub(super) const WIRE_LIMIT: usize = 32_768;
 pub(super) const OUTPUT_LIMIT: usize = 65_536;
 pub(super) const MAX_NAME_BYTES: usize = 2_048;
@@ -66,17 +70,7 @@ pub(super) struct Parsed {
     pub status: ParserStatus,
     pub message: String,
     pub warnings: Vec<ParserWarning>,
-    pub cxsmiles: Option<String>,
-    pub locants: Vec<Option<String>>,
-    pub axes: Vec<Axis>,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct Axis {
-    pub atoms: [usize; 2],
-    pub refs: [usize; 2],
-    pub clockwise: bool,
-    pub descriptor: String,
+    pub molecule: Option<nazuchem_ir::Molecule>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -152,19 +146,15 @@ fn parse(name: String, generation: bool) -> Result<Response, String> {
         .collect();
     let serialized = result
         .structure
-        .map(|structure| structure.semantic_cxsmiles_with_locants_and_axes())
+        .map(|structure| structure.to_ir())
         .transpose();
-    let (status, message, cxsmiles, locants, axes) = match serialized {
-        Ok(Some((cxsmiles, locants, axes))) => {
-            (status, result.message, Some(cxsmiles), locants, axes)
-        }
-        Ok(None) => (status, result.message, None, vec![], vec![]),
+    let (status, message, molecule) = match serialized {
+        Ok(Some(molecule)) => (status, result.message, Some(molecule)),
+        Ok(None) => (status, result.message, None),
         Err(error) => (
             ParserStatus::Failure,
             format!("{} Structure serialization failed: {error}", result.message),
             None,
-            vec![],
-            vec![],
         ),
     };
     Ok(Response::Parse(Parsed {
@@ -184,17 +174,7 @@ fn parse(name: String, generation: bool) -> Result<Response, String> {
         status,
         message,
         warnings,
-        cxsmiles,
-        locants,
-        axes: axes
-            .into_iter()
-            .map(|axis| Axis {
-                atoms: axis.atoms,
-                refs: axis.refs,
-                clockwise: axis.clockwise,
-                descriptor: axis.descriptor,
-            })
-            .collect(),
+        molecule,
     }))
 }
 

@@ -93,6 +93,7 @@ fn edited_name_can_resolve_current_aliases_without_reopening_details() {
         omitted_stereo: vec![],
         omitted_units: 0,
         smiles: identity.into(),
+        prepared: None,
         canonical_smiles: identity.into(),
         locants: None,
         synonyms: naming::aliases_for_smiles(identity).unwrap(),

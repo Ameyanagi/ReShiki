@@ -171,14 +171,33 @@ fn component(
         }
     }
     if options.symbols.isomeric && state.properties.done.is_none() {
-        state = perception::perceive(
-            &state,
-            perception::Options {
-                clean: options.clean_stereo,
-                force: false,
-                flag_possible: false,
-            },
-        )
+        let perception_options = perception::Options {
+            clean: options.clean_stereo,
+            force: false,
+            flag_possible: false,
+        };
+        // Splitting disconnected structures invalidates perception caches.
+        // Typed IR carries reference-relative cis/trans instead of slash
+        // directions, so ordinary direction-based cleanup would erase it.
+        // Preserve that authoritative configuration while rebuilding the
+        // component's ranks and ring stereo.
+        state = if state
+            .metadata
+            .bonds
+            .iter()
+            .any(|meta| matches!(meta.stereo, 4 | 5))
+        {
+            for meta in &mut state.metadata.bonds {
+                meta.stereo = match meta.stereo {
+                    2 => 4,
+                    3 => 5,
+                    other => other,
+                };
+            }
+            perception::perceive_bond_configurations(&state, perception_options)
+        } else {
+            perception::perceive(&state, perception_options)
+        }
         .map_err(invalid)?;
     }
     state.metadata.groups.clear();

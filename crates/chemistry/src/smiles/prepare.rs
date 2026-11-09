@@ -7,7 +7,7 @@ use crate::{
 };
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Prepared {
     pub state: perception::State,
     pub dummy_labels: Vec<Option<String>>,

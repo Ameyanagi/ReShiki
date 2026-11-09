@@ -4,6 +4,9 @@ use crate::naming::{IsotopeStyle, local, reverse, worker};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::Path, time::Instant};
 
+#[path = "worker_snapshot_migration.rs"]
+mod migration;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Response {
@@ -116,7 +119,11 @@ fn assert_shapes(text: &str) {
         ("neutral-parent verification", r#"\"verification\":{"#),
         ("unknown stereo units", r#"\"omitted_stereo\":[\""#),
         ("alternative names", r#"\"alternatives\":[{"#),
-        ("atropisomer axes", r#"\"axes\":[{"#),
+        (
+            "IR molecular structures",
+            r#"\"molecule\":{\"nazuchem_ir\":1"#,
+        ),
+        ("atropisomer axes", r#"\"kind\":\"atropisomer\""#),
     ] {
         assert!(text.contains(needle), "worker snapshot lacks {shape}");
     }

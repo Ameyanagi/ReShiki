@@ -2,7 +2,7 @@
 //! The browser sends the same request to its naming Web Worker instead.
 #[cfg(not(target_arch = "wasm32"))]
 use super::client::{self, CancelOnDrop, POLL};
-use super::{Error, Locants, Provenance, Record, canonical_smiles, worker};
+use super::{Error, Locants, Provenance, Record, worker};
 use std::borrow::Cow;
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
@@ -239,116 +239,41 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
             details.chars().take(2048).collect::<String>()
         )));
     }
-    let smiles = reply.cxsmiles.ok_or_else(|| {
+    let molecule = reply.molecule.ok_or_else(|| {
         Error::Rejected("The OPSIN Rust port returned no molecular structure".into())
     })?;
-    let relative = generation
-        .then(|| relative_stereo_smiles(&smiles))
-        .flatten()
-        .map(str::to_owned);
-    let graph_smiles = relative.as_deref().unwrap_or(&smiles);
-    if graph_smiles.contains('|') {
-        const MESSAGE: &str = "ReShiki drawings cannot yet store relative configuration (rel, rac, or endo/exo/syn/anti on a chiral ring system), polymer or atom-label semantics. No simplified structure or single enantiomer was drawn";
-        return Err(Error::Rejected(MESSAGE.into()));
-    }
-    let mut canonical_smiles = canonical_smiles(graph_smiles).map_err(Error::Rejected)?;
-    let atom_count = crate::chemistry::smiles::parse(graph_smiles)
-        .map_err(|error| Error::Worker(error.to_string()))?
-        .graph
-        .atoms
-        .len();
-    if reply.locants.len() != atom_count {
-        return Err(Error::Worker(
-            "Local parser returned locants for a different atom count".into(),
+    const SEMANTICS: &str = "ReShiki drawings cannot yet store relative configuration (rel, rac, or endo/exo/syn/anti on a chiral ring system), polymer or atom-label semantics. No simplified structure or single enantiomer was drawn";
+    // Verification alone accepts the single OR group used by endo/exo names.
+    // Import retains its existing fail-closed policy for relative configurations.
+    let relative = match molecule.stereo_groups.as_slice() {
+        [] => None,
+        [group]
+            if generation
+                && matches!(group.kind, nazuchem_ir::StereoGroupKind::Or(_))
+                && group.stereo.iter().all(|&index| {
+                    matches!(
+                        molecule.stereo.get(index as usize),
+                        Some(nazuchem_ir::Stereo::Tetrahedral { .. })
+                    )
+                }) =>
+        {
+            Some(group)
+        }
+        _ => return Err(Error::Rejected(SEMANTICS.into())),
+    };
+    let prepared = crate::molecule_names::from_ir(&molecule).map_err(Error::Rejected)?;
+    let (prepared, ir_atoms) =
+        crate::molecule_names::name_import_projection(&prepared).map_err(Error::Rejected)?;
+    if prepared.state.graph.atoms.len() > crate::molecule_names::MAX_NAMING_ATOMS {
+        return Err(Error::Rejected(
+            "Naming supports at most 512 input atom tokens; no oversized graph was imported".into(),
         ));
     }
-    // Locants map by constitution, so they keep the parser's SMILES and atom
-    // order even when salt components are reordered below.
-    let locants = Locants {
-        smiles: smiles.clone(),
-        atoms: reply.locants,
-    };
-    let smiles = if reply.axes.is_empty() {
-        smiles
-    } else {
-        let mut state = crate::chemistry::smiles::read(&smiles)
-            .map_err(|error| Error::Rejected(error.to_string()))?
-            .prepared
-            .state;
-        if state.graph.atoms.len() != atom_count {
-            return Err(Error::Rejected(
-                "Native import changed the atom count of an axial structure".into(),
-            ));
-        }
-        let invalid = || Error::Worker("Local parser returned an invalid axis".into());
-        let mut axes = Vec::new();
-        for axis in &reply.axes {
-            let [a, b] = axis.atoms;
-            let index = state
-                .graph
-                .bonds
-                .iter()
-                .position(|bond| (bond.a, bond.b) == (a, b) || (bond.a, bond.b) == (b, a))
-                .ok_or_else(invalid)?;
-            let bond = state.graph.bonds.get(index).ok_or_else(invalid)?;
-            let mut refs = axis.refs;
-            if bond.a != a {
-                refs.reverse();
-            }
-            // Native axial CIP and wedging take the lowest-index neighbour at
-            // each end as carrier, so the winding flips once per other carrier.
-            let mut clockwise = axis.clockwise;
-            let mut carriers = vec![];
-            for ((atom, other), reference) in
-                [(bond.a, bond.b), (bond.b, bond.a)].into_iter().zip(refs)
-            {
-                let neighbours: Vec<_> = state
-                    .graph
-                    .bonds
-                    .iter()
-                    .filter_map(|bond| match (bond.a, bond.b) {
-                        (x, y) | (y, x) if x == atom && y != other => Some(y),
-                        _ => None,
-                    })
-                    .collect();
-                let carrier = *neighbours.iter().min().ok_or_else(invalid)?;
-                if neighbours.len() != 2 || !neighbours.contains(&reference) {
-                    return Err(invalid());
-                }
-                clockwise ^= carrier != reference;
-                carriers.push(carrier);
-            }
-            let metadata = state.metadata.bonds.get_mut(index).ok_or_else(invalid)?;
-            if metadata.stereo != 0 {
-                return Err(invalid());
-            }
-            metadata.stereo = if clockwise { 6 } else { 7 };
-            metadata.stereo_atoms = carriers;
-            axes.push((index, axis.descriptor.as_str()));
-        }
-        // Verify the requested descriptor after transferring references into
-        // the SMILES atom order, since InChI cannot check the axis.
-        let labelled = crate::chemistry::stereo::cip::label::assign(&state, &Default::default())
-            .map_err(|error| Error::Rejected(error.to_string()))?;
-        if axes.iter().any(|&(index, descriptor)| {
-            labelled
-                .state
-                .properties
-                .bond_codes
-                .get(index)
-                .and_then(Option::as_deref)
-                != Some(descriptor)
-        }) {
-            return Err(Error::Rejected(
-                "Native and OPSIN CIP assignments disagree on the biaryl axis".into(),
-            ));
-        }
-        canonical_smiles = super::canonical_state(&state).map_err(Error::Rejected)?;
-        canonical_smiles.clone()
-    };
+    let mut identity_state = prepared.state.clone();
+    identity_state.metadata.groups.clear();
+    let canonical_smiles = super::canonical_state(&identity_state).map_err(Error::Rejected)?;
     if !generation
-        && crate::chemistry::smiles::prepare(&canonical_smiles)
-            .map_err(|error| Error::Rejected(error.to_string()))?
+        && prepared
             .state
             .graph
             .atoms
@@ -359,16 +284,79 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
             "Importing radical names is not supported by the strict parser".into(),
         ));
     }
+    // SMILES remains an editable display/export view. Chemistry and layout use
+    // the prepared IR graph, and the writer's traversal maps display locants.
+    let display_state = crate::molecule_names::encode_axis_markers(&identity_state)
+        .map_err(|_| Error::Rejected("Native import could not encode the biaryl axis".into()))?;
+    let written = crate::chemistry::smiles::write::write(
+        &display_state,
+        crate::chemistry::smiles::write::Options {
+            canonical: false,
+            ..Default::default()
+        },
+    )
+    .map_err(|error| Error::Rejected(error.to_string()))?;
+    let mut smiles = written.text;
+    if let Some(group) = relative {
+        let nazuchem_ir::StereoGroupKind::Or(number) = group.kind else {
+            return Err(Error::Rejected(SEMANTICS.into()));
+        };
+        let mut centers = group
+            .stereo
+            .iter()
+            .filter_map(|&index| match molecule.stereo.get(index as usize) {
+                Some(nazuchem_ir::Stereo::Tetrahedral { center, .. }) => written
+                    .atom_order
+                    .iter()
+                    .position(|&atom| ir_atoms.get(atom) == Some(&(*center as usize))),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        centers.sort_unstable();
+        smiles.push_str(&format!(
+            " |o{number}:{}|",
+            centers
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        ));
+    }
+    let projected = molecule.displayed_locants();
+    // Locants compare constitution against the drawing. Private axial maps are
+    // only for isomeric identity and must not enter this unmarked source view.
+    let locant_source = crate::chemistry::smiles::write::write(
+        &identity_state,
+        crate::chemistry::smiles::write::Options {
+            canonical: false,
+            ..Default::default()
+        },
+    )
+    .map_err(|error| Error::Rejected(error.to_string()))?;
+    let locants = Locants {
+        smiles: if relative.is_some() {
+            smiles.clone()
+        } else {
+            locant_source.text
+        },
+        atoms: locant_source
+            .atom_order
+            .iter()
+            .map(|&atom| {
+                ir_atoms
+                    .get(atom)
+                    .and_then(|&atom| projected.get(atom))
+                    .cloned()
+                    .flatten()
+            })
+            .collect(),
+    };
     let mut warnings = Vec::new();
     if let Some(signs) = signs {
         let descriptors = cip_descriptors(name);
-        let imported = crate::chemistry::smiles::read(relative.as_deref().unwrap_or(&smiles))
-            .map_err(|error| Error::Rejected(error.to_string()))?;
         if descriptors.is_empty()
-            || crate::chemistry::stereo::perception::has_unspecified_stereo(
-                &imported.prepared.state,
-            )
-            .map_err(Error::Rejected)?
+            || crate::chemistry::stereo::perception::has_unspecified_stereo(&identity_state)
+                .map_err(Error::Rejected)?
         {
             return Err(Error::Rejected("A rotation sign is accepted only beside R/S descriptors that specify every stereocentre and double bond; the sign itself is never used to assign configuration".into()));
         }
@@ -383,16 +371,27 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     // the parser's atom order (and therefore stereo) within each component.
     // Relative CX groups must retain the parser's atom indices.
     let smiles = if relative.is_none() && smiles.contains('.') {
+        let mut offset = 0;
         let mut components = smiles
             .split('.')
             .map(|part| {
-                let graph = crate::chemistry::smiles::parse(part)
-                    .map_err(|error| Error::Rejected(error.to_string()))?
-                    .graph;
-                let charge: i32 = graph.atoms.iter().map(|atom| i32::from(atom.charge)).sum();
-                Ok((charge <= 0, part))
+                let first = written.atom_order.get(offset).copied();
+                let members = first
+                    .map(|first| component_atoms(&prepared.state, first))
+                    .unwrap_or_default();
+                let count = members.len();
+                let charge: i32 = written
+                    .atom_order
+                    .iter()
+                    .skip(offset)
+                    .take(count)
+                    .filter_map(|&atom| prepared.state.graph.atoms.get(atom))
+                    .map(|atom| i32::from(atom.charge))
+                    .sum();
+                offset += count;
+                (charge <= 0, part)
             })
-            .collect::<Result<Vec<_>, Error>>()?;
+            .collect::<Vec<_>>();
         components.sort_by_key(|(nonpositive, _)| *nonpositive);
         components
             .into_iter()
@@ -408,6 +407,7 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
         super::aliases_for_smiles(&canonical_smiles).map_err(Error::Worker)?
     };
     Ok(Record {
+        prepared: Some(prepared),
         title: name.into(),
         systematic_name: None,
         name_status: None,
@@ -423,8 +423,35 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     })
 }
 
+/// Connected-component size in the source graph, used to align writer fragments.
+fn component_atoms(
+    state: &crate::chemistry::stereo::perception::State,
+    first: usize,
+) -> std::collections::HashSet<usize> {
+    let mut seen = std::collections::HashSet::from([first]);
+    let mut pending = vec![first];
+    while let Some(atom) = pending.pop() {
+        for bond in &state.graph.bonds {
+            let other = if bond.a == atom {
+                Some(bond.b)
+            } else if bond.b == atom {
+                Some(bond.a)
+            } else {
+                None
+            };
+            if let Some(other) = other
+                && seen.insert(other)
+            {
+                pending.push(other);
+            }
+        }
+    }
+    seen
+}
+
 /// Check only the syntax of a single relative CX group in a generation reply.
 /// Reverse verification checks its parsed membership before accepting identity.
+#[cfg(test)]
 pub(super) fn relative_stereo_smiles(smiles: &str) -> Option<&str> {
     let (graph, group) = smiles.split_once(" |o")?;
     let (number, atoms) = group.strip_suffix('|')?.split_once(':')?;

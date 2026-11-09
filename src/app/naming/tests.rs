@@ -2,6 +2,31 @@ use super::test_support::{ethanol, record};
 use super::*;
 
 #[tokio::test]
+async fn original_ir_preview_does_not_parse_the_display_smiles() -> Result<(), String> {
+    let mut source = record("CCO");
+    source.prepared = Some(
+        reshiki::chemistry::smiles::read("CCO")
+            .map_err(|error| error.to_string())?
+            .prepared,
+    );
+    // The source text is an editable representation, separate from the
+    // prepared chemistry and the canonical identity checked after drawing.
+    source.smiles = "This is not SMILES".into();
+    let preview = prepare_preview(
+        LocalEngine::in_process(),
+        source.clone(),
+        source.smiles.clone(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert_eq!(preview.identity, "CCO");
+    assert_eq!(preview.smiles, "CCO");
+    assert!(!preview.modified);
+    Ok(())
+}
+
+#[tokio::test]
 async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), String> {
     let mut binol = Vec::new();
     for (name, descriptor) in [
@@ -31,6 +56,7 @@ async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), Str
         let parsed = naming::resolve_name(name, naming::Cancel::default())
             .await
             .map_err(|error| format!("{name}: {error}"))?;
+        assert!(parsed.prepared.is_some(), "{name}: missing native IR input");
         let preview = prepare_preview(
             LocalEngine::in_process(),
             parsed.clone(),
@@ -76,6 +102,28 @@ async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), Str
         // The editable field never shows the private axis maps.
         assert!(!preview.smiles.contains(":9000"), "{}", preview.smiles);
         if name.contains("binaphthalene]-2") {
+            let axis_atom = |expected| {
+                preview
+                    .locants
+                    .iter()
+                    .find_map(|(&id, locant)| (locant.replace('′', "'") == expected).then_some(id))
+                    .ok_or_else(|| format!("{name}: missing parent locant {expected}"))
+            };
+            let (one, primed_one) = (axis_atom("1")?, axis_atom("1'")?);
+            let axis = labelled
+                .graph
+                .bonds
+                .iter()
+                .position(|bond| {
+                    let (a, b) = (molecule.ids[bond.a], molecule.ids[bond.b]);
+                    (a == one && b == primed_one) || (a == primed_one && b == one)
+                })
+                .ok_or_else(|| format!("{name}: locants 1 and 1' are not bonded"))?;
+            assert_eq!(
+                labelled.properties.bond_codes[axis].as_deref(),
+                Some(descriptor),
+                "{name}: parent locants must identify the specified atropisomer axis"
+            );
             // An unedited Update rebuilds from the identity and keeps the axis.
             let rebuilt = prepare_preview(
                 LocalEngine::in_process(),
@@ -241,7 +289,7 @@ async fn generated_fusion_hydrogens_preserve_formula_inchi_and_naming_outcomes()
         let name = |identity: &naming::Identity| -> Result<serde_json::Value, String> {
             let request = serde_json::json!({
                 "operation": "generate",
-                "protocol": 6,
+                "protocol": 5,
                 "profile": "openclatura 0.4.3 Rust port",
                 "smiles": identity.smiles,
                 "isotope_style": "iupac",
@@ -700,17 +748,23 @@ async fn warnings_and_unapplied_smiles_edits_block_insertion() -> Result<(), Str
 
 #[tokio::test]
 async fn changed_preview_no_longer_claims_original_chemical_name() -> Result<(), String> {
-    let engine = LocalEngine::default();
+    let engine = LocalEngine::in_process();
+    let mut source = record("CCO");
+    source.prepared = Some(
+        reshiki::chemistry::smiles::read("CCO")
+            .map_err(|error| error.to_string())?
+            .prepared,
+    );
     let original = prepare_preview(
         engine.clone(),
-        record("CCO"),
+        source.clone(),
         "CCO".into(),
         Default::default(),
     )
     .await
     .map_err(|error| error.to_string())?;
     assert!(!original.modified);
-    let edited = prepare_preview(engine, record("CCO"), "CCN".into(), Default::default())
+    let edited = prepare_preview(engine, source, "CCN".into(), Default::default())
         .await
         .map_err(|error| error.to_string())?;
     assert!(edited.modified);

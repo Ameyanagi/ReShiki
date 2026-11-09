@@ -26,6 +26,119 @@ fn options() -> Options {
 }
 
 #[test]
+fn authoritative_bonds_assign_without_atom_winding_or_candidate_flags() -> TestResult {
+    for text in ["F/C=C/F", "F/C=C\\F"] {
+        let mut input = crate::smiles::prepare(text)?.state;
+        let bond = input
+            .graph
+            .bonds
+            .iter()
+            .position(|bond| bond.order == 2)
+            .ok_or_else(|| anyhow::anyhow!("No double bond in {text}"))?;
+        let expected = input.metadata.bonds[bond].stereo;
+        assert!(matches!(expected, 2 | 3));
+        input.metadata.bonds[bond].stereo += 2;
+        input.directions.fill(Direction::None);
+        let options = Options {
+            flag_possible: false,
+            ..options()
+        };
+        let assigned = perceive_bond_configurations(&input, options).map_err(anyhow::Error::msg)?;
+        assert_eq!(assigned.metadata.bonds[bond].stereo, expected, "{text}");
+        let preserved = perceive_preserving_bonds(
+            &input,
+            Options {
+                clean: false,
+                ..options
+            },
+            &vec![true; input.graph.bonds.len()],
+        )
+        .map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            preserved.metadata.bonds[bond].stereo,
+            expected + 2,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn authoritative_bond_carriers_are_normalized_by_ligand_rank() -> TestResult {
+    let mut input = crate::smiles::prepare("F/C(Cl)=C(/Br)I")?.state;
+    let bond = input
+        .graph
+        .bonds
+        .iter()
+        .position(|bond| bond.order == 2)
+        .ok_or_else(|| anyhow::anyhow!("No double bond"))?;
+    let expected = input.metadata.bonds[bond].clone();
+    assert!(matches!(expected.stereo, 2 | 3));
+    input.metadata.bonds[bond].stereo = if expected.stereo == 2 { 5 } else { 4 };
+    // Replace the ranked left carrier (Cl) with F and reverse cis/trans.
+    input.metadata.bonds[bond].stereo_atoms[0] = 0;
+    input.directions.fill(Direction::None);
+    let assigned = perceive_bond_configurations(&input, options()).map_err(anyhow::Error::msg)?;
+    assert_eq!(assigned.metadata.bonds[bond].stereo, expected.stereo);
+    assert_eq!(
+        assigned.metadata.bonds[bond].stereo_atoms,
+        expected.stereo_atoms
+    );
+    Ok(())
+}
+
+#[test]
+fn authoritative_bonds_refine_tetrahedral_ligands_and_preserve_absence() -> TestResult {
+    let mut input = crate::smiles::prepare("F/C=C/[C@H](Cl)/C=C\\F")?.state;
+    let center = input
+        .metadata
+        .atoms
+        .iter()
+        .position(|atom| matches!(atom.chiral_tag, 1 | 2))
+        .ok_or_else(|| anyhow::anyhow!("No tetrahedral winding"))?;
+    let winding = input.metadata.atoms[center].chiral_tag;
+    let expected = input.properties.atoms[center].cip_code.clone();
+    assert!(expected.is_some());
+    for (bond, meta) in input.graph.bonds.iter().zip(&mut input.metadata.bonds) {
+        if bond.order == 2 {
+            assert!(matches!(meta.stereo, 2 | 3));
+            meta.stereo += 2;
+        }
+    }
+    input.directions.fill(Direction::None);
+    let assigned = perceive_bond_configurations(&input, options()).map_err(anyhow::Error::msg)?;
+    assert_eq!(assigned.metadata.atoms[center].chiral_tag, winding);
+    assert_eq!(assigned.properties.atoms[center].cip_code, expected);
+    assert!(
+        assigned
+            .graph
+            .bonds
+            .iter()
+            .zip(&assigned.metadata.bonds)
+            .filter(|(bond, _)| bond.order == 2)
+            .all(|(_, meta)| matches!(meta.stereo, 2 | 3))
+    );
+
+    // Direction marks cannot infer a configuration omitted by the caller.
+    for stereo in [0, 1] {
+        let mut input = crate::smiles::prepare("F/C=C/F")?.state;
+        let bond = input
+            .graph
+            .bonds
+            .iter()
+            .position(|bond| bond.order == 2)
+            .ok_or_else(|| anyhow::anyhow!("No double bond"))?;
+        input.metadata.bonds[bond].stereo = stereo;
+        input.metadata.bonds[bond].stereo_atoms.clear();
+        let assigned =
+            perceive_bond_configurations(&input, options()).map_err(anyhow::Error::msg)?;
+        assert_eq!(assigned.metadata.bonds[bond].stereo, stereo);
+        assert!(assigned.metadata.bonds[bond].stereo_atoms.is_empty());
+    }
+    Ok(())
+}
+
+#[test]
 fn allene_winding_needs_an_axis() -> TestResult {
     // Like ligands at a terminal leave no axis, as at a centre: two methyls,
     // atom maps, or ¹H beside H (#992). Stereo-only differences (m/p), ring

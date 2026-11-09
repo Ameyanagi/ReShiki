@@ -10,10 +10,96 @@ use std::{
 };
 
 fn reply(smiles: &str) -> serde_json::Value {
-    let count = crate::chemistry::smiles::parse(smiles.split('|').next().unwrap().trim_end())
-        .map(|parsed| parsed.graph.atoms.len())
-        .unwrap_or_default();
-    json!({"operation":"parse","protocol":worker::PROTOCOL,"backend":worker::BACKEND,"port_version":worker::PORT_VERSION,"upstream_version":worker::UPSTREAM_VERSION,"upstream_commit":worker::UPSTREAM_COMMIT,"resource_fingerprint":worker::RESOURCE_FINGERPRINT,"options":worker::OPTIONS,"name":"example","status":"SUCCESS","message":"","warnings":[],"cxsmiles":smiles,"locants":vec![None::<String>; count],"axes":[]})
+    use nazuchem_ir::{
+        Atom, Bond, BondOrder, Molecule, Ref, Stereo, StereoGroup, StereoGroupKind, Winding,
+    };
+    let state = crate::chemistry::smiles::read(smiles)
+        .unwrap()
+        .prepared
+        .state;
+    let mut molecule = Molecule {
+        atoms: state
+            .graph
+            .atoms
+            .iter()
+            .zip(&state.valences)
+            .map(|(atom, valence)| Atom {
+                element: atom.atomic_number,
+                isotope: (atom.isotope != 0).then_some(atom.isotope),
+                charge: atom.charge,
+                hydrogens: (u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens) as u8,
+                hydrogens_stated: atom.no_implicit,
+                radical_electrons: atom.radical_electrons,
+                ..Default::default()
+            })
+            .collect(),
+        bonds: state
+            .graph
+            .bonds
+            .iter()
+            .map(|bond| Bond {
+                atoms: [bond.a as u32, bond.b as u32],
+                order: match bond.order {
+                    1 => BondOrder::Single,
+                    2 => BondOrder::Double,
+                    3 => BondOrder::Triple,
+                    _ => panic!("unsupported fixture bond"),
+                },
+            })
+            .collect(),
+        ..Default::default()
+    };
+    for (center, metadata) in state.metadata.atoms.iter().enumerate() {
+        if !matches!(metadata.chiral_tag, 1 | 2) {
+            continue;
+        }
+        let mut neighbors = state
+            .graph
+            .bonds
+            .iter()
+            .filter_map(|bond| {
+                if bond.a == center {
+                    Some(Ref::Atom(bond.b as u32))
+                } else if bond.b == center {
+                    Some(Ref::Atom(bond.a as u32))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if neighbors.len() == 3 {
+            neighbors.push(Ref::ImplicitHydrogen);
+        }
+        molecule.stereo.push(Stereo::Tetrahedral {
+            center: center as u32,
+            neighbors: neighbors.try_into().unwrap(),
+            winding: if metadata.chiral_tag == 1 {
+                Winding::Clockwise
+            } else {
+                Winding::Anticlockwise
+            },
+        });
+    }
+    for group in &state.metadata.groups {
+        let kind = match group.kind {
+            1 => StereoGroupKind::Or(group.read_id),
+            2 => StereoGroupKind::And(group.read_id),
+            _ => continue,
+        };
+        let stereo = molecule
+            .stereo
+            .iter()
+            .enumerate()
+            .filter_map(|(index, stereo)| match stereo {
+                Stereo::Tetrahedral { center, .. } if group.atoms.contains(&(*center as usize)) => {
+                    Some(index as u32)
+                }
+                _ => None,
+            })
+            .collect();
+        molecule.stereo_groups.push(StereoGroup { kind, stereo });
+    }
+    json!({"operation":"parse","protocol":worker::PROTOCOL,"backend":worker::BACKEND,"port_version":worker::PORT_VERSION,"upstream_version":worker::UPSTREAM_VERSION,"upstream_commit":worker::UPSTREAM_COMMIT,"resource_fingerprint":worker::RESOURCE_FINGERPRINT,"options":worker::OPTIONS,"name":"example","status":"SUCCESS","message":"","warnings":[],"molecule":molecule})
 }
 
 #[test]
@@ -31,7 +117,7 @@ fn worker_parse_round_trip_keeps_parent_locants_in_smiles_order() {
         assert_eq!(locant.is_some(), atom.atomic_number == 6);
     }
     let mut bad = reply("CCO");
-    bad["locants"] = json!(["1"]);
+    bad["molecule"]["parent"] = json!([999]);
     assert!(matches!(parse(bad), Err(Error::Worker(_))));
 }
 fn parse(value: serde_json::Value) -> Result<Record, Error> {
@@ -44,12 +130,8 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
     for smiles in [
         "C[C@H](O)C(=O)O |r|",
         "C[C@H](O)C(=O)O |o1:1|",
-        "*CC* |$star_e;;;star_e$,Sg:n:1,2::ht|",
-        "CCO |unknown:1|",
         "[CH3]",
         "*C",
-        "C~C",
-        "C->N",
     ] {
         assert!(
             matches!(parse(reply(smiles)), Err(Error::Rejected(_))),
@@ -77,7 +159,7 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
         ("options", json!("plain-smiles")),
         ("name", json!("older-input")),
         ("status", json!("UNKNOWN")),
-        ("cxsmiles", json!(null)),
+        ("molecule", json!(null)),
         (
             "warnings",
             json!([{"kind":"APPEARS_AMBIGUOUS","message":"Missing locant"}]),
@@ -90,7 +172,7 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
         let mut result = reply("CCO");
         result[key] = value;
         let error = parse(result).unwrap_err();
-        if matches!(key, "cxsmiles" | "warnings") {
+        if matches!(key, "molecule" | "warnings") {
             assert!(matches!(error, Error::Rejected(_)), "{key}: {error}");
         } else {
             assert!(matches!(error, Error::Worker(_)), "{key}: {error}");
@@ -136,29 +218,33 @@ fn generation_verification_accepts_only_one_relative_cx_group() {
         assert_eq!(record.locants.unwrap().smiles, smiles);
         assert!(matches!(parse(reply(smiles)), Err(Error::Rejected(_))));
     }
-    for extension in [
-        "r",
-        "&1:1",
-        "a:1",
-        "o1:1,o2:3",
-        "o1:1,&1:3",
-        "o1:1,$label$",
-        "o:1",
-        "o1:",
-        "o1:1,",
-        "o1:x",
-        "o1:1||o2:3",
-        "o1:1| trailing",
+    for group in [
+        json!([{"kind":"and","id":1,"stereo":[0]}]),
+        json!([{"kind":"or","id":1,"stereo":[0]}, {"kind":"or","id":2,"stereo":[1]}]),
     ] {
-        let mut value = reply(&format!("C[C@H](O)C(=O)O |{extension}|"));
+        let mut value = reply("C[C@H](O)[C@H](Cl)C");
+        value["molecule"]["stereo_groups"] = group;
         value["options"] = json!(worker::GENERATION_OPTIONS);
-        assert!(
-            matches!(
-                verification_result("example", &serde_json::to_vec(&value).unwrap()),
-                Err(Error::Rejected(_))
-            ),
-            "Accepted unsupported extension {extension}"
-        );
+        assert!(matches!(
+            verification_result("example", &serde_json::to_vec(&value).unwrap()),
+            Err(Error::Rejected(_))
+        ));
+    }
+    let mut labelled = reply("C[C@H](O)C(=O)O |o1:1|");
+    labelled["molecule"]["atoms"][0]["label"] = json!("label");
+    labelled["options"] = json!(worker::GENERATION_OPTIONS);
+    assert!(matches!(
+        verification_result("example", &serde_json::to_vec(&labelled).unwrap()),
+        Err(Error::Rejected(_))
+    ));
+    for (key, value) in [
+        ("nazuchem_ir", json!(2)),
+        ("unknown", json!(true)),
+        ("stereo", json!([{"kind":"allene"}])),
+    ] {
+        let mut malformed = reply("CCO");
+        malformed["molecule"][key] = value;
+        assert!(matches!(parse(malformed), Err(Error::Worker(_))));
     }
 }
 
@@ -802,4 +888,18 @@ async fn retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse() -> Re
         assert_eq!(generated.provenance, Provenance::Openclatura);
     }
     Ok(())
+}
+
+#[test]
+fn aromatic_anion_alkenes_keep_geometry_through_ir_verification() {
+    for (configuration, smiles) in [
+        ("E", "[Na+].Oc1ccc(/C=C/c2cc[n-]c2)cc1"),
+        ("Z", "[Na+].Oc1ccc(/C=C\\c2cc[n-]c2)cc1"),
+    ] {
+        let name =
+            format!("sodium 3-[(1{configuration})-2-(4-hydroxyphenyl)ethenyl]-1H-pyrrol-1-ide");
+        let bytes = worker::respond(&verification_request(&name).unwrap()).unwrap();
+        let record = verification_result(&name, &bytes).unwrap();
+        super::super::verify_identity(smiles, &record.smiles).unwrap();
+    }
 }

@@ -169,76 +169,91 @@ fn axial_transport_rejects_reference_and_atom_count_mismatches() {
     let name = CASES[0].0;
     let bytes = worker::respond(&local::parse_request(name).unwrap()).unwrap();
     let reply: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let axis = &reply["molecule"]["stereo"][0];
+    assert_eq!(axis["kind"], "atropisomer");
+    let bond = axis["bond"].as_u64().unwrap() as usize;
+    let expected = local::parse_result(name, &bytes).unwrap().canonical_smiles;
+
+    // Reversing an axis and exchanging its two reference pairs preserves the
+    // winding. The IR references describe geometry independently of CIP ranks.
     let mut reversed = reply.clone();
-    reversed["axes"][0]["atoms"]
+    reversed["molecule"]["bonds"][bond]["atoms"]
         .as_array_mut()
         .unwrap()
         .reverse();
-    reversed["axes"][0]["refs"]
+    reversed["molecule"]["stereo"][0]["refs"]
         .as_array_mut()
         .unwrap()
-        .reverse();
+        .rotate_left(2);
     assert_eq!(
         local::parse_result(name, &serde_json::to_vec(&reversed).unwrap())
             .unwrap()
             .canonical_smiles,
-        local::parse_result(name, &bytes).unwrap().canonical_smiles,
+        expected,
     );
 
-    let graph = chemistry::smiles::parse(reply["cxsmiles"].as_str().unwrap())
+    // Exchanging one end's references reverses the specified hand. Reversing
+    // the winding as well states the original structure again.
+    let mut exchanged = reply.clone();
+    exchanged["molecule"]["stereo"][0]["refs"]
+        .as_array_mut()
         .unwrap()
-        .graph;
-    let atom = reply["axes"][0]["atoms"][0].as_u64().unwrap() as usize;
-    let partner = reply["axes"][0]["atoms"][1].as_u64().unwrap() as usize;
-    let reference = reply["axes"][0]["refs"][0].as_u64().unwrap() as usize;
-    let other = graph
-        .bonds
-        .iter()
-        .find_map(|bond| {
-            let neighbour = if bond.a == atom {
-                Some(bond.b)
-            } else if bond.b == atom {
-                Some(bond.a)
-            } else {
-                None
-            }?;
-            (neighbour != partner && neighbour != reference).then_some(neighbour)
-        })
-        .unwrap();
+        .swap(0, 1);
+    let mirror = local::parse_result(name, &serde_json::to_vec(&exchanged).unwrap()).unwrap();
+    assert!(verify_identity(&expected, &mirror.canonical_smiles).is_err());
+    exchanged["molecule"]["stereo"][0]["winding"] = match axis["winding"].as_str().unwrap() {
+        "clockwise" => "anticlockwise".into(),
+        "anticlockwise" => "clockwise".into(),
+        other => panic!("Unexpected axial winding {other}"),
+    };
+    assert_eq!(
+        local::parse_result(name, &serde_json::to_vec(&exchanged).unwrap())
+            .unwrap()
+            .canonical_smiles,
+        expected,
+    );
+
+    let mut invalid_bond = reply.clone();
+    invalid_bond["molecule"]["stereo"][0]["bond"] = usize::MAX.into();
+    let mut invalid_reference = reply.clone();
+    invalid_reference["molecule"]["stereo"][0]["refs"][0] = usize::MAX.into();
+    let mut incomplete_references = reply.clone();
+    incomplete_references["molecule"]["stereo"][0]["refs"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
     let mut wrong_reference = reply.clone();
-    wrong_reference["axes"][0]["refs"][0] = other.into();
-    let error =
-        local::parse_result(name, &serde_json::to_vec(&wrong_reference).unwrap()).unwrap_err();
-    assert!(
-        error.to_string().contains("CIP assignments disagree"),
-        "{error}"
-    );
-
-    for field in ["atoms", "refs"] {
-        let mut invalid = reply.clone();
-        invalid["axes"][0][field] = serde_json::json!([usize::MAX, usize::MAX]);
-        assert!(local::parse_result(name, &serde_json::to_vec(&invalid).unwrap()).is_err());
-    }
+    wrong_reference["molecule"]["stereo"][0]["refs"][0] =
+        reply["molecule"]["bonds"][bond]["atoms"][0].clone();
+    let mut invalid_atom = reply.clone();
+    invalid_atom["molecule"]["bonds"][bond]["atoms"][0] = usize::MAX.into();
     let mut duplicate = reply.clone();
-    duplicate["axes"]
+    duplicate["molecule"]["stereo"]
         .as_array_mut()
         .unwrap()
-        .push(reply["axes"][0].clone());
-    assert!(local::parse_result(name, &serde_json::to_vec(&duplicate).unwrap()).is_err());
-
-    let mut removed_hydrogen = reply;
-    let smiles = removed_hydrogen["cxsmiles"].as_str().unwrap().to_owned();
-    removed_hydrogen["cxsmiles"] = smiles.replacen('O', "O[H]", 1).into();
-    removed_hydrogen["locants"]
+        .push(axis.clone());
+    let mut missing_atom = reply.clone();
+    missing_atom["molecule"]["atoms"]
         .as_array_mut()
         .unwrap()
-        .insert(0, serde_json::Value::Null);
-    let error =
-        local::parse_result(name, &serde_json::to_vec(&removed_hydrogen).unwrap()).unwrap_err();
-    assert!(
-        error.to_string().contains("changed the atom count"),
-        "{error}"
-    );
+        .pop();
+    let mut invalid_element = reply;
+    invalid_element["molecule"]["atoms"][0]["element"] = 119.into();
+    for (case, invalid) in [
+        ("invalid bond identity", invalid_bond),
+        ("invalid reference identity", invalid_reference),
+        ("incomplete reference count", incomplete_references),
+        ("reference is the axis end", wrong_reference),
+        ("invalid bond endpoint", invalid_atom),
+        ("duplicate axis", duplicate),
+        ("atom count no longer covers bonds", missing_atom),
+        ("invalid element", invalid_element),
+    ] {
+        assert!(
+            local::parse_result(name, &serde_json::to_vec(&invalid).unwrap()).is_err(),
+            "Accepted {case}"
+        );
+    }
 }
 
 #[test]
@@ -246,19 +261,32 @@ fn axial_transport_applies_indices_before_salt_component_reordering() {
     let name = CASES[0].0;
     let bytes = worker::respond(&local::parse_request(name).unwrap()).unwrap();
     let mut reply: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    let smiles = reply["cxsmiles"].as_str().unwrap().to_owned();
-    reply["cxsmiles"] = format!("[Cl-].{smiles}.[Na+]").into();
-    for field in ["atoms", "refs"] {
-        for index in reply["axes"][0][field].as_array_mut().unwrap() {
-            *index = (index.as_u64().unwrap() + 1).into();
+    let molecule = &mut reply["molecule"];
+    let atoms = molecule["atoms"].as_array_mut().unwrap();
+    atoms.insert(
+        0,
+        serde_json::json!({"element": 17, "hydrogens": 0, "charge": -1}),
+    );
+    atoms.push(serde_json::json!({"element": 11, "hydrogens": 0, "charge": 1}));
+    for bond in molecule["bonds"].as_array_mut().unwrap() {
+        for atom in bond["atoms"].as_array_mut().unwrap() {
+            *atom = (atom.as_u64().unwrap() + 1).into();
         }
     }
-    let locants = reply["locants"].as_array_mut().unwrap();
-    locants.insert(0, serde_json::Value::Null);
-    locants.push(serde_json::Value::Null);
+    assert_eq!(molecule["stereo"][0]["kind"], "atropisomer");
+    for reference in molecule["stereo"][0]["refs"].as_array_mut().unwrap() {
+        *reference = (reference.as_u64().unwrap() + 1).into();
+    }
+    for atom in molecule["parent"].as_array_mut().unwrap() {
+        *atom = (atom.as_u64().unwrap() + 1).into();
+    }
     let salt = local::parse_result(name, &serde_json::to_vec(&reply).unwrap()).unwrap();
     assert!(salt.smiles.starts_with("[Na+]."));
     assert!(salt.locants.as_ref().unwrap().smiles.starts_with("[Cl-]."));
+    assert_eq!(
+        salt.prepared.as_ref().unwrap().state.graph.atoms[0].atomic_number,
+        17
+    );
     let original = local::parse_result(name, &bytes).unwrap();
     verify_identity(&format!("[Na+].{}.[Cl-]", original.smiles), &salt.smiles).unwrap();
 }
