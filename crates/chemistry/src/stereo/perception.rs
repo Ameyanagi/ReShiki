@@ -386,6 +386,9 @@ fn with_work_preserving(
     }
     let mut ctx = Context::new(input.clone(), work)?;
     ctx.queries = queries.map(<[bool]>::to_vec);
+    if !options.force && ctx.state.properties.done.is_some() {
+        return Ok(ctx.state);
+    }
     match bond_stereo {
         BondStereo::Directions => {}
         BondStereo::Preserve(authoritative) => {
@@ -412,9 +415,6 @@ fn with_work_preserving(
             );
             ctx.bond_configurations = true;
         }
-    }
-    if !options.force && ctx.state.properties.done.is_some() {
-        return Ok(ctx.state);
     }
     ctx.state.properties.needs_detection = None;
     if ctx.state.rings.kind == RingKind::None {

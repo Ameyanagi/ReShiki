@@ -26,6 +26,21 @@ fn options() -> Options {
 }
 
 #[test]
+fn cached_bond_configurations_return_unchanged_without_force() -> TestResult {
+    let input = crate::smiles::prepare("F/C=C/F")?.state;
+    assert!(input.properties.done.is_some());
+    let options = Options {
+        force: false,
+        ..options()
+    };
+    let cached = perceive_bond_configurations(&input, options).map_err(anyhow::Error::msg)?;
+    let stereo =
+        |state: &State| -> Vec<_> { state.metadata.bonds.iter().map(|b| b.stereo).collect() };
+    assert_eq!(stereo(&cached), stereo(&input));
+    Ok(())
+}
+
+#[test]
 fn authoritative_bonds_assign_without_atom_winding_or_candidate_flags() -> TestResult {
     for text in ["F/C=C/F", "F/C=C\\F"] {
         let mut input = crate::smiles::prepare(text)?.state;
