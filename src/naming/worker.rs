@@ -8,10 +8,7 @@ use std::{
     path::PathBuf,
 };
 
-pub(super) const PROTOCOL: u32 = 7;
-// Phase B 10b measured 4,933 snapshot requests and Parse/Verify for 1,788
-// distinct OPSIN oracle names: largest request 349 B, response 18,371 B
-// (Verify undecadictane); snapshot maximum 8,072 B. Both caps stay unchanged.
+pub const PROTOCOL: u32 = 7;
 // See docs/structure-to-name-harness.md for the reproducible measurement.
 pub(super) const WIRE_LIMIT: usize = 32_768;
 pub(super) const OUTPUT_LIMIT: usize = 65_536;
@@ -27,7 +24,7 @@ pub(super) const GENERATION_OPTIONS: &str = "generation-radicals-semantic-cx1";
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
-pub(super) enum Request {
+pub enum Request {
     Parse {
         protocol: u32,
         name: String,

@@ -38,6 +38,22 @@ fn at_mut<T>(items: &mut [T], index: usize) -> Result<&mut T, String> {
         .ok_or_else(|| "Invalid IR atom or bond identity".into())
 }
 
+fn perception_state(sanitized: sanitize::Sanitized) -> perception::State {
+    perception::State {
+        properties: perception::Properties::unspecified(&sanitized.graph),
+        graph: sanitized.graph,
+        metadata: sanitized.metadata,
+        directions: sanitized.directions,
+        valences: sanitized.valences,
+        conjugated: sanitized.conjugated,
+        hybridizations: sanitized.hybridizations,
+        rings: perception::RingCache {
+            kind: perception::RingKind::Symmetric,
+            atoms: sanitized.rings,
+        },
+    }
+}
+
 /// Prepare the typed graph directly, without serializing or reparsing SMILES.
 ///
 /// Atom and bond indices remain the IR identities, including explicit hydrogen
@@ -144,19 +160,7 @@ pub fn from_ir(molecule: &Molecule) -> Result<Prepared, String> {
     let sanitized =
         sanitize::sanitize(&graph, &metadata, &vec![Direction::None; graph.bonds.len()])
             .map_err(|error| error.to_string())?;
-    let mut state = perception::State {
-        properties: perception::Properties::unspecified(&sanitized.graph),
-        graph: sanitized.graph,
-        metadata: sanitized.metadata,
-        directions: sanitized.directions,
-        valences: sanitized.valences,
-        conjugated: sanitized.conjugated,
-        hybridizations: sanitized.hybridizations,
-        rings: perception::RingCache {
-            kind: perception::RingKind::Symmetric,
-            atoms: sanitized.rings,
-        },
-    };
+    let mut state = perception_state(sanitized);
     if state.graph.atoms.len() != molecule.atoms.len()
         || state.graph.bonds.len() != molecule.bonds.len()
         || state
@@ -357,30 +361,9 @@ pub fn name_import_projection(input: &Prepared) -> Result<(Prepared, Vec<usize>)
     }
     let sanitized = sanitize::sanitize(&removed.graph, &removed.metadata, &removed.directions)
         .map_err(|error| error.to_string())?;
-    let mut state = perception::State {
-        properties: perception::Properties::unspecified(&sanitized.graph),
-        graph: sanitized.graph,
-        metadata: sanitized.metadata,
-        directions: sanitized.directions,
-        valences: sanitized.valences,
-        conjugated: sanitized.conjugated,
-        hybridizations: sanitized.hybridizations,
-        rings: perception::RingCache {
-            kind: perception::RingKind::Symmetric,
-            atoms: sanitized.rings,
-        },
-    };
+    let mut state = perception_state(sanitized);
     for (property, unknown) in state.properties.atoms.iter_mut().zip(removed.unknown_atoms) {
         property.unknown = unknown;
-    }
-    // from_ir stores reference-relative cis/trans. Accept an already ranked
-    // prepared input too, whose stored carriers define Z/E equivalently.
-    for meta in &mut state.metadata.bonds {
-        meta.stereo = match meta.stereo {
-            2 => 4,
-            3 => 5,
-            other => other,
-        };
     }
     state = perception::perceive_bond_configurations(
         &state,

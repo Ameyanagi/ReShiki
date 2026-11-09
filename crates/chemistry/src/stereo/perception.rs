@@ -213,9 +213,10 @@ pub fn perceive_preserving_bonds(
 }
 
 /// Validate atom winding with authoritative cis/trans bond configurations.
-/// Double bonds use stereo 4/5 relative to their stored carriers, 1 for unknown,
-/// or 0 for unspecified. Configurations are normalized to legacy Z/E (2/3)
-/// during assignment so they participate in the ordinary ligand refinement.
+/// Double bonds use stereo 4/5 relative to their stored carriers, ranked legacy
+/// Z/E (2/3) with their stored carriers, 1 for unknown, or 0 for unspecified.
+/// Ranked inputs are first treated as carrier-relative cis/trans; assignment
+/// normalizes configurations to legacy Z/E (2/3) for ordinary ligand refinement.
 /// Cleanup keeps the input bond metadata until assignment, and no other bond
 /// configurations are inferred. Callers must separately validate admission.
 pub fn perceive_bond_configurations(input: &State, options: Options) -> Result<State, String> {
@@ -224,7 +225,7 @@ pub fn perceive_bond_configurations(input: &State, options: Options) -> Result<S
         .bonds
         .iter()
         .zip(&input.metadata.bonds)
-        .any(|(bond, meta)| bond.order == 2 && !matches!(meta.stereo, 0 | 1 | 4 | 5))
+        .any(|(bond, meta)| bond.order == 2 && !matches!(meta.stereo, 0..=5))
     {
         return Err("Authoritative bond configurations require cis/trans carriers".into());
     }
@@ -391,6 +392,16 @@ fn with_work_preserving(
             ctx.authoritative_bonds = Some(authoritative.to_vec());
         }
         BondStereo::Configurations => {
+            // Ranked Z/E carriers encode the same relation as cis/trans.
+            // Convert once so assignment can distinguish input configurations
+            // from the normalized 2/3 values it has already processed.
+            for meta in &mut ctx.state.metadata.bonds {
+                meta.stereo = match meta.stereo {
+                    2 => 4,
+                    3 => 5,
+                    other => other,
+                };
+            }
             ctx.authoritative_bonds = Some(
                 input
                     .graph

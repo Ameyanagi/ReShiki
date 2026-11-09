@@ -37,14 +37,20 @@ fn authoritative_bonds_assign_without_atom_winding_or_candidate_flags() -> TestR
             .ok_or_else(|| anyhow::anyhow!("No double bond in {text}"))?;
         let expected = input.metadata.bonds[bond].stereo;
         assert!(matches!(expected, 2 | 3));
-        input.metadata.bonds[bond].stereo += 2;
         input.directions.fill(Direction::None);
         let options = Options {
             flag_possible: false,
             ..options()
         };
-        let assigned = perceive_bond_configurations(&input, options).map_err(anyhow::Error::msg)?;
-        assert_eq!(assigned.metadata.bonds[bond].stereo, expected, "{text}");
+        for stereo in [expected, expected + 2] {
+            input.metadata.bonds[bond].stereo = stereo;
+            let assigned =
+                perceive_bond_configurations(&input, options).map_err(anyhow::Error::msg)?;
+            assert_eq!(
+                assigned.metadata.bonds[bond].stereo, expected,
+                "{text}, stereo {stereo}"
+            );
+        }
         let preserved = perceive_preserving_bonds(
             &input,
             Options {
@@ -99,12 +105,6 @@ fn authoritative_bonds_refine_tetrahedral_ligands_and_preserve_absence() -> Test
     let winding = input.metadata.atoms[center].chiral_tag;
     let expected = input.properties.atoms[center].cip_code.clone();
     assert!(expected.is_some());
-    for (bond, meta) in input.graph.bonds.iter().zip(&mut input.metadata.bonds) {
-        if bond.order == 2 {
-            assert!(matches!(meta.stereo, 2 | 3));
-            meta.stereo += 2;
-        }
-    }
     input.directions.fill(Direction::None);
     let assigned = perceive_bond_configurations(&input, options()).map_err(anyhow::Error::msg)?;
     assert_eq!(assigned.metadata.atoms[center].chiral_tag, winding);

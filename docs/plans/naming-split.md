@@ -38,7 +38,7 @@ Non-goals for the move: naming-quality work, algorithm rewrites, switching chemi
 
 **Phase A — move, same interface.** Extract the code into crates with today's interface: SMILES in for s2n, semantic CXSMILES + parent locants out for n2s, worker protocol v4 unchanged. Proven byte-identical, then lifted into the new repo. This alone delivers the development-speed goal.
 
-**Phase B — introduce the IR.** Designed from a complete inventory of what the two engines carry today, added as adapters next to the string interface, gated separately, then made the primary API. Mixing the two phases would bundle five compatibility changes (extraction, IR, parser path, result types, protocol v5) into a move that must stay byte-identical.
+**Phase B — introduce the IR.** Designed from a complete inventory of what the two engines carry today, added as adapters next to the string interface, gated separately, then made the primary API. Mixing the two phases would bundle five compatibility changes (extraction, IR, parser path, result types, protocol 7) into a move that must stay byte-identical.
 
 ## 4. Library layout and crate graph
 
@@ -120,7 +120,7 @@ Result types must keep today's semantics:
 
 - `GeneratedName`: `text, status, alternatives, omitted_stereo, omitted_units` (unknown units ≠ omitted locants), `atom_locants` with a flag for when they do not apply (radical-ion names suppress the recovered parent's locants), and `verification: { target: Input | RecoveredNeutral { name, smiles }, outcome }`.
 - Two parse modes stay separate: strict import parsing and generated-name verification parsing (radicals allowed), as worker v4's `Parse` and `Verify` do today.
-- Before switching the worker to IR (protocol v5), measure IR JSON size against the 32 KiB request / 64 KiB response caps and the browser worker's memory limits; raise caps only with evidence.
+- Before switching the worker to IR (protocol 7), measure IR JSON size against the 32 KiB request / 64 KiB response caps and the browser worker's memory limits; raise caps only with evidence.
 
 ## 6. Provenance, licensing and IUPAC citations
 
@@ -161,12 +161,12 @@ Baseline first: freeze the outputs of the OPSIN gates (8,100 lexical, 2,624 stru
 
 **Phase B (in the new repo)**
 
-| Step | Work                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 8    | IR v1 to §5's requirements; adapters both ways next to the string API; round-trip and corpus gates through the IR                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| 9    | Python and npm bindings on the IR API                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 10   | **Done (2026-11-09).** Direct `IR → chemistry State` converter and prepared-graph preview/layout; Parse/Verify replies use IR under protocol 7 (the CXSMILES worker used 6). Generate retains its SMILES API and verification semantics; Python `drawing::from_name` retains its semantic CXSMILES path. All 4,933 preserved requests pass equivalence with zero differences; snapshot and 1,788-name OPSIN measurements fit the unchanged wire caps. Two current-snapshot regenerations are byte-identical and replay passes; native/wasm build and lint pass. See [the harness](../structure-to-name-harness.md#direct-ir-migration-gates) for counts and the fixture hash. |
-| 11   | 0.1.0 via tag-triggered trusted publishing (crates.io, PyPI, npm); ReShiki moves from git rev to version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Step | Work                                                                                                              |
+| ---- | ----------------------------------------------------------------------------------------------------------------- |
+| 8    | IR v1 to §5's requirements; adapters both ways next to the string API; round-trip and corpus gates through the IR |
+| 9    | Python and npm bindings on the IR API                                                                             |
+| 10   | Done 2026-11-09; protocol 7; see [the harness](../structure-to-name-harness.md#direct-ir-migration-gates)         |
+| 11   | 0.1.0 via tag-triggered trusted publishing (crates.io, PyPI, npm); ReShiki moves from git rev to version          |
 
 Before 0.1.0, decide whether to add `#[non_exhaustive]` to `NameStatus` and `NameReason` so the shared vocabulary's public API evolution policy is explicit.
 

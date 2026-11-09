@@ -360,8 +360,7 @@ fn arrange_name_components(document: &mut Document) {
             Some(atoms)
         })
         .collect::<Vec<_>>();
-    // The parser's IR may put a salt's anion first. Keep the insertion and
-    // visual order used by naming imports, with cations before other parts.
+    // Put cations first to match the conventional order used in salt names.
     components.sort_by_key(|atoms| {
         atoms
             .iter()

@@ -2,6 +2,15 @@ use super::*;
 use crate::naming::NameStatus;
 use serde_json::json;
 
+/// Check only the syntax of a single relative CX group in a generation reply.
+/// Reverse verification checks its parsed membership before accepting identity.
+fn relative_stereo_smiles(smiles: &str) -> Option<&str> {
+    let (graph, group) = smiles.split_once(" |o")?;
+    let (number, atoms) = group.strip_suffix('|')?.split_once(':')?;
+    let digits = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
+    (digits(number) && atoms.split(',').all(digits)).then_some(graph)
+}
+
 #[test]
 fn generated_record_keeps_reconstruction_smiles_order_for_locants() {
     let name = "ethanol";
@@ -501,7 +510,7 @@ async fn chiral_endo_exo_alternatives_require_relative_reconstruction() {
     let request = super::super::local::verification_request(endo_exo).unwrap();
     let reply = worker::respond(&request).unwrap();
     let parsed = super::super::local::verification_result(endo_exo, &reply).unwrap();
-    let absolute = super::super::local::relative_stereo_smiles(&parsed.smiles).unwrap();
+    let absolute = relative_stereo_smiles(&parsed.smiles).unwrap();
     for expected in [smiles, "O[C@@H]1C[C@H]2CC[C@@H]1C2"] {
         verify_alternative_identity(expected, &parsed.smiles, relative).unwrap();
     }

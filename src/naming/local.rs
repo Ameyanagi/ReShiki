@@ -247,17 +247,21 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     // Import retains its existing fail-closed policy for relative configurations.
     let relative = match molecule.stereo_groups.as_slice() {
         [] => None,
-        [group]
-            if generation
-                && matches!(group.kind, nazuchem_ir::StereoGroupKind::Or(_))
-                && group.stereo.iter().all(|&index| {
-                    matches!(
-                        molecule.stereo.get(index as usize),
-                        Some(nazuchem_ir::Stereo::Tetrahedral { .. })
-                    )
-                }) =>
+        [
+            nazuchem_ir::StereoGroup {
+                kind: nazuchem_ir::StereoGroupKind::Or(number),
+                stereo,
+                ..
+            },
+        ] if generation
+            && stereo.iter().all(|&index| {
+                matches!(
+                    molecule.stereo.get(index as usize),
+                    Some(nazuchem_ir::Stereo::Tetrahedral { .. })
+                )
+            }) =>
         {
-            Some(group)
+            Some((number, stereo))
         }
         _ => return Err(Error::Rejected(SEMANTICS.into())),
     };
@@ -288,21 +292,20 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     // the prepared IR graph, and the writer's traversal maps display locants.
     let display_state = crate::molecule_names::encode_axis_markers(&identity_state)
         .map_err(|_| Error::Rejected("Native import could not encode the biaryl axis".into()))?;
-    let written = crate::chemistry::smiles::write::write(
-        &display_state,
-        crate::chemistry::smiles::write::Options {
-            canonical: false,
-            ..Default::default()
-        },
-    )
-    .map_err(|error| Error::Rejected(error.to_string()))?;
+    let write_smiles = |state| {
+        crate::chemistry::smiles::write::write(
+            state,
+            crate::chemistry::smiles::write::Options {
+                canonical: false,
+                ..Default::default()
+            },
+        )
+        .map_err(|error| Error::Rejected(error.to_string()))
+    };
+    let written = write_smiles(&display_state)?;
     let mut smiles = written.text;
-    if let Some(group) = relative {
-        let nazuchem_ir::StereoGroupKind::Or(number) = group.kind else {
-            return Err(Error::Rejected(SEMANTICS.into()));
-        };
-        let mut centers = group
-            .stereo
+    if let Some((number, stereo)) = relative {
+        let mut centers = stereo
             .iter()
             .filter_map(|&index| match molecule.stereo.get(index as usize) {
                 Some(nazuchem_ir::Stereo::Tetrahedral { center, .. }) => written
@@ -325,14 +328,7 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
     let projected = molecule.displayed_locants();
     // Locants compare constitution against the drawing. Private axial maps are
     // only for isomeric identity and must not enter this unmarked source view.
-    let locant_source = crate::chemistry::smiles::write::write(
-        &identity_state,
-        crate::chemistry::smiles::write::Options {
-            canonical: false,
-            ..Default::default()
-        },
-    )
-    .map_err(|error| Error::Rejected(error.to_string()))?;
+    let locant_source = write_smiles(&identity_state)?;
     let locants = Locants {
         smiles: if relative.is_some() {
             smiles.clone()
@@ -367,8 +363,8 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
             ));
         }
     }
-    // Stable sorting moves positive components to the front without changing
-    // the parser's atom order (and therefore stereo) within each component.
+    // Put cations first to match the conventional order used in salt names.
+    // Stable sorting preserves the parser's atom order and stereo within each component.
     // Relative CX groups must retain the parser's atom indices.
     let smiles = if relative.is_none() && smiles.contains('.') {
         let mut offset = 0;
@@ -380,11 +376,8 @@ fn parse_reply_with_mode(bytes: &[u8], name: &str, generation: bool) -> Result<R
                     .map(|first| component_atoms(&prepared.state, first))
                     .unwrap_or_default();
                 let count = members.len();
-                let charge: i32 = written
-                    .atom_order
+                let charge: i32 = members
                     .iter()
-                    .skip(offset)
-                    .take(count)
                     .filter_map(|&atom| prepared.state.graph.atoms.get(atom))
                     .map(|atom| i32::from(atom.charge))
                     .sum();
@@ -447,16 +440,6 @@ fn component_atoms(
         }
     }
     seen
-}
-
-/// Check only the syntax of a single relative CX group in a generation reply.
-/// Reverse verification checks its parsed membership before accepting identity.
-#[cfg(test)]
-pub(super) fn relative_stereo_smiles(smiles: &str) -> Option<&str> {
-    let (graph, group) = smiles.split_once(" |o")?;
-    let (number, atoms) = group.strip_suffix('|')?.split_once(':')?;
-    let digits = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
-    (digits(number) && atoms.split(',').all(digits)).then_some(graph)
 }
 
 fn cip_descriptors(name: &str) -> Vec<&str> {

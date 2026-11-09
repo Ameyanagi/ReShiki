@@ -83,18 +83,27 @@ is excluded from formatting by `bunfig.toml`.
 
 ### Direct IR migration gates
 
-The IR worker uses protocol 7. The pre-migration fixture used protocol 6 and contained 4,933 requests in 3,243,897 bytes. Parse and Verify
+The IR worker uses protocol 7. The pre-migration fixture used protocol 6 and
+contained 4,933 requests in 3,243,897 bytes. Parse and Verify
 now return `nazuchem_ir::Molecule` instead of semantic CXSMILES, locant arrays
 and axis side channels. Generate retains its SMILES input and existing result
-semantics. Preserve the old fixture before regenerating the current snapshot:
+semantics.
+
+The one-off migration gates ran at commit `4ab8fd7b` on branch
+`feat/naming-ir-protocol`. Their harness, `worker_snapshot_migration.rs`, was
+removed after the migration. To rerun these historical gates, preserve the fixture
+from main before that commit and create an isolated worktree at `4ab8fd7b`:
 
 ```sh
-git show origin/main:tests/fixtures/s2n/worker_snapshot.jsonl > /tmp/reshiki-10b-old-worker_snapshot.jsonl
-cargo test --locked --lib -p reshiki naming::s2n_harness::worker_snapshot::migration::s2n_worker_ir_equivalence -- --ignored --exact --nocapture
+# 4ab8fd7b's parent is main before the IR migration.
+git show 4ab8fd7b^:tests/fixtures/s2n/worker_snapshot.jsonl > /tmp/reshiki-10b-old-worker_snapshot.jsonl
+git worktree add --detach /tmp/reshiki-ir-migration-4ab8fd7b 4ab8fd7b
+cd /tmp/reshiki-ir-migration-4ab8fd7b
+RESHIKI_OLD_S2N_SNAPSHOT=/tmp/reshiki-10b-old-worker_snapshot.jsonl cargo test --locked --lib -p reshiki naming::s2n_harness::worker_snapshot::migration::s2n_worker_ir_equivalence -- --ignored --exact --nocapture
 ```
 
-The ignored migration test in `worker_snapshot_migration.rs` replays every
-preserved request through the current worker. It normalizes the protocol field
+The ignored migration test at that commit replays every preserved request through
+the protocol-7 worker. It normalizes the protocol field
 and requires Generate response bytes to match. For Parse and Verify, it checks
 status, message, warnings, provenance, options and input name, then compares
 canonical chemical identity, first parent locants, semantic CX layers and explicit
@@ -104,16 +113,16 @@ The gate validates this map against per-atom chemical facts and the complete edg
 set before comparing the literal parent-only first-locant vectors. Cases whose
 canonical identity is unsupported on both paths are counted explicitly; their
 mapped semantic groups and underlying specified stereochemistry must still match.
-Set `RESHIKI_OLD_S2N_SNAPSHOT` to use a preserved fixture at another path. This
-semantic comparison is specific to the migration; ordinary replay still compares
-the current wire response byte for byte.
+Set `RESHIKI_OLD_S2N_SNAPSHOT` to the fixture from main before `4ab8fd7b`, using
+another path if needed. This semantic comparison is specific to the migration;
+ordinary replay still compares the current wire response byte for byte.
 
 The full migration-equivalence run on 2026-11-09 passed with **zero differences
 and no skipped rows** across all 4,933 requests:
 
 | Check                                           | Result                                                                                      |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Generate                                        | 1,654 responses byte-identical after changing only protocol 6 to 5                          |
+| Generate                                        | 1,654 responses byte-identical after changing only protocol 6 to 7                          |
 | Parse/Verify envelope                           | 3,279 identical status, message, warnings, provenance, options and input-name results       |
 | Parse/Verify without a structure                | 83 identical absent-structure results                                                       |
 | Canonical chemical identity                     | 3,195 equal identities                                                                      |
@@ -125,8 +134,11 @@ for distinct names from the pinned OPSIN oracle fixtures. It reports the largest
 request and response for each operation against the unchanged 32,768-byte request
 and 65,536-byte response limits, including explicit worker-error counts:
 
+Run this gate from the same `4ab8fd7b` worktree, with a nazuchem checkout at its
+pinned revision, `6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3`:
+
 ```sh
-RESHIKI_NAZUCHEM_CHECKOUT=/path/to/pinned/nazuchem cargo test --locked --lib -p reshiki naming::s2n_harness::worker_snapshot::migration::s2n_worker_ir_wire_sizes -- --ignored --exact --nocapture
+RESHIKI_OLD_S2N_SNAPSHOT=/tmp/reshiki-10b-old-worker_snapshot.jsonl RESHIKI_NAZUCHEM_CHECKOUT=/path/to/pinned/nazuchem cargo test --locked --lib -p reshiki naming::s2n_harness::worker_snapshot::migration::s2n_worker_ir_wire_sizes -- --ignored --exact --nocapture
 ```
 
 The wire-size gate also passed on 2026-11-09. It measured the 4,933 snapshot
@@ -147,9 +159,7 @@ remain unchanged.
 The current protocol-7 snapshot was regenerated twice on 2026-11-09. Both runs
 produced **4,933 rows and 8,020,627 bytes**, byte for byte identical, with SHA-256
 `2188b9309fb252de6a2b29d777ace8c38413c0f2e8220e01b0ffb7a81cd72262`.
-The ordinary byte-for-byte snapshot replay also passed. These results cover the
-worker migration gates; localhost-network and native-pasteboard tests remain
-restricted by the sandbox used for this validation.
+The ordinary byte-for-byte snapshot replay also passed.
 
 ## Metamorphic tests
 

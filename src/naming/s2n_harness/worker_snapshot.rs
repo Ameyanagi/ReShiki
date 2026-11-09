@@ -4,9 +4,6 @@ use crate::naming::{IsotopeStyle, local, reverse, worker};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::Path, time::Instant};
 
-#[path = "worker_snapshot_migration.rs"]
-mod migration;
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Response {

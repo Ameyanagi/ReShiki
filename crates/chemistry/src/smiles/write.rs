@@ -187,13 +187,6 @@ fn component(
             .iter()
             .any(|meta| matches!(meta.stereo, 4 | 5))
         {
-            for meta in &mut state.metadata.bonds {
-                meta.stereo = match meta.stereo {
-                    2 => 4,
-                    3 => 5,
-                    other => other,
-                };
-            }
             perception::perceive_bond_configurations(&state, perception_options)
         } else {
             perception::perceive(&state, perception_options)
