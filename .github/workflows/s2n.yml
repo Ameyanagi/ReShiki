@@ -17,6 +17,9 @@ jobs:
   corpus:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+    env:
+      # Naming integration must launch this exact source's executable, not a test harness.
+      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/.cargo-target/s2n/debug/reshiki
     steps:
       - &actions_runtime
         name: Patch the Actions Node runtime when needed
@@ -82,6 +85,8 @@ jobs:
           shared-key: s2n
           cache-on-failure: true
           workspaces: ". -> .cargo-target/s2n"
+      - name: Build the exact application for local naming worker tests
+        run: cargo build --locked --no-default-features --bin reshiki
       - name: Measure both s2n suites
         run: cargo test --locked --no-default-features --lib naming::s2n_harness -- --include-ignored --nocapture
       - name: Preserve full s2n report, including wrong structures on failure
