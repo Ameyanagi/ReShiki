@@ -205,6 +205,42 @@ fn analyze_prints_one_json_line() {
 }
 
 #[test]
+fn axial_smiles_analysis_notice_and_convert_warning() {
+    const SOURCE: &str = "c1(-c2c(Br)cccc2Cl)c([C@H](O)C)cccc1[C@@H](O)C";
+    const EXPECTED: &str = "C[C@H](O)c1cccc([C@@H](C)O)c1-c1c(Cl)cccc1Br";
+    const NOTICE: &str =
+        "SMILES has no notation for atropisomer axes; the axial configuration was dropped.";
+    let dir = tempfile::tempdir().expect("working folder");
+    for annotation in [" |wU:0.9|", " |wD:0.9|", ""] {
+        let source = format!("{SOURCE}{annotation}");
+        let notice = (!annotation.is_empty()).then_some(NOTICE);
+        let output = cli(dir.path(), &["analyze", "--smiles", &source]);
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        assert!(output.stderr.is_empty());
+        let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(result["value"]["analysis"]["smiles"], EXPECTED);
+        assert_eq!(
+            result["value"]["analysis"]["smiles_notice"].as_str(),
+            notice
+        );
+        assert_eq!(result["warnings"], serde_json::json!([]));
+
+        let output = cli(
+            dir.path(),
+            &["convert", "--smiles", &source, "--to", "smiles"],
+        );
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        assert_eq!(text(&output.stdout), EXPECTED);
+        assert_eq!(
+            text(&output.stderr),
+            notice
+                .map(|n| format!("reshiki: warning: {n}\n"))
+                .unwrap_or_default()
+        );
+    }
+}
+
+#[test]
 fn analyze_reads_cpp7_mol_with_trimmed_leading_spaces() {
     let dir = tempfile::tempdir().expect("working folder");
     fs::write(

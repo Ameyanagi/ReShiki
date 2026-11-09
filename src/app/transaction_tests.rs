@@ -22,6 +22,7 @@ fn app() -> App {
 fn analysis() -> reshiki::engine::Analysis {
     reshiki::engine::Analysis {
         smiles: "CC".into(),
+        smiles_notice: None,
         formula: "C2H6".into(),
         display_formula: "C₂H₆".into(),
         mass_percent: vec![],

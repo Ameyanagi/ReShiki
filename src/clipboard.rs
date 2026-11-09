@@ -385,9 +385,16 @@ async fn prepare_copy_for(
         let mut request = Request::molecule("export", doc.clone());
         request.format = Some("smiles".into());
         if !doc.atoms.is_empty()
-            && let Ok(smiles) = engine.request(request).await
-            && let Some(smiles) = smiles.output.filter(|smiles| !smiles.trim().is_empty())
+            && let Ok(response) = engine.request(request).await
+            && let Some(smiles) = response.output.filter(|smiles| !smiles.trim().is_empty())
         {
+            // Other SMILES export notices concern files, not this plain text.
+            outcome.notices.extend(
+                response
+                    .warnings
+                    .into_iter()
+                    .filter(|notice| notice == crate::engine::native_response::SMILES_AXIAL_NOTICE),
+            );
             representations.push(Representation::new(
                 "public.utf8-plain-text",
                 smiles.as_bytes(),

@@ -614,7 +614,12 @@ impl App {
             return Task::none();
         }
         if let Some(a) = self.property_analysis() {
-            return write_text(a.smiles.clone());
+            let text = a.smiles.clone();
+            if let Some(notice) = a.smiles_notice.clone() {
+                self.status = notice;
+                self.error = false;
+            }
+            return write_text(text);
         }
         Task::none()
     }

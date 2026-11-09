@@ -128,6 +128,52 @@ fn molecular_weight_precision_applies_to_status_and_summary_with_display_formula
 }
 
 #[tokio::test]
+async fn copy_smiles_preserves_cached_text_and_surfaces_axial_notice() {
+    use iced::futures::StreamExt;
+    use reshiki::engine::{LocalEngine, Request, native_response::SMILES_AXIAL_NOTICE};
+
+    const SOURCE: &str = "c1(-c2c(Br)cccc2Cl)c([C@H](O)C)cccc1[C@@H](O)C";
+    const EXPECTED: &str = "C[C@H](O)c1cccc([C@@H](C)O)c1-c1c(Cl)cccc1Br";
+    let engine = LocalEngine::in_process();
+    for annotation in [" |wU:0.9|", " |wD:0.9|", ""] {
+        let response = engine
+            .request(Request::import_smiles(&format!("{SOURCE}{annotation}")))
+            .await
+            .unwrap();
+        let document = response.document.unwrap();
+        let analysis = response.analysis.unwrap();
+        let expected_notice = (!annotation.is_empty()).then_some(SMILES_AXIAL_NOTICE);
+        assert_eq!(analysis.smiles, EXPECTED);
+        assert_eq!(analysis.smiles_notice.as_deref(), expected_notice);
+        for inspector_cache in [false, true] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            app.tab.doc = document.clone();
+            if inspector_cache {
+                let key = app.property_request_key();
+                app.tab.inspector_ui.whole_properties = Some((key, Ok(analysis.clone())));
+            } else {
+                app.tab.analysis = Some(analysis.clone());
+            }
+            app.status = "Previous status".into();
+            let before = app.tab.doc.clone();
+            let mut effects =
+                iced_runtime::task::into_stream(app.update(Message::CopySmiles)).unwrap();
+            assert!(matches!(
+                effects.next().await,
+                Some(iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write { contents, .. }))
+                    if contents == EXPECTED
+            ));
+            assert!(effects.next().await.is_none());
+            assert_eq!(app.status, expected_notice.unwrap_or("Previous status"));
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
+            assert!(!app.error);
+        }
+    }
+}
+
+#[tokio::test]
 async fn copy_analysis_routes_the_displayed_text_to_the_clipboard() {
     use iced::futures::StreamExt;
 
