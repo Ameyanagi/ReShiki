@@ -683,7 +683,7 @@ mod tests {
 
     #[test]
     fn all_supported_glycosyl_and_parent_forms_build_in_real_opsin() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for symbol in [
             "Glc", "Gal", "Man", "Fru", "Rib", "dRib", "Xyl", "Fuc", "Rha", "GlcNAc", "GalNAc",
             "GlcA", "Neu5Ac",
@@ -703,10 +703,10 @@ mod tests {
                         format!("{configuration}-{symbol}{ring}(a{donor}-4)Glc"),
                     ] {
                         let expanded = expansion(&input).name;
-                        let parsed = parser.parse(&expanded, &opsin::ParseOptions::strict());
+                        let parsed = parser.parse(&expanded, &nazuchem_n2s::ParseOptions::strict());
                         assert_eq!(
                             parsed.status,
-                            opsin::Status::Success,
+                            nazuchem_n2s::Status::Success,
                             "{input}: {}",
                             parsed.message
                         );
@@ -726,7 +726,7 @@ mod tests {
     /// independently of OPSIN's glycosyl-name expansion and atom traversal.
     #[test]
     fn real_glycans_match_independently_written_stereochemical_graphs() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (input, expected) in [
             (
                 "Gal(b1-4)Glc",
@@ -750,10 +750,10 @@ mod tests {
             ),
         ] {
             let expanded = expansion(input).name;
-            let parsed = parser.parse(&expanded, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&expanded, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{input}: {}",
                 parsed.message
             );

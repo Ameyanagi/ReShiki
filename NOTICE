@@ -7,7 +7,8 @@ See LICENSE for scope and LICENSE-MIT and LICENSE-APACHE for the full terms.
 Third-party material retains its own terms. Source attribution, descriptions
 of adaptations, copyright notices, and license texts are recorded in:
 
-  crates/opsin/           OPSIN algorithms, resources, and fixtures, main after 2.9.0 (MIT)
+  nazuchem dependency     Naming engines and their molecular perception kernel
+                          https://github.com/Ameyanagi/nazuchem
   licenses/rdkit/          Molecular algorithms, data, and reference fixtures
   licenses/centres/        Extended-tetrahedral CIP configuration (BSD-2-Clause)
   licenses/openclatura/    Structure-to-name port, rule tables, and fixtures (MIT)
@@ -34,6 +35,20 @@ of adaptations, copyright notices, and license texts are recorded in:
 Individual files and fixture directories may contain additional notices.
 Dependencies retain the licenses declared by their respective projects;
 the project-level dual license does not relicense them.
+
+The naming engines come from the nazuchem git dependency, pinned at
+6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3. Its repository retains the per-file
+provenance ledger and complete crate-local notices and license texts:
+name-to-structure is a Rust port of OPSIN by Daniel Lowe (MIT), tracking main
+after 2.9.0; structure-to-name began as a port of openclatura 0.4.3 by
+lamalab-org (MIT), extended in ReShiki, and includes OPSIN-derived data and
+a CPython integer-set adaptation (Python-2.0). The perception kernel adapts
+RDKit (BSD-3-Clause), SiMolecule centres (BSD-2-Clause), and LLVM libc++ and
+Microsoft STL (Apache-2.0 WITH LLVM-exception). The root attribution records
+listed above remain applicable to ReShiki's retained code, data and fixtures.
+Historical crates/opsin/ and crates/nazuchem* paths in retained attribution
+records identify source locations before the split; current naming sources
+and provenance live in the external nazuchem repository at the pin above.
 
 Binary distributions include a Licenses directory. It contains this notice,
 the project license texts, and THIRD-PARTY-NOTICES.txt with the source

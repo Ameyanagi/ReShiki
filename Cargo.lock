@@ -2770,19 +2770,43 @@ dependencies = [
 [[package]]
 name = "nazuchem-ir"
 version = "0.1.0"
+source = "git+https://github.com/Ameyanagi/nazuchem?rev=6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3#6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3"
 dependencies = [
  "serde",
+ "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "nazuchem-kernel"
 version = "0.1.0"
+source = "git+https://github.com/Ameyanagi/nazuchem?rev=6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3#6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3"
 dependencies = [
- "anyhow",
  "serde",
- "serde_json",
  "thiserror 2.0.20",
  "web-time",
+]
+
+[[package]]
+name = "nazuchem-n2s"
+version = "0.1.0"
+source = "git+https://github.com/Ameyanagi/nazuchem?rev=6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3#6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3"
+dependencies = [
+ "nazuchem-ir",
+ "nazuchem-kernel",
+ "regex",
+ "roxmltree",
+]
+
+[[package]]
+name = "nazuchem-s2n"
+version = "0.1.0"
+source = "git+https://github.com/Ameyanagi/nazuchem?rev=6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3#6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3"
+dependencies = [
+ "nazuchem-ir",
+ "nazuchem-kernel",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3203,18 +3227,6 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
-
-[[package]]
-name = "opsin"
-version = "0.1.0"
-dependencies = [
- "flate2",
- "nazuchem-kernel",
- "regex",
- "roxmltree",
- "serde_json",
- "sha2",
-]
 
 [[package]]
 name = "orbclient"
@@ -3915,8 +3927,9 @@ dependencies = [
  "js-sys",
  "nazuchem-ir",
  "nazuchem-kernel",
+ "nazuchem-n2s",
+ "nazuchem-s2n",
  "open",
- "opsin",
  "pdf-writer",
  "png 0.17.16",
  "reqwest",
@@ -4092,7 +4105,7 @@ dependencies = [
  "iced_core",
  "image",
  "nazuchem-kernel",
- "opsin",
+ "nazuchem-n2s",
  "png 0.17.16",
  "reshiki-chemistry",
  "reshiki-metafile",
@@ -4127,7 +4140,7 @@ dependencies = [
 name = "reshiki-python"
 version = "0.14.0"
 dependencies = [
- "opsin",
+ "nazuchem-n2s",
  "png 0.17.16",
  "pyo3",
  "rayon",

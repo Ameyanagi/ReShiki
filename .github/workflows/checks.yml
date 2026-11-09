@@ -164,8 +164,6 @@ jobs:
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
-      - name: Check naming provenance headers, function markers and data hashes
-        run: uv run --locked python scripts/check_provenance.py
   python-package:
     name: Python package (headless wheel)
     needs: scope
@@ -184,8 +182,12 @@ jobs:
         with:
           version: "0.13.5"
           python-version: "3.12.15"
+      - name: Generate wheel license notices
+        run: uv run --no-project --python 3.12.15 python scripts/license_notices.py
       - name: Build the abi3 wheel
-        run: uvx maturin build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
+        run: uvx maturin@1.15.0 build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
+      - name: Check wheel license notices
+        run: uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py "artifacts/python/*.whl"
       - name: Install test and integration dependencies
         run: uv sync --project crates/python --all-extras --no-install-project
       - name: Test the built wheel
@@ -475,10 +477,10 @@ jobs:
         # The catalog lays groups out with the native depiction port at run
         # time; this replaces the former per-platform capture workflow.
         run: "cargo test --locked -p reshiki-model --lib --target ${{ matrix.target }} chemistry::abbreviations::"
-      - name: Check native Rust naming backend and process portability
-        run: cargo check --locked -p opsin -p reshiki-process --all-targets --target ${{ matrix.target }}
-      - name: Test the native Rust naming backend and process limits on the matching host
-        run: cargo test --locked -p opsin -p reshiki-process --target ${{ matrix.target }}
+      - name: Check native process portability
+        run: cargo check --locked -p reshiki-process --all-targets --target ${{ matrix.target }}
+      - name: Test native process limits on the matching host
+        run: cargo test --locked -p reshiki-process --target ${{ matrix.target }}
   reference:
     needs: scope
     if: needs.scope.outputs.live == 'true'

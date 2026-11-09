@@ -347,7 +347,7 @@ fn element_name(symbol: &str) -> Option<String> {
         return Some("Hydrogen".into());
     }
     let tag = format!("value=\"[{symbol}]\"");
-    include_str!("../../../crates/opsin/resources/xml/elementaryAtoms.xml")
+    include_str!("../../../resources/naming/opsin/elementaryAtoms.xml")
         .lines()
         .find(|line| line.contains(&tag))
         .and_then(|line| line.split('>').nth(1)?.split(['|', '<']).next())

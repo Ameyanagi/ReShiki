@@ -1,13 +1,43 @@
 """Consolidate complete project/dependency notices without changing upstream terms."""
 
+import argparse
 import hashlib
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 PROJECT_FILES = ("LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE")
 THIRD_PARTY_FILE = "THIRD-PARTY-NOTICES.txt"
 NOTICE_PREFIXES = ("LICENSE", "LICENCE", "COPYING", "NOTICE", "COPYRIGHT", "UNLICENSE", "AUTHORS")
+
+
+def dependency_metadata(metadata):
+    """Scope workspace metadata to the selected package's normal/build dependencies."""
+    resolve = metadata["resolve"]
+    root = resolve["root"]
+    if root is None:
+        raise ValueError("Select a package manifest, not a virtual workspace")
+    nodes = {node["id"]: node for node in resolve["nodes"]}
+    visited = set()
+    pending = [root]
+    while pending:
+        package = pending.pop()
+        if package in visited:
+            continue
+        visited.add(package)
+        pending.extend(
+            dependency["pkg"]
+            for dependency in nodes[package]["deps"]
+            if any(kind["kind"] != "dev" for kind in dependency["dep_kinds"])
+        )
+    # The selected project's terms are copied separately. Do not scan its build
+    # staging directory or Python virtualenv as if they were dependency sources.
+    visited.remove(root)
+    return {
+        **metadata,
+        "packages": [package for package in metadata["packages"] if package["id"] in visited],
+    }
 
 
 def notice_files(source):
@@ -31,7 +61,7 @@ def consolidated_notices(root, metadata):
         "attributions, dependency declarations and complete license/notice texts.\n",
         "Each indexed file refers to its SHA-256 text identifier below. Identical\n",
         "texts are stored once; different copyright notices remain distinct.\n",
-        "Cargo's inventory includes platform-specific and development dependencies.\n",
+        "Cargo's inventory records resolved dependencies and their declarations.\n",
         "Original ReShiki workspace crates use the accompanying project licenses.\n\n",
     ]
     texts = {}
@@ -131,3 +161,40 @@ def write_notices(root, destination, metadata):
             old.unlink()
         elif old.is_dir():
             shutil.rmtree(old)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest-path", type=Path, default=Path("crates/python/Cargo.toml"))
+    parser.add_argument("--destination", type=Path, default=Path("crates/python/wheel-licenses"))
+    parser.add_argument("--target", help="Cargo target triple (defaults to the Rust host)")
+    args = parser.parse_args()
+    target = args.target
+    if target is None:
+        version = subprocess.check_output(["rustc", "-vV"], text=True)
+        target = next(
+            line.removeprefix("host: ")
+            for line in version.splitlines()
+            if line.startswith("host: ")
+        )
+    command = [
+        "cargo",
+        "metadata",
+        "--format-version",
+        "1",
+        "--locked",
+        "--manifest-path",
+        str(args.manifest_path),
+        "--filter-platform",
+        target,
+    ]
+    metadata = json.loads(subprocess.check_output(command, encoding="utf-8"))
+    scoped = dependency_metadata(metadata)
+    write_notices(Path(metadata["workspace_root"]), args.destination, scoped)
+    print(
+        f"Wrote notices for {len(scoped['packages'])} dependencies ({target}) to {args.destination}"
+    )
+
+
+if __name__ == "__main__":
+    main()

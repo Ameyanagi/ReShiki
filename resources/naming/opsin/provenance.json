@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "nazuchem": {
+    "repository": "https://github.com/Ameyanagi/nazuchem",
+    "rev": "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3"
+  },
+  "opsin": {
+    "repository": "https://github.com/dan2097/opsin",
+    "version": "3.0-SNAPSHOT",
+    "commit": "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91",
+    "license": "MIT",
+    "copyright": "2017 Daniel Lowe"
+  },
+  "adaptation": "Selected unchanged data and fixture files only; no naming engine source or generated parser tables.",
+  "files": [
+    {
+      "path": "resources/naming/opsin/elementaryAtoms.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/elementaryAtoms.xml",
+      "purpose": "Command palette element names at runtime",
+      "bytes": 14243,
+      "sha256": "f60303cda7b23b65b1e1e88d09bb2f02ce48298ad6b9bd567ec3c8f21180c1e0"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/alkanes.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/alkanes.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 3267,
+      "sha256": "2b047195ac805959da5410d3b96f896abb98ec51e502714f8cb6dbed08241fb8"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/aminoAcids.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/aminoAcids.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 37093,
+      "sha256": "2829fc6ba1562f090f38c2f89488255fc6d0a709251a502005759121462880fd"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/arylGroups.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/arylGroups.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 45118,
+      "sha256": "16b7b7c03673499fcfd6ee0bee17c7bd1583224cebf2fd9e409e6610e840a7e8"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/arylSubstituents.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/arylSubstituents.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 12618,
+      "sha256": "a6c26a40a518e770d5bd443d6f705c9d98bf78c302b0dacc2f7a94795d0e412f"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/carbohydrateSuffixes.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/carbohydrateSuffixes.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 4441,
+      "sha256": "8f6a0d37c0b2cc608a416fd6557937c6538326eaa9263c8eb2285093769c3df5"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/carbohydrates.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/carbohydrates.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 19313,
+      "sha256": "7d015e7f3480f4f84612251bb5a6f0734253cf7ed4d383983f97637ac897d86d"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/carboxylicAcids.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/carboxylicAcids.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 30864,
+      "sha256": "b66b6479ad98c75cbc4875e3c09cdb5a3bdce1ddd87977dbfd95fd9d9840b24f"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/functionalTerms.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/functionalTerms.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 10416,
+      "sha256": "1aff14ca9925c609780c50e82d8c6b4b555848155504972c96a5c50ab1451257"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/groupStemsAllowingInlineSuffixes.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/groupStemsAllowingInlineSuffixes.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 4472,
+      "sha256": "573b2dbb02ea17e90f22a8f432233507d38713f368aa5f9ee4f5cd3ee7adaac1"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/inlineSuffixes.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/inlineSuffixes.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 3047,
+      "sha256": "9d5ce3bc345dd15ed6a8be0a6b46a22007b1801c190519164f45369eb0c37a9c"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/miscTokens.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/miscTokens.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 8026,
+      "sha256": "c46a740d8d94b45a07aa1327891183430809809ed119b86fed8e374967649709"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/multipliers.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/multipliers.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 5149,
+      "sha256": "c2401556d2111cf7dbd94a2e6d6ec5dc96bdee999373a892bbdd08d62e62ed12"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/simpleCyclicGroups.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/simpleCyclicGroups.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 19852,
+      "sha256": "9d2529668f7c1e59ba3d0b2ac276b4b9f11f31467f26295362729aec608e586d"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/simpleGroups.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/simpleGroups.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 45237,
+      "sha256": "1c776c51de9fe2e2114042e1ee4fc7afe8906b685346d88c2a94c33fd106bd61"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/simpleSubstituents.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/simpleSubstituents.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 40165,
+      "sha256": "41348a77f2135ad2047f836b52ca2c5db983bcb26c44e04e1694818d24066876"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/suffixes.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/suffixes.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 8732,
+      "sha256": "6a76924255cceee29e99917d5808c4ae904d071243cf367d387f977992634b08"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/xml/unsaturators.xml",
+      "source_path": "crates/nazuchem-n2s/resources/xml/unsaturators.xml",
+      "purpose": "Retained-name catalog source evidence in tests",
+      "bytes": 451,
+      "sha256": "d528b967c52d64a434563dc237d0a28e0784d1916784772381fe545c9bdf6bc1"
+    },
+    {
+      "path": "tests/fixtures/naming/opsin/phanes.txt",
+      "source_path": "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/phanes.txt",
+      "purpose": "Application naming/InChI integration tests",
+      "bytes": 33297,
+      "sha256": "d71bb8113947ae69aa97d1ccb725413a3289b9d0eaf196629c8c1d48815c39a1"
+    },
+    {
+      "path": "resources/naming/opsin/LICENSE",
+      "source_path": "crates/nazuchem-n2s/LICENSE",
+      "purpose": "Unmodified OPSIN MIT license",
+      "bytes": 1056,
+      "sha256": "aeeafe2053175a5b34cb2ded4410581ccd36b82c734315be1a7a81c6f9fb4834"
+    }
+  ]
+}

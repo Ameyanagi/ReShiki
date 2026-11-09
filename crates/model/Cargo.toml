@@ -36,9 +36,9 @@ ttf-parser = "0.25"
 i_overlay = "9.1.0"
 
 [dev-dependencies]
-nazuchem-kernel = { path = "../nazuchem-kernel" }
+nazuchem-kernel = { workspace = true }
 anyhow = "1"
-opsin = { path = "../opsin" }
+nazuchem-n2s = { workspace = true }
 reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

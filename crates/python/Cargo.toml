@@ -17,7 +17,7 @@ doctest = false
 reshiki-process-heap = { path = "../process-heap" }
 reshiki-io = { path = "../io" }
 reshiki-model = { path = "../model" }
-opsin = { path = "../opsin" }
+nazuchem-n2s = { workspace = true }
 pyo3 = { version = "0.29", features = ["abi3-py310", "extension-module"] }
 rayon = "1.12"
 resvg = "0.45"

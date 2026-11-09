@@ -243,7 +243,7 @@ class Drawing:
 
     @classmethod
     def from_name(cls: type[_D], name: str, *, online: bool = False) -> _D:
-        """Resolve a chemical name with OPSIN, or PubChem when ``online=True``."""
+        """Resolve a chemical name offline, or with PubChem when ``online=True``."""
         if not isinstance(online, bool):
             raise TypeError("online must be a boolean")
         if online:

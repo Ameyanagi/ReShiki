@@ -3,21 +3,22 @@
 `src/naming/s2n_harness.rs` (test-only) measures the structure-to-name namer by
 round trip through the in-process OPSIN Rust port. The namer sits behind one
 function, `namer`, which calls the openclatura port
-(`naming::openclatura::name_smiles`). The app, through the naming worker's
-`generate` operation, uses the same function, and shows a name only after the
+(`naming::openclatura::name_smiles`, re-exported from the external `nazuchem-s2n`
+dependency). The app's naming worker calls the same engine's style-aware
+entry point in its `generate` operation, and shows a name only after the
 OPSIN port reads it back to the drawn structure.
 
 ## Run
 
 ```sh
 # Fast subset (normal test)
-cargo test --locked --no-default-features --lib naming::s2n_harness::s2n_fast_subset -- --nocapture
+cargo test --locked -p reshiki --no-default-features --lib naming::s2n_harness::s2n_fast_subset -- --nocapture
 # Metamorphic relations (normal tests)
-cargo test --locked --no-default-features --lib naming::s2n_harness::metamorphic -- --nocapture
+cargo test --locked -p reshiki --no-default-features --lib naming::s2n_harness::metamorphic -- --nocapture
 # Full corpus (ignored by default; nightly in .github/workflows/s2n.yml)
-S2N_REPORT=s2n-report.tsv cargo test --locked --no-default-features --lib naming::s2n_harness::s2n_full_corpus -- --ignored --nocapture
+S2N_REPORT=s2n-report.tsv cargo test --locked -p reshiki --no-default-features --lib naming::s2n_harness::s2n_full_corpus -- --ignored --nocapture
 # Regenerate baseline.tsv and status-snapshot.tsv, then review both diffs
-S2N_UPDATE_BASELINE=1 cargo test --locked --no-default-features --lib naming::s2n_harness::s2n_fast_subset -- --nocapture
+S2N_UPDATE_BASELINE=1 cargo test --locked -p reshiki --no-default-features --lib naming::s2n_harness::s2n_fast_subset -- --nocapture
 ```
 
 `S2N_EXTRA=<file>` with the ignored `s2n_extra_file` test round-trips any extra
@@ -29,8 +30,9 @@ name, openclatura text for parity, decline reason) for analysis, and
 `{fast,full}-status.tsv` with the [PIN status](chemical-naming-rust.md#preferred-iupac-name-status)
 of every named row: check, SMILES, status (`preferred`, `not_preferred` or
 `unverified`) and reason. The ignored `parity_file` test in
-`src/naming/openclatura/mod.rs` names the SMILES in `OPENCLATURA_PARITY` and
+[`nazuchem-s2n/src/lib.rs`](https://github.com/Ameyanagi/nazuchem/blob/main/crates/nazuchem-s2n/src/lib.rs) names the SMILES in `OPENCLATURA_PARITY` and
 adds the same status and reason columns to each `different` row it writes.
+Run that engine test in a nazuchem checkout at ReShiki's pinned revision.
 
 The fast test fails on any Wrong name and when a correct count in
 `tests/fixtures/s2n/baseline.tsv` drops; it prints a reminder when one rises.
@@ -217,7 +219,8 @@ own name round-trips to a different structure; the other 18 come from
 conservative checks on stereo the OPSIN reading can invert: stereocentres
 ranked through a mancude-ring duplicate atom (RDKit's CIP labels and OPSIN can
 disagree there), nitrogen centres and ring centres with a lone pair (P, As,
-S+). Lines marked `Upstream divergence` in `src/naming/openclatura/` list every
+S+). Lines marked `Upstream divergence` in the
+[`nazuchem-s2n` sources](https://github.com/Ameyanagi/nazuchem/tree/main/crates/nazuchem-s2n/src) list every
 such decline. The remaining
 `mr_assembly` and `mr_spiro` rows need fused parents (`naphthalene`,
 `spiro[indene-1,1'-indene]`). Previous rules-namer baseline: structure 145,

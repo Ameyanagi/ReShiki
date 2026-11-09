@@ -40,11 +40,12 @@ cargo test --locked -p reshiki-io
 cargo test --locked -p reshiki-agent
 cargo test --locked -p reshiki-mcp
 cargo test --locked -p reshiki-metafile
-cargo test --locked -p opsin
 cargo test --locked -p reshiki --test theme_reference
 ```
 
-A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. `reshiki-metafile` and `opsin` are not default members, so plain `cargo test` skips their tests. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
+A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. `reshiki-metafile` is not a default member, so plain `cargo test` skips its tests. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
+
+The naming project's five crates now live in [Ameyanagi/nazuchem](https://github.com/Ameyanagi/nazuchem). ReShiki uses `nazuchem-ir`, `nazuchem-kernel`, `nazuchem-n2s` and `nazuchem-s2n` as git dependencies at the nazuchem revision pinned in `Cargo.toml`; it does not use the facade crate `nazuchem`. Run the engine unit tests and oracle gates in that repository. ReShiki's `cargo test --workspace --locked` covers the adapters, naming integration tests and worker response snapshot; it does not run dependency unit tests. Use the [structure-to-name harness](structure-to-name-harness.md#run) for focused ReShiki naming checks.
 
 Naming integration tests start the built application in its `--naming-worker` mode. Build it first and point `RESHIKI_NAMING_HELPER` at it with an absolute path; if you set `CARGO_TARGET_DIR`, use the binary there. Without the variable, the tests fail with "Naming integration tests require RESHIKI_NAMING_HELPER…". Rebuild the binary after you change naming or worker code, because the tests run it as built.
 
@@ -53,6 +54,34 @@ The [structure-to-name harness](structure-to-name-harness.md) measures naming co
 The development-only helper and fault-injection stub let library tests exercise subprocess transport independently of the GUI entry point. Keep `RESHIKI_INCHI_HELPER` set while running those tests. In PowerShell, use `python`, set `$env:RESHIKI_INCHI_HELPER = (Resolve-Path artifacts/inchi-helper/reshiki-inchi-helper.exe).Path`, and set `$env:RESHIKI_REQUIRE_INCHI_HELPER = '1'`. After `cargo build --locked --bin reshiki`, set `$env:RESHIKI_NAMING_HELPER = (Resolve-Path target/debug/reshiki.exe).Path`. Required mode fails if native test binaries are missing. Default tests do not require Python or RDKit. Windows clipboard tests replace the desktop clipboard with test data.
 
 Archive and installer checks run the installed app twice with Python, uv and the checkout unavailable. They reject separate worker executables, Python payloads and chemistry-environment creation. Release CI also runs the complete InChI framing and heap suite against the application’s `--inchi-worker` mode.
+
+## Working on nazuchem
+
+To test unmerged engine changes, check out nazuchem beside ReShiki and add this temporary patch to ReShiki's root `Cargo.toml`:
+
+```toml
+[patch."https://github.com/Ameyanagi/nazuchem"]
+nazuchem-ir = { path = "../nazuchem/crates/nazuchem-ir" }
+nazuchem-kernel = { path = "../nazuchem/crates/nazuchem-kernel" }
+nazuchem-n2s = { path = "../nazuchem/crates/nazuchem-n2s" }
+nazuchem-s2n = { path = "../nazuchem/crates/nazuchem-s2n" }
+```
+
+Patch all four crates together. A partial patch can resolve two copies of `nazuchem-kernel` and cause type mismatches between the local and git crates. `--locked` fails while the patch changes dependency resolution, so omit it for local patch builds and tests. Keep the patch and its `Cargo.lock` changes uncommitted. Remove the patch and undo its lockfile changes before updating the pin.
+
+After upstream CI is green at the selected revision, change all four `rev` values in `[workspace.dependencies]` to that commit, then update the lockfile:
+
+```sh
+cargo update -p nazuchem-ir -p nazuchem-kernel -p nazuchem-n2s -p nazuchem-s2n
+```
+
+Then replay the [worker response snapshot](structure-to-name-harness.md#worker-response-snapshot). It calls the worker's request handler in-process, so it checks the engines' output byte-for-byte without the helper processes:
+
+```sh
+cargo test --locked --lib -p reshiki naming::s2n_harness::worker_snapshot::s2n_worker_snapshot -- --exact --nocapture
+```
+
+The other naming tests do start helper processes; run them as CI does, with `RESHIKI_INCHI_HELPER` and `RESHIKI_NAMING_HELPER` set to the rebuilt `target/debug/reshiki` (with `.exe` on Windows) and `RESHIKI_REQUIRE_INCHI_HELPER=1`.
 
 ## Opt-in renderer tests
 

@@ -139,15 +139,6 @@ fn graph_identity_preserves_stereo_isotopes_charges_and_tautomers() -> Result<()
 }
 
 #[test]
-fn oversized_smiles_are_rejected_before_graph_preparation() {
-    assert!(bound_atom_tokens(&"C".repeat(513)).is_err());
-    assert!(bound_atom_tokens(&"[13CH3]".repeat(513)).is_err());
-    assert!(bound_atom_tokens(&"Cl".repeat(512)).is_ok());
-    assert!(bound_atom_tokens(&"Cc".repeat(257)).is_err());
-    assert!(bound_atom_tokens("C[CH3").is_err());
-}
-
-#[test]
 fn unsupported_or_ignored_winding_is_rejected_before_cleanup() {
     for text in [
         "FC=[C@AL1]=CF",
@@ -931,6 +922,7 @@ async fn iupac_audit_cases() {
                     NameStatus::Preferred => "preferred",
                     NameStatus::NotPreferred(_) => "not_preferred",
                     NameStatus::Unverified(_) => "unverified",
+                    _ => "unverified",
                 },
             ),
             Err(_) => (String::new(), "refuse"),

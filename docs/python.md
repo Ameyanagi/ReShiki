@@ -156,7 +156,9 @@ a follow-up.
 From the repository root, with Rust and uv installed:
 
 ```sh
-uvx maturin build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
+uv run --no-project --python 3.12.15 python scripts/license_notices.py
+uvx maturin@1.15.0 build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
+uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py 'artifacts/python/*.whl'
 uv sync --project crates/python --all-extras --no-install-project
 uv run --project crates/python --no-sync --with ./artifacts/python/*.whl --with rdkit pytest crates/python/tests
 uv run --project crates/python --no-sync ruff check crates/python/python crates/python/tests
@@ -166,3 +168,8 @@ uv run --project crates/python --no-sync ty check --project crates/python
 
 The package version comes from the Rust workspace version. No desktop executable
 or external InChI helper is required by the wheel.
+The ignored `crates/python/wheel-licenses/` staging directory contains the project
+licenses and consolidated notices for the selected target's Rust dependencies.
+Pass `--target` to the notice generator when cross-compiling. Maturin includes
+these files under the wheel's `.dist-info/licenses/` and declares them with
+`License-File` metadata.

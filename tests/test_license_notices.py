@@ -2,16 +2,221 @@
 
 import hashlib
 import json
+import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, write_notices
+from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, dependency_metadata, write_notices
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_package_scope_keeps_transitive_normal_and_build_dependencies(self):
+        def dependency(package, *kinds):
+            return {"pkg": package, "dep_kinds": [{"kind": kind} for kind in kinds]}
+
+        graph = {
+            "python": [
+                dependency("normal", None),
+                dependency("build", "build"),
+                dependency("dev", "dev"),
+            ],
+            "normal": [dependency("shared", "dev", None)],
+            "build": [dependency("transitive", None)],
+            "shared": [dependency("normal", None)],
+            "transitive": [],
+            "dev": [dependency("dev-only", None)],
+            "dev-only": [],
+            "desktop": [dependency("gui", None)],
+            "gui": [],
+        }
+        metadata = {
+            "packages": [{"id": package} for package in graph],
+            "workspace_members": ["python", "desktop"],
+            "resolve": {
+                "root": "python",
+                "nodes": [{"id": package, "deps": deps} for package, deps in graph.items()],
+            },
+        }
+        scoped = dependency_metadata(metadata)
+        self.assertEqual(
+            {package["id"] for package in scoped["packages"]},
+            {"normal", "build", "shared", "transitive"},
+        )
+        self.assertEqual(len(metadata["packages"]), len(graph))
+        self.assertEqual(scoped["workspace_members"], metadata["workspace_members"])
+        metadata["resolve"]["root"] = None
+        with self.assertRaisesRegex(ValueError, "Select a package manifest"):
+            dependency_metadata(metadata)
+
+    def test_python_scope_includes_naming_notices_and_dependency_license(self):
+        repository = Path(__file__).resolve().parents[1]
+        metadata = json.loads(
+            subprocess.check_output(
+                [
+                    "cargo",
+                    "metadata",
+                    "--locked",
+                    "--format-version",
+                    "1",
+                    "--manifest-path",
+                    "crates/python/Cargo.toml",
+                ],
+                cwd=repository,
+                text=True,
+            )
+        )
+        scoped = dependency_metadata(metadata)
+        packages = {package["name"]: package for package in scoped["packages"]}
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            write_notices(repository, destination, scoped)
+            notices = (destination / THIRD_PARTY_FILE).read_bytes()
+            for name, relative in (
+                ("nazuchem-kernel", "NOTICE"),
+                ("nazuchem-n2s", "NOTICE"),
+                ("pyo3", "LICENSE-MIT"),
+            ):
+                with self.subTest(package=name, file=relative):
+                    package = packages[name]
+                    self.assertIn(f"{name}@{package['version']}/{relative}".encode(), notices)
+                    source = Path(package["manifest_path"]).parent
+                    self.assertIn((source / relative).read_bytes(), notices)
+
+    def test_git_naming_components_collect_complete_crate_local_terms(self):
+        repository = Path(__file__).resolve().parents[1]
+        metadata = json.loads(
+            subprocess.check_output(
+                ["cargo", "metadata", "--locked", "--format-version", "1"],
+                cwd=repository,
+                text=True,
+            )
+        )
+        runtime_names = {"nazuchem-ir", "nazuchem-kernel", "nazuchem-n2s", "nazuchem-s2n"}
+        packages = [p for p in metadata["packages"] if p["name"].startswith("nazuchem")]
+        self.assertEqual({p["name"] for p in packages}, runtime_names)
+        workspace = tomllib.loads((repository / "Cargo.toml").read_text())["workspace"]
+        declaration = workspace["dependencies"]["nazuchem-ir"]
+        self.assertEqual(declaration["git"], "https://github.com/Ameyanagi/nazuchem")
+        self.assertEqual(len(declaration["rev"]), 40)
+        git_source = f"git+{declaration['git']}?rev={declaration['rev']}#{declaration['rev']}"
+        sources = {}
+        for package in packages:
+            with self.subTest(component=package["name"]):
+                self.assertEqual(package["source"], git_source)
+                self.assertNotIn(package["id"], metadata["workspace_members"])
+                source = Path(package["manifest_path"]).parent.resolve()
+                self.assertFalse(source.is_relative_to(repository.resolve()))
+                sources[package["name"]] = source
+        self.assertEqual(len(packages), len(sources))
+        self.assertEqual(len({source.parent for source in sources.values()}), 1)
+
+        self.assertEqual(set(sources), runtime_names)
+        self.assertEqual(
+            next(p["license"] for p in packages if p["name"] == "nazuchem-s2n"),
+            "MIT AND (MIT OR Apache-2.0) AND Python-2.0",
+        )
+        # The packaging root deliberately has no upstream source terms. Every
+        # license and attribution below must be read from Cargo's git checkout.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in PROJECT_FILES:
+                (root / name).write_text(f"Project {name}")
+            (root / "licenses/rust").mkdir(parents=True)
+            (root / "licenses/rust/manifest.json").write_text("{}")
+            write_notices(
+                root,
+                root / "output",
+                {"packages": packages, "workspace_members": metadata["workspace_members"]},
+            )
+            result = (root / "output" / THIRD_PARTY_FILE).read_bytes()
+            self.assertFalse((root / "licenses/nazuchem").exists())
+            opsin_source = sources["nazuchem-n2s"]
+            root_terms = {name: repository / name for name in ("LICENSE-MIT", "LICENSE-APACHE")}
+            # License grants remain identical to the retained root copies.
+            # Attribution notices also describe the extracted source layout,
+            # so their canonical bytes come from the corresponding git crate.
+            openclatura_terms = {
+                f"licenses/openclatura/{name}": (
+                    sources["nazuchem-s2n"] if name == "NOTICE" else repository
+                )
+                / "licenses/openclatura"
+                / name
+                for name in ("LICENSE", "NOTICE")
+            }
+            opsin_terms = {
+                f"licenses/opsin/{name}": opsin_source / name for name in ("LICENSE", "NOTICE")
+            }
+            cpython_terms = {
+                f"licenses/cpython/{name}": (
+                    sources["nazuchem-s2n"] if name == "NOTICE" else repository
+                )
+                / "licenses/cpython"
+                / name
+                for name in ("LICENSE", "NOTICE")
+            }
+            kernel_terms = {
+                f"licenses/{component}/{name}": (
+                    sources["nazuchem-kernel"] if name == "NOTICE" else repository
+                )
+                / "licenses"
+                / component
+                / name
+                for component, names in (
+                    ("rdkit", ("LICENSE", "NOTICE")),
+                    ("centres", ("LICENSE", "NOTICE")),
+                    ("stdlib", ("llvm-LICENSE", "msvc-LICENSE", "NOTICE")),
+                )
+                for name in names
+            }
+            copies = {
+                "nazuchem-ir": root_terms,
+                "nazuchem-s2n": {
+                    "LICENSE": repository / "LICENSE",
+                    **root_terms,
+                    **openclatura_terms,
+                    **opsin_terms,
+                    **cpython_terms,
+                },
+                "nazuchem-kernel": {
+                    "LICENSE": repository / "LICENSE",
+                    **root_terms,
+                    **kernel_terms,
+                },
+                "nazuchem-n2s": {"LICENSE": opsin_source / "LICENSE"},
+            }
+            expected_labels = set()
+            for package in packages:
+                name, version = package["name"], package["version"]
+                for relative, upstream in copies[name].items():
+                    with self.subTest(component=name, relative=relative):
+                        expected = upstream.read_bytes()
+                        self.assertEqual((sources[name] / relative).read_bytes(), expected)
+                        label = f"{name}@{version}/{relative}"
+                        expected_labels.add(label)
+                        self.assertIn(label.encode(), result)
+                        self.assertIn(expected, result)
+                for relative in ("NOTICE", "Cargo.toml"):
+                    with self.subTest(component=name, relative=relative):
+                        label = f"{name}@{version}/{relative}"
+                        expected_labels.add(label)
+                        self.assertIn(label.encode(), result)
+                        self.assertIn((sources[name] / relative).read_bytes(), result)
+            # All 26 crate-local license/notice files and four Cargo manifests
+            # must be indexed directly from the four production dependencies.
+            index = result.split(b"\nCOMPLETE TEXTS\n", 1)[0].decode()
+            actual_labels = {
+                line.strip() for line in index.splitlines() if line.startswith("  nazuchem")
+            }
+            self.assertEqual(len(expected_labels), 30)
+            self.assertEqual(actual_labels, expected_labels)
+            self.assertIn(f"source: {json.dumps(git_source)}".encode(), result)
+            self.assertNotIn(b"Original workspace crate:", result)
+            self.assertNotIn(b"Separately licensed workspace component:", result)
+
     def test_workspace_kernel_collects_nested_terms_with_either_manifest_expression(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -66,7 +271,7 @@ class LicenseNoticeTests(unittest.TestCase):
             (root / "licenses/rust").mkdir(parents=True)
             (root / "licenses/rust/manifest.json").write_text("{}")
             packages = []
-            for name, license_name in [("reshiki", "MIT OR Apache-2.0"), ("opsin", "MIT")]:
+            for name, license_name in [("reshiki", "MIT OR Apache-2.0"), ("nazuchem-n2s", "MIT")]:
                 source = root / name
                 source.mkdir()
                 (source / "Cargo.toml").write_text(f'name = "{name}"\nlicense = "{license_name}"\n')
@@ -81,17 +286,17 @@ class LicenseNoticeTests(unittest.TestCase):
                 )
             upstream = b"Original OPSIN copyright and complete MIT terms\r\n"
             attribution = b"Ported from the pinned upstream source, not original project code.\n"
-            (root / "opsin/LICENSE").write_bytes(upstream)
-            (root / "opsin/NOTICE").write_bytes(attribution)
+            (root / "nazuchem-n2s/LICENSE").write_bytes(upstream)
+            (root / "nazuchem-n2s/NOTICE").write_bytes(attribution)
             write_notices(
                 root,
                 root / "output",
-                {"packages": packages, "workspace_members": ["reshiki", "opsin"]},
+                {"packages": packages, "workspace_members": ["reshiki", "nazuchem-n2s"]},
             )
             result = (root / "output" / THIRD_PARTY_FILE).read_bytes()
-            self.assertIn(b"opsin@1/LICENSE", result)
-            self.assertIn(b"opsin@1/NOTICE", result)
-            self.assertIn(b"opsin@1/Cargo.toml", result)
+            self.assertIn(b"nazuchem-n2s@1/LICENSE", result)
+            self.assertIn(b"nazuchem-n2s@1/NOTICE", result)
+            self.assertIn(b"nazuchem-n2s@1/Cargo.toml", result)
             self.assertIn(upstream, result)
             self.assertIn(attribution, result)
             self.assertEqual(result.count(b"Original workspace crate:"), 1)
