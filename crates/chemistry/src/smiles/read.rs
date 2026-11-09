@@ -18,7 +18,7 @@ pub struct Imported {
     pub name: Option<String>,
     /// SMILES directions specified odd-cumulene E/Z that preparation discarded.
     pub dropped_cumulene_ez: bool,
-    /// Original molecule-level CX `r` marker, normalized into stereo groups.
+    /// Some fragment has a CX relative flag, normalized into stereo groups.
     #[serde(skip)]
     pub relative: bool,
     /// Reaction CX attachment markers affect wedge selection before drawing.
@@ -44,7 +44,7 @@ struct Annotations {
     groups: HashMap<u32, usize>,
     labels_processed: bool,
     atom_stereo: bool,
-    relative: bool,
+    relative: HashSet<usize>,
     work: usize,
 }
 impl Annotations {
@@ -56,7 +56,7 @@ impl Annotations {
             groups: HashMap::new(),
             labels_processed: false,
             atom_stereo: false,
-            relative: false,
+            relative: HashSet::new(),
             work: 2_000_000,
         }
     }
@@ -186,7 +186,7 @@ impl Annotations {
                     });
                 }
             }
-            cx::Event::RelativeStereo => self.relative = true,
+            cx::Event::RelativeStereo(atoms) => self.relative.extend(atoms),
             cx::Event::QueryAtom(atom) => put(&mut self.queries, atom, true)?,
             cx::Event::SubstanceGroup { atoms, bonds } => {
                 let members = atoms.iter().copied().collect::<HashSet<_>>();
@@ -325,9 +325,9 @@ fn int_property(
     value
 }
 
-fn relative_stereo(state: &mut State) -> Result<()> {
+fn relative_stereo(state: &mut State, relative: &HashSet<usize>) -> Result<()> {
     let metadata = &state.metadata;
-    // Explicit enhanced stereo labels take precedence over molecule-level r.
+    // Explicit enhanced stereo labels take precedence over relative flags.
     let grouped: HashSet<_> = metadata
         .groups
         .iter()
@@ -338,7 +338,10 @@ fn relative_stereo(state: &mut State) -> Result<()> {
         .iter()
         .enumerate()
         .filter_map(|(atom, meta)| {
-            (matches!(meta.chiral_tag, 1 | 2) && !grouped.contains(&atom)).then_some(atom)
+            (relative.contains(&atom)
+                && matches!(meta.chiral_tag, 1 | 2)
+                && !grouped.contains(&atom))
+            .then_some(atom)
         })
         .collect();
     if atoms.is_empty() {
@@ -372,7 +375,7 @@ fn relative_stereo(state: &mut State) -> Result<()> {
 
 /// Reactions apply CX annotations after bare parsing and keep explicit H.
 /// They sanitize without the default molecule import's stereo perception.
-/// Molecule-level `r` is normalized before refusing enhanced stereo groups.
+/// Relative flags are normalized before refusing enhanced stereo groups.
 pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
     use crate::{
         sanitize,
@@ -445,7 +448,7 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         .collect();
     let mut imported = Imported {
         dropped_cumulene_ez: false,
-        relative: annotations.relative,
+        relative: !annotations.relative.is_empty(),
         reaction_properties,
         reaction_attachments: annotations
             .properties
@@ -478,8 +481,8 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         conformers: annotations.context.conformers,
         name: None,
     };
-    if annotations.relative {
-        relative_stereo(&mut imported.prepared.state)?;
+    if imported.relative {
+        relative_stereo(&mut imported.prepared.state, &annotations.relative)?;
     }
     if !imported.prepared.state.metadata.groups.is_empty() {
         return Err(Error::Unsupported(
@@ -599,8 +602,13 @@ pub fn read(text: &str) -> Result<Imported> {
     }
     // After cumulene detection: an `r` group would make enantiomorphic ligands
     // rank equal and hide the dropped E/Z.
-    if annotations.relative {
-        relative_stereo(&mut prepared.state)?;
+    if !annotations.relative.is_empty() {
+        let relative = kept_atoms
+            .iter()
+            .enumerate()
+            .filter_map(|(atom, original)| annotations.relative.contains(original).then_some(atom))
+            .collect();
+        relative_stereo(&mut prepared.state, &relative)?;
     }
     // Native RemoveHs preserves properties on retained atoms. Keep the raw
     // values for the later depiction stage, which converts rank properties
@@ -621,7 +629,7 @@ pub fn read(text: &str) -> Result<Imported> {
         .collect::<Result<Vec<_>>>()?;
     Ok(Imported {
         dropped_cumulene_ez,
-        relative: annotations.relative,
+        relative: !annotations.relative.is_empty(),
         prepared,
         conformers,
         name: (!name.is_empty()).then(|| name.to_owned()),
