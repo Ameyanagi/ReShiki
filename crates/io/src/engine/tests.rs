@@ -557,6 +557,120 @@ async fn cleanup_keeps_the_hidden_drawing_of_a_molecule_shown_in_3d() {
 }
 
 #[tokio::test]
+async fn reaction_relative_cx_refuses_selected_configured_fragments() {
+    use crate::chemistry::{reaction, smiles};
+    let engine = LocalEngine::in_process();
+    for text in [
+        "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r|",
+        "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r:0|",
+        "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r:1|",
+        "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r:0,1|",
+        "CCO>C[C@H](O)F.O>CC |r:1|",
+        "(CCO.C[C@H](O)F)>O>CC |r:1|",
+    ] {
+        assert!(
+            matches!(
+                reaction::read_smiles(text),
+                Err(reaction::SmilesError::Molecule(smiles::Error::Unsupported(
+                    "reaction stereochemistry or radical count"
+                )))
+            ),
+            "{text}"
+        );
+        // The clipboard uses this format detection and request boundary.
+        assert_eq!(
+            engine
+                .request(Request::import(text_format(text), text))
+                .await
+                .unwrap_err(),
+            "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
+            "{text}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn reaction_relative_cx_keeps_unselected_stereo_absolute() -> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    let engine = LocalEngine::in_process();
+    for (bare, marker, relative) in [
+        ("CCO>>C[C@H](O)C(=O)O", "r:0", vec![true, false]),
+        (
+            "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O",
+            "r:5",
+            vec![false, false],
+        ),
+        (
+            "CCO>C[C@H](O)F.O>CC",
+            "r:2",
+            vec![false, false, true, false],
+        ),
+        ("(CCO.C[C@H](O)F)>O>CC", "r:0", vec![true, false, false]),
+    ] {
+        let text = format!("{bare} |{marker}|");
+        let imported = reaction::read_smiles(&text)?;
+        assert_eq!(
+            imported
+                .reactants
+                .iter()
+                .chain(&imported.agents)
+                .chain(&imported.products)
+                .map(|part| part.relative)
+                .collect::<Vec<_>>(),
+            relative,
+            "{text}"
+        );
+        assert_eq!(
+            serde_json::to_value(imported)?,
+            serde_json::to_value(reaction::read_smiles(bare)?)?,
+            "{text}"
+        );
+        let expected = engine
+            .request(Request::import(text_format(bare), bare))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let actual = engine
+            .request(Request::import(text_format(&text), &text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            serde_json::to_value(actual)?,
+            serde_json::to_value(expected)?,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn reaction_relative_cx_counts_connected_fragments_in_participant_order() -> anyhow::Result<()> {
+    for (text, relative) in [
+        (
+            "C.O>N.F>Cl.Br |r:1,2,4|",
+            vec![false, true, true, false, true, false],
+        ),
+        ("C.O>N.F>Cl.Br |r|", vec![true; 6]),
+        ("(CC.O)>N>F.Cl |r:1,3|", vec![true, false, true, false]),
+        ("(C1.C1.O)>N>F |r:2|", vec![false, true, false]),
+        ("CCO>C1.C1.O>CC |r:2|", vec![false, false, true, false]),
+    ] {
+        let imported = crate::chemistry::reaction::read_smiles(text)?;
+        assert_eq!(
+            imported
+                .reactants
+                .iter()
+                .chain(&imported.agents)
+                .chain(&imported.products)
+                .map(|part| part.relative)
+                .collect::<Vec<_>>(),
+            relative,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn reaction_import_centres_each_separator_between_visible_ion_labels() {
     for input in [
         "[CH3:1][CH:2]=[O:3]>[BH4-].[Na+]>[CH3:1][CH2:2][OH:3]",

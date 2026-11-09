@@ -162,6 +162,7 @@ impl Part {
         suffix: &str,
         atoms: &mut usize,
         bonds: &mut usize,
+        fragments: &mut usize,
     ) -> Result<molecule::Imported> {
         let topology = cx::Topology {
             atoms: self.graph.atoms.len(),
@@ -181,9 +182,12 @@ impl Part {
         let events = if suffix.is_empty() {
             Vec::new()
         } else {
-            cx::read_at(suffix, &topology, *atoms, *bonds)
-                .map_err(molecule::Error::from)?
-                .events
+            let extension = cx::read_at(suffix, &topology, *atoms, *bonds, *fragments)
+                .map_err(molecule::Error::from)?;
+            *fragments = fragments
+                .checked_add(extension.fragments)
+                .ok_or(ReadError::Limit)?;
+            extension.events
         };
         *atoms = atoms.checked_add(topology.atoms).ok_or(ReadError::Limit)?;
         *bonds = bonds
@@ -344,11 +348,11 @@ pub fn read(text: &str) -> Result<SmilesReaction> {
     {
         return Err(ReadError::Limit);
     }
-    let (mut atoms, mut bonds) = (0, 0);
+    let (mut atoms, mut bonds, mut fragments) = (0, 0, 0);
     let mut finish = |parts: Vec<Part>| -> Result<Vec<molecule::Imported>> {
         parts
             .into_iter()
-            .map(|p| p.finish(suffix, &mut atoms, &mut bonds))
+            .map(|p| p.finish(suffix, &mut atoms, &mut bonds, &mut fragments))
             .collect()
     };
     let reactants = finish(reactants)?;

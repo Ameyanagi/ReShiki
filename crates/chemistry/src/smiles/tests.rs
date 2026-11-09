@@ -338,7 +338,7 @@ fn relative_cx_marker_is_exact_and_normalized_into_import_output() -> anyhow::Re
     assert_eq!(relative.prepared.state.metadata.groups.len(), 1);
     assert_eq!(relative.prepared.state.metadata.groups[0].kind, 2);
     assert_eq!(relative.prepared.state.metadata.groups[0].atoms, [1]);
-    for extension in ["rb:", "rr", "r1", "r:", "xr"] {
+    for extension in ["rb:", "rr", "r1", "r:", "xr", "rr:0", "r1:0", "xr:0"] {
         let imported = super::read(&format!("{molecule} |{extension}|"))?;
         assert!(!imported.relative, "{extension}");
         assert_eq!(
@@ -347,6 +347,94 @@ fn relative_cx_marker_is_exact_and_normalized_into_import_output() -> anyhow::Re
         );
     }
     assert!(super::read(&format!("{molecule} |rb:0:0|")).is_err());
+    Ok(())
+}
+
+#[test]
+fn relative_cx_fragment_indices_select_connected_components() -> anyhow::Result<()> {
+    for molecule in ["C[C@H](O)C(=O)O", "[H][C@](C)(O)C(=O)O"] {
+        let relative = super::read(&format!("{molecule} |r|"))?;
+        let indexed = super::read(&format!("{molecule} |r:0|"))?;
+        assert!(indexed.relative);
+        assert_eq!(
+            serde_json::to_value(indexed)?,
+            serde_json::to_value(relative)?,
+            "{molecule}"
+        );
+    }
+    for (molecule, centre) in [
+        ("C[C@H](O)F.C[C@H](O)Cl", 5),
+        ("[H][C@](C)(O)F.[H][C@](C)(O)Cl", 4),
+        ("C1[C@H](O)F.C1.C[C@H](O)Cl", 6),
+        ("C1.C[C@H](O)Cl.C1[C@H](O)F", 2),
+    ] {
+        let absolute = super::read(molecule)?;
+        let indexed = super::read(&format!("{molecule} |r:1|"))?;
+        assert!(indexed.relative);
+        let groups = &indexed.prepared.state.metadata.groups;
+        assert_eq!(groups.len(), 1, "{molecule}");
+        assert_eq!(groups[0].kind, 2, "{molecule}");
+        assert_eq!(groups[0].atoms, [centre], "{molecule}");
+        assert_eq!(
+            serde_json::to_value(&indexed.prepared.state.metadata.atoms)?,
+            serde_json::to_value(&absolute.prepared.state.metadata.atoms)?,
+            "{molecule}"
+        );
+        assert_eq!(
+            serde_json::to_value(super::read(&format!("{molecule} |r:0,1|"))?)?,
+            serde_json::to_value(super::read(&format!("{molecule} |r|"))?)?,
+            "{molecule}"
+        );
+        let outside = super::read(&format!("{molecule} |r:5|"))?;
+        assert!(!outside.relative);
+        assert_eq!(
+            serde_json::to_value(outside)?,
+            serde_json::to_value(absolute)?,
+            "{molecule}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn relative_cx_fragment_lists_allow_following_fields() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)F.C[C@H](O)Cl.C[C@H](O)Br";
+    for extension in ["r:0,2,a:5", "a:5,r:0,2"] {
+        let indexed = super::read(&format!("{molecule} |{extension}|"))?;
+        assert!(indexed.relative);
+        let groups = &indexed.prepared.state.metadata.groups;
+        assert_eq!(groups.len(), 2);
+        assert_eq!((groups[0].kind, groups[0].atoms.as_slice()), (0, &[5][..]));
+        assert_eq!(
+            (groups[1].kind, groups[1].atoms.as_slice()),
+            (2, &[1, 9][..])
+        );
+        assert_eq!(
+            super::stereoisomers(&format!("{molecule} |{extension}|"))?,
+            super::stereoisomers(&format!("{molecule} |a:5,&1:1,9|"))?
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn relative_cx_markers_coalesce_into_one_event() -> anyhow::Result<()> {
+    // Repeated markers must not each expand to every atom.
+    let topology = crate::cx::Topology {
+        atoms: 1000,
+        bonds: Vec::new(),
+    };
+    let fields = format!("{},{}", ["r"; 1000].join(","), ["r:0"; 1000].join(","));
+    let read = crate::cx::read(&format!("|{fields}|"), &topology)?;
+    let relative: Vec<_> = read
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            crate::cx::Event::RelativeStereo(atoms) => Some(atoms.len()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(relative, [1000]);
     Ok(())
 }
 
@@ -475,9 +563,10 @@ fn reaction_relative_cx_refuses_configured_centres_and_keeps_controls() -> anyho
         "[H][C@](C)(O)C(=O)O",
     ] {
         let parsed = super::parse(molecule)?;
+        let atoms = (0..parsed.graph.atoms.len()).collect();
         assert!(
             matches!(
-                super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo]),
+                super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)]),
                 Err(Error::Unsupported(
                     "reaction stereochemistry or radical count"
                 ))
@@ -494,10 +583,9 @@ fn reaction_relative_cx_refuses_configured_centres_and_keeps_controls() -> anyho
         "C[C@H](O)[C@H](O)C",
     ] {
         let absolute = super::reaction_part(super::parse(molecule)?, Vec::new())?;
-        let relative = super::reaction_part(
-            super::parse(molecule)?,
-            vec![crate::cx::Event::RelativeStereo],
-        )?;
+        let parsed = super::parse(molecule)?;
+        let atoms = (0..parsed.graph.atoms.len()).collect();
+        let relative = super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)])?;
         assert!(relative.relative);
         assert!(relative.prepared.state.metadata.groups.is_empty());
         assert_eq!(
@@ -506,6 +594,32 @@ fn reaction_relative_cx_refuses_configured_centres_and_keeps_controls() -> anyho
             "{molecule}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn reaction_relative_cx_limits_groups_to_selected_atoms() -> anyhow::Result<()> {
+    let molecule = "CCO.C[C@H](O)F";
+    let absolute = super::reaction_part(super::parse(molecule)?, Vec::new())?;
+    let relative = super::reaction_part(
+        super::parse(molecule)?,
+        vec![crate::cx::Event::RelativeStereo(vec![0, 1, 2])],
+    )?;
+    assert!(relative.relative);
+    assert!(relative.prepared.state.metadata.groups.is_empty());
+    assert_eq!(
+        serde_json::to_value(relative)?,
+        serde_json::to_value(absolute)?
+    );
+    assert!(matches!(
+        super::reaction_part(
+            super::parse(molecule)?,
+            vec![crate::cx::Event::RelativeStereo(vec![3, 4, 5, 6])],
+        ),
+        Err(Error::Unsupported(
+            "reaction stereochemistry or radical count"
+        ))
+    ));
     Ok(())
 }
 
