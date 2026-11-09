@@ -127,9 +127,11 @@ fn readback(state: &WedgeState, conformer: &Conformer) -> anyhow::Result<Metadat
     )?)
 }
 
-#[test]
-fn axes_sharing_an_end_repair_their_shared_carrier_together() -> TestResult {
-    let prepared = crate::smiles::prepare("CN(C(=C)C)C(=C)C")?.state;
+fn shared_end_fixture(copies: usize) -> anyhow::Result<(WedgeState, WedgeProperties, Conformer)> {
+    let smiles = std::iter::repeat_n("CN(C(=C)C)C(=C)C", copies)
+        .collect::<Vec<_>>()
+        .join(".");
+    let prepared = crate::smiles::prepare(&smiles)?.state;
     let properties = WedgeProperties {
         attachment_points: vec![false; prepared.graph.atoms.len()],
         valences: prepared.valences,
@@ -140,28 +142,43 @@ fn axes_sharing_an_end_repair_their_shared_carrier_together() -> TestResult {
         directions: prepared.directions,
         rings: prepared.rings,
     };
-    for axis in [1, 4] {
-        at_mut(&mut state.metadata.bonds, axis)
-            .map_err(anyhow::Error::msg)?
-            .stereo = 6; // N1-C2 and N1-C5.
+    for copy in 0..copies {
+        for axis in [1, 4] {
+            at_mut(&mut state.metadata.bonds, copy * 7 + axis)
+                .map_err(anyhow::Error::msg)?
+                .stereo = 6; // Each copy's N1-C2 and N1-C5.
+        }
     }
     assert!(state.directions.iter().all(|&d| d == Direction::None));
     let conformer = Conformer {
         is_3d: false,
-        positions: [
-            (-1.0, 0.0),
-            (0.0, 0.0),
-            (0.5, 1.0),
-            (1.5, 1.0),
-            (0.0, 2.0),
-            (0.5, -1.0),
-            (1.5, -1.0),
-            (0.0, -2.0),
-        ]
-        .into_iter()
-        .map(|(x, y)| Point3 { x, y, z: 0.0 })
-        .collect(),
+        positions: (0..copies)
+            .flat_map(|copy| {
+                [
+                    (-1.0, 0.0),
+                    (0.0, 0.0),
+                    (0.5, 1.0),
+                    (1.5, 1.0),
+                    (0.0, 2.0),
+                    (0.5, -1.0),
+                    (1.5, -1.0),
+                    (0.0, -2.0),
+                ]
+                .into_iter()
+                .map(move |(x, y)| Point3 {
+                    x: x + copy as f64 * 6.0,
+                    y,
+                    z: 0.0,
+                })
+            })
+            .collect(),
     };
+    Ok((state, properties, conformer))
+}
+
+#[test]
+fn axes_sharing_an_end_repair_their_shared_carrier_together() -> TestResult {
+    let (state, properties, conformer) = shared_end_fixture(1)?;
     let raw = wedging::wedge_molecule(&state, &properties, Some(&conformer), false)
         .map_err(anyhow::Error::msg)?;
     let reference =
@@ -183,6 +200,39 @@ fn axes_sharing_an_end_repair_their_shared_carrier_together() -> TestResult {
     let repaired =
         wedge_molecule(&state, &properties, &conformer, false).map_err(anyhow::Error::msg)?;
     assert!(preserves_stereo(&repaired, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+    Ok(())
+}
+
+#[test]
+fn disconnected_shared_end_axes_repair_without_multiplying_trials() -> TestResult {
+    let (state, properties, conformer) = shared_end_fixture(2)?;
+    let mut witness = state.clone();
+    for (bond, direction) in [
+        (3, Direction::Hash),
+        (6, Direction::Wedge),
+        (10, Direction::Hash),
+        (13, Direction::Wedge),
+    ] {
+        *at_mut(&mut witness.directions, bond).map_err(anyhow::Error::msg)? = direction;
+    }
+    let mut work = Work(50_000_000);
+    assert!(preserves_stereo(&witness, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+    // Searching the two independent repairs as one Cartesian product used
+    // to exhaust the readback cap before reaching this valid assignment.
+    let repaired =
+        wedge_molecule(&state, &properties, &conformer, false).map_err(anyhow::Error::msg)?;
+    assert!(preserves_stereo(&repaired, &conformer, &mut work).map_err(anyhow::Error::msg)?);
+    let read = readback(&repaired, &conformer)?;
+    assert_eq!(
+        read.bonds
+            .iter()
+            .enumerate()
+            .filter_map(|(bond, metadata)| {
+                matches!(metadata.stereo, 6 | 7).then_some((bond, metadata.stereo))
+            })
+            .collect::<Vec<_>>(),
+        [(1, 6), (4, 6), (8, 6), (11, 6)]
+    );
     Ok(())
 }
 

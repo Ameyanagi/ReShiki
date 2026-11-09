@@ -12,8 +12,8 @@ use crate::{
 mod tests;
 
 // A repair is local, but each readback traverses the whole molecule. Allow
-// 256 trials (including second wedges) to cover small coupled cages without
-// making interactive import an unbounded combinatorial search.
+// 256 trials per carrier-sharing group (including second wedges) to cover
+// small coupled cages without an unbounded interactive import search.
 const READBACK_LIMIT: usize = 256;
 
 /// The normal generated drawing is authoritative whenever it reads back.
@@ -100,14 +100,26 @@ fn preserves_stereo(
     conformer: &Conformer,
     work: &mut Work,
 ) -> Result<bool, String> {
+    preserves_selected_stereo(state, conformer, |_| true, work)
+}
+
+fn preserves_selected_stereo(
+    state: &WedgeState,
+    conformer: &Conformer,
+    includes: impl Fn(usize) -> bool,
+    work: &mut Work,
+) -> Result<bool, String> {
     let seen = read_stereo(state, conformer, work)?;
     Ok(state
         .metadata
         .atoms
         .iter()
         .zip(&seen.atoms)
-        .all(|(expected, actual)| {
-            if expected.chiral_tag == 5 {
+        .enumerate()
+        .all(|(atom, (expected, actual))| {
+            if !includes(atom) {
+                true
+            } else if expected.chiral_tag == 5 {
                 actual.chiral_tag == 5 && expected.chiral_permutation == actual.chiral_permutation
             } else {
                 !tetrahedral(expected.chiral_tag) || expected.chiral_tag == actual.chiral_tag
@@ -118,8 +130,11 @@ fn preserves_stereo(
             .bonds
             .iter()
             .zip(&seen.bonds)
-            .all(|(expected, actual)| {
-                if matches!(expected.stereo, 6 | 7) || matches!(actual.stereo, 6 | 7) {
+            .zip(&state.graph.bonds)
+            .all(|((expected, actual), edge)| {
+                if (includes(edge.a) || includes(edge.b))
+                    && (matches!(expected.stereo, 6 | 7) || matches!(actual.stereo, 6 | 7))
+                {
                     expected.stereo == actual.stereo
                 } else {
                     true
@@ -201,131 +216,120 @@ fn search(
         }
     }
     let axis_ends: Vec<_> = axes_at.iter().map(|axes| !axes.is_empty()).collect();
-    let mut movable = vec![false; input.graph.atoms.len()];
+    let mut sites: Vec<_> = eligible
+        .iter()
+        .zip(&axis_ends)
+        .map(|(&center, &axis)| center || axis)
+        .collect();
+    for &atom in &pending {
+        *at_mut(&mut sites, atom)? = true;
+    }
+    let mut groups = vec![None; input.graph.atoms.len()];
+    let mut group_count = 0;
     // Close over shared carrier sites before clearing anything. A carrier
     // touches its centre/axis end and a neighbour, including incoming wedges,
     // second wedges and ring replacements absent from the chooser's map.
-    // Only centres and axis ends joined by directable bonds propagate;
-    // unrelated components stay fixed.
-    while let Some(atom) = pending.pop() {
-        work.spend(1)?;
-        if std::mem::replace(at_mut(&mut movable, atom)?, true) {
+    // Centres and axis ends joined by directable bonds form one group;
+    // include unexpected-axis seeds so this relation remains symmetric.
+    for seed in pending {
+        if at(&groups, seed)?.is_some() {
             continue;
         }
-        let incident =
-            std::iter::once(None).chain(at(&ctx.adjacent, atom)?.iter().copied().map(Some));
-        for bond in incident {
+        let mut pending = vec![seed];
+        while let Some(atom) = pending.pop() {
             work.spend(1)?;
-            let other = if let Some(bond) = bond {
-                if !can_direct(at(&input.graph.bonds, bond)?.order) {
-                    continue;
-                }
-                ctx.other(bond, atom)?
-            } else {
-                atom
-            };
-            if *at(&eligible, other)? && !*at(&movable, other)? {
-                pending.push(other);
+            if at_mut(&mut groups, atom)?.replace(group_count).is_some() {
+                continue;
             }
-            for &axis in at(&axes_at, other)? {
+            for &axis in at(&axes_at, atom)? {
                 work.spend(1)?;
                 let edge = at(&input.graph.bonds, axis)?;
                 for end in [edge.a, edge.b] {
-                    if !*at(&movable, end)? {
+                    if at(&groups, end)?.is_none() {
                         pending.push(end);
                     }
                 }
             }
-        }
-    }
-    let centers: Vec<_> = eligible
-        .iter()
-        .zip(originals)
-        .enumerate()
-        .filter_map(|(atom, (&eligible, original))| {
-            (eligible && movable.get(atom).copied().unwrap_or(false)).then_some((atom, original))
-        })
-        .collect();
-    let center_count = centers.len();
-    // Keep input wedges and allene carriers fixed. The optional second centre
-    // wedge may have added more than one movable bond. Valid axes outside
-    // the repair retain their reference carriers and add no search choices.
-    for (bond, edge) in ctx.state.graph.bonds.iter_mut().enumerate() {
-        work.spend(1)?;
-        let original = *at(&input.directions, bond)?;
-        if original != Direction::None {
-            let fixed = at(&input.graph.bonds, bond)?;
-            // Ring presentation may itself have changed an input wedge.
-            // In that case retain the reference rather than repair around
-            // a changed input or alter an unrelated reference centre.
-            if original != *at(&ctx.state.directions, bond)?
-                || (edge.a, edge.b) != (fixed.a, fixed.b)
-            {
-                return Ok(None);
+            for &bond in at(&ctx.adjacent, atom)? {
+                work.spend(1)?;
+                if !can_direct(at(&input.graph.bonds, bond)?.order) {
+                    continue;
+                }
+                let other = ctx.other(bond, atom)?;
+                if *at(&sites, other)? && at(&groups, other)?.is_none() {
+                    pending.push(other);
+                }
             }
-        } else if *at(&movable, edge.a)?
+        }
+        group_count += 1;
+    }
+    let readback_limit = *readbacks;
+    // Solve one group at a time; other groups retain their current carriers
+    // and do not consume this group's choices or readback allowance.
+    for group in 0..group_count {
+        work.spend(input.graph.atoms.len())?;
+        let movable: Vec<_> = groups.iter().map(|&member| member == Some(group)).collect();
+        let centers: Vec<_> = eligible
+            .iter()
+            .zip(&originals)
+            .enumerate()
+            .filter_map(|(atom, (&eligible, &original))| {
+                (eligible && movable.get(atom).copied().unwrap_or(false))
+                    .then_some((atom, original))
+            })
+            .collect();
+        let center_count = centers.len();
+        // Keep input wedges and allene carriers fixed. The optional second centre
+        // wedge may have added more than one movable bond. Valid axes outside
+        // the repair retain their reference carriers and add no search choices.
+        for (bond, edge) in ctx.state.graph.bonds.iter_mut().enumerate() {
+            work.spend(1)?;
+            let original = *at(&input.directions, bond)?;
+            if original != Direction::None {
+                let fixed = at(&input.graph.bonds, bond)?;
+                // Ring presentation may itself have changed an input wedge.
+                // In that case retain the reference rather than repair around
+                // a changed input or alter an unrelated reference centre.
+                if original != *at(&ctx.state.directions, bond)?
+                    || (edge.a, edge.b) != (fixed.a, fixed.b)
+                {
+                    return Ok(None);
+                }
+            } else if *at(&movable, edge.a)?
             && (*at(&eligible, edge.a)?
                 || matches!(ctx.choices.get(&bond), Some(Choice::Atrop(_))))
             // An allene can reuse an atrop carrier without a Choice::Allene.
             && !*at(&allene_ends, edge.a)?
             && wedged(*at(&ctx.state.directions, bond)?)
-        {
-            *at_mut(&mut ctx.state.directions, bond)? = Direction::None;
-            *edge = at(&input.graph.bonds, bond)?.clone();
-        }
-    }
-    let mut alternatives = Vec::new();
-    for (atom, original) in centers {
-        let mut bonds = Vec::new();
-        for &bond in at(&ctx.adjacent, atom)? {
-            work.spend(1)?;
-            bonds.push((
-                *at(&axis_ends, ctx.other(bond, atom)?)?,
-                Some(bond) != original,
-                bond,
-            ));
-        }
-        // Try away from axis ends first, but retain every candidate: crowded
-        // cages may need these bonds to give each centre its own wedge.
-        bonds.sort_unstable();
-        let mut choices = Vec::new();
-        for (_, _, bond) in bonds {
-            work.spend(1)?;
-            if at(&ctx.state.graph.bonds, bond)?.order != 1
-                || *at(&ctx.state.directions, bond)? != Direction::None
             {
-                continue;
-            }
-            let direction = ctx.wedge_direction(bond, atom, work)?;
-            if wedged(direction) {
-                choices.push(Some(Wedge {
-                    bond,
-                    atom,
-                    direction,
-                }));
+                *at_mut(&mut ctx.state.directions, bond)? = Direction::None;
+                *edge = at(&input.graph.bonds, bond)?.clone();
             }
         }
-        alternatives.push(choices);
-    }
-    for (axis, metadata) in input.metadata.bonds.iter().enumerate() {
-        work.spend(1)?;
-        let edge = at(&input.graph.bonds, axis)?;
-        if !matches!(metadata.stereo, 6 | 7) || !*at(&movable, edge.a)? {
-            continue;
-        }
-        // A centre or fixed input wedge may already define this axis. Both
-        // directions must be tried because another axis can share a carrier.
-        let mut choices = vec![None];
-        for atom in [edge.a, edge.b] {
+        let mut alternatives = Vec::new();
+        for (atom, original) in centers {
+            let mut bonds = Vec::new();
             for &bond in at(&ctx.adjacent, atom)? {
                 work.spend(1)?;
-                if bond == axis
-                    || !can_direct(at(&ctx.state.graph.bonds, bond)?.order)
+                bonds.push((
+                    *at(&axis_ends, ctx.other(bond, atom)?)?,
+                    Some(bond) != original,
+                    bond,
+                ));
+            }
+            // Try away from axis ends first, but retain every candidate: crowded
+            // cages may need these bonds to give each centre its own wedge.
+            bonds.sort_unstable();
+            let mut choices = Vec::new();
+            for (_, _, bond) in bonds {
+                work.spend(1)?;
+                if at(&ctx.state.graph.bonds, bond)?.order != 1
                     || *at(&ctx.state.directions, bond)? != Direction::None
                 {
                     continue;
                 }
-                for direction in [Direction::Wedge, Direction::Hash] {
+                let direction = ctx.wedge_direction(bond, atom, work)?;
+                if wedged(direction) {
                     choices.push(Some(Wedge {
                         bond,
                         atom,
@@ -333,21 +337,79 @@ fn search(
                     }));
                 }
             }
+            alternatives.push(choices);
         }
-        alternatives.push(choices);
+        for (axis, metadata) in input.metadata.bonds.iter().enumerate() {
+            work.spend(1)?;
+            let edge = at(&input.graph.bonds, axis)?;
+            if !matches!(metadata.stereo, 6 | 7) || !*at(&movable, edge.a)? {
+                continue;
+            }
+            // A centre or fixed input wedge may already define this axis. Both
+            // directions must be tried because another axis can share a carrier.
+            let mut choices = vec![None];
+            for atom in [edge.a, edge.b] {
+                for &bond in at(&ctx.adjacent, atom)? {
+                    work.spend(1)?;
+                    if bond == axis
+                        || !can_direct(at(&ctx.state.graph.bonds, bond)?.order)
+                        || *at(&ctx.state.directions, bond)? != Direction::None
+                    {
+                        continue;
+                    }
+                    for direction in [Direction::Wedge, Direction::Hash] {
+                        choices.push(Some(Wedge {
+                            bond,
+                            atom,
+                            direction,
+                        }));
+                    }
+                }
+            }
+            alternatives.push(choices);
+        }
+        *readbacks = readback_limit;
+        let conformer = ctx.conf;
+        let mut check = |state: &WedgeState, work: &mut Work| {
+            *readbacks = readbacks
+                .checked_sub(1)
+                .ok_or("Atropisomer wedging readback limit exceeded")?;
+            preserves_selected_stereo(
+                state,
+                conformer,
+                |atom| movable.get(atom).copied().unwrap_or(false),
+                work,
+            )
+        };
+        if !solve(
+            ctx,
+            two_bonds,
+            &alternatives,
+            center_count,
+            &mut check,
+            work,
+        )? {
+            return Ok(None);
+        }
     }
+    // Local checks permit the other groups' outstanding failures. Accept
+    // the combined drawing only after checking all stereo once more.
+    Ok(preserves_stereo(&ctx.state, ctx.conf, work)?.then(|| ctx.state.clone()))
+}
+
+fn solve(
+    ctx: &mut Context<'_>,
+    two_bonds: bool,
+    alternatives: &[Vec<Option<Wedge>>],
+    center_count: usize,
+    check: &mut impl FnMut(&WedgeState, &mut Work) -> Result<bool, String>,
+    work: &mut Work,
+) -> Result<bool, String> {
     work.spend(ctx.state.graph.atoms.len() + ctx.state.graph.bonds.len())?;
     let base = ctx.state.clone();
     let mut next = vec![0; alternatives.len()];
     let mut placed: Vec<Option<Wedge>> = vec![None; alternatives.len()];
     let mut depth = 0;
-    let conformer = ctx.conf;
-    let mut check = |state: &WedgeState, work: &mut Work| {
-        *readbacks = readbacks
-            .checked_sub(1)
-            .ok_or("Atropisomer wedging readback limit exceeded")?;
-        preserves_stereo(state, conformer, work)
-    };
     // Iterative backtracking avoids a call-stack limit on large molecules.
     loop {
         work.spend(1)?;
@@ -363,9 +425,9 @@ fn search(
                         }
                     }
                 }
-                return Ok(Some(ctx.state.clone()));
+                return Ok(true);
             }
-        } else if let Some(&choice) = at(&alternatives, depth)?.get(*at(&next, depth)?) {
+        } else if let Some(&choice) = at(alternatives, depth)?.get(*at(&next, depth)?) {
             *at_mut(&mut next, depth)? += 1;
             if let Some(wedge) = choice {
                 if *at(&ctx.state.directions, wedge.bond)? != Direction::None {
@@ -382,7 +444,7 @@ fn search(
             continue;
         }
         if depth == 0 {
-            return Ok(None);
+            return Ok(false);
         }
         depth -= 1;
         if let Some(wedge) = *at(&placed, depth)? {

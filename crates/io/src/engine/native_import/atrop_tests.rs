@@ -651,28 +651,42 @@ fn an_axis_with_coincident_ends_is_still_refused() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn fresh_cxsmiles_import_preserves_axes_sharing_an_end() -> anyhow::Result<()> {
+async fn import_smiles_document(text: &str) -> anyhow::Result<Document> {
     let config = if std::env::var_os("RESHIKI_INCHI_HELPER").is_some() {
         native_response::Config::new(helper::discover()?)
     } else {
         assert!(std::env::var_os("RESHIKI_REQUIRE_INCHI_HELPER").is_none());
         native_response::Config::in_process()
     };
-    let outcome = execute(
-        Request::import_smiles(
-            "CN(C(=C)C)C(=C)C |(-1,0,;0,0,;0.5,1,;1.5,1,;0,2,;0.5,-1,;1.5,-1,;0,-2,),wD:2.3,wU:5.6|",
-        ),
-        Some(config),
-    )
-    .await?;
+    let outcome = execute(Request::import_smiles(text), Some(config)).await?;
     let Outcome::Complete(response) = outcome else {
         panic!("Import unexpectedly deferred");
     };
-    let document = response
+    response
         .document
-        .ok_or_else(|| anyhow::anyhow!("Missing imported drawing"))?;
+        .ok_or_else(|| anyhow::anyhow!("Missing imported drawing"))
+}
+
+#[tokio::test]
+async fn fresh_cxsmiles_import_preserves_axes_sharing_an_end() -> anyhow::Result<()> {
+    let document = import_smiles_document(
+        "CN(C(=C)C)C(=C)C |(-1,0,;0,0,;0.5,1,;1.5,1,;0,2,;0.5,-1,;1.5,-1,;0,-2,),wD:2.3,wU:5.6|",
+    )
+    .await?;
     assert_eq!(axes(&read_wedges(&document)?)?, [(2, 3, 6), (2, 6, 6)]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn fresh_cxsmiles_import_preserves_disconnected_shared_end_axes() -> anyhow::Result<()> {
+    let document = import_smiles_document(
+        "CN(C(=C)C)C(=C)C.CN(C(=C)C)C(=C)C |(-1,0,;0,0,;0.5,1,;1.5,1,;0,2,;0.5,-1,;1.5,-1,;0,-2,;5,0,;6,0,;6.5,1,;7.5,1,;6,2,;6.5,-1,;7.5,-1,;6,-2,),wD:2.3,10.10,wU:5.6,13.13|",
+    )
+    .await?;
+    assert_eq!(
+        axes(&read_wedges(&document)?)?,
+        [(2, 3, 6), (2, 6, 6), (10, 11, 6), (10, 14, 6)]
+    );
     Ok(())
 }
 
