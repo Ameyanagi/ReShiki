@@ -28,17 +28,12 @@ members = [
   "native/process",
   "crates/agent",
   "crates/chemistry",
-  "crates/nazuchem-ir",
-  "crates/nazuchem-kernel",
-  "crates/nazuchem-s2n",
-  "crates/nazuchem",
   "crates/depict-math",
   "crates/io",
   "crates/mcp",
   "crates/model",
   "crates/metafile",
   "crates/web-worker",
-  "crates/nazuchem-n2s",
   "crates/process-heap",
   "crates/web",
   "crates/python",
@@ -55,6 +50,12 @@ default-members = [
 # Public language packages follow the application release version.
 [workspace.package]
 version = "0.14.0"
+
+[workspace.dependencies]
+nazuchem-ir = { git = "https://github.com/Ameyanagi/nazuchem", rev = "f418fea6747aad48d9f5cb020b00b8afc55cbb31" }
+nazuchem-kernel = { git = "https://github.com/Ameyanagi/nazuchem", rev = "f418fea6747aad48d9f5cb020b00b8afc55cbb31" }
+nazuchem-n2s = { git = "https://github.com/Ameyanagi/nazuchem", rev = "f418fea6747aad48d9f5cb020b00b8afc55cbb31" }
+nazuchem-s2n = { git = "https://github.com/Ameyanagi/nazuchem", rev = "f418fea6747aad48d9f5cb020b00b8afc55cbb31" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }
@@ -74,10 +75,10 @@ iced_tiny_skia = { version = "0.14", default-features = false }
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 
 [dependencies]
-nazuchem-ir = { path = "crates/nazuchem-ir" }
-nazuchem-kernel = { path = "crates/nazuchem-kernel" }
-nazuchem-s2n = { path = "crates/nazuchem-s2n" }
-nazuchem-n2s = { path = "crates/nazuchem-n2s" }
+nazuchem-ir = { workspace = true }
+nazuchem-kernel = { workspace = true }
+nazuchem-s2n = { workspace = true }
+nazuchem-n2s = { workspace = true }
 reshiki-geometry = { path = "native/geometry" }
 accesskit = "=0.24.1"
 reshiki-process-heap = { path = "crates/process-heap" }

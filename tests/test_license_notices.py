@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -13,24 +14,57 @@ from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, write_notices
 
 
 class LicenseNoticeTests(unittest.TestCase):
-    def test_checked_in_naming_components_collect_complete_crate_local_terms(self):
+    def test_git_naming_components_collect_complete_crate_local_terms(self):
         repository = Path(__file__).resolve().parents[1]
-        packages = []
-        for name in ("nazuchem-s2n", "nazuchem-kernel", "nazuchem-n2s", "nazuchem"):
-            manifest = repository / "crates" / name / "Cargo.toml"
+        metadata = json.loads(
+            subprocess.check_output(
+                ["cargo", "metadata", "--locked", "--format-version", "1"],
+                cwd=repository,
+                text=True,
+            )
+        )
+        runtime_names = {"nazuchem-ir", "nazuchem-kernel", "nazuchem-n2s", "nazuchem-s2n"}
+        naming_names = runtime_names | {"nazuchem"}
+        packages = [p for p in metadata["packages"] if p["name"] in naming_names]
+        self.assertTrue(runtime_names <= {p["name"] for p in packages})
+        workspace = tomllib.loads((repository / "Cargo.toml").read_text())["workspace"]
+        declaration = workspace["dependencies"]["nazuchem-ir"]
+        self.assertEqual(declaration["git"], "https://github.com/Ameyanagi/nazuchem")
+        self.assertEqual(len(declaration["rev"]), 40)
+        git_source = f"git+{declaration['git']}?rev={declaration['rev']}#{declaration['rev']}"
+        sources = {}
+        for package in packages:
+            with self.subTest(component=package["name"]):
+                self.assertEqual(package["source"], git_source)
+                self.assertNotIn(package["id"], metadata["workspace_members"])
+                source = Path(package["manifest_path"]).parent.resolve()
+                self.assertFalse(source.is_relative_to(repository.resolve()))
+                sources[package["name"]] = source
+        self.assertEqual(len(packages), len(sources))
+        self.assertEqual(len({source.parent for source in sources.values()}), 1)
+
+        # The unused facade is not a production dependency. Its sibling manifest
+        # in the same fetched revision supplies source-only notice coverage.
+        if "nazuchem" not in sources:
+            source = sources["nazuchem-ir"].parent / "nazuchem"
+            manifest = source / "Cargo.toml"
             declaration = tomllib.loads(manifest.read_text())["package"]
+            self.assertEqual(declaration["name"], "nazuchem")
             packages.append(
                 {
-                    "id": name,
-                    "name": name,
-                    "version": declaration["version"],
-                    "license": declaration["license"],
+                    **declaration,
+                    "source": git_source,
                     "manifest_path": str(manifest),
                 }
             )
-        self.assertEqual(packages[0]["license"], "MIT AND (MIT OR Apache-2.0) AND Python-2.0")
-        # The source tree has no root upstream terms in this miniature release.
-        # All third-party bytes must therefore arrive through crate-local files.
+            sources["nazuchem"] = source
+        self.assertEqual(set(sources), naming_names)
+        self.assertEqual(
+            next(p["license"] for p in packages if p["name"] == "nazuchem-s2n"),
+            "MIT AND (MIT OR Apache-2.0) AND Python-2.0",
+        )
+        # The packaging root deliberately has no upstream source terms. Every
+        # license and attribution below must be read from Cargo's git checkout.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for name in PROJECT_FILES:
@@ -40,51 +74,80 @@ class LicenseNoticeTests(unittest.TestCase):
             write_notices(
                 root,
                 root / "output",
-                {"packages": packages, "workspace_members": [p["id"] for p in packages]},
+                {"packages": packages, "workspace_members": metadata["workspace_members"]},
             )
             result = (root / "output" / THIRD_PARTY_FILE).read_bytes()
+            opsin_source = sources["nazuchem-n2s"]
+            root_terms = {name: repository / name for name in ("LICENSE-MIT", "LICENSE-APACHE")}
+            # License grants remain identical to the retained root copies.
+            # Attribution notices also describe the extracted source layout,
+            # so their canonical bytes come from the corresponding git crate.
+            openclatura_terms = {
+                f"licenses/openclatura/{name}": (
+                    sources["nazuchem-s2n"] if name == "NOTICE" else repository
+                )
+                / "licenses/openclatura"
+                / name
+                for name in ("LICENSE", "NOTICE")
+            }
+            opsin_terms = {
+                f"licenses/opsin/{name}": opsin_source / name for name in ("LICENSE", "NOTICE")
+            }
+            cpython_terms = {
+                f"licenses/cpython/{name}": (
+                    sources["nazuchem-s2n"] if name == "NOTICE" else repository
+                )
+                / "licenses/cpython"
+                / name
+                for name in ("LICENSE", "NOTICE")
+            }
+            kernel_terms = {
+                f"licenses/{component}/{name}": (
+                    sources["nazuchem-kernel"] if name == "NOTICE" else repository
+                )
+                / "licenses"
+                / component
+                / name
+                for component, names in (
+                    ("rdkit", ("LICENSE", "NOTICE")),
+                    ("centres", ("LICENSE", "NOTICE")),
+                    ("stdlib", ("llvm-LICENSE", "msvc-LICENSE", "NOTICE")),
+                )
+                for name in names
+            }
             copies = {
+                "nazuchem-ir": root_terms,
                 "nazuchem-s2n": {
-                    "licenses/openclatura/LICENSE": "licenses/openclatura/LICENSE",
-                    "licenses/openclatura/NOTICE": "licenses/openclatura/NOTICE",
-                    "licenses/opsin/LICENSE": "crates/nazuchem-n2s/LICENSE",
-                    "licenses/opsin/NOTICE": "crates/nazuchem-n2s/NOTICE",
-                    "licenses/cpython/LICENSE": "licenses/cpython/LICENSE",
-                    "licenses/cpython/NOTICE": "licenses/cpython/NOTICE",
+                    **root_terms,
+                    **openclatura_terms,
+                    **opsin_terms,
+                    **cpython_terms,
                 },
-                "nazuchem-kernel": {
-                    "licenses/rdkit/LICENSE": "licenses/rdkit/LICENSE",
-                    "licenses/centres/LICENSE": "licenses/centres/LICENSE",
-                    "licenses/stdlib/llvm-LICENSE": "licenses/stdlib/llvm-LICENSE",
-                    "licenses/stdlib/msvc-LICENSE": "licenses/stdlib/msvc-LICENSE",
-                },
-                "nazuchem-n2s": {"LICENSE": "crates/nazuchem-n2s/LICENSE"},
+                "nazuchem-kernel": {**root_terms, **kernel_terms},
+                "nazuchem-n2s": {"LICENSE": opsin_source / "LICENSE"},
                 "nazuchem": {
-                    "licenses/opsin/LICENSE": "crates/nazuchem-n2s/LICENSE",
-                    "licenses/opsin/NOTICE": "crates/nazuchem-n2s/NOTICE",
-                    "licenses/openclatura/LICENSE": "licenses/openclatura/LICENSE",
-                    "licenses/openclatura/NOTICE": "licenses/openclatura/NOTICE",
-                    "licenses/cpython/LICENSE": "licenses/cpython/LICENSE",
-                    "licenses/cpython/NOTICE": "licenses/cpython/NOTICE",
-                    "licenses/rdkit/LICENSE": "licenses/rdkit/LICENSE",
-                    "licenses/centres/LICENSE": "licenses/centres/LICENSE",
-                    "licenses/stdlib/llvm-LICENSE": "licenses/stdlib/llvm-LICENSE",
-                    "licenses/stdlib/msvc-LICENSE": "licenses/stdlib/msvc-LICENSE",
+                    **root_terms,
+                    **opsin_terms,
+                    **openclatura_terms,
+                    **cpython_terms,
+                    **kernel_terms,
                 },
             }
             for package in packages:
                 name, version = package["name"], package["version"]
                 for relative, upstream in copies[name].items():
                     with self.subTest(component=name, relative=relative):
-                        expected = (repository / upstream).read_bytes()
-                        self.assertEqual(
-                            (repository / "crates" / name / relative).read_bytes(), expected
-                        )
+                        expected = upstream.read_bytes()
+                        self.assertEqual((sources[name] / relative).read_bytes(), expected)
                         self.assertIn(f"{name}@{version}/{relative}".encode(), result)
                         self.assertIn(expected, result)
-                self.assertIn(f"{name}@{version}/NOTICE".encode(), result)
-                self.assertIn((repository / "crates" / name / "NOTICE").read_bytes(), result)
+                for relative in ("NOTICE", "Cargo.toml"):
+                    with self.subTest(component=name, relative=relative):
+                        self.assertIn(f"{name}@{version}/{relative}".encode(), result)
+                        self.assertIn((sources[name] / relative).read_bytes(), result)
+            self.assertIn(f"source: {json.dumps(git_source)}".encode(), result)
             self.assertNotIn(b"Original workspace crate:", result)
+            self.assertNotIn(b"Separately licensed workspace component:", result)
 
     def test_workspace_kernel_collects_nested_terms_with_either_manifest_expression(self):
         with tempfile.TemporaryDirectory() as temporary:

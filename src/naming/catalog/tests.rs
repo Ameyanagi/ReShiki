@@ -119,54 +119,54 @@ fn every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph(
 
 fn pinned_resource(file: &str) -> &'static str {
     match file {
-        "alkanes.xml" => include_str!("../../../crates/nazuchem-n2s/resources/xml/alkanes.xml"),
+        "alkanes.xml" => include_str!("../../../tests/fixtures/naming/opsin/xml/alkanes.xml"),
         "aminoAcids.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/aminoAcids.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/aminoAcids.xml")
         }
         "arylSubstituents.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/arylSubstituents.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/arylSubstituents.xml")
         }
         "arylGroups.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/arylGroups.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/arylGroups.xml")
         }
         "carbohydrateSuffixes.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/carbohydrateSuffixes.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/carbohydrateSuffixes.xml")
         }
         "carbohydrates.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/carbohydrates.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/carbohydrates.xml")
         }
         "carboxylicAcids.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/carboxylicAcids.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/carboxylicAcids.xml")
         }
         "functionalTerms.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/functionalTerms.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/functionalTerms.xml")
         }
         "groupStemsAllowingInlineSuffixes.xml" => {
             include_str!(
-                "../../../crates/nazuchem-n2s/resources/xml/groupStemsAllowingInlineSuffixes.xml"
+                "../../../tests/fixtures/naming/opsin/xml/groupStemsAllowingInlineSuffixes.xml"
             )
         }
         "inlineSuffixes.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/inlineSuffixes.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/inlineSuffixes.xml")
         }
         "miscTokens.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/miscTokens.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/miscTokens.xml")
         }
         "multipliers.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/multipliers.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/multipliers.xml")
         }
         "simpleCyclicGroups.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/simpleCyclicGroups.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/simpleCyclicGroups.xml")
         }
         "simpleGroups.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/simpleGroups.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/simpleGroups.xml")
         }
         "simpleSubstituents.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/simpleSubstituents.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/simpleSubstituents.xml")
         }
-        "suffixes.xml" => include_str!("../../../crates/nazuchem-n2s/resources/xml/suffixes.xml"),
+        "suffixes.xml" => include_str!("../../../tests/fixtures/naming/opsin/xml/suffixes.xml"),
         "unsaturators.xml" => {
-            include_str!("../../../crates/nazuchem-n2s/resources/xml/unsaturators.xml")
+            include_str!("../../../tests/fixtures/naming/opsin/xml/unsaturators.xml")
         }
         _ => panic!("Unpinned resource {file}"),
     }

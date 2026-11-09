@@ -40,11 +40,12 @@ cargo test --locked -p reshiki-io
 cargo test --locked -p reshiki-agent
 cargo test --locked -p reshiki-mcp
 cargo test --locked -p reshiki-metafile
-cargo test --locked -p nazuchem-n2s
 cargo test --locked -p reshiki --test theme_reference
 ```
 
-A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. `reshiki-metafile` and `nazuchem-n2s` are not default members, so plain `cargo test` skips their tests. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
+A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. `reshiki-metafile` is not a default member, so plain `cargo test` skips its tests. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
+
+The naming project's five crates now live in [Ameyanagi/nazuchem](https://github.com/Ameyanagi/nazuchem). ReShiki uses `nazuchem-ir`, `nazuchem-kernel`, `nazuchem-n2s` and `nazuchem-s2n` as git dependencies pinned to `f418fea6747aad48d9f5cb020b00b8afc55cbb31`; it does not use the facade crate `nazuchem`. Run the engine unit tests and oracle gates in that repository. ReShiki's `cargo test --workspace --locked` covers the adapters, naming integration tests and worker response snapshot; it does not run dependency unit tests. Use the [structure-to-name harness](structure-to-name-harness.md#run) for focused ReShiki naming checks.
 
 Naming integration tests start the built application in its `--naming-worker` mode. Build it first and point `RESHIKI_NAMING_HELPER` at it with an absolute path; if you set `CARGO_TARGET_DIR`, use the binary there. Without the variable, the tests fail with "Naming integration tests require RESHIKI_NAMING_HELPER…". Rebuild the binary after you change naming or worker code, because the tests run it as built.
 
