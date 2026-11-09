@@ -12,9 +12,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 mod axis_markers;
 mod identity;
+mod ir;
 pub use identity::{
     IdentityRejection, canonical_identity, unknown_atom_units, unspecified_unknown_stereo,
 };
+pub use ir::{from_ir, name_import_projection};
 
 #[cfg(test)]
 mod identity_parity;

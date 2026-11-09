@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::naming::test_support::record;
 
 #[test]
 fn wrapped_locant_mouse_area_dispatches_enter_and_exit_without_a_font_renderer() {
@@ -151,21 +150,12 @@ fn splitting_indicated_hydrogen_locant_preserves_in_word_font_change() {
 async fn indole_preview() -> Result<Preview, String> {
     // The real OPSIN parser and native importer run in-process; no application
     // executable, display server or installed fonts are required.
-    let parser = nazuchem_n2s::Parser::new().map_err(|error| error.to_string())?;
-    let parsed = parser.parse("5-chloro-1H-indole", &nazuchem_n2s::ParseOptions::strict());
-    assert_eq!(parsed.status, nazuchem_n2s::Status::Success);
-    let (smiles, atoms) = parsed
-        .structure
-        .ok_or("No parsed indole")?
-        .semantic_cxsmiles_with_locants()
+    let record = naming::resolve_name("5-chloro-1H-indole", naming::Cancel::default())
+        .await
         .map_err(|error| error.to_string())?;
-    let mut record = record(&smiles);
-    record.title = "5-chloro-1H-indole".into();
-    record.systematic_name = Some(record.title.clone());
-    record.locants = Some(naming::Locants {
-        smiles: smiles.clone(),
-        atoms,
-    });
+    assert!(record.prepared.is_some(), "Missing native IR input");
+    assert!(record.locants.is_some(), "Missing parent locants");
+    let smiles = record.smiles.clone();
     prepare_preview(
         LocalEngine::in_process(),
         record,

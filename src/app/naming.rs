@@ -316,8 +316,17 @@ async fn prepare_preview(
     smiles: String,
     options: DrawingOptions,
 ) -> Result<Preview, naming::Error> {
-    let identity = naming::canonical_smiles(&smiles).map_err(naming::Error::Rejected)?;
-    let mut request = Request::import("naming_smiles", &smiles);
+    let (identity, mut request) = match record.prepared.as_ref().filter(|_| smiles == record.smiles)
+    {
+        Some(prepared) => (
+            record.canonical_smiles.clone(),
+            Request::import_prepared(prepared.clone()),
+        ),
+        None => (
+            naming::canonical_smiles(&smiles).map_err(naming::Error::Rejected)?,
+            Request::import("naming_smiles", &smiles),
+        ),
+    };
     request.drawing_options = Some(options);
     let response = engine
         .request(request)
@@ -334,12 +343,12 @@ async fn prepare_preview(
     Ok(Preview::new(record, document, response.warnings, identity))
 }
 
-/// Name imports keep source component order (the resolver puts cations first),
-/// with enough horizontal space for their labels. General depiction can stack
-/// fragments vertically to make a compact drawing.
+/// Name imports put cations first, keeping the source order otherwise, with
+/// enough horizontal space for labels. General depiction can stack fragments
+/// vertically to make a compact drawing.
 fn arrange_name_components(document: &mut Document) {
     let mut seen = std::collections::HashSet::new();
-    let components = document
+    let mut components = document
         .atoms
         .iter()
         .filter_map(|atom| {
@@ -351,6 +360,23 @@ fn arrange_name_components(document: &mut Document) {
             Some(atoms)
         })
         .collect::<Vec<_>>();
+    // Put cations first to match the conventional order used in salt names.
+    components.sort_by_key(|atoms| {
+        atoms
+            .iter()
+            .filter_map(|&id| document.atom(id))
+            .map(|atom| atom.charge)
+            .sum::<i32>()
+            <= 0
+    });
+    let component_order: HashMap<_, _> = components
+        .iter()
+        .enumerate()
+        .flat_map(|(index, atoms)| atoms.iter().map(move |&id| (id, index)))
+        .collect();
+    document
+        .atoms
+        .sort_by_key(|atom| component_order.get(&atom.id).copied().unwrap_or(usize::MAX));
     let mut previous = None;
     let gap = document.drawing_style.bond_length_world;
     for atoms in components {

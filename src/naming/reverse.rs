@@ -275,6 +275,7 @@ pub(super) fn generated_record(
         super::aliases_for_smiles(&expected).map_err(Error::Worker)?
     };
     Ok(Record {
+        prepared: None,
         title: candidate.text.clone(),
         systematic_name: Some(candidate.text),
         name_status: Some(candidate.status),

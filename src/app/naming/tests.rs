@@ -2,6 +2,31 @@ use super::test_support::{ethanol, record};
 use super::*;
 
 #[tokio::test]
+async fn original_ir_preview_does_not_parse_the_display_smiles() -> Result<(), String> {
+    let mut source = record("CCO");
+    source.prepared = Some(
+        reshiki::chemistry::smiles::read("CCO")
+            .map_err(|error| error.to_string())?
+            .prepared,
+    );
+    // The source text is an editable representation, separate from the
+    // prepared chemistry and the canonical identity checked after drawing.
+    source.smiles = "This is not SMILES".into();
+    let preview = prepare_preview(
+        LocalEngine::in_process(),
+        source.clone(),
+        source.smiles.clone(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert_eq!(preview.identity, "CCO");
+    assert_eq!(preview.smiles, "CCO");
+    assert!(!preview.modified);
+    Ok(())
+}
+
+#[tokio::test]
 async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), String> {
     let mut binol = Vec::new();
     for (name, descriptor) in [
@@ -31,6 +56,7 @@ async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), Str
         let parsed = naming::resolve_name(name, naming::Cancel::default())
             .await
             .map_err(|error| format!("{name}: {error}"))?;
+        assert!(parsed.prepared.is_some(), "{name}: missing native IR input");
         let preview = prepare_preview(
             LocalEngine::in_process(),
             parsed.clone(),
@@ -76,6 +102,28 @@ async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), Str
         // The editable field never shows the private axis maps.
         assert!(!preview.smiles.contains(":9000"), "{}", preview.smiles);
         if name.contains("binaphthalene]-2") {
+            let axis_atom = |expected| {
+                preview
+                    .locants
+                    .iter()
+                    .find_map(|(&id, locant)| (locant.replace('′', "'") == expected).then_some(id))
+                    .ok_or_else(|| format!("{name}: missing parent locant {expected}"))
+            };
+            let (one, primed_one) = (axis_atom("1")?, axis_atom("1'")?);
+            let axis = labelled
+                .graph
+                .bonds
+                .iter()
+                .position(|bond| {
+                    let (a, b) = (molecule.ids[bond.a], molecule.ids[bond.b]);
+                    (a == one && b == primed_one) || (a == primed_one && b == one)
+                })
+                .ok_or_else(|| format!("{name}: locants 1 and 1' are not bonded"))?;
+            assert_eq!(
+                labelled.properties.bond_codes[axis].as_deref(),
+                Some(descriptor),
+                "{name}: parent locants must identify the specified atropisomer axis"
+            );
             // An unedited Update rebuilds from the identity and keeps the axis.
             let rebuilt = prepare_preview(
                 LocalEngine::in_process(),
@@ -90,6 +138,75 @@ async fn axial_name_previews_reperceive_the_axis_from_wedges() -> Result<(), Str
         }
     }
     assert!(naming::verify_identity(&binol[0], &binol[1]).is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn binol_name_import_preserves_the_legacy_atropisomer_identity() -> Result<(), String> {
+    use reshiki::{chemistry, molecule_names};
+
+    let name = "(1M)-[1,1'-binaphthalene]-2,2'-diol";
+    // Frozen from main's protocol-6 fixture before 4ab8fd7b: semantic
+    // CXSMILES plus axis { atoms: [11, 0], refs: [12, 1], clockwise: false }.
+    let mut legacy = chemistry::smiles::read("C=1(C(=CC=C2C=CC=CC12)O)C=1C(=CC=C2C=CC=CC12)O")
+        .map_err(|error| error.to_string())?
+        .prepared
+        .state;
+    let axis = legacy
+        .graph
+        .bonds
+        .iter()
+        .position(|bond| matches!((bond.a, bond.b), (11, 0) | (0, 11)))
+        .ok_or("Missing frozen BINOL axis")?;
+    let refs = if legacy.graph.bonds[axis].a == 11 {
+        vec![12, 1]
+    } else {
+        vec![1, 12]
+    };
+    legacy.metadata.bonds[axis].stereo = 7;
+    legacy.metadata.bonds[axis].stereo_atoms = refs;
+    let labelled = chemistry::stereo::cip::label::assign(&legacy, &Default::default())
+        .map_err(|error| error.to_string())?;
+    assert_eq!(
+        labelled.state.properties.bond_codes[axis].as_deref(),
+        Some("M")
+    );
+    let expected =
+        molecule_names::canonical_identity(&legacy).map_err(|error| format!("{error:?}"))?;
+    legacy.metadata.bonds[axis].stereo = 6;
+    let opposite =
+        molecule_names::canonical_identity(&legacy).map_err(|error| format!("{error:?}"))?;
+    assert_ne!(
+        expected, opposite,
+        "The expectation must distinguish M from P"
+    );
+
+    let Outcome::Names(records, Some(preview)) = resolve_preview(
+        LocalEngine::in_process(),
+        name.into(),
+        naming::Cancel::default(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?
+    else {
+        return Err("Missing BINOL name-import preview".into());
+    };
+    assert!(
+        records[0].prepared.is_some(),
+        "Import must use the native IR"
+    );
+    let (mut app, _) = App::new();
+    app.tab.naming.set_preview(*preview);
+    let _ = app.naming_action(Action::Insert);
+    let imported = chemistry::document::prepare(&app.tab.doc).map_err(|error| error.to_string())?;
+    // C2-symmetric relabelling can exchange the naphthyl halves and change
+    // their drawing orientation/locants while retaining the same axial hand.
+    assert_eq!(
+        molecule_names::canonical_identity(&imported.state)
+            .map_err(|error| format!("{error:?}"))?,
+        expected,
+    );
     Ok(())
 }
 
@@ -239,13 +356,12 @@ async fn generated_fusion_hydrogens_preserve_formula_inchi_and_naming_outcomes()
         // Exercise the same naming worker in-process so this check never
         // launches the application executable or a GUI.
         let name = |identity: &naming::Identity| -> Result<serde_json::Value, String> {
-            let request = serde_json::json!({
-                "operation": "generate",
-                "protocol": 6,
-                "profile": "openclatura 0.4.3 Rust port",
-                "smiles": identity.smiles,
-                "isotope_style": "iupac",
-            });
+            let request = naming::worker::Request::Generate {
+                protocol: naming::worker::PROTOCOL,
+                profile: naming::openclatura::PROFILE.into(),
+                smiles: identity.smiles.clone(),
+                isotope_style: naming::IsotopeStyle::Iupac,
+            };
             let response =
                 naming::worker::respond(&serde_json::to_vec(&request).map_err(|e| e.to_string())?)?;
             let response: serde_json::Value =
@@ -700,17 +816,23 @@ async fn warnings_and_unapplied_smiles_edits_block_insertion() -> Result<(), Str
 
 #[tokio::test]
 async fn changed_preview_no_longer_claims_original_chemical_name() -> Result<(), String> {
-    let engine = LocalEngine::default();
+    let engine = LocalEngine::in_process();
+    let mut source = record("CCO");
+    source.prepared = Some(
+        reshiki::chemistry::smiles::read("CCO")
+            .map_err(|error| error.to_string())?
+            .prepared,
+    );
     let original = prepare_preview(
         engine.clone(),
-        record("CCO"),
+        source.clone(),
         "CCO".into(),
         Default::default(),
     )
     .await
     .map_err(|error| error.to_string())?;
     assert!(!original.modified);
-    let edited = prepare_preview(engine, record("CCO"), "CCN".into(), Default::default())
+    let edited = prepare_preview(engine, source, "CCN".into(), Default::default())
         .await
         .map_err(|error| error.to_string())?;
     assert!(edited.modified);

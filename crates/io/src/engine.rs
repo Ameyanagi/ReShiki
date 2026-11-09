@@ -32,6 +32,10 @@ pub struct Request {
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    /// Native molecular input whose graph and stereo are already prepared.
+    /// It stays in-process; exchange worker requests continue to carry text.
+    #[serde(skip)]
+    pub prepared: Option<crate::chemistry::smiles::Prepared>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_layout: Option<std::collections::HashMap<u64, TextMetrics>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -60,10 +64,18 @@ impl Request {
             document: None,
             text: Some(text.into()),
             format: Some(format.into()),
+            prepared: None,
             text_layout: None,
             graphic_paths: None,
             graphic_parts: None,
         }
+    }
+    /// Lay out an already prepared molecule with the native import pipeline.
+    pub fn import_prepared(prepared: crate::chemistry::smiles::Prepared) -> Self {
+        let mut request = Self::import("prepared", "");
+        request.text = None;
+        request.prepared = Some(prepared);
+        request
     }
     pub fn molecule(operation: &str, document: Document) -> Self {
         let graphic_parts = (operation == "export").then(|| {
@@ -139,6 +151,7 @@ impl Request {
             document: Some(document),
             text: None,
             format: None,
+            prepared: None,
             text_layout,
             graphic_paths,
             graphic_parts,

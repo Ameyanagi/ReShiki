@@ -199,10 +199,18 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
     let format = request.format.as_deref().unwrap_or("smiles");
     let drawing_options = request.drawing_options.unwrap_or_default();
     let text = request.text.unwrap_or_default();
-    if !matches!(format, "rxn" | "rsmi") && text.trim().is_empty() {
+    if !matches!(format, "rxn" | "rsmi" | "prepared") && text.trim().is_empty() {
         return Err(Error::Empty);
     }
     let prepared = match format {
+        "prepared" => {
+            let imported = request.prepared.ok_or(Error::Parse)?;
+            let mut molecule = molecule(imported.state)?;
+            let warnings = layout(&mut molecule, &[])?;
+            let mut prepared = finish_molecule(molecule, &imported.dummy_labels, drawing_options)?;
+            prepared.warnings.extend(warnings);
+            prepared
+        }
         "inchi" => return Ok(Preparation::Inchi(text)),
         format if crate::crystal::is_crystal_format(format) => {
             let (document, warnings) = crate::crystal::read(format, &text)?;

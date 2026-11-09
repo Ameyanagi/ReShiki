@@ -4,6 +4,39 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[tokio::test]
+async fn prepared_import_reuses_the_native_layout_and_analysis() -> anyhow::Result<()> {
+    let engine = LocalEngine::in_process();
+    for text in [
+        "CCO",
+        "CC[C@](C)(Br)Cl",
+        "Clc1ccc2[nH]ccc2c1",
+        "Oc1ccc2ccccc2[c:900004]1-[c:900004]1c(O)ccc2ccccc12",
+    ] {
+        let mut prepared = crate::chemistry::smiles::read(text)?.prepared;
+        prepared.state = crate::molecule_names::apply_axis_markers(&prepared.state)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let options = crate::chemistry::document::DrawingOptions {
+            two_wedge_stereocentres: true,
+            ..Default::default()
+        };
+        let mut original = Request::import("naming_smiles", text);
+        original.drawing_options = Some(options);
+        let mut direct = Request::import_prepared(prepared);
+        direct.drawing_options = Some(options);
+        // Prepared import must never read the text exchange field.
+        direct.text = Some("This is not SMILES".into());
+        let expected = engine.request(original).await.map_err(anyhow::Error::msg)?;
+        let actual = engine.request(direct).await.map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            serde_json::to_value(actual)?,
+            serde_json::to_value(expected)?,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn analysis_preserves_display_formula_and_element_mass_percent() {
     let engine = LocalEngine::in_process();
     for (smiles, formula, display) in [

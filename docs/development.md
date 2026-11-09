@@ -75,6 +75,12 @@ After upstream CI is green at the selected revision, change all four `rev` value
 cargo update -p nazuchem-ir -p nazuchem-kernel -p nazuchem-n2s -p nazuchem-s2n
 ```
 
+As part of each pin bump, review `crates/model/src/molecule_names/ir.rs`, adapted
+from nazuchem-s2n's `src/ir_input.rs` at the pinned revision. Changes to upstream
+IR preparation semantics require a manual re-sync of this adapter. The worker
+snapshot deliberately rejects IR versions other than 1; review its version guard
+when changing the IR contract.
+
 Then replay the [worker response snapshot](structure-to-name-harness.md#worker-response-snapshot). It calls the worker's request handler in-process, so it checks the engines' output byte-for-byte without the helper processes:
 
 ```sh

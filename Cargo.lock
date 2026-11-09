@@ -4104,6 +4104,7 @@ dependencies = [
  "i_overlay",
  "iced_core",
  "image",
+ "nazuchem-ir",
  "nazuchem-kernel",
  "nazuchem-n2s",
  "png 0.17.16",

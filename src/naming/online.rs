@@ -190,6 +190,7 @@ fn parse_record(name: &str, cid: u64, bytes: &[u8]) -> Result<Record, Error> {
         .map_err(|_| invalid())?
         .map(str::to_owned);
     Ok(Record {
+        prepared: None,
         title: name.into(),
         systematic_name,
         name_status: None,

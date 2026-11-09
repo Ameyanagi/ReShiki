@@ -116,7 +116,11 @@ fn assert_shapes(text: &str) {
         ("neutral-parent verification", r#"\"verification\":{"#),
         ("unknown stereo units", r#"\"omitted_stereo\":[\""#),
         ("alternative names", r#"\"alternatives\":[{"#),
-        ("atropisomer axes", r#"\"axes\":[{"#),
+        (
+            "IR molecular structures",
+            r#"\"molecule\":{\"nazuchem_ir\":1"#,
+        ),
+        ("atropisomer axes", r#"\"kind\":\"atropisomer\""#),
     ] {
         assert!(text.contains(needle), "worker snapshot lacks {shape}");
     }
