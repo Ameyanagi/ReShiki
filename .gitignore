@@ -1,6 +1,7 @@
 /target/
 /.venv/
 /crates/python/.venv/
+/crates/python/wheel-licenses/
 __pycache__/
 *.pyc
 .DS_Store

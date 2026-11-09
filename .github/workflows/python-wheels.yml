@@ -3,7 +3,18 @@ name: Python wheels
 # requests that touch the package run it as a dry run without publishing.
 on:
   pull_request:
-    paths: ["crates/python/**", ".github/workflows/python-wheels.yml"]
+    paths:
+      - "crates/python/**"
+      - "crates/**/Cargo.toml"
+      - "native/**/Cargo.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "LICENSE*"
+      - "NOTICE"
+      - "licenses/**"
+      - "scripts/license_notices.py"
+      - "scripts/check_python_wheel_notices.py"
+      - ".github/workflows/python-wheels.yml"
   workflow_call:
 permissions:
   contents: read
@@ -112,6 +123,9 @@ jobs:
           version: "0.13.5"
           python-version: ${{ matrix.python || '3.12.15' }}
           enable-cache: false
+      - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }} && rustup default 1.99.1
+      - name: Generate wheel license notices
+        run: uv run --no-project --python 3.12.15 python scripts/license_notices.py --manifest-path crates/python/Cargo.toml --features pyo3/extension-module --target ${{ matrix.target }} --destination crates/python/wheel-licenses
       # Builds in the manylinux2014 container.
       - name: Build the manylinux wheel
         if: runner.os == 'Linux'
@@ -122,8 +136,6 @@ jobs:
           manylinux: auto
           target: ${{ matrix.target }}
           args: --release --locked --manifest-path crates/python/Cargo.toml --out dist
-      - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }} && rustup default 1.99.1
-        if: runner.os != 'Linux'
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc
@@ -133,6 +145,8 @@ jobs:
       - name: Build the wheel
         if: runner.os != 'Linux'
         run: uvx maturin@1.15.0 build --release --locked --manifest-path crates/python/Cargo.toml --target ${{ matrix.target }} --interpreter python --out dist
+      - name: Check wheel license notices
+        run: uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py "dist/*.whl"
       - name: Test the built wheel
         if: matrix.test
         shell: bash
