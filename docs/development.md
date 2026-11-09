@@ -40,11 +40,11 @@ cargo test --locked -p reshiki-io
 cargo test --locked -p reshiki-agent
 cargo test --locked -p reshiki-mcp
 cargo test --locked -p reshiki-metafile
-cargo test --locked -p opsin
+cargo test --locked -p nazuchem-n2s
 cargo test --locked -p reshiki --test theme_reference
 ```
 
-A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. `reshiki-metafile` and `opsin` are not default members, so plain `cargo test` skips their tests. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
+A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. `reshiki-metafile` and `nazuchem-n2s` are not default members, so plain `cargo test` skips their tests. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
 
 Naming integration tests start the built application in its `--naming-worker` mode. Build it first and point `RESHIKI_NAMING_HELPER` at it with an absolute path; if you set `CARGO_TARGET_DIR`, use the binary there. Without the variable, the tests fail with "Naming integration tests require RESHIKI_NAMING_HELPER…". Rebuild the binary after you change naming or worker code, because the tests run it as built.
 

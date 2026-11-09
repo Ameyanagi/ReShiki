@@ -15,4 +15,4 @@ serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [dev-dependencies]
-opsin = { path = "../opsin" }
+nazuchem-n2s = { path = "../nazuchem-n2s" }

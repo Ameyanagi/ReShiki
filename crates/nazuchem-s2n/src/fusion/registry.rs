@@ -1785,7 +1785,7 @@ mod tests {
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn table_28_pin_names_templates_and_whole_system_components() {
         let registry = fusion_component_registry();
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         let mut checked = 0;
         let mut templates = 0;
         let mut components = 0;
@@ -1808,10 +1808,10 @@ mod tests {
                     row.pin_name
                 );
             }
-            let parsed = parser.parse(row.pin_name, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(row.pin_name, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{}: {}",
                 row.pin_name,
                 parsed.message
@@ -2500,7 +2500,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_tricycles_compete_as_parent_components() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             ("c1ccc2nc3ccccc3cc2c1", "acridine"),
             ("c1ccc2c(c1)cnc1ccccc12", "phenanthridine"),
@@ -2528,8 +2528,13 @@ mod tests {
             let name = super::super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
-            assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
+            assert_eq!(
+                parsed.status,
+                nazuchem_n2s::Status::Success,
+                "{}",
+                parsed.message
+            );
             assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
             let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
             crate::test_support::verify_identity(smiles, &reconstructed).unwrap();
@@ -2545,7 +2550,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_bicycles_compete_as_parent_components() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             (
                 "Cc1c2ccccc2nc2cc3ccccc3n12",
@@ -2573,10 +2578,10 @@ mod tests {
         ] {
             let name = super::super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{}: {}",
                 name.text,
                 parsed.message
@@ -2643,16 +2648,16 @@ mod tests {
                 < component_spec_seniority_key(&registry.get("pyrazine").unwrap().spec)
         );
 
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             ("c1oc2cc3nc4ccccc4nc3cc2c1", "furo[2,3-b]phenazine"),
             ("c1sc2cc3nc4ccccc4nc3cc2c1", "thieno[2,3-b]phenazine"),
         ] {
             // Parse the specified fusion name independently of name generation.
-            let reference = parser.parse(expected, &opsin::ParseOptions::strict());
+            let reference = parser.parse(expected, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 reference.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{expected}: {}",
                 reference.message
             );
@@ -2670,10 +2675,10 @@ mod tests {
                     .iter()
                     .map(|alternative| alternative.name.as_str()),
             ) {
-                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                let parsed = parser.parse(candidate, &nazuchem_n2s::ParseOptions::strict());
                 assert_eq!(
                     parsed.status,
-                    opsin::Status::Success,
+                    nazuchem_n2s::Status::Success,
                     "{candidate}: {}",
                     parsed.message
                 );

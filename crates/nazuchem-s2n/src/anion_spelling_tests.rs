@@ -22,7 +22,7 @@ fn name(smiles: &str) -> Result<super::Name, String> {
 // Provenance: fn assert_name_and_round_trip | original
 // Source: ReShiki | src/naming/openclatura/anion_spelling_tests.rs::assert_name_and_round_trip
 fn assert_name_and_round_trip(
-    parser: &opsin::Parser,
+    parser: &nazuchem_n2s::Parser,
     smiles: &str,
     expected: &str,
     status: NameStatus,
@@ -33,10 +33,10 @@ fn assert_name_and_round_trip(
         (expected, status),
         "{smiles}"
     );
-    let parsed = parser.parse(&actual.text, &opsin::ParseOptions::strict());
+    let parsed = parser.parse(&actual.text, &nazuchem_n2s::ParseOptions::strict());
     assert_eq!(
         parsed.status,
-        opsin::Status::Success,
+        nazuchem_n2s::Status::Success,
         "{smiles}: {}: {}",
         actual.text,
         parsed.message
@@ -172,7 +172,7 @@ fn anion_spelling_matrix() {
 fn zwitterion_suffix_order_preserves_numbering_status_and_identity() {
     // P-74.1.1: cite cations first while anionic centres retain low locants
     // and the neutral parent's indicated hydrogen remains explicit.
-    let parser = opsin::Parser::new().unwrap();
+    let parser = nazuchem_n2s::Parser::new().unwrap();
     for (smiles, expected, status) in [
         (
             "[N-]1C[NH2+]CC1",
@@ -306,7 +306,7 @@ fn zwitterion_suffix_order_preserves_numbering_status_and_identity() {
 fn anion_spelling_supports_charge_citations_on_chains_and_rings() {
     // The low-locant and neutral-suffix rules admit these former row-32
     // refusals without changing their molecular identity.
-    let parser = opsin::Parser::new().unwrap();
+    let parser = nazuchem_n2s::Parser::new().unwrap();
     for (smiles, expected) in [
         ("[cH-]1cccc1", "cyclopenta-2,4-dien-1-ide"),
         ("O=C1CCC[CH-]1", "2-oxocyclopentan-1-ide"),
@@ -332,7 +332,7 @@ fn retained_anion_parents_compose_supported_charge_sites() {
     ] {
         assert!(name(smiles).is_err(), "{smiles}");
     }
-    let parser = opsin::Parser::new().unwrap();
+    let parser = nazuchem_n2s::Parser::new().unwrap();
     for (smiles, expected, status) in [
         (
             "[c-]1ccccc1C",

@@ -160,7 +160,7 @@ pub async fn from_name(name: &str) -> Result<(Vec<u8>, String), String> {
         return Err("Enter a chemical name first".into());
     }
     let policy = reshiki_process_heap::policy::Capabilities::detect().resolve();
-    let budget = opsin::Budget::new(
+    let budget = nazuchem_n2s::Budget::new(
         policy.heap_bytes(),
         policy.work_units(),
         Some(policy.analysis_timeout()),
@@ -171,8 +171,8 @@ pub async fn from_name(name: &str) -> Result<(Vec<u8>, String), String> {
                 .map(|guard| Box::new(guard) as Box<dyn Send + Sync>)
         },
     );
-    let parser = opsin::Parser::with_budget(budget).map_err(|error| error.to_string())?;
-    let result = parser.parse(name, &opsin::ParseOptions::strict());
+    let parser = nazuchem_n2s::Parser::with_budget(budget).map_err(|error| error.to_string())?;
+    let result = parser.parse(name, &nazuchem_n2s::ParseOptions::strict());
     let structure = result.structure.ok_or_else(|| {
         if result.message.is_empty() {
             format!("Could not interpret chemical name {name:?}")

@@ -1,5 +1,5 @@
 # Provenance for the files that will form the nazuchem library.
-# Phase A step 4 moves openclatura source/data into nazuchem-s2n.
+# Phase A step 5 renames opsin to nazuchem-n2s and adds the string-API facade.
 # Historical source paths and unresolved source/licensing decisions remain unchanged.
 # Source audit: 2026-11-09; owner decisions and source-pin gaps remain explicit below.
 # NOASSERTION is not a licence grant. Test-only fixtures are excluded from packages.
@@ -1188,17 +1188,17 @@ notes = "Generated native comparison-sort/heap fingerprints for MSVC STL 143, co
 sha256 = "6979a268cb6ff5913acff5e5c96b4055f76af86c9416a232f3c85712b9eb1aa2"
 
 [[file]]
-path = "crates/opsin/Cargo.toml"
+path = "crates/nazuchem-n2s/Cargo.toml"
 origin = "original"
 license = "MIT"
 sources = [
   { project = "ReShiki", ref = "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9", path = "crates/opsin/Cargo.toml", license = "MIT" },
 ]
 notes = "Original Rust crate package/dependency metadata. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
-sha256 = "12cbe9ba7752612257fe6b672a7041b711d1b3da23fe17cf8c1fdc3bf4ac1772"
+sha256 = "ac515ca1def71633dbfee8a56202089041a6eb12e96ead7dda121a818bfbcc4c"
 
 [[file]]
-path = "crates/opsin/LICENSE"
+path = "crates/nazuchem-n2s/LICENSE"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1208,7 +1208,7 @@ notes = "Complete MIT text with Copyright 2017 Daniel Lowe; byte-identical to pi
 sha256 = "aeeafe2053175a5b34cb2ded4410581ccd36b82c734315be1a7a81c6f9fb4834"
 
 [[file]]
-path = "crates/opsin/NOTICE"
+path = "crates/nazuchem-n2s/NOTICE"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1218,27 +1218,27 @@ notes = "Project-authored attribution and packaging notice for the incorporated 
 sha256 = "371633076e5aaabf178dfc2ed38fb4c652b2bacee4a0d20c903ad894e3de634a"
 
 [[file]]
-path = "crates/opsin/PORTING.md"
+path = "crates/nazuchem-n2s/PORTING.md"
 origin = "original"
 license = "MIT"
 sources = [
   { project = "ReShiki", ref = "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9", path = "crates/opsin/PORTING.md", license = "MIT" },
 ]
 notes = "Project-authored OPSIN source/module mapping, acceptance narrative and upstream commit classification. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
-sha256 = "89ced21bbb72d71a7739f38721fba4ed9df4dadd04cf7d4fcc76e24926a6aa14"
+sha256 = "59640bf6fb327dd4d1b4b93cdf1d839978494887d900b42b2986ff72bb15587d"
 
 [[file]]
-path = "crates/opsin/README.md"
+path = "crates/nazuchem-n2s/README.md"
 origin = "original"
 license = "MIT"
 sources = [
   { project = "ReShiki", ref = "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9", path = "crates/opsin/README.md", license = "MIT" },
 ]
 notes = "Project-authored usage and provenance documentation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
-sha256 = "57317d19273af165e0827fbf845bcb888ffdf18e8ae70168757ae6151c78c5f9"
+sha256 = "b359d2dfa47aa307c8da67b4e677845e9327ffb03d7756958418fcf868477a25"
 
 [[file]]
-path = "crates/opsin/provenance/ExportComponents.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportComponents.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1251,7 +1251,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "8012e1f6090e0d3f594457f5d248193844dbc225d92437a3371c23af1169aae2"
 
 [[file]]
-path = "crates/opsin/provenance/ExportConfigurations.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportConfigurations.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1263,7 +1263,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "b31ed6bdd52b117ea201b549da4e299a804878bd2778fd4383e1387a855d923b"
 
 [[file]]
-path = "crates/opsin/provenance/ExportDfa.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportDfa.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1275,7 +1275,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "5d1300d141d9f980d1e232f017e6ffe9d730c0c807833b279ff0a9187de73316"
 
 [[file]]
-path = "crates/opsin/provenance/ExportFrontend.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportFrontend.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1290,7 +1290,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "b9ace31c466c52e97f3cb2eea0d3492dd17a9ea10f4c733155ab8dc4383bdf6d"
 
 [[file]]
-path = "crates/opsin/provenance/ExportFusedBuilding.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportFusedBuilding.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1302,7 +1302,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "07a21e1ead74783b56530a476eae8886dc322317de4c80f304a8e6756580c647"
 
 [[file]]
-path = "crates/opsin/provenance/ExportFusedNumbering.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportFusedNumbering.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1314,7 +1314,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "d3d44dc0dcab023f4dffaaec34f02a2eef0dda443cf94d868cbe58c95dc3dc9e"
 
 [[file]]
-path = "crates/opsin/provenance/ExportGraphResources.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportGraphResources.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1326,7 +1326,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "0a16a73239c709b0e1e61b38ec287ee5981f010c2d23a3dce04460cf472e8d1e"
 
 [[file]]
-path = "crates/opsin/provenance/ExportParseTrees.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportParseTrees.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1338,7 +1338,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "50415280c70873cb095abcdb2dfc001f48101d7ce5bcdea2ab92740587987043"
 
 [[file]]
-path = "crates/opsin/provenance/ExportStructures.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportStructures.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1349,7 +1349,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "b24d380b0d2089e896d1af241821071cb41838e566467482258499742203764d"
 
 [[file]]
-path = "crates/opsin/provenance/ExportSuffixRules.java.txt"
+path = "crates/nazuchem-n2s/provenance/ExportSuffixRules.java.txt"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1360,7 +1360,7 @@ notes = "Original development-only Java exporter wrapper introduced in the proje
 sha256 = "825a7a1caaaebe070c483932e481a3ac937f353712178f433b2430aa6330e3d5"
 
 [[file]]
-path = "crates/opsin/provenance/README.md"
+path = "crates/nazuchem-n2s/provenance/README.md"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1370,17 +1370,17 @@ notes = "Project-authored usage and provenance documentation. Original classific
 sha256 = "b8a59e0363d3e486ee72a4070b13024a6da3820a3d4987af2736e677df8703ae"
 
 [[file]]
-path = "crates/opsin/provenance/manifest.json"
+path = "crates/nazuchem-n2s/provenance/manifest.json"
 origin = "original"
 license = "MIT"
 sources = [
   { project = "ReShiki", ref = "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9", path = "crates/opsin/provenance/manifest.json", license = "MIT" },
 ]
 notes = "Project-authored provenance metadata with source pins, hashes, oracle lineage and native grammar extension records. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
-sha256 = "de4411c6800146699b5e3f94c94acd0f916ac97939fc7353aff793cbf3d5c066"
+sha256 = "1d600b9e90c8bf96d1c3484bdf6a5ecdf2dc58dc916c564c505fe52ecf419f03"
 
 [[file]]
-path = "crates/opsin/resources/automata.bin"
+path = "crates/nazuchem-n2s/resources/automata.bin"
 origin = "data"
 license = "MIT"
 sources = [
@@ -1395,7 +1395,7 @@ notes = "Generated OPSINDFA v2 table for the pinned OPSIN grammar, including two
 sha256 = "47d46837e25862c4ac175ef5d51be26faf8f66e7ce19028a8b084d8768fdfdd6"
 
 [[file]]
-path = "crates/opsin/resources/xml/alkanes.xml"
+path = "crates/nazuchem-n2s/resources/xml/alkanes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1405,7 +1405,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "2b047195ac805959da5410d3b96f896abb98ec51e502714f8cb6dbed08241fb8"
 
 [[file]]
-path = "crates/opsin/resources/xml/aminoAcids.xml"
+path = "crates/nazuchem-n2s/resources/xml/aminoAcids.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1415,7 +1415,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "2829fc6ba1562f090f38c2f89488255fc6d0a709251a502005759121462880fd"
 
 [[file]]
-path = "crates/opsin/resources/xml/arylGroups.xml"
+path = "crates/nazuchem-n2s/resources/xml/arylGroups.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1425,7 +1425,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "16b7b7c03673499fcfd6ee0bee17c7bd1583224cebf2fd9e409e6610e840a7e8"
 
 [[file]]
-path = "crates/opsin/resources/xml/arylSubstituents.xml"
+path = "crates/nazuchem-n2s/resources/xml/arylSubstituents.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1435,7 +1435,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "a6c26a40a518e770d5bd443d6f705c9d98bf78c302b0dacc2f7a94795d0e412f"
 
 [[file]]
-path = "crates/opsin/resources/xml/atomHydrides.xml"
+path = "crates/nazuchem-n2s/resources/xml/atomHydrides.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1445,7 +1445,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "84113f4d42b556f46b06b5aa9b24a722f40fb3298d4b2b5c8aca19fc8bb148c0"
 
 [[file]]
-path = "crates/opsin/resources/xml/carbohydrateSuffixes.xml"
+path = "crates/nazuchem-n2s/resources/xml/carbohydrateSuffixes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1455,7 +1455,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "8f6a0d37c0b2cc608a416fd6557937c6538326eaa9263c8eb2285093769c3df5"
 
 [[file]]
-path = "crates/opsin/resources/xml/carbohydrates.xml"
+path = "crates/nazuchem-n2s/resources/xml/carbohydrates.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1465,7 +1465,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "7d015e7f3480f4f84612251bb5a6f0734253cf7ed4d383983f97637ac897d86d"
 
 [[file]]
-path = "crates/opsin/resources/xml/carboxylicAcids.xml"
+path = "crates/nazuchem-n2s/resources/xml/carboxylicAcids.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1475,7 +1475,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "b66b6479ad98c75cbc4875e3c09cdb5a3bdce1ddd87977dbfd95fd9d9840b24f"
 
 [[file]]
-path = "crates/opsin/resources/xml/chargeAndOxidationNumberSpecifiers.xml"
+path = "crates/nazuchem-n2s/resources/xml/chargeAndOxidationNumberSpecifiers.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1485,7 +1485,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "e49d54a32e4aa889285b6ef2167c2dde1ab6936f50b6f0896e6b045ab1e901cc"
 
 [[file]]
-path = "crates/opsin/resources/xml/cyclicUnsaturableHydrocarbon.xml"
+path = "crates/nazuchem-n2s/resources/xml/cyclicUnsaturableHydrocarbon.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1495,7 +1495,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "1cf6419d2bd7503a2b6818259ea9e6335c09d214ad6b0523da47b25e84411c25"
 
 [[file]]
-path = "crates/opsin/resources/xml/elementaryAtoms.xml"
+path = "crates/nazuchem-n2s/resources/xml/elementaryAtoms.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1505,7 +1505,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "f60303cda7b23b65b1e1e88d09bb2f02ce48298ad6b9bd567ec3c8f21180c1e0"
 
 [[file]]
-path = "crates/opsin/resources/xml/functionalTerms.xml"
+path = "crates/nazuchem-n2s/resources/xml/functionalTerms.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1515,7 +1515,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "1aff14ca9925c609780c50e82d8c6b4b555848155504972c96a5c50ab1451257"
 
 [[file]]
-path = "crates/opsin/resources/xml/fusionComponents.xml"
+path = "crates/nazuchem-n2s/resources/xml/fusionComponents.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1525,7 +1525,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "bd9b4caa09b9c60a6d087b01f6063613a8af0cab681d6cdffea005ac57509938"
 
 [[file]]
-path = "crates/opsin/resources/xml/germanTokens.xml"
+path = "crates/nazuchem-n2s/resources/xml/germanTokens.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1535,7 +1535,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "9cf7c50f974503858ff8da31772410573f7577e91530fc8e696558ad15513d62"
 
 [[file]]
-path = "crates/opsin/resources/xml/groupStemsAllowingAllSuffixes.xml"
+path = "crates/nazuchem-n2s/resources/xml/groupStemsAllowingAllSuffixes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1545,7 +1545,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "9b12769c19e6c41a542410d288e04c16caa6d95213a59a042046bb299bd3737b"
 
 [[file]]
-path = "crates/opsin/resources/xml/groupStemsAllowingInlineSuffixes.xml"
+path = "crates/nazuchem-n2s/resources/xml/groupStemsAllowingInlineSuffixes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1555,7 +1555,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "573b2dbb02ea17e90f22a8f432233507d38713f368aa5f9ee4f5cd3ee7adaac1"
 
 [[file]]
-path = "crates/opsin/resources/xml/heteroAtoms.xml"
+path = "crates/nazuchem-n2s/resources/xml/heteroAtoms.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1565,7 +1565,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "4a8fd79f07dc15a584a00b363245dc18cac47ca1e43e9d71cc93bab2eb094879"
 
 [[file]]
-path = "crates/opsin/resources/xml/hwHeteroAtoms.xml"
+path = "crates/nazuchem-n2s/resources/xml/hwHeteroAtoms.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1575,7 +1575,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "3df693433fa3ed98fef784624b9c63b6463c6ba50100611b6957b153ba857a25"
 
 [[file]]
-path = "crates/opsin/resources/xml/hwSuffixes.xml"
+path = "crates/nazuchem-n2s/resources/xml/hwSuffixes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1585,7 +1585,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "88115be0e59fc308f1441f2c34922859d605e3c9f6da206fd43acceaf665c8f8"
 
 [[file]]
-path = "crates/opsin/resources/xml/index.xml"
+path = "crates/nazuchem-n2s/resources/xml/index.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1595,7 +1595,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "4136936b17eb922c2c55f939aaf6881f5dc809da255991e37292fd720582766a"
 
 [[file]]
-path = "crates/opsin/resources/xml/infixes.xml"
+path = "crates/nazuchem-n2s/resources/xml/infixes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1605,7 +1605,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "0fcda75b010b706b09ae9f34008066c3e4072ba015edb3db8f6fe2306266c81c"
 
 [[file]]
-path = "crates/opsin/resources/xml/inlineChargeSuffixes.xml"
+path = "crates/nazuchem-n2s/resources/xml/inlineChargeSuffixes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1615,7 +1615,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "f8b604af4f329f86ac541a36b54f635b4a975c0e480ed8f030f0343d9e4eea7a"
 
 [[file]]
-path = "crates/opsin/resources/xml/inlineSuffixes.xml"
+path = "crates/nazuchem-n2s/resources/xml/inlineSuffixes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1625,7 +1625,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "9d5ce3bc345dd15ed6a8be0a6b46a22007b1801c190519164f45369eb0c37a9c"
 
 [[file]]
-path = "crates/opsin/resources/xml/miscTokens.xml"
+path = "crates/nazuchem-n2s/resources/xml/miscTokens.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1635,7 +1635,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "c46a740d8d94b45a07aa1327891183430809809ed119b86fed8e374967649709"
 
 [[file]]
-path = "crates/opsin/resources/xml/multiRadicalSubstituents.xml"
+path = "crates/nazuchem-n2s/resources/xml/multiRadicalSubstituents.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1645,7 +1645,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "dba08d1e2367d5253080bee04f9edcb964da7a4b215ecb10953be4d04524b683"
 
 [[file]]
-path = "crates/opsin/resources/xml/multipliers.xml"
+path = "crates/nazuchem-n2s/resources/xml/multipliers.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1655,7 +1655,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "c2401556d2111cf7dbd94a2e6d6ec5dc96bdee999373a892bbdd08d62e62ed12"
 
 [[file]]
-path = "crates/opsin/resources/xml/naturalProducts.xml"
+path = "crates/nazuchem-n2s/resources/xml/naturalProducts.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1665,7 +1665,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "8f1f01cff9111d391b25d9e04222dd2a90f8ac1580ada348badc6643ff6d582b"
 
 [[file]]
-path = "crates/opsin/resources/xml/nonCarboxylicAcids.xml"
+path = "crates/nazuchem-n2s/resources/xml/nonCarboxylicAcids.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1675,7 +1675,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "732921fafe01c2d19c4793d83b91f6bec6f7d05ce7cf47fa2b01a70e691be30a"
 
 [[file]]
-path = "crates/opsin/resources/xml/phanes.xml"
+path = "crates/nazuchem-n2s/resources/xml/phanes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1685,7 +1685,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "09a2c3d671b2fe77f585eb0b721ce49729fa403973b57f2d2bff0a4a8069adb4"
 
 [[file]]
-path = "crates/opsin/resources/xml/regexTokenList.dtd"
+path = "crates/nazuchem-n2s/resources/xml/regexTokenList.dtd"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1695,7 +1695,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "b4549d79af7361662fd2b01d764e15e930126502367a4004c19042a00b9c0486"
 
 [[file]]
-path = "crates/opsin/resources/xml/regexTokens.xml"
+path = "crates/nazuchem-n2s/resources/xml/regexTokens.xml"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -1706,7 +1706,7 @@ notes = "OPSIN regex token grammar with two original native edits: optional axia
 sha256 = "4d7d5e9a2c27a8d72dec1efca8d892daef4e4c3063c6acc111cfd1e1015e3806"
 
 [[file]]
-path = "crates/opsin/resources/xml/regexes.dtd"
+path = "crates/nazuchem-n2s/resources/xml/regexes.dtd"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1716,7 +1716,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "ca576a00c60ba99c54954294999528c73ef8c190b6f64c8fa03e983be9c3d02e"
 
 [[file]]
-path = "crates/opsin/resources/xml/regexes.xml"
+path = "crates/nazuchem-n2s/resources/xml/regexes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1726,7 +1726,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "9db20e76b9b8ab4bd0ca876ca3baa4ba11ca859c5956609333001a9fa8737a23"
 
 [[file]]
-path = "crates/opsin/resources/xml/simpleCyclicGroups.xml"
+path = "crates/nazuchem-n2s/resources/xml/simpleCyclicGroups.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1736,7 +1736,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "9d2529668f7c1e59ba3d0b2ac276b4b9f11f31467f26295362729aec608e586d"
 
 [[file]]
-path = "crates/opsin/resources/xml/simpleGroups.xml"
+path = "crates/nazuchem-n2s/resources/xml/simpleGroups.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1746,7 +1746,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "1c776c51de9fe2e2114042e1ee4fc7afe8906b685346d88c2a94c33fd106bd61"
 
 [[file]]
-path = "crates/opsin/resources/xml/simpleSubstituents.xml"
+path = "crates/nazuchem-n2s/resources/xml/simpleSubstituents.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1756,7 +1756,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "41348a77f2135ad2047f836b52ca2c5db983bcb26c44e04e1694818d24066876"
 
 [[file]]
-path = "crates/opsin/resources/xml/substituents.xml"
+path = "crates/nazuchem-n2s/resources/xml/substituents.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1766,7 +1766,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "41a7f584e7d532dd21526bacd4078d34f8b8ec2df6b833b6f5347b63e3164a35"
 
 [[file]]
-path = "crates/opsin/resources/xml/suffixApplicability.dtd"
+path = "crates/nazuchem-n2s/resources/xml/suffixApplicability.dtd"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1776,7 +1776,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "50e57c6484ac2ec522cb6ca30e33d25288a74a036ad03432a40db1bb59787c16"
 
 [[file]]
-path = "crates/opsin/resources/xml/suffixApplicability.xml"
+path = "crates/nazuchem-n2s/resources/xml/suffixApplicability.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1786,7 +1786,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "86d39f1a16a695a35568bd2778576e0c3b8ac7e2612fcb718beeb785b19bb315"
 
 [[file]]
-path = "crates/opsin/resources/xml/suffixPrefix.xml"
+path = "crates/nazuchem-n2s/resources/xml/suffixPrefix.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1796,7 +1796,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "5428dbc34ce8e458f81e36ccf456023284bcf8b822d2ada7de5b41e248a7d1c5"
 
 [[file]]
-path = "crates/opsin/resources/xml/suffixRules.dtd"
+path = "crates/nazuchem-n2s/resources/xml/suffixRules.dtd"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1806,7 +1806,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "307af66d255095c9d117493c8bddf5e2b9dcc4741e998e7dd7fdcb38304d4daf"
 
 [[file]]
-path = "crates/opsin/resources/xml/suffixRules.xml"
+path = "crates/nazuchem-n2s/resources/xml/suffixRules.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1816,7 +1816,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "57e1aff341ad43911536a00283651ec468a70b1b09eadb9ab6d6f359f3a7ca21"
 
 [[file]]
-path = "crates/opsin/resources/xml/suffixes.xml"
+path = "crates/nazuchem-n2s/resources/xml/suffixes.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1826,7 +1826,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "6a76924255cceee29e99917d5808c4ae904d071243cf367d387f977992634b08"
 
 [[file]]
-path = "crates/opsin/resources/xml/tokenFiles.dtd"
+path = "crates/nazuchem-n2s/resources/xml/tokenFiles.dtd"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1836,7 +1836,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "3acb49df364b02a65ea20aef8d33758b047fa1426289be3811386a7450e57355"
 
 [[file]]
-path = "crates/opsin/resources/xml/tokenLists.dtd"
+path = "crates/nazuchem-n2s/resources/xml/tokenLists.dtd"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1846,7 +1846,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "35ab7b9c52960ea27aa715dd73f1fadb5fc5c5e9081f8fdd9dd8967fdad96100"
 
 [[file]]
-path = "crates/opsin/resources/xml/unsaturators.xml"
+path = "crates/nazuchem-n2s/resources/xml/unsaturators.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1856,7 +1856,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "d528b967c52d64a434563dc237d0a28e0784d1916784772381fe545c9bdf6bc1"
 
 [[file]]
-path = "crates/opsin/resources/xml/wordRules.dtd"
+path = "crates/nazuchem-n2s/resources/xml/wordRules.dtd"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1866,7 +1866,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "cb4591fa73c808f8bb79ff3edf6c31770d45d39d34ab762b601077d3d9f39312"
 
 [[file]]
-path = "crates/opsin/resources/xml/wordRules.xml"
+path = "crates/nazuchem-n2s/resources/xml/wordRules.xml"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -1876,7 +1876,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "8ee7cacb1cbe77cc6a1e0fd07b54c199fa1736a1eaaa621fb1bfe563c9600331"
 
 [[file]]
-path = "crates/opsin/src/ambiguity.rs"
+path = "crates/nazuchem-n2s/src/ambiguity.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -1886,7 +1886,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/api.rs"
+path = "crates/nazuchem-n2s/src/api.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -1900,7 +1900,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Rust configuration/status/warning/result representations mirror upstream types; standard Rust Display/Error wrappers are original scaffolding."
 
 [[file]]
-path = "crates/opsin/src/automaton.rs"
+path = "crates/nazuchem-n2s/src/automaton.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -1912,7 +1912,7 @@ sources = [
 notes = "Native table decoder and longest-prefix interpreter for the project-specific OPSINDFA format; row, word, live_transitions, step, is_accept, run, load and Reader methods. This replaces runtime dk.brics deserialization. OPSIN supplies grammar/table semantics; no dk.brics library source is present in the pinned upstream tree or this scope, so this audit makes no clean-room claim for the interpreter. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here. Unresolved: Header names dk.brics automata but does not declare whether implementation is original or adapted. No identified copied dk.brics code; independent originality of standard DFA stepping cannot be proved from these repository records."
 
 [[file]]
-path = "crates/opsin/src/build_results.rs"
+path = "crates/nazuchem-n2s/src/build_results.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -1922,7 +1922,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/build_state.rs"
+path = "crates/nazuchem-n2s/src/build_state.rs"
 origin = "mixed"
 license = "MIT"
 sources = [
@@ -1942,7 +1942,7 @@ parts = [
 ]
 
 [[file]]
-path = "crates/opsin/src/cas.rs"
+path = "crates/nazuchem-n2s/src/cas.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -1952,7 +1952,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/cip.rs"
+path = "crates/nazuchem-n2s/src/cip.rs"
 origin = "mixed"
 license = "MIT"
 sources = [
@@ -1976,7 +1976,7 @@ parts = [
 ]
 
 [[file]]
-path = "crates/opsin/src/component_generator.rs"
+path = "crates/nazuchem-n2s/src/component_generator.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -1991,7 +1991,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Complete original function exceptions, where present, are identified in parts; integrated native branch/field changes are documented in evidence. Current opening comments do not fully mark the distinction."
 
 [[file]]
-path = "crates/opsin/src/component_processor.rs"
+path = "crates/nazuchem-n2s/src/component_processor.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2001,7 +2001,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/component_processor_brackets.rs"
+path = "crates/nazuchem-n2s/src/component_processor_brackets.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2011,7 +2011,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/component_processor_carbohydrates.rs"
+path = "crates/nazuchem-n2s/src/component_processor_carbohydrates.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2022,7 +2022,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Complete original function exceptions, where present, are identified in parts; integrated native branch/field changes are documented in evidence. Current opening comments do not fully mark the distinction."
 
 [[file]]
-path = "crates/opsin/src/component_processor_rings.rs"
+path = "crates/nazuchem-n2s/src/component_processor_rings.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2032,7 +2032,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/cycle_detector.rs"
+path = "crates/nazuchem-n2s/src/cycle_detector.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2042,7 +2042,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/fragment_manager.rs"
+path = "crates/nazuchem-n2s/src/fragment_manager.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2052,7 +2052,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/fragment_tools.rs"
+path = "crates/nazuchem-n2s/src/fragment_tools.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2064,7 +2064,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/frontend.rs"
+path = "crates/nazuchem-n2s/src/frontend.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2074,7 +2074,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/functional_replacement.rs"
+path = "crates/nazuchem-n2s/src/functional_replacement.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2084,7 +2084,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/fused_ring_builder.rs"
+path = "crates/nazuchem-n2s/src/fused_ring_builder.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2094,7 +2094,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. The post-port native-axis integration only initializes the added axial_stereo field to None; it does not make the fusion algorithm original."
 
 [[file]]
-path = "crates/opsin/src/fused_ring_numberer.rs"
+path = "crates/nazuchem-n2s/src/fused_ring_numberer.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2111,7 +2111,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Complete original function exceptions, where present, are identified in parts; integrated native branch/field changes are documented in evidence. Current opening comments do not fully mark the distinction."
 
 [[file]]
-path = "crates/opsin/src/graph.rs"
+path = "crates/nazuchem-n2s/src/graph.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2137,7 +2137,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Complete original function exceptions, where present, are identified in parts; integrated native branch/field changes are documented in evidence. Current opening comments do not fully mark the distinction."
 
 [[file]]
-path = "crates/opsin/src/isotope_specification_parser.rs"
+path = "crates/nazuchem-n2s/src/isotope_specification_parser.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2147,7 +2147,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/lib.rs"
+path = "crates/nazuchem-n2s/src/lib.rs"
 origin = "mixed"
 license = "MIT"
 sources = [
@@ -2171,7 +2171,7 @@ parts = [
 ]
 
 [[file]]
-path = "crates/opsin/src/modern_cip.rs"
+path = "crates/nazuchem-n2s/src/modern_cip.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -2180,7 +2180,7 @@ sources = [
 notes = "Original adapter between the OPSIN construction graph and the separately derived kernel CIP/perception API; state, atom_labels and local regression tests. No full CIP algorithm is copied into this adapter. Its dependency code retains its own BSD provenance and must be noticed in distribution. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/src/parse_rules.rs"
+path = "crates/nazuchem-n2s/src/parse_rules.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2198,7 +2198,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/parse_tree.rs"
+path = "crates/nazuchem-n2s/src/parse_tree.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2218,7 +2218,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/phane_amplifier.rs"
+path = "crates/nazuchem-n2s/src/phane_amplifier.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2227,7 +2227,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/pipeline.rs"
+path = "crates/nazuchem-n2s/src/pipeline.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2238,7 +2238,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Complete original function exceptions, where present, are identified in parts; integrated native branch/field changes are documented in evidence. Current opening comments do not fully mark the distinction."
 
 [[file]]
-path = "crates/opsin/src/preprocess.rs"
+path = "crates/nazuchem-n2s/src/preprocess.rs"
 origin = "mixed"
 license = "MIT"
 sources = [
@@ -2265,7 +2265,7 @@ parts = [
 ]
 
 [[file]]
-path = "crates/opsin/src/preprocess_characters.rs"
+path = "crates/nazuchem-n2s/src/preprocess_characters.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2276,7 +2276,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Complete original function exceptions, where present, are identified in parts; integrated native branch/field changes are documented in evidence. Current opening comments do not fully mark the distinction."
 
 [[file]]
-path = "crates/opsin/src/resource_data.rs"
+path = "crates/nazuchem-n2s/src/resource_data.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -2333,7 +2333,7 @@ sources = [
 notes = "Original include_str! registry wrapper. The embedded resource payloads are separately audited OPSIN MIT data, rather than original Rust algorithm content. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/src/resources.rs"
+path = "crates/nazuchem-n2s/src/resources.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2347,7 +2347,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Embedded immutable resource loading replaces runtime resource search/cache construction."
 
 [[file]]
-path = "crates/opsin/src/smiles.rs"
+path = "crates/nazuchem-n2s/src/smiles.rs"
 origin = "mixed"
 license = "MIT"
 sources = [
@@ -2385,7 +2385,7 @@ parts = [
 ]
 
 [[file]]
-path = "crates/opsin/src/stereo_analyser.rs"
+path = "crates/nazuchem-n2s/src/stereo_analyser.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2395,7 +2395,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/stereochemistry_handler.rs"
+path = "crates/nazuchem-n2s/src/stereochemistry_handler.rs"
 origin = "mixed"
 license = "MIT"
 sources = [
@@ -2439,7 +2439,7 @@ parts = [
 ]
 
 [[file]]
-path = "crates/opsin/src/structure_builder.rs"
+path = "crates/nazuchem-n2s/src/structure_builder.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2450,7 +2450,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. Complete original function exceptions, where present, are identified in parts; integrated native branch/field changes are documented in evidence. Current opening comments do not fully mark the distinction."
 
 [[file]]
-path = "crates/opsin/src/structure_building_methods.rs"
+path = "crates/nazuchem-n2s/src/structure_building_methods.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2460,7 +2460,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/suffix_applier.rs"
+path = "crates/nazuchem-n2s/src/suffix_applier.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2470,7 +2470,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/suffix_rules.rs"
+path = "crates/nazuchem-n2s/src/suffix_rules.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2484,7 +2484,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/tokenizer.rs"
+path = "crates/nazuchem-n2s/src/tokenizer.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2498,7 +2498,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/tree_tools.rs"
+path = "crates/nazuchem-n2s/src/tree_tools.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2508,7 +2508,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/trie.rs"
+path = "crates/nazuchem-n2s/src/trie.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2518,7 +2518,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable. OpsinRadixTrie contract is reimplemented using sorted sparse byte children rather than upstream compressed radix nodes; PORTING.md names the upstream correspondence. Treat as adapted, not wholly original."
 
 [[file]]
-path = "crates/opsin/src/valence.rs"
+path = "crates/nazuchem-n2s/src/valence.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2530,7 +2530,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/word_rules.rs"
+path = "crates/nazuchem-n2s/src/word_rules.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2540,7 +2540,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/word_rules_omitted_space.rs"
+path = "crates/nazuchem-n2s/src/word_rules_omitted_space.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2550,7 +2550,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/src/xml_declarations.rs"
+path = "crates/nazuchem-n2s/src/xml_declarations.rs"
 origin = "port"
 license = "MIT"
 sources = [
@@ -2560,7 +2560,7 @@ sources = [
 notes = "OPSIN algorithm/model port with Rust ownership, arena/container and error-handling adaptation. Source class mapping is verified against pinned git objects; baseline ancestry is retained where applicable."
 
 [[file]]
-path = "crates/opsin/tests/assembly_methods.rs"
+path = "crates/nazuchem-n2s/tests/assembly_methods.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2571,7 +2571,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/atropisomer_names.rs"
+path = "crates/nazuchem-n2s/tests/atropisomer_names.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -2580,7 +2580,7 @@ sources = [
 notes = "Native biaryl axial-descriptor regression tests introduced with the native axis implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/bicyclic_stereochemistry.rs"
+path = "crates/nazuchem-n2s/tests/bicyclic_stereochemistry.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -2589,7 +2589,7 @@ sources = [
 notes = "Native cage descriptor regression tests introduced with the endo/exo/syn/anti extension. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/carbohydrates.rs"
+path = "crates/nazuchem-n2s/tests/carbohydrates.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2600,7 +2600,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/carbohydrates_configuration.rs"
+path = "crates/nazuchem-n2s/tests/carbohydrates_configuration.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2611,7 +2611,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/chalcogen_acid_locants.rs"
+path = "crates/nazuchem-n2s/tests/chalcogen_acid_locants.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2624,7 +2624,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/chemistry_budget.rs"
+path = "crates/nazuchem-n2s/tests/chemistry_budget.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -2633,7 +2633,7 @@ sources = [
 notes = "Host-supplied budget propagation tests introduced by the kernel extraction. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/cip_ordering.rs"
+path = "crates/nazuchem-n2s/tests/cip_ordering.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2644,7 +2644,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/components_micro_syntax.rs"
+path = "crates/nazuchem-n2s/tests/components_micro_syntax.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2658,7 +2658,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/components_oracle.rs"
+path = "crates/nazuchem-n2s/tests/components_oracle.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -2669,7 +2669,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/components_pipeline.rs"
+path = "crates/nazuchem-n2s/tests/components_pipeline.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -2679,7 +2679,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/configuration_oracle.rs"
+path = "crates/nazuchem-n2s/tests/configuration_oracle.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -2691,7 +2691,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/fixtures/ambiguous.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/ambiguous.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -2701,7 +2701,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "83b06661cefd182369f6d3991c017b067e0c09b063737dd3aee558852356705e"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/chalcogenAcidLocants.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/chalcogenAcidLocants.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -2711,7 +2711,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "321a40bb91213b72bc7415cc81a305578736001ec977c507c68157f8a273ee98"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/component-golden.jsonl.gz"
+path = "crates/nazuchem-n2s/tests/fixtures/component-golden.jsonl.gz"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2753,7 +2753,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "01cab7c15510f40c1b2db347dea9f43005e911983c5109f43b3c19e8d88e1468"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/configuration-golden.jsonl.gz"
+path = "crates/nazuchem-n2s/tests/fixtures/configuration-golden.jsonl.gz"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2767,7 +2767,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "e04551bd126b9ac1d895340fed519ec5eab1d950146516780c111cf75728e17e"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/configuration-inputs.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/configuration-inputs.txt"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2781,7 +2781,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "1b63073e7506bab7f9d75189c7ce1f17f83844ae8c9814778c3c0dd14019252a"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/frontend-golden.jsonl"
+path = "crates/nazuchem-n2s/tests/fixtures/frontend-golden.jsonl"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2823,7 +2823,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "44ec5b2f03c0f40b80fdffd1c855abc263b252e4296238ff1b2d05d9cac495df"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/frontend-inputs.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/frontend-inputs.txt"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2865,7 +2865,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "4c94d53b907951841087d274234a3fc24fcc1552f5174af524d5af3a830c569c"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/fused-building-golden.jsonl"
+path = "crates/nazuchem-n2s/tests/fixtures/fused-building-golden.jsonl"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2879,7 +2879,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "bfa5f48c45cd91ff7b06ee88b02b4e15605006952a34ee965d0fbeeb1d9bd692"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/fused-building-inputs.tsv"
+path = "crates/nazuchem-n2s/tests/fixtures/fused-building-inputs.tsv"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2893,7 +2893,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "342d280434600ee0d594e732576390f46ae09c3b80db97890303e0286ec3e2e8"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/fused-numbering-golden.jsonl"
+path = "crates/nazuchem-n2s/tests/fixtures/fused-numbering-golden.jsonl"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2907,7 +2907,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "0c36636cc8a970b504bee2729f1c009ec1ed4e890a74ddae6b4cf7a2a187d377"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/fused-numbering-inputs.tsv"
+path = "crates/nazuchem-n2s/tests/fixtures/fused-numbering-inputs.tsv"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2921,7 +2921,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "782eefd0eb2595d1f0c7f4ed9e2a3d45bc4bbb3391da46220fe8298aafbf5abd"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/graph-resource-golden.tsv"
+path = "crates/nazuchem-n2s/tests/fixtures/graph-resource-golden.tsv"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2957,7 +2957,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "b263332fb0c6fa752eb1fc9bac683e86340161eb24ea5162ed4399a46255b4dc"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/graph-resource-inputs.tsv"
+path = "crates/nazuchem-n2s/tests/fixtures/graph-resource-inputs.tsv"
 origin = "data"
 license = "MIT"
 sources = [
@@ -2993,7 +2993,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "c40a3a22dd967d5bb83e243f0f210c92a0f928f5ddb08ef20726ec5731b0cf76"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/parse-tree-golden.jsonl.gz"
+path = "crates/nazuchem-n2s/tests/fixtures/parse-tree-golden.jsonl.gz"
 origin = "data"
 license = "MIT"
 sources = [
@@ -3035,7 +3035,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "26764501fa09d876d23806a5dd90e1bcab83f6cbdd9e683ab0922432a9dc672d"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/parse-tree-inputs.tsv"
+path = "crates/nazuchem-n2s/tests/fixtures/parse-tree-inputs.tsv"
 origin = "data"
 license = "MIT"
 sources = [
@@ -3077,7 +3077,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "494adc14bf3eeedf0eea5c68d27214516b53c86704674a147c68b6ddeb56477e"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/structure-golden.jsonl.gz"
+path = "crates/nazuchem-n2s/tests/fixtures/structure-golden.jsonl.gz"
 origin = "data"
 license = "MIT"
 sources = [
@@ -3119,7 +3119,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "b26cfb1ee1f8919ebd6034e71cde5145663fc70419704edca43aadeb9748a1fc"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/structure-inputs.tsv"
+path = "crates/nazuchem-n2s/tests/fixtures/structure-inputs.tsv"
 origin = "data"
 license = "MIT"
 sources = [
@@ -3161,7 +3161,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "efb374070cd8340616985047075cb8fb9c9bd950774cedf2291623bd8712394b"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/suffix-rule-golden.jsonl"
+path = "crates/nazuchem-n2s/tests/fixtures/suffix-rule-golden.jsonl"
 origin = "data"
 license = "MIT"
 sources = [
@@ -3175,7 +3175,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "4a467a4507da52f4bdc5b045f4f856d19a15b6f4c0f4d6c37b54be00ef0b7250"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/suffix-rule-inputs.tsv"
+path = "crates/nazuchem-n2s/tests/fixtures/suffix-rule-inputs.tsv"
 origin = "data"
 license = "MIT"
 sources = [
@@ -3189,7 +3189,7 @@ notes = "Generated or assembled development fixture. MIT is the current package 
 sha256 = "57a327a8c8c39991a5b8b9e2498956757cc44a6793d8f9a984c983855270d027"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/unambiguous.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/unambiguous.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3199,7 +3199,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "a1667bf5d7a7f23bd69045ab44763fac4df2dbd0c350348f496f964dff9a6406"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/uninterpretable.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/uninterpretable.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3209,7 +3209,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "1d874031d858dfd7455e0a437013bc99324bef2890dd84acff97b015d277cbf7"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/acetals.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/acetals.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3219,7 +3219,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "2afa9f593bca9b7ee296c9ff774b914e217615b9a79ae1fd7744d3b1349cf321"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/additiveNomenclature.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/additiveNomenclature.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3229,7 +3229,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "063f852008dc6b1f2f82f14dff9ca3a40caa96e22d39a0b0d72dbfe03c65d9d1"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/alcoholEsters.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/alcoholEsters.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3239,7 +3239,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "ba90f011105583a18ba421238f059bc65fcb63a4dde0b3faf7e24c38a8a1128c"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/aminoAcids.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/aminoAcids.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3249,7 +3249,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "857b5cb4907288bf955dbcfeb8fe11e17a8a8783582dff82a526992e60ce1388"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/carbohydrates.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/carbohydrates.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3259,7 +3259,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "e01db12235cc7e811d1e9ed033a782654ddc143110658a612ffb798837e2fc3e"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/chargeBalancing.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/chargeBalancing.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3269,7 +3269,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "8fc5177b4df2808e82cf083dd94457d339f7441b5019b55656dda4fb3466c36b"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/conjunctiveNomenclature.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/conjunctiveNomenclature.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3279,7 +3279,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "b9ec1303f490b1628e3fcbd7618830dd5870375df8c26d4f87f6085686eabe28"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/cyclicSuffixes.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/cyclicSuffixes.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3289,7 +3289,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "5d6e785f0e3b81153f8d135efc0e3f66a9b4b55dc12dd3cc5d7d855f68de1d8f"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/detachablePrefixes.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/detachablePrefixes.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3299,7 +3299,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "e1b2b5c48b9620b07bc376cc8c1b3fe7aed00ee3e394447b3f7158332ea28081"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/epoxyLike.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/epoxyLike.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3309,7 +3309,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "503109bd95cc1ff867e3c3d94ab56a274438a891c79f2f99922c875c82df9a6a"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/flavonoids.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/flavonoids.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3319,7 +3319,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "ed50ecd1c40a21d676b20edaf1d4facbc779e3eeb72032716e66604e7141c0b2"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/functionalClasses.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/functionalClasses.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3329,7 +3329,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "67643550f2fe37a9824ea342b4c208aa609924dd5ce188abd71cbe7ad9ed0ef3"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/functionalReplacement.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/functionalReplacement.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3339,7 +3339,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "aee90228a94d3d4ee026f9e4e72ea3f41e3a08a6f5628e4d57b55ee455c3e82f"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/fusedRings.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/fusedRings.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3349,7 +3349,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "3bf295f6eeaf9a2a638354c5290315f44bcd97ec913161adec9c47088b23ca7a"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/greekLactones.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/greekLactones.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3359,7 +3359,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "2b54ebb8354d21f36c5bba0d95993b9a24bd441cc41c20ee963a5529c81f20fb"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/hwRings.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/hwRings.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3369,7 +3369,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "e4e7f7b71431dbb61bbfb1455ad21193f0618136bdd88f7c2f17a9d16ab1441d"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/implicitBracketting.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/implicitBracketting.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3379,7 +3379,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "d5cfdc7e9a1c5b490129ec5c4e11eb1fdc8901d0fa49b7b0fe80aaf38f68c327"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/indirectLocants.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/indirectLocants.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3389,7 +3389,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "1ab43102a53118e82864aed441ac6ac342ae3eb0a1e298492dfa57ba4557562c"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/inorganics.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/inorganics.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3399,7 +3399,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "dff6883925bca1d942763b316748fca899ecc4d280438df3a78d9c6cdbe9be75"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/ions.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/ions.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3409,7 +3409,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "5a717d11b32bfbba9fe07d8bfddfa0c7350f9f7623d6b014738b935d34fb07f5"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/isotopes.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/isotopes.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3419,7 +3419,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "a9f6457bb826d9ab88c8418efe53163b31579cf249e9ffbb819a70dd7fee9dfc"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/lettercasing.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/lettercasing.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3429,7 +3429,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "14a5e9d8b51bd5540e11452d33892868b8a75d93d50b22be1d4846ee14221d3a"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/miscellany.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/miscellany.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3439,7 +3439,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "f4cd2a5f0510663c6d5c0567f86357a9c0b7d41d6bf5f2dce0107776c24ee97f"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/multiplicativeNomenclature.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/multiplicativeNomenclature.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3449,7 +3449,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "79add59e21fa6f7145f67af3c5d9e18ae1b6c5789912825b979355f4b2f3d4f1"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/omittedSpaces.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/omittedSpaces.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3459,7 +3459,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "c04c4414e7929aa8a90556d7a7f53b0668aaa2b359333c159b895b47e648874f"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/organometallics.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/organometallics.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3469,7 +3469,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "f57c28de4b03be274bacf705f7f817977e5f3d7a77af520903cc7527f694a2d0"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/phanes.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/phanes.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3479,7 +3479,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "d71bb8113947ae69aa97d1ccb725413a3289b9d0eaf196629c8c1d48815c39a1"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/radicals.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/radicals.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3489,7 +3489,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "d4f5b1df7816701539ff412578ee0d61eafa4e5ca14d5941c3f69967222aac11"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/spiro.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/spiro.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3499,7 +3499,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "e5bb43b2395df431fad2d25fd32926bbb90f5c13aee03c91e3c7669e562d8d1d"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/stereochemistry.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/stereochemistry.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3509,7 +3509,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "cbe76f3bbedda55cccdf8571cdfa6acfdb671c97052f94c8074b498967ee96d7"
 
 [[file]]
-path = "crates/opsin/tests/fixtures/upstream-inchi/superfluousSpaces.txt"
+path = "crates/nazuchem-n2s/tests/fixtures/upstream-inchi/superfluousSpaces.txt"
 origin = "copy"
 license = "MIT"
 sources = [
@@ -3519,7 +3519,7 @@ notes = "Byte-preserved upstream data."
 sha256 = "6bff172b51a40b9096929570f32f292a43fb25b93e3eda9aa2fd18b3dc3d00ea"
 
 [[file]]
-path = "crates/opsin/tests/fragment_manager.rs"
+path = "crates/nazuchem-n2s/tests/fragment_manager.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3530,7 +3530,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/frontend.rs"
+path = "crates/nazuchem-n2s/tests/frontend.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3541,7 +3541,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/frontend_cas.rs"
+path = "crates/nazuchem-n2s/tests/frontend_cas.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3552,7 +3552,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/frontend_omitted_space.rs"
+path = "crates/nazuchem-n2s/tests/frontend_omitted_space.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3562,7 +3562,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/frontend_oracle.rs"
+path = "crates/nazuchem-n2s/tests/frontend_oracle.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3574,7 +3574,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/fused_builder.rs"
+path = "crates/nazuchem-n2s/tests/fused_builder.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3584,7 +3584,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/fused_builder_oracle.rs"
+path = "crates/nazuchem-n2s/tests/fused_builder_oracle.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3595,7 +3595,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/fused_numbering.rs"
+path = "crates/nazuchem-n2s/tests/fused_numbering.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3609,7 +3609,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/grammar_oracle.rs"
+path = "crates/nazuchem-n2s/tests/grammar_oracle.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3623,7 +3623,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/graph_construction.rs"
+path = "crates/nazuchem-n2s/tests/graph_construction.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3635,7 +3635,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/graph_foundation.rs"
+path = "crates/nazuchem-n2s/tests/graph_foundation.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3648,7 +3648,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/graph_resource_oracle.rs"
+path = "crates/nazuchem-n2s/tests/graph_resource_oracle.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3661,7 +3661,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/graph_resources.rs"
+path = "crates/nazuchem-n2s/tests/graph_resources.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3671,7 +3671,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/graph_stereo_oracle.rs"
+path = "crates/nazuchem-n2s/tests/graph_stereo_oracle.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3684,7 +3684,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/graph_substitution_oracle.rs"
+path = "crates/nazuchem-n2s/tests/graph_substitution_oracle.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3695,7 +3695,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/graph_upstream_parser.rs"
+path = "crates/nazuchem-n2s/tests/graph_upstream_parser.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3706,7 +3706,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/graph_upstream_writer.rs"
+path = "crates/nazuchem-n2s/tests/graph_upstream_writer.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3717,7 +3717,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/name_to_structure.rs"
+path = "crates/nazuchem-n2s/tests/name_to_structure.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3728,7 +3728,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/parent_locants.rs"
+path = "crates/nazuchem-n2s/tests/parent_locants.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3737,7 +3737,7 @@ sources = [
 notes = "Principal-parent locant projection regression tests introduced with the ReShiki parent-locant feature. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/phanes.rs"
+path = "crates/nazuchem-n2s/tests/phanes.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3748,7 +3748,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/preprocessing.rs"
+path = "crates/nazuchem-n2s/tests/preprocessing.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3760,7 +3760,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/processing_brackets.rs"
+path = "crates/nazuchem-n2s/tests/processing_brackets.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3770,7 +3770,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/processing_functional_replacement.rs"
+path = "crates/nazuchem-n2s/tests/processing_functional_replacement.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3781,7 +3781,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/processing_phane_rings.rs"
+path = "crates/nazuchem-n2s/tests/processing_phane_rings.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3792,7 +3792,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/processing_pipeline.rs"
+path = "crates/nazuchem-n2s/tests/processing_pipeline.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3802,7 +3802,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/processing_rings.rs"
+path = "crates/nazuchem-n2s/tests/processing_rings.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3812,7 +3812,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/processing_rings_topology.rs"
+path = "crates/nazuchem-n2s/tests/processing_rings_topology.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3822,7 +3822,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/processing_upstream.rs"
+path = "crates/nazuchem-n2s/tests/processing_upstream.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3833,7 +3833,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/protium.rs"
+path = "crates/nazuchem-n2s/tests/protium.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3842,7 +3842,7 @@ sources = [
 notes = "Explicit-protium preservation regression tests introduced by the ReShiki naming fix. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/resource_pins.rs"
+path = "crates/nazuchem-n2s/tests/resource_pins.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3851,7 +3851,7 @@ sources = [
 notes = "Original manifest/fingerprint integrity checker introduced with deterministic grammar regeneration. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/stereochemistry_handler.rs"
+path = "crates/nazuchem-n2s/tests/stereochemistry_handler.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3862,7 +3862,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/stereoisomer_sets.rs"
+path = "crates/nazuchem-n2s/tests/stereoisomer_sets.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3871,7 +3871,7 @@ sources = [
 notes = "Original enhanced-stereo stereoisomer-set comparison regressions. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/structure_oracle.rs"
+path = "crates/nazuchem-n2s/tests/structure_oracle.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3882,7 +3882,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/suffix_rules_oracle.rs"
+path = "crates/nazuchem-n2s/tests/suffix_rules_oracle.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3893,7 +3893,7 @@ sources = [
 notes = "Original Rust differential/coverage harness. It consumes separately recorded OPSIN-derived data and compares the port against upstream behavior; it is not a translated Java test implementation. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/suffixes.rs"
+path = "crates/nazuchem-n2s/tests/suffixes.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3903,7 +3903,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/suffixes_cycles.rs"
+path = "crates/nazuchem-n2s/tests/suffixes_cycles.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3913,7 +3913,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/suffixes_isotopes.rs"
+path = "crates/nazuchem-n2s/tests/suffixes_isotopes.rs"
 origin = "adapted"
 license = "MIT"
 sources = [
@@ -3924,7 +3924,7 @@ sources = [
 notes = "Source-derived assertions, examples, errors or inline oracle snapshots plus original Rust graph/tree construction and regression harness. Exact upstream implementation/test paths replace abbreviated header class names. New native regression cases are retained as local additions; these files must not be represented as wholly original."
 
 [[file]]
-path = "crates/opsin/tests/support/structure_snapshots.rs"
+path = "crates/nazuchem-n2s/tests/support/structure_snapshots.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3933,7 +3933,7 @@ sources = [
 notes = "Original Rust graph-to-JSON serializer and first-difference helper for the original differential harness schema. Original classification is a repository-history inference, not a clean-room certification. Current crate metadata licenses this file MIT; the plan proposes dual licensing original extraction code, which has not been applied here."
 
 [[file]]
-path = "crates/opsin/tests/unknown_stereochemistry.rs"
+path = "crates/nazuchem-n2s/tests/unknown_stereochemistry.rs"
 origin = "original"
 license = "MIT"
 sources = [
@@ -3997,7 +3997,7 @@ sources = [
   { project = "ReShiki", ref = "5f559fd482e237307a589dfcb7ea333cee0a6e13", path = "assets/haworth-sugars.json", license = "MIT OR Apache-2.0" },
 ]
 notes = "Original provenance metadata recording OPSIN/ChEBI sources, adaptations and frozen resource/reference-graph hashes."
-sha256 = "445f3b43fef84f19e6791b11dafa22f58de9b26e3ea3fc5694d1f5e6cc1121c6"
+sha256 = "f50f0c2debaa201d291d3758f07b32caccc266927a4e2663b08c05932164b377"
 
 [[file]]
 path = "crates/nazuchem-s2n/src/additive.rs"
@@ -7276,7 +7276,7 @@ sources = [
   { "project" = "Nazuchem/ReShiki", "path" = "crates/nazuchem-s2n/Cargo.toml", "ref" = "Phase A step 4 (local extraction)", "license" = "MIT OR Apache-2.0" },
 ]
 notes = "Phase A step 4 local extraction documentation and package metadata. Established terms do not resolve the retained Blue Book table; publish = false remains in force."
-sha256 = "3c60364045883dc756495dd91dc44d82c48193b23a542837c240ccc8394f4b55"
+sha256 = "ba0e8122e16a5e7aea35ff967857719e48c4e5b1ea4b7ae3c81736e75b6b490f"
 
 [[file]]
 path = "crates/nazuchem-s2n/LICENSE"
@@ -7432,3 +7432,232 @@ sources = [
   { "project" = "ReShiki", "path" = "src/naming/worker.rs", "ref" = "4460ac34c3ad6bf79358c4e4ae07103f69e5f42d", "license" = "MIT OR Apache-2.0" },
 ]
 notes = "Test-only original ReShiki strict-import and generated-name verification adapters use direct OPSIN parsing and kernel identity checks. Preserves mode-specific options while removing the application worker and document boundary. Parsing returns SMILES directly, rejects all OPSIN warnings without symbol or retained-name expansion, and shares the engine identity helpers."
+
+[[file]]
+path = "crates/nazuchem/Cargo.toml"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem/Cargo.toml", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0" },
+]
+notes = "Original Phase A step 5 facade code, documentation or metadata. Package metadata ANDs the established engine/kernel terms; unresolved sort-policy and Blue Book provenance remains NOASSERTION in dependency records, with publish = false retained."
+sha256 = "33387a1959d1351d3c14766223c5bd541272bc66f946492e0820dbe131e6ffaa"
+
+[[file]]
+path = "crates/nazuchem/LICENSE"
+origin = "copy"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "LICENSE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT OR Apache-2.0" },
+]
+notes = "Complete license or notice copied byte-for-byte from LICENSE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab"
+
+[[file]]
+path = "crates/nazuchem/LICENSE-APACHE"
+origin = "copy"
+license = "Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "LICENSE-APACHE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "Apache-2.0" },
+]
+notes = "Complete license or notice copied byte-for-byte from LICENSE-APACHE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+
+[[file]]
+path = "crates/nazuchem/LICENSE-MIT"
+origin = "copy"
+license = "MIT"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "LICENSE-MIT", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT" },
+]
+notes = "Complete license or notice copied byte-for-byte from LICENSE-MIT at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+
+[[file]]
+path = "crates/nazuchem/NOTICE"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem/NOTICE", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0" },
+]
+notes = "Original Phase A step 5 facade code, documentation or metadata. Package metadata ANDs the established engine/kernel terms; unresolved sort-policy and Blue Book provenance remains NOASSERTION in dependency records, with publish = false retained."
+sha256 = "e9444ea72f8790ff1f3ab8a556a403a0d04b718dbf704dd5a054c0e1e2b0c396"
+
+[[file]]
+path = "crates/nazuchem/README.md"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem/README.md", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0" },
+]
+notes = "Original Phase A step 5 facade code, documentation or metadata. Package metadata ANDs the established engine/kernel terms; unresolved sort-policy and Blue Book provenance remains NOASSERTION in dependency records, with publish = false retained."
+sha256 = "56d48a31b0f1dd2403148e6e4f691db47fff6a44e71b236626715a2e5008b1c8"
+
+[[file]]
+path = "crates/nazuchem/licenses/centres/LICENSE"
+origin = "copy"
+license = "BSD-2-Clause"
+sources = [
+  { project = "SiMolecule centres", path = "crates/nazuchem-kernel/licenses/centres/LICENSE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "BSD-2-Clause" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-kernel/licenses/centres/LICENSE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "16400650096867f4d1dc1b6a970536bc19689da69ba5db72ce87eb076be19562"
+
+[[file]]
+path = "crates/nazuchem/licenses/centres/NOTICE"
+origin = "copy"
+license = "BSD-2-Clause"
+sources = [
+  { project = "SiMolecule centres", path = "crates/nazuchem-kernel/licenses/centres/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "BSD-2-Clause" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-kernel/licenses/centres/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "cba7ecd76e77ea0c44ddf3ac404fca326f95ac4eb39a70b77fe8c17840e5c00d"
+
+[[file]]
+path = "crates/nazuchem/licenses/cpython/LICENSE"
+origin = "copy"
+license = "Python-2.0"
+sources = [
+  { project = "CPython", path = "crates/nazuchem-s2n/licenses/cpython/LICENSE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "Python-2.0" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-s2n/licenses/cpython/LICENSE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+
+[[file]]
+path = "crates/nazuchem/licenses/cpython/NOTICE"
+origin = "copy"
+license = "Python-2.0"
+sources = [
+  { project = "CPython", path = "crates/nazuchem-s2n/licenses/cpython/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "Python-2.0" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-s2n/licenses/cpython/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "aacc8aa61d679ab70d08a0b9b0ba658013f574c9e7c1442b17b843f7ac2a21ad"
+
+[[file]]
+path = "crates/nazuchem/licenses/nazuchem-ir/NOTICE"
+origin = "copy"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-ir/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT OR Apache-2.0" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-ir/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "a227c8e269721fb9c010d4ec287bddab4769c8251885b0e4b8baf5533e49e270"
+
+[[file]]
+path = "crates/nazuchem/licenses/nazuchem-kernel/NOTICE"
+origin = "copy"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-kernel/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT OR Apache-2.0" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-kernel/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "5e673728376b3b33598f1a544c1dcecfa4a10bfaab28a77e4189f44b0d7fbb22"
+
+[[file]]
+path = "crates/nazuchem/licenses/nazuchem-s2n/NOTICE"
+origin = "copy"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem-s2n/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT OR Apache-2.0" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-s2n/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "9173fced764b862d51871b0b8e474f30d51d9a1df52a1895df47d0a671878faa"
+
+[[file]]
+path = "crates/nazuchem/licenses/openclatura/LICENSE"
+origin = "copy"
+license = "MIT"
+sources = [
+  { project = "openclatura", path = "crates/nazuchem-s2n/licenses/openclatura/LICENSE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-s2n/licenses/openclatura/LICENSE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "ad516fd7a236924e80aedb55ad8d9c446e3e4882947b6b8bfcfdc53cb6a4e455"
+
+[[file]]
+path = "crates/nazuchem/licenses/openclatura/NOTICE"
+origin = "copy"
+license = "MIT"
+sources = [
+  { project = "openclatura", path = "crates/nazuchem-s2n/licenses/openclatura/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-s2n/licenses/openclatura/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "91e03be9047f65abf4a62dd1c0b19a32452a2b4d3378e474276659890953e8eb"
+
+[[file]]
+path = "crates/nazuchem/licenses/opsin/LICENSE"
+origin = "copy"
+license = "MIT"
+sources = [
+  { project = "OPSIN", path = "crates/opsin/LICENSE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/opsin/LICENSE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "aeeafe2053175a5b34cb2ded4410581ccd36b82c734315be1a7a81c6f9fb4834"
+
+[[file]]
+path = "crates/nazuchem/licenses/opsin/NOTICE"
+origin = "copy"
+license = "MIT"
+sources = [
+  { project = "OPSIN", path = "crates/opsin/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "MIT" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/opsin/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "371633076e5aaabf178dfc2ed38fb4c652b2bacee4a0d20c903ad894e3de634a"
+
+[[file]]
+path = "crates/nazuchem/licenses/rdkit/LICENSE"
+origin = "copy"
+license = "BSD-3-Clause"
+sources = [
+  { project = "RDKit", path = "crates/nazuchem-kernel/licenses/rdkit/LICENSE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "BSD-3-Clause" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-kernel/licenses/rdkit/LICENSE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "daeb8d194502cbcf34c05c39541a0d02be65bc9bada5b891c1974cd24e9fca30"
+
+[[file]]
+path = "crates/nazuchem/licenses/rdkit/NOTICE"
+origin = "copy"
+license = "BSD-3-Clause"
+sources = [
+  { project = "RDKit", path = "crates/nazuchem-kernel/licenses/rdkit/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "BSD-3-Clause" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-kernel/licenses/rdkit/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "cfd653d345f0a028867f57ea6178180114e4d5df81b453150445a3d01de15fab"
+
+[[file]]
+path = "crates/nazuchem/licenses/stdlib/NOTICE"
+origin = "copy"
+license = "Apache-2.0 WITH LLVM-exception"
+sources = [
+  { project = "LLVM libc++ / Microsoft STL", path = "crates/nazuchem-kernel/licenses/stdlib/NOTICE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "Apache-2.0 WITH LLVM-exception" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-kernel/licenses/stdlib/NOTICE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "5eaa80d3b0b2265e65cd041c04bdaa6167fbaee92c294c789efad7ad2a968e2d"
+
+[[file]]
+path = "crates/nazuchem/licenses/stdlib/llvm-LICENSE"
+origin = "copy"
+license = "Apache-2.0 WITH LLVM-exception"
+sources = [
+  { project = "LLVM libc++ / Microsoft STL", path = "crates/nazuchem-kernel/licenses/stdlib/llvm-LICENSE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "Apache-2.0 WITH LLVM-exception" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-kernel/licenses/stdlib/llvm-LICENSE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "3340babe8ac7bc6ae294d93aa01c310a250d43d5b760e5c12954882d4e5c83c7"
+
+[[file]]
+path = "crates/nazuchem/licenses/stdlib/msvc-LICENSE"
+origin = "copy"
+license = "Apache-2.0 WITH LLVM-exception"
+sources = [
+  { project = "LLVM libc++ / Microsoft STL", path = "crates/nazuchem-kernel/licenses/stdlib/msvc-LICENSE", ref = "b2e00834cb43f347e2376efde308d57242c44397", license = "Apache-2.0 WITH LLVM-exception" },
+]
+notes = "Complete license or notice copied byte-for-byte from crates/nazuchem-kernel/licenses/stdlib/msvc-LICENSE at the recorded ReShiki commit. Facade NOTICE and dependency scope notices qualify historical paths, incorporated scope and unresolved provenance."
+sha256 = "7c68a47568bd633f7a71ee5e2038660a2cc62ce8a5405999e2b69fab3f37469c"
+
+[[file]]
+path = "crates/nazuchem/src/lib.rs"
+origin = "original"
+license = "MIT OR Apache-2.0"
+sources = [
+  { project = "Nazuchem/ReShiki", path = "crates/nazuchem/src/lib.rs", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0" },
+]
+notes = "Original Phase A step 5 facade code, documentation or metadata. Package metadata ANDs the established engine/kernel terms; unresolved sort-policy and Blue Book provenance remains NOASSERTION in dependency records, with publish = false retained."

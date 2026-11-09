@@ -1531,7 +1531,7 @@ mod tests {
     fn ring_ketone_numbering_compares_suffix_before_added_hydrogen() {
         use crate::test_support::verify_identity;
         use nazuchem_ir::NameStatus;
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             ("O=C1C(=O)Cc2ccccc21", "1H-indene-1,2(3H)-dione"),
             (
@@ -1572,10 +1572,10 @@ mod tests {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{}: {}",
                 name.text,
                 parsed.message
@@ -1602,7 +1602,7 @@ mod tests {
     fn suffix_hydrogen_names_are_preferred_and_round_trip() {
         use crate::test_support::verify_identity;
         use nazuchem_ir::NameStatus;
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         let mut failures = Vec::new();
         for (smiles, expected) in [
             (
@@ -1713,10 +1713,10 @@ mod tests {
                 failures.push(format!("{smiles}: {} -> {expected}", name.text));
             }
             assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{}: {}",
                 name.text,
                 parsed.message
@@ -1740,10 +1740,15 @@ mod tests {
             name.status,
             nazuchem_ir::NameStatus::Unverified(nazuchem_ir::NameReason::SpiroHydrogen)
         );
-        let parsed = opsin::Parser::new()
+        let parsed = nazuchem_n2s::Parser::new()
             .unwrap()
-            .parse(&name.text, &opsin::ParseOptions::strict());
-        assert_eq!(parsed.status, opsin::Status::Success, "{}", parsed.message);
+            .parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
+        assert_eq!(
+            parsed.status,
+            nazuchem_n2s::Status::Success,
+            "{}",
+            parsed.message
+        );
         let reconstructed = parsed.structure.unwrap().semantic_cxsmiles().unwrap();
         crate::test_support::verify_identity(smiles, &reconstructed).unwrap();
     }
@@ -1881,7 +1886,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn xanthene_congeners_retain_indicated_hydrogen_and_oxo_locants() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             ("S1c2ccccc2Cc2ccccc21", "9H-thioxanthene"),
             (
@@ -1916,10 +1921,10 @@ mod tests {
                     .iter()
                     .map(|alternative| &alternative.name),
             ) {
-                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                let parsed = parser.parse(candidate, &nazuchem_n2s::ParseOptions::strict());
                 assert_eq!(
                     parsed.status,
-                    opsin::Status::Success,
+                    nazuchem_n2s::Status::Success,
                     "{candidate}: {}",
                     parsed.message
                 );

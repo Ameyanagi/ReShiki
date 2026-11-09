@@ -18,7 +18,7 @@ WEB_FILES = {
 
 def needs_native(paths):
     # Unknown files, empty diffs and failed Git lookups take the full-check path.
-    # This includes the naming provenance ledger, source/data roots and checker.
+    # This includes the naming provenance ledger, all nazuchem crate roots and checker.
     return not paths or any(
         path not in WEB_FILES and not path.startswith(("docs/", "website/")) for path in paths
     )

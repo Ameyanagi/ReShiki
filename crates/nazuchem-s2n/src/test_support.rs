@@ -45,11 +45,12 @@ fn parse(name: &str, generation: bool) -> Result<String, String> {
         return Err("Chemical names must contain 1–2048 bytes without control characters".into());
     }
     let budget = Budget::default();
-    let parser = opsin::Parser::with_budget(budget.clone()).map_err(|error| error.to_string())?;
-    let mut options = opsin::ParseOptions::strict();
+    let parser =
+        nazuchem_n2s::Parser::with_budget(budget.clone()).map_err(|error| error.to_string())?;
+    let mut options = nazuchem_n2s::ParseOptions::strict();
     options.allow_radicals = generation;
     let result = parser.parse(name, &options);
-    if result.status != opsin::Status::Success || !result.warnings.is_empty() {
+    if result.status != nazuchem_n2s::Status::Success || !result.warnings.is_empty() {
         return Err(format!(
             "OPSIN could not interpret {name} unambiguously: {} {:?}",
             result.message, result.warnings

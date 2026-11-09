@@ -282,7 +282,7 @@ mod tests {
     // Provenance: fn tests::neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph | original
     // Source: ReShiki | src/naming/openclatura/radical_ions.rs::tests::neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph
     fn neutral_parent_names_reparse_through_strict_opsin_to_the_recovered_graph() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for ion in [
             "[CH2+][CH2]",
             "[CH+]1[CH]C=CC=C1",
@@ -291,10 +291,10 @@ mod tests {
         ] {
             let (neutral, _) = recover(ion, &Default::default()).unwrap().unwrap();
             let name = super::super::name_smiles(&neutral, &Default::default()).unwrap();
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{ion}: {}",
                 name.text
             );

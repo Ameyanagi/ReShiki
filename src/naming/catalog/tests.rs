@@ -49,7 +49,7 @@ fn every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph(
             .sum::<usize>(),
         97
     );
-    let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+    let parser = nazuchem_n2s::Parser::new().map_err(|error| error.to_string())?;
     for entry in &data.entries {
         for alias in &entry.aliases {
             for evidence in &alias.evidence {
@@ -79,10 +79,10 @@ fn every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph(
             } else {
                 &alias.name
             };
-            let result = parser.parse(interpreted, &opsin::ParseOptions::strict());
+            let result = parser.parse(interpreted, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 result.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{}: {}",
                 alias.name,
                 result.message
@@ -119,41 +119,55 @@ fn every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph(
 
 fn pinned_resource(file: &str) -> &'static str {
     match file {
-        "alkanes.xml" => include_str!("../../../crates/opsin/resources/xml/alkanes.xml"),
-        "aminoAcids.xml" => include_str!("../../../crates/opsin/resources/xml/aminoAcids.xml"),
-        "arylSubstituents.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/arylSubstituents.xml")
+        "alkanes.xml" => include_str!("../../../crates/nazuchem-n2s/resources/xml/alkanes.xml"),
+        "aminoAcids.xml" => {
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/aminoAcids.xml")
         }
-        "arylGroups.xml" => include_str!("../../../crates/opsin/resources/xml/arylGroups.xml"),
+        "arylSubstituents.xml" => {
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/arylSubstituents.xml")
+        }
+        "arylGroups.xml" => {
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/arylGroups.xml")
+        }
         "carbohydrateSuffixes.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/carbohydrateSuffixes.xml")
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/carbohydrateSuffixes.xml")
         }
         "carbohydrates.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/carbohydrates.xml")
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/carbohydrates.xml")
         }
         "carboxylicAcids.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/carboxylicAcids.xml")
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/carboxylicAcids.xml")
         }
         "functionalTerms.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/functionalTerms.xml")
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/functionalTerms.xml")
         }
         "groupStemsAllowingInlineSuffixes.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/groupStemsAllowingInlineSuffixes.xml")
+            include_str!(
+                "../../../crates/nazuchem-n2s/resources/xml/groupStemsAllowingInlineSuffixes.xml"
+            )
         }
         "inlineSuffixes.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/inlineSuffixes.xml")
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/inlineSuffixes.xml")
         }
-        "miscTokens.xml" => include_str!("../../../crates/opsin/resources/xml/miscTokens.xml"),
-        "multipliers.xml" => include_str!("../../../crates/opsin/resources/xml/multipliers.xml"),
+        "miscTokens.xml" => {
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/miscTokens.xml")
+        }
+        "multipliers.xml" => {
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/multipliers.xml")
+        }
         "simpleCyclicGroups.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/simpleCyclicGroups.xml")
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/simpleCyclicGroups.xml")
         }
-        "simpleGroups.xml" => include_str!("../../../crates/opsin/resources/xml/simpleGroups.xml"),
+        "simpleGroups.xml" => {
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/simpleGroups.xml")
+        }
         "simpleSubstituents.xml" => {
-            include_str!("../../../crates/opsin/resources/xml/simpleSubstituents.xml")
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/simpleSubstituents.xml")
         }
-        "suffixes.xml" => include_str!("../../../crates/opsin/resources/xml/suffixes.xml"),
-        "unsaturators.xml" => include_str!("../../../crates/opsin/resources/xml/unsaturators.xml"),
+        "suffixes.xml" => include_str!("../../../crates/nazuchem-n2s/resources/xml/suffixes.xml"),
+        "unsaturators.xml" => {
+            include_str!("../../../crates/nazuchem-n2s/resources/xml/unsaturators.xml")
+        }
         _ => panic!("Unpinned resource {file}"),
     }
 }
@@ -175,11 +189,14 @@ fn catalog_provenance_pins_the_shipping_data_and_all_cited_resources() {
             .sum::<usize>()
     );
     assert_eq!(provenance["data_sha256"], sha256(DATA.as_bytes()));
-    assert_eq!(provenance["opsin"]["version"], opsin::UPSTREAM_VERSION);
-    assert_eq!(provenance["opsin"]["commit"], opsin::UPSTREAM_COMMIT);
+    assert_eq!(
+        provenance["opsin"]["version"],
+        nazuchem_n2s::UPSTREAM_VERSION
+    );
+    assert_eq!(provenance["opsin"]["commit"], nazuchem_n2s::UPSTREAM_COMMIT);
     assert_eq!(
         provenance["opsin"]["resource_fingerprint"],
-        opsin::RESOURCE_FINGERPRINT
+        nazuchem_n2s::RESOURCE_FINGERPRINT
     );
     let resources = provenance["opsin"]["resources"].as_array().unwrap();
     for resource in resources {
@@ -293,7 +310,7 @@ fn biochemical_aliases_keep_configuration_and_purine_tautomers_distinct() -> Res
 
 #[test]
 fn biochemical_plain_opsin_defaults_keep_template_tautomers_distinct() -> Result<(), String> {
-    let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
+    let parser = nazuchem_n2s::Parser::new().map_err(|error| error.to_string())?;
     for (name, independent_graph, template_graph, template_alias) in [
         (
             "cytosine",
@@ -314,10 +331,10 @@ fn biochemical_plain_opsin_defaults_keep_template_tautomers_distinct() -> Result
             "N(5)-(diaminomethylidene)-L-ornithine",
         ),
     ] {
-        let result = parser.parse(name, &opsin::ParseOptions::strict());
+        let result = parser.parse(name, &nazuchem_n2s::ParseOptions::strict());
         assert_eq!(
             result.status,
-            opsin::Status::Success,
+            nazuchem_n2s::Status::Success,
             "{name}: {}",
             result.message
         );

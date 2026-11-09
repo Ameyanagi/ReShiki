@@ -1279,7 +1279,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn single_ester_acid_component_omits_only_redundant_locants() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             ("FCC(=O)OC", "methyl fluoroacetate"),
             ("FC(F)C(=O)OC", "methyl difluoroacetate"),
@@ -1314,10 +1314,10 @@ mod tests {
             let name = super::super::name_smiles(&canonical, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{expected}: {}",
                 parsed.message
             );
@@ -1346,7 +1346,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn unsaturated_parent_locants() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             ("FC=C=C=CCl", "1-chloro-4-fluorobuta-1,2,3-triene"),
             ("ClC=C=C=C", "chlorobutatriene"),
@@ -1382,10 +1382,10 @@ mod tests {
             let name = super::super::name_smiles(smiles, &Default::default()).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
             assert_eq!(name.status, nazuchem_ir::NameStatus::Preferred, "{smiles}");
-            let parsed = parser.parse(&name.text, &opsin::ParseOptions::strict());
+            let parsed = parser.parse(&name.text, &nazuchem_n2s::ParseOptions::strict());
             assert_eq!(
                 parsed.status,
-                opsin::Status::Success,
+                nazuchem_n2s::Status::Success,
                 "{expected}: {}",
                 parsed.message
             );

@@ -23,7 +23,7 @@ test fails if any of these shapes disappears from the fixture.
 Generate inputs are the corpus SMILES as written. The app first canonicalizes
 them and may add unknown-configuration marks; the two marked inputs above cover
 that path, but not every corpus input in its marked form. Names typed by users
-(trivial, CAS) are covered by the opsin crate's own oracle tests, not here.
+(trivial, CAS) are covered by the nazuchem-n2s crate's own oracle tests, not here.
 
 Replay takes about 55–70 s in the normal test profile, so the complete gate is a
 regular test. Two regenerations produced byte-identical files. A deliberate

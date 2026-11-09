@@ -19,12 +19,12 @@ const META: &str = "C1Cc2cccc(c2)CCc2cccc1c2";
 // Provenance: fn round_trip | original
 // Source: ReShiki | src/naming/openclatura/phane/tests.rs::round_trip
 fn round_trip(smiles: &str, name: &str) -> Result<(), String> {
-    let parsed = opsin::Parser::new()
+    let parsed = nazuchem_n2s::Parser::new()
         .map_err(|e| e.to_string())?
-        .parse(name, &opsin::ParseOptions::strict());
+        .parse(name, &nazuchem_n2s::ParseOptions::strict());
     assert_eq!(
         parsed.status,
-        opsin::Status::Success,
+        nazuchem_n2s::Status::Success,
         "{name}: {}",
         parsed.message
     );

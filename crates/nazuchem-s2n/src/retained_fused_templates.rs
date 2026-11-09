@@ -1271,7 +1271,7 @@ mod tests {
 
     #[test]
     fn added_phenanthroline_isomers_have_exact_retained_graphs() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected, nitrogen_locants) in [
             ("c1nccc2ccc3ccncc3c12", "2,9-phenanthroline", ["2", "9"]),
             ("c1cncc2ccc3ncccc3c12", "3,7-phenanthroline", ["3", "7"]),
@@ -1299,10 +1299,10 @@ mod tests {
                     .iter()
                     .map(|alternative| &alternative.name),
             ) {
-                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                let parsed = parser.parse(candidate, &nazuchem_n2s::ParseOptions::strict());
                 assert_eq!(
                     parsed.status,
-                    opsin::Status::Success,
+                    nazuchem_n2s::Status::Success,
                     "{candidate}: {}",
                     parsed.message
                 );

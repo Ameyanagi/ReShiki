@@ -29,7 +29,7 @@ use nazuchem_ir::{NameReason, NameStatus};
 fn ion_spelling_matrix() {
     // Only unsubstituted cationic N prefixes use azaniumyl/azaniumylidene.
     // Substituted N keeps the accepted ammonio/iminio alternative and CationPrefix.
-    let parser = opsin::Parser::new().unwrap();
+    let parser = nazuchem_n2s::Parser::new().unwrap();
     let mut failures = Vec::new();
     for (row, smiles, expected, status) in [
         (
@@ -272,8 +272,8 @@ fn ion_spelling_matrix() {
                     actual.text, actual.status
                 ));
             }
-            let parsed = parser.parse(&actual.text, &opsin::ParseOptions::strict());
-            if parsed.status != opsin::Status::Success {
+            let parsed = parser.parse(&actual.text, &nazuchem_n2s::ParseOptions::strict());
+            if parsed.status != nazuchem_n2s::Status::Success {
                 return Err(format!("OPSIN: {}", parsed.message));
             }
             let reconstructed = parsed

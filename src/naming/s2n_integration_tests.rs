@@ -20,7 +20,7 @@ use nazuchem_s2n::name_smiles;
 // Provenance: fn fixture_smiles | original
 // Source: ReShiki | src/naming/openclatura/phane/tests.rs::fixture_smiles
 fn fixture_smiles(name: &str) -> Result<String, String> {
-    let inchi = include_str!("../../crates/opsin/tests/fixtures/upstream-inchi/phanes.txt")
+    let inchi = include_str!("../../crates/nazuchem-n2s/tests/fixtures/upstream-inchi/phanes.txt")
         .lines()
         .filter_map(|line| line.split_once('\t'))
         .find(|(fixture, _)| *fixture == name)
@@ -52,12 +52,12 @@ fn phane_name(smiles: &str) -> Result<Option<String>, String> {
 // Provenance: fn round_trip | original
 // Source: ReShiki | src/naming/openclatura/phane/tests.rs::round_trip
 fn round_trip(smiles: &str, name: &str) -> Result<(), String> {
-    let parsed = opsin::Parser::new()
+    let parsed = nazuchem_n2s::Parser::new()
         .map_err(|e| e.to_string())?
-        .parse(name, &opsin::ParseOptions::strict());
+        .parse(name, &nazuchem_n2s::ParseOptions::strict());
     assert_eq!(
         parsed.status,
-        opsin::Status::Success,
+        nazuchem_n2s::Status::Success,
         "{name}: {}",
         parsed.message
     );

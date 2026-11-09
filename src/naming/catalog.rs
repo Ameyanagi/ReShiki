@@ -125,11 +125,11 @@ fn load() -> Result<Index, String> {
                     }
                     AliasSource {
                         name: "OPSIN",
-                        version: opsin::UPSTREAM_VERSION,
+                        version: nazuchem_n2s::UPSTREAM_VERSION,
                         record: entry.id.clone(),
                         url: format!(
                             "https://github.com/dan2097/opsin/blob/{}/opsin-core/src/main/resources/uk/ac/cam/ch/wwmm/opsin/{}",
-                            opsin::UPSTREAM_COMMIT,
+                            nazuchem_n2s::UPSTREAM_COMMIT,
                             file.file
                         ),
                         license: "MIT",

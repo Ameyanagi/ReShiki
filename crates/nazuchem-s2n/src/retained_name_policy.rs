@@ -259,7 +259,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn benzoheterocycle_locants_survive_substitution_fusion_and_spiro() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected, status) in [
             // The spelling policy must not fix H1: oxo reconstruction and
             // strict retained matches derive the hydrogen state from the graph.
@@ -359,10 +359,10 @@ mod tests {
                     .iter()
                     .map(|alternative| alternative.name.as_str()),
             ) {
-                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                let parsed = parser.parse(candidate, &nazuchem_n2s::ParseOptions::strict());
                 assert_eq!(
                     parsed.status,
-                    opsin::Status::Success,
+                    nazuchem_n2s::Status::Success,
                     "{candidate}: {}",
                     parsed.message
                 );
@@ -380,7 +380,7 @@ mod tests {
     // Test provenance: upstream inputs/expected names with local assertions and extensions;
     // exact matches are conservatively adapted; independent ancestry is not established.
     fn retained_parent_indicated_hydrogen_survives_replacement() {
-        let parser = opsin::Parser::new().unwrap();
+        let parser = nazuchem_n2s::Parser::new().unwrap();
         for (smiles, expected) in [
             ("O1COc2ccccc21", "2H-1,3-benzodioxole"),
             ("O=Cc1ccc2OCOc2c1", "2H-1,3-benzodioxole-5-carbaldehyde"),
@@ -402,10 +402,10 @@ mod tests {
                     .iter()
                     .map(|alternative| alternative.name.as_str()),
             ) {
-                let parsed = parser.parse(candidate, &opsin::ParseOptions::strict());
+                let parsed = parser.parse(candidate, &nazuchem_n2s::ParseOptions::strict());
                 assert_eq!(
                     parsed.status,
-                    opsin::Status::Success,
+                    nazuchem_n2s::Status::Success,
                     "{candidate}: {}",
                     parsed.message
                 );
