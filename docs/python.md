@@ -119,7 +119,7 @@ a follow-up.
 From the repository root, with Rust and uv installed:
 
 ```sh
-uv run --no-project --python 3.12.15 python scripts/license_notices.py --manifest-path crates/python/Cargo.toml --features pyo3/extension-module --destination crates/python/wheel-licenses
+uv run --no-project --python 3.12.15 python scripts/license_notices.py
 uvx maturin@1.15.0 build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
 uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py 'artifacts/python/*.whl'
 uv sync --project crates/python --all-extras --no-install-project

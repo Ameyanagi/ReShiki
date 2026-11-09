@@ -5,10 +5,6 @@ on:
   pull_request:
     paths:
       - "crates/python/**"
-      - "crates/**/Cargo.toml"
-      - "native/**/Cargo.toml"
-      - "Cargo.toml"
-      - "Cargo.lock"
       - "LICENSE*"
       - "NOTICE"
       - "licenses/**"
@@ -125,7 +121,7 @@ jobs:
           enable-cache: false
       - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }} && rustup default 1.99.1
       - name: Generate wheel license notices
-        run: uv run --no-project --python 3.12.15 python scripts/license_notices.py --manifest-path crates/python/Cargo.toml --features pyo3/extension-module --target ${{ matrix.target }} --destination crates/python/wheel-licenses
+        run: uv run --no-project --python 3.12.15 python scripts/license_notices.py --target ${{ matrix.target }}
       # Builds in the manylinux2014 container.
       - name: Build the manylinux wheel
         if: runner.os == 'Linux'

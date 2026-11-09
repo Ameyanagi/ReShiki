@@ -52,6 +52,40 @@ class LicenseNoticeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Select a package manifest"):
             dependency_metadata(metadata)
 
+    def test_python_scope_includes_naming_notices_and_dependency_license(self):
+        repository = Path(__file__).resolve().parents[1]
+        metadata = json.loads(
+            subprocess.check_output(
+                [
+                    "cargo",
+                    "metadata",
+                    "--locked",
+                    "--format-version",
+                    "1",
+                    "--manifest-path",
+                    "crates/python/Cargo.toml",
+                ],
+                cwd=repository,
+                text=True,
+            )
+        )
+        scoped = dependency_metadata(metadata)
+        packages = {package["name"]: package for package in scoped["packages"]}
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            write_notices(repository, destination, scoped)
+            notices = (destination / THIRD_PARTY_FILE).read_bytes()
+            for name, relative in (
+                ("nazuchem-kernel", "NOTICE"),
+                ("nazuchem-n2s", "NOTICE"),
+                ("pyo3", "LICENSE-MIT"),
+            ):
+                with self.subTest(package=name, file=relative):
+                    package = packages[name]
+                    self.assertIn(f"{name}@{package['version']}/{relative}".encode(), notices)
+                    source = Path(package["manifest_path"]).parent
+                    self.assertIn((source / relative).read_bytes(), notices)
+
     def test_git_naming_components_collect_complete_crate_local_terms(self):
         repository = Path(__file__).resolve().parents[1]
         metadata = json.loads(

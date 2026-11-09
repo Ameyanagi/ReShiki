@@ -165,10 +165,9 @@ def write_notices(root, destination, metadata):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest-path", type=Path, required=True)
-    parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--manifest-path", type=Path, default=Path("crates/python/Cargo.toml"))
+    parser.add_argument("--destination", type=Path, default=Path("crates/python/wheel-licenses"))
     parser.add_argument("--target", help="Cargo target triple (defaults to the Rust host)")
-    parser.add_argument("--features", help="Cargo features used by the distribution build")
     args = parser.parse_args()
     target = args.target
     if target is None:
@@ -189,8 +188,6 @@ def main():
         "--filter-platform",
         target,
     ]
-    if args.features:
-        command.extend(["--features", args.features])
     metadata = json.loads(subprocess.check_output(command, encoding="utf-8"))
     scoped = dependency_metadata(metadata)
     write_notices(Path(metadata["workspace_root"]), args.destination, scoped)

@@ -183,7 +183,7 @@ jobs:
           version: "0.13.5"
           python-version: "3.12.15"
       - name: Generate wheel license notices
-        run: uv run --no-project --python 3.12.15 python scripts/license_notices.py --manifest-path crates/python/Cargo.toml --features pyo3/extension-module --destination crates/python/wheel-licenses
+        run: uv run --no-project --python 3.12.15 python scripts/license_notices.py
       - name: Build the abi3 wheel
         run: uvx maturin@1.15.0 build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
       - name: Check wheel license notices
