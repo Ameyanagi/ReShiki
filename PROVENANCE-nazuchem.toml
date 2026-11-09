@@ -7491,7 +7491,7 @@ sources = [
   { project = "Nazuchem/ReShiki", path = "crates/nazuchem/README.md", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0" },
 ]
 notes = "Original Phase A step 5 facade code, documentation or metadata. Package metadata ANDs the established engine/kernel terms; unresolved sort-policy and Blue Book provenance remains NOASSERTION in dependency records, with publish = false retained."
-sha256 = "56d48a31b0f1dd2403148e6e4f691db47fff6a44e71b236626715a2e5008b1c8"
+sha256 = "d5ef823afe43547d33405e32b69d05165cd45c53f7d06fbbaaf41889bd4b9fd7"
 
 [[file]]
 path = "crates/nazuchem/licenses/centres/LICENSE"
@@ -7655,9 +7655,17 @@ sha256 = "7c68a47568bd633f7a71ee5e2038660a2cc62ce8a5405999e2b69fab3f37469c"
 
 [[file]]
 path = "crates/nazuchem/src/lib.rs"
-origin = "original"
+origin = "mixed"
 license = "MIT OR Apache-2.0"
 sources = [
   { project = "Nazuchem/ReShiki", path = "crates/nazuchem/src/lib.rs", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0" },
 ]
 notes = "Original Phase A step 5 facade code, documentation or metadata. Package metadata ANDs the established engine/kernel terms; unresolved sort-policy and Blue Book provenance remains NOASSERTION in dependency records, with publish = false retained."
+parts = [
+  { origin = "original", sources = [{ project = "Nazuchem/ReShiki", path = "crates/nazuchem/src/lib.rs", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0", symbol = "Error" }], items = ["impl Error"], members = { "impl Error" = ["fn Error::kind"] } },
+  { origin = "original", sources = [{ project = "Nazuchem/ReShiki", path = "crates/nazuchem/src/lib.rs", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0", symbol = "<Error as std::fmt::Display>" }], items = ["impl <Error as std::fmt::Display>"], members = { "impl <Error as std::fmt::Display>" = ["fn <Error as std::fmt::Display>::fmt"] } },
+  { origin = "original", sources = [{ project = "Nazuchem/ReShiki", path = "crates/nazuchem/src/lib.rs", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0", symbol = "n2s_errors" }], items = ["mod n2s_errors"], members = { "mod n2s_errors" = ["fn n2s_errors::<Error as From<n2s::InitializationError>>::from", "fn n2s_errors::<Error as From<n2s::ParsingError>>::from", "fn n2s_errors::<Error as From<n2s::SerializationError>>::from"] } },
+  { origin = "original", sources = [{ project = "Nazuchem/ReShiki", path = "crates/nazuchem/src/lib.rs", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0", symbol = "name_to_smiles" }], items = ["fn name_to_smiles"] },
+  { origin = "original", sources = [{ project = "Nazuchem/ReShiki", path = "crates/nazuchem/src/lib.rs", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0", symbol = "smiles_to_name" }], items = ["fn smiles_to_name"] },
+  { origin = "original", sources = [{ project = "Nazuchem/ReShiki", path = "crates/nazuchem/src/lib.rs", ref = "Phase A step 5 (local extraction)", license = "MIT OR Apache-2.0", symbol = "tests" }], items = ["mod tests"], members = { "mod tests" = ["fn tests::error_kind_and_message_are_available_without_engines", "fn tests::invalid_name_is_a_parse_error", "fn tests::parser_warning_is_a_warning_error", "fn tests::axial_structure_is_a_serialization_error", "fn tests::typed_parsing_error_preserves_its_message", "fn tests::unsupported_smiles_is_a_naming_error"] } },
+]

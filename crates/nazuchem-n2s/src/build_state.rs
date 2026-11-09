@@ -12,7 +12,7 @@
 
 //! Per-name state shared by OPSIN construction passes.
 use crate::{
-    Budget, OpsinWarning, ParseOptions, ParsingError, WarningKind,
+    Budget, ParseOptions, ParseWarning, ParsingError, WarningKind,
     fragment_manager::FragmentManager,
     graph::{AtomId, FragmentId, Graph, GraphError},
     parse_tree::{Arena, NodeId},
@@ -28,7 +28,7 @@ pub struct BuildState {
     pub xml_suffix_map: BTreeMap<NodeId, Vec<FragmentId>>,
     pub racemic_group_count: u32,
     pub current_word_rule: Option<String>,
-    pub warnings: Vec<OpsinWarning>,
+    pub warnings: Vec<ParseWarning>,
     pub(crate) principal_parent_atoms: Vec<AtomId>,
 }
 
@@ -61,7 +61,7 @@ impl BuildState {
         &mut self.fragment_manager.graph
     }
     pub fn add_warning(&mut self, kind: WarningKind, message: impl Into<String>) {
-        self.warnings.push(OpsinWarning {
+        self.warnings.push(ParseWarning {
             kind,
             message: message.into(),
         });

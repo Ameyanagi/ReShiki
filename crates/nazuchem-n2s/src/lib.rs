@@ -67,7 +67,7 @@ pub mod word_rules_omitted_space;
 pub mod xml_declarations;
 
 pub use api::{
-    InitializationError, OpsinResult, OpsinWarning, ParseOptions, ParsingError, SerializationError,
+    InitializationError, ParseOptions, ParseResult, ParseWarning, ParsingError, SerializationError,
     Status, WarningKind,
 };
 pub use nazuchem_kernel::budget::Budget;
@@ -212,7 +212,7 @@ impl Parser {
         cas::uninvert(&self.resources, &preprocess::preprocess(name)?)
     }
 
-    pub fn parse(&self, name: &str, options: &ParseOptions) -> OpsinResult {
+    pub fn parse(&self, name: &str, options: &ParseOptions) -> ParseResult {
         pipeline::parse(&self.resources, name, options, &self.budget)
     }
 }

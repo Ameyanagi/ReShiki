@@ -58,19 +58,19 @@ impl WarningKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpsinWarning {
+pub struct ParseWarning {
     pub kind: WarningKind,
     pub message: String,
 }
 
 /// A name interpretation result. Failure never contains a partial structure.
 #[derive(Debug, Clone)]
-pub struct OpsinResult {
+pub struct ParseResult {
     pub status: Status,
     pub input: String,
     pub normalized_name: Option<String>,
     pub message: String,
-    pub warnings: Vec<OpsinWarning>,
+    pub warnings: Vec<ParseWarning>,
     pub structure: Option<crate::Structure>,
 }
 

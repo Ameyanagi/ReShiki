@@ -16,7 +16,7 @@
 //! Phane skeleton and locant updates: upstream main, 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 
-use crate::api::{OpsinWarning, ParseOptions, WarningKind};
+use crate::api::{ParseOptions, ParseWarning, WarningKind};
 use crate::parse_tree::{Arena, NodeId, ParseTree};
 use crate::tree_tools::{fix_locant_capitalisation, remove_dash};
 use crate::xml_declarations::*;
@@ -28,7 +28,7 @@ use std::sync::{Mutex, OnceLock};
 #[derive(Debug, Clone, Default)]
 pub struct ComponentGenerationContext {
     pub options: ParseOptions,
-    pub warnings: Vec<OpsinWarning>,
+    pub warnings: Vec<ParseWarning>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComponentGenerationError(pub String);
@@ -810,7 +810,7 @@ impl<'a> ComponentGenerator<'a> {
                     .options
                     .warn_rather_than_fail_on_uninterpretable_stereochemistry
                 {
-                    self.context.warnings.push(OpsinWarning {
+                    self.context.warnings.push(ParseWarning {
                         kind: WarningKind::StereochemistryIgnored,
                         message: error.0,
                     });

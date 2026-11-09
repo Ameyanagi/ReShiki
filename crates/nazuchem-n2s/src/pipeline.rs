@@ -11,7 +11,7 @@
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 
 use crate::{
-    Budget, OpsinResult, OpsinWarning, ParseOptions, ParsingError, Status, Structure,
+    Budget, ParseOptions, ParseResult, ParseWarning, ParsingError, Status, Structure,
     build_state::BuildState,
     component_generator::{ComponentGenerationContext, process_components},
     component_processor, frontend,
@@ -26,8 +26,8 @@ pub(crate) fn parse(
     input: &str,
     options: &ParseOptions,
     budget: &Budget,
-) -> OpsinResult {
-    let mut result = OpsinResult {
+) -> ParseResult {
+    let mut result = ParseResult {
         status: Status::Failure,
         input: input.to_owned(),
         normalized_name: None,
@@ -84,7 +84,7 @@ fn interpret_candidate(
     tree: &mut ParseTree,
     options: ParseOptions,
     budget: &Budget,
-) -> Result<(Structure, Vec<OpsinWarning>), ParsingError> {
+) -> Result<(Structure, Vec<ParseWarning>), ParsingError> {
     let mut state = BuildState::with_budget(options, budget.clone());
     let mut generation = ComponentGenerationContext {
         options,

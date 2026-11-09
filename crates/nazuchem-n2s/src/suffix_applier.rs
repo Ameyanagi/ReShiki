@@ -16,7 +16,7 @@ use std::{collections::HashSet, sync::LazyLock};
 
 use regex::Regex;
 
-use crate::api::{OpsinWarning, ParsingError, WarningKind};
+use crate::api::{ParseWarning, ParsingError, WarningKind};
 use crate::build_state::BuildState;
 use crate::graph::{AtomId, Element, FragmentId, Graph};
 use crate::isotope_specification_parser::parse_isotope_specification;
@@ -976,7 +976,7 @@ impl<'a> SuffixApplier<'a> {
     }
 
     fn add_ambiguity(&mut self, message: String) {
-        self.state.warnings.push(OpsinWarning {
+        self.state.warnings.push(ParseWarning {
             kind: WarningKind::AppearsAmbiguous,
             message,
         });
