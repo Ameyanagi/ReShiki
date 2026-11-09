@@ -37,7 +37,7 @@ Dependencies retain the licenses declared by their respective projects;
 the project-level dual license does not relicense them.
 
 The naming engines come from the nazuchem git dependency, pinned at
-f418fea6747aad48d9f5cb020b00b8afc55cbb31. Its repository retains the per-file
+6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3. Its repository retains the per-file
 provenance ledger and complete crate-local notices and license texts:
 name-to-structure is a Rust port of OPSIN by Daniel Lowe (MIT), tracking main
 after 2.9.0; structure-to-name began as a port of openclatura 0.4.3 by
