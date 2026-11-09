@@ -19,6 +19,11 @@ print(aspirin.properties().formula)
 Transforms return new objects. The original molecule keeps its geometry and
 style. In Jupyter, displaying an object shows its SVG drawing.
 
+On Linux, labels use installed fonts; if none are found, the included Liberation
+Sans keeps PNG and PDF labels visible. To choose a label font explicitly, use
+`aspirin.with_style(font_family="Liberation Sans")` with an installed font family.
+After installing fonts, restart Python or the Jupyter kernel before rendering again.
+
 ## Spreadsheets
 
 Install the Excel integration with `uv add 'reshiki[excel]'`, then add drawings

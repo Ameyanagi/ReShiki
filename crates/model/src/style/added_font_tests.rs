@@ -1,6 +1,51 @@
 //! Fonts added at runtime, as the browser build does with a page's fonts.
 
 #[test]
+fn latin_label_fallbacks_precede_cjk_without_replacing_requested_families() {
+    use resvg::usvg::fontdb::{Database, Language};
+
+    let mut db = Database::new();
+    for name in ["Noto Sans CJK JP", "DejaVu Sans", "Liberation Sans"] {
+        db.load_font_data(include_bytes!("../../fonts/LiberationSans-Regular.ttf").to_vec());
+        let mut face = db.faces().last().unwrap().clone();
+        db.remove_face(face.id);
+        face.families = vec![(name.into(), Language::English_UnitedStates)];
+        db.push_face_info(face);
+    }
+    let mut fonts = super::Fonts {
+        names: super::family_names(&db),
+        db: std::sync::Arc::new(db),
+        added: vec![],
+    };
+    let style = crate::typography::TextStyle::default();
+    for c in "CHO".chars() {
+        assert_eq!(
+            super::glyph_metrics_in(c, &style, &fonts).0,
+            "Liberation Sans"
+        );
+    }
+    for family in ["Noto Sans CJK JP", "DejaVu Sans"] {
+        let requested = crate::typography::TextStyle {
+            family: family.into(),
+            ..style.clone()
+        };
+        assert_eq!(super::glyph_metrics_in('O', &requested, &fonts).0, family);
+    }
+    let db = std::sync::Arc::make_mut(&mut fonts.db);
+    let liberation = db
+        .faces()
+        .find(|face| face.families[0].0 == "Liberation Sans")
+        .unwrap()
+        .id;
+    db.remove_face(liberation);
+    fonts.names = super::family_names(db);
+    assert_eq!(
+        super::glyph_metrics_in('O', &style, &fonts).0,
+        "DejaVu Sans"
+    );
+}
+
+#[test]
 fn missing_named_families_use_an_installed_face_for_label_metrics() {
     let mut db = resvg::usvg::fontdb::Database::new();
     for bytes in [

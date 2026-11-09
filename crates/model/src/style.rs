@@ -197,10 +197,16 @@ pub fn fontdb() -> Arc<resvg::usvg::fontdb::Database> {
 static ADDED: Mutex<Vec<resvg::usvg::fontdb::Source>> = Mutex::new(Vec::new());
 
 /// Load the fonts that text is measured and drawn with: the system's on the
-/// desktop and the bundled ones in the browser, then any added at runtime.
+/// desktop, bundled ones when none were found or in the browser, then any
+/// added at runtime.
 pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
     #[cfg(not(target_arch = "wasm32"))]
-    db.load_system_fonts();
+    {
+        db.load_system_fonts();
+        if db.faces().next().is_none() {
+            font::load_bundled(db);
+        }
+    }
     #[cfg(target_arch = "wasm32")]
     font::load_bundled(db);
     for source in added_fonts(0) {
@@ -331,7 +337,7 @@ pub fn styled_text_width(text: &str, size: f32, style: &crate::typography::TextS
     text.chars().map(|c| glyph_metrics(c, style).1 * size).sum()
 }
 
-const SANS_FALLBACKS: &[&str] = &[
+const UI_FONT_FALLBACKS: &[&str] = &[
     "Hiragino Sans",
     "Hiragino Kaku Gothic ProN",
     "Yu Gothic",
@@ -342,10 +348,13 @@ const SANS_FALLBACKS: &[&str] = &[
     "DejaVu Sans",
 ];
 
+// Keep Latin chemical labels close to Arial's metrics before trying CJK faces.
+const LABEL_FONT_FALLBACKS: &[&str] = &["Arial", "Liberation Sans", "DejaVu Sans"];
+
 /// Explicit Japanese sans-serif avoids the platform's generic CJK serif fallback.
 /// This is an interface preference; chemical labels retain their document style.
 pub fn ui_font_family() -> &'static str {
-    SANS_FALLBACKS
+    UI_FONT_FALLBACKS
         .iter()
         .find_map(|name| {
             fonts()
@@ -358,10 +367,11 @@ pub fn ui_font_family() -> &'static str {
 }
 
 /// The families a label's glyph is looked up in, in order: its own, the
-/// sans-serif fallbacks, then the fonts added at runtime.
+/// Latin sans-serif fallbacks, the UI fallbacks, then the fonts added at runtime.
 fn fallback_families<'a>(family: &'a str, added: &'a [&str]) -> impl Iterator<Item = &'a str> {
     std::iter::once(family)
-        .chain(SANS_FALLBACKS.iter().copied())
+        .chain(LABEL_FONT_FALLBACKS.iter().copied())
+        .chain(UI_FONT_FALLBACKS.iter().copied())
         .chain(added.iter().copied())
 }
 

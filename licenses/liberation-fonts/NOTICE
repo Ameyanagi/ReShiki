@@ -1,5 +1,5 @@
-Liberation Sans fonts for the browser build
-===========================================
+Liberation Sans fonts for browser and native fallback
+====================================================
 
 crates/model/fonts/LiberationSans-{Regular,Bold,Italic,BoldItalic}.ttf are the
 unmodified files from Liberation Fonts 2.1.5:
@@ -14,6 +14,8 @@ Copyright (c) 2012 Red Hat, Inc.
 Licensed under the SIL Open Font License, Version 1.1; see LICENSE in this
 directory.
 
-Only the wasm32 build embeds them, because a browser has no system fonts.
-Liberation Sans has Arial's metrics, so the font database also lists its faces
-under the family name Arial; the font files themselves are not changed.
+The browser build embeds them because a browser has no system fonts. Native
+builds embed them as a fallback when no system fonts are discovered, including
+headless Python environments. Liberation Sans has Arial's metrics, so the font
+database also lists its faces under the family name Arial; the font files
+themselves are not changed.

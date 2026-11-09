@@ -47,10 +47,9 @@ pub(super) fn keep_resident(db: &mut resvg::usvg::fontdb::Database, families: &[
     }
 }
 
-/// The browser has no system fonts. Liberation Sans has Arial's metrics, so
-/// its faces also answer to Arial, the default label family.
+/// The browser and some headless systems have no installed fonts. Liberation
+/// Sans has Arial's metrics, so its faces also answer to the default label family.
 /// Source and license: licenses/liberation-fonts.
-#[cfg(target_arch = "wasm32")]
 pub(super) fn load_bundled(db: &mut resvg::usvg::fontdb::Database) {
     use resvg::usvg::fontdb::{Language, Source};
     const FACES: [&[u8]; 4] = [
