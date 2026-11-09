@@ -75,17 +75,13 @@ After upstream CI is green at the selected revision, change all four `rev` value
 cargo update -p nazuchem-ir -p nazuchem-kernel -p nazuchem-n2s -p nazuchem-s2n
 ```
 
-Rebuild the application and replay the [worker response snapshot](structure-to-name-harness.md#worker-response-snapshot) with the required helpers:
+Then replay the [worker response snapshot](structure-to-name-harness.md#worker-response-snapshot). It calls the worker's request handler in-process, so it checks the engines' output byte-for-byte without the helper processes:
 
 ```sh
-cargo build --locked --bin reshiki
-export RESHIKI_INCHI_HELPER="$PWD/target/debug/reshiki"
-export RESHIKI_NAMING_HELPER="$RESHIKI_INCHI_HELPER"
-export RESHIKI_REQUIRE_INCHI_HELPER=1
 cargo test --locked --lib -p reshiki naming::s2n_harness::worker_snapshot::s2n_worker_snapshot -- --exact --nocapture
 ```
 
-Use PowerShell environment syntax and the `.exe` suffix on Windows. If `CARGO_TARGET_DIR` is set, point both helper variables at the rebuilt binary's absolute path there.
+The other naming tests do start helper processes; run them as CI does, with `RESHIKI_INCHI_HELPER` and `RESHIKI_NAMING_HELPER` set to the rebuilt `target/debug/reshiki` (with `.exe` on Windows) and `RESHIKI_REQUIRE_INCHI_HELPER=1`.
 
 ## Opt-in renderer tests
 
