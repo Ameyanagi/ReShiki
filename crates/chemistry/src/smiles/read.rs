@@ -498,9 +498,77 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     Ok(imported)
 }
 
+/// Keep stated E/Z under wU/wD on terminal H/C bonds to isolated C=C/C=N
+/// ends with no other neighbour or chiral tag (#1042). These flags cannot
+/// define a tetrahedral centre or contribute another bond to a chiral axis.
+fn keep_stated_alkene_directions(parsed: &mut Parsed, stated: &[(usize, Direction)]) -> Result<()> {
+    let graph = &parsed.graph;
+    let mut degree = vec![0usize; graph.atoms.len()];
+    let mut doubles = vec![Vec::new(); graph.atoms.len()];
+    let mut directed = vec![false; graph.atoms.len()];
+    for (bond, &(_, direction)) in graph.bonds.iter().zip(stated) {
+        for (atom, partner) in [(bond.a, bond.b), (bond.b, bond.a)] {
+            *degree.get_mut(atom).ok_or(Error::Limit)? += 1;
+            if bond.order == 2 && !bond.aromatic {
+                doubles.get_mut(atom).ok_or(Error::Limit)?.push(partner);
+            }
+            if bond.order == 1 && matches!(direction, Direction::Up | Direction::Down) {
+                put(&mut directed, atom, true)?;
+            }
+        }
+    }
+    let terminal = |atom: usize| -> Result<bool> {
+        Ok(*at(&degree, atom)? == 1 && matches!(at(&graph.atoms, atom)?.atomic_number, 1 | 6))
+    };
+    let alkene_end = |atom: usize| -> Result<bool> {
+        let &[partner] = at(&doubles, atom)?.as_slice() else {
+            return Ok(false);
+        };
+        let a = at(&graph.atoms, atom)?;
+        let b = at(&graph.atoms, partner)?;
+        Ok(*at(&degree, atom)? == 2
+            && at(&doubles, partner)?.len() == 1
+            // Require a slash at the other end before H removal (#1042).
+            && *at(&directed, partner)?
+            && !a.aromatic
+            && !b.aromatic
+            && matches!((a.atomic_number, b.atomic_number), (6, 6 | 7) | (7, 6)))
+    };
+    for ((bond, direction), &(stated_a, stated_direction)) in
+        graph.bonds.iter().zip(&mut parsed.directions).zip(stated)
+    {
+        // Keep the flag's begin atom, reversing the slash when it swapped ends.
+        let restored = match (stated_direction, stated_a == bond.a) {
+            (Direction::Up, true) | (Direction::Down, false) => Direction::Up,
+            (Direction::Down, true) | (Direction::Up, false) => Direction::Down,
+            _ => continue,
+        };
+        if bond.order == 1
+            && matches!(direction, Direction::Wedge | Direction::Hash)
+            && at(&parsed.metadata.atoms, bond.a)?.chiral_tag == 0
+            && at(&parsed.metadata.atoms, bond.b)?.chiral_tag == 0
+            && (terminal(bond.a)? && alkene_end(bond.b)?
+                || terminal(bond.b)? && alkene_end(bond.a)?)
+        {
+            *direction = restored;
+        }
+    }
+    Ok(())
+}
+
 /// Read default SMILES/CXSMILES chemistry, retaining input conformers and name.
 /// Drawing layout and the application's editable-chemistry checks follow this.
 pub fn read(text: &str) -> Result<Imported> {
+    read_with(text, true)
+}
+
+/// Read as RDKit does, letting wU/wD replace the E/Z direction on their bond.
+/// Reference comparisons use this reading where `read` keeps stated E/Z (#1042).
+pub fn read_dropping_flagged_ez(text: &str) -> Result<Imported> {
+    read_with(text, false)
+}
+
+fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
@@ -543,8 +611,18 @@ pub fn read(text: &str) -> Result<Imported> {
                 .collect(),
         };
         let extension = cx::read(suffix, &topology)?;
+        let stated: Vec<_> = parsed
+            .graph
+            .bonds
+            .iter()
+            .zip(&parsed.directions)
+            .map(|(bond, &direction)| (bond.a, direction))
+            .collect();
         for event in extension.events {
             annotations.apply(&mut parsed, event)?;
+        }
+        if keep_stated_ez {
+            keep_stated_alkene_directions(&mut parsed, &stated)?;
         }
         cx::trim(suffix.get(extension.end..).ok_or(Error::Limit)?)
     } else {
