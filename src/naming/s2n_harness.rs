@@ -718,7 +718,8 @@ fn s2n_fast_subset() {
 }
 
 #[tokio::test]
-async fn relative_cxsmiles_refuses_absolute_identity_927_item_5() {
+async fn relative_cxsmiles_keeps_identity_refusal_but_imports_stated_enantiomer_927_item_5() {
+    let notice = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
     for smiles in [
         "C[C@H](O)C(=O)O |r|",
         "C[C@@H](O)C(=O)O |r|",
@@ -735,14 +736,26 @@ async fn relative_cxsmiles_refuses_absolute_identity_927_item_5() {
             error.contains("relative stereo groups"),
             "{smiles}: {error}"
         );
-        let error = crate::engine::LocalEngine::in_process()
+        let result = crate::engine::LocalEngine::in_process()
             .request(crate::engine::Request::import_smiles(smiles))
-            .await
-            .unwrap_err();
-        assert!(
-            error.contains("Unsupported drawing stereochemistry"),
-            "{smiles}: {error}"
-        );
+            .await;
+        if let Some(absolute) = smiles.strip_suffix(" |r|") {
+            let response = result.unwrap();
+            assert_eq!(
+                response.warnings.iter().filter(|w| *w == notice).count(),
+                1,
+                "{smiles}: {:?}",
+                response.warnings
+            );
+            let identity = super::document_identity(&response.document.unwrap()).unwrap();
+            super::verify_identity(absolute, &identity.smiles).unwrap();
+        } else {
+            let error = result.unwrap_err();
+            assert!(
+                error.contains("Unsupported drawing stereochemistry"),
+                "{smiles}: {error}"
+            );
+        }
     }
 }
 
@@ -757,6 +770,14 @@ async fn relative_cxsmiles_preserves_inversion_invariant_configurations() {
                 .request(crate::engine::Request::import_smiles(&input))
                 .await
                 .unwrap();
+            assert!(
+                response
+                    .warnings
+                    .iter()
+                    .all(|w| !w.contains("(CXSMILES r)")),
+                "{input}: {:?}",
+                response.warnings
+            );
             let identity = super::document_identity(&response.document.unwrap()).unwrap();
             super::verify_identity(smiles, &identity.smiles).unwrap();
             let record = super::generate_name(&identity, super::Cancel::default())

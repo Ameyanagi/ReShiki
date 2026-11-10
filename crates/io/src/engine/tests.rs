@@ -557,9 +557,11 @@ async fn cleanup_keeps_the_hidden_drawing_of_a_molecule_shown_in_3d() {
 }
 
 #[tokio::test]
-async fn reaction_relative_cx_refuses_selected_configured_fragments() {
-    use crate::chemistry::{reaction, smiles};
+async fn reaction_relative_cx_imports_selected_configured_fragments_with_notice()
+-> anyhow::Result<()> {
+    use crate::chemistry::reaction;
     let engine = LocalEngine::in_process();
+    let notice = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
     for text in [
         "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r|",
         "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r:0|",
@@ -568,25 +570,47 @@ async fn reaction_relative_cx_refuses_selected_configured_fragments() {
         "CCO>C[C@H](O)F.O>CC |r:1|",
         "(CCO.C[C@H](O)F)>O>CC |r:1|",
     ] {
-        assert!(
-            matches!(
-                reaction::read_smiles(text),
-                Err(reaction::SmilesError::Molecule(smiles::Error::Unsupported(
-                    "reaction stereochemistry or radical count"
-                )))
-            ),
-            "{text}"
-        );
+        reaction::read_smiles(text)?;
+        let bare = text.split_once(" |").unwrap().0;
+        let mut expected = engine
+            .request(Request::import(text_format(bare), bare))
+            .await
+            .map_err(anyhow::Error::msg)?;
         // The clipboard uses this format detection and request boundary.
+        let actual = engine
+            .request(Request::import(text_format(text), text))
+            .await
+            .map_err(anyhow::Error::msg)?;
         assert_eq!(
-            engine
-                .request(Request::import(text_format(text), text))
-                .await
-                .unwrap_err(),
-            "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
+            actual.warnings.iter().filter(|w| *w == notice).count(),
+            1,
             "{text}"
         );
+        expected.warnings.push(notice.into());
+        assert_eq!(actual.warnings, expected.warnings, "{text}");
+        assert_eq!(
+            serde_json::to_value(&actual.document)?,
+            serde_json::to_value(&expected.document)?,
+            "{text}"
+        );
+        // Compare whole-document SMILES exports to cover every participant's configuration.
+        let mut exports = Vec::new();
+        for document in [actual.document.unwrap(), expected.document.unwrap()] {
+            let mut request = Request::molecule("export", document);
+            request.format = Some("smiles".into());
+            exports.push(
+                engine
+                    .request(request)
+                    .await
+                    .map_err(anyhow::Error::msg)?
+                    .output
+                    .unwrap(),
+            );
+        }
+        assert_eq!(exports[0], exports[1], "{text}");
+        assert!(exports[0].contains('@'), "{text}: {}", exports[0]);
     }
+    Ok(())
 }
 
 #[tokio::test]
@@ -633,6 +657,11 @@ async fn reaction_relative_cx_keeps_unselected_stereo_absolute() -> anyhow::Resu
             .request(Request::import(text_format(&text), &text))
             .await
             .map_err(anyhow::Error::msg)?;
+        assert!(
+            actual.warnings.iter().all(|w| !w.contains("(CXSMILES r)")),
+            "{text}: {:?}",
+            actual.warnings
+        );
         assert_eq!(
             serde_json::to_value(actual)?,
             serde_json::to_value(expected)?,

@@ -410,7 +410,8 @@ fn relative_cx_groups_keep_configurations_and_explicit_groups() -> anyhow::Resul
 #[test]
 fn relative_cx_adds_one_group_without_inverting_explicit_absolute_centres() -> anyhow::Result<()> {
     let molecule = "C[C@H](O)[C@H](F)[C@H](Br)Cl";
-    let imported = super::read(&format!("{molecule} |r,o1:1,a:3|"))?;
+    let mut imported = super::read(&format!("{molecule} |r,o1:1,a:3|"))?;
+    assert!(imported.relative_group);
     let groups = &imported.prepared.state.metadata.groups;
     assert_eq!(groups.len(), 3);
     assert_eq!((groups[0].kind, groups[0].atoms.as_slice()), (1, &[1][..]));
@@ -425,6 +426,20 @@ fn relative_cx_adds_one_group_without_inverting_explicit_absolute_centres() -> a
             "C[C@@H](O)[C@H](F)[C@@H](Cl)Br".into(),
         ]
         .into()
+    );
+    assert!(imported.draw_relative_as_stated());
+    assert_eq!(
+        serde_json::to_value(imported)?,
+        serde_json::to_value(super::read(&format!("{molecule} |o1:1,a:3|"))?)?
+    );
+    let molecule = "C[C@H](O)[C@H](F)Cl";
+    let mut imported = super::read(&format!("{molecule} |r,o1:1,a:3|"))?;
+    assert!(!imported.relative_group);
+    assert!(!imported.draw_relative_as_stated());
+    assert_eq!(imported.prepared.state.metadata.groups.len(), 2);
+    assert_eq!(
+        serde_json::to_value(imported)?,
+        serde_json::to_value(super::read(&format!("{molecule} |o1:1,a:3|"))?)?
     );
     Ok(())
 }
@@ -473,7 +488,42 @@ fn relative_cx_without_configured_tetrahedral_centres_is_unchanged() -> anyhow::
 }
 
 #[test]
-fn reaction_relative_cx_refuses_configured_centres_and_keeps_controls() -> anyhow::Result<()> {
+fn relative_cx_drawing_keeps_the_stated_configuration() -> anyhow::Result<()> {
+    for (molecule, marker, atoms) in [
+        ("C[C@H](O)C(=O)O", "r", vec![1]),
+        ("C[C@H](O)F.C[C@H](O)Cl", "r:1", vec![5]),
+        ("C[C@H](O)F.C[C@H](O)Cl", "r:0,1", vec![1, 5]),
+        ("C[C@H](O)F.CCO", "r:0,1", vec![1]),
+        ("C[C@H](O)F.CCO", "r:1", vec![]),
+        ("CCO", "r", vec![]),
+        ("O[C@H]1CC[C@@H](O)CC1", "r", vec![]),
+    ] {
+        let text = format!("{molecule} |{marker}|");
+        let mut imported = super::read(&text)?;
+        assert!(imported.relative, "{text}");
+        let grouped = !atoms.is_empty();
+        assert_eq!(imported.relative_group, grouped, "{text}");
+        let groups = &imported.prepared.state.metadata.groups;
+        assert_eq!(groups.len(), usize::from(grouped), "{text}");
+        if grouped {
+            assert_eq!(groups[0].kind, 2, "{text}");
+            assert_eq!(groups[0].atoms, atoms, "{text}");
+        }
+        assert_eq!(imported.draw_relative_as_stated(), grouped, "{text}");
+        assert!(!imported.relative_group, "{text}");
+        assert!(!imported.draw_relative_as_stated(), "{text}");
+        assert!(imported.relative, "{text}");
+        assert_eq!(
+            serde_json::to_value(imported)?,
+            serde_json::to_value(super::read(molecule)?)?,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn reaction_relative_cx_groups_configured_centres_and_keeps_controls() -> anyhow::Result<()> {
     for molecule in [
         "C[C@H](O)C(=O)O",
         "C[C@@H](O)C(=O)O",
@@ -483,13 +533,18 @@ fn reaction_relative_cx_refuses_configured_centres_and_keeps_controls() -> anyho
     ] {
         let parsed = super::parse(molecule)?;
         let atoms = (0..parsed.graph.atoms.len()).collect();
-        assert!(
-            matches!(
-                super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)]),
-                Err(Error::Unsupported(
-                    "reaction stereochemistry or radical count"
-                ))
-            ),
+        let mut relative =
+            super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)])?;
+        assert!(relative.relative, "{molecule}");
+        assert!(relative.relative_group, "{molecule}");
+        let groups = &relative.prepared.state.metadata.groups;
+        assert_eq!(groups.len(), 1, "{molecule}");
+        assert_eq!(groups[0].kind, 2, "{molecule}");
+        assert!(relative.draw_relative_as_stated(), "{molecule}");
+        assert!(!relative.relative_group, "{molecule}");
+        assert_eq!(
+            serde_json::to_value(relative)?,
+            serde_json::to_value(super::reaction_part(super::parse(molecule)?, vec![])?)?,
             "{molecule}"
         );
     }
@@ -504,8 +559,11 @@ fn reaction_relative_cx_refuses_configured_centres_and_keeps_controls() -> anyho
         let absolute = super::reaction_part(super::parse(molecule)?, Vec::new())?;
         let parsed = super::parse(molecule)?;
         let atoms = (0..parsed.graph.atoms.len()).collect();
-        let relative = super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)])?;
+        let mut relative =
+            super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)])?;
         assert!(relative.relative);
+        assert!(!relative.relative_group);
+        assert!(!relative.draw_relative_as_stated());
         assert!(relative.prepared.state.metadata.groups.is_empty());
         assert_eq!(
             serde_json::to_value(relative)?,
@@ -525,20 +583,20 @@ fn reaction_relative_cx_limits_groups_to_selected_atoms() -> anyhow::Result<()> 
         vec![crate::cx::Event::RelativeStereo(vec![0, 1, 2])],
     )?;
     assert!(relative.relative);
+    assert!(!relative.relative_group);
     assert!(relative.prepared.state.metadata.groups.is_empty());
     assert_eq!(
         serde_json::to_value(relative)?,
         serde_json::to_value(absolute)?
     );
-    assert!(matches!(
-        super::reaction_part(
-            super::parse(molecule)?,
-            vec![crate::cx::Event::RelativeStereo(vec![3, 4, 5, 6])],
-        ),
-        Err(Error::Unsupported(
-            "reaction stereochemistry or radical count"
-        ))
-    ));
+    let relative = super::reaction_part(
+        super::parse(molecule)?,
+        vec![crate::cx::Event::RelativeStereo(vec![3, 4, 5, 6])],
+    )?;
+    assert!(relative.relative_group);
+    let groups = &relative.prepared.state.metadata.groups;
+    assert_eq!(groups.len(), 1);
+    assert_eq!((groups[0].kind, groups[0].atoms.as_slice()), (2, &[4][..]));
     Ok(())
 }
 

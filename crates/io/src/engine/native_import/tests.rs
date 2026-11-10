@@ -91,6 +91,70 @@ async fn cumulene_smiles_loss_warning_reaches_the_import_response() -> anyhow::R
 }
 
 #[tokio::test]
+async fn relative_cx_smiles_imports_the_stated_enantiomer_with_notice() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    for (text, warned) in [
+        ("C[C@H](O)C(=O)O |r|", true),
+        ("C[C@@H](O)C(=O)O |r|", true),
+        ("C[C@H](O)[C@@H](C)Cl |r|", true),
+        ("[H][C@](C)(O)C(=O)O |r|", true),
+        ("C[C@H](O)F.C[C@H](O)Cl |r:1|", true),
+        ("C[C@H](O)F.C[C@H](O)Cl |r:0|", true),
+        ("CCO |r|", false),
+        ("CC(O)C(=O)O |r|", false),
+        ("O[C@H]1CC[C@@H](O)CC1 |r|", false),
+        ("C[C@H](O)[C@H](O)C |r|", false),
+        ("C[C@H](O)F.CCO |r:1|", false),
+    ] {
+        let bare = text.split_once(" |").unwrap().0;
+        let mut expected = engine
+            .request(Request::import_smiles(bare))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let actual = engine
+            .request(Request::import_smiles(text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            actual
+                .warnings
+                .iter()
+                .filter(|notice| notice.as_str() == RELATIVE_STEREO_NOTICE)
+                .count(),
+            usize::from(warned),
+            "{text}: {:?}",
+            actual.warnings
+        );
+        let inchi = &actual.analysis.as_ref().unwrap().inchi;
+        assert_eq!(inchi, &expected.analysis.as_ref().unwrap().inchi, "{text}");
+        if warned {
+            assert!(inchi.contains("/m"), "{text}: {inchi}");
+            expected.warnings.push(RELATIVE_STEREO_NOTICE.into());
+        }
+        assert_eq!(
+            serde_json::to_value(actual)?,
+            serde_json::to_value(expected)?,
+            "{text}"
+        );
+    }
+    for text in [
+        "C[C@H](O)[C@@H](C)Cl |&1:1,3|",
+        "C[C@H](O)[C@@H](C)Cl |o1:1,3|",
+        "C[C@H](O)[C@H](F)Cl |r,o1:1,a:3|",
+    ] {
+        let error = engine
+            .request(Request::import_smiles(text))
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("Unsupported drawing stereochemistry"),
+            "{text}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn cumulene_inchi_ez_loss_uses_the_same_import_warning() -> anyhow::Result<()> {
     for (inchi, warned) in [
         ("InChI=1S/C6H8/c1-3-5-6-4-2/h3-4H,1-2H3/b4-3+", true),
