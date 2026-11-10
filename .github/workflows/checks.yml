@@ -518,9 +518,6 @@ jobs:
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Install fixture reader dependencies
         run: uv sync --locked
-      - name: Select the captured Ubuntu fixture profile
-        if: runner.os == 'Linux'
-        run: echo "RESHIKI_TEST_LINUX_GOLDENS=ubuntu-22.04-x64" >> "$GITHUB_ENV"
       - name: Replay independently captured chemistry fixtures
         run: cargo test --locked --features rdkit-reference --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
