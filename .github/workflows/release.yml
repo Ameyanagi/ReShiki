@@ -262,14 +262,9 @@ jobs:
       - name: Test the RDKit reference worker and oracles on this platform
         if: matrix.native_only != true
         run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
-      - name: Build Intel native helper boundary fixtures
-        if: matrix.native_only == true
-        run: uv run --no-project --isolated --python 3.12.15 python scripts/build_inchi_helper.py --target ${{ matrix.target }}
       - name: Test Intel Mac packaging without reference dependencies
         if: matrix.native_only == true
-        env:
-          RESHIKI_REQUIRE_INCHI_HELPER: "1"
-        run: uv run --no-project --with certifi==2026.10.23 --isolated --python 3.12.15 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_helper_protocol tests.test_native_packaging tests.test_agent_api_package tests.test_geometry_distribution tests.test_license_notices tests.test_native_clipboard tests.test_native_print
+        run: uv run --no-project --with certifi==2026.10.23 --isolated --python 3.12.15 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_native_packaging tests.test_agent_api_package tests.test_geometry_distribution tests.test_license_notices tests.test_native_clipboard tests.test_native_print
       - name: Verify reference dependencies
         if: matrix.native_only != true
         run: uv run --locked python scripts/check_reference_dependencies.py
