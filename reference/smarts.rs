@@ -15,6 +15,7 @@ struct Case {
     text: String,
     expected: Option<usize>,
     atomic_number: Option<u32>,
+    renumbered: Option<Box<Case>>,
 }
 
 #[test]
@@ -41,9 +42,20 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected) = (0, 0);
+    let mut renumberings = 0;
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
+        let expected = case.renumbered.as_deref().unwrap_or(&case);
+        if case.renumbered.is_some() {
+            renumberings += 1;
+            assert_ne!(
+                (expected.expected, expected.atomic_number),
+                (case.expected, case.atomic_number),
+                "Stereo-group renumbering did not change the native result: {:?}",
+                case.text
+            );
+        }
         let actual = match smarts::validate(&case.text) {
             Ok(n) => {
                 accepted += 1;
@@ -55,24 +67,24 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
             }
             Err(error) => anyhow::bail!("Unexpected parser error for {:?}: {error}", case.text),
         };
-        if actual != case.expected {
+        if actual != expected.expected {
             failures.push(format!(
                 "{:?}: {actual:?} != {:?}",
-                case.text, case.expected
+                case.text, expected.expected
             ));
         }
         if let Ok(number) = smarts::atomic_number_query(&case.text)
-            && number != case.atomic_number
+            && number != expected.atomic_number
         {
             failures.push(format!(
                 "{:?}: atomic-number query {number:?} != {:?}",
-                case.text, case.atomic_number
+                case.text, expected.atomic_number
             ));
         }
     }
     assert!(child.wait()?.success());
     eprintln!(
-        "SMARTS: {accepted} accepted, {rejected} rejected, {} mismatches",
+        "SMARTS: {accepted} accepted, {rejected} rejected, {renumberings} stereo-group renumberings, {} mismatches",
         failures.len()
     );
     if !failures.is_empty() {
@@ -93,6 +105,10 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
             .join("\n")
     );
     assert!(accepted > 5000 && rejected > 1000);
+    assert!(
+        renumberings > 0,
+        "Missing CX stereo-group collision coverage"
+    );
     Ok(())
 }
 

@@ -1,5 +1,7 @@
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/cx_stereo_groups.rs"]
+mod cx_stereo_groups;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, document::Labels, molfile},
@@ -29,6 +31,7 @@ struct Case {
     restriction: Option<GenericRestriction>,
     extension: Option<DrawingExtension>,
     generic: Option<GenericDrawingAddition>,
+    renumbered: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -121,6 +124,7 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     let mut restrictions = BTreeMap::<String, usize>::new();
     let mut fields = BTreeMap::<String, usize>::new();
     let (mut mismatches, mut extensions, mut generic_additions) = (0, 0, 0);
+    let mut renumberings = 0;
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let imported = molfile::read(&case.text);
@@ -194,7 +198,18 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
             .map(|generic| serde_json::to_value(&generic.document))
             .transpose()?
             .unwrap_or(base_document);
-        let failure = if extension_guard.is_some() {
+        let failure = if let Some(text) = &case.renumbered {
+            renumberings += 1;
+            cx_stereo_groups::query_rejection(
+                text,
+                original_success
+                    && case.restriction.is_none()
+                    && case.extension.is_none()
+                    && case.generic.is_none(),
+                &imported,
+                molfile::read,
+            )
+        } else if extension_guard.is_some() {
             extension_guard
         } else if generic_guard.is_some() {
             generic_guard
@@ -357,10 +372,15 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     for (field, count) in fields {
         eprintln!("MOL drawing mismatch field: {count} {field}");
     }
+    eprintln!("MOL drawings: {renumberings} stereo-group renumberings");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         accepted > 1000 && rejected > 100 && spatial > 100 && wedges > 100,
         "Insufficient import drawing coverage"
+    );
+    assert!(
+        renumberings > 0,
+        "Missing CX stereo-group collision coverage"
     );
     Ok(())
 }
