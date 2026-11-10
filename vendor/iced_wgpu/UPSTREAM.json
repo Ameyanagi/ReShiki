@@ -1,0 +1,16 @@
+{
+  "upstream": "https://github.com/iced-rs/iced/tree/3997291f318a8bc06fa522f5579836fb3feb94df/wgpu",
+  "version": "0.14.0",
+  "commit": "3997291f318a8bc06fa522f5579836fb3feb94df",
+  "license": "MIT",
+  "source": "crates.io iced_wgpu 0.14.0",
+  "upstream_file_sha256": {
+    "Cargo.toml": "25b9c6ee060874ed93645f49d1ec0e8056378a187ebb5660c97b8cef71380675",
+    "src/triangle/msaa.rs": "86c6319d50274fafcf775a759eedb0ae6fd8fc7e3f351c31688c690fd2fde3d8"
+  },
+  "purpose": "Release oversized MSAA targets when the window shrinks while preserving antialiasing.",
+  "local_changes": [
+    "src/triangle/msaa.rs: recreate MSAA targets whenever the region size differs, including when it shrinks; leave the ratio calculation unchanged",
+    "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"
+  ]
+}
