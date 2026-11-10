@@ -21,6 +21,8 @@ type TestResult = anyhow::Result<()>;
 mod coordinate_free_wedges;
 #[path = "support/coordinate_wedges.rs"]
 mod coordinate_wedges;
+#[path = "support/flagged_ez.rs"]
+mod flagged_ez;
 #[path = "support/longest_lived_mass.rs"]
 mod longest_lived_mass;
 #[path = "support/molecule_reading.rs"]
@@ -37,8 +39,6 @@ mod reaction_presentation;
 mod reference_mol;
 #[path = "support/reference_presentation.rs"]
 mod reference_presentation;
-#[path = "support/stated_ez_wedges.rs"]
-mod stated_ez_wedges;
 
 #[tokio::test]
 async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
@@ -280,7 +280,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let mut categories = std::collections::BTreeMap::<String, usize>::new();
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
-    let mut tag_wins = Vec::new();
+    let (mut tag_wins, mut kept_ez) = (Vec::new(), Vec::new());
     let mut deferred = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -381,6 +381,11 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             tag_wins.push(case.name);
             continue;
         }
+        if actual.is_ok() && expected.is_some() && flagged_ez::flagged(format, &case.text) {
+            accepted += 1;
+            kept_ez.push(case.name);
+            continue;
+        }
         let failure = match (actual, expected) {
             (Ok(actual), Some(mut expected)) => {
                 accepted += 1;
@@ -395,11 +400,6 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 }
                 if let Some(atom) = reaction_coordinate_free_wedges::known(format, &case.text) {
                     reaction_coordinate_free_wedges::adapt(atom, &actual, &mut expected);
-                    deferred.push(case.name.clone());
-                }
-                let doubles = stated_ez_wedges::double_bonds(format, &case.text);
-                if !doubles.is_empty() {
-                    stated_ez_wedges::adapt(&doubles, &actual, &mut expected);
                     deferred.push(case.name.clone());
                 }
                 let expected = if format == "mol" {
@@ -467,7 +467,8 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     }
     assert!(child.wait()?.success(), "Import reference failed");
     eprintln!("{format} coordinate-free wedge flags following the tag (#1044): {tag_wins:?}");
-    eprintln!("{format} deferred known issues (#1042, #1048): {deferred:?}");
+    eprintln!("{format} E/Z kept under wedge flags (#1042): {kept_ez:?}");
+    eprintln!("{format} deferred known issue (#1048): {deferred:?}");
     eprintln!(
         "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()

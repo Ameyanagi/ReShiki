@@ -8,6 +8,47 @@ fn binol(wedges: &str) -> String {
 }
 
 #[test]
+fn wedge_flags_leave_other_double_bonds_and_wavy_flags_unchanged() -> anyhow::Result<()> {
+    for text in [
+        "[H]/N=N/C |wU:1.0|",
+        "C/C=O |wU:1.0|",
+        "F/C=C/F |wU:1.0|",
+        "[C@H3]/C=C/C |wU:1.0|",
+        "C/C=C/C |w:1.0|",
+        "[H]/N=C/F |w:1.0|",
+    ] {
+        assert_eq!(
+            serde_json::to_value(super::read(text)?.prepared)?,
+            serde_json::to_value(super::read_dropping_flagged_ez(text)?.prepared)?,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn reaction_part_wedge_flags_still_replace_stated_directions() -> anyhow::Result<()> {
+    use crate::{cx::Event, kekulize::Direction};
+    for text in ["C/C=C/C", r"C/C=C\C", "[H]/N=C/F"] {
+        for (kind, direction) in [(1, Direction::Wedge), (3, Direction::Hash)] {
+            let imported = super::reaction_part(
+                super::parse(text)?,
+                vec![Event::Wedge {
+                    bond: 0,
+                    begin: 1,
+                    kind,
+                }],
+            )?;
+            let state = imported.prepared.state;
+            assert_eq!(state.directions[0], direction, "{text}");
+            assert_eq!(state.graph.bonds[0].a, 1, "{text}");
+            assert_eq!(state.metadata.bonds[1].stereo, 0, "{text}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn protium_does_not_create_configuration() -> anyhow::Result<()> {
     for text in [
         "[1H][C@@H](C)O",
