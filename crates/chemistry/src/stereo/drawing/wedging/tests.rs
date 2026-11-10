@@ -72,6 +72,20 @@ fn molecule_orients_the_wedge_but_single_bond_preserves_endpoints() -> TestResul
     Ok(())
 }
 #[test]
+fn wavy_bond_at_tagged_far_end_keeps_reference_chooser_suppressed() -> TestResult {
+    let (mut state, props, conf) = input().map_err(anyhow::Error::msg)?;
+    // Pinned RDKit treats an existing wavy bond as satisfying either tagged
+    // endpoint, even when the drawing's unknown belongs to its untagged begin.
+    state.directions[0] = Direction::Unknown;
+    assert_eq!(state.graph.bonds[0].b, 0);
+    let before = serde_json::to_value(&state)?;
+    let result = wedge_molecule(&state, &props, Some(&conf), false).map_err(anyhow::Error::msg)?;
+    assert_eq!(result.directions, state.directions);
+    assert_eq!(result.graph.bonds, state.graph.bonds);
+    assert_eq!(serde_json::to_value(&state)?, before);
+    Ok(())
+}
+#[test]
 fn attachment_points_and_second_wedges_follow_preferences() -> TestResult {
     let (state, mut props, conf) = input().map_err(anyhow::Error::msg)?;
     props.attachment_points[1] = true;
