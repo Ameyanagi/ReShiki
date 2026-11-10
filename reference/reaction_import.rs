@@ -1,5 +1,7 @@
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/cx_stereo_groups.rs"]
+mod cx_stereo_groups;
 use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, reaction};
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,7 @@ struct Case {
     expected: Option<Value>,
     failure: Option<String>,
     restriction: Option<GenericRestriction>,
+    renumbered: Option<String>,
 }
 fn difference(a: &Value, e: &Value, path: &str) -> Option<String> {
     fn collect(a: &Value, e: &Value, path: &str, failures: &mut Vec<String>) {
@@ -107,6 +110,7 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut mismatches) = (0, 0, 0);
+    let mut renumberings = 0;
 
     let mut failures = Vec::new();
     let mut categories = BTreeMap::<String, usize>::new();
@@ -116,7 +120,15 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
         let case: Case = serde_json::from_str(&line?)?;
         let result = reaction::read_rxn(&case.text);
 
-        let failure = if let Some(restriction) = &case.restriction {
+        let failure = if let Some(text) = &case.renumbered {
+            renumberings += 1;
+            cx_stereo_groups::query_rejection(
+                text,
+                case.expected.is_some() && case.failure.is_none() && case.restriction.is_none(),
+                &result,
+                reaction::read_rxn,
+            )
+        } else if let Some(restriction) = &case.restriction {
             let failure = rejection_difference(
                 restriction,
                 case.expected.is_some() && case.failure.is_none(),
@@ -206,6 +218,7 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
         eprintln!("RXN import restriction category: {count} {category}");
     }
     eprintln!("RXN import: {} mismatch diagnostics", failures.len());
+    eprintln!("RXN import: {renumberings} stereo-group renumberings");
     for (field, count) in fields {
         eprintln!("RXN import mismatch field: {count} {field}");
     }
@@ -213,6 +226,10 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
     assert!(
         accepted > if queries { 50 } else { 1000 } && rejected > 100,
         "Insufficient RXN coverage"
+    );
+    assert!(
+        queries || renumberings > 0,
+        "Missing CX stereo-group collision coverage"
     );
     Ok(())
 }

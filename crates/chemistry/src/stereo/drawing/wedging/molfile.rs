@@ -21,7 +21,7 @@ pub fn file_bonds(
     }
     let mut work = Work(50_000_000);
     let mut ctx = Context::new(input, properties, conformer, true, &mut work)?;
-    ctx.choose_tetrahedral(&mut work)?;
+    ctx.choose_tetrahedral(&mut work, false)?;
     ctx.choose_atrop(&mut work)?;
     ctx.choose_allene(&mut work)?;
     ctx.state

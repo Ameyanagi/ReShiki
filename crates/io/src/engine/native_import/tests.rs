@@ -988,7 +988,12 @@ fn explicit_mol_and_cdxml_imports_preserve_nonconventional_coordinates() -> anyh
     ]
     .map(|(x, y)| Point3 { x, y, z: 0. })
     .to_vec();
-    let source = finish_molecule(molecule, &input.prepared.dummy_labels, Default::default())?;
+    let source = finish_molecule(
+        molecule,
+        &input.prepared.dummy_labels,
+        Default::default(),
+        &ComponentRow::default(),
+    )?;
     let (mol, fallback) =
         molfile::write_drawing_absolute(&source.molecule, &source.document, Default::default())?;
     assert!(!fallback);
@@ -1017,6 +1022,39 @@ fn explicit_mol_and_cdxml_imports_preserve_nonconventional_coordinates() -> anyh
                 before.id
             );
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn imported_component_rows_leave_a_bond_length_between_label_edges() -> anyhow::Result<()> {
+    for text in [
+        "C1C=CCC2C1CNC2.Cl",
+        "C1CCNCC1.Cl",
+        "C1CCNCC1.OC(=O)C(F)(F)F",
+    ] {
+        let prepared = imported_smiles(text)?;
+        let doc = &prepared.document;
+        let ids: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+        let mut bounds: Vec<_> = crate::reactions::molecules(doc, &ids)
+            .iter()
+            .map(|ids| {
+                doc.atoms
+                    .iter()
+                    .filter(|a| ids.contains(&a.id))
+                    .map(|a| (a.position, a.position))
+                    .chain(crate::scene::participant_label_ink_boxes(doc, ids))
+                    .fold(
+                        (f32::INFINITY, f32::NEG_INFINITY),
+                        |(left, right), (lo, hi)| (left.min(lo.x), right.max(hi.x)),
+                    )
+            })
+            .collect();
+        bounds.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert_eq!(bounds.len(), 2, "{text}");
+        let gap = bounds[1].0 - bounds[0].1;
+        let length = average_document_bond_length(doc);
+        assert!(gap >= length - 1e-4, "{text}: label gap {gap} < {length}");
     }
     Ok(())
 }
@@ -1402,18 +1440,6 @@ async fn coordinate_free_wedge_flags_follow_the_tag() -> anyhow::Result<()> {
             );
         }
     }
-    // A wavy flag next to a wedge flag keeps the flags on the layout (#1049):
-    // the drawing must not lose the tagged centre's stereobond.
-    let text = "C[C@H](N)C(=O)O |w:0.0,wD:1.1|";
-    let mut visible = drawn(&import("smiles", text).await?);
-    for atom in &mut visible.atoms {
-        atom.stereo = None;
-    }
-    assert_eq!(
-        smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
-        "C[C@H](N)C(=O)O",
-        "{text}"
-    );
     // An axial flag has no tag to defer to: the molecule reader takes the
     // configuration from it, and the drawing is wedged from that.
     let binol = "c1(-c2c(O)c3c(cc2)cccc3)c(O)c2c(cc1)cccc2";
@@ -1432,6 +1458,305 @@ async fn coordinate_free_wedge_flags_follow_the_tag() -> anyhow::Result<()> {
         axes.push(labels);
     }
     assert_ne!(axes[0], axes[1]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn coordinate_free_wedge_flags_respect_wavy_stereo_semantics() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let import = async |format: &str, text: &str| {
+        engine
+            .request(Request::import(format, text))
+            .await
+            .map_err(anyhow::Error::msg)
+    };
+    const ALANINE: &str = "C[C@H](N)C(=O)O";
+    for (source, wave, wedge, bare, inchi, wavy_single) in [
+        // A wave ending at the tagged atom preserves its configuration.
+        (
+            ALANINE,
+            "w:0.0",
+            "1.1",
+            ALANINE,
+            Some("InChI=1S/C3H7NO2/c1-2(4)3(5)6/h2H,4H2,1H3,(H,5,6)/t2-/m0/s1"),
+            Some((1, 2)),
+        ),
+        // The wave disappears with its explicit hydrogen during preparation.
+        (
+            "C1[C@@H](F)CC[C@H]1O[H]",
+            "w:7.7",
+            "1.0",
+            "C1[C@@H](F)CC[C@H]1O",
+            Some("InChI=1S/C5H9FO/c6-4-1-2-5(7)3-4/h4-5,7H,1-3H2/t4-,5+/m0/s1"),
+            None,
+        ),
+        // A wave beginning at the tagged atom explicitly clears that tag.
+        (
+            ALANINE,
+            "w:1.0",
+            "1.2",
+            "CC(N)C(=O)O",
+            Some("InChI=1S/C3H7NO2/c1-2(4)3(5)6/h2H,4H2,1H3,(H,5,6)"),
+            Some((2, 1)),
+        ),
+        // The wave makes the adjacent alkene unknown, leaving the far-end tag.
+        (
+            "C[C@H](N)/C=C/C",
+            "w:3.2",
+            "1.0",
+            "C[C@H](N)C=CC",
+            None,
+            Some((4, 2)),
+        ),
+    ] {
+        let stated =
+            smiles::write::write(&smiles::read(bare)?.prepared.state, Default::default())?.text;
+        for format in ["smiles", "naming_smiles"] {
+            let expected = import(format, bare).await?;
+            let expected_analysis = expected.analysis.as_ref().unwrap();
+            let wave_only = import(format, &format!("{source} |{wave}|")).await?;
+            let wave_analysis = wave_only.analysis.as_ref().unwrap();
+            assert_eq!(
+                wave_analysis.inchi, expected_analysis.inchi,
+                "{source}/{wave}/{format}"
+            );
+            assert_eq!(
+                wave_analysis.smiles, expected_analysis.smiles,
+                "{source}/{wave}/{format}"
+            );
+            if let Some(inchi) = inchi {
+                assert_eq!(wave_analysis.inchi, inchi, "{source}/{wave}/{format}");
+            } else {
+                assert!(
+                    !wave_analysis.inchi.contains("/b"),
+                    "{source}/{wave}/{format}"
+                );
+            }
+            let mut visible = wave_only.document.unwrap();
+            for atom in &mut visible.atoms {
+                atom.stereo = None;
+            }
+            assert_eq!(
+                smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?
+                    .text,
+                wave_analysis.smiles,
+                "{source}/{wave}/{format}: wave-only visible drawing stereochemistry"
+            );
+            for flag in ["wU", "wD"] {
+                let text = format!("{source} |{wave},{flag}:{wedge}|");
+                let imported = import(format, &text).await?;
+                let analysis = imported.analysis.as_ref().unwrap();
+                assert_eq!(analysis.inchi, wave_analysis.inchi, "{text}/{format}");
+                assert_eq!(analysis.smiles, wave_analysis.smiles, "{text}/{format}");
+                let mut visible = imported.document.unwrap();
+                assert_eq!(
+                    visible
+                        .bonds
+                        .iter()
+                        .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                        .map(|bond| (bond.a, bond.b))
+                        .collect::<Vec<_>>(),
+                    wavy_single.into_iter().collect::<Vec<_>>(),
+                    "{text}/{format}: wavy single-bond direction"
+                );
+                for atom in &mut visible.atoms {
+                    atom.stereo = None;
+                }
+                assert_eq!(
+                    smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?
+                        .text,
+                    stated,
+                    "{text}/{format}: visible drawing stereochemistry"
+                );
+                if source == ALANINE && bare == ALANINE {
+                    let xml = crate::exchange::drawing::write(&visible, Default::default())?;
+                    let reopened = import("cdxml", &xml).await?;
+                    let analysis = reopened.analysis.as_ref().unwrap();
+                    assert_eq!(
+                        analysis.inchi, wave_analysis.inchi,
+                        "{text}/{format}: CDXML"
+                    );
+                    assert_eq!(
+                        analysis.smiles, wave_analysis.smiles,
+                        "{text}/{format}: CDXML"
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn coordinate_free_wavy_flags_keep_visible_fused_and_adjacent_stereo() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    for (bare, flags, waves) in [
+        // Add fusion H before choosing wedges so their directions stay correct.
+        (
+            "C1CC[C@H]2CCCC[C@@H]2C1",
+            "w:2.2,4.3,wU:8.9",
+            [(3, 4), (5, 4)],
+        ),
+        // Leave the only available bond for the wave-constrained centre.
+        (
+            "F[C@H](Cl)[C@]([C@H](F)Br)([C@H](Cl)Br)[C@H](F)I",
+            "w:0.0,2.1,wU:1.2,3.3",
+            [(1, 2), (3, 2)],
+        ),
+    ] {
+        let stated =
+            smiles::write::write(&smiles::read(bare)?.prepared.state, Default::default())?.text;
+        let text = format!("{bare} |{flags}|");
+        for format in ["smiles", "naming_smiles"] {
+            let imported = engine
+                .request(Request::import(format, &text))
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let analysis = imported.analysis.unwrap();
+            assert_eq!(analysis.smiles, stated, "{text}/{format}: analysis");
+            let mut visible = imported.document.unwrap();
+            assert_eq!(
+                visible
+                    .bonds
+                    .iter()
+                    .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                    .map(|bond| (bond.a, bond.b))
+                    .collect::<Vec<_>>(),
+                waves,
+                "{text}/{format}: wavy single-bond direction"
+            );
+            for atom in &mut visible.atoms {
+                atom.stereo = None;
+            }
+            // Normalize the graph H added for the drawing to the implicit H
+            // representation used for analysis, retaining the read-back stereo.
+            let visible_smiles =
+                smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?
+                    .text;
+            let normalized = smiles::prepare(&visible_smiles)?.state;
+            assert_eq!(
+                smiles::write::write(&normalized, Default::default())?.text,
+                analysis.smiles,
+                "{text}/{format}: visible drawing stereochemistry"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn wavy_imports_keep_all_five_visible_sulfoxide_configurations() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let bare = "O=[S@]([C@H](F)[C@]([2H])(Cl)Br)[C@H](Cl)[C@]([2H])(F)I";
+    let text = format!("{bare} |w:3.2,9.8|");
+    let stated = smiles::read(bare)?.prepared.state;
+    assert_eq!(
+        stated
+            .metadata
+            .atoms
+            .iter()
+            .filter(|atom| matches!(atom.chiral_tag, 1 | 2))
+            .count(),
+        5
+    );
+    let expected = smiles::write::write(&stated, Default::default())?.text;
+    for format in ["smiles", "naming_smiles", "prepared"] {
+        let request = if format == "prepared" {
+            Request::import_prepared(smiles::read(&text)?.prepared)
+        } else {
+            Request::import(format, &text)
+        };
+        let imported = engine.request(request).await.map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            imported.analysis.unwrap().smiles,
+            expected,
+            "{format}: analysis"
+        );
+        let mut visible = imported.document.unwrap();
+        assert_eq!(
+            visible
+                .bonds
+                .iter()
+                .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                .map(|bond| (bond.a, bond.b))
+                .collect::<Vec<_>>(),
+            [(4, 3), (10, 9)],
+            "{format}: incoming waves"
+        );
+        assert_eq!(
+            visible
+                .bonds
+                .iter()
+                .filter(|bond| matches!(bond.display.as_str(), "wedge" | "hash"))
+                .count(),
+            5,
+            "{format}: every centre needs a visible stereobond"
+        );
+        assert_eq!(
+            visible
+                .bonds
+                .iter()
+                .filter(|bond| { bond.a == 2 && matches!(bond.display.as_str(), "wedge" | "hash") })
+                .count(),
+            1,
+            "{format}: sulfur needs an outgoing stereobond"
+        );
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        let read_back = molecular::prepare(&visible)?.state;
+        assert_eq!(
+            read_back
+                .metadata
+                .atoms
+                .iter()
+                .filter(|atom| matches!(atom.chiral_tag, 1 | 2))
+                .count(),
+            5,
+            "{format}: all five configurations must be visible"
+        );
+        assert_eq!(
+            smiles::write::write(&read_back, Default::default())?.text,
+            expected,
+            "{format}: visible drawing stereochemistry"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn prepared_import_keeps_visible_wavy_bridgehead_stereo() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let bare = "O=C1C[C@H]2CC[C@@H]1C2";
+    let text = format!("{bare} |w:7.7|");
+    let source = smiles::read(&text)?;
+    let imported = engine
+        .request(Request::import_prepared(source.prepared))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let analysis = imported.analysis.unwrap();
+    let stated =
+        smiles::write::write(&smiles::read(bare)?.prepared.state, Default::default())?.text;
+    assert_eq!(analysis.smiles, stated, "{text}: analysis");
+    let mut visible = imported.document.unwrap();
+    assert_eq!(
+        visible
+            .bonds
+            .iter()
+            .filter(|bond| bond.order == 1 && bond.display == "wavy")
+            .map(|bond| (bond.a, bond.b))
+            .collect::<Vec<_>>(),
+        [(8, 7)],
+        "{text}: wavy single-bond direction"
+    );
+    for atom in &mut visible.atoms {
+        atom.stereo = None;
+    }
+    assert_eq!(
+        smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+        analysis.smiles,
+        "{text}: visible drawing stereochemistry"
+    );
     Ok(())
 }
 
@@ -1598,4 +1923,423 @@ async fn reaction_imports_keep_stated_alkene_stereo() -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+/// A wU/wD flag replaces the `/` or `\` on its bond. Where the flag cannot mean
+/// a wedge, import keeps the E/Z the direction states, as the bare SMILES does,
+/// although RDKit drops it (#1042). Other flagged directions keep main's result.
+#[tokio::test]
+async fn wedge_flags_keep_stated_alkene_stereo() -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    let engine = crate::engine::LocalEngine::in_process();
+    let analysis = async |text: &str| -> anyhow::Result<(String, String)> {
+        let analysis = engine
+            .request(Request::import("smiles", text))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .analysis
+            .context("Missing analysis")?;
+        Ok((analysis.smiles, analysis.inchi))
+    };
+    let dropped = smiles::read_dropping_flagged_ez;
+    // The whole prepared molecule, so a restore cannot change anything else.
+    let stereo =
+        |text: &str, read: fn(&str) -> std::result::Result<smiles::Imported, smiles::Error>| {
+            anyhow::Ok(serde_json::to_value(read(text)?.prepared)?)
+        };
+    const FLUOROIMINE: &str = "InChI=1S/CH2FN/c2-1-3/h1,3H";
+    const BUTENE: &str = "InChI=1S/C4H8/c1-3-4-2/h3-4H,1-2H3";
+    for (text, smiles, inchi) in [
+        ("[H]/N=C/F |wU:1.0|", "[H]/N=C/F", "/b3-1+"),
+        ("[H]/N=C/F |wD:1.0|", "[H]/N=C/F", "/b3-1+"),
+        (r"[H]\N=C/F |wU:1.0|", r"[H]/N=C\F", "/b3-1-"),
+        (
+            "[H]/N=C/F |(0,0,;1,0,;0,1,;-1,-1,;1,1,;0,-1,),wU:1.0|",
+            "[H]/N=C/F",
+            "/b3-1+",
+        ),
+        (
+            "[H]/N=C/F |(-1,1,;0,0,;1,0,;2,-1,),wU:1.0|",
+            "[H]/N=C/F",
+            "/b3-1+",
+        ),
+        // The flag begins at a terminal atom or at a double-bond end.
+        ("C/C=C/C |wU:0.0|", "C/C=C/C", "/b4-3+"),
+        ("C/C=C/C |wU:0.0,wU:3.2|", "C/C=C/C", "/b4-3+"),
+        (r"C/C=C\C |wU:0.0|", r"C/C=C\C", "/b4-3-"),
+        ("C/C=C/C |wU:1.0|", "C/C=C/C", "/b4-3+"),
+    ] {
+        let bare = text.split_once(' ').context("Missing CX suffix")?.0;
+        let inchi = format!(
+            "{}{inchi}",
+            if text.contains('N') {
+                FLUOROIMINE
+            } else {
+                BUTENE
+            }
+        );
+        let actual = analysis(text).await?;
+        assert_eq!(actual, (smiles.into(), inchi), "{text}");
+        assert_eq!(actual, analysis(bare).await?, "{text}");
+        assert_ne!(
+            stereo(text, smiles::read)?,
+            stereo(text, dropped)?,
+            "{text}"
+        );
+    }
+    // The flag can mean a centre or an axis, the double-bond end has another
+    // neighbour, or the double bond is cumulated: the flag still replaces the
+    // direction, as on main. Where the double bond has no E/Z, or CX states
+    // it, the kept direction changes nothing.
+    for (text, smiles, inchi) in [
+        ("C/C=C |wU:1.0|", "C=CC", "InChI=1S/C3H6/c1-3-2/h3H,1H2,2H3"),
+        (
+            "F/C=C(F)F |wU:1.0|",
+            "FC=C(F)F",
+            "InChI=1S/C2HF3/c3-1-2(4)5/h1H",
+        ),
+        ("C/C=C/C |wU:1.0,ctu:1|", "CC=CC", BUTENE),
+        ("[H]/CC=C/C |wU:3.3|", "CC=CC", BUTENE),
+        ("[H]/CC=C/C |wU:4.3|", "CC=CC", BUTENE),
+        // Halogen oxides are outside the C=C/C=N restoration rule.
+        ("O/Cl=O |wU:1.0|", "[O-][Cl+]O", "InChI=1S/ClHO2/c2-1-3/h2H"),
+        (
+            "F/C(=C/F)C(Cl)=C/Br |wU:0.0,wU:4.4|",
+            "FC=C(F)C(Cl)=CBr",
+            "InChI=1S/C4H2BrClF2/c5-1-3(6)4(8)2-7/h1-2H",
+        ),
+        (
+            "C/C=C=CC |(0,1,;0,0,;1,0,;2,0,;2,1,),wU:1.0,wU:3.3|",
+            "CC=C=CC",
+            "InChI=1S/C5H8/c1-3-5-4-2/h3-4H,1-2H3",
+        ),
+        (
+            "c1/[p@](F)(C)cccc1 |wU:1.0|",
+            "C[P@]1(F)=CC=CC=C1",
+            "InChI=1S/C6H8FP/c1-8(7)5-3-2-4-6-8/h2-6H,1H3",
+        ),
+        (
+            "[H]/CC=C/F |wU:1.0|",
+            "CC=CF",
+            "InChI=1S/C3H5F/c1-2-3-4/h2-3H,1H3",
+        ),
+        (
+            "F/C=C/[C@H](Cl)Br |wU:3.2|",
+            "FC=C[C@H](Cl)Br",
+            "InChI=1S/C3H3BrClF/c4-3(5)1-2-6/h1-3H/t3-/m0/s1",
+        ),
+        (
+            "C/C(F)=C/F |wU:1.0|",
+            "CC(F)=CF",
+            "InChI=1S/C3H4F2/c1-3(5)2-4/h2H,1H3",
+        ),
+    ] {
+        assert_eq!(
+            analysis(text).await?,
+            (smiles.into(), inchi.into()),
+            "{text}"
+        );
+        assert_eq!(
+            stereo(text, smiles::read)?,
+            stereo(text, dropped)?,
+            "{text}"
+        );
+    }
+    // Existing E/Z from another slash and metal normalization must not differ.
+    for text in [
+        "F/C(/Cl)=C/F |wU:0.0|",
+        "[Na]/O=C |wU:1.0|",
+        "[Na]/O=C/F |wU:0.0|",
+        "[Na]/O=C/F |wU:1.0|",
+    ] {
+        assert_eq!(
+            stereo(text, smiles::read)?,
+            stereo(text, dropped)?,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+async fn reaction_wedges_match_smiles(
+    text: &str,
+    molecule_text: &str,
+    role: crate::reactions::Role,
+) -> anyhow::Result<(Document, String)> {
+    let expected = prepare(Request::import("smiles", molecule_text));
+    let actual = prepare(Request::import("rsmi", text));
+    assert_eq!(actual.is_ok(), expected.is_ok(), "{text}: acceptance");
+    let Preparation::Complete(expected) = expected? else {
+        panic!("{molecule_text}: import deferred");
+    };
+    let Preparation::Complete(actual) = actual? else {
+        panic!("{text}: import deferred");
+    };
+    let ids = &actual.document.reactions[0].participants(role)[0].atoms;
+    let document = Document {
+        atoms: actual
+            .document
+            .atoms
+            .into_iter()
+            .filter(|a| ids.contains(&a.id))
+            .collect(),
+        bonds: actual
+            .document
+            .bonds
+            .into_iter()
+            .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
+            .collect(),
+        ..Document::default()
+    };
+    let labels = |doc: &Document| {
+        doc.bonds
+            .iter()
+            .filter_map(|b| b.cip_label.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        labels(&document),
+        labels(&expected.document),
+        "{text}: axes"
+    );
+    let identity = crate::molecule_names::canonical_identity(&expected.molecule.state).unwrap();
+    let expected = native_response::analyze_prepared(
+        Arc::new(expected.molecule),
+        false,
+        Some(native_response::Config::in_process()),
+    )
+    .await?;
+    for clear_tags in [false, true] {
+        let mut visible = document.clone();
+        if clear_tags {
+            for atom in &mut visible.atoms {
+                atom.stereo = None;
+            }
+        }
+        let molecule = molecular::prepare(&visible)?;
+        assert_eq!(
+            crate::molecule_names::canonical_identity(&molecule.state).unwrap(),
+            identity,
+            "{text}: clear_tags={clear_tags}"
+        );
+        let actual = native_response::analyze_prepared(
+            Arc::new(molecule),
+            false,
+            Some(native_response::Config::in_process()),
+        )
+        .await?;
+        assert_eq!(
+            actual.smiles, expected.smiles,
+            "{text}: clear_tags={clear_tags}"
+        );
+        assert_eq!(
+            actual.inchi, expected.inchi,
+            "{text}: clear_tags={clear_tags}"
+        );
+    }
+    Ok((document, expected.inchi))
+}
+
+#[tokio::test]
+async fn coordinate_free_reaction_wedge_flags_follow_the_tag() -> anyhow::Result<()> {
+    use crate::reactions::Role;
+    for flags in ["wU:1.0", "wD:1.0", "wU:0.0,wD:1.1"] {
+        let (doc, inchi) = reaction_wedges_match_smiles(
+            &format!("C[C@H](N)C(=O)O>>O |{flags}|"),
+            &format!("C[C@H](N)C(=O)O |{flags}|"),
+            Role::Reactant,
+        )
+        .await?;
+        assert!(inchi.ends_with("/t2-/m0/s1"), "{flags}: {inchi}");
+        assert!(
+            doc.bonds
+                .iter()
+                .any(|b| matches!(b.display.as_str(), "wedge" | "hash"))
+        );
+    }
+    // CX indices traverse reactants, agents, then products (#1048).
+    for (text, role) in [
+        ("O>>C[C@H](N)C(=O)O |wU:2.1|", Role::Product),
+        ("CC>O>C[C@H](N)C(=O)O |wU:4.2|", Role::Product),
+        ("CC>C[C@H](N)C(=O)O>O |wU:3.2|", Role::Agent),
+    ] {
+        let (_, inchi) =
+            reaction_wedges_match_smiles(text, "C[C@H](N)C(=O)O |wU:1.1|", role).await?;
+        assert!(inchi.ends_with("/t2-/m0/s1"), "{text}: {inchi}");
+    }
+    for flags in ["wU:1.0", "wD:1.0"] {
+        let (doc, _) = reaction_wedges_match_smiles(
+            &format!("FC(Cl)(Br)I>>O |{flags}|"),
+            &format!("FC(Cl)(Br)I |{flags}|"),
+            Role::Reactant,
+        )
+        .await?;
+        assert!(doc.bonds.iter().all(|b| b.display == "plain"));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn coordinate_free_reaction_aromatic_wedges_are_plain() -> anyhow::Result<()> {
+    let (document, _) = reaction_wedges_match_smiles(
+        "c1ccccc1>>O |wU:0.0|",
+        "c1ccccc1 |wU:0.0|",
+        crate::reactions::Role::Reactant,
+    )
+    .await?;
+    assert_eq!(document.bonds.len(), 6);
+    assert!(document.bonds.iter().all(|bond| bond.display == "plain"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn coordinate_free_reaction_wedges_keep_axes_before_sanitization() -> anyhow::Result<()> {
+    use crate::reactions::Role;
+    let binol = "c1(-c2c(O)c3c(cc2)cccc3)c(O)c2c(cc1)cccc2";
+    let mut axes = Vec::new();
+    for flags in ["wU:0.13", "wD:0.13"] {
+        let (doc, _) = reaction_wedges_match_smiles(
+            &format!("{binol}>>O |{flags}|"),
+            &format!("{binol} |{flags}|"),
+            Role::Reactant,
+        )
+        .await?;
+        let labels = doc
+            .bonds
+            .iter()
+            .filter_map(|b| b.cip_label.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(labels.len(), 1, "{flags}: {labels:?}");
+        axes.push(labels);
+    }
+    assert_ne!(axes[0], axes[1]);
+    // Kekulization clears the first flag; sanitization removes the second axis.
+    for (bare, flags) in [
+        ("c1(ncc[nH]1)-c1c(F)cccc1", "wU:0.0"),
+        ("C1=C(F)C=CCC1", "wU:1.1"),
+    ] {
+        reaction_wedges_match_smiles(
+            &format!("{bare}>>O |{flags}|"),
+            &format!("{bare} |{flags}|"),
+            Role::Reactant,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn reaction_wedge_flags_keep_coordinates_and_wavy_behavior() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    let ring = WEDGE_FLAGGED_RING.replacen(" |", ">>O |", 1);
+    // These coordinate-bearing results are unchanged from origin/main (#1048).
+    for (text, smiles, inchi) in [
+        (
+            ring.clone(),
+            "O.O[C@@H]1CC[C@H](F)C1",
+            "InChI=1S/C5H9FO.H2O/c6-4-1-2-5(7)3-4;/h4-5,7H,1-3H2;1H2/t4-,5+;/m0./s1",
+        ),
+        (
+            ring.replace("wD:", "wU:"),
+            "O.O[C@@H]1CC[C@H](F)C1",
+            "InChI=1S/C5H9FO.H2O/c6-4-1-2-5(7)3-4;/h4-5,7H,1-3H2;1H2/t4-,5+;/m1./s1",
+        ),
+        (
+            "C[C@H](N)C(=O)O>>O |w:0.0,wD:1.1|".into(),
+            "C[C@H](N)C(=O)O.O",
+            "InChI=1S/C3H7NO2.H2O/c1-2(4)3(5)6;/h2H,4H2,1H3,(H,5,6);1H2/t2-;/m0./s1",
+        ),
+    ] {
+        let imported = engine
+            .request(Request::import("rsmi", &text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let analysis = imported.analysis.unwrap();
+        assert_eq!(analysis.smiles, smiles, "{text}");
+        assert_eq!(analysis.inchi, inchi, "{text}");
+    }
+    reaction_wedges_match_smiles(
+        "C[C@H](N)C(=O)O>>O |w:0.0,wD:1.1|",
+        "C[C@H](N)C(=O)O |w:0.0,wD:1.1|",
+        crate::reactions::Role::Reactant,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn coordinate_bearing_reaction_wedges_keep_main_results() -> anyhow::Result<()> {
+    let engine = crate::engine::LocalEngine::in_process();
+    // Identifiers, absent axis labels, and wedge counts match origin/main (#1048).
+    for (text, smiles, inchi, wedge_count, axes) in [
+        (
+            "FC=C(F)C(F)=CF>>O |(-2,1,0;-1,1,0;0,0,0;-1,-1,0;1.5,0,0;2.5,1,1;2.5,-1,-1;3.5,-1,-1;5,0,0),wU:2.2|",
+            "FC=C(F)C(F)=CF.O",
+            "InChI=1S/C4H2F4.H2O/c5-1-3(7)4(8)2-6;/h1-2H;1H2",
+            1,
+            vec![6],
+        ),
+        (
+            "c1(ncc[nH]1)-c1c(F)cccc1>>O |(0,0,;-1,1,;-2,0.5,;-2,-0.5,;-1,-1,;1.5,0,;2.25,-1.299,;1.5,-2.598,;3.75,-1.299,;4.5,0,;3.75,1.299,;2.25,1.299,;8,0,),wU:0.0|",
+            "Fc1ccccc1-c1ncc[nH]1.O",
+            "InChI=1S/C9H7FN2.H2O/c10-8-4-2-1-3-7(8)9-11-5-6-12-9;/h1-6H,(H,11,12);1H2",
+            0,
+            vec![],
+        ),
+    ] {
+        let imported = engine
+            .request(Request::import("rsmi", text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let analysis = imported.analysis.unwrap();
+        assert_eq!(analysis.smiles, smiles, "{text}");
+        assert_eq!(analysis.inchi, inchi, "{text}");
+        let document = imported.document.unwrap();
+        assert!(
+            document.bonds.iter().all(|b| b.cip_label.is_none()),
+            "{text}"
+        );
+        assert_eq!(
+            document
+                .bonds
+                .iter()
+                .filter(|b| b.display == "wedge")
+                .count(),
+            wedge_count,
+            "{text}"
+        );
+        assert!(document.bonds.iter().all(|b| b.display != "hash"), "{text}");
+        let molecule = molecular::prepare(&document)?;
+        assert_eq!(
+            molecule
+                .state
+                .metadata
+                .bonds
+                .iter()
+                .filter_map(|b| matches!(b.stereo, 6 | 7).then_some(b.stereo))
+                .collect::<Vec<_>>(),
+            axes,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn coordinate_free_reaction_hashes_on_nonsingle_bonds_are_rejected() {
+    let engine = crate::engine::LocalEngine::in_process();
+    for text in [
+        "CO>N->[Cu]<-N>CC |wD:3.1|",
+        "C/C=C/C>N>CC |wD:2.1|",
+        "N->[Cu]<-N>N>CC |wD:1.0,SgD:0:name:data::::,SgH:0:0|",
+    ] {
+        let error = engine
+            .request(Request::import("rsmi", text))
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("Unsupported bond appearance for this order"),
+            "{text}: {error}"
+        );
+    }
 }

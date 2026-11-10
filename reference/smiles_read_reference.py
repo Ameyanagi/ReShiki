@@ -11,14 +11,18 @@ from rdkit import Chem, RDLogger, rdBase
 if TYPE_CHECKING or __package__:
     from .cxsmarts_reference import cases as cx_cases
     from .cxsmiles_cases import cases as interaction_cases
+    from .degenerate_cx_coordinates import CoordinateInput
     from .perception_reference import snapshot
     from .smiles_prepare_reference import all_cases as bare_cases
+    from .support.cx_stereo_groups import renumber
     from .valence_reference import ORDERS
 else:
     from cxsmarts_reference import cases as cx_cases
     from cxsmiles_cases import cases as interaction_cases
+    from degenerate_cx_coordinates import CoordinateInput
     from perception_reference import snapshot
     from smiles_prepare_reference import all_cases as bare_cases
+    from support.cx_stereo_groups import renumber
     from valence_reference import ORDERS
 
 
@@ -37,6 +41,35 @@ def cases():
             for index, line in enumerate(path.read_text().splitlines()):
                 if line:
                     yield f"source-cx/{path.name}/{index}", line
+
+
+def without_degenerate_coordinates(text, mol):
+    """Read the equivalent input before coordinates can affect CX stereo.
+
+    Decide coincidence with explicit input hydrogens present, as #1046 does.
+    Re-reading also restores wedge/wavy directions and stereo that RDKit may
+    already have changed using the discarded conformers. Retained sections and
+    every other annotation remain in their original order.
+    """
+    if not mol.GetNumConformers():
+        return mol
+    # Use the CX input that produced this oracle molecule, preserving any
+    # earlier normalization (e.g. #1006 stereo-group IDs) when reading again.
+    parsed_text = text[: text.index("|")] + mol.GetProp("_CXSMILES_Data")
+    params = Chem.SmilesParserParams()
+    params.sanitize = False
+    params.removeHs = False
+    source = Chem.MolFromSmiles(parsed_text, params)
+    assert source is not None, "Accepted SMILES lost its coordinate source"
+    coordinates = CoordinateInput(parsed_text)
+    dropped = coordinates.dropped(source)
+    if not dropped:
+        return mol
+    equivalent = Chem.MolFromSmiles(coordinates.without(dropped))
+    assert equivalent is not None, "Removing coordinates rejected accepted SMILES"
+    if mol.HasProp("_Name"):
+        equivalent.SetProp("_Name", mol.GetProp("_Name"))
+    return equivalent
 
 
 def prepared_snapshot(mol):
@@ -59,12 +92,21 @@ def prepared_snapshot(mol):
     return snapshot(observed, "symmetric")
 
 
+def restored_snapshot(mol, text):
+    observed = prepared_snapshot(mol)
+    if normalized := renumber(text):
+        _, identities = normalized
+        for group in observed["metadata"]["groups"]:
+            group["read_id"] = identities.get((group["kind"], group["read_id"]), group["read_id"])
+    return observed
+
+
 def main():
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     for name, text in cases():
         try:
-            mol = Chem.MolFromSmiles(text)
+            mol = Chem.MolFromSmiles((renumber(text) or (text,))[0])
             if (
                 mol is None
                 or any(a.HasQuery() for a in mol.GetAtoms())
@@ -72,6 +114,7 @@ def main():
                 or any(b.GetBondType() not in ORDERS.values() for b in mol.GetBonds())
             ):
                 raise ValueError("Invalid or query SMILES")
+            mol = without_degenerate_coordinates(text, mol)
             conformers = []
             for conf in mol.GetConformers():
                 points = [
@@ -86,7 +129,7 @@ def main():
                 conformers.append(dict(positions=points, is_3d=conf.Is3D()))
             expected = dict(
                 prepared=dict(
-                    state=prepared_snapshot(mol),
+                    state=restored_snapshot(mol, text),
                     dummy_labels=[
                         a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
                         for a in mol.GetAtoms()

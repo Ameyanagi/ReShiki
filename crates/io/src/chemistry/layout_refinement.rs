@@ -553,16 +553,20 @@ pub(crate) fn iupac_orientation(state: &State, points: &mut [Point3]) {
     }
 }
 
+/// Ordered rigid groups from a fresh layout, including their paired ions.
+#[derive(Default)]
+pub(crate) struct ComponentRow(Vec<Vec<usize>>);
+
 /// Arrange fresh import components by decreasing heavy-atom count, then charge
 /// sign (cation, neutral, anion) on exact size ties, retaining input order for
 /// other ties (#843). Align bounding-box centers with a one-bond gap, then pair
 /// monoatomic ions with available opposite charges along their free bisectors.
-pub(crate) fn arrange_components(state: &State, points: &mut [Point3]) {
-    let _ = (|| -> Option<()> {
+pub(crate) fn arrange_components(state: &State, points: &mut [Point3]) -> ComponentRow {
+    (|| -> Option<ComponentRow> {
         let adjacent = adjacency(state)?;
         let mut components = components(&adjacent)?;
         if components.len() < 2 {
-            return Some(());
+            return Some(ComponentRow::default());
         }
         let length = bond_length(state, points);
         components.sort_by_cached_key(|atoms| {
@@ -624,6 +628,7 @@ pub(crate) fn arrange_components(state: &State, points: &mut [Point3]) {
             })
             .collect();
         let mut paired = HashSet::new();
+        let mut row = components.clone();
         for atoms in &components {
             let &[ion] = atoms.as_slice() else {
                 continue;
@@ -672,12 +677,75 @@ pub(crate) fn arrange_components(state: &State, points: &mut [Point3]) {
                 if clear_of_atoms && clear_of_bonds {
                     *points.get_mut(ion)? = target;
                     paired.insert(atom);
+                    row.retain(|part| part != atoms);
+                    row.iter_mut().find(|part| part.contains(&atom))?.push(ion);
                     break;
                 }
             }
         }
-        Some(())
-    })();
+        Some(ComponentRow(row))
+    })()
+    .unwrap_or_default()
+}
+
+/// Widen only the arranged row's gaps for the finished labels (#1033).
+pub(crate) fn space_component_labels(
+    row: &ComponentRow,
+    molecule: &mut super::document::Molecule,
+    doc: &mut crate::document::Document,
+) {
+    if row.0.len() < 2 {
+        return;
+    }
+    let gap = (bond_length(&molecule.state, &molecule.positions)
+        * super::document::WORLD_PER_DEPICT_UNIT) as f32;
+    let mut right = f32::NEG_INFINITY;
+    for group in &row.0 {
+        let ids: Vec<_> = group
+            .iter()
+            .filter_map(|&index| molecule.ids.get(index).copied())
+            .collect();
+        let ids = crate::reactions::molecules(doc, &ids).concat();
+        // Measure each group alone so crowded neighbours cannot flip implicit H.
+        let part = crate::document::Document {
+            atoms: doc
+                .atoms
+                .iter()
+                .filter(|a| ids.contains(&a.id))
+                .cloned()
+                .collect(),
+            bonds: doc
+                .bonds
+                .iter()
+                .filter(|b| ids.contains(&b.a))
+                .cloned()
+                .collect(),
+            drawing_style: doc.drawing_style.clone(),
+            atom_labels: doc.atom_labels.clone(),
+            ..Default::default()
+        };
+        let (left, edge) = part
+            .atoms
+            .iter()
+            .map(|a| (a.position, a.position))
+            .chain(crate::scene::participant_label_ink_boxes(&part, &ids))
+            .fold(
+                (f32::INFINITY, f32::NEG_INFINITY),
+                |(left, right), (lo, hi)| (left.min(lo.x), right.max(hi.x)),
+            );
+        let dx = (right + gap - left).max(0.);
+        right = edge + dx;
+        for atom in &mut doc.atoms {
+            if ids.contains(&atom.id) {
+                atom.position.x += dx;
+            }
+        }
+        for (id, point) in molecule.ids.iter().zip(&mut molecule.positions) {
+            if ids.contains(id) {
+                point.x += f64::from(dx) / super::document::WORLD_PER_DEPICT_UNIT;
+            }
+        }
+    }
 }
 
 pub(crate) fn bridged(state: &State) -> bool {
@@ -911,7 +979,7 @@ pub(crate) fn exterior_terminals(state: &State, points: &mut [Point3], fixed: &C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chemistry::{depict, smiles};
+    use crate::chemistry::{depict, document, smiles};
     const ARTEMISININ: &str = "C[C@@H]1CC[C@H]2[C@H](C(=O)O[C@H]3[C@@]24[C@H]1CC[C@](O3)(OO4)C)C";
 
     fn layout(text: &str) -> anyhow::Result<(State, Vec<Point3>)> {
@@ -1254,6 +1322,31 @@ mod tests {
         for &id in &order[1..] {
             assert!((points[id].y - baseline).abs() < 1e-12);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn label_spacing_preserves_an_unlabeled_row() -> anyhow::Result<()> {
+        let (state, mut positions) = layout("CCC.CC")?;
+        let row = arrange_components(&state, &mut positions);
+        let mut molecule = document::Molecule {
+            rdkit_version: crate::chemistry::RDKIT_VERSION,
+            ids: (1..=positions.len() as u64).collect(),
+            state,
+            positions,
+        };
+        let drawing = document::for_generated(
+            &molecule,
+            &vec![None; molecule.ids.len()],
+            Default::default(),
+        )?;
+        let labels = drawing.labels()?;
+        let mut doc = drawing.finish(labels)?;
+        let before = doc.clone();
+        let original = molecule.positions.clone();
+        space_component_labels(&row, &mut molecule, &mut doc);
+        assert_eq!(doc, before);
+        assert_eq!(molecule.positions, original);
         Ok(())
     }
 

@@ -1,5 +1,86 @@
 use super::*;
 
+/// Exercise the real widget event handlers without creating a GPU renderer or
+/// waiting for the caret timeout in wall-clock time.
+fn assert_idle_caret_stops_requesting_redraws(
+    widget: &mut dyn widget::Widget<(), Theme, ()>,
+    id: widget::Id,
+) {
+    use iced::advanced::widget::operation::focusable;
+    use iced::time::{Duration, Instant};
+    use iced::window::RedrawRequest;
+    use iced::{Event, Rectangle, Size, mouse, window};
+
+    let renderer = ();
+    let viewport = Rectangle::with_size(Size::new(320., 120.));
+    let mut tree = widget::Tree::new(&*widget);
+    let node = widget.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, viewport.size()),
+    );
+    widget.operate(
+        &mut tree,
+        Layout::new(&node),
+        &renderer,
+        &mut focusable::focus(id),
+    );
+    let base = Instant::now();
+    let mut redraw = |now| {
+        let mut messages = Vec::new();
+        // Each runtime event has a fresh Shell: a previous blink request must
+        // not leak into the idle frame and conceal that it stopped scheduling.
+        let mut shell = Shell::new(&mut messages);
+        widget.update(
+            &mut tree,
+            &Event::Window(window::Event::RedrawRequested(now)),
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut shell,
+            &viewport,
+        );
+        shell.redraw_request()
+    };
+
+    let active_at = base + Duration::from_millis(1_200);
+    let active_request = redraw(active_at);
+    assert!(
+        matches!(active_request, RedrawRequest::At(next) if next > active_at),
+        "a focused caret must schedule its next blink while active: {active_request:?}",
+    );
+    assert_eq!(
+        redraw(base + Duration::from_secs(11)),
+        RedrawRequest::Wait,
+        "an idle focused caret must stop requesting frames after ten seconds",
+    );
+}
+
+#[test]
+fn text_input_caret_stops_requesting_redraws_after_idle() {
+    let id = widget::Id::new("idle-caret-text-input");
+    let mut input: iced::Element<'_, (), Theme, ()> = iced::widget::text_input("", "idle caret")
+        .id(id.clone())
+        .on_input(|_| ())
+        .into();
+
+    assert_idle_caret_stops_requesting_redraws(input.as_widget_mut(), id);
+}
+
+#[test]
+fn text_editor_caret_stops_requesting_redraws_after_idle() {
+    let id = widget::Id::new("idle-caret-text-editor");
+    let content = iced::widget::text_editor::Content::<()>::new();
+    let mut editor: iced::Element<'_, (), Theme, ()> = iced::widget::text_editor(&content)
+        .id(id.clone())
+        .height(80.)
+        .on_action(|_| ())
+        .into();
+
+    assert_idle_caret_stops_requesting_redraws(editor.as_widget_mut(), id);
+}
+
 #[cfg(windows)]
 #[test]
 fn dropdown_partial_redraws_preserve_unchanged_pixels() {

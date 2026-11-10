@@ -490,6 +490,7 @@ fn a_rejected_drawing_is_an_error_envelope() {
 fn analysis_json_keeps_public_fields_and_omits_mass_percent() {
     let analysis = Analysis {
         smiles: "CC".into(),
+        smiles_notice: None,
         formula: "C2H6".into(),
         display_formula: "C₂H₆".into(),
         mass_percent: vec![("C".into(), 79.88), ("H".into(), 20.12)],

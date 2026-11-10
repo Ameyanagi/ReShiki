@@ -5,6 +5,8 @@
 mod hydrogen_isotopes;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
+#[path = "support/reference_response.rs"]
+mod reference_response;
 use anyhow::Context;
 use reshiki::{
     arrows::ArrowStyle,
@@ -64,7 +66,7 @@ fn equal_with_source(
     source_document: Option<&serde_json::Value>,
 ) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
-    let mut expected = serde_json::to_value(expected)?;
+    let mut expected = reference_response::expected(expected)?;
     // The Python reference has no display formula or mass percentages.
     for side in [&mut actual, &mut expected] {
         if let Some(analysis) = side
@@ -97,6 +99,61 @@ fn equal_with_source(
         &actual, &expected,
     ));
     anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn reference_smiles_notice_is_derived_from_expected_drawing() -> anyhow::Result<()> {
+    rdkit_parity::enable();
+    let reference = PythonEngine::default();
+    for (text, axial) in [
+        ("(c1(-c2ccccc2)ccccc1.CC)>>O |wU:1.1,w:12.13|", true),
+        ("(c1(-c2ccccc2)ccccc1.CC)>>O |wD:1.1,w:12.13|", true),
+        ("(c1(-c2ccccc2)ccccc1.CC)>>O", false),
+        ("C[C@H](O)Cl>>O", false),
+    ] {
+        let expected = reference
+            .execute(Request::import("rsmi", text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let analysis = expected.analysis.as_ref().context("Missing analysis")?;
+        assert!(analysis.smiles_notice.is_none());
+        assert!(!analysis.smiles.is_empty());
+        let notice = axial.then(|| native_response::SMILES_AXIAL_NOTICE.to_owned());
+        let mut actual = expected.clone();
+        actual.analysis.as_mut().unwrap().smiles_notice = notice.clone();
+        // Only the independently derived notice may change in the expectation.
+        assert_eq!(
+            reference_response::expected(expected.clone())?,
+            serde_json::to_value(&actual)?,
+            "{text}"
+        );
+        equal(actual.clone(), expected.clone())?;
+        actual.analysis.as_mut().unwrap().smiles_notice = Some("incorrect notice".into());
+        assert!(equal(actual.clone(), expected.clone()).is_err(), "{text}");
+        actual.analysis.as_mut().unwrap().smiles_notice = None;
+        assert_eq!(
+            equal(actual.clone(), expected.clone()).is_err(),
+            axial,
+            "{text}"
+        );
+        actual.analysis.as_mut().unwrap().smiles_notice = notice;
+        actual.analysis.as_mut().unwrap().rings += 1;
+        assert!(equal(actual, expected.clone()).is_err(), "{text}");
+
+        // An axis with unavailable SMILES, or no analysis, has no notice.
+        let mut empty = expected;
+        empty.analysis.as_mut().unwrap().smiles.clear();
+        assert_eq!(
+            reference_response::expected(empty.clone())?,
+            serde_json::to_value(&empty)?
+        );
+        empty.analysis = None;
+        assert_eq!(
+            reference_response::expected(empty.clone())?,
+            serde_json::to_value(empty)?
+        );
+    }
     Ok(())
 }
 

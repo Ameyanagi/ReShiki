@@ -212,9 +212,23 @@ pub(crate) fn write_rxn_with_fallback(
 /// Canonical reaction SMILES, preserving grouped components and repeated roles.
 /// Drawing positions and captions do not determine reaction membership.
 pub fn write_smiles(doc: &Document, selected: Option<&[u64]>) -> Result<String, Error> {
+    write_smiles_with_axial_loss(doc, selected).map(|(output, _)| output)
+}
+
+pub(crate) fn write_smiles_with_axial_loss(
+    doc: &Document,
+    selected: Option<&[u64]>,
+) -> Result<(String, bool), Error> {
     use super::smiles::write;
+    let mut axial_loss = false;
     let rows = prepare_output(doc, selected, |molecule| {
         let text = write::write(&molecule.state, write::Options::default())?.text;
+        axial_loss |= molecule
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .any(|bond| matches!(bond.stereo, 6 | 7));
         // Default molecular output has no custom symbols: a dot identifies a
         // disconnected participant, which reaction SMILES groups in parentheses.
         Ok(if text.contains('.') {
@@ -251,5 +265,5 @@ pub fn write_smiles(doc: &Document, selected: Option<&[u64]>) -> Result<String, 
             output.push_str(part);
         }
     }
-    Ok(output)
+    Ok((output, axial_loss))
 }

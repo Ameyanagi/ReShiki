@@ -294,6 +294,7 @@ fn a_missing_analysis_warns_for_the_drawing_and_fails_a_selection() {
     assert_eq!(error, OpError::new(ErrorKind::Failed, NO_PROPERTIES));
     let analysis = Analysis {
         smiles: "C".into(),
+        smiles_notice: None,
         formula: "CH4".into(),
         display_formula: "CH₄".into(),
         mass_percent: vec![],

@@ -7,6 +7,8 @@ mod empty_heads;
 mod longest_lived_mass;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
+#[path = "support/reference_response.rs"]
+mod reference_response;
 #[path = "support/smiles_extensions.rs"]
 #[allow(dead_code)]
 mod smiles_extensions;
@@ -92,7 +94,7 @@ fn compare_response(
     import_format: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut a = serde_json::to_value(actual)?;
-    let mut b = serde_json::to_value(expected)?;
+    let mut b = reference_response::expected(expected)?;
     // The Python reference has no display formula or mass percentages.
     for side in [&mut a, &mut b] {
         if let Some(analysis) = side
@@ -364,12 +366,6 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 continue;
             }
         };
-        if matches!((&actual, &expected), (Ok(Outcome::Complete(_)), Some(_)))
-            && coordinate_free_wedges::flagged(format, &case.text)
-        {
-            accepted += 1;
-            continue;
-        }
         let error = match (actual, expected) {
             (Ok(Outcome::Complete(a)), None) if projected.is_some() => {
                 // The original complete response exists, but its order-5 paint
@@ -433,7 +429,14 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     Ok(b)
                 };
                 expected
-                    .and_then(|b| compare_response(*a, b, Some(format)))
+                    .and_then(|b| {
+                        let comparison = compare_response(*a, b, Some(format));
+                        if coordinate_free_wedges::changed(format, &case.text, &comparison) {
+                            Ok(())
+                        } else {
+                            comparison
+                        }
+                    })
                     .err()
                     .map(|e| e.to_string())
             }

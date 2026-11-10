@@ -247,17 +247,28 @@ def test_aspirin_properties() -> None:
     assert value.donors == 1 and value.acceptors == 3 and value.rings == 1
     assert value.tpsa == pytest.approx(63.6, abs=0.1)
     assert value.unpaired_electrons == 0
+    assert value.smiles_notice is None
     assert value.inchi.startswith("InChI=1S/C9H8O4/")
     assert value.inchikey == "BSYNRYMUTXBXSQ-UHFFFAOYSA-N"
     with pytest.raises(FrozenInstanceError):
         value.mass = 1.0  # type: ignore[misc]
 
 
+@pytest.mark.parametrize("winding", ["wU", "wD"])
+def test_axial_smiles_properties_notice(winding: str) -> None:
+    molecule = reshiki.Molecule.from_smiles(
+        f"c1(-c2c(Br)cccc2Cl)c([C@H](O)C)cccc1[C@@H](O)C |{winding}:0.9|"
+    )
+    assert molecule.properties().smiles_notice == (
+        "SMILES has no notation for atropisomer axes; the axial configuration was dropped."
+    )
+
+
 def test_properties_match_cli() -> None:
     # Captured from this source with:
     # reshiki --cli analyze --smiles 'CC(=O)Oc1ccccc1C(=O)O'
     result = json.loads((Path(__file__).parent / "fixtures/aspirin-cli.json").read_text("utf-8"))
-    analysis = result["value"]["analysis"]
+    analysis = {"smiles_notice": None, **result["value"]["analysis"]}
     actual = asdict(reshiki.properties(ASPIRIN))
     assert actual.keys() == analysis.keys()
     for field, value in actual.items():
@@ -278,7 +289,7 @@ def test_properties_match_live_cli() -> None:
         encoding="utf-8",
     )
     result = json.loads(completed.stdout)
-    analysis = result["value"]["analysis"]
+    analysis = {"smiles_notice": None, **result["value"]["analysis"]}
     for field, value in asdict(reshiki.properties(ASPIRIN)).items():
         assert analysis[field] == (round(value, 9) if isinstance(value, float) else value)
 

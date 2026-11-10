@@ -1,0 +1,23 @@
+axial stereo reference
+                    2D
+
+  0  0  0  0  0  0  0  0  0  0999 V3000
+M  V30 BEGIN CTAB
+M  V30 COUNTS 6 5 0 0 0
+M  V30 BEGIN ATOM
+M  V30 1 C 2.5 -1 0 0
+M  V30 2 C -1 1 0 0
+M  V30 3 C 0 0 0 0
+M  V30 4 C 2.5 1 0 0
+M  V30 5 C -1 -1 0 0
+M  V30 6 C 1.5 0 0 0
+M  V30 END ATOM
+M  V30 BEGIN BOND
+M  V30 1 1 3 2 CFG=1
+M  V30 2 2 1 6 CFG=0
+M  V30 3 1 6 3 CFG=1
+M  V30 4 2 3 5 CFG=2
+M  V30 5 1 4 6 CFG=3
+M  V30 END BOND
+M  V30 END CTAB
+M  END
