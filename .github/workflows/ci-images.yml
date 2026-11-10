@@ -1,0 +1,154 @@
+name: CI images
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/ci-images/**"
+      - ".github/workflows/ci-images.yml"
+  schedule:
+    - cron: "43 4 * * 1"
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      jammy:
+        value: ${{ jobs.images.outputs.jammy }}
+      noble:
+        value: ${{ jobs.images.outputs.noble }}
+      noble_desktop:
+        value: ${{ jobs.images.outputs.noble_desktop }}
+jobs:
+  images:
+    name: CI images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      jammy: ${{ steps.images.outputs.jammy }}
+      noble: ${{ steps.images.outputs.noble }}
+      noble_desktop: ${{ steps.images.outputs.noble_desktop }}
+    steps:
+      - &actions_runtime
+        name: Patch the Actions Node runtime when needed
+        id: actions_runtime_guard
+        shell: pwsh
+        run: |
+          # Embedded before checkout; setup-node does not change JavaScript actions' Node.
+          $ErrorActionPreference = 'Stop'
+          $workers = @(Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue)
+          $containerJob = $workers.Count -eq 0 -and -not $IsWindows -and (Test-Path -LiteralPath '/__e/node24/bin/node' -PathType Leaf)
+          if ($containerJob) {
+              $node = '/__e/node24/bin/node'
+          } else {
+              if ($workers.Count -ne 1) { throw 'Expected exactly one live Runner.Worker.' }
+              $root = Split-Path (Split-Path $workers[0].Path -Parent) -Parent
+              $name = if ($IsWindows) { 'node.exe' } else { 'node' }
+              $node = Join-Path $root "externals/node24/bin/$name"
+          }
+          $version = & $node --version
+          if ($LASTEXITCODE -ne 0 -or $version -cnotmatch '^v24\.[0-9]+\.[0-9]+$') {
+              throw 'Could not read the active runner Node 24 version.'
+          }
+          Write-Host "Actions runtime before bootstrap: $version ($node)"
+          if ([version] $version.Substring(1) -lt [version] '24.22.1') {
+              if ($containerJob) {
+                  throw 'The read-only /__e runner Node of a container job cannot be patched; run this job without a container.'
+              }
+              # Official signed SHASUMS256.txt provenance is in actions_node_bootstrap.json.
+              $assets = @{
+                  'macOS-ARM64' = @('node-v24.22.1-darwin-arm64.tar.gz', '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7')
+                  'macOS-X64' = @('node-v24.22.1-darwin-x64.tar.gz', 'd132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035')
+                  'Linux-ARM64' = @('node-v24.22.1-linux-arm64.tar.gz', '33c37be234ba8bee041961047b19160f4d7d0f164e8e246f78bdd10feff148b3')
+                  'Linux-X64' = @('node-v24.22.1-linux-x64.tar.gz', 'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c')
+                  'Windows-ARM64' = @('win-arm64/node.exe', '8bea91dc437fe01e7d92ef0efc6c9eaf654369aaba9b2d3e9841552ea7b95a00')
+                  'Windows-X64' = @('win-x64/node.exe', 'd702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5')
+              }
+              $asset = $assets["$env:RUNNER_OS-$env:RUNNER_ARCH"]
+              if ($null -eq $asset) { throw 'Unsupported runner OS/architecture.' }
+              $temporary = Join-Path $env:RUNNER_TEMP ('reshiki-node-' + [Guid]::NewGuid())
+              New-Item -ItemType Directory -Path $temporary | Out-Null
+              try {
+                  $download = Join-Path $temporary 'node-download'
+                  Invoke-WebRequest -Uri "https://nodejs.org/dist/v24.22.1/$($asset[0])" -OutFile $download
+                  if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash -ine $asset[1]) {
+                      throw 'Official Node artifact SHA256 mismatch.'
+                  }
+                  if ($IsWindows) {
+                      $candidate = $download # The pinned Windows asset is the raw node.exe.
+                  } else {
+                      & tar -xzf $download -C $temporary
+                      if ($LASTEXITCODE -ne 0) { throw 'Official Node archive extraction failed.' }
+                      $candidate = Join-Path $temporary ($asset[0].Replace('.tar.gz', '') + '/bin/node')
+                  }
+                  Copy-Item -LiteralPath $candidate -Destination $node -Force
+              } finally {
+                  Remove-Item -LiteralPath $temporary -Recurse -Force
+              }
+              $version = & $node --version
+              if ($LASTEXITCODE -ne 0 -or $version -cne 'v24.22.1') {
+                  throw 'The installed Actions Node did not report v24.22.1.'
+              }
+          }
+          Write-Host "Verified Actions runtime: $version ($node)"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build or resolve CI images
+        id: images
+        shell: bash
+        env:
+          REGISTRY_OWNER: ${{ github.repository_owner }}
+          REPOSITORY: ${{ github.repository }}
+          PUBLISH: ${{ github.workflow == 'CI images' }}
+          CAN_PUSH: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          registry="ghcr.io/$(tr '[:upper:]' '[:lower:]' <<< "$REGISTRY_OWNER")"
+          if ! printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USER" --password-stdin; then
+            if [[ "$PUBLISH" == true ]]; then
+              echo '::error::Could not log in to GHCR to publish CI images.'
+              exit 1
+            fi
+            CAN_PUSH=false
+            echo '::warning::GHCR login failed; using the published images anonymously.'
+          fi
+
+          resolve_image() {
+            local key="$1" directory="$2" target="$3" hash image ref
+            hash="$(python3 - "$directory" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          digest = hashlib.sha256()
+          for path in sorted(p for p in root.rglob("*") if p.is_file()):
+              digest.update(path.relative_to(root).as_posix().encode() + b"\0")
+              digest.update(path.read_bytes() + b"\0")
+          print(digest.hexdigest()[:16])
+          PY
+            )"
+            image="$registry/reshiki-ci-${key//_/-}"
+            ref="$image:$hash"
+            local build_args=(--target "$target" --label "org.opencontainers.image.source=https://github.com/$REPOSITORY" --tag "$ref" --push)
+            if [[ "$PUBLISH" == true ]]; then
+              docker buildx build "${build_args[@]}" --pull --no-cache --tag "$image:main" "$directory"
+            elif ! docker buildx imagetools inspect "$ref" > /dev/null 2>&1; then
+              if [[ "$CAN_PUSH" == true ]]; then
+                docker buildx build "${build_args[@]}" "$directory"
+              else
+                ref="$image:main"
+                echo "::warning::This run cannot publish CI images, so its image change is untested until a maintainer runs it from a branch in this repo; using $ref."
+                if ! docker buildx imagetools inspect "$ref" > /dev/null 2>&1; then
+                  echo "::error::CI image $ref is unavailable. A maintainer must publish the CI images from this repository first."
+                  exit 1
+                fi
+              fi
+            fi
+            echo "$key=$ref" | tee -a "$GITHUB_OUTPUT"
+          }
+
+          resolve_image jammy .github/ci-images/jammy base
+          resolve_image noble .github/ci-images/noble base
+          resolve_image noble_desktop .github/ci-images/noble desktop

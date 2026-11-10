@@ -12,6 +12,8 @@ on:
       - "tests/fixtures/ui-ethanol.reshiki"
       - "scripts/wayland_clipboard_qa.sh"
       - ".github/workflows/wayland-clipboard.yml"
+      - ".github/ci-images/**"
+      - ".github/workflows/ci-images.yml"
   push:
     branches: [main]
     paths:
@@ -25,6 +27,8 @@ on:
       - "tests/fixtures/ui-ethanol.reshiki"
       - "scripts/wayland_clipboard_qa.sh"
       - ".github/workflows/wayland-clipboard.yml"
+      - ".github/ci-images/**"
+      - ".github/workflows/ci-images.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,9 +38,23 @@ concurrency:
 env:
   UV_PYTHON_PREFERENCE: only-managed
 jobs:
+  images:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/ci-images.yml
   clipboard:
     name: Real ${{ matrix.compositor }} Wayland clipboard
+    needs: images
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    container: ${{ needs.images.outputs.noble_desktop }}
+    # Container steps otherwise default to sh; keep the hosted runner's bash -e.
+    defaults:
+      run:
+        shell: bash -e {0}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -53,17 +71,25 @@ jobs:
         run: |
           # Embedded before checkout; setup-node does not change JavaScript actions' Node.
           $ErrorActionPreference = 'Stop'
-          $workers = @(Get-Process -Name Runner.Worker -ErrorAction Stop)
-          if ($workers.Count -ne 1) { throw 'Expected exactly one live Runner.Worker.' }
-          $root = Split-Path (Split-Path $workers[0].Path -Parent) -Parent
-          $name = if ($IsWindows) { 'node.exe' } else { 'node' }
-          $node = Join-Path $root "externals/node24/bin/$name"
+          $workers = @(Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue)
+          $containerJob = $workers.Count -eq 0 -and -not $IsWindows -and (Test-Path -LiteralPath '/__e/node24/bin/node' -PathType Leaf)
+          if ($containerJob) {
+              $node = '/__e/node24/bin/node'
+          } else {
+              if ($workers.Count -ne 1) { throw 'Expected exactly one live Runner.Worker.' }
+              $root = Split-Path (Split-Path $workers[0].Path -Parent) -Parent
+              $name = if ($IsWindows) { 'node.exe' } else { 'node' }
+              $node = Join-Path $root "externals/node24/bin/$name"
+          }
           $version = & $node --version
           if ($LASTEXITCODE -ne 0 -or $version -cnotmatch '^v24\.[0-9]+\.[0-9]+$') {
               throw 'Could not read the active runner Node 24 version.'
           }
           Write-Host "Actions runtime before bootstrap: $version ($node)"
           if ([version] $version.Substring(1) -lt [version] '24.22.1') {
+              if ($containerJob) {
+                  throw 'The read-only /__e runner Node of a container job cannot be patched; run this job without a container.'
+              }
               # Official signed SHASUMS256.txt provenance is in actions_node_bootstrap.json.
               $assets = @{
                   'macOS-ARM64' = @('node-v24.22.1-darwin-arm64.tar.gz', '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7')
@@ -101,43 +127,6 @@ jobs:
           }
           Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Restore apt archives
-        id: apt_cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/apt-archives/*.deb
-          key: wayland-apt-noble-${{ matrix.compositor }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: wayland-apt-noble-${{ matrix.compositor }}-
-      - name: Install private compositor, software renderer and independent receiver
-        id: apt_install
-        # Cached debs skip the mirror, which can crawl for minutes; the timeout bounds a cold download.
-        timeout-minutes: 10
-        env:
-          COMPOSITOR_PACKAGE: ${{ matrix.compositor == 'gnome' && 'gnome-shell' || 'sway' }}
-        run: |
-          archives="$HOME/apt-archives"
-          mkdir -p "$archives/partial"
-          before=$(find "$archives" -maxdepth 1 -name '*.deb' -printf '%f\n' | sort)
-          sudo rm -f /var/lib/man-db/auto-update
-          sudo apt-get update -o Acquire::Retries=3
-          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
-            -o Dir::Cache::Archives="$archives" \
-            "$COMPOSITOR_PACKAGE" wtype xdotool xvfb xauth dbus-x11 \
-            python3-gi gir1.2-gtk-4.0 mesa-vulkan-drivers fonts-dejavu-core \
-            libegl1-mesa-dev libwayland-dev libxkbcommon-dev libfontconfig1-dev \
-            libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libx11-xcb-dev \
-            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libudev-dev pkg-config
-          sudo apt-get autoclean -o Dir::Cache::Archives="$archives"
-          after=$(find "$archives" -maxdepth 1 -name '*.deb' -printf '%f\n' | sort)
-          if [ "$before" != "$after" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Save apt archives
-        if: steps.apt_install.outputs.changed == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/apt-archives/*.deb
-          key: ${{ steps.apt_cache.outputs.cache-primary-key }}
       - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -155,6 +144,9 @@ jobs:
           cargo tree --locked --no-default-features -e features | /usr/bin/python3 -c 'import sys; assert "wayland-qa" not in sys.stdin.read()'
       - name: Build the GUI with default-off compositor observation and delay hooks
         run: cargo build --locked --no-default-features --features wayland-qa --bin reshiki
+      - name: Start a system D-Bus without logind
+        # GNOME Shell needs a system bus; without logind its seat directory selects the non-systemd login manager.
+        run: rm -rf /run/systemd/seats && dbus-daemon --system --fork
       - name: Exercise real input, clipboard transfer, cancellation and owner exit
         run: bash scripts/wayland_clipboard_qa.sh ${{ matrix.compositor }} target/debug/reshiki artifacts/wayland-qa/${{ matrix.compositor }}
       - name: Retain protocol traces, MIME bytes, saved drawings and package provenance

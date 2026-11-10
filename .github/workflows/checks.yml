@@ -44,17 +44,25 @@ jobs:
         run: |
           # Embedded before checkout; setup-node does not change JavaScript actions' Node.
           $ErrorActionPreference = 'Stop'
-          $workers = @(Get-Process -Name Runner.Worker -ErrorAction Stop)
-          if ($workers.Count -ne 1) { throw 'Expected exactly one live Runner.Worker.' }
-          $root = Split-Path (Split-Path $workers[0].Path -Parent) -Parent
-          $name = if ($IsWindows) { 'node.exe' } else { 'node' }
-          $node = Join-Path $root "externals/node24/bin/$name"
+          $workers = @(Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue)
+          $containerJob = $workers.Count -eq 0 -and -not $IsWindows -and (Test-Path -LiteralPath '/__e/node24/bin/node' -PathType Leaf)
+          if ($containerJob) {
+              $node = '/__e/node24/bin/node'
+          } else {
+              if ($workers.Count -ne 1) { throw 'Expected exactly one live Runner.Worker.' }
+              $root = Split-Path (Split-Path $workers[0].Path -Parent) -Parent
+              $name = if ($IsWindows) { 'node.exe' } else { 'node' }
+              $node = Join-Path $root "externals/node24/bin/$name"
+          }
           $version = & $node --version
           if ($LASTEXITCODE -ne 0 -or $version -cnotmatch '^v24\.[0-9]+\.[0-9]+$') {
               throw 'Could not read the active runner Node 24 version.'
           }
           Write-Host "Actions runtime before bootstrap: $version ($node)"
           if ([version] $version.Substring(1) -lt [version] '24.22.1') {
+              if ($containerJob) {
+                  throw 'The read-only /__e runner Node of a container job cannot be patched; run this job without a container.'
+              }
               # Official signed SHASUMS256.txt provenance is in actions_node_bootstrap.json.
               $assets = @{
                   'macOS-ARM64' = @('node-v24.22.1-darwin-arm64.tar.gz', '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7')
@@ -98,6 +106,13 @@ jobs:
         env:
           CI_LIVE_REFERENCE: ${{ inputs.live_reference || false }}
         run: python3 scripts/ci_scope.py
+  images:
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/ci-images.yml
   web:
     runs-on: ubuntu-22.04
     steps:
@@ -197,18 +212,21 @@ jobs:
       - run: uv run --project crates/python --no-sync ty check --project crates/python
   libreoffice-uno:
     name: LibreOffice UNO regressions
-    needs: scope
+    needs: [scope, images]
     if: needs.scope.outputs.native == 'true'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    container: ${{ needs.images.outputs.noble_desktop }}
+    # Container steps otherwise default to sh; keep the hosted runner's bash -e.
+    defaults:
+      run:
+        shell: bash -e {0}
     timeout-minutes: 15
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install matching LibreOffice and Python UNO packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends -t noble-backports \
-            libreoffice-core-nogui python3-uno
       - name: Record and require a supported LibreOffice runtime
         run: |
           dpkg-query -W libreoffice-core-nogui python3-uno python3
@@ -218,15 +236,21 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s integrations/libreoffice/tests -p 'test_*.py' -v
   linux-x11:
     name: Linux X11 clipboard regressions
-    needs: scope
+    needs: [scope, images]
     if: needs.scope.outputs.native == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    container: ${{ needs.images.outputs.noble }}
+    # Container steps otherwise default to sh; keep the hosted runner's bash -e.
+    defaults:
+      run:
+        shell: bash -e {0}
     timeout-minutes: 10
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install the isolated X11 test server and clipboard libraries
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libwayland-dev libxkbcommon-dev pkg-config
       - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -238,7 +262,7 @@ jobs:
           xvfb-run -a -s '-screen 0 1024x768x24 -nolisten tcp -noreset' cargo test -p reshiki-linux --lib --locked --no-default-features x11::tests:: -- --ignored --test-threads=1
   rust:
     name: rust (${{ matrix.platform.os }}, ${{ matrix.platform.target }}, ${{ matrix.platform.python }}, ${{ matrix.partition }}/2)
-    needs: scope
+    needs: [scope, images]
     if: needs.scope.outputs.native == 'true'
     strategy:
       fail-fast: false
@@ -252,10 +276,19 @@ jobs:
             target: x86_64-pc-windows-msvc
             msvc_arch: x64
             python: cpython-3.12.15-windows-x86_64-none
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             python: "3.12.15"
     runs-on: ${{ matrix.platform.os }}
+    permissions:
+      contents: read
+      packages: read
+    # Linux runs in the CI image; an empty string runs the other rows on the host.
+    container: ${{ matrix.platform.os == 'ubuntu-24.04' && needs.images.outputs.noble || '' }}
+    # Container steps otherwise default to sh; keep each runner's own default shell.
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.platform.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
     env:
       UV_PYTHON: ${{ matrix.platform.python }}
       RESHIKI_REQUIRE_INCHI_HELPER: "1"
@@ -266,9 +299,6 @@ jobs:
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install Linux libraries
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.99.1 --profile minimal --component clippy
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -416,7 +446,7 @@ jobs:
           cargo test --locked --features rdkit-reference --no-run --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --test native_aromatic
   rust-lint:
     name: rust lint (${{ matrix.os }}, ${{ matrix.target }})
-    needs: scope
+    needs: [scope, images]
     if: needs.scope.outputs.native == 'true'
     timeout-minutes: 30
     strategy:
@@ -428,15 +458,21 @@ jobs:
           - os: windows-2022
             target: x86_64-pc-windows-msvc
             msvc_arch: x64
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+    # Linux runs in the CI image; an empty string runs the other rows on the host.
+    container: ${{ matrix.os == 'ubuntu-24.04' && needs.images.outputs.noble || '' }}
+    # Container steps otherwise default to sh; keep each runner's own default shell.
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install Linux libraries
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -456,7 +492,7 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
   rust-goldens:
     name: rust goldens (${{ matrix.os }}, ${{ matrix.target }})
-    needs: scope
+    needs: [scope, images]
     if: needs.scope.outputs.native == 'true'
     timeout-minutes: 30
     strategy:
@@ -470,19 +506,25 @@ jobs:
             target: x86_64-pc-windows-msvc
             msvc_arch: x64
             python: cpython-3.12.15-windows-x86_64-none
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             python: "3.12.15"
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+    # Linux runs in the CI image; an empty string runs the other rows on the host.
+    container: ${{ matrix.os == 'ubuntu-24.04' && needs.images.outputs.noble || '' }}
+    # Container steps otherwise default to sh; keep each runner's own default shell.
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
     env:
       UV_PYTHON: ${{ matrix.python }}
       RESHIKI_REQUIRE_INCHI_HELPER: "1"
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install Linux libraries
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.99.1 --profile minimal
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -504,9 +546,6 @@ jobs:
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Install fixture reader dependencies
         run: uv sync --locked
-      - name: Select the captured Ubuntu fixture profile
-        if: runner.os == 'Linux'
-        run: echo "RESHIKI_TEST_LINUX_GOLDENS=ubuntu-22.04-x64" >> "$GITHUB_ENV"
       - name: Replay independently captured chemistry fixtures
         run: cargo test --locked --features rdkit-reference --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
