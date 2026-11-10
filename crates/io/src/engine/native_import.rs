@@ -22,6 +22,8 @@ mod allene_tests;
 #[cfg(test)]
 mod atrop_tests;
 pub(super) mod chain_layout;
+#[cfg(test)]
+mod molfile_atrop_tests;
 pub(super) mod template_retry;
 #[cfg(test)]
 mod tests;
@@ -253,13 +255,24 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         }
         "mol" => {
             let imported = molfile::read(&text)?;
+            let expected = axes(&imported.molecule)?;
             // A 3D file is never Haworth-restored, so the molecule keeps its XYZ.
             let file_xyz = imported.annotations.is_3d;
             let (document, molecule) = imported.display_document()?;
+            let mut warnings = Vec::new();
+            // Projection bonds cannot carry axis wedges; other file wedges
+            // can lose or add axes in the finished drawing too (#1057).
+            // If the drawing cannot be prepared, keep the existing import.
+            if !expected.is_empty()
+                && let Ok(drawn) = molecular::prepare(&document)
+                && axes(&drawn)? != expected
+            {
+                warnings.push("The drawing cannot keep the imported atropisomer axis; editing, Clean Up or export of this drawing will not include it".into());
+            }
             Prepared {
                 molecule,
                 document,
-                warnings: Vec::new(),
+                warnings,
                 file_xyz,
             }
         }
