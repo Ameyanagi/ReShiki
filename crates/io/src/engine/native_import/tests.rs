@@ -924,7 +924,12 @@ fn explicit_mol_and_cdxml_imports_preserve_nonconventional_coordinates() -> anyh
     ]
     .map(|(x, y)| Point3 { x, y, z: 0. })
     .to_vec();
-    let source = finish_molecule(molecule, &input.prepared.dummy_labels, Default::default())?;
+    let source = finish_molecule(
+        molecule,
+        &input.prepared.dummy_labels,
+        Default::default(),
+        &ComponentRow::default(),
+    )?;
     let (mol, fallback) =
         molfile::write_drawing_absolute(&source.molecule, &source.document, Default::default())?;
     assert!(!fallback);
@@ -953,6 +958,39 @@ fn explicit_mol_and_cdxml_imports_preserve_nonconventional_coordinates() -> anyh
                 before.id
             );
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn imported_component_rows_leave_a_bond_length_between_label_edges() -> anyhow::Result<()> {
+    for text in [
+        "C1C=CCC2C1CNC2.Cl",
+        "C1CCNCC1.Cl",
+        "C1CCNCC1.OC(=O)C(F)(F)F",
+    ] {
+        let prepared = imported_smiles(text)?;
+        let doc = &prepared.document;
+        let ids: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+        let mut bounds: Vec<_> = crate::reactions::molecules(doc, &ids)
+            .iter()
+            .map(|ids| {
+                doc.atoms
+                    .iter()
+                    .filter(|a| ids.contains(&a.id))
+                    .map(|a| (a.position, a.position))
+                    .chain(crate::scene::participant_label_ink_boxes(doc, ids))
+                    .fold(
+                        (f32::INFINITY, f32::NEG_INFINITY),
+                        |(left, right), (lo, hi)| (left.min(lo.x), right.max(hi.x)),
+                    )
+            })
+            .collect();
+        bounds.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert_eq!(bounds.len(), 2, "{text}");
+        let gap = bounds[1].0 - bounds[0].1;
+        let length = average_document_bond_length(doc);
+        assert!(gap >= length - 1e-4, "{text}: label gap {gap} < {length}");
     }
     Ok(())
 }
