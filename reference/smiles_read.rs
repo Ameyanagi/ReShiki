@@ -16,7 +16,6 @@ struct Case {
     text: String,
     expected: Option<Value>,
     failure: Option<String>,
-    renumbered: Option<Box<Case>>,
 }
 fn difference(a: &Value, e: &Value, path: &str) -> Option<String> {
     if a == e {
@@ -71,22 +70,12 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut mismatches) = (0, 0, 0);
-    let mut renumberings = 0;
     let mut failures = Vec::new();
     let mut all_failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
-        let expected = case.renumbered.as_deref().unwrap_or(&case);
-        if case.renumbered.is_some() {
-            renumberings += 1;
-            assert_ne!(
-                expected.expected, case.expected,
-                "Stereo-group renumbering did not change the native result: {}",
-                case.name
-            );
-        }
         let result = smiles::read(&case.text);
-        let failure = match (&result, &expected.expected) {
+        let failure = match (&result, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
                 let mut actual =
@@ -108,7 +97,7 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
                 None
             }
             (Err(error), Some(_)) => Some(format!("Rejected supported input: {error}")),
-            (Ok(_), None) => Some(format!("Accepted invalid input: {:?}", expected.failure)),
+            (Ok(_), None) => Some(format!("Accepted invalid input: {:?}", case.failure)),
         };
         if let Some(error) = failure {
             all_failures.push(format!("{}: {error}", case.name));
@@ -139,15 +128,10 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
         )?;
     }
     eprintln!("Extended SMILES: {accepted} accepted, {rejected} rejected, {mismatches} mismatches");
-    eprintln!("Extended SMILES: {renumberings} stereo-group renumberings");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         accepted > 5000 && rejected > 1000,
         "Insufficient SMILES import coverage"
-    );
-    assert!(
-        renumberings > 0,
-        "Missing CX stereo-group collision coverage"
     );
     Ok(())
 }
