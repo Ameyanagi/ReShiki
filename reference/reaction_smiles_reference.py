@@ -13,12 +13,14 @@ from rdkit.Chem import rdChemReactions
 if TYPE_CHECKING or __package__:
     from .cxsmarts_reference import cases as extension_cases
     from .cxsmiles_cases import cases as interaction_cases
+    from .degenerate_cx_coordinates import CoordinateInput
     from .smiles_prepare_reference import all_cases as molecular_cases
     from .smiles_read_reference import prepared_snapshot
     from .valence_reference import ORDERS
 else:
     from cxsmarts_reference import cases as extension_cases
     from cxsmiles_cases import cases as interaction_cases
+    from degenerate_cx_coordinates import CoordinateInput
     from smiles_prepare_reference import all_cases as molecular_cases
     from smiles_read_reference import prepared_snapshot
     from valence_reference import ORDERS
@@ -37,6 +39,15 @@ def read(text):
     rows = (reaction.GetReactants(), reaction.GetProducts(), reaction.GetAgents())
     if sum(m.GetNumAtoms() for parts in rows for m in parts) > 10000:
         raise ValueError("Reaction exceeds 10,000 atoms")
+    # Reaction parsing keeps explicit H and does not run the molecule reader's
+    # coordinate-driven stereo assignment. Drop only the selected conformers,
+    # before sanitization and the otherwise unchanged prepared-state projection.
+    coordinates = CoordinateInput(text)
+    atom_offset = 0
+    for parts in (rows[0], rows[2], rows[1]):
+        for mol in parts:
+            coordinates.drop(mol, atom_offset)
+            atom_offset += mol.GetNumAtoms()
     result = {}
     for role, parts in zip(("reactants", "products", "agents"), rows, strict=True):
         result[role] = []
