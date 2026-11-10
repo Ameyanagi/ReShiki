@@ -1,0 +1,20 @@
+[test-groups]
+naming-worker = { max-threads = 1 }
+native-clipboard = { max-threads = 1 }
+
+[[profile.default.overrides]]
+# Nextest processes cannot share naming's in-process semaphores. Cover all
+# app tests and CLI/clipboard callers conservatively, plus child-limit tests.
+filter = 'package(reshiki) & (kind(bin) | test(/^(naming|cli|clipboard)::/) | binary_id(reshiki::cli) | binary_id(reshiki::stated_ez_wedges)) | package(reshiki-process)'
+test-group = 'naming-worker'
+
+[[profile.default.overrides]]
+# These Windows namespaces share the system clipboard; their Rust mutex is
+# process-local. macOS clipboard tests use private, uniquely named pasteboards.
+filter = 'package(reshiki-windows) & (test(/^clipboard::/) | test(/^ole::embedded::/))'
+test-group = 'native-clipboard'
+
+[profile.ci]
+fail-fast = false
+status-level = "skip"
+# Keep defaults: no retries, PASS/SKIP output above, and 60-second slow reports.
