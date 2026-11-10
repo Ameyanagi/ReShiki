@@ -56,19 +56,27 @@ impl Drawing {
     }
 
     pub fn finish(self, labels: Vec<document::Labels>) -> Result<Document, Error> {
+        self.finish_with_notices(labels)
+            .map(|(document, _)| document)
+    }
+
+    pub fn finish_with_notices(
+        self,
+        labels: Vec<document::Labels>,
+    ) -> Result<(Document, Vec<String>), Error> {
         if labels.len() != self.parts.len() {
             return Err(invalid("Reaction label participant count changed"));
         }
         let mut doc = Document::default();
+        let mut notices = Vec::new();
         for (part, labels) in self.parts.into_iter().zip(labels) {
-            let axis_free = axes(part.drawing.molecule()).is_empty();
+            let source = part.drawing.molecule().clone();
             let positions: Vec<_> = part.positions.into_iter().map(Position::point).collect();
             let mut drawing = part.drawing.finish_at(labels, &positions)?;
-            if axis_free && crate::chemistry::crossed_double_has_axis(&drawing) {
-                return Err(invalid(
-                    "The drawing cannot keep this reaction's atropisomer axes",
-                ));
-            }
+            notices.extend(crate::chemistry::drop_added_axis_wedges(
+                &mut drawing,
+                &source,
+            ));
             if let [atom] = drawing.atoms.as_mut_slice()
                 && atom.element == "O"
                 && atom.label_h == 2
@@ -92,7 +100,7 @@ impl Drawing {
         doc.reactions.push(self.reaction);
         layout_ink(&mut doc);
         doc.validate().map_err(invalid)?;
-        Ok(doc)
+        Ok((doc, notices))
     }
 }
 

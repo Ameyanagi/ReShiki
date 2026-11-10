@@ -143,6 +143,89 @@ fn assert_visible_axis(doc: &Document, expected: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn assert_axis_free(doc: &Document) -> anyhow::Result<()> {
+    assert!(
+        document::prepare(doc)?
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .all(|bond| !matches!(bond.stereo, 6 | 7))
+    );
+    Ok(())
+}
+
+fn axial_endpoints(molecule: &document::Molecule) -> Vec<(u64, u64)> {
+    molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&molecule.state.metadata.bonds)
+        .filter(|(_, metadata)| matches!(metadata.stereo, 6 | 7))
+        .map(|(bond, _)| {
+            (
+                *molecule.ids.get(bond.a).unwrap(),
+                *molecule.ids.get(bond.b).unwrap(),
+            )
+        })
+        .collect()
+}
+
+fn assert_dropped_axis_wedge(doc: &Document, a: u64, b: u64) -> anyhow::Result<()> {
+    let bond = doc
+        .bonds
+        .iter()
+        .find(|bond| (bond.a, bond.b) == (a, b) || (bond.a, bond.b) == (b, a))
+        .unwrap();
+    assert_eq!(bond.display, "plain");
+    assert!(!bond.projection);
+    assert_axis_free(doc)
+}
+
+fn assert_no_added_axis_notice(notices: &[String]) {
+    assert!(
+        notices
+            .iter()
+            .all(|notice| !notice.starts_with("Removed ") || !notice.contains("atropisomer ax")),
+        "{notices:?}"
+    );
+}
+
+fn assert_no_allene_configuration(doc: &Document) -> anyhow::Result<()> {
+    let molecule = document::prepare(doc)?;
+    assert!(
+        molecule
+            .state
+            .metadata
+            .atoms
+            .iter()
+            .all(|atom| atom.chiral_tag != 5)
+    );
+    let labeled = label::assign(&molecule.state, &Default::default())?;
+    assert!(
+        labeled
+            .state
+            .properties
+            .atoms
+            .iter()
+            .all(|atom| !matches!(atom.cip_code.as_deref(), Some("M" | "P")))
+    );
+    Ok(())
+}
+
+fn assert_allene_p_at(doc: &Document, id: u64) -> anyhow::Result<()> {
+    let molecule = document::prepare(doc)?;
+    let center = molecule.ids.iter().position(|&atom| atom == id).unwrap();
+    let labeled = label::assign(&molecule.state, &Default::default())?;
+    assert_eq!(labeled.state.metadata.atoms[center].chiral_tag, 5);
+    assert_eq!(
+        labeled.state.properties.atoms[center].cip_code.as_deref(),
+        Some("P")
+    );
+    Ok(())
+}
+
 #[test]
 fn binol_mol_v2000_and_v3000_retain_axial_wedges_and_cip() -> anyhow::Result<()> {
     let mut codes = Vec::new();
@@ -501,7 +584,7 @@ async fn rxn_github7669_keeps_its_biaryl_axis() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn rxn_refuses_an_axis_created_from_a_3d_allene_terminal_file_wedge() -> anyhow::Result<()> {
+async fn rxn_drops_a_3d_allene_terminal_file_wedge_that_adds_an_axis() -> anyhow::Result<()> {
     use super::kekulize::Direction;
     use crate::engine::{LocalEngine, Request};
 
@@ -552,26 +635,47 @@ M  V30 5 2 2 6 CFG=2\nM  V30 6 1 2 7\nM  V30 7 1 4 8\n",
     assert_eq!(axial_code(&prepared)?, "P");
     assert!(matches!(prepared.state.metadata.bonds[0].stereo, 6 | 7));
     let drawing = read.drawing()?;
+    // The agent follows the water reactant, so use its remapped canvas IDs.
+    let (agent, _) = drawing.participants().nth(1).unwrap();
+    let wedge = (agent.ids[0], agent.ids[4]);
     let labels = drawing.labels()?;
-    let error = drawing.finish(labels).unwrap_err().to_string();
-    assert!(
-        error.contains("cannot keep this reaction's atropisomer axes"),
-        "{error}"
-    );
-    let error = LocalEngine::in_process()
+    let (drawn, notices) = drawing.finish_with_notices(labels)?;
+    assert_eq!(notices, [super::ADDED_AXIS_WEDGE_NOTICE]);
+    assert_dropped_axis_wedge(&drawn, wedge.0, wedge.1)?;
+    assert_no_allene_configuration(&drawn)?;
+    let engine = LocalEngine::in_process();
+    let imported = engine
         .request(Request::import("rxn", &text))
         .await
-        .unwrap_err();
+        .map_err(anyhow::Error::msg)?;
     assert!(
-        error.contains("cannot keep this reaction's atropisomer axes"),
-        "{error}"
+        imported
+            .warnings
+            .iter()
+            .any(|notice| notice == super::ADDED_AXIS_WEDGE_NOTICE),
+        "{:?}",
+        imported.warnings
     );
+    let doc = imported.document.unwrap();
+    for doc in [drawn, doc] {
+        assert_dropped_axis_wedge(&doc, wedge.0, wedge.1)?;
+        assert_no_allene_configuration(&doc)?;
+        let cleaned = engine
+            .request(Request::molecule("clean", doc))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let doc = cleaned.document.as_ref().unwrap();
+        assert_dropped_axis_wedge(doc, wedge.0, wedge.1)?;
+        assert_no_allene_configuration(doc)?;
+    }
     // The same axis-free 3D agent without the file wedge still imports.
     let unwedged = text.replace("1 1 5 CFG=1", "1 1 5 CFG=0");
     let read = super::reaction::read_rxn(&unwedged)?;
     let drawing = read.drawing()?;
     let labels = drawing.labels()?;
-    let prepared = document::prepare(&drawing.finish(labels)?)?;
+    let (doc, notices) = drawing.finish_with_notices(labels)?;
+    assert_no_added_axis_notice(&notices);
+    let prepared = document::prepare(&doc)?;
     assert!(
         prepared
             .state
@@ -580,10 +684,11 @@ M  V30 5 2 2 6 CFG=2\nM  V30 6 1 2 7\nM  V30 7 1 4 8\n",
             .iter()
             .all(|b| !matches!(b.stereo, 6 | 7))
     );
-    let imported = LocalEngine::in_process()
+    let imported = engine
         .request(Request::import("rxn", &unwedged))
         .await
         .map_err(anyhow::Error::msg)?;
+    assert_no_added_axis_notice(&imported.warnings);
     let prepared = document::prepare(imported.document.as_ref().unwrap())?;
     assert!(
         prepared
@@ -593,7 +698,7 @@ M  V30 5 2 2 6 CFG=2\nM  V30 6 1 2 7\nM  V30 7 1 4 8\n",
             .iter()
             .all(|b| !matches!(b.stereo, 6 | 7))
     );
-    // Without a crossed double, main accepts even this pre-existing axis gain.
+    // Without a crossed double, the restored file wedge remains accepted.
     let plain = text.replace("2 2 6 CFG=2", "2 2 6 CFG=0");
     let read = super::reaction::read_rxn(&plain)?;
     assert!(
@@ -607,13 +712,15 @@ M  V30 5 2 2 6 CFG=2\nM  V30 6 1 2 7\nM  V30 7 1 4 8\n",
     );
     let drawing = read.drawing()?;
     let labels = drawing.labels()?;
-    let doc = drawing.finish(labels)?;
+    let (doc, notices) = drawing.finish_with_notices(labels)?;
+    assert_no_added_axis_notice(&notices);
     assert!(doc.bonds.iter().all(|b| b.display != "wavy"));
     assert_eq!(axial_code(&document::prepare(&doc)?)?, "P");
-    let imported = LocalEngine::in_process()
+    let imported = engine
         .request(Request::import("rxn", &plain))
         .await
         .map_err(anyhow::Error::msg)?;
+    assert_no_added_axis_notice(&imported.warnings);
     assert_eq!(
         axial_code(&document::prepare(imported.document.as_ref().unwrap())?)?,
         "P"
@@ -631,7 +738,8 @@ async fn rxn_axis_free_participants_do_not_require_drawing_preparation() -> anyh
         assert!(read.agents[0].molecule.state.metadata.bonds.is_empty());
         let drawing = read.drawing()?;
         let labels = drawing.labels()?;
-        let document = drawing.finish(labels)?;
+        let (document, notices) = drawing.finish_with_notices(labels)?;
+        assert_no_added_axis_notice(&notices);
         assert!(document.bonds.is_empty());
         if element == "R" {
             assert!(document::prepare(&document).is_err());
@@ -647,6 +755,7 @@ async fn rxn_axis_free_participants_do_not_require_drawing_preparation() -> anyh
                 .request(Request::import("rxn", &text))
                 .await
                 .map_err(anyhow::Error::msg)?;
+            assert_no_added_axis_notice(&imported.warnings);
             assert!(imported.document.unwrap().bonds.is_empty());
         }
     }
@@ -654,8 +763,7 @@ async fn rxn_axis_free_participants_do_not_require_drawing_preparation() -> anyh
 }
 
 #[tokio::test]
-async fn cdxml_refuses_an_axis_created_from_a_3d_allene_terminal_file_wedge() -> anyhow::Result<()>
-{
+async fn cdxml_drops_a_3d_allene_terminal_file_wedge_that_adds_an_axis() -> anyhow::Result<()> {
     use crate::engine::{LocalEngine, Request};
 
     // #1064's review reproducer: p and xyz associate at twice the RXN scale,
@@ -718,21 +826,38 @@ async fn cdxml_refuses_an_axis_created_from_a_3d_allene_terminal_file_wedge() ->
     let prepared = document::prepare(&restored)?;
     assert_eq!(axial_code(&prepared)?, "P");
     assert!(matches!(prepared.state.metadata.bonds[0].stereo, 6 | 7));
-    let error = scene.into_document().unwrap_err().to_string();
-    assert!(
-        error.contains("cannot keep this CDXML's atropisomer axes"),
-        "{error}"
-    );
-    let error = LocalEngine::in_process()
+    let imported = scene.into_document()?;
+    assert_eq!(imported.notices, [super::ADDED_AXIS_WEDGE_NOTICE]);
+    assert_dropped_axis_wedge(&imported.document, 1, 5)?;
+    assert_no_allene_configuration(&imported.document)?;
+    let engine = LocalEngine::in_process();
+    let response = engine
         .request(Request::import("cdxml", &xml))
         .await
-        .unwrap_err();
+        .map_err(anyhow::Error::msg)?;
     assert!(
-        error.contains("cannot keep this CDXML's atropisomer axes"),
-        "{error}"
+        response
+            .warnings
+            .iter()
+            .any(|notice| notice == super::ADDED_AXIS_WEDGE_NOTICE),
+        "{:?}",
+        response.warnings
     );
+    let doc = response.document.unwrap();
+    for doc in [imported.document, doc] {
+        assert_dropped_axis_wedge(&doc, 1, 5)?;
+        assert_no_allene_configuration(&doc)?;
+        let cleaned = engine
+            .request(Request::molecule("clean", doc))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let doc = cleaned.document.as_ref().unwrap();
+        assert_dropped_axis_wedge(doc, 1, 5)?;
+        assert_no_allene_configuration(doc)?;
+    }
     // With no restored wedge the same axis-free 3D file remains importable.
     let imported = cdxml::import_cdxml(&xml.replace(" Display='WedgeBegin'", ""))?;
+    assert_no_added_axis_notice(&imported.notices);
     assert!(
         document::prepare(&imported.document)?
             .state
@@ -741,9 +866,17 @@ async fn cdxml_refuses_an_axis_created_from_a_3d_allene_terminal_file_wedge() ->
             .iter()
             .all(|b| !matches!(b.stereo, 6 | 7))
     );
-    // Without the wavy double, keep main's acceptance of the restored wedge.
+    let unwedged = xml.replace(" Display='WedgeBegin'", "");
+    let response = engine
+        .request(Request::import("cdxml", &unwedged))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_no_added_axis_notice(&response.warnings);
+    assert_axis_free(response.document.as_ref().unwrap())?;
+    // Without the wavy double, the restored wedge remains accepted.
     let plain = xml.replace(" Display='Wavy'", "");
     let imported = cdxml::import_cdxml(&plain)?;
+    assert_no_added_axis_notice(&imported.notices);
     assert!(
         imported
             .molecule
@@ -755,10 +888,11 @@ async fn cdxml_refuses_an_axis_created_from_a_3d_allene_terminal_file_wedge() ->
     );
     assert!(imported.document.bonds.iter().all(|b| b.display != "wavy"));
     assert_eq!(axial_code(&document::prepare(&imported.document)?)?, "P");
-    let response = LocalEngine::in_process()
+    let response = engine
         .request(Request::import("cdxml", &plain))
         .await
         .map_err(anyhow::Error::msg)?;
+    assert_no_added_axis_notice(&response.warnings);
     assert_eq!(
         axial_code(&document::prepare(response.document.as_ref().unwrap())?)?,
         "P"
@@ -767,8 +901,7 @@ async fn cdxml_refuses_an_axis_created_from_a_3d_allene_terminal_file_wedge() ->
 }
 
 #[tokio::test]
-async fn cxsmiles_refuses_axes_added_by_retained_wedges_beside_wavy_doubles() -> anyhow::Result<()>
-{
+async fn cxsmiles_drops_wedges_that_add_axes_beside_wavy_doubles() -> anyhow::Result<()> {
     use super::kekulize::Direction;
     use crate::engine::{LocalEngine, Request};
 
@@ -788,29 +921,66 @@ async fn cxsmiles_refuses_axes_added_by_retained_wedges_beside_wavy_doubles() ->
         );
         assert_eq!(state.directions[1], Direction::Unknown);
         assert_eq!(state.directions[6], Direction::Wedge);
-        match engine.request(Request::import("smiles", text)).await {
-            // #1049 redraws coordinate-free wedges from the stereo.
-            Ok(response) if read.conformers.is_empty() => assert!(
-                document::prepare(response.document.as_ref().unwrap())?
-                    .state
-                    .metadata
-                    .bonds
-                    .iter()
-                    .all(|b| !matches!(b.stereo, 6 | 7))
-            ),
-            result => {
-                let error = result.unwrap_err();
-                assert!(
-                    error.contains("The drawing cannot keep this structure's atropisomer axes"),
-                    "{error}"
-                );
-            }
+        if let Some(conformer) = read.conformers.first() {
+            assert!(state.metadata.atoms.iter().all(|a| a.chiral_tag == 0));
+            let molecule = document::Molecule {
+                rdkit_version: super::RDKIT_VERSION,
+                ids: (1..=state.graph.atoms.len() as u64).collect(),
+                positions: conformer.positions.clone(),
+                state: state.clone(),
+            };
+            let drawing = document::for_generated(
+                &molecule,
+                &read.prepared.dummy_labels,
+                Default::default(),
+            )?;
+            let labels = drawing.labels()?;
+            let mut doc = drawing.finish(labels)?;
+            assert_eq!(axial_code(&document::prepare(&doc)?)?, "P");
+            assert_eq!(
+                super::drop_added_axis_wedges(&mut doc, &molecule).as_deref(),
+                Some(super::ADDED_AXIS_WEDGE_NOTICE)
+            );
+            assert_dropped_axis_wedge(&doc, 1, 8)?;
+            assert_no_allene_configuration(&doc)?;
+            let cleaned = engine
+                .request(Request::molecule("clean", doc))
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let doc = cleaned.document.as_ref().unwrap();
+            assert_dropped_axis_wedge(doc, 1, 8)?;
+            assert_no_allene_configuration(doc)?;
         }
+        let response = engine
+            .request(Request::import("smiles", text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let doc = response.document.unwrap();
+        assert_axis_free(&doc)?;
+        assert!(
+            response
+                .warnings
+                .iter()
+                .any(|notice| notice == super::ADDED_AXIS_WEDGE_NOTICE),
+            "{:?}",
+            response.warnings
+        );
+        assert_dropped_axis_wedge(&doc, 1, 8)?;
+        assert_no_allene_configuration(&doc)?;
+        let cleaned = engine
+            .request(Request::molecule("clean", doc))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let doc = cleaned.document.as_ref().unwrap();
+        assert_axis_free(doc)?;
+        assert_dropped_axis_wedge(doc, 1, 8)?;
+        assert_no_allene_configuration(doc)?;
         let unwedged = text.replace("wU:0.6,", "");
         let response = engine
             .request(Request::import("smiles", &unwedged))
             .await
             .map_err(anyhow::Error::msg)?;
+        assert_no_added_axis_notice(&response.warnings);
         assert!(
             document::prepare(response.document.as_ref().unwrap())?
                 .state
@@ -827,6 +997,7 @@ async fn cxsmiles_refuses_axes_added_by_retained_wedges_beside_wavy_doubles() ->
         .request(Request::import("smiles", planar))
         .await
         .map_err(anyhow::Error::msg)?;
+    assert_no_added_axis_notice(&response.warnings);
     assert!(
         document::prepare(response.document.as_ref().unwrap())?
             .state
@@ -839,6 +1010,7 @@ async fn cxsmiles_refuses_axes_added_by_retained_wedges_beside_wavy_doubles() ->
         .request(Request::import("smiles", "* |atomProp:0.dummyLabel.R1|"))
         .await
         .map_err(anyhow::Error::msg)?;
+    assert_no_added_axis_notice(&response.warnings);
     let doc = response.document.as_ref().unwrap();
     assert!(doc.bonds.is_empty());
     assert!(document::prepare(doc).is_err());
@@ -846,7 +1018,344 @@ async fn cxsmiles_refuses_axes_added_by_retained_wedges_beside_wavy_doubles() ->
 }
 
 #[tokio::test]
-async fn mol_and_sdf_refuse_added_axes_only_for_non_projection_file_wedges() -> anyhow::Result<()> {
+async fn cdxml_import_removes_wedges_from_axes_exposed_by_another_removal() -> anyhow::Result<()> {
+    use crate::engine::{LocalEngine, Request};
+
+    // MOL clears these non-allene file wedges before drawing. Flat 3D CDXML
+    // retains them: equal Z coordinates leave the source axis-free while p/xyz
+    // restore the supplied XY geometry and both authored wedges.
+    let mut xml = String::from("<CDXML BondLength='14.4'><page><fragment id='100'>");
+    for (i, (element, x, y)) in [
+        (6, 0., 0.),
+        (6, 0., 1.),
+        (7, 1., 0.),
+        (6, -1., 1.),
+        (6, 1., 2.),
+        (6, -1., 2.),
+        (6, 2., -1.),
+        (6, 2., 1.),
+        (8, 3., 0.),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        write!(
+            xml,
+            "<n id='{}' Element='{element}' p='{} {}' xyz='{} {} {}'/>",
+            i + 1,
+            19.2 * x,
+            -19.2 * y,
+            2. * x / 65536.,
+            -2. * y / 65536.,
+            2. / 65536.
+        )?;
+    }
+    xml.push_str(
+        "<b id='11' B='1' E='2'/><b id='12' B='1' E='3' Display='WedgeBegin'/>
+<b id='13' B='1' E='4' Order='2'/><b id='14' B='2' E='5' Order='2' Display='Wavy'/>
+<b id='15' B='2' E='6'/><b id='16' B='3' E='7'/>
+<b id='17' B='3' E='8' Display='WedgeBegin'/><b id='18' B='7' E='9' Order='2'/>
+</fragment></page></CDXML>",
+    );
+    let scene = cdxml::assemble_cdxml(&cdxml::prepare_cdxml(&xml)?)?;
+    assert_eq!(scene.conformer_3d, Some(true));
+    assert!(axial_endpoints(&scene.molecule).is_empty());
+    let before_removal = scene.clone().into_unchecked_drawing()?;
+    assert_eq!(
+        axial_endpoints(&document::prepare(&before_removal)?),
+        [(1, 2)]
+    );
+    let mut after_first_removal = before_removal;
+    after_first_removal
+        .bonds
+        .iter_mut()
+        .find(|bond| (bond.a, bond.b) == (1, 3))
+        .unwrap()
+        .display = "plain".into();
+    // The wedge on 1--3 masked the neighbouring 3--7 candidate. Removing
+    // only the first axis's wedge exposes a second, previously absent axis.
+    assert_eq!(
+        axial_endpoints(&document::prepare(&after_first_removal)?),
+        [(3, 7)]
+    );
+
+    let expected_notice =
+        "Removed 2 wedges that would have added atropisomer axes the file does not define";
+    let imported = scene.into_document()?;
+    assert!(axial_endpoints(&imported.molecule).is_empty());
+    assert_eq!(imported.notices, [expected_notice]);
+    let engine = LocalEngine::in_process();
+    let response = engine
+        .request(Request::import("cdxml", &xml))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert!(
+        response
+            .warnings
+            .iter()
+            .any(|notice| notice == expected_notice),
+        "{:?}",
+        response.warnings
+    );
+    for doc in [imported.document, response.document.unwrap()] {
+        assert_dropped_axis_wedge(&doc, 1, 3)?;
+        assert_dropped_axis_wedge(&doc, 3, 8)?;
+        let cleaned = engine
+            .request(Request::molecule("clean", doc))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let doc = cleaned.document.as_ref().unwrap();
+        assert_dropped_axis_wedge(doc, 1, 3)?;
+        assert_dropped_axis_wedge(doc, 3, 8)?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn cdxml_import_rechecks_axes_after_removing_an_invented_allene_wedge() -> anyhow::Result<()>
+{
+    use crate::engine::{LocalEngine, Request};
+
+    // Flat 3D CDXML retains the authored wedges in the drawing while its
+    // conformer defines neither an axis nor an allene configuration.
+    // The allene is 1=3=4. Its 4->8 wedge and the same-display 8->9 wedge
+    // initially mask the 8--10 axis through the three-coordinate amide N.
+    let mut xml = String::from("<CDXML BondLength='14.4'><page><fragment id='100'>");
+    for (i, (element, x, y)) in [
+        (6, 0., 0.),
+        (6, 1.5, 0.),
+        (6, -1., 1.),
+        (6, -2., 2.),
+        (6, -1., -1.),
+        (6, 2.5, 1.),
+        (6, 2.5, -1.),
+        (7, -3., 1.),
+        (6, -4., -1.),
+        (6, -3., 0.),
+        (8, -2., -1.),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        write!(
+            xml,
+            "<n id='{}' Element='{element}' p='{} {}' xyz='{} {} {}'/>",
+            i + 1,
+            19.2 * x,
+            -19.2 * y,
+            2. * x / 65536.,
+            -2. * y / 65536.,
+            2. / 65536.
+        )?;
+    }
+    xml.push_str(
+        "<b id='12' B='1' E='2'/><b id='13' B='1' E='3' Order='2'/>
+<b id='14' B='3' E='4' Order='2'/><b id='15' B='1' E='5' Display='WedgeBegin'/>
+<b id='16' B='2' E='6' Order='2' Display='Wavy'/><b id='17' B='2' E='7'/>
+<b id='18' B='4' E='8' Display='WedgeBegin'/>
+<b id='19' B='8' E='9' Display='WedgeBegin'/><b id='20' B='8' E='10'/>
+<b id='21' B='10' E='11' Order='2'/></fragment></page></CDXML>",
+    );
+    let scene = cdxml::assemble_cdxml(&cdxml::prepare_cdxml(&xml)?)?;
+    assert_eq!(scene.conformer_3d, Some(true));
+    assert!(axial_endpoints(&scene.molecule).is_empty());
+    let source = label::assign(&scene.molecule.state, &Default::default())?;
+    assert!(
+        source
+            .state
+            .metadata
+            .atoms
+            .iter()
+            .all(|atom| atom.chiral_tag != 5)
+    );
+    assert!(
+        source
+            .state
+            .properties
+            .atoms
+            .iter()
+            .all(|atom| !matches!(atom.cip_code.as_deref(), Some("M" | "P")))
+    );
+    let before_removal = scene.clone().into_unchecked_drawing()?;
+    assert_eq!(
+        axial_endpoints(&document::prepare(&before_removal)?),
+        [(1, 2)]
+    );
+    assert_no_allene_configuration(&before_removal)?;
+
+    let mut after_axis_removal = before_removal;
+    after_axis_removal
+        .bonds
+        .iter_mut()
+        .find(|bond| (bond.a, bond.b) == (1, 5))
+        .unwrap()
+        .display = "plain".into();
+    let molecule = document::prepare(&after_axis_removal)?;
+    assert!(axial_endpoints(&molecule).is_empty());
+    let allene_center = molecule.ids.iter().position(|&id| id == 3).unwrap();
+    let labeled = label::assign(&molecule.state, &Default::default())?;
+    assert_eq!(
+        labeled
+            .state
+            .metadata
+            .atoms
+            .get(allene_center)
+            .unwrap()
+            .chiral_tag,
+        5
+    );
+    assert!(matches!(
+        labeled
+            .state
+            .properties
+            .atoms
+            .get(allene_center)
+            .unwrap()
+            .cip_code
+            .as_deref(),
+        Some("M" | "P")
+    ));
+    // The axis pass now appears finished, but removing the invented allene's
+    // other wedge unmasks the neighbouring amide axis at three-coordinate N.
+    after_axis_removal
+        .bonds
+        .iter_mut()
+        .find(|bond| (bond.a, bond.b) == (4, 8))
+        .unwrap()
+        .display = "plain".into();
+    assert_eq!(
+        axial_endpoints(&document::prepare(&after_axis_removal)?),
+        [(8, 10)]
+    );
+    assert_no_allene_configuration(&after_axis_removal)?;
+
+    let expected_notice = "Removed 2 wedges that would have added atropisomer axes the file does not define; the allene's other wedge was removed too, so it stays unspecified as in the file";
+    let imported = scene.into_document()?;
+    assert!(axial_endpoints(&imported.molecule).is_empty());
+    assert_eq!(imported.notices, [expected_notice]);
+    let engine = LocalEngine::in_process();
+    let response = engine
+        .request(Request::import("cdxml", &xml))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert!(
+        response
+            .warnings
+            .iter()
+            .any(|notice| notice == expected_notice),
+        "{:?}",
+        response.warnings
+    );
+    for doc in [imported.document, response.document.unwrap()] {
+        assert_dropped_axis_wedge(&doc, 1, 5)?;
+        assert_dropped_axis_wedge(&doc, 4, 8)?;
+        assert_dropped_axis_wedge(&doc, 8, 9)?;
+        assert_no_allene_configuration(&doc)?;
+        let cleaned = engine
+            .request(Request::molecule("clean", doc))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let doc = cleaned.document.as_ref().unwrap();
+        assert_dropped_axis_wedge(doc, 1, 5)?;
+        assert_dropped_axis_wedge(doc, 4, 8)?;
+        assert_dropped_axis_wedge(doc, 8, 9)?;
+        assert_no_allene_configuration(doc)?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn mol_import_keeps_both_ended_allene_unspecified_after_removing_an_axis()
+-> anyhow::Result<()> {
+    use crate::engine::{LocalEngine, Request};
+
+    let engine = LocalEngine::in_process();
+    for other_wedge in [1, 6] {
+        let mut text = String::from(
+            "Both-ended allene\n     RDKit          2D\n\n  8  7  0  0  0  0  0  0  0  0999 V2000\n",
+        );
+        for (x, y) in [
+            (0., 0.),
+            (1.5, 0.),
+            (-1., 1.),
+            (-2., 2.),
+            (-1., -1.),
+            (2.5, 1.),
+            (2.5, -1.),
+            (-3., 1.),
+        ] {
+            writeln!(
+                text,
+                "{x:10.4}{y:10.4}{:10.4} C   0  0  0  0  0  0  0  0  0  0  0  0",
+                0.
+            )?;
+        }
+        write!(
+            text,
+            "  1  2  1  0\n  1  3  2  0\n  3  4  2  0\n  1  5  1  1\n  2  6  2  4\n  2  7  1  0\n  4  8  1  {other_wedge}\nM  END\n"
+        )?;
+        let read = molfile::read(&text)?;
+        assert!(axial_endpoints(&read.molecule).is_empty());
+        assert!(
+            read.molecule
+                .state
+                .metadata
+                .atoms
+                .iter()
+                .all(|atom| atom.chiral_tag != 5)
+        );
+        let drawing = read.drawing()?;
+        let labels = drawing.labels()?;
+        let before_removal = drawing.finish(labels)?;
+        assert_eq!(
+            axial_endpoints(&document::prepare(&before_removal)?),
+            [(1, 2)]
+        );
+        assert_no_allene_configuration(&before_removal)?;
+        let expected_notice = "Removed a wedge that would have added an atropisomer axis the file does not define; the allene's other wedge was removed too, so it stays unspecified as in the file";
+        let (drawing, molecule, notices) = read.display_document()?;
+        assert!(axial_endpoints(&molecule).is_empty());
+        assert!(
+            molecule
+                .state
+                .metadata
+                .atoms
+                .iter()
+                .all(|atom| atom.chiral_tag != 5)
+        );
+        assert_eq!(notices, [expected_notice]);
+        let response = engine
+            .request(Request::import("mol", &text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert!(
+            response
+                .warnings
+                .iter()
+                .any(|notice| notice == expected_notice),
+            "{:?}",
+            response.warnings
+        );
+        for doc in [drawing, response.document.unwrap()] {
+            assert_dropped_axis_wedge(&doc, 1, 5)?;
+            assert_dropped_axis_wedge(&doc, 4, 8)?;
+            assert_no_allene_configuration(&doc)?;
+            let cleaned = engine
+                .request(Request::molecule("clean", doc))
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let doc = cleaned.document.as_ref().unwrap();
+            assert_dropped_axis_wedge(doc, 1, 5)?;
+            assert_dropped_axis_wedge(doc, 4, 8)?;
+            assert_no_allene_configuration(doc)?;
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn mol_and_sdf_drop_added_axis_wedges_only_for_non_projection_file_wedges()
+-> anyhow::Result<()> {
     use crate::engine::{LocalEngine, Request, text_format};
 
     let engine = LocalEngine::in_process();
@@ -892,32 +1401,77 @@ async fn mol_and_sdf_refuse_added_axes_only_for_non_projection_file_wedges() -> 
             assert_eq!(format, "mol");
             if dimension == "2D" && crossed == 4 {
                 // The reader accepts code 4 on a double as Unknown. Flattened
-                // file wedges would then create P beside that wavy double.
+                // file wedges would then create an atropisomer axis beside it.
+                let labeled = label::assign(&read.molecule.state, &Default::default())?;
+                let center = read.molecule.ids.iter().position(|&id| id == 3).unwrap();
+                assert_eq!(labeled.state.metadata.atoms[center].chiral_tag, 5);
+                assert_eq!(
+                    labeled.state.properties.atoms[center].cip_code.as_deref(),
+                    Some("P")
+                );
                 let drawing = read.drawing()?;
                 let labels = drawing.labels()?;
+                let mut unrecoverable = drawing.finish(labels)?;
+                assert_eq!(axial_code(&document::prepare(&unrecoverable)?)?, "P");
+                // A styled bond at the other terminal leaves no plain bond
+                // for rewedging. Dropping the configuration also clears its label.
+                unrecoverable
+                    .bonds
+                    .iter_mut()
+                    .find(|bond| (bond.a, bond.b) == (4, 8))
+                    .unwrap()
+                    .display = "wavy".into();
+                unrecoverable.atom_mut(3).unwrap().cip_label = Some("P".into());
                 assert_eq!(
-                    axial_code(&document::prepare(&drawing.finish(labels)?)?)?,
-                    "P"
+                    super::drop_added_axis_wedges(&mut unrecoverable, &read.molecule),
+                    Some(format!(
+                        "{}; the allene's (P) configuration could not be kept",
+                        super::ADDED_AXIS_WEDGE_NOTICE
+                    ))
                 );
-                let error = read.display_document().unwrap_err().to_string();
-                assert!(
-                    error.contains("cannot keep this MOL file's atropisomer axes"),
-                    "{error}"
+                assert_dropped_axis_wedge(&unrecoverable, 1, 5)?;
+                assert_no_allene_configuration(&unrecoverable)?;
+                assert_eq!(unrecoverable.atom(3).unwrap().cip_label, None);
+                let (drawing, _, notices) = read.display_document()?;
+                let expected_notice = format!(
+                    "{}; the allene's (P) configuration is now wedged at its other end",
+                    super::ADDED_AXIS_WEDGE_NOTICE
                 );
-                let error = engine
-                    .request(Request::import(format, &source))
-                    .await
-                    .unwrap_err();
-                assert!(
-                    error.contains("cannot keep this MOL file's atropisomer axes"),
-                    "{error}"
-                );
-            } else {
-                let (drawing, _) = read.display_document()?;
+                assert_eq!(notices.as_slice(), std::slice::from_ref(&expected_notice));
                 let response = engine
                     .request(Request::import(format, &source))
                     .await
                     .map_err(anyhow::Error::msg)?;
+                assert!(
+                    response.warnings.contains(&expected_notice),
+                    "{:?}",
+                    response.warnings
+                );
+                let imported = response.document.unwrap();
+                for doc in [&drawing, &imported] {
+                    assert_dropped_axis_wedge(doc, 1, 5)?;
+                    assert_allene_p_at(doc, 3)?;
+                    assert!(doc.bonds.iter().any(|bond| {
+                        (bond.a, bond.b) == (4, 8)
+                            && matches!(bond.display.as_str(), "wedge" | "hash")
+                            && !bond.projection
+                    }));
+                    let cleaned = engine
+                        .request(Request::molecule("clean", doc.clone()))
+                        .await
+                        .map_err(anyhow::Error::msg)?;
+                    let doc = cleaned.document.as_ref().unwrap();
+                    assert_dropped_axis_wedge(doc, 1, 5)?;
+                    assert_allene_p_at(doc, 3)?;
+                }
+            } else {
+                let (drawing, _, notices) = read.display_document()?;
+                assert_no_added_axis_notice(&notices);
+                let response = engine
+                    .request(Request::import(format, &source))
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                assert_no_added_axis_notice(&response.warnings);
                 for doc in [&drawing, response.document.as_ref().unwrap()] {
                     let prepared = document::prepare(doc)?;
                     if dimension == "2D" {
@@ -932,6 +1486,14 @@ async fn mol_and_sdf_refuse_added_axes_only_for_non_projection_file_wedges() -> 
                                 .iter()
                                 .all(|b| !matches!(b.stereo, 6 | 7))
                         );
+                        assert_no_allene_configuration(doc)?;
+                        let cleaned = engine
+                            .request(Request::molecule("clean", doc.clone()))
+                            .await
+                            .map_err(anyhow::Error::msg)?;
+                        let doc = cleaned.document.as_ref().unwrap();
+                        assert_axis_free(doc)?;
+                        assert_no_allene_configuration(doc)?;
                     }
                 }
             }
@@ -941,10 +1503,20 @@ async fn mol_and_sdf_refuse_added_axes_only_for_non_projection_file_wedges() -> 
     let text = rxn("2D", "M  V30 1 R 0 0 0 0\n", "");
     let mol = text.rsplit("$MOL\n").next().unwrap();
     for suffix in ["", ">  <Name>\naxis-free dummy\n\n$$$$\n"] {
-        let (doc, molecule) = molfile::read(&format!("{mol}{suffix}"))?.display_document()?;
+        let source = format!("{mol}{suffix}");
+        let (doc, molecule, notices) = molfile::read(&source)?.display_document()?;
+        assert_no_added_axis_notice(&notices);
         assert!(molecule.state.metadata.bonds.is_empty());
         assert!(doc.bonds.is_empty());
         assert!(document::prepare(&doc).is_err());
+        let response = engine
+            .request(Request::import("mol", &source))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_no_added_axis_notice(&response.warnings);
+        let doc = response.document.as_ref().unwrap();
+        assert!(doc.bonds.is_empty());
+        assert!(document::prepare(doc).is_err());
     }
     Ok(())
 }

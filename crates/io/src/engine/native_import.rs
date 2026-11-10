@@ -255,11 +255,11 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let imported = molfile::read(&text)?;
             // A 3D file is never Haworth-restored, so the molecule keeps its XYZ.
             let file_xyz = imported.annotations.is_3d;
-            let (document, molecule) = imported.display_document()?;
+            let (document, molecule, warnings) = imported.display_document()?;
             Prepared {
                 molecule,
                 document,
-                warnings: Vec::new(),
+                warnings,
                 file_xyz,
             }
         }
@@ -314,6 +314,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 scene.conformer_3d = Some(false);
             }
             let imported = scene.into_document()?;
+            warnings.extend(imported.notices);
             Prepared {
                 molecule: imported.molecule,
                 document: imported.document,
@@ -372,12 +373,12 @@ fn styled_coordination_changed(prepared: &cdxml::PreparedCdxml) -> bool {
 
 fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {
     let labels = drawing.labels()?;
-    let document = drawing.finish(labels)?;
+    let (document, warnings) = drawing.finish_with_notices(labels)?;
     let molecule = molecular::prepare(&document)?;
     Ok(Prepared {
         molecule,
         document,
-        warnings: Vec::new(),
+        warnings,
         file_xyz: false,
     })
 }
@@ -453,7 +454,7 @@ fn finish_molecule(
 ) -> Result<Prepared, Error> {
     let drawing = molecular::for_generated(&molecule, labels, options)?;
     let labels = drawing.labels()?;
-    let document = drawing.finish(labels)?;
+    let mut document = drawing.finish(labels)?;
     document.validate().map_err(Error::Document)?;
     // An axis end reads a wedge from a neighbouring centre as its own, as
     // RDKit does, so some fresh layouts' wedges hide an axis (#1056). Refuse
@@ -474,15 +475,13 @@ fn finish_molecule(
         )
         .into());
     }
-    if expected.is_empty() && chemistry::crossed_double_has_axis(&document) {
-        return Err(Error::Document(
-            "The drawing cannot keep this structure's atropisomer axes".into(),
-        ));
-    }
+    let warnings = chemistry::drop_added_axis_wedges(&mut document, &molecule)
+        .into_iter()
+        .collect();
     Ok(Prepared {
         molecule,
         document,
-        warnings: Vec::new(),
+        warnings,
         file_xyz: false,
     })
 }

@@ -138,21 +138,18 @@ impl CdxmlScene {
         let labels = drawing.labels()?;
         let mut molecule = self.molecule.clone();
         let mut document = drawing.finish_with(labels, |document| self.restore(document))?;
-        let axis_free = molecule
-            .state
-            .metadata
-            .bonds
-            .iter()
-            .all(|bond| !matches!(bond.stereo, 6 | 7));
-        if planar && crate::haworth::interchange::restore(&mut document) {
+        let restored = planar && crate::haworth::interchange::restore(&mut document);
+        let notices = chemistry::drop_added_axis_wedges(&mut document, &molecule)
+            .into_iter()
+            .collect();
+        if restored {
             molecule = chemistry::document::prepare(&document)?;
         }
-        if axis_free && chemistry::crossed_double_has_axis(&document) {
-            return Err(SceneError::Invalid(
-                "The drawing cannot keep this CDXML's atropisomer axes",
-            ));
-        }
-        Ok(ImportedCdxml { molecule, document })
+        Ok(ImportedCdxml {
+            molecule,
+            document,
+            notices,
+        })
     }
     fn restore(self, document: &mut Document) -> Result<()> {
         let generated: HashMap<_, _> = std::mem::take(&mut document.bonds)
