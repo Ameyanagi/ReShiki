@@ -175,6 +175,31 @@ async fn a_browser_copy_has_the_drawing_pictures_and_smiles_but_no_pdf_or_cdx() 
     );
 }
 
+#[tokio::test]
+async fn a_browser_copy_says_when_its_smiles_drops_an_axis() {
+    use crate::engine::native_response::SMILES_AXIAL_NOTICE;
+    let engine = LocalEngine::default();
+    for (annotation, notice) in [(" |wU:0.9|", true), ("", false)] {
+        let source = format!("c1(-c2c(Br)cccc2Cl)c([C@H](O)C)cccc1[C@@H](O)C{annotation}");
+        let doc = engine
+            .request(Request::import_smiles(&source))
+            .await
+            .unwrap()
+            .document
+            .unwrap();
+        let (outcome, _) = prepare_copy_for(engine.clone(), doc, false, true)
+            .await
+            .unwrap();
+        assert_eq!(
+            outcome.notices,
+            notice
+                .then(|| SMILES_AXIAL_NOTICE.to_owned())
+                .into_iter()
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
 #[test]
 fn a_browser_name_copy_keeps_html_and_plain_text_without_rtf() {
     let text = "(1R)-N6-methyl";

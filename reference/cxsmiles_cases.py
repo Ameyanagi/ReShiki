@@ -127,3 +127,6 @@ def cases():
                     conf.SetAtomPosition(atom.GetIdx(), p)
             Chem.WedgeMolBonds(mol, conf)
             yield Chem.MolToCXSmiles(mol, canonical=False)
+    # Parity keeps this hash beside an incoming wave (#1049). Appended last so
+    # existing case indices stay put.
+    yield "C[C@H](N)C(=O)O |w:0.0,wD:1.1|"

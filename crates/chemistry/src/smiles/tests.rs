@@ -8,6 +8,47 @@ fn binol(wedges: &str) -> String {
 }
 
 #[test]
+fn wedge_flags_leave_other_double_bonds_and_wavy_flags_unchanged() -> anyhow::Result<()> {
+    for text in [
+        "[H]/N=N/C |wU:1.0|",
+        "C/C=O |wU:1.0|",
+        "F/C=C/F |wU:1.0|",
+        "[C@H3]/C=C/C |wU:1.0|",
+        "C/C=C/C |w:1.0|",
+        "[H]/N=C/F |w:1.0|",
+    ] {
+        assert_eq!(
+            serde_json::to_value(super::read(text)?.prepared)?,
+            serde_json::to_value(super::read_dropping_flagged_ez(text)?.prepared)?,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn reaction_part_wedge_flags_still_replace_stated_directions() -> anyhow::Result<()> {
+    use crate::{cx::Event, kekulize::Direction};
+    for text in ["C/C=C/C", r"C/C=C\C", "[H]/N=C/F"] {
+        for (kind, direction) in [(1, Direction::Wedge), (3, Direction::Hash)] {
+            let imported = super::reaction_part(
+                super::parse(text)?,
+                vec![Event::Wedge {
+                    bond: 0,
+                    begin: 1,
+                    kind,
+                }],
+            )?;
+            let state = imported.prepared.state;
+            assert_eq!(state.directions[0], direction, "{text}");
+            assert_eq!(state.graph.bonds[0].a, 1, "{text}");
+            assert_eq!(state.metadata.bonds[1].stereo, 0, "{text}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn protium_does_not_create_configuration() -> anyhow::Result<()> {
     for text in [
         "[1H][C@@H](C)O",
@@ -121,7 +162,14 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
         "C[C@@H](O)[C@@H](F)Cl".into(),
     ]
     .into();
-    for extension in ["o1:1,&1:3", "o1:1,o2:3", "&1:1,&2:3", "r,o1:1", "r,&1:1"] {
+    for extension in [
+        "o1:1,&1:3",
+        "o1:1,o2:3",
+        "o858993459:1,o3006477107:3",
+        "&1:1,&2:3",
+        "r,o1:1",
+        "r,&1:1",
+    ] {
         assert_eq!(
             super::stereoisomers(&format!("{molecule} |{extension}|"))?,
             expected,
@@ -129,14 +177,27 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
         );
     }
     let paired = ["C[C@H](O)[C@H](F)Cl".into(), "C[C@@H](O)[C@@H](F)Cl".into()].into();
-    for extension in ["o1:1,3", "&1:1,3", "r", "o1:1,3,r"] {
+    for extension in [
+        "o1:1,3",
+        "&1:1,3",
+        "&2:1,&2:3",
+        "o2:1,o2:3",
+        "r",
+        "o1:1,3,r",
+    ] {
         assert_eq!(
             super::stereoisomers(&format!("{molecule} |{extension}|"))?,
             paired,
             "{extension}"
         );
     }
-    for extension in ["a:1,&1:3", "r,a:1,&1:3", "r,a:1,o1:3", "r,a:1"] {
+    for extension in [
+        "a:1,&1:3",
+        "a:1,&858993459:3",
+        "r,a:1,&1:3",
+        "r,a:1,o1:3",
+        "r,a:1",
+    ] {
         assert_eq!(
             super::stereoisomers(&format!("{molecule} |{extension}|"))?,
             ["C[C@H](O)[C@H](F)Cl".into(), "C[C@H](O)[C@@H](F)Cl".into(),].into(),
@@ -154,6 +215,67 @@ fn stereoisomers_invert_each_enhanced_group_independently() -> anyhow::Result<()
         super::stereoisomers(&format!("{molecule} |r,a:1,3|"))?,
         super::stereoisomers(molecule)?
     );
+    Ok(())
+}
+
+#[test]
+fn cx_stereo_group_ids_preserve_kind_and_atoms() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)[C@H](F)Cl";
+    for (extension, [first, second]) in [
+        ("a:1,&1:3", [0, 2]),
+        ("a:1,&858993459:3", [0, 2]),
+        ("o1:1,o2:3", [1, 1]),
+        ("o858993459:1,o3006477107:3", [1, 1]),
+    ] {
+        let imported = super::read(&format!("{molecule} |{extension}|"))?;
+        let groups = imported
+            .prepared
+            .state
+            .metadata
+            .groups
+            .iter()
+            .map(|group| (group.kind, group.atoms.as_slice()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            groups,
+            [(first, &[1][..]), (second, &[3][..])],
+            "{extension}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn cx_stereo_group_duplicates_are_scoped_to_each_group() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)[C@H](F)Cl";
+    let expected = super::stereoisomers(&format!("{molecule} |a:1,&1:1|"))?;
+    assert_eq!(expected.len(), 2);
+    for (extension, [first, second]) in [
+        ("a:1,&1:1", [0, 2]),
+        ("a:1,&858993459:1", [0, 2]),
+        ("o1:1,o2:1", [1, 1]),
+        ("o858993459:1,o3006477107:1", [1, 1]),
+    ] {
+        let text = format!("{molecule} |{extension}|");
+        let imported = super::read(&text)?;
+        let groups = imported
+            .prepared
+            .state
+            .metadata
+            .groups
+            .iter()
+            .map(|group| (group.kind, group.atoms.as_slice()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            groups,
+            [(first, &[1][..]), (second, &[1][..])],
+            "{extension}"
+        );
+        assert_eq!(super::stereoisomers(&text)?, expected, "{extension}");
+    }
+    for extension in ["a:1,a:1", "&2:1,&2:1", "o2:1,o2:1"] {
+        assert!(super::read(&format!("{molecule} |{extension}|")).is_err());
+    }
     Ok(())
 }
 
@@ -446,6 +568,70 @@ fn other_stereochemistry_errors_keep_the_smiles_context() {
             format!("SMILES stereochemistry: {message}")
         );
     }
+}
+
+#[test]
+fn cx_degenerate_coordinates_preserve_smiles_configuration() -> anyhow::Result<()> {
+    use crate::kekulize::Direction;
+
+    let molecule = "C[C@H](O)F";
+    let plain = super::read(molecule)?;
+    let wedged = super::read(&format!("{molecule} |wU:1.0|"))?;
+    for extension in [
+        "(),wU:1.0",
+        "(0,0,;0,0,;0,0,;0,0,),wU:1.0",
+        "(1,2,;1,2,;1,2,;1,2,),wU:1.0",
+        "(1,2,3;1,2,3;1,2,3;1,2,3)",
+        "()",
+    ] {
+        let imported = super::read(&format!("{molecule} |{extension}|"))?;
+        let state = &imported.prepared.state;
+        assert!(imported.conformers.is_empty(), "{extension}");
+        assert_eq!(super::canonical_smiles(state)?, molecule, "{extension}");
+        assert_eq!(
+            serde_json::to_value(&state.metadata.atoms)?,
+            serde_json::to_value(&plain.prepared.state.metadata.atoms)?,
+            "{extension}"
+        );
+        let expected = if extension.contains("wU") {
+            assert_eq!(state.directions.first(), Some(&Direction::Wedge));
+            &wedged
+        } else {
+            &plain
+        };
+        assert_eq!(
+            serde_json::to_value(&imported)?,
+            serde_json::to_value(expected)?,
+            "{extension}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn cx_single_atom_coordinates_keep_the_conformer() -> anyhow::Result<()> {
+    use crate::stereo::Point3;
+
+    for (coordinates, position, is_3d) in [
+        ("0,0,", Point3::default(), false),
+        (
+            "1,2,3",
+            Point3 {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+            true,
+        ),
+    ] {
+        let imported = super::read(&format!("C |({coordinates})|"))?;
+        assert_eq!(imported.conformers.len(), 1, "{coordinates}");
+        let conformer = imported.conformers.first().ok_or(Error::Limit)?;
+        assert_eq!(conformer.positions, [position], "{coordinates}");
+        assert_eq!(conformer.is_3d, is_3d, "{coordinates}");
+    }
+    assert!(super::read("C |()|")?.conformers.is_empty());
+    Ok(())
 }
 
 #[test]

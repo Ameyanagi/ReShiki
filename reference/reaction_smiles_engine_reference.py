@@ -10,12 +10,15 @@ from rdkit import Chem, RDLogger, rdBase
 from rdkit.Chem import rdChemReactions
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from engine.worker import handle
+from engine import reactions
+from engine.worker import analyze, check_supported, from_document, handle, to_document
 
 if TYPE_CHECKING or __package__:
+    from .degenerate_cx_coordinates import CoordinateInput
     from .reaction_smiles_reference import cases as bare_cases
     from .reaction_smiles_reference import cx_cases
 else:
+    from degenerate_cx_coordinates import CoordinateInput
     from reaction_smiles_reference import cases as bare_cases
     from reaction_smiles_reference import cx_cases
 
@@ -74,6 +77,48 @@ def participants(text):
         Chem.SanitizeMol(mol)
         Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
     return mols
+
+
+def reference_response(text):
+    """#1046: replay the frozen worker with degenerate participant input removed.
+
+    The original response still determines acceptance. Reaction parsing does not
+    assign stereo from CX geometry, so only conformers need changing before the
+    worker draws them. Retained participant coordinates and all other imported
+    chemistry stay intact; RDKit supplies the replacement drawing and analysis.
+    """
+    original = handle(dict(protocol=1, operation="import", format="rsmi", text=text))
+    if "|" not in text:
+        return original
+    reaction = rdChemReactions.ReactionFromSmarts(text.strip(), useSmiles=True)
+    mols = [*reaction.GetReactants(), *reaction.GetAgents(), *reaction.GetProducts()]
+    coordinates = CoordinateInput(text)
+    drops, atom_offset = [], 0
+    for mol in mols:
+        drops.append(coordinates.dropped(mol, atom_offset))
+        atom_offset += mol.GetNumAtoms()
+    if not any(drops):
+        return original
+    remaining = iter(drops)
+
+    def draw(mol):
+        # The frozen importer initializes its document with an empty molecule.
+        # It then draws participants in the same R/A/P order used above, after
+        # sanitization and assignment of their global canvas atom IDs.
+        if mol.GetNumAtoms():
+            selected = set(next(remaining))
+            for index, conf_id in enumerate([conf.GetId() for conf in mol.GetConformers()]):
+                if index in selected:
+                    mol.RemoveConformer(conf_id)
+        return to_document(mol)
+
+    document = reactions.import_reaction(text, "rsmi", draw, check_supported)
+    adapted = dict(
+        original,
+        document=document,
+        analysis=analyze(from_document(document)),
+    )
+    return adapted if adapted != original else original
 
 
 def molecule_reading(text):
@@ -155,7 +200,7 @@ if __name__ == "__main__":
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     for name, text in cases():
         try:
-            expected = handle(dict(protocol=1, operation="import", format="rsmi", text=text))
+            expected = reference_response(text)
             failure = None
         except (ValueError, RuntimeError, KeyError, AttributeError, OverflowError) as error:
             expected, failure = None, str(error)

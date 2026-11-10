@@ -15,7 +15,7 @@ pub mod write;
 pub use prepare::{Prepared, prepare};
 mod read;
 pub use read::reaction_part;
-pub use read::{Imported, read};
+pub use read::{Imported, read, read_dropping_flagged_ez};
 
 #[cfg(test)]
 mod tests;

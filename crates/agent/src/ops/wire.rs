@@ -285,6 +285,8 @@ pub(crate) fn warnings(messages: Vec<String>) -> Vec<Warning> {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AnalysisJson {
     pub smiles: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smiles_notice: Option<String>,
     pub formula: String,
     pub display_formula: String,
     pub mass: f64,
@@ -305,6 +307,7 @@ impl From<Analysis> for AnalysisJson {
         let round = |value: f64| (value * 1e9).round() / 1e9 + 0.0;
         let Analysis {
             smiles,
+            smiles_notice,
             formula,
             display_formula,
             mass_percent: _,
@@ -321,6 +324,7 @@ impl From<Analysis> for AnalysisJson {
         } = analysis;
         Self {
             smiles,
+            smiles_notice,
             formula,
             display_formula,
             mass: round(mass),

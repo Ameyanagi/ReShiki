@@ -1283,6 +1283,12 @@ impl App {
                     .size(11)
                     .wrapping(text::Wrapping::Glyph),
                 )
+                .push(a.smiles_notice.as_deref().map(|notice| {
+                    text(notice)
+                        .size(11)
+                        .style(muted_text)
+                        .wrapping(text::Wrapping::WordOrGlyph)
+                }))
                 .push(
                     command("Copy SMILES", Message::CopySmiles)
                         .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),

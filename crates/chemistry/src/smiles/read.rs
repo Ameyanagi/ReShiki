@@ -41,7 +41,7 @@ struct Annotations {
     context: prepare::Context,
     properties: Vec<HashMap<Vec<u8>, Vec<u8>>>,
     queries: Vec<bool>,
-    groups: HashMap<u32, usize>,
+    groups: HashMap<(u8, u32), usize>,
     labels_processed: bool,
     atom_stereo: bool,
     relative: bool,
@@ -62,6 +62,23 @@ impl Annotations {
     }
     fn spend(&mut self, count: usize) -> Result<()> {
         self.work = self.work.checked_sub(count).ok_or(Error::Limit)?;
+        Ok(())
+    }
+    fn conformer(&self) -> Option<&Conformer> {
+        self.context
+            .conformers
+            .iter()
+            .find(|c| !c.is_3d)
+            .or_else(|| self.context.conformers.first())
+    }
+    fn atropisomers(&self, parsed: &mut Parsed) -> Result<()> {
+        parsed.metadata = stereo::detect_atropisomers_with_bounds(
+            &parsed.graph,
+            &parsed.metadata,
+            &parsed.directions,
+            self.conformer(),
+            stereo::CoordinateBounds::NativeImport,
+        )?;
         Ok(())
     }
     fn labels(&mut self, parsed: &mut Parsed) -> Result<()> {
@@ -125,6 +142,9 @@ impl Annotations {
                     .insert(name, value);
             }
             cx::Event::Coordinates(points) => {
+                if points.is_empty() {
+                    return Ok(());
+                }
                 self.spend(parsed.graph.atoms.len())?;
                 let mut positions = vec![Point3::default(); parsed.graph.atoms.len()];
                 let mut marked = false;
@@ -142,6 +162,9 @@ impl Annotations {
                         }
                     }
                     marked |= fields.get(2).is_some_and(|s| !s.is_empty());
+                }
+                if positions.len() > 1 && positions.iter().all(|p| Some(p) == positions.first()) {
+                    return Ok(());
                 }
                 let is_3d = marked && positions.iter().any(|p| p.z.abs() > 1e-3);
                 self.context.conformers.push(Conformer { positions, is_3d });
@@ -171,13 +194,13 @@ impl Annotations {
                     .radical_electrons = electrons;
             }
             cx::Event::StereoGroup { kind, id, atoms } => {
-                let hash = id.wrapping_mul(10).wrapping_add(u32::from(kind));
-                if let Some(&index) = self.groups.get(&hash) {
+                let key = (kind, id);
+                if let Some(&index) = self.groups.get(&key) {
                     let group = parsed.metadata.groups.get_mut(index).ok_or(Error::Limit)?;
                     group.atoms.extend(atoms);
                     group.read_id = id;
                 } else {
-                    self.groups.insert(hash, parsed.metadata.groups.len());
+                    self.groups.insert(key, parsed.metadata.groups.len());
                     parsed.metadata.groups.push(StereoGroup {
                         kind,
                         read_id: id,
@@ -393,6 +416,10 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     if let Some(error) = annotations.context.property_errors.iter().flatten().next() {
         return Err(Error::Unsupported(error));
     }
+    // Read axial flags before kekulization and small-ring axis cleanup (#1048).
+    if annotations.context.conformers.is_empty() {
+        annotations.atropisomers(&mut parsed)?;
+    }
     let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
     if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || clean.metadata.atoms.iter().enumerate().any(|(i, a)| {
@@ -489,9 +516,77 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     Ok(imported)
 }
 
+/// Keep stated E/Z under wU/wD on terminal H/C bonds to isolated C=C/C=N
+/// ends with no other neighbour or chiral tag (#1042). These flags cannot
+/// define a tetrahedral centre or contribute another bond to a chiral axis.
+fn keep_stated_alkene_directions(parsed: &mut Parsed, stated: &[(usize, Direction)]) -> Result<()> {
+    let graph = &parsed.graph;
+    let mut degree = vec![0usize; graph.atoms.len()];
+    let mut doubles = vec![Vec::new(); graph.atoms.len()];
+    let mut directed = vec![false; graph.atoms.len()];
+    for (bond, &(_, direction)) in graph.bonds.iter().zip(stated) {
+        for (atom, partner) in [(bond.a, bond.b), (bond.b, bond.a)] {
+            *degree.get_mut(atom).ok_or(Error::Limit)? += 1;
+            if bond.order == 2 && !bond.aromatic {
+                doubles.get_mut(atom).ok_or(Error::Limit)?.push(partner);
+            }
+            if bond.order == 1 && matches!(direction, Direction::Up | Direction::Down) {
+                put(&mut directed, atom, true)?;
+            }
+        }
+    }
+    let terminal = |atom: usize| -> Result<bool> {
+        Ok(*at(&degree, atom)? == 1 && matches!(at(&graph.atoms, atom)?.atomic_number, 1 | 6))
+    };
+    let alkene_end = |atom: usize| -> Result<bool> {
+        let &[partner] = at(&doubles, atom)?.as_slice() else {
+            return Ok(false);
+        };
+        let a = at(&graph.atoms, atom)?;
+        let b = at(&graph.atoms, partner)?;
+        Ok(*at(&degree, atom)? == 2
+            && at(&doubles, partner)?.len() == 1
+            // Require a slash at the other end before H removal (#1042).
+            && *at(&directed, partner)?
+            && !a.aromatic
+            && !b.aromatic
+            && matches!((a.atomic_number, b.atomic_number), (6, 6 | 7) | (7, 6)))
+    };
+    for ((bond, direction), &(stated_a, stated_direction)) in
+        graph.bonds.iter().zip(&mut parsed.directions).zip(stated)
+    {
+        // Keep the flag's begin atom, reversing the slash when it swapped ends.
+        let restored = match (stated_direction, stated_a == bond.a) {
+            (Direction::Up, true) | (Direction::Down, false) => Direction::Up,
+            (Direction::Down, true) | (Direction::Up, false) => Direction::Down,
+            _ => continue,
+        };
+        if bond.order == 1
+            && matches!(direction, Direction::Wedge | Direction::Hash)
+            && at(&parsed.metadata.atoms, bond.a)?.chiral_tag == 0
+            && at(&parsed.metadata.atoms, bond.b)?.chiral_tag == 0
+            && (terminal(bond.a)? && alkene_end(bond.b)?
+                || terminal(bond.b)? && alkene_end(bond.a)?)
+        {
+            *direction = restored;
+        }
+    }
+    Ok(())
+}
+
 /// Read default SMILES/CXSMILES chemistry, retaining input conformers and name.
 /// Drawing layout and the application's editable-chemistry checks follow this.
 pub fn read(text: &str) -> Result<Imported> {
+    read_with(text, true)
+}
+
+/// Read as RDKit does, letting wU/wD replace the E/Z direction on their bond.
+/// Reference comparisons use this reading where `read` keeps stated E/Z (#1042).
+pub fn read_dropping_flagged_ez(text: &str) -> Result<Imported> {
+    read_with(text, false)
+}
+
+fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
@@ -534,8 +629,18 @@ pub fn read(text: &str) -> Result<Imported> {
                 .collect(),
         };
         let extension = cx::read(suffix, &topology)?;
+        let stated: Vec<_> = parsed
+            .graph
+            .bonds
+            .iter()
+            .zip(&parsed.directions)
+            .map(|(bond, &direction)| (bond.a, direction))
+            .collect();
         for event in extension.events {
             annotations.apply(&mut parsed, event)?;
+        }
+        if keep_stated_ez {
+            keep_stated_alkene_directions(&mut parsed, &stated)?;
         }
         cx::trim(suffix.get(extension.end..).ok_or(Error::Limit)?)
     } else {
@@ -546,12 +651,7 @@ pub fn read(text: &str) -> Result<Imported> {
     }
     annotations.numeric_props(&mut parsed)?;
     prepare::validate_allenes(&parsed)?;
-    let conf = annotations
-        .context
-        .conformers
-        .iter()
-        .find(|c| !c.is_3d)
-        .or_else(|| annotations.context.conformers.first());
+    let conf = annotations.conformer();
     if let Some(conf) = conf {
         if conf.is_3d {
             parsed.metadata = stereo::from_3d_with_bounds(
@@ -581,13 +681,7 @@ pub fn read(text: &str) -> Result<Imported> {
             parsed.metadata = drawn.metadata;
         }
     }
-    parsed.metadata = stereo::detect_atropisomers_with_bounds(
-        &parsed.graph,
-        &parsed.metadata,
-        &parsed.directions,
-        conf,
-        stereo::CoordinateBounds::NativeImport,
-    )?;
+    annotations.atropisomers(&mut parsed)?;
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
     let mut dropped_cumulene_ez = false;
     for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {

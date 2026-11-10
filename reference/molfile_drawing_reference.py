@@ -20,6 +20,7 @@ if TYPE_CHECKING or __package__:
     from .molfile_import_reference import cases, read
     from .molfile_restrictions_reference import generic_restriction
     from .perception_reference import snapshot
+    from .support.cx_stereo_groups import query_renumbering
 else:
     from molfile_generic_reference import (
         drawing_snapshot,
@@ -29,6 +30,7 @@ else:
     from molfile_import_reference import cases, read
     from molfile_restrictions_reference import generic_restriction
     from perception_reference import snapshot
+    from support.cx_stereo_groups import query_renumbering
 
 
 def emit(name, text):
@@ -84,6 +86,12 @@ def emit(name, text):
                 restriction=restriction,
                 extension=extension,
                 generic=generic,
+                renumbered=query_renumbering(
+                    text,
+                    expected is not None,
+                    read,
+                    "Outside the existing editable chemistry contract",
+                ),
             )
         )
     )

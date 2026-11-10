@@ -204,6 +204,7 @@ class Properties:
     inchikey: str
     smiles: str
     unpaired_electrons: int = 0
+    smiles_notice: str | None = None
 
 
 @dataclass(frozen=True)

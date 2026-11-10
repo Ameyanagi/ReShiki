@@ -197,6 +197,59 @@ fn allene_winding_needs_an_axis() -> TestResult {
 }
 
 #[test]
+fn allene_axis_check_cleans_invalid_tetrahedral_tags_first() -> TestResult {
+    for (smiles, expected) in [
+        ("CC=[C@AL1]=C(C)C.[C@H4]", "C.CC=C=C(C)C"),
+        ("[C@H4].CC=[C@AL1]=C(C)C", "C.CC=C=C(C)C"),
+        ("CC=[C@AL1]=C(C)C.C[C@H](C)C", "CC(C)C.CC=C=C(C)C"),
+        ("CC=[C@AL1]=C(C)C.[C@H4] |&1:2,6|", "C.CC=C=C(C)C"),
+    ] {
+        let state = crate::smiles::read(smiles)?.prepared.state;
+        assert!(
+            state.metadata.atoms.iter().all(|a| a.chiral_tag == 0),
+            "{smiles}"
+        );
+        let center = (0..state.graph.atoms.len())
+            .find(|&i| crate::stereo::allene::terminals(&state.graph, i).is_some())
+            .ok_or_else(|| anyhow::anyhow!("No allene in {smiles}"))?;
+        assert_eq!(
+            at(&state.metadata.atoms, center)
+                .map_err(anyhow::Error::msg)?
+                .chiral_permutation,
+            None
+        );
+        assert!(state.metadata.groups.is_empty(), "{smiles}");
+        assert_eq!(
+            crate::smiles::write::write(&state, Default::default())?.text,
+            expected,
+            "{smiles}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn genuine_allene_winding_survives_invalid_tetrahedral_cleanup() -> TestResult {
+    for smiles in ["CC=[C@AL1]=CC", "C([C@H](F)Cl)([C@@H](F)Cl)=[C@AL1]=C(I)Br"] {
+        let state = crate::smiles::read(smiles)?.prepared.state;
+        let expected = crate::smiles::write::write(&state, Default::default())?.text;
+        for text in [format!("{smiles}.[C@H4]"), format!("[C@H4].{smiles}")] {
+            let state = crate::smiles::read(&text)?.prepared.state;
+            assert!(
+                state.metadata.atoms.iter().any(|a| a.chiral_tag == 5),
+                "{text}"
+            );
+            assert_eq!(
+                crate::smiles::write::write(&state, Default::default())?.text,
+                format!("C.{expected}"),
+                "{text}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn unspecified_stereo_uses_perceived_atom_and_double_bond_candidates() -> TestResult {
     for (smiles, unspecified) in [
         ("CC(O)C(=O)O", true),

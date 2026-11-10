@@ -1,7 +1,7 @@
 //! Presentation preferences for newly generated molecular drawings.
 //!
 //! Keep these conventions separate from the pinned RDKit bond chooser. A raw
-//! `wedge_molecule` call continues to reproduce that chooser exactly.
+//! [`super::wedge_molecule`] call continues to reproduce that chooser exactly.
 use super::{Conformer, WedgeProperties, WedgeState, at, wedge_bond};
 use crate::{
     electronic,
@@ -12,6 +12,9 @@ use crate::{
     stereo::{Point3, drawing::from_directions, perception},
 };
 use std::collections::HashSet;
+
+mod atrop;
+pub use atrop::wedge_molecule;
 
 #[cfg(test)]
 mod tests;
@@ -253,11 +256,11 @@ fn preserves_center(
         == at(&state.metadata.atoms, atom)?.chiral_tag)
 }
 
-/// Apply generated-drawing conventions after `wedge_molecule` without changing
-/// its chemical tags, coordinates, or RDKit-compatible bond-selection policy.
-/// Bridgeheads without an acyclic substituent use their shortest bridge when
-/// its first atom is not a stereocenter. A spiro center shows opposite wedges on
-/// one ring, leaving the other ring plain. Degenerate projections are retained.
+/// Apply generated-drawing conventions without changing tags or coordinates.
+/// Bridgeheads without an acyclic substituent prefer their shortest bridge,
+/// trying longer bridges only when a wave blocks a shortest choice. A spiro
+/// center shows opposite wedges on one ring, leaving the other ring plain.
+/// Degenerate projections are retained.
 pub fn prefer_ring_wedges(
     input: &WedgeState,
     properties: &WedgeProperties,
@@ -308,8 +311,9 @@ pub fn prefer_ring_wedges(
             bridges.sort_unstable();
             let shortest = at(&bridges, 0)?.0;
             if shortest > 1 && shortest != usize::MAX {
+                let mut wavy_shortest = false;
                 for &(length, bond, neighbor) in &bridges {
-                    if length != shortest {
+                    if length == usize::MAX || (length != shortest && !wavy_shortest) {
                         break;
                     }
                     let edge = at(&result.graph.bonds, bond)?;
@@ -317,6 +321,10 @@ pub fn prefer_ring_wedges(
                         || edge.order != 1
                         || (wedged(*at(&result.directions, bond)?) && edge.a != atom)
                     {
+                        continue;
+                    }
+                    if *at(&result.directions, bond)? == Direction::Unknown {
+                        wavy_shortest |= length == shortest;
                         continue;
                     }
                     work.spend(n + input.graph.bonds.len())?;
@@ -352,6 +360,8 @@ pub fn prefer_ring_wedges(
         for [first, second] in pairs {
             if at(&result.graph.bonds, first)?.order != 1
                 || at(&result.graph.bonds, second)?.order != 1
+                || *at(&result.directions, first)? == Direction::Unknown
+                || *at(&result.directions, second)? == Direction::Unknown
             {
                 continue;
             }

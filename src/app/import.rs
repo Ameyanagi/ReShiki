@@ -145,6 +145,12 @@ fn extension(path: &Path) -> String {
         .unwrap_or_default()
         .to_ascii_lowercase()
 }
+pub(super) fn unsupported_file(path: &Path) -> String {
+    match extension(path) {
+        e if e.is_empty() => "Can't import this file".into(),
+        e => format!("Can't import .{e}"),
+    }
+}
 fn kind(path: &Path) -> Kind {
     let extension = extension(path);
     if let Some((_, format)) = STRUCTURES.iter().find(|(e, _)| *e == extension) {
@@ -183,10 +189,7 @@ enum Plan {
 }
 fn plan(paths: &[PathBuf]) -> Plan {
     if let Some(path) = paths.iter().find(|p| kind(p) == Kind::Unsupported) {
-        return Plan::Reject(match extension(path) {
-            e if e.is_empty() => "Can't import this file".into(),
-            e => format!("Can't import .{e}"),
-        });
+        return Plan::Reject(unsupported_file(path));
     }
     let documents = paths.iter().filter(|p| kind(p) == Kind::Document).count();
     if documents == paths.len() {

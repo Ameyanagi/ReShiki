@@ -1,5 +1,7 @@
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/cx_stereo_groups.rs"]
+mod cx_stereo_groups;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -26,6 +28,7 @@ struct Case {
     failure: Option<String>,
     restriction: Option<GenericRestriction>,
     extension: Option<MoleculeExtension>,
+    renumbered: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -135,6 +138,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     let mut restrictions = BTreeMap::<String, usize>::new();
     let mut fields = BTreeMap::<String, usize>::new();
     let mut extensions = 0;
+    let mut renumberings = 0;
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let result = molfile::read(&case.text);
@@ -151,7 +155,18 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
             .as_ref()
             .map(|extension| &extension.expected)
             .or(case.expected.as_ref());
-        let failure = if extension_guard.is_some() {
+        let failure = if let Some(text) = &case.renumbered {
+            renumberings += 1;
+            cx_stereo_groups::query_rejection(
+                text,
+                case.expected.is_some()
+                    && case.failure.is_none()
+                    && case.restriction.is_none()
+                    && case.extension.is_none(),
+                &result,
+                molfile::read,
+            )
+        } else if extension_guard.is_some() {
             extension_guard
         } else if let Some(restriction) = &case.restriction {
             let failure = rejection_difference(
@@ -263,6 +278,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
         eprintln!("MOL import mismatch field: {count} {field}");
     }
     eprintln!("Substance groups: {groups_accepted} accepted, {groups_rejected} rejected");
+    eprintln!("MOL import: {renumberings} stereo-group renumberings");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         accepted > 1000 && rejected > 100,
@@ -271,6 +287,10 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     assert!(
         groups_accepted > 500 && groups_rejected > 500,
         "Insufficient substance-group coverage"
+    );
+    assert!(
+        renumberings > 0,
+        "Missing CX stereo-group collision coverage"
     );
     Ok(())
 }

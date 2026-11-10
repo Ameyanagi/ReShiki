@@ -14,6 +14,8 @@ ignorePatterns = [
   "vendor/svg2pdf/**",
   "vendor/smithay-clipboard/**",
   "vendor/iced_winit/**",
+  "vendor/iced_widget/**",
+  "vendor/iced_wgpu/**",
   "vendor/window_clipboard/**",
   "reference/engine/cdx_schema.py",
   "website/.astro/**",

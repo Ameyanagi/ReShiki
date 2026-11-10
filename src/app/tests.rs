@@ -201,6 +201,7 @@ fn dismissing_the_recovery_offer_restores_the_ready_message() {
 pub(super) fn completed_analysis() -> reshiki::engine::Analysis {
     reshiki::engine::Analysis {
         smiles: String::new(),
+        smiles_notice: None,
         formula: String::new(),
         display_formula: String::new(),
         mass_percent: vec![],
@@ -1710,6 +1711,7 @@ fn matching_dative_click_invalidates_computed_chemistry_like_reverse_bonds() {
     reversed.tab.selected = vec![donor, acceptor];
     let cached = reshiki::engine::Analysis {
         smiles: "cached".into(),
+        smiles_notice: None,
         formula: "cached".into(),
         display_formula: "cached".into(),
         mass_percent: vec![],
