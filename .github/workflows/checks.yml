@@ -237,12 +237,14 @@ jobs:
           # Tests briefly release their last connection; keep the X server ready.
           xvfb-run -a -s '-screen 0 1024x768x24 -nolisten tcp -noreset' cargo test -p reshiki-linux --lib --locked --no-default-features x11::tests:: -- --ignored --test-threads=1
   rust:
+    name: rust (${{ matrix.platform.os }}, ${{ matrix.platform.target }}, ${{ matrix.platform.python }}, ${{ matrix.partition }}/2)
     needs: scope
     if: needs.scope.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
-        include:
+        partition: [1, 2]
+        platform:
           - os: macos-15
             target: aarch64-apple-darwin
             python: "3.12.15"
@@ -253,12 +255,12 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             python: "3.12.15"
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.platform.os }}
     env:
-      UV_PYTHON: ${{ matrix.python }}
+      UV_PYTHON: ${{ matrix.platform.python }}
       RESHIKI_REQUIRE_INCHI_HELPER: "1"
       # Naming integration must launch this exact source's executable, not a test harness.
-      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.target, '-pc-windows-msvc') && '.exe' || '' }}
+      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.platform.target, '-pc-windows-msvc') && '.exe' || '' }}
       # Windows symlink escape tests fail instead of skipping without the privilege.
       RESHIKI_REQUIRE_LINK_TESTS: "1"
     steps:
@@ -272,35 +274,39 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: rust
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.partition == 1 }}
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-nextest@0.9.150
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "0.13.5"
-          python-version: ${{ matrix.python }}
+          python-version: ${{ matrix.platform.python }}
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc
         with:
-          arch: ${{ matrix.msvc_arch }}
+          arch: ${{ matrix.platform.msvc_arch }}
       - name: Build the Rust helper and test executable
-        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.target }}
+        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.platform.target }}
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Check Rust heap and byte protocol boundaries
+        if: matrix.partition == 1
         run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
       - name: Build the exact application for local naming worker tests
         run: cargo build --locked --no-default-features --bin reshiki
       - name: Audit agent API dependencies for every release target
         # cargo tree resolves all six release triples from one host.
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && matrix.partition == 1
         run: uv run --no-project python scripts/check_agent_dependencies.py
       - name: Test rendered numeric-field focus on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # The Windows renderer includes Tiny Skia when WGPU is unavailable.
         # This checks widget layout/input; it is not native desktop acceptance.
         run: cargo test --locked --no-default-features --bin reshiki app::numeric_transforms::focus::tests::handle_shortcut_focuses_selects_and_reveals_the_field_in_both_window_sizes -- --exact --ignored
       - name: Capture rendered Help QA on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # Real Windows font/key rendering, including the TinySkia fallback.
         # Native desktop input acceptance is recorded separately.
         env:
@@ -308,32 +314,32 @@ jobs:
           RESHIKI_DATA_DIR: ${{ runner.temp }}/reshiki-help-polish
         run: cargo test --locked --no-default-features --bin reshiki app::help::tests::help_renderer_evidence -- --exact --ignored
       - name: Retain Windows Help renderer evidence
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: qa-help-polish-${{ matrix.target }}
+          name: qa-help-polish-${{ matrix.platform.target }}
           path: artifacts/qa-help-polish
           if-no-files-found: error
       - name: Test rendered cascading menus on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # The headless renderer falls back to TinySkia on Windows. These
         # exercise widget input and layout, not native OS acceptance.
         run: "cargo test --locked --no-default-features --bin reshiki app::context_menu::cascade_tests:: -- --ignored"
       - name: Test rendered Updates modal keyboard input on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # The Windows renderer includes Tiny Skia when WGPU is unavailable.
         # This checks widget layout/input; it is not native desktop acceptance.
         run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::updates_ -- --ignored
       - name: Test that closing review panels returns keyboard focus to the drawing on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::review_close -- --ignored
       - name: Test rendered tool flyout input ownership on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # Exercise the actual application widgets, including the Tiny Skia fallback.
         # Native desktop timing and accessibility acceptance remain separate.
         run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner -- --exact --ignored
       - name: Test rendered shortcut and command palette focus on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # Exercise actual widget input and accessibility, including the Tiny Skia fallback.
         # Native desktop timing and accessibility acceptance remain separate.
         run: |
@@ -346,19 +352,19 @@ jobs:
           cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::command_palette_unavailable_row_click_keeps_typing_in_the_search_field -- --exact --ignored
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test rendered drop-down Escape on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # Escape closes the status-bar journal and theme lists (#336).
         run: cargo test --locked --no-default-features --bin reshiki appearance::tests::escape_closes_an_open_pick_list -- --exact --ignored
       - name: Test rendered figure export labels on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # Keep the renderer-dependent AX check explicit; ordinary menu state
         # regressions run on all hosts without requiring a graphics adapter.
         run: cargo test --locked --no-default-features --bin reshiki app::inspector::tests::figure_export_buttons_publish_readable_labels -- --exact --ignored
       - name: Test rendered new drawing inspector scroll on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         run: cargo test --locked --no-default-features --bin reshiki app::workspace::inspector_motion_qa::a_new_drawing_shows_selected_properties_from_the_top -- --exact --ignored
       - name: Test rendered hybrid NMR controls on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         # Actual shared widgets, plot/atom linkage, docking camera and owned
         # drag/resize input. Native desktop acceptance is recorded separately.
         run: |
@@ -367,19 +373,41 @@ jobs:
           cargo test --locked --no-default-features --bin reshiki canvas::nmr:: -- --include-ignored --test-threads=1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test rendered local naming accessibility and scrolled insertion on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.partition == 1
         run: "cargo test --locked --no-default-features --bin reshiki app::naming:: -- --ignored"
       # Required workspace tests include independent expected-name rules, exact
       # native OPSIN reconstruction and cancellation/resource/missing-helper cases.
-      - run: cargo test --workspace --locked --no-default-features
+      - name: Test the native workspace partition
+        # Binary exclusions also prevent executing custom harnesses during listing.
+        run: >-
+          cargo nextest run --workspace --locked --no-default-features --profile ci
+          --partition hash:${{ matrix.partition }}/2
+          -E 'not binary_id(reshiki::metafile_worker) & not binary_id(reshiki-macos::native_print) & not (package(reshiki) & kind(lib) & test(/^naming::s2n_harness::/))'
+      - name: Test the shared naming corpus in one libtest process
+        # Preserve the shared LazyLock baseline; balance against partition 1's extras.
+        if: matrix.partition == 2
+        run: "cargo test --locked --no-default-features -p reshiki --lib naming::s2n_harness::"
+      - name: Test the custom metafile worker harness
+        if: matrix.partition == 1
+        run: cargo test --locked --no-default-features --test metafile_worker
+      - name: Test the custom native print harness
+        # Cargo also runs this target's no-op main on non-macOS hosts.
+        if: matrix.partition == 1
+        run: cargo test --locked --no-default-features -p reshiki-macos --test native_print
+      - name: Test workspace documentation
+        if: matrix.partition == 1
+        run: cargo test --workspace --locked --no-default-features --doc
       - name: Test the isolated font export probe
+        if: matrix.partition == 1
         run: cargo test --locked --manifest-path tools/font-export-probe/Cargo.toml -j 2
       - name: Test public SciFinder fixtures on a one-megabyte stack
+        if: matrix.partition == 1
         run: cargo test --locked --no-default-features --example scifinder_handoff_qa tests::public_fixture_checks_fit_one_megabyte_stack -- --exact
       - name: Verify public SciFinder handoff fixtures
+        if: matrix.partition == 1
         run: cargo run --locked --no-default-features --example scifinder_handoff_qa -- "${{ runner.temp }}/reshiki-scifinder-handoff"
       - name: Warm the shared Rust cache
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && matrix.partition == 1
         shell: bash
         # Include lint and golden configurations for all three lanes' PR cache reads.
         run: |
