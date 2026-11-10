@@ -138,10 +138,18 @@ impl CdxmlScene {
         let labels = drawing.labels()?;
         let mut molecule = self.molecule.clone();
         let mut document = drawing.finish_with(labels, |document| self.restore(document))?;
-        if planar && crate::haworth::interchange::restore(&mut document) {
+        let restored = planar && crate::haworth::interchange::restore(&mut document);
+        let notices = chemistry::drop_added_axis_wedges(&mut document, &molecule)
+            .into_iter()
+            .collect();
+        if restored {
             molecule = chemistry::document::prepare(&document)?;
         }
-        Ok(ImportedCdxml { molecule, document })
+        Ok(ImportedCdxml {
+            molecule,
+            document,
+            notices,
+        })
     }
     fn restore(self, document: &mut Document) -> Result<()> {
         let generated: HashMap<_, _> = std::mem::take(&mut document.bonds)

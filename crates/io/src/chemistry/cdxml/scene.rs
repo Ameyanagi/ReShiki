@@ -120,6 +120,7 @@ pub struct CdxmlScene {
 pub struct ImportedCdxml {
     pub molecule: Molecule,
     pub document: Document,
+    pub notices: Vec<String>,
 }
 
 fn point(text: &str, scale: f64) -> Result<ImportPoint> {
