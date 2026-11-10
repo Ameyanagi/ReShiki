@@ -267,10 +267,11 @@ jobs:
       - name: Install Linux libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
-      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: rust
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
@@ -287,9 +288,6 @@ jobs:
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Check Rust heap and byte protocol boundaries
         run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
-      - run: cargo fmt --all --check
-      - name: Check the native application without reference dependencies
-        run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
       - name: Build the exact application for local naming worker tests
         run: cargo build --locked --no-default-features --bin reshiki
       - name: Audit agent API dependencies for every release target
@@ -380,10 +378,104 @@ jobs:
         run: cargo test --locked --no-default-features --example scifinder_handoff_qa tests::public_fixture_checks_fit_one_megabyte_stack -- --exact
       - name: Verify public SciFinder handoff fixtures
         run: cargo run --locked --no-default-features --example scifinder_handoff_qa -- "${{ runner.temp }}/reshiki-scifinder-handoff"
-      - name: Install fixture reader dependencies
-        run: uv sync --locked
+      - name: Warm the shared Rust cache
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        # Include lint and golden configurations for all three lanes' PR cache reads.
+        run: |
+          cargo clippy --workspace --all-targets --locked --no-default-features
+          cargo clippy --workspace --all-targets --locked --features rdkit-reference
+          cargo test --locked --features rdkit-reference --no-run --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --test native_aromatic
+  rust-lint:
+    name: rust lint (${{ matrix.os }}, ${{ matrix.target }})
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            msvc_arch: x64
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
+      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: rust
+          save-if: false
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
+      - if: runner.os == 'Linux'
+        run: cargo fmt --all --check
+      - name: Check the native application without reference dependencies
+        run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
       - name: Check all optional reference tests compile cleanly
         run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
+  rust-goldens:
+    name: rust goldens (${{ matrix.os }}, ${{ matrix.target }})
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+            python: "3.12.15"
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            msvc_arch: x64
+            python: cpython-3.12.15-windows-x86_64-none
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            python: "3.12.15"
+    runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+      RESHIKI_REQUIRE_INCHI_HELPER: "1"
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: rust
+          save-if: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: ${{ matrix.python }}
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
+      - name: Build the Rust helper and test executable
+        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.target }}
+      - name: Select the helper for runtime integration tests
+        run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
+      - name: Install fixture reader dependencies
+        run: uv sync --locked
       - name: Select the captured Ubuntu fixture profile
         if: runner.os == 'Linux'
         run: echo "RESHIKI_TEST_LINUX_GOLDENS=ubuntu-22.04-x64" >> "$GITHUB_ENV"
@@ -391,6 +483,30 @@ jobs:
         run: cargo test --locked --features rdkit-reference --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
+  rust-result:
+    name: Rust checks
+    needs: [scope, rust, rust-lint, rust-goldens]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - *actions_runtime
+      - name: Require successful Rust lanes for native changes
+        shell: bash
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          NATIVE: ${{ needs.scope.outputs.native }}
+          RUST_RESULT: ${{ needs.rust.result }}
+          LINT_RESULT: ${{ needs.rust-lint.result }}
+          GOLDENS_RESULT: ${{ needs.rust-goldens.result }}
+        run: |
+          [[ "$SCOPE_RESULT" == success ]] || exit 1
+          for result in "$RUST_RESULT" "$LINT_RESULT" "$GOLDENS_RESULT"; do
+            case "$result" in
+              success) ;;
+              skipped) [[ "$NATIVE" != true ]] || exit 1 ;;
+              *) exit 1 ;;
+            esac
+          done
   # The browser build: the editor and the headless library for wasm32, as
   # scripts/build_wasm.sh builds them, and the packages/editor tests. The
   # tests load an unoptimised debug build; only releases build the bundle.
