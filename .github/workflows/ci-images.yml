@@ -106,11 +106,12 @@ jobs:
           set -euo pipefail
           registry="ghcr.io/$(tr '[:upper:]' '[:lower:]' <<< "$REGISTRY_OWNER")"
           if ! printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USER" --password-stdin; then
-            if [[ "$CAN_PUSH" == true ]]; then
+            if [[ "$PUBLISH" == true ]]; then
               echo '::error::Could not log in to GHCR to publish CI images.'
               exit 1
             fi
-            echo '::warning::GHCR login failed for this fork PR; inspecting public images anonymously.'
+            CAN_PUSH=false
+            echo '::warning::GHCR login failed; using the published images anonymously.'
           fi
 
           resolve_image() {
@@ -138,7 +139,7 @@ jobs:
                 docker buildx build "${build_args[@]}" "$directory"
               else
                 ref="$image:main"
-                echo "::warning::The fork's CI image change is not tested until a maintainer runs it from a branch in this repo; using $ref."
+                echo "::warning::This run cannot publish CI images, so its image change is untested until a maintainer runs it from a branch in this repo; using $ref."
                 if ! docker buildx imagetools inspect "$ref" > /dev/null 2>&1; then
                   echo "::error::CI image $ref is unavailable. A maintainer must publish the CI images from this repository first."
                   exit 1

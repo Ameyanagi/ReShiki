@@ -219,6 +219,10 @@ jobs:
       contents: read
       packages: read
     container: ${{ needs.images.outputs.noble_desktop }}
+    # Container steps otherwise default to sh; keep the hosted runner's bash -e.
+    defaults:
+      run:
+        shell: bash -e {0}
     timeout-minutes: 15
     steps:
       - *actions_runtime
@@ -239,6 +243,10 @@ jobs:
       contents: read
       packages: read
     container: ${{ needs.images.outputs.noble }}
+    # Container steps otherwise default to sh; keep the hosted runner's bash -e.
+    defaults:
+      run:
+        shell: bash -e {0}
     timeout-minutes: 10
     steps:
       - *actions_runtime

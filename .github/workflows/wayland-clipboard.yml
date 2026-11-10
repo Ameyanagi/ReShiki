@@ -51,6 +51,10 @@ jobs:
       contents: read
       packages: read
     container: ${{ needs.images.outputs.noble_desktop }}
+    # Container steps otherwise default to sh; keep the hosted runner's bash -e.
+    defaults:
+      run:
+        shell: bash -e {0}
     timeout-minutes: 25
     strategy:
       fail-fast: false

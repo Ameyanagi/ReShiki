@@ -26,6 +26,10 @@ jobs:
       contents: read
       packages: read
     container: ${{ needs.images.outputs.noble }}
+    # Container steps otherwise default to sh; keep the hosted runner's bash -e.
+    defaults:
+      run:
+        shell: bash -e {0}
     timeout-minutes: 45
     env:
       # Naming integration must launch this exact source's executable, not a test harness.

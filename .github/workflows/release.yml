@@ -233,6 +233,10 @@ jobs:
       packages: read
     # Hosted runners pull ghcr.io images with the job token; an empty string runs on the host.
     container: ${{ matrix.artifact == 'linux-x64' && needs.images.outputs.jammy || '' }}
+    # Container steps otherwise default to sh; keep each runner's own default shell.
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
     env:
       UV_PYTHON: ${{ matrix.python }}
       # Keep the Rust application independent of redistributable Windows CRT DLLs.
