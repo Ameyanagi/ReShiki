@@ -130,6 +130,44 @@ fn unwedged_biphenyl_has_no_axial_stereo() -> anyhow::Result<()> {
 }
 
 #[test]
+fn crossed_double_bond_keeps_an_axis_but_unknown_single_bond_hides_it() -> anyhow::Result<()> {
+    // RDKit atropisomer geometry/4327 (#1064).
+    let mut doc = Document::default();
+    for (x, y) in [
+        (2.5, -1.),
+        (-1., 1.),
+        (0., 0.),
+        (2.5, 1.),
+        (-1., -1.),
+        (1.5, 0.),
+    ] {
+        doc.add_atom("C", Point::new(x * 28., -y * 28.));
+    }
+    for (a, b, order, display) in [
+        (3, 2, 1, "wedge"),
+        (1, 6, 2, "plain"),
+        (6, 3, 1, "wedge"),
+        (3, 5, 2, "wavy"),
+        (4, 6, 1, "hash"),
+    ] {
+        doc.add_bond(a, b, order, display);
+    }
+    // Other consumers of build(), including E/Z and InChI, keep Unknown.
+    assert_eq!(build(&doc)?.directions[3], Direction::Unknown);
+    let molecule = prepare(&doc)?;
+    assert!(matches!(molecule.state.metadata.bonds[2].stereo, 6 | 7));
+    assert_eq!(molecule.state.metadata.bonds[3].stereo, 1);
+    assert_eq!(labeled(&doc)?.bonds[2].cip_label.as_deref(), Some("M"));
+    assert_eq!(
+        prepare_at(&doc, &molecule.positions)?.state.metadata.bonds[2].stereo,
+        molecule.state.metadata.bonds[2].stereo
+    );
+    doc.bonds[0].display = "wavy".into();
+    assert_eq!(prepare(&doc)?.state.metadata.bonds[2].stereo, 0);
+    Ok(())
+}
+
+#[test]
 fn small_ring_wedges_do_not_create_an_axis() -> anyhow::Result<()> {
     // C1=C(O)C(O)=CCC1: the detector's provisional tag on the single bond
     // between the two sp2 carbons must be removed, as on sanitized MOL import.

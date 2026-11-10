@@ -275,8 +275,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let expected = axes(&imported.molecule)?;
             // A 3D file is never Haworth-restored, so the molecule keeps its XYZ.
             let file_xyz = imported.annotations.is_3d;
-            let (document, molecule) = imported.display_document()?;
-            let mut warnings = Vec::new();
+            let (document, molecule, mut warnings) = imported.display_document()?;
             // Projection bonds cannot carry axis wedges; other file wedges
             // can lose or add axes in the finished drawing too (#1057).
             // If the drawing cannot be prepared, keep the existing import.
@@ -344,6 +343,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 scene.conformer_3d = Some(false);
             }
             let imported = scene.into_document()?;
+            warnings.extend(imported.notices);
             Prepared {
                 molecule: imported.molecule,
                 document: imported.document,
@@ -414,12 +414,12 @@ fn styled_coordination_changed(prepared: &cdxml::PreparedCdxml) -> bool {
 
 fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {
     let labels = drawing.labels()?;
-    let document = drawing.finish(labels)?;
+    let (document, warnings) = drawing.finish_with_notices(labels)?;
     let molecule = molecular::prepare(&document)?;
     Ok(Prepared {
         molecule,
         document,
-        warnings: Vec::new(),
+        warnings,
         file_xyz: false,
     })
 }
@@ -521,10 +521,13 @@ fn finish_molecule(
         )
         .into());
     }
+    let warnings = chemistry::drop_added_axis_wedges(&mut document, &molecule)
+        .into_iter()
+        .collect();
     Ok(Prepared {
         molecule,
         document,
-        warnings: Vec::new(),
+        warnings,
         file_xyz: false,
     })
 }

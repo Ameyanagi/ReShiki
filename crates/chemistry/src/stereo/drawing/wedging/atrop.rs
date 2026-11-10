@@ -91,7 +91,11 @@ impl Context<'_> {
                 bonds.swap(0, 1);
             }
             for &b in bonds.iter() {
-                if self.direction(b)? == Direction::Unknown {
+                // Drawings retain Unknown for crossed double bonds outside
+                // axis perception. They must not prevent rewedging an axis.
+                if self.direction(b)? == Direction::Unknown
+                    && at(&self.state.graph.bonds, b)?.order != 2
+                {
                     return Ok(());
                 }
             }
@@ -216,6 +220,77 @@ impl Context<'_> {
                 self.atrop(i, work)?;
             }
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::{Atom, Bond};
+
+    #[test]
+    fn crossed_double_bonds_allow_axis_rewedging_after_reflection() -> anyhow::Result<()> {
+        // RDKit geometry/3583 as prepared from its drawing (#1064).
+        let graph = Graph {
+            atoms: vec![
+                Atom {
+                    atomic_number: 6,
+                    ..Default::default()
+                };
+                6
+            ],
+            bonds: [(2, 3, 2), (1, 4, 1), (3, 1, 1), (5, 1, 2), (0, 3, 1)]
+                .into_iter()
+                .map(|(a, b, order)| Bond {
+                    a,
+                    b,
+                    order,
+                    aromatic: false,
+                })
+                .collect(),
+        };
+        let properties = WedgeProperties {
+            valences: graph.provisional_valences().map_err(anyhow::Error::msg)?,
+            attachment_points: vec![false; 6],
+        };
+        let mut metadata = Metadata::unspecified(&graph);
+        metadata.bonds[2].stereo = 7;
+        let mut state = WedgeState {
+            graph,
+            metadata,
+            directions: vec![
+                Direction::Unknown,
+                Direction::Hash,
+                Direction::None,
+                Direction::Unknown,
+                Direction::None,
+            ],
+            rings: RingCache::default(),
+        };
+        let conformer = Conformer {
+            is_3d: false,
+            positions: [
+                (-1., 1.),
+                (1.5, 0.),
+                (-1., -1.),
+                (0., 0.),
+                (2.5, 1.),
+                (2.5, -1.),
+            ]
+            .map(|(x, y)| Point3 { x: -x, y, z: 0. })
+            .to_vec(),
+        };
+        let wedged = wedge_molecule(&state, &properties, Some(&conformer), false)
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(wedged.directions[1], Direction::Wedge);
+        // Rewedging must not change the crossed bonds' input directions.
+        assert_eq!(wedged.directions[0], Direction::Unknown);
+        assert_eq!(wedged.directions[3], Direction::Unknown);
+        state.directions[4] = Direction::Unknown;
+        let blocked = wedge_molecule(&state, &properties, Some(&conformer), false)
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(blocked.directions[1], Direction::Hash);
         Ok(())
     }
 }
