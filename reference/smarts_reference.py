@@ -11,8 +11,10 @@ from rdkit import Chem, RDConfig, RDLogger, rdBase
 
 if TYPE_CHECKING or __package__:
     from .cxsmarts_reference import cases as cx_cases
+    from .support.cx_stereo_groups import renumber
 else:
     from cxsmarts_reference import cases as cx_cases
+    from support.cx_stereo_groups import renumber
 
 
 def cases():
@@ -257,24 +259,34 @@ def cases():
         yield s
 
 
+def observe(text):
+    try:
+        mol = Chem.MolFromSmarts(text)
+        expected = mol.GetNumAtoms() if mol is not None else None
+        query = (
+            re.fullmatch(
+                r"AtomAtomicNum (\d+) = val", mol.GetAtomWithIdx(0).DescribeQuery().strip()
+            )
+            if expected == 1
+            else None
+        )
+        atomic_number = int(query.group(1)) if query else None
+    except (RuntimeError, ValueError, OverflowError):
+        expected, atomic_number = None, None
+    return dict(expected=expected, atomic_number=atomic_number)
+
+
 def main():
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps({"rdkit_version": rdBase.rdkitVersion}))
     for text in dict.fromkeys(cases()):
-        try:
-            mol = Chem.MolFromSmarts(text)
-            expected = mol.GetNumAtoms() if mol is not None else None
-            query = (
-                re.fullmatch(
-                    r"AtomAtomicNum (\d+) = val", mol.GetAtomWithIdx(0).DescribeQuery().strip()
-                )
-                if expected == 1
-                else None
-            )
-            atomic_number = int(query.group(1)) if query else None
-        except (RuntimeError, ValueError, OverflowError):
-            expected, atomic_number = None, None
-        print(json.dumps({"text": text, "expected": expected, "atomic_number": atomic_number}))
+        original = observe(text)
+        alternate = None
+        if normalized := renumber(text):
+            observed = observe(normalized[0])
+            if observed != original:
+                alternate = dict(text=normalized[0], **observed)
+        print(json.dumps(dict(text=text, **original, renumbered=alternate)))
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ if TYPE_CHECKING or __package__:
     from .degenerate_cx_coordinates import CoordinateInput
     from .perception_reference import snapshot
     from .smiles_prepare_reference import all_cases as bare_cases
+    from .support.cx_stereo_groups import renumber
     from .valence_reference import ORDERS
 else:
     from cxsmarts_reference import cases as cx_cases
@@ -21,6 +22,7 @@ else:
     from degenerate_cx_coordinates import CoordinateInput
     from perception_reference import snapshot
     from smiles_prepare_reference import all_cases as bare_cases
+    from support.cx_stereo_groups import renumber
     from valence_reference import ORDERS
 
 
@@ -90,12 +92,21 @@ def prepared_snapshot(mol):
     return snapshot(observed, "symmetric")
 
 
+def restored_snapshot(mol, text):
+    observed = prepared_snapshot(mol)
+    if normalized := renumber(text):
+        _, identities = normalized
+        for group in observed["metadata"]["groups"]:
+            group["read_id"] = identities.get((group["kind"], group["read_id"]), group["read_id"])
+    return observed
+
+
 def main():
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     for name, text in cases():
         try:
-            mol = Chem.MolFromSmiles(text)
+            mol = Chem.MolFromSmiles((renumber(text) or (text,))[0])
             if (
                 mol is None
                 or any(a.HasQuery() for a in mol.GetAtoms())
@@ -118,7 +129,7 @@ def main():
                 conformers.append(dict(positions=points, is_3d=conf.Is3D()))
             expected = dict(
                 prepared=dict(
-                    state=prepared_snapshot(mol),
+                    state=restored_snapshot(mol, text),
                     dummy_labels=[
                         a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
                         for a in mol.GetAtoms()
