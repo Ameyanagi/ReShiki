@@ -1,6 +1,8 @@
 #[path = "support/crossed_double.rs"]
 #[allow(dead_code)]
 mod crossed_double;
+#[path = "support/reference_response.rs"]
+mod reference_response;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, reaction},
@@ -224,7 +226,7 @@ async fn complete_reaction_export_responses_match_the_original_engine() -> anyho
                 .map_err(anyhow::Error::msg)?;
             let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
             anyhow::ensure!(
-                serde_json::to_value(actual)? == serde_json::to_value(expected)?,
+                serde_json::to_value(actual)? == reference_response::expected(expected)?,
                 "{text}"
             );
         }
@@ -299,7 +301,7 @@ async fn dense_ring_reaction_export_never_calls_the_backend() -> anyhow::Result<
         );
         assert_eq!(
             serde_json::to_value(result)?,
-            serde_json::to_value(expected)?
+            reference_response::expected(expected)?
         );
     }
     Ok(())

@@ -5,6 +5,8 @@
 mod hydrogen_isotopes;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
+#[path = "support/reference_response.rs"]
+mod reference_response;
 use anyhow::Context;
 use reshiki::{
     arrows::ArrowStyle,
@@ -370,7 +372,7 @@ fn equal(
     format: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
-    let mut expected = serde_json::to_value(expected)?;
+    let mut expected = reference_response::expected(expected)?;
     // The Python reference has no display formula or mass percentages.
     for side in [&mut actual, &mut expected] {
         if let Some(analysis) = side
