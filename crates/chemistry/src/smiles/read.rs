@@ -64,6 +64,23 @@ impl Annotations {
         self.work = self.work.checked_sub(count).ok_or(Error::Limit)?;
         Ok(())
     }
+    fn conformer(&self) -> Option<&Conformer> {
+        self.context
+            .conformers
+            .iter()
+            .find(|c| !c.is_3d)
+            .or_else(|| self.context.conformers.first())
+    }
+    fn atropisomers(&self, parsed: &mut Parsed) -> Result<()> {
+        parsed.metadata = stereo::detect_atropisomers_with_bounds(
+            &parsed.graph,
+            &parsed.metadata,
+            &parsed.directions,
+            self.conformer(),
+            stereo::CoordinateBounds::NativeImport,
+        )?;
+        Ok(())
+    }
     fn labels(&mut self, parsed: &mut Parsed) -> Result<()> {
         if self.labels_processed {
             return Ok(());
@@ -399,6 +416,10 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
     if let Some(error) = annotations.context.property_errors.iter().flatten().next() {
         return Err(Error::Unsupported(error));
     }
+    // Read axial flags before kekulization and small-ring axis cleanup (#1048).
+    if annotations.context.conformers.is_empty() {
+        annotations.atropisomers(&mut parsed)?;
+    }
     let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
     if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || clean.metadata.atoms.iter().enumerate().any(|(i, a)| {
@@ -630,12 +651,7 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
     }
     annotations.numeric_props(&mut parsed)?;
     prepare::validate_allenes(&parsed)?;
-    let conf = annotations
-        .context
-        .conformers
-        .iter()
-        .find(|c| !c.is_3d)
-        .or_else(|| annotations.context.conformers.first());
+    let conf = annotations.conformer();
     if let Some(conf) = conf {
         if conf.is_3d {
             parsed.metadata = stereo::from_3d_with_bounds(
@@ -665,13 +681,7 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
             parsed.metadata = drawn.metadata;
         }
     }
-    parsed.metadata = stereo::detect_atropisomers_with_bounds(
-        &parsed.graph,
-        &parsed.metadata,
-        &parsed.directions,
-        conf,
-        stereo::CoordinateBounds::NativeImport,
-    )?;
+    annotations.atropisomers(&mut parsed)?;
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
     let mut dropped_cumulene_ez = false;
     for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {

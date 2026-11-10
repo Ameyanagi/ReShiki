@@ -31,8 +31,6 @@ mod molecule_reading;
 mod molfile_restrictions;
 #[path = "support/nci_2808_template_layout.rs"]
 mod nci_2808_template_layout;
-#[path = "support/reaction_coordinate_free_wedges.rs"]
-mod reaction_coordinate_free_wedges;
 #[path = "support/reaction_presentation.rs"]
 mod reaction_presentation;
 #[path = "support/reference_mol.rs"]
@@ -62,6 +60,41 @@ async fn rust_rxn_import_preserves_complete_reference_responses() -> TestResult 
 async fn rust_reaction_smiles_import_preserves_complete_reference_responses() -> TestResult {
     rdkit_parity::enable();
     import_responses("rsmi", "reference/reaction_smiles_engine_reference.py").await
+}
+
+#[tokio::test]
+async fn reaction_coordinate_free_wedge_exceptions_require_changed_responses() -> TestResult {
+    rdkit_parity::enable();
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for (text, changed) in [
+        ("c1ccccc1>>O |wU:0.0|", true),
+        ("c1(ncc[nH]1)-c1c(F)cccc1>>O |wU:0.0|", true),
+        ("(c1(ncc[nH]1)-c1c(F)cccc1.CC)>>O |wU:0.0,w:12.13|", true),
+        ("c1ncc[nH]1>>O |wU:0.0|", false),
+        ("(c1(-c2ccccc2)ccccc1.CC)>>O |wU:1.1,w:12.13|", false),
+        ("(c1(-c2ccccc2)ccccc1.CC)>>O |wD:1.1,w:12.13|", false),
+        ("(c1ccccc1-c1ccccc1.CC)>>O |wU:5.4,w:12.13|", true),
+    ] {
+        let request = Request::import("rsmi", text);
+        let actual = local
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let expected = reference
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let comparison = assert_import_response_matches(actual, expected, "rsmi");
+        // Matching inputs stay under strict comparison, including symmetric axes (#1048).
+        assert_eq!(comparison.is_err(), changed, "{text}: {comparison:?}");
+        assert_eq!(
+            coordinate_free_wedges::changed("rsmi", text, &comparison),
+            changed,
+            "{text}"
+        );
+    }
+    Ok(())
 }
 
 #[tokio::test]
@@ -281,7 +314,6 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
     let (mut tag_wins, mut kept_ez) = (Vec::new(), Vec::new());
-    let mut deferred = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let actual = local.execute(Request::import(format, &case.text)).await;
@@ -373,14 +405,6 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             // editable document's types, such as negative atom-map numbers.
             .and_then(|value| serde_json::from_value::<Response>(value).ok())
             .filter(|r| r.document.as_ref().is_none_or(|d| d.validate().is_ok()));
-        if actual.is_ok()
-            && expected.is_some()
-            && coordinate_free_wedges::flagged(format, &case.text)
-        {
-            accepted += 1;
-            tag_wins.push(case.name);
-            continue;
-        }
         if actual.is_ok() && expected.is_some() && flagged_ez::flagged(format, &case.text) {
             accepted += 1;
             kept_ez.push(case.name);
@@ -397,10 +421,6 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 }
                 if let Some(reading) = &case.molecule_reading {
                     molecule_reading::adapt(reading, &actual, &mut expected);
-                }
-                if let Some(atom) = reaction_coordinate_free_wedges::known(format, &case.text) {
-                    reaction_coordinate_free_wedges::adapt(atom, &actual, &mut expected);
-                    deferred.push(case.name.clone());
                 }
                 let expected = if format == "mol" {
                     let before = serde_json::to_value(&expected)?;
@@ -420,7 +440,15 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                             format, &case.name, &case.text, expected,
                         )
                     })
-                    .and_then(|expected| assert_import_response_matches(actual, expected, format))
+                    .and_then(|expected| {
+                        let comparison = assert_import_response_matches(actual, expected, format);
+                        if coordinate_free_wedges::changed(format, &case.text, &comparison) {
+                            tag_wins.push(case.name.clone());
+                            Ok(())
+                        } else {
+                            comparison
+                        }
+                    })
                     .err()
                     .map(|e| e.to_string())
             }
@@ -466,9 +494,10 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         }
     }
     assert!(child.wait()?.success(), "Import reference failed");
-    eprintln!("{format} coordinate-free wedge flags following the tag (#1044): {tag_wins:?}");
+    eprintln!(
+        "{format} coordinate-free wedge flags following the tag (#1044, #1048): {tag_wins:?}"
+    );
     eprintln!("{format} E/Z kept under wedge flags (#1042): {kept_ez:?}");
-    eprintln!("{format} deferred known issue (#1048): {deferred:?}");
     eprintln!(
         "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
