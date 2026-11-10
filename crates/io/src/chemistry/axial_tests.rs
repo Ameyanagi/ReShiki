@@ -957,14 +957,19 @@ async fn cxsmiles_drops_wedges_that_add_axes_beside_wavy_doubles() -> anyhow::Re
             .map_err(anyhow::Error::msg)?;
         let doc = response.document.unwrap();
         assert_axis_free(&doc)?;
-        assert!(
-            response
-                .warnings
-                .iter()
-                .any(|notice| notice == super::ADDED_AXIS_WEDGE_NOTICE),
-            "{:?}",
-            response.warnings
-        );
+        // Coordinate-free import redraws wedges; the flat 3D conformer keeps the file wedge.
+        if read.conformers.is_empty() {
+            assert_no_added_axis_notice(&response.warnings);
+        } else {
+            assert!(
+                response
+                    .warnings
+                    .iter()
+                    .any(|notice| notice == super::ADDED_AXIS_WEDGE_NOTICE),
+                "{:?}",
+                response.warnings
+            );
+        }
         assert_dropped_axis_wedge(&doc, 1, 8)?;
         assert_no_allene_configuration(&doc)?;
         let cleaned = engine
