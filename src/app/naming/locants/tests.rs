@@ -1,5 +1,7 @@
 use super::*;
 
+// iced implements the `()` renderer only in debug builds.
+#[cfg(debug_assertions)]
 #[test]
 fn wrapped_locant_mouse_area_dispatches_enter_and_exit_without_a_font_renderer() {
     use iced::advanced::{Layout, Shell, layout, widget::Tree};
