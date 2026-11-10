@@ -1178,8 +1178,10 @@ fn element(app: &App, id: u64) -> Option<&str> {
 /// Two quick clicks on the same atom, as the canvas publishes a double-click.
 fn double_click(app: &mut App, x: f32) {
     let p = Point::new(x, 0.);
-    let _ = app.update(Message::Canvas(Edit::Click(p)));
-    let _ = app.update(Message::Canvas(Edit::Click(p)));
+    // Share a timestamp so label commits cannot expire the double-click.
+    let now = iced::time::Instant::now();
+    let _ = app.text_tool_atom_click_at(&Edit::Click(p), now);
+    let _ = app.text_tool_atom_click_at(&Edit::Click(p), now);
 }
 
 #[test]
