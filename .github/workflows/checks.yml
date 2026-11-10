@@ -489,6 +489,7 @@ jobs:
     if: always()
     runs-on: ubuntu-22.04
     steps:
+      - *actions_runtime
       - name: Require successful Rust lanes for native changes
         shell: bash
         env:
