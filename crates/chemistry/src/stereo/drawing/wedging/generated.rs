@@ -13,6 +13,9 @@ use crate::{
 };
 use std::collections::HashSet;
 
+mod atrop;
+pub use atrop::wedge_molecule;
+
 #[cfg(test)]
 mod tests;
 

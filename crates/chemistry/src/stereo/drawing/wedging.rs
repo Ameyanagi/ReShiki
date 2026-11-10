@@ -444,6 +444,15 @@ fn with_work(
     two_bonds: bool,
     work: &mut Work,
 ) -> Result<WedgeState, String> {
+    Ok(with_context(input, properties, conformer, two_bonds, work)?.state)
+}
+fn with_context<'a>(
+    input: &WedgeState,
+    properties: &'a WedgeProperties,
+    conformer: Option<&'a Conformer>,
+    two_bonds: bool,
+    work: &mut Work,
+) -> Result<Context<'a>, String> {
     let conf = conformer.ok_or("No conformer available for bond wedging")?;
     let mut ctx = Context::new(input, properties, conf, true, work)?;
     ctx.choose_tetrahedral(work)?;
@@ -485,7 +494,7 @@ fn with_work(
             }
         }
     }
-    Ok(ctx.state)
+    Ok(ctx)
 }
 
 /// Set one bond's wedge direction relative to the requested tetrahedral atom.
