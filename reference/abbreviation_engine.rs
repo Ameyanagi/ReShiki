@@ -1,6 +1,8 @@
 //! Compare the migrated application path with the unmodified abbreviation worker.
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
+#[path = "support/reference_response.rs"]
+mod reference_response;
 use anyhow::Context;
 use reshiki::{
     chemistry::abbreviations,
@@ -27,7 +29,7 @@ fn native_geometry_diagnostic() -> anyhow::Result<String> {
 
 fn matches(actual: Response, expected: Response) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
-    let mut expected = serde_json::to_value(expected)?;
+    let mut expected = reference_response::expected(expected)?;
     // The Python reference has no display formula or mass percentages.
     for side in [&mut actual, &mut expected] {
         if let Some(analysis) = side

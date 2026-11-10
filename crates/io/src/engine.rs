@@ -179,6 +179,9 @@ pub fn text_format(text: &str) -> &'static str {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Analysis {
     pub smiles: String,
+    /// Information lost from the plain SMILES, retained with cached properties.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub smiles_notice: Option<String>,
     pub formula: String,
     #[serde(default)]
     pub display_formula: String,
@@ -360,19 +363,31 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             let selected = request.selected_ids.take();
             let output = crate::task::spawn_blocking(move || {
                 if reaction_smiles {
-                    reaction::write_smiles(&document, selected.as_deref())
-                        .map(|output| (output, false))
+                    reaction::write_smiles_with_axial_loss(&document, selected.as_deref()).map(
+                        |(output, axial_loss)| {
+                            (
+                                output,
+                                axial_loss.then_some(native_response::SMILES_AXIAL_NOTICE),
+                            )
+                        },
+                    )
                 } else {
-                    reaction::write_rxn_with_fallback(&document, selected.as_deref())
+                    reaction::write_rxn_with_fallback(&document, selected.as_deref()).map(
+                        |(output, stereo_fallback)| {
+                            (
+                                output,
+                                stereo_fallback
+                                    .then_some(crate::chemistry::molfile::STEREO_FALLBACK_NOTICE),
+                            )
+                        },
+                    )
                 }
             })
             .await
             .map_err(|e| format!("Reaction export failed: {e}"))?;
             match output {
-                Ok((output, fallback)) => {
-                    if fallback {
-                        warnings.push(crate::chemistry::molfile::STEREO_FALLBACK_NOTICE.into());
-                    }
+                Ok((output, notice)) => {
+                    warnings.extend(notice.map(str::to_owned));
                     return Ok(Response {
                         document: None,
                         analysis: None,

@@ -4,6 +4,8 @@
 mod axial_extension;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
+#[path = "support/reference_response.rs"]
+mod reference_response;
 #[path = "support/smiles_extensions.rs"]
 #[allow(dead_code)]
 mod smiles_extensions;
@@ -518,7 +520,7 @@ fn assert_response_matches_contract(
 ) -> TestResult {
     let source = source.map(serde_json::to_value).transpose()?;
     let mut actual = serde_json::to_value(actual)?;
-    let mut expected = serde_json::to_value(expected)?;
+    let mut expected = reference_response::expected(expected)?;
     // The Python reference has no display formula or mass percentages.
     for side in [&mut actual, &mut expected] {
         if let Some(analysis) = side
