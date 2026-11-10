@@ -14,6 +14,10 @@ on:
   workflow_call:
 permissions:
   contents: read
+concurrency:
+  # run_id prevents workflow_call from release.yml from queuing or cancelling runs.
+  group: python-wheels-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   UV_PYTHON_PREFERENCE: only-managed
 jobs:
