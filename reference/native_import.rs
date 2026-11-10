@@ -7,6 +7,8 @@ mod empty_heads;
 mod longest_lived_mass;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
+#[path = "support/reference_response.rs"]
+mod reference_response;
 #[path = "support/smiles_extensions.rs"]
 #[allow(dead_code)]
 mod smiles_extensions;
@@ -92,7 +94,7 @@ fn compare_response(
     import_format: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut a = serde_json::to_value(actual)?;
-    let mut b = serde_json::to_value(expected)?;
+    let mut b = reference_response::expected(expected)?;
     // The Python reference has no display formula or mass percentages.
     for side in [&mut a, &mut b] {
         if let Some(analysis) = side
