@@ -1,6 +1,22 @@
 use super::*;
 use serde_json::json;
 
+fn documented_app_version(version: &str) -> &str {
+    version
+        .split_once("-nightly.")
+        .map_or(version, |(base, _)| base)
+}
+
+#[test]
+fn documented_app_version_strips_only_the_nightly_suffix() {
+    assert_eq!(
+        documented_app_version("0.14.0-nightly.20261108.42529939246.1"),
+        "0.14.0"
+    );
+    assert_eq!(documented_app_version("0.14.0"), "0.14.0");
+    assert_eq!(documented_app_version("0.15.0-rc.1"), "0.15.0-rc.1");
+}
+
 #[test]
 fn the_agent_reference_is_current() {
     assert_eq!(
@@ -17,7 +33,10 @@ fn the_agent_api_versions_are_current() {
         .unwrap()
         .1;
     for (field, version) in [
-        ("app", env!("CARGO_PKG_VERSION").to_string()),
+        (
+            "app",
+            documented_app_version(env!("CARGO_PKG_VERSION")).to_string(),
+        ),
         ("document", crate::document::VERSION.to_string()),
     ] {
         let row = table
