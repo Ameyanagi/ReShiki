@@ -92,9 +92,10 @@ other appearance controls remain available in **Properties → 3D model**.
   about 15°) where stacked atoms would hide each other, as rock salt's along
   _c_. An axis seen end-on has no label. Each repeat change lays out a visible
   2D drawing along whichever of the four keeps the labels of all the cells
-  nearly as far apart as the best view, preferring a lattice axis, until you
-  choose a direction explicitly; that choice stays selected and is kept in the
-  file. A visible 3D model keeps its rotation when the repeat changes.
+  nearly as far apart as the best view, allowing a word space between labels
+  on the same line and preferring a lattice axis, until you choose a direction
+  explicitly; that choice stays selected and is kept in the file. A visible 3D
+  model keeps its rotation when the repeat changes.
 - **Molecular crystals** keep whole molecules. Each molecule is made whole
   across the cell boundary and kept once, where its centre lies in the cell, so
   atoms of a molecule on a corner or face stick out of the box.
@@ -308,12 +309,12 @@ them, and the axis labels after the atom labels, which get a paper halo.
 off, only for painting. `models3d::flat_scale` sets the 2D scale. The opening
 view (`crystal_rotation`) scores every tilt of three view families by
 `separation`, measured in label heights: label boxes against each other (with
-room for a bond between two), and labels against box edges, other atoms'
-bonds and stubs. Labels are compared with a left-to-right sweep that stops
-once two are too far apart across to matter, so a 4 × 4 × 4 repeat is still
-checked; beyond 20,000 labels only the box is. The lighter copies' labels sit
-on a paper halo over the box's edges, as the drawing's own labels do. Bond
-orders come from `crystal/build.rs`.
+a word space horizontally and room for a bond between two), and labels against
+box edges, other atoms' bonds and stubs. Labels are compared with a left-to-right
+sweep that stops once two are too far apart across to matter, so a 4 × 4 × 4
+repeat is still checked; beyond 20,000 labels only the box is. The lighter
+copies' labels sit on a paper halo over the box's edges, as the drawing's own
+labels do. Bond orders come from `crystal/build.rs`.
 
 Test fixtures in `tests/fixtures/crystal/` are hand-written from published cell
 parameters: NaCl (Fm-3m), dry ice CO₂ (Pa-3), urea (PDB), rutile TiO₂
