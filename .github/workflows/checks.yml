@@ -390,6 +390,7 @@ jobs:
     name: rust lint (${{ matrix.os }}, ${{ matrix.target }})
     needs: scope
     if: needs.scope.outputs.native == 'true'
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -429,6 +430,7 @@ jobs:
     name: rust goldens (${{ matrix.os }}, ${{ matrix.target }})
     needs: scope
     if: needs.scope.outputs.native == 'true'
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
