@@ -101,20 +101,43 @@ jobs:
           }
           Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Restore apt archives
+        id: apt_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives/*.deb
+          key: wayland-apt-noble-${{ matrix.compositor }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: wayland-apt-noble-${{ matrix.compositor }}-
       - name: Install private compositor, software renderer and independent receiver
-        # A stalled mirror or package trigger otherwise holds the runner until the job timeout.
+        id: apt_install
+        # Cached debs skip the mirror, which can crawl for minutes; the timeout bounds a cold download.
         timeout-minutes: 10
         env:
           COMPOSITOR_PACKAGE: ${{ matrix.compositor == 'gnome' && 'gnome-shell' || 'sway' }}
         run: |
+          archives="$HOME/apt-archives"
+          mkdir -p "$archives/partial"
+          before=$(find "$archives" -maxdepth 1 -name '*.deb' -printf '%f\n' | sort)
           sudo rm -f /var/lib/man-db/auto-update
           sudo apt-get update -o Acquire::Retries=3
           sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+            -o Dir::Cache::Archives="$archives" \
             "$COMPOSITOR_PACKAGE" wtype xdotool xvfb xauth dbus-x11 \
             python3-gi gir1.2-gtk-4.0 mesa-vulkan-drivers fonts-dejavu-core \
             libegl1-mesa-dev libwayland-dev libxkbcommon-dev libfontconfig1-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libx11-xcb-dev \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libudev-dev pkg-config
+          sudo apt-get autoclean -o Dir::Cache::Archives="$archives"
+          after=$(find "$archives" -maxdepth 1 -name '*.deb' -printf '%f\n' | sort)
+          if [ "$before" != "$after" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save apt archives
+        if: steps.apt_install.outputs.changed == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives/*.deb
+          key: ${{ steps.apt_cache.outputs.cache-primary-key }}
       - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
