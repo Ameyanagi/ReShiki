@@ -553,12 +553,10 @@ fn with_work_preserving(
             ctx.write_ranks()?;
         }
     }
-    // Before cleanup, so stereo groups drop a cleared allene.
-    if allene_axes {
-        clear_allenes_without_axis(&mut ctx.state, work)?;
-    }
     if options.clean {
-        ctx.cleanup(work)?;
+        ctx.cleanup(allene_axes, work)?;
+    } else if allene_axes {
+        clear_allenes_without_axis(&mut ctx.state, work)?;
     }
     ctx.state.properties.done = Some(true);
     Ok(ctx.state)
@@ -692,7 +690,7 @@ impl Context {
         }
         Ok(())
     }
-    fn cleanup(&mut self, work: &mut Work) -> Result<(), String> {
+    fn cleanup(&mut self, allene_axes: bool, work: &mut Work) -> Result<(), String> {
         for (props, meta) in self
             .state
             .properties
@@ -752,6 +750,11 @@ impl Context {
                 self.state
                     .graph
                     .refresh_atoms(&self.state.valences, &refreshed, false)?;
+        }
+        // Invalid tetrahedral tags must not block CIP's allene axis check.
+        // Before bond/group cleanup, so stereo groups drop a cleared allene.
+        if allene_axes {
+            clear_allenes_without_axis(&mut self.state, work)?;
         }
         self.cleanup_bonds(work)?;
         self.cleanup_groups(work)
