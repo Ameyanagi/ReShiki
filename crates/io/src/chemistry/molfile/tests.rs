@@ -64,7 +64,7 @@ fn v2000_preserves_singlet_and_triplet_spin() -> anyhow::Result<()> {
             imported.molecule.state.graph.atoms[0].radical_electrons,
             electrons
         );
-        let (document, _) = imported.clone().display_document()?;
+        let (document, _, _) = imported.clone().display_document()?;
         assert_eq!(document.atoms[0].radical_electrons, electrons);
         assert_eq!(document.atoms[0].singlet, singlet);
         if electrons == 2 {
@@ -76,7 +76,7 @@ fn v2000_preserves_singlet_and_triplet_spin() -> anyhow::Result<()> {
             output.contains(&format!("M  RAD  1   1   {code}")),
             "{output}"
         );
-        let (reopened, _) = read(&output)?.display_document()?;
+        let (reopened, _, _) = read(&output)?.display_document()?;
         assert_eq!(reopened.atoms[0].radical_electrons, electrons);
         assert_eq!(reopened.atoms[0].singlet, singlet);
     }
@@ -94,13 +94,13 @@ fn v3000_preserves_singlet_and_triplet_spin() -> anyhow::Result<()> {
         );
         let imported = read(&text)?;
         assert_eq!(imported.annotations.singlets, [singlet]);
-        let (document, molecule) = imported.display_document()?;
+        let (document, molecule, _) = imported.display_document()?;
         assert_eq!(document.atoms[0].radical_electrons, 2);
         assert_eq!(document.atoms[0].singlet, singlet);
         let (output, _) =
             write_drawing_absolute(&molecule, &document, Options { force_v3000: true })?;
         assert_eq!(output.contains(" RAD=1"), singlet, "{output}");
-        let (reopened, _) = read(&output)?.display_document()?;
+        let (reopened, _, _) = read(&output)?.display_document()?;
         assert_eq!(reopened.atoms[0].radical_electrons, 2);
         assert_eq!(reopened.atoms[0].singlet, singlet);
     }
@@ -113,7 +113,7 @@ fn singlet_code_without_two_perceived_electrons_stays_triplet() -> anyhow::Resul
         M  V30 BEGIN CTAB\nM  V30 COUNTS 1 0 0 0 0\nM  V30 BEGIN ATOM\n\
         M  V30 1 D 0 0 0 0 CHG=1 VAL=15 RAD=1\nM  V30 END ATOM\n\
         M  V30 END CTAB\nM  END\n";
-    let (document, _) = read(text)?.display_document()?;
+    let (document, _, _) = read(text)?.display_document()?;
     assert_ne!(document.atoms[0].radical_electrons, 2);
     assert!(!document.atoms[0].singlet);
     Ok(())
@@ -126,7 +126,7 @@ fn hydrogen_folding_preserves_singlet_spin() -> anyhow::Result<()> {
         .replace("M  END", "M  RAD  1   2   1\nM  END");
     let imported = read(&text)?.for_display()?;
     assert_eq!(imported.annotations.singlets, [true]);
-    let (document, _) = imported.display_document()?;
+    let (document, _, _) = imported.display_document()?;
     assert_eq!(document.atoms.len(), 1);
     assert!(document.atoms[0].singlet);
     assert_eq!(document.atoms[0].radical_electrons, 2);

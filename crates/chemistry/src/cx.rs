@@ -63,7 +63,7 @@ pub enum Event {
         id: u32,
         atoms: Vec<usize>,
     },
-    RelativeStereo,
+    RelativeStereo(Vec<usize>),
     QueryAtom(usize),
     SubstanceGroup {
         atoms: Vec<usize>,
@@ -83,21 +83,25 @@ pub enum Event {
 #[derive(Debug)]
 pub struct Read {
     pub events: Vec<Event>,
+    /// Number of connected components in this participant.
+    pub fragments: usize,
     /// Byte offset immediately after the closing delimiter; a name can follow.
     pub end: usize,
 }
 
 pub fn read(text: &str, graph: &Topology) -> Result<Read> {
-    read_at(text, graph, 0, 0)
+    read_at(text, graph, 0, 0, 0)
 }
 
 /// Apply reaction-global annotations to one participant. Events use local
 /// indices; references outside this participant are ignored by the native reader.
+/// Fragments are ordered by their lowest local atom index.
 pub fn read_at(
     text: &str,
     graph: &Topology,
     atom_offset: usize,
     bond_offset: usize,
+    fragment_offset: usize,
 ) -> Result<Read> {
     if text.len() > 1024 * 1024 || graph.atoms > 100_000 || graph.bonds.len() > 300_000 {
         return Err(Error::Limit);
@@ -120,6 +124,27 @@ pub fn read_at(
                 *n += 1;
             }
         }
+    }
+    let mut fragments = Vec::new();
+    let mut visited = vec![false; graph.atoms];
+    for start in 0..graph.atoms {
+        if visited.get(start) == Some(&true) {
+            continue;
+        }
+        let mut atoms = Vec::new();
+        let mut pending = vec![start];
+        *visited.get_mut(start).ok_or(Error::Limit)? = true;
+        while let Some(atom) = pending.pop() {
+            atoms.push(atom);
+            for &(_, neighbor) in neighbors.get(atom).ok_or(Error::Limit)? {
+                let seen = visited.get_mut(neighbor).ok_or(Error::Limit)?;
+                if !*seen {
+                    *seen = true;
+                    pending.push(neighbor);
+                }
+            }
+        }
+        fragments.push(atoms);
     }
     // Match get_bond_with_smiles_idx, including fallback slots when recursive
     // patterns have consumed parse-order indices before the outer graph.
@@ -152,6 +177,8 @@ pub fn read_at(
         events: Vec::new(),
         work: 2_000_000,
     };
+    // Relative flags are coalesced into one event after the fields are read.
+    let (mut all_relative, mut relative) = (false, HashSet::new());
     p.require(b'|')?;
     while p.peek().is_some_and(|b| b != b'|') {
         match p.peek() {
@@ -213,10 +240,18 @@ pub fn read_at(
             Some(b'r') if p.starts(b"rb") => p.substitution(true)?,
             Some(b'r')
                 if matches!(p.input.get(p.pos - 1), Some(b'|' | b','))
-                    && matches!(p.input.get(p.pos + 1), Some(b'|' | b',')) =>
+                    && matches!(p.input.get(p.pos + 1), Some(b'|' | b',' | b':')) =>
             {
-                p.events.push(Event::RelativeStereo);
                 p.advance()?;
+                if p.eat(b':') {
+                    relative.extend(
+                        p.sequence()?
+                            .into_iter()
+                            .filter_map(|id| (id as usize).checked_sub(fragment_offset)),
+                    );
+                } else {
+                    all_relative = true;
+                }
             }
             Some(b'L') if p.starts(b"LN") => p.link_nodes()?,
             Some(b'S') if p.starts(b"SgD") => p.data_group()?,
@@ -247,9 +282,19 @@ pub fn read_at(
         }
     }
     p.require(b'|')?;
+    let atoms: Vec<_> = fragments
+        .iter()
+        .enumerate()
+        .filter(|(id, _)| all_relative || relative.contains(id))
+        .flat_map(|(_, atoms)| atoms.iter().copied())
+        .collect();
+    if !atoms.is_empty() {
+        p.events.push(Event::RelativeStereo(atoms));
+    }
     p.events.push(Event::ProcessLabels);
     Ok(Read {
         events: p.events,
+        fragments: fragments.len(),
         end: p.pos,
     })
 }

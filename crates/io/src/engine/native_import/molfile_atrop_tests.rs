@@ -70,7 +70,7 @@ async fn molfile_atrop_warns_only_when_drawing_changes_axes() -> anyhow::Result<
             let labeled = label::assign(&imported.molecule.state, &Default::default())?;
             assert_eq!(labeled.state.properties.bond_codes[1].as_deref(), Some("P"));
         }
-        let (document, molecule) = imported.display_document()?;
+        let (document, molecule, _) = imported.display_document()?;
         let drawn = axes(&molecular::prepare(&document)?)?;
         assert_eq!(drawn != expected, changed, "{name}");
         let warnings = if changed { vec![NOTICE] } else { vec![] };
@@ -132,7 +132,7 @@ async fn molfile_atrop_kept_2d_axis_and_axis_free_3d_are_unchanged() -> anyhow::
         let imported = molfile::read(text)?;
         assert_eq!(axes(&imported.molecule)?, expected_axes);
         assert_eq!(imported.annotations.is_3d, spatial);
-        let (document, molecule) = imported.display_document()?;
+        let (document, molecule, _) = imported.display_document()?;
         assert_eq!(axes(&molecular::prepare(&document)?)?, expected_axes);
         let Preparation::Complete(prepared) = prepare(Request::import("mol", text))? else {
             panic!("Import unexpectedly deferred");
@@ -171,7 +171,7 @@ async fn molfile_atrop_unpreparable_named_dummy_keeps_importing() -> anyhow::Res
         .replace("M  V30 END ATOM", "M  V30 7 R1 5 5 0 0\nM  V30 END ATOM");
     let imported = molfile::read(&text)?;
     assert_eq!(axes(&imported.molecule)?, [(4, 6, 6)]);
-    let (document, _) = imported.display_document()?;
+    let (document, _, _) = imported.display_document()?;
     assert!(
         molecular::prepare(&document)
             .unwrap_err()

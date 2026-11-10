@@ -96,6 +96,7 @@ pub enum Error {
 }
 
 const CUMULENE_EZ_NOTICE: &str = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored";
+const RELATIVE_STEREO_NOTICE: &str = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
 
 struct Prepared {
     molecule: molecular::Molecule,
@@ -250,11 +251,15 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                     }
                 }
             }
+            let relative = imported.draw_relative_as_stated();
             let mut molecule = molecule(imported.prepared.state)?;
             let (mut warnings, row) = layout(&mut molecule, &imported.reaction_properties)?;
             // Import perception does not keep cumulene E/Z; say so.
             if imported.dropped_cumulene_ez {
                 warnings.push(CUMULENE_EZ_NOTICE.into());
+            }
+            if relative {
+                warnings.push(RELATIVE_STEREO_NOTICE.into());
             }
             let mut prepared = finish_molecule(
                 molecule,
@@ -270,8 +275,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let expected = axes(&imported.molecule)?;
             // A 3D file is never Haworth-restored, so the molecule keeps its XYZ.
             let file_xyz = imported.annotations.is_3d;
-            let (document, molecule) = imported.display_document()?;
-            let mut warnings = Vec::new();
+            let (document, molecule, mut warnings) = imported.display_document()?;
             // Projection bonds cannot carry axis wedges; other file wedges
             // can lose or add axes in the finished drawing too (#1057).
             // If the drawing cannot be prepared, keep the existing import.
@@ -339,6 +343,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 scene.conformer_3d = Some(false);
             }
             let imported = scene.into_document()?;
+            warnings.extend(imported.notices);
             Prepared {
                 molecule: imported.molecule,
                 document: imported.document,
@@ -348,7 +353,16 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         }
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
         "rsmi" => {
-            let layout = reaction::read_smiles(&text)?.layout()?;
+            let mut reaction = reaction::read_smiles(&text)?;
+            let relative = reaction
+                .reactants
+                .iter_mut()
+                .chain(&mut reaction.agents)
+                .chain(&mut reaction.products)
+                .fold(false, |relative, part| {
+                    relative | part.draw_relative_as_stated()
+                });
+            let layout = reaction.layout()?;
             let layouts = layout
                 .requests()
                 .map(|request| {
@@ -362,6 +376,9 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 .unzip();
             let mut prepared = finish_reaction(layout.finish(positions)?)?;
             prepared.warnings.extend(warnings.into_iter().flatten());
+            if relative {
+                prepared.warnings.push(RELATIVE_STEREO_NOTICE.into());
+            }
             prepared
         }
         _ => return Err(Error::Format),
@@ -397,12 +414,12 @@ fn styled_coordination_changed(prepared: &cdxml::PreparedCdxml) -> bool {
 
 fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {
     let labels = drawing.labels()?;
-    let document = drawing.finish(labels)?;
+    let (document, warnings) = drawing.finish_with_notices(labels)?;
     let molecule = molecular::prepare(&document)?;
     Ok(Prepared {
         molecule,
         document,
-        warnings: Vec::new(),
+        warnings,
         file_xyz: false,
     })
 }
@@ -504,10 +521,13 @@ fn finish_molecule(
         )
         .into());
     }
+    let warnings = chemistry::drop_added_axis_wedges(&mut document, &molecule)
+        .into_iter()
+        .collect();
     Ok(Prepared {
         molecule,
         document,
-        warnings: Vec::new(),
+        warnings,
         file_xyz: false,
     })
 }

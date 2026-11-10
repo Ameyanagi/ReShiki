@@ -14,19 +14,22 @@ use std::collections::{BTreeMap, HashMap};
 impl Imported {
     /// Build the display drawing and retain the imported molecular state unless
     /// restoring Haworth conventions requires preparing the finished drawing.
-    pub(crate) fn display_document(self) -> Result<(Document, Molecule), Error> {
+    pub(crate) fn display_document(self) -> Result<(Document, Molecule, Vec<String>), Error> {
         let imported = self.for_display()?;
         let drawing = imported.drawing()?;
         let labels = drawing.labels()?;
         let mut document =
             drawing.finish_with(labels, |document| imported.restore_xyz(document))?;
         let restored = imported.restore_haworth(&mut document);
+        let notices = crate::chemistry::drop_added_axis_wedges(&mut document, &imported.molecule)
+            .into_iter()
+            .collect();
         let molecule = if restored {
             document::prepare(&document)?
         } else {
             imported.molecule
         };
-        Ok((document, molecule))
+        Ok((document, molecule, notices))
     }
 
     /// Fold ordinary terminal H only after file stereo has been assigned.

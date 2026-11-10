@@ -22,7 +22,8 @@ RUN printf '%s\n' 'path-exclude=/usr/share/doc/*' 'path-exclude=/usr/share/man/*
     && rm -rf /var/lib/apt/lists/*
 
 # Pin the bootstrap tools; each job installs its own Rust toolchain. Container jobs run as
-# root over a workspace the runner user owns, so git must trust it.
+# root over a workspace the runner user owns, so git must trust it, and expressions such as
+# ${{ github.workspace }} give the host's /home/runner/work paths, mounted here at /__w.
 RUN curl -fsSL --retry 5 -o /tmp/powershell.tar.gz \
         https://github.com/PowerShell/PowerShell/releases/download/v7.6.9/powershell-7.6.9-linux-x64.tar.gz \
     && echo '1da6d6d6035d651f20e70ddee7c4c15ac6ab8b9fb40ee92240d91263f28a884b  /tmp/powershell.tar.gz' | sha256sum -c - \
@@ -36,4 +37,5 @@ RUN curl -fsSL --retry 5 -o /tmp/powershell.tar.gz \
     && chmod +x /tmp/rustup-init \
     && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain none \
     && rm /tmp/powershell.tar.gz /tmp/rustup-init \
-    && git config --system --add safe.directory '*'
+    && git config --system --add safe.directory '*' \
+    && mkdir -p /home/runner && ln -s /__w /home/runner/work

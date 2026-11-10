@@ -130,7 +130,7 @@ fn allene_mol_v2000_and_v3000_keep_one_ended_wedges_and_cip() -> anyhow::Result<
                     smiles::write::write(&reopened.molecule.state, Default::default())?.text,
                     canonical
                 );
-                let (drawing, _) = reopened.display_document()?;
+                let (drawing, _, _) = reopened.display_document()?;
                 assert_visible_allene(&drawing, expected)?;
                 let wedged_ends = drawing
                     .bonds
@@ -160,7 +160,7 @@ fn allene_mol_both_ended_wedges_survive_import_and_warn() -> anyhow::Result<()> 
             imported.molecule.state.directions
         );
     }
-    let (drawing, _) = imported.display_document()?;
+    let (drawing, _, _) = imported.display_document()?;
     assert_eq!(
         document::prepare(&drawing)?.state.metadata.atoms[2].chiral_tag,
         0

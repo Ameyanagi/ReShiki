@@ -326,7 +326,7 @@ async fn imported_3d_engine_mol_export_preserves_xyz_without_a_fallback_notice()
             "F/C=C/F",
         ),
     ] {
-        let (document, _) = molfile::read(fixture)?.display_document()?;
+        let (document, _, _) = molfile::read(fixture)?.display_document()?;
         assert!(document.atoms.iter().any(|atom| atom.depth != 0.));
         let before = serde_json::to_value(&document)?;
         let mut request = Request::molecule("export", document.clone());
