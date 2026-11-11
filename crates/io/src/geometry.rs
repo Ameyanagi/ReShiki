@@ -216,6 +216,9 @@ impl Prepared {
         part.abbreviations
             .retain(|a| a.members.iter().all(|id| selected.contains(id)));
         for atom in &part.atoms {
+            if atom.stereo_group.is_some() {
+                return Err(Error::Unsupported("enhanced stereo groups"));
+            }
             if !atom.centroid.is_empty() || atom.attachment.is_some() {
                 return Err(Error::Unsupported("multi-centre or variable attachments"));
             }
@@ -253,18 +256,18 @@ impl Prepared {
                 return Err(Error::Unsupported("this charge, isotope or hydrogen count"));
             }
         }
-        if !molecule.state.metadata.groups.is_empty()
-            || molecule
-                .state
-                .metadata
-                .atoms
-                .iter()
-                .any(|a| a.chiral_tag > 2)
+        if !molecule.state.metadata.groups.is_empty() {
+            return Err(Error::Unsupported("enhanced stereo groups"));
+        }
+        if molecule
+            .state
+            .metadata
+            .atoms
+            .iter()
+            .any(|a| a.chiral_tag > 2)
             || molecule.state.metadata.bonds.iter().any(|b| b.stereo > 5)
         {
-            return Err(Error::Unsupported(
-                "enhanced or non-tetrahedral stereochemistry",
-            ));
+            return Err(Error::Unsupported("non-tetrahedral stereochemistry"));
         }
         let ids = molecule.ids.clone();
         let units = f64::from(source.drawing_style.bond_length_world) / 1.5;

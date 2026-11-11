@@ -9,6 +9,7 @@ pub mod reaction;
 
 pub(crate) const ADDED_AXIS_WEDGE_NOTICE: &str =
     "Removed a wedge that would have added an atropisomer axis the file does not define";
+pub(crate) const STEREO_GROUP_BONDS_NOTICE: &str = "Enhanced stereo group bond members (atropisomer axes) cannot be stored in the drawing and were dropped; atom members were retained";
 
 /// Remove #1064's unintended axes while keeping source allene configurations
 /// at the other terminal wherever the drawing can show them without an axis.

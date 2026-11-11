@@ -63,6 +63,7 @@ impl CdxmlScene {
             ));
         }
         let mut document = Document::default();
+        let stereo_groups = chemistry::document::atom_stereo_groups(&self.molecule)?;
         for (i, source) in self.molecule.state.graph.atoms.iter().enumerate() {
             let p = self.molecule.positions.get(i).ok_or(SceneError::Limit)?;
             let element = chemistry::ELEMENTS
@@ -106,7 +107,7 @@ impl CdxmlScene {
                 steroid_label: None,
                 undefined_stereo: false,
                 undefined_pseudoasymmetric: false,
-                stereo_group: None,
+                stereo_group: *stereo_groups.get(i).ok_or(SceneError::Limit)?,
                 marks: Vec::new(),
                 mark_serial: 0,
                 stereo: None,
@@ -140,9 +141,18 @@ impl CdxmlScene {
         let mut molecule = self.molecule.clone();
         let mut document = drawing.finish_with(labels, |document| self.restore(document))?;
         let restored = planar && crate::haworth::interchange::restore(&mut document);
-        let notices = chemistry::drop_added_axis_wedges(&mut document, &molecule)
+        let mut notices: Vec<_> = chemistry::drop_added_axis_wedges(&mut document, &molecule)
             .into_iter()
             .collect();
+        if molecule
+            .state
+            .metadata
+            .groups
+            .iter()
+            .any(|group| !group.bonds.is_empty())
+        {
+            notices.push(chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+        }
         if restored {
             molecule = chemistry::document::prepare(&document)?;
         }

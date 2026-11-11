@@ -33,6 +33,21 @@ fn carbon_chain(atoms: usize) -> Document {
 }
 
 #[test]
+fn geometry_reports_enhanced_stereo_without_dropping_sample_semantics() {
+    let mut source = ethanol();
+    source.atoms[0].stereo_group = Some(crate::stereo_groups::StereoGroup {
+        kind: crate::stereo_groups::Kind::And,
+        number: 1,
+    });
+    let before = source.clone();
+    assert!(matches!(
+        Prepared::new(&source, &[]),
+        Err(Error::Unsupported("enhanced stereo groups"))
+    ));
+    assert_eq!(source, before);
+}
+
+#[test]
 fn machine_capacity_changes_admission_without_changing_the_document() {
     use reshiki_process_heap::policy::{Capabilities, MIB};
     let limits = |memory| {

@@ -718,8 +718,7 @@ fn s2n_fast_subset() {
 }
 
 #[tokio::test]
-async fn relative_cxsmiles_keeps_identity_refusal_but_imports_stated_enantiomer_927_item_5() {
-    let notice = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
+async fn grouped_cxsmiles_imports_and_keeps_naming_identity_refusal_927_item_5() {
     for smiles in [
         "C[C@H](O)C(=O)O |r|",
         "C[C@@H](O)C(=O)O |r|",
@@ -732,30 +731,29 @@ async fn relative_cxsmiles_keeps_identity_refusal_but_imports_stated_enantiomer_
     ] {
         let imported = reshiki_chemistry::smiles::read(smiles).unwrap();
         let error = super::canonical_state(&imported.prepared.state).unwrap_err();
-        assert!(
-            error.contains("relative stereo groups"),
-            "{smiles}: {error}"
-        );
-        let result = crate::engine::LocalEngine::in_process()
+        assert!(error.contains("stereo groups"), "{smiles}: {error}");
+        let response = crate::engine::LocalEngine::in_process()
             .request(crate::engine::Request::import_smiles(smiles))
-            .await;
-        if let Some(absolute) = smiles.strip_suffix(" |r|") {
-            let response = result.unwrap();
-            assert_eq!(
-                response.warnings.iter().filter(|w| *w == notice).count(),
-                1,
-                "{smiles}: {:?}",
-                response.warnings
-            );
-            let identity = super::document_identity(&response.document.unwrap()).unwrap();
-            super::verify_identity(absolute, &identity.smiles).unwrap();
-        } else {
-            let error = result.unwrap_err();
-            assert!(
-                error.contains("Unsupported drawing stereochemistry"),
-                "{smiles}: {error}"
-            );
-        }
+            .await
+            .unwrap();
+        assert!(
+            response
+                .warnings
+                .iter()
+                .all(|notice| !notice.contains("stated enantiomer")),
+            "{smiles}: {:?}",
+            response.warnings
+        );
+        let document = response.document.unwrap();
+        assert!(
+            document
+                .atoms
+                .iter()
+                .any(|atom| atom.stereo_group.is_some()),
+            "{smiles}"
+        );
+        let error = super::document_identity(&document).unwrap_err();
+        assert!(error.contains("stereo groups"), "{smiles}: {error}");
     }
 }
 

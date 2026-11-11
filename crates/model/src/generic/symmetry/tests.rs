@@ -40,6 +40,36 @@ fn variable(mut doc: Document, targets: &[u64], element: &str) -> Document {
 }
 
 #[test]
+fn generic_expansion_reports_enhanced_stereo_identity_limit() {
+    let mut source = variable(ring(&["C"; 6], false), &[1, 2], "Cl");
+    source.atoms[0].stereo_group = Some(crate::stereo_groups::StereoGroup {
+        kind: crate::stereo_groups::Kind::And,
+        number: 1,
+    });
+    assert!(
+        generic::expand(&source, Limits::default())
+            .unwrap_err()
+            .contains("enhanced stereo group identities")
+    );
+    let mut molecule = prepared(&ring(&["C"; 6], false));
+    molecule
+        .state
+        .metadata
+        .groups
+        .push(crate::chemistry::ranking::StereoGroup {
+            kind: 1,
+            atoms: vec![0],
+            ..Default::default()
+        });
+    assert!(
+        Deduplicator::default()
+            .insert(&molecule, &mut Work::new(Limits::default().max_work))
+            .unwrap_err()
+            .contains("enhanced stereo group identities")
+    );
+}
+
+#[test]
 fn six_benzene_positions_keep_one_first_representative_on_every_path() {
     let source = variable(ring(&["C"; 6], true), &[1, 2, 3, 4, 5, 6], "Cl");
     let before = source.clone();

@@ -186,6 +186,8 @@ impl Drawing {
             atom.cip_code = None;
         }
         state.properties.bond_codes.fill(None);
+        // Group membership describes the sample, not an atom's CIP descriptor.
+        state.metadata.groups.clear();
         let state = label::assign(&state, &Default::default())?.state;
         Ok(Labels {
             rdkit_version: RDKIT_VERSION.into(),
@@ -548,7 +550,6 @@ pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
             .enumerate()
             .any(|(i, a)| !allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation))
         || state.metadata.bonds.iter().any(|b| b.stereo > 7)
-        || !state.metadata.groups.is_empty()
     {
         return Err(invalid(
             "Unsupported drawing stereochemistry or radical count",
@@ -668,6 +669,11 @@ fn reconstruct(
         .filter(|b| b.order == 4)
         .flat_map(|b| [b.a, b.b])
         .collect();
+    let groups = if base.is_some() {
+        Vec::new()
+    } else {
+        atom_stereo_groups(molecule)?
+    };
     let atoms = reconstruct_atoms(
         &work,
         molecule,
@@ -675,6 +681,7 @@ fn reconstruct(
         dummy_labels,
         &circular,
         &adjacent,
+        &groups,
     )?;
     let ordered = ordered_bonds(base, &bonds_by_pair, e)?;
     let (mut bonds, bond_indices) = reconstruct_bonds(&work, molecule, ordered, e)?;
@@ -694,6 +701,13 @@ fn reconstruct(
     // Kept 3D models still need the version that validates them.
     crate::models3d::require_version(&mut document);
     if document
+        .atoms
+        .iter()
+        .any(|atom| atom.stereo_group.is_some())
+    {
+        document.require_version(crate::document::STEREO_GROUPS);
+    }
+    if document
         .abbreviations
         .iter()
         .any(|group| group.exit.is_some())
@@ -705,6 +719,83 @@ fn reconstruct(
         document,
         bond_indices,
     })
+}
+
+/// Atom and bond memberships are independent. The drawing retains all atom
+/// members; import callers report any bond memberships it cannot represent.
+pub fn atom_stereo_groups(
+    molecule: &Molecule,
+) -> Result<Vec<Option<crate::stereo_groups::StereoGroup>>, Error> {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let groups = &molecule.state.metadata.groups;
+    let kind = |code| match code {
+        1 => Some(Kind::Or),
+        2 => Some(Kind::And),
+        _ => None,
+    };
+    let preferred = |group: &ranking::StereoGroup| {
+        if group.read_id != 0 {
+            group.read_id
+        } else {
+            group.write_id
+        }
+    };
+    // Reserve file labels before allocating replacements, so a missing or
+    // repeated ID cannot take a valid label from a later group.
+    let mut taken: HashSet<_> = groups
+        .iter()
+        .filter_map(|group| kind(group.kind).map(|kind| (kind, group)))
+        .filter_map(|(kind, group)| {
+            let number = preferred(group);
+            (number != 0).then_some(StereoGroup { kind, number })
+        })
+        .collect();
+    let mut assigned = HashSet::new();
+    let mut next = (1u32, 1u32);
+    let mut atoms = vec![None; molecule.ids.len()];
+    for group in groups {
+        let Some(kind) = kind(group.kind) else {
+            continue;
+        };
+        let label = StereoGroup {
+            kind,
+            number: preferred(group),
+        };
+        let label = if label.number != 0 && !assigned.contains(&label) {
+            label
+        } else {
+            let number = match kind {
+                Kind::And => &mut next.0,
+                Kind::Or => &mut next.1,
+            };
+            while taken.contains(&StereoGroup {
+                kind,
+                number: *number,
+            }) {
+                *number = number
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("Stereo group number overflow"))?;
+            }
+            StereoGroup {
+                kind,
+                number: *number,
+            }
+        };
+        taken.insert(label);
+        assigned.insert(label);
+        for &index in &group.atoms {
+            let atom = atoms
+                .get_mut(index)
+                .ok_or_else(|| invalid("Missing stereo group atom"))?;
+            if atom.is_some() {
+                return Err(invalid(
+                    "Overlapping enhanced stereo atom groups cannot be represented in a drawing",
+                ));
+            }
+            *atom = Some(label);
+        }
+    }
+    Ok(atoms)
 }
 
 /// Neighbor IDs per atom and the bond index of each unordered ID pair.
@@ -742,6 +833,7 @@ fn reconstruct_atoms(
     dummy_labels: Option<&[Option<String>]>,
     circular: &HashSet<u64>,
     adjacent: &[Vec<u64>],
+    groups: &[Option<crate::stereo_groups::StereoGroup>],
 ) -> Result<Vec<Atom>, Error> {
     let state = &molecule.state;
     work.state
@@ -754,6 +846,11 @@ fn reconstruct_atoms(
             let metadata = at(&work.state.metadata.atoms, i)?;
             let p = at(&work.positions, i)?;
             let old = previous.get(&id).copied();
+            // Existing drawing membership survives perception pruning.
+            let stereo_group = match old {
+                Some(atom) => atom.stereo_group,
+                None => *at(groups, i)?,
+            };
             let element = if a.atomic_number == 0 {
                 dummy_labels
                     .and_then(|labels| labels.get(i))
@@ -787,7 +884,7 @@ fn reconstruct_atoms(
                 steroid_label: None,
                 undefined_stereo: false,
                 undefined_pseudoasymmetric: false,
-                stereo_group: None,
+                stereo_group,
                 display: old.map(|a| a.display.clone()).unwrap_or_default(),
                 marks: old.map(|a| a.marks.clone()).unwrap_or_default(),
                 mark_serial: old.map_or(0, |a| a.mark_serial),

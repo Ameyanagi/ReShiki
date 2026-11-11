@@ -48,6 +48,236 @@ fn v2000_chain(atoms: usize) -> String {
     lines.join("\n")
 }
 
+// RDKit 2026.03.6 MolToMolBlock of C[C@H](O)[C@H](F)Cl, forceV3000=True.
+const ENHANCED_STEREO_BASE: &str = "\n     RDKit          2D\n\n  0  0  0  0  0  0  0  0  0  0999 V3000\n\
+M  V30 BEGIN CTAB\nM  V30 COUNTS 6 5 0 0 0\nM  V30 BEGIN ATOM\n\
+M  V30 1 C 1.500000 1.299038 0.000000 0\n\
+M  V30 2 C 0.750000 0.000000 0.000000 0\n\
+M  V30 3 O 1.500000 -1.299038 0.000000 0\n\
+M  V30 4 C -0.750000 -0.000000 0.000000 0\n\
+M  V30 5 F -1.500000 -1.299038 0.000000 0\n\
+M  V30 6 Cl -1.500000 1.299038 0.000000 0\n\
+M  V30 END ATOM\nM  V30 BEGIN BOND\n\
+M  V30 1 1 2 1 CFG=3\nM  V30 2 1 2 3\nM  V30 3 1 2 4\n\
+M  V30 4 1 4 5 CFG=3\nM  V30 5 1 4 6\n\
+M  V30 END BOND\nM  V30 END CTAB\nM  END\n";
+
+fn enhanced_stereo_mol(records: &str) -> String {
+    ENHANCED_STEREO_BASE.replace(
+        "M  V30 END CTAB",
+        &format!(
+            "M  V30 BEGIN COLLECTION\nM  V30 {records}\nM  V30 END COLLECTION\nM  V30 END CTAB"
+        ),
+    )
+}
+
+#[test]
+fn v3000_import_and_reference_output_preserve_and_or_groups() -> anyhow::Result<()> {
+    use crate::stereo_groups::{Kind, StereoGroup as DrawingGroup};
+    for (label, kind, drawing_kind) in [("RAC", 2, Kind::And), ("REL", 1, Kind::Or)] {
+        let imported = read(&enhanced_stereo_mol(&format!(
+            "MDLV30/STE{label}7 ATOMS=(2 2 4)"
+        )))?;
+        let groups = &imported.molecule.state.metadata.groups;
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].kind, kind);
+        assert_eq!(groups[0].atoms, [1, 3]);
+        assert_eq!(groups[0].read_id, 7);
+        // Default RDKit output assigns write IDs independently of read IDs.
+        assert_eq!(
+            write(&imported.molecule, Options::default())?,
+            enhanced_stereo_mol(&format!("MDLV30/STE{label}1 ATOMS=(2 2 4)"))
+        );
+        let (doc, _, notices) = imported.display_document()?;
+        assert!(notices.is_empty());
+        let expected = DrawingGroup {
+            kind: drawing_kind,
+            number: 7,
+        };
+        assert_eq!(doc.atoms[1].stereo_group, Some(expected));
+        assert_eq!(doc.atoms[3].stereo_group, Some(expected));
+        let prepared = document::prepare(&doc)?;
+        let (output, fallback) = write_drawing_absolute(&prepared, &doc, Options::default())?;
+        assert!(!fallback);
+        assert!(output.contains("V3000"));
+        assert!(output.contains(&format!("MDLV30/STE{label}7 ATOMS=(2 2 4)")));
+        let reopened = read(&output)?;
+        assert_eq!(reopened.molecule.state.metadata.groups[0].kind, kind);
+        assert_eq!(reopened.molecule.state.metadata.groups[0].atoms, [1, 3]);
+    }
+    assert_eq!(
+        write(
+            &read(ENHANCED_STEREO_BASE)?.molecule,
+            Options { force_v3000: true }
+        )?,
+        ENHANCED_STEREO_BASE
+    );
+    Ok(())
+}
+
+#[test]
+fn mixed_mol_stereo_marks_only_ungrouped_centres_absolute() -> anyhow::Result<()> {
+    for label in ["RAC", "REL"] {
+        let imported = read(&enhanced_stereo_mol(&format!(
+            "MDLV30/STE{label}7 ATOMS=(1 2)"
+        )))?;
+        let output = write_absolute(&imported.molecule, Options::default())?;
+        assert!(output.contains("M  V30 COUNTS 6 5 0 0 0\n"));
+        assert!(output.contains("MDLV30/STEABS ATOMS=(1 4)\n"));
+        assert!(output.contains(&format!("MDLV30/STE{label}7 ATOMS=(1 2)\n")));
+        let reopened = read(&output)?;
+        let groups = &reopened.molecule.state.metadata.groups;
+        assert_eq!(groups.len(), 2);
+        assert_eq!((groups[0].kind, groups[0].atoms.as_slice()), (0, &[3][..]));
+        assert_eq!(groups[1].atoms, [1]);
+        assert_eq!(groups[1].read_id, 7);
+        let (doc, _, notices) = reopened.display_document()?;
+        assert!(notices.is_empty());
+        assert!(doc.atoms[1].stereo_group.is_some());
+        assert!(doc.atoms[3].stereo_group.is_none());
+    }
+    Ok(())
+}
+
+#[test]
+fn rxn_roundtrip_retains_relative_groups_and_ungrouped_absolute_centres() -> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    let input = reaction::Imported {
+        reactants: vec![read(&enhanced_stereo_mol("MDLV30/STERAC7 ATOMS=(1 2)"))?],
+        products: vec![read(&enhanced_stereo_mol("MDLV30/STEREL9 ATOMS=(1 2)"))?],
+        agents: Vec::new(),
+    };
+    let drawing = input.drawing()?;
+    let labels = drawing.labels()?;
+    let doc = drawing.finish(labels)?;
+    let output = reaction::write_rxn(&doc, None)?;
+    assert!(output.starts_with("$RXN V3000\n"));
+    assert!(output.contains("MDLV30/STERAC7 ATOMS=(1 2)"));
+    assert!(output.contains("MDLV30/STEREL9 ATOMS=(1 2)"));
+    assert_eq!(output.matches("MDLV30/STEABS ATOMS=(1 4)").count(), 2);
+    let reopened = reaction::read_rxn(&output)?;
+    for (molecule, kind, number) in [
+        (&reopened.reactants[0].molecule, 2, 7),
+        (&reopened.products[0].molecule, 1, 9),
+    ] {
+        let groups = &molecule.state.metadata.groups;
+        assert_eq!(groups.len(), 2);
+        assert_eq!((groups[0].kind, groups[0].atoms.as_slice()), (0, &[3][..]));
+        assert_eq!(
+            (groups[1].kind, groups[1].atoms.as_slice()),
+            (kind, &[1][..])
+        );
+        assert_eq!(groups[1].read_id, number);
+    }
+    let drawing = reopened.drawing()?;
+    let labels = drawing.labels()?;
+    let (doc, notices) = drawing.finish_with_notices(labels)?;
+    assert!(notices.is_empty());
+    assert_eq!(
+        doc.atoms
+            .iter()
+            .filter(|a| a.stereo_group.is_some())
+            .count(),
+        2
+    );
+    Ok(())
+}
+
+#[test]
+fn grouped_rxn_marks_a_wholly_ungrouped_participant_absolute() -> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    let input = reaction::Imported {
+        reactants: vec![read(&enhanced_stereo_mol("MDLV30/STERAC7 ATOMS=(2 2 4)"))?],
+        products: vec![read(ENHANCED_STEREO_BASE)?],
+        agents: Vec::new(),
+    };
+    let drawing = input.drawing()?;
+    let labels = drawing.labels()?;
+    let doc = drawing.finish(labels)?;
+    let output = reaction::write_rxn(&doc, None)?;
+    assert_eq!(output.matches("MDLV30/STERAC7 ATOMS=(2 2 4)").count(), 1);
+    assert_eq!(output.matches("MDLV30/STEABS ATOMS=(2 2 4)").count(), 1);
+    let reopened = reaction::read_rxn(&output)?;
+    let groups = &reopened.products[0].molecule.state.metadata.groups;
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].kind, 0);
+    assert_eq!(groups[0].atoms, [1, 3]);
+    let drawing = reopened.drawing()?;
+    let labels = drawing.labels()?;
+    let doc = drawing.finish(labels)?;
+    let product = &doc.reactions[0].products[0];
+    assert!(
+        product
+            .atoms
+            .iter()
+            .all(|&id| doc.atom(id).unwrap().stereo_group.is_none())
+    );
+    Ok(())
+}
+
+#[test]
+fn grouped_axis_import_retains_atoms_and_warns_once_when_bonds_are_dropped() -> anyhow::Result<()> {
+    use crate::{chemistry::reaction, document::Point};
+    const BINOL: &str = include_str!("../../../../../tests/fixtures/mol-atrop-import/binol-2d.mol");
+    let (mut doc, _, _) = read(BINOL)?.display_document()?;
+    let (centres, _, _) = read(ENHANCED_STEREO_BASE)?.display_document()?;
+    crate::editing::append(&mut doc, &centres, Point::new(400., 0.));
+    let mut molecule = document::prepare(&doc)?;
+    let center = molecule
+        .state
+        .metadata
+        .atoms
+        .iter()
+        .position(|atom| atom.chiral_tag != 0)
+        .unwrap();
+    let axis = molecule
+        .state
+        .metadata
+        .bonds
+        .iter()
+        .position(|bond| matches!(bond.stereo, 6 | 7))
+        .unwrap();
+    molecule.state.metadata.groups = vec![StereoGroup {
+        kind: 2,
+        atoms: vec![center],
+        bonds: vec![axis],
+        read_id: 7,
+        write_id: 7,
+    }];
+    let output = write_absolute(&molecule, Options::default())?;
+    assert!(output.contains(&format!("BONDS=(1 {})", axis + 1)));
+    let imported = read(&output)?;
+    let group = imported
+        .molecule
+        .state
+        .metadata
+        .groups
+        .iter()
+        .find(|group| group.kind == 2)
+        .unwrap();
+    assert_eq!(group.atoms, [center]);
+    assert_eq!(group.bonds, [axis]);
+    let (doc, _, notices) = imported.clone().display_document()?;
+    assert_eq!(notices, [crate::chemistry::STEREO_GROUP_BONDS_NOTICE]);
+    assert_eq!(
+        doc.atoms
+            .iter()
+            .filter(|atom| atom.stereo_group.is_some())
+            .count(),
+        1
+    );
+    let reaction = reaction::Imported {
+        reactants: vec![imported.clone()],
+        products: vec![imported],
+        agents: Vec::new(),
+    };
+    let drawing = reaction.drawing()?;
+    let labels = drawing.labels()?;
+    let (_, notices) = drawing.finish_with_notices(labels)?;
+    assert_eq!(notices, [crate::chemistry::STEREO_GROUP_BONDS_NOTICE]);
+    Ok(())
+}
+
 #[test]
 fn v2000_preserves_singlet_and_triplet_spin() -> anyhow::Result<()> {
     for (code, electrons, singlet) in [(1, 2, true), (2, 1, false), (3, 2, false)] {

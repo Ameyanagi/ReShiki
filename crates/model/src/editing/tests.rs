@@ -1,6 +1,47 @@
 use super::*;
 
 #[test]
+fn mapped_append_part_renumbers_stereo_groups_without_joining_existing_groups() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut destination = Document::default();
+    let existing = destination.add_atom("C", Point::default());
+    let and = StereoGroup {
+        kind: Kind::And,
+        number: 1,
+    };
+    destination.atom_mut(existing).unwrap().stereo_group = Some(and);
+    let mut source = Document::default();
+    for group in [
+        and,
+        and,
+        StereoGroup {
+            kind: Kind::Or,
+            number: 1,
+        },
+    ] {
+        let id = source.add_atom("C", Point::default());
+        source.atom_mut(id).unwrap().stereo_group = Some(group);
+    }
+    for mode in [AppendMode::Ordinary, AppendMode::Preserved] {
+        let (part, mapping, _) =
+            mapped_append_part(&destination, &source, Point::new(84., 0.), mode).unwrap();
+        assert_eq!(
+            part.atoms[0].stereo_group,
+            Some(StereoGroup {
+                kind: Kind::And,
+                number: 2
+            })
+        );
+        assert_eq!(part.atoms[1].stereo_group, part.atoms[0].stereo_group);
+        assert_eq!(part.atoms[2].stereo_group, source.atoms[2].stereo_group);
+        assert_eq!(part.atoms[0].id, mapping[&source.atoms[0].id]);
+        assert_ne!(part.atoms[0].id, existing);
+    }
+    assert_eq!(destination.atom(existing).unwrap().stereo_group, Some(and));
+    assert_eq!(source.atoms[0].stereo_group, Some(and));
+}
+
+#[test]
 fn fixed_hydrogen_positions_follow_reflections_and_rotations() {
     use crate::atom_labels::HydrogenPosition::{self as H, Above, Auto, Below, Left, Right};
     for (operation, expected) in [

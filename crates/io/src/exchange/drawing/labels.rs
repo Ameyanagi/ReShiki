@@ -88,8 +88,13 @@ impl Writer<'_> {
         self.tree.node_mut(node)?.text = Some(text.into());
         Ok(())
     }
-    pub(super) fn atoms(&mut self, graph: &crate::chemistry::graph::Graph) -> Result<()> {
+    pub(super) fn atoms(
+        &mut self,
+        graph: &crate::chemistry::graph::Graph,
+        stereocentres: &[bool],
+    ) -> Result<()> {
         let doc = self.doc;
+        let enhanced_stereo = doc.atoms.iter().any(|a| a.stereo_group.is_some());
         let valences = graph.provisional_valences().map_err(invalid)?;
         let isotope_labels = HydrogenIsotopeLabels::new(doc);
         let mut degrees: HashMap<u64, usize> = HashMap::new();
@@ -130,6 +135,23 @@ impl Writer<'_> {
             )?;
             self.atom_nodes.push(node);
             self.objects.push((a.id, node));
+            if let Some(group) = a.stereo_group {
+                let number = u16::try_from(group.number).map_err(|_| {
+                    invalid("CDXML/CDX stereo group numbers must be between 1 and 65535")
+                })?;
+                self.tree.set(
+                    node,
+                    "EnhancedStereoType",
+                    match group.kind {
+                        crate::stereo_groups::Kind::And => "And",
+                        crate::stereo_groups::Kind::Or => "Or",
+                    },
+                )?;
+                self.tree
+                    .set(node, "EnhancedStereoGroupNum", number.to_string())?;
+            } else if enhanced_stereo && *stereocentres.get(i).ok_or(Error::Limit)? {
+                self.tree.set(node, "EnhancedStereoType", "Absolute")?;
+            }
             // ChemDraw's "not a stereocentre" tells import that this metal's
             // wedges are frame projection, not tetrahedral stereo.
             if frame_metals.get(&a.id) == Some(&true) {

@@ -77,6 +77,18 @@ impl Drawing {
                 &mut drawing,
                 &source,
             ));
+            if source
+                .state
+                .metadata
+                .groups
+                .iter()
+                .any(|group| !group.bonds.is_empty())
+                && !notices
+                    .iter()
+                    .any(|notice| notice == crate::chemistry::STEREO_GROUP_BONDS_NOTICE)
+            {
+                notices.push(crate::chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+            }
             if let [atom] = drawing.atoms.as_mut_slice()
                 && atom.element == "O"
                 && atom.label_h == 2

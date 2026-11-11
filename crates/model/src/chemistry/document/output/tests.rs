@@ -51,6 +51,168 @@ fn generated(text: &str, options: DrawingOptions) -> anyhow::Result<Document> {
 }
 
 #[test]
+fn import_stereo_groups_keep_atom_members_and_normalize_colliding_ids() -> anyhow::Result<()> {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let (mut molecule, dummy_labels) = depicted("CCCCCCCC")?;
+    let group = |kind, atoms, bonds, read_id, write_id| ranking::StereoGroup {
+        kind,
+        atoms,
+        bonds,
+        read_id,
+        write_id,
+    };
+    molecule.state.metadata.groups = vec![
+        group(2, vec![0], vec![0], 7, 7),
+        group(2, vec![1], vec![], 7, 31),
+        group(2, vec![2], vec![], 1, 0),
+        group(1, vec![3], vec![], 7, 0),
+        group(1, vec![4], vec![], 0, 9),
+        group(2, vec![5], vec![], 0, 0),
+        group(0, vec![6], vec![], 0, 0),
+    ];
+    let expected = [
+        Some(StereoGroup {
+            kind: Kind::And,
+            number: 7,
+        }),
+        Some(StereoGroup {
+            kind: Kind::And,
+            number: 2,
+        }),
+        Some(StereoGroup {
+            kind: Kind::And,
+            number: 1,
+        }),
+        Some(StereoGroup {
+            kind: Kind::Or,
+            number: 7,
+        }),
+        Some(StereoGroup {
+            kind: Kind::Or,
+            number: 9,
+        }),
+        Some(StereoGroup {
+            kind: Kind::And,
+            number: 3,
+        }),
+        None,
+        None,
+    ];
+    for draft in [
+        for_import(&molecule, false, &dummy_labels)?,
+        for_import_with_attachments(
+            &molecule,
+            false,
+            &dummy_labels,
+            vec![false; molecule.ids.len()],
+        )?,
+        for_import_scene(&molecule, false)?,
+        for_generated(&molecule, &dummy_labels, DrawingOptions::default())?,
+    ] {
+        let assigned = labels(&draft);
+        let document = draft.finish(assigned)?;
+        assert_eq!(
+            document
+                .atoms
+                .iter()
+                .map(|a| a.stereo_group)
+                .collect::<Vec<_>>(),
+            expected
+        );
+        assert_eq!(document.file_version(), crate::document::STEREO_GROUPS);
+    }
+    Ok(())
+}
+
+#[test]
+fn drawing_stereo_groups_survive_prepare_reconstruction_and_label_refresh() -> anyhow::Result<()> {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut source = generated("F[C@H](Cl)Br.F[C@@H](Cl)I", DrawingOptions::default())?;
+    for (i, atom) in source.atoms.iter_mut().enumerate() {
+        if i == 1 || i == 5 {
+            atom.stereo_group = Some(StereoGroup {
+                kind: Kind::And,
+                number: 12,
+            });
+        }
+    }
+    // A source label on a nonstereogenic atom must survive perceived pruning.
+    source.atoms[0].stereo_group = Some(StereoGroup {
+        kind: Kind::Or,
+        number: 4,
+    });
+    let before = source.clone();
+    let molecule = prepare(&source)?;
+    validate_molecule(&molecule)?;
+    let formula = |molecule: &Molecule| -> anyhow::Result<_> {
+        let facts = molecule
+            .state
+            .graph
+            .atoms
+            .iter()
+            .zip(&molecule.state.valences)
+            .map(|(atom, valence)| crate::chemistry::AtomFacts {
+                atomic_number: atom.atomic_number,
+                isotope: atom.isotope,
+                charge: atom.charge,
+                hydrogens: u8::try_from(
+                    u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens,
+                )
+                .unwrap(),
+                radical_electrons: atom.radical_electrons,
+            })
+            .collect::<Vec<_>>();
+        crate::chemistry::properties(&facts).map_err(anyhow::Error::msg)
+    };
+    let mut ungrouped = source.clone();
+    for atom in &mut ungrouped.atoms {
+        atom.stereo_group = None;
+    }
+    assert_eq!(formula(&molecule)?, formula(&prepare(&ungrouped)?)?);
+    assert_eq!(formula(&molecule)?.formula, "C2H2BrCl2F2I");
+    let draft = for_drawing(&molecule, &source)?;
+    let assigned = draft.labels()?;
+    let mut absolute = molecule.clone();
+    absolute.state.metadata.groups.clear();
+    assert_eq!(
+        assigned.atoms,
+        for_drawing(&absolute, &source)?.labels()?.atoms
+    );
+    let output = draft.finish(assigned)?;
+    assert_eq!(
+        output
+            .atoms
+            .iter()
+            .map(|a| (a.id, a.stereo_group))
+            .collect::<Vec<_>>(),
+        source
+            .atoms
+            .iter()
+            .map(|a| (a.id, a.stereo_group))
+            .collect::<Vec<_>>()
+    );
+    let refresh = crate::atom_labels::refresh::Refresh::calculate(&output, &Default::default())
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(refresh.notice, None);
+    let mut refreshed = output;
+    refresh.apply(&mut refreshed);
+    assert_eq!(
+        refreshed
+            .atoms
+            .iter()
+            .map(|a| a.stereo_group)
+            .collect::<Vec<_>>(),
+        source
+            .atoms
+            .iter()
+            .map(|a| a.stereo_group)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(source, before);
+    Ok(())
+}
+
+#[test]
 fn new_drawings_preserve_alkene_specification_through_finish() -> anyhow::Result<()> {
     let cases: &[(&str, &[bool])] = &[
         ("CC=CC", &[true]),

@@ -3,6 +3,48 @@ use crate::document::{AtomStereo, Point};
 use anyhow::Context;
 
 #[test]
+fn drawing_stereo_groups_build_in_label_order_with_stable_ids() -> anyhow::Result<()> {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut source = Document::default();
+    for group in [
+        StereoGroup {
+            kind: Kind::Or,
+            number: 1,
+        },
+        StereoGroup {
+            kind: Kind::And,
+            number: 3,
+        },
+        StereoGroup {
+            kind: Kind::And,
+            number: 1,
+        },
+        StereoGroup {
+            kind: Kind::Or,
+            number: 1,
+        },
+    ] {
+        let id = source.add_atom("C", Point::default());
+        source.atom_mut(id).context("Group atom")?.stereo_group = Some(group);
+    }
+    let input = build(&source)?;
+    assert_eq!(
+        input
+            .metadata
+            .groups
+            .iter()
+            .map(|g| (g.kind, g.read_id, g.write_id, g.atoms.clone()))
+            .collect::<Vec<_>>(),
+        [
+            (1, 1, 1, vec![0, 3]),
+            (2, 1, 1, vec![2]),
+            (2, 3, 3, vec![1])
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn winding_uses_neighbor_order_without_losing_parity() -> anyhow::Result<()> {
     assert_eq!(winding(&[1, 2, 3, 4], &[1, 2, 3, 4], true)?, 1);
     assert_eq!(winding(&[1, 2, 3, 4], &[2, 1, 3, 4], true)?, 2);

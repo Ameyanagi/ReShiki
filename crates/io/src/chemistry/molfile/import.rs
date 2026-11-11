@@ -21,9 +21,20 @@ impl Imported {
         let mut document =
             drawing.finish_with(labels, |document| imported.restore_xyz(document))?;
         let restored = imported.restore_haworth(&mut document);
-        let notices = crate::chemistry::drop_added_axis_wedges(&mut document, &imported.molecule)
-            .into_iter()
-            .collect();
+        let mut notices: Vec<_> =
+            crate::chemistry::drop_added_axis_wedges(&mut document, &imported.molecule)
+                .into_iter()
+                .collect();
+        if imported
+            .molecule
+            .state
+            .metadata
+            .groups
+            .iter()
+            .any(|group| !group.bonds.is_empty())
+        {
+            notices.push(crate::chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+        }
         let molecule = if restored {
             document::prepare(&document)?
         } else {

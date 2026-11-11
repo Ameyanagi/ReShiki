@@ -587,14 +587,14 @@ fn template_order(r: &Reader<'_>, value: &str) -> Result<()> {
     Ok(())
 }
 
-// Group membership uses the one-based atom insertion order, not V3000
+// Group membership uses one-based insertion order, not V3000
 // bookmarks. Unknown collection types are ignored by the reference reader.
 fn collection(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
     let mut line = r.v3()?.to_ascii_uppercase();
     let mut groups = Vec::new();
     let mut absolute = false;
     while !line.starts_with("END") {
-        if let Some(group) = collection_group(r, &line, p.graph.atoms.len())? {
+        if let Some(group) = collection_group(r, &line, p.graph.atoms.len(), p.graph.bonds.len())? {
             if group.kind == 0 {
                 if absolute {
                     return Err(r.invalid("Multiple absolute stereo groups"));
@@ -611,17 +611,18 @@ fn collection(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
     Ok(())
 }
 
-fn collection_group(r: &Reader<'_>, text: &str, atom_count: usize) -> Result<Option<StereoGroup>> {
+fn collection_group(
+    r: &Reader<'_>,
+    text: &str,
+    atom_count: usize,
+    bond_count: usize,
+) -> Result<Option<StereoGroup>> {
     let Some(content) = text.trim_end_matches(' ').strip_prefix("MDLV30/STE") else {
         return Ok(None);
     };
-    let Some((label, list)) = content.split_once("ATOMS=(") else {
+    let Some((label, mut properties)) = content.split_once(' ') else {
         return Ok(None);
     };
-    if !label.ends_with(' ') {
-        return Ok(None);
-    }
-    let label = label.trim_end_matches(' ');
     let Some(kind) = label.get(..3) else {
         return Ok(None);
     };
@@ -631,15 +632,6 @@ fn collection_group(r: &Reader<'_>, text: &str, atom_count: usize) -> Result<Opt
     else {
         return Ok(None);
     };
-    let Some(list) = list.strip_suffix(')') else {
-        return Ok(None);
-    };
-    let Some((count, members)) = list.split_once(' ') else {
-        return Ok(None);
-    };
-    if count.is_empty() || !count.bytes().all(|c| c.is_ascii_digit()) {
-        return Ok(None);
-    }
     let kind = match kind {
         "ABS" => 0,
         "REL" => 1,
@@ -653,25 +645,64 @@ fn collection_group(r: &Reader<'_>, text: &str, atom_count: usize) -> Result<Opt
             .parse::<u32>()
             .map_err(|_| r.invalid("Invalid stereo group ID"))?
     };
-    let count = r.count(r.integer(count)?, 100_000)?;
-    let mut atoms = Vec::new();
-    let mut seen = HashSet::new();
-    let mut members = members.split_whitespace();
-    for _ in 0..count {
-        let token = members
-            .next()
-            .ok_or_else(|| r.invalid("Missing stereo group members"))?;
-        let i = r.index(r.integer(token)?, atom_count)?;
-        if !seen.insert(i) {
-            return Err(r.invalid("Duplicate stereo group member"));
+    let mut atoms = None;
+    let mut bonds = None;
+    loop {
+        properties = properties.trim_start_matches(' ');
+        if properties.is_empty() {
+            break;
         }
-        atoms.push(i);
+        let (target, count, list) = if let Some(list) = properties.strip_prefix("ATOMS=(") {
+            (&mut atoms, atom_count, list)
+        } else if let Some(list) = properties.strip_prefix("BONDS=(") {
+            (&mut bonds, bond_count, list)
+        } else {
+            return Ok(None);
+        };
+        if target.is_some() {
+            return Err(r.invalid("Repeated stereo group member list"));
+        }
+        let Some((list, rest)) = list.split_once(')') else {
+            return Ok(None);
+        };
+        let Some(members) = collection_members(r, list, count)? else {
+            return Ok(None);
+        };
+        *target = Some(members);
+        properties = rest;
+    }
+    if atoms.is_none() && bonds.is_none() {
+        return Ok(None);
     }
     Ok(Some(StereoGroup {
         kind,
-        atoms,
-        bonds: Vec::new(),
+        atoms: atoms.unwrap_or_default(),
+        bonds: bonds.unwrap_or_default(),
         read_id,
         write_id: 0,
     }))
+}
+
+fn collection_members(r: &Reader<'_>, list: &str, item_count: usize) -> Result<Option<Vec<usize>>> {
+    let mut fields = list.split_whitespace();
+    let Some(count) = fields.next() else {
+        return Ok(None);
+    };
+    if !count.bytes().all(|c| c.is_ascii_digit()) {
+        return Ok(None);
+    }
+    let count = r.count(r.integer(count)?, 100_000)?;
+    let mut members = Vec::with_capacity(count);
+    let mut seen = HashSet::new();
+    for _ in 0..count {
+        let token = fields
+            .next()
+            .ok_or_else(|| r.invalid("Missing stereo group members"))?;
+        let index = r.index(r.integer(token)?, item_count)?;
+        if !seen.insert(index) {
+            return Err(r.invalid("Duplicate stereo group member"));
+        }
+        members.push(index);
+    }
+    Ok(Some(members))
 }

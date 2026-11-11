@@ -129,6 +129,17 @@ struct Draft {
 pub(crate) const ALLENE_INCHI_NOTICE: &str = "Allene InChI and InChIKey require an ordinary 2D depiction; use stereochemical SMILES or MOL export";
 pub const SMILES_AXIAL_NOTICE: &str =
     "SMILES has no notation for atropisomer axes; the axial configuration was dropped.";
+pub(crate) const STEREO_GROUP_INCHI_NOTICE: &str =
+    "InChI export doesn't support racemic (AND) or relative (OR) stereo groups yet";
+
+fn has_stereo_groups(molecule: &molecular::Molecule) -> bool {
+    molecule
+        .state
+        .metadata
+        .groups
+        .iter()
+        .any(|group| matches!(group.kind, 1 | 2))
+}
 
 fn has_allene_stereo(molecule: &molecular::Molecule) -> bool {
     molecule
@@ -435,6 +446,12 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
     let projected = molfile::has_projected_coordinates(document);
     if request.operation == "export"
         && request.format.as_deref() == Some("inchi")
+        && has_stereo_groups(&prepared.molecule)
+    {
+        return Err(Error::Chemistry(STEREO_GROUP_INCHI_NOTICE.into()));
+    }
+    if request.operation == "export"
+        && request.format.as_deref() == Some("inchi")
         && allene_inchi_unavailable(&prepared.molecule, projected)
     {
         return Err(Error::Chemistry(ALLENE_INCHI_NOTICE.into()));
@@ -475,13 +492,16 @@ fn prepare_identifiers(
     let bonds = &molecule.state.graph.bonds;
     let identifiers = !bonds.iter().any(|b| matches!(b.order, 0 | 7));
     let smiles = if identifiers {
-        smiles::write::write(&molecule.state, Default::default())?.text
+        let output = smiles::write::write(&molecule.state, Default::default())?;
+        let groups = smiles::write::cx_groups(&molecule.state.metadata, &output.atom_order)?;
+        output.text + &groups
     } else {
         String::new()
     };
     // Allene parity is passed through real planar coordinates and terminal
     // wedges. Projected drawings cannot use that route without inventing XY.
     let inchi = if identifiers
+        && !has_stereo_groups(molecule)
         && !bonds.iter().any(|b| matches!(b.order, 5 | 6))
         && !allene_inchi_unavailable(molecule, projected)
     {
@@ -650,5 +670,7 @@ fn encode_drawing(
 mod axial_tests;
 #[cfg(test)]
 mod distance_tests;
+#[cfg(test)]
+mod stereo_group_tests;
 #[cfg(test)]
 mod tests;

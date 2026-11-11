@@ -1,6 +1,64 @@
 use super::*;
 
 #[test]
+fn enhanced_stereo_native_files_use_version_35_and_legacy_atoms_stay_absolute() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut source = Document::default();
+    let atom = source.add_atom("C", Point::default());
+    let legacy = source.file_json().unwrap();
+    assert!(!String::from_utf8_lossy(&legacy).contains("stereo_group"));
+    let reopened = Document::from_native_file(&legacy).unwrap();
+    assert_eq!(reopened.atom(atom).unwrap().stereo_group, None);
+    assert_eq!(reopened.file_json().unwrap(), legacy);
+    source.atom_mut(atom).unwrap().stereo_group = Some(StereoGroup {
+        kind: Kind::And,
+        number: 2,
+    });
+    let saved = source.file_json().unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&saved).unwrap()["version"],
+        35
+    );
+    let reopened = Document::from_native_file(&saved).unwrap();
+    assert_eq!(reopened, source.current());
+    assert_eq!(reopened.file_json().unwrap(), saved);
+    source
+        .atom_mut(atom)
+        .unwrap()
+        .stereo_group
+        .as_mut()
+        .unwrap()
+        .number = 0;
+    assert!(source.validate().unwrap_err().contains("start at 1"));
+}
+
+#[test]
+fn stereo_group_support_keeps_version_34_residue_files_unchanged() {
+    let mut source = Document::default();
+    let ids = (0..5)
+        .map(|i| source.add_atom("C", Point::new(i as f32 * 42., 0.)))
+        .collect::<Vec<_>>();
+    for pair in ids.windows(2) {
+        source.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    source.contract(&ids[1..4], "Bridge", "").unwrap();
+    let saved = source.file_json().unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&saved).unwrap()["version"],
+        34
+    );
+    assert!(!String::from_utf8_lossy(&saved).contains("stereo_group"));
+    let reopened = Document::from_native_file(&saved).unwrap();
+    assert!(
+        reopened
+            .atoms
+            .iter()
+            .all(|atom| atom.stereo_group.is_none())
+    );
+    assert_eq!(reopened.file_json().unwrap(), saved);
+}
+
+#[test]
 fn singlet_atoms_round_trip_and_legacy_atoms_default_to_triplet() {
     let legacy = serde_json::json!({
         "id": 1,

@@ -557,11 +557,9 @@ async fn cleanup_keeps_the_hidden_drawing_of_a_molecule_shown_in_3d() {
 }
 
 #[tokio::test]
-async fn reaction_relative_cx_imports_selected_configured_fragments_with_notice()
--> anyhow::Result<()> {
+async fn reaction_cx_imports_explicit_and_selected_relative_groups() -> anyhow::Result<()> {
     use crate::chemistry::reaction;
     let engine = LocalEngine::in_process();
-    let notice = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
     for text in [
         "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r|",
         "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r:0|",
@@ -569,46 +567,210 @@ async fn reaction_relative_cx_imports_selected_configured_fragments_with_notice(
         "C[C@H](O)C(=O)O>>C[C@H](O)C(=O)O |r:0,1|",
         "CCO>C[C@H](O)F.O>CC |r:1|",
         "(CCO.C[C@H](O)F)>O>CC |r:1|",
+        "C[C@H](O)F>>C[C@H](O)Cl |&7:1,5|",
+        "C[C@H](O)F>C[C@H](O)Br>C[C@H](O)Cl |o2:1,5,9|",
+        "C[C@H](O)F>>C[C@H](O)Cl |a:1,&3:5|",
+        "C[C@H](O)F>>C[C@H](O)Cl |a:1,5|",
     ] {
-        reaction::read_smiles(text)?;
-        let bare = text.split_once(" |").unwrap().0;
-        let mut expected = engine
-            .request(Request::import(text_format(bare), bare))
-            .await
-            .map_err(anyhow::Error::msg)?;
-        // The clipboard uses this format detection and request boundary.
+        let source = reaction::read_smiles(text)?;
+        let expected_members: usize = source
+            .reactants
+            .iter()
+            .chain(&source.agents)
+            .chain(&source.products)
+            .flat_map(|part| &part.prepared.state.metadata.groups)
+            .filter(|group| matches!(group.kind, 1 | 2))
+            .map(|group| group.atoms.len())
+            .sum();
         let actual = engine
             .request(Request::import(text_format(text), text))
             .await
             .map_err(anyhow::Error::msg)?;
+        assert!(
+            actual
+                .warnings
+                .iter()
+                .all(|notice| !notice.contains("stated enantiomer")),
+            "{text}: {:?}",
+            actual.warnings
+        );
+        let document = actual.document.unwrap();
         assert_eq!(
-            actual.warnings.iter().filter(|w| *w == notice).count(),
-            1,
+            document
+                .atoms
+                .iter()
+                .filter(|atom| atom.stereo_group.is_some())
+                .count(),
+            expected_members,
             "{text}"
         );
-        expected.warnings.push(notice.into());
-        assert_eq!(actual.warnings, expected.warnings, "{text}");
-        assert_eq!(
-            serde_json::to_value(&actual.document)?,
-            serde_json::to_value(&expected.document)?,
-            "{text}"
-        );
-        // Compare whole-document SMILES exports to cover every participant's configuration.
-        let mut exports = Vec::new();
-        for document in [actual.document.unwrap(), expected.document.unwrap()] {
-            let mut request = Request::molecule("export", document);
-            request.format = Some("smiles".into());
-            exports.push(
-                engine
-                    .request(request)
-                    .await
-                    .map_err(anyhow::Error::msg)?
-                    .output
-                    .unwrap(),
-            );
+        let mut request = Request::molecule("export", document);
+        request.format = Some("rsmi".into());
+        let output = engine
+            .request(request)
+            .await
+            .map_err(anyhow::Error::msg)?
+            .output
+            .unwrap();
+        let restored = reaction::read_smiles(&output)?;
+        let actual_members: usize = restored
+            .reactants
+            .iter()
+            .chain(&restored.agents)
+            .chain(&restored.products)
+            .flat_map(|part| &part.prepared.state.metadata.groups)
+            .filter(|group| matches!(group.kind, 1 | 2))
+            .map(|group| group.atoms.len())
+            .sum();
+        assert_eq!(actual_members, expected_members, "{text}: {output}");
+        if text.contains("&7:") || text.contains("o2:") {
+            let labels = restored
+                .reactants
+                .iter()
+                .chain(&restored.agents)
+                .chain(&restored.products)
+                .flat_map(|part| &part.prepared.state.metadata.groups)
+                .filter(|group| matches!(group.kind, 1 | 2))
+                .map(|group| (group.kind, group.read_id))
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(labels.len(), 1, "{text}: {output}");
         }
-        assert_eq!(exports[0], exports[1], "{text}");
-        assert!(exports[0].contains('@'), "{text}: {}", exports[0]);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn reaction_cx_export_remaps_sorted_and_repeated_participants() -> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    let text = "F[C@H](Cl)Br.C[C@H](O)F>O>C[C@H](O)Cl |&7:1,10|";
+    let mut document = LocalEngine::in_process()
+        .request(Request::import("rsmi", text))
+        .await
+        .map_err(anyhow::Error::msg)?
+        .document
+        .unwrap();
+    document.reactions[0].reactants[0].coefficient = 2;
+    let output = reaction::write_smiles(&document, None)?;
+    let bare = output.split_once(" |").unwrap().0;
+    let reactants: Vec<_> = bare.split('>').next().unwrap().split('.').collect();
+    let mut sorted = reactants.clone();
+    sorted.sort_unstable();
+    assert_eq!(reactants, sorted, "{output}");
+    let restored = reaction::read_smiles(&output)?;
+    assert_eq!(restored.reactants.len(), 3, "{output}");
+    assert_eq!(restored.agents.len(), 1, "{output}");
+    assert_eq!(restored.products.len(), 1, "{output}");
+    let mut grouped = 0;
+    let mut absolute = 0;
+    for part in restored
+        .reactants
+        .iter()
+        .chain(&restored.agents)
+        .chain(&restored.products)
+    {
+        for group in &part.prepared.state.metadata.groups {
+            match group.kind {
+                0 => absolute += group.atoms.len(),
+                2 => {
+                    assert_eq!(group.read_id, 7, "{output}");
+                    grouped += group.atoms.len();
+                }
+                _ => panic!("Unexpected stereo group: {output}"),
+            }
+        }
+    }
+    assert_eq!(grouped, 3, "{output}");
+    assert_eq!(absolute, 1, "{output}");
+    assert_eq!(reaction::write_smiles(&document, None)?, output);
+    Ok(())
+}
+
+#[test]
+fn reaction_relative_cx_allocates_group_numbers_globally() -> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    let bare = "C[C@H](O)F>C[C@H](O)Br>C[C@H](O)Cl";
+    for (fields, expected) in [
+        ("&1:1,r", vec![vec![(2, 1)], vec![(2, 2)], vec![(2, 2)]]),
+        ("&1:9,r", vec![vec![(2, 2)], vec![(2, 2)], vec![(2, 1)]]),
+        ("&:1,&1:9,r", vec![vec![(2, 2)], vec![(2, 3)], vec![(2, 1)]]),
+        (
+            "&0:1,5,&1:9,r",
+            vec![vec![(2, 2)], vec![(2, 2)], vec![(2, 1)]],
+        ),
+        ("o1:1,r", vec![vec![(1, 1)], vec![(2, 1)], vec![(2, 1)]]),
+        ("o:1,o1:9,r", vec![vec![(1, 2)], vec![(2, 1)], vec![(1, 1)]]),
+        ("r", vec![vec![(2, 1)], vec![(2, 1)], vec![(2, 1)]]),
+        ("", vec![vec![], vec![], vec![]]),
+    ] {
+        let text = if fields.is_empty() {
+            bare.into()
+        } else {
+            format!("{bare} |{fields}|")
+        };
+        let imported = reaction::read_smiles(&text)?;
+        let actual = imported
+            .reactants
+            .iter()
+            .chain(&imported.agents)
+            .chain(&imported.products)
+            .map(|part| {
+                part.prepared
+                    .state
+                    .metadata
+                    .groups
+                    .iter()
+                    .map(|group| (group.kind, group.read_id))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected, "{text}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn reaction_relative_cx_keeps_explicit_and_relative_groups_separate() -> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    for text in [
+        "C[C@H](O)F>>C[C@H](O)Cl |&1:1,r|",
+        "C[C@H](O)F>>C[C@H](O)Cl |&1:5,r|",
+        "C[C@H](O)F>C[C@H](O)Br>C[C@H](O)Cl |&1:9,r|",
+        "C[C@H](O)F>C[C@H](O)Br>C[C@H](O)Cl |&:1,&1:9,r|",
+    ] {
+        let expected = reaction::read_smiles(text)?;
+        let document = LocalEngine::in_process()
+            .request(Request::import("rsmi", text))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .document
+            .unwrap();
+        let output = reaction::write_smiles(&document, None)?;
+        let actual = reaction::read_smiles(&output)?;
+        let labels = |reaction: &reaction::SmilesReaction| {
+            reaction
+                .reactants
+                .iter()
+                .chain(&reaction.agents)
+                .chain(&reaction.products)
+                .map(|part| {
+                    part.prepared
+                        .state
+                        .metadata
+                        .groups
+                        .iter()
+                        .filter(|group| group.kind != 0)
+                        .map(|group| (group.kind, group.read_id))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(labels(&actual), labels(&expected), "{text}: {output}");
+        let group_count = crate::stereo_groups::used(&document).len();
+        assert_eq!(
+            group_count,
+            if text.contains("&:") { 3 } else { 2 },
+            "{text}"
+        );
     }
     Ok(())
 }

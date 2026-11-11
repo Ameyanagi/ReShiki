@@ -232,6 +232,14 @@ fn unsupported_semantics_and_unreconstructable_electrons_match() {
             atoms: vec![0],
             ..Default::default()
         });
+    assert_eq!(
+        canonical_identity(&relative),
+        Err(IdentityRejection::EnhancedStereo),
+    );
+    assert_eq!(
+        kernel::canonical_identity(&kernel_state(&relative), &Budget::default()),
+        Err(kernel::IdentityRejection::UnsupportedAtomsOrBonds),
+    );
     let mut unreconstructable = chemistry::smiles::prepare("[CH3].[O]").unwrap().state;
     unreconstructable.graph.atoms[1].radical_electrons = 0;
     let mut charged_radical = chemistry::smiles::prepare("c1ccccc1").unwrap().state;
@@ -241,7 +249,6 @@ fn unsupported_semantics_and_unreconstructable_electrons_match() {
         wildcard,
         electrons,
         exotic,
-        relative,
         unreconstructable,
         charged_radical,
     ] {

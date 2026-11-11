@@ -295,6 +295,9 @@ fn check_fragment(prepared: &Prepared, contract: bool) -> std::result::Result<()
 pub(super) fn check_annotations(
     state: &crate::chemistry::stereo::perception::State,
 ) -> std::result::Result<(), String> {
+    if !state.metadata.groups.is_empty() {
+        return Err("Enhanced stereo groups cannot be retained in collapsed abbreviations".into());
+    }
     if state
         .metadata
         .atoms
@@ -305,7 +308,6 @@ pub(super) fn check_annotations(
             .bonds
             .iter()
             .any(|b| b.stereo != 0 || !b.stereo_atoms.is_empty())
-        || !state.metadata.groups.is_empty()
         // A wavy bond on a non-stereo atom sets only its direction.
         || state.directions.iter().any(|d| {
             matches!(
