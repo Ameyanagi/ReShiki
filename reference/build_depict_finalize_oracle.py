@@ -97,6 +97,8 @@ def main():
         source,
         source / "GraphMol/Depictor",
         boost,
+        args.rdkit_source.resolve()
+        / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib",
     ]
     package = Path(rdkit.__file__).parent
     libraries = package / ".dylibs" if sys.platform == "darwin" else package.parent / "rdkit.libs"

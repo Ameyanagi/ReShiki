@@ -24,6 +24,7 @@ from setup_linux_depict_reference import (
     checked_source,
     digest,
     extract_headers,
+    ring_decomposer_header,
 )
 from setup_linux_depict_reference import (
     source_checkout as shared_source_checkout,
@@ -233,6 +234,7 @@ def main():
         else source_checkout(directory / "rdkit")
     )
     archive = boost_archive(args.cache_dir.resolve())
+    ring_decomposer_header(source, args.cache_dir.resolve())
     libraries = Path(rdkit.__file__).resolve().parent.parent / "rdkit.libs"
     if not libraries.is_dir():
         raise ValueError("Missing pinned wheel libraries")

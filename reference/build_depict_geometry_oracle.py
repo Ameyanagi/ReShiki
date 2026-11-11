@@ -112,6 +112,11 @@ def main():
             "-I" + str(source),
             "-I" + str(source / "GraphMol/Depictor"),
             "-I" + str(args.boost_include),
+            "-I"
+            + str(
+                args.rdkit_source.resolve()
+                / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib"
+            ),
             str(root / f"reference/depict_{args.component}_reference.cpp"),
             *library_files,
             "-o",

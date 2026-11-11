@@ -208,6 +208,11 @@ def main():
         "/I" + str(source),
         "/I" + str(source / "GraphMol/Depictor"),
         "/I" + str(args.boost_include.resolve()),
+        "/I"
+        + str(
+            args.rdkit_source.resolve()
+            / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib"
+        ),
         str(reference),
         str(root / "reference/depict_windows_runtime.cpp"),
         *links,
