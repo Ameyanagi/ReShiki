@@ -80,6 +80,47 @@ fn collisions(state: &State, positions: &[Point3], stop: usize, bond_length: f64
     count
 }
 
+/// Longest minus shortest bond, in bond lengths. Fused macrocycles such as
+/// porphyrins embed without collisions but with stretched bonds (#1113).
+fn spread(state: &State, positions: &[Point3], bond_length: f64) -> f64 {
+    let (shortest, longest) = state
+        .graph
+        .bonds
+        .iter()
+        .filter_map(|bond| positions.get(bond.a).zip(positions.get(bond.b)))
+        .map(|(a, b)| (b.x - a.x).hypot(b.y - a.y))
+        .fold((f64::INFINITY, 0_f64), |(lo, hi), l| (lo.min(l), hi.max(l)));
+    (longest - shortest) / bond_length
+}
+
+/// Bonds further apart than this are a stretched layout, not template rounding.
+const STRETCHED: f64 = 0.1;
+
+/// The templated layout, or None when a template is unavailable or the layout
+/// budget is exhausted: a retry must not turn a successful import into a failure.
+fn templated(
+    state: &State,
+    ranks: &[depict::ranks::AtomProperties],
+    bond_length: f64,
+) -> Option<Vec<Point3>> {
+    let mut positions = depict::compute_with_rank_properties(
+        state,
+        ranks,
+        None,
+        depict::Options {
+            bond_length,
+            use_ring_templates: true,
+            path_angle_expansion: crate::chemistry::document::refine(),
+            preserve_spiro_rings: crate::chemistry::document::refine(),
+            ..Default::default()
+        },
+    )
+    .ok()?
+    .positions;
+    exterior_terminals(state, &mut positions, &Default::default());
+    Some(positions)
+}
+
 pub(in crate::engine) fn improve(
     state: &State,
     ranks: &[depict::ranks::AtomProperties],
@@ -91,24 +132,21 @@ pub(in crate::engine) fn improve(
     }
     let count = collisions(state, &original, 4096, bond_length);
     if count == 0 {
-        return original;
+        // A stretched macrocycle is kept unless its template draws every bond
+        // at the same length without introducing a collision (#1113).
+        if !crate::chemistry::document::refine()
+            || spread(state, &original, bond_length) <= STRETCHED
+        {
+            return original;
+        }
+        return templated(state, ranks, bond_length)
+            .filter(|positions| {
+                spread(state, positions, bond_length) <= STRETCHED
+                    && collisions(state, positions, 1, bond_length) == 0
+            })
+            .unwrap_or(original);
     }
-    // A retry is optional: an unavailable template or exhausted layout budget
-    // must not turn a previously successful import into a failure.
-    if let Ok(candidate) = depict::compute_with_rank_properties(
-        state,
-        ranks,
-        None,
-        depict::Options {
-            bond_length,
-            use_ring_templates: true,
-            path_angle_expansion: crate::chemistry::document::refine(),
-            preserve_spiro_rings: crate::chemistry::document::refine(),
-            ..Default::default()
-        },
-    ) {
-        let mut positions = candidate.positions;
-        exterior_terminals(state, &mut positions, &Default::default());
+    if let Some(positions) = templated(state, ranks, bond_length) {
         if collisions(state, &positions, count, bond_length) < count {
             return positions;
         }

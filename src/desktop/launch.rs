@@ -51,7 +51,7 @@ pub(super) fn forwardable(args: &[std::ffi::OsString]) -> bool {
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         if arg == "--open" || arg == "--desktop-private" {
-            if args.next().is_none() {
+            if args.next().is_none() && arg == "--desktop-private" {
                 return false;
             }
         } else if ![

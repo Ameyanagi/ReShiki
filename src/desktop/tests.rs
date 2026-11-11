@@ -205,6 +205,8 @@ fn semantic_launch_flags_preserve_workers_and_explicit_gui_actions() {
         ));
     }
     assert!(forwardable(&args(&["--open", "a.rsk", "--open", "b.rsk"])));
+    assert!(forwardable(&args(&["--open"])));
+    assert!(!forwardable(&args(&["--desktop-private"])));
     for mode in [
         "--cli",
         "--mcp",
