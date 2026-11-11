@@ -86,9 +86,6 @@ def main():
             "-I" + str(source),
             "-I" + str(args.boost_include),
             "-I" + str(ringdecomposer_include),
-            # Keep the private CIP implementation local if a wheel dependency
-            # also loads the shared CIPLabeler library.
-            *(["-fvisibility=hidden"] if standalone else []),
             str(
                 root
                 / f"reference/cip_{'rules' if args.component == 'pairing' else args.component}_reference.cpp"

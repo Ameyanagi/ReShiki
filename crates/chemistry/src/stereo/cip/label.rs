@@ -200,12 +200,13 @@ fn primary(
 pub fn assign(input: &State, options: &Options) -> Result<Assignment, Error> {
     let mut prepared = std::borrow::Cow::Borrowed(input);
     for (index, bond) in input.metadata.bonds.iter().enumerate() {
+        // RDKit #9577 skips out-of-range controls; strict metadata validation
+        // would reject them before the configuration is considered.
         if matches!(bond.stereo, 2..=5)
-            && (bond.stereo_atoms.len() > 2
-                || bond
-                    .stereo_atoms
-                    .iter()
-                    .any(|&a| a >= input.graph.atoms.len()))
+            && bond
+                .stereo_atoms
+                .iter()
+                .any(|&a| a >= input.graph.atoms.len())
         {
             let bond = at_mut(&mut prepared.to_mut().metadata.bonds, index)?;
             bond.stereo = 0;

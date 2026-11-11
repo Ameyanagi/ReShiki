@@ -42,10 +42,11 @@ impl Configuration {
             })
         };
         let valid = match carriers.as_slice() {
+            [] if b.order != 2 => false,
             [a, b] => {
                 a != b && valid_carrier(foci[0], foci[1], *a) && valid_carrier(foci[1], foci[0], *b)
             }
-            _ => false,
+            _ => return Err(invalid("Expected two double-bond carriers")),
         };
         if !valid {
             carriers.clear();
