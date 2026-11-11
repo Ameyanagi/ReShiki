@@ -96,6 +96,9 @@ pub struct Atom {
     pub aromatic: bool,
     #[serde(default)]
     pub stereo: Option<AtomStereo>,
+    /// Enhanced stereo group; `None` is absolute (#766).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stereo_group: Option<crate::stereo_groups::StereoGroup>,
     #[serde(default)]
     pub map_num: u32,
     #[serde(default)]
@@ -229,11 +232,13 @@ pub const ORTEP: u32 = 32;
 pub const MODEL_POLISH: u32 = 33;
 /// Collapsed residue groups with two attachment atoms.
 pub const RESIDUE_GROUPS: u32 = 34;
+/// Enhanced stereo groups (ABS / AND / OR) on atoms.
+pub const STEREO_GROUPS: u32 = 35;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32, model polish requires version 33 or two-sided groups
-/// require version 34.
+/// require version 34, or stereo groups require version 35.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -266,7 +271,8 @@ pub const RESIDUE_GROUPS: u32 = 34;
 /// | 32 | Thermal ellipsoids and molecule-only crystal display (#417). |
 /// | 33 | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
 /// | 34 | Collapsed groups with two attachment atoms (#870). |
-pub const VERSION: u32 = 34;
+/// | 35 | Enhanced stereo groups (#766). |
+pub const VERSION: u32 = 35;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -433,7 +439,9 @@ impl Document {
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
-        if self.abbreviations.iter().any(|group| group.exit.is_some()) {
+        if self.atoms.iter().any(|a| a.stereo_group.is_some()) {
+            STEREO_GROUPS
+        } else if self.abbreviations.iter().any(|group| group.exit.is_some()) {
             RESIDUE_GROUPS
         } else if self.models.iter().any(|model| model.needs_polish_version()) {
             MODEL_POLISH
@@ -466,6 +474,7 @@ impl Document {
             steroid_label: None,
             undefined_stereo: false,
             undefined_pseudoasymmetric: false,
+            stereo_group: None,
             id,
             element: element.into(),
             position,
@@ -792,6 +801,7 @@ impl Document {
         let empty_neighbors = HashSet::new();
         for a in &self.atoms {
             a.display.validate()?;
+            crate::stereo_groups::validate(a)?;
             if a.element != "*" && !a.display.label_scripts.is_empty() {
                 return Err("Atom label scripts require wildcard atoms".into());
             }

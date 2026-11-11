@@ -441,6 +441,7 @@ fn mapped_append_part(
         model.remap(&mapping)?;
     }
     part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
+    crate::stereo_groups::renumber_incoming(doc, &mut part.atoms);
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
         if matches!(mode, AppendMode::Ordinary) && source.atom_labels != doc.atom_labels {
