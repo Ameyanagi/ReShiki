@@ -1356,70 +1356,123 @@ fn crossing_clearance_sets_the_ring_circle_cut_behind_a_front_bond() {
     }
 }
 
-#[test]
-fn small_crossing_clearances_keep_round_ring_caps_and_rear_bonds_apart() {
-    // Ring curves and Band ink have round caps that reach half a width past
-    // their ends; Area ink (filled bond outlines) has none.
+/// The smallest distance from `rear` ink to `front` ink, counting the round
+/// caps of Band ink; negative where rear ink paints over front ink.
+fn ink_gap(rear: &[&Ink], front: &[&Ink]) -> f32 {
     let reach = |ink: &Ink, p: Point| match ink.shape {
         Shape::Band(a, b, w) => crate::graphics::segment_distance(p, a, b) - w * 0.5,
         _ => ink.shape.distance(p),
     };
+    rear.iter()
+        .flat_map(|ink| match ink.shape {
+            Shape::Band(a, b, w) => Shape::Band(a, b, 0.)
+                .samples()
+                .into_iter()
+                .map(|p| (p, w * 0.5))
+                .collect::<Vec<_>>(),
+            _ => ink.shape.samples().into_iter().map(|p| (p, 0.)).collect(),
+        })
+        .flat_map(|(p, radius)| front.iter().map(move |f| reach(f, p) - radius))
+        .fold(f32::INFINITY, f32::min)
+}
+
+fn hexagon(doc: &mut Document, z: f32) {
+    let ring: Vec<_> = (0..6)
+        .map(|i| {
+            let angle = (i as f32 * 60.).to_radians();
+            (Point::new(42. * angle.cos(), 42. * angle.sin()), z)
+        })
+        .collect();
+    let ring = atoms_at(doc, &ring);
+    for i in 0..6 {
+        doc.add_bond(ring[i], ring[(i + 1) % 6], 4, "plain");
+    }
+}
+
+#[test]
+fn small_crossing_clearances_never_paint_rear_ink_over_front_ink() {
     let width = Document::default().drawing_style.line_width();
+    // (label, ring depth or none, rear bond, front bond); a ring at +20 is in
+    // front, one at -20 behind. Bonds are (from, to, depth, display).
+    type Bond = (Point, Point, f32, &'static str);
+    type Case = (String, Option<f32>, Option<Bond>, Option<Bond>);
+    let mut cases: Vec<Case> = vec![
+        (
+            "ring behind a bond".into(),
+            Some(-20.),
+            None,
+            Some((Point::new(-40., 0.), Point::new(40., 0.), 20., "plain")),
+        ),
+        (
+            "bond behind a ring".into(),
+            Some(20.),
+            Some((Point::new(-40., 0.), Point::new(40., 0.), -20., "plain")),
+            None,
+        ),
+        (
+            "bold bond behind a ring".into(),
+            Some(20.),
+            Some((Point::new(-40., 20.), Point::new(40., 20.), -20., "bold")),
+            None,
+        ),
+    ];
+    for k in 0..=24 {
+        let y = -9. + k as f32 * 0.75;
+        for front in ["hashed", "wavy"] {
+            cases.push((
+                format!("bond at y {y} behind a {front} bond"),
+                None,
+                Some((Point::new(-30., y), Point::new(30., y), -20., "plain")),
+                Some((Point::new(0., -30.), Point::new(0., 30.), 20., front)),
+            ));
+        }
+    }
     for clearance in [0.1, 0.] {
-        for ring_z in [-20., 20.] {
+        for (label, ring, rear, front) in &cases {
             let mut doc = Document::default();
             doc.drawing_style.crossing_clearance_pt = clearance;
-            let ring: Vec<_> = (0..6)
-                .map(|i| {
-                    let angle = (i as f32 * 60.).to_radians();
-                    (Point::new(42. * angle.cos(), 42. * angle.sin()), ring_z)
-                })
-                .collect();
-            let ring = atoms_at(&mut doc, &ring);
-            for i in 0..6 {
-                doc.add_bond(ring[i], ring[(i + 1) % 6], 4, "plain");
+            if let Some(z) = ring {
+                hexagon(&mut doc, *z);
             }
-            let atoms = atoms_at(
-                &mut doc,
-                &[
-                    (Point::new(-40., 0.), -ring_z),
-                    (Point::new(40., 0.), -ring_z),
-                ],
-            );
-            doc.add_bond(atoms[0], atoms[1], 1, "plain");
+            let mut owners = vec![];
+            for (from, to, z, display) in [rear, front].into_iter().flatten() {
+                let atoms = atoms_at(&mut doc, &[(*from, *z), (*to, *z)]);
+                doc.add_bond(atoms[0], atoms[1], 1, display);
+                owners.push(Some(doc.bonds.len() - 1));
+            }
             tag(&mut doc);
             let inks = inks(&crate::scene::primitives(&doc));
-            let circle: Vec<_> = inks.iter().filter(|i| i.owner.is_none()).collect();
-            let bond: Vec<_> = inks.iter().filter(|i| i.owner == Some(6)).collect();
-            assert!(!circle.is_empty() && !bond.is_empty());
-            let (rear, front) = if ring_z < 0. {
-                (&circle, &bond)
-            } else {
-                (&bond, &circle)
-            };
-            // Sample rear centre lines (keeping their cap radius) or outlines.
-            let nearest = rear
+            // Ring circles, wavy bonds and hash bars have no owner; neither
+            // does anything else when the rear ink is the ring's.
+            let rear_owner = rear.map(|_| owners[0]).flatten();
+            let front_owner = front.map(|_| *owners.last().unwrap()).flatten();
+            let rear_ink: Vec<_> = inks.iter().filter(|i| i.owner == rear_owner).collect();
+            let front_ink: Vec<_> = inks
                 .iter()
-                .flat_map(|ink| match ink.shape {
-                    Shape::Band(a, b, w) => Shape::Band(a, b, 0.)
-                        .samples()
-                        .into_iter()
-                        .map(|p| (p, w * 0.5))
-                        .collect::<Vec<_>>(),
-                    _ => ink.shape.samples().into_iter().map(|p| (p, 0.)).collect(),
-                })
-                .map(|(p, radius)| {
-                    front
-                        .iter()
-                        .map(|f| reach(f, p) - radius)
-                        .fold(f32::INFINITY, f32::min)
-                })
-                .fold(f32::INFINITY, f32::min);
+                .filter(|i| i.owner == front_owner || (rear_owner.is_some() && i.owner.is_none()))
+                .collect();
+            assert!(!rear_ink.is_empty() && !front_ink.is_empty(), "{label}");
+            let gap = ink_gap(&rear_ink, &front_ink);
             assert!(
-                nearest > -0.01 * width,
-                "{clearance} pt, ring at z {ring_z}: rear ink overlaps front ink by {}",
-                -nearest
+                gap > -0.01 * width,
+                "{clearance} pt, {label}: rear ink overlaps front ink by {}",
+                -gap
             );
         }
     }
+}
+
+#[test]
+fn the_default_crossing_clearance_keeps_its_cuts_for_any_stroke_width() {
+    let mut style = crate::style::DEFAULT.clone();
+    style.line_width_pt = 3.;
+    style.bold_width_pt = 6.;
+    let default = style.world(crate::style::CROSSING_CLEARANCE_PT);
+    for ink in [0., style.line_width(), style.world(6.), f32::INFINITY] {
+        assert_eq!(super::crossing_gap(&style, ink), default);
+    }
+    style.crossing_clearance_pt = 2.;
+    assert_eq!(super::crossing_gap(&style, f32::INFINITY), style.world(2.));
+    style.crossing_clearance_pt = 0.1;
+    assert_eq!(super::crossing_gap(&style, 0.), style.world(0.1));
 }

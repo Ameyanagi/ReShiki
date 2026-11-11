@@ -358,6 +358,27 @@ impl Envelope {
         Some((edge(best, lo), edge(best, hi), best))
     }
 }
+/// The style's crossing clearance around a stroke whose painted ink reaches
+/// `ink` past the rail model (round caps, hash bar ends, wave crests). A
+/// smaller clearance still clears that ink, up to the 1.1 pt default, so rear
+/// ink never paints over front ink and the default keeps its exact cuts.
+pub(super) fn crossing_gap(style: &crate::style::DrawingStyle, ink: f32) -> f32 {
+    let default = style.world(crate::style::CROSSING_CLEARANCE_PT);
+    style
+        .world(style.crossing_clearance_pt)
+        .max(ink.min(default))
+}
+
+/// How far a front bond's ink reaches past its rails: hash bars end in round
+/// caps and single wavy bonds swing past the rail.
+pub(super) fn overshoot(style: &crate::style::DrawingStyle, bond: &crate::document::Bond) -> f32 {
+    match bond.base_display() {
+        "hash" | "hashed" => style.line_width() * 0.5,
+        "wavy" if bond.order != 2 => style.line_width() * 1.75,
+        _ => 0.,
+    }
+}
+
 /// Sorted sweep avoids checking every pair of well-separated molecules.
 pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
     gaps_with_opacity(doc, &crate::rear_opacity::Paint::new(doc))
@@ -379,7 +400,7 @@ pub(crate) fn gaps_with_opacity(
     // rails, two bold half-widths and the clearance.
     let pad = style.bond_length_world * style.bond_spacing_ratio * 1.5
         + style.world(style.bold_width_pt)
-        + style.world(style.crossing_clearance_pt)
+        + crossing_gap(style, f32::INFINITY)
         + 0.001;
     let graph = sides.faces().graph();
     let mut segments: Vec<_> = doc
@@ -458,9 +479,10 @@ fn occlusion(
         return vec![];
     }
     let axis = Point::new((to.x - from.x) / length, (to.y - from.y) / length);
-    let crossing_gap = doc
-        .drawing_style
-        .world(doc.drawing_style.crossing_clearance_pt);
+    let crossing_gap = crossing_gap(
+        &doc.drawing_style,
+        overshoot(&doc.drawing_style, front_bond),
+    );
     let along = Point::new(
         (over_to.x - over_from.x) / front_length,
         (over_to.y - over_from.y) / front_length,
