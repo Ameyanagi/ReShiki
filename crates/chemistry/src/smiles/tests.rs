@@ -1120,6 +1120,21 @@ fn allene_smiles_without_stereo_and_tetrahedral_stereo_are_unchanged() -> anyhow
 }
 
 #[test]
+fn ignored_atom_maps_stay_in_non_canonical_output() -> anyhow::Result<()> {
+    // RDKit 2026.09.1 (#9396) ignores maps only for canonical ranking.
+    let state = super::read("c1ccc([NH2:1])cc1")?.prepared.state;
+    for (canonical, expected) in [(false, "c1ccc([NH2:1])cc1"), (true, "[NH2:1]c1ccccc1")] {
+        let options = super::write::Options {
+            canonical,
+            ignore_maps: true,
+            ..Default::default()
+        };
+        assert_eq!(super::write::write(&state, options)?.text, expected);
+    }
+    Ok(())
+}
+
+#[test]
 fn allene_smiles_writes_exact_classes_and_rejects_unsupported_topologies() -> anyhow::Result<()> {
     for text in [
         "FC(Cl)=[C@AL1]=C(Br)I",

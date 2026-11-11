@@ -164,7 +164,7 @@ fn component(
         .iter()
         .map(|a| a.map_number)
         .collect::<Vec<_>>();
-    if options.ignore_maps {
+    if options.canonical && options.ignore_maps {
         for atom in &mut state.metadata.atoms {
             atom.map_number = 0;
             atom.map_present = false;
