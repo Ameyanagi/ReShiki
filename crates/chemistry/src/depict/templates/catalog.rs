@@ -27,7 +27,7 @@ pub(super) struct Catalog {
 fn load() -> Result<Catalog> {
     let mut catalog: Catalog = serde_json::from_str(include_str!("builtin.json"))
         .map_err(|_| Error::Invalid("builtin template data"))?;
-    if catalog.source_commit != "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+    if catalog.source_commit != "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
         || catalog.source_sha256
             != "69530df08d9e532a2ce89275359333fe24a2c50868fe91f1942970bc03ee890b"
         || catalog.templates.len() != 578
