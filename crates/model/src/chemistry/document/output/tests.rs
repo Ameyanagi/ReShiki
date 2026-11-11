@@ -383,8 +383,9 @@ fn fusion_hydrogens_clear_atoms_labels_and_bonds_preserving_stereo() -> anyhow::
             "C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CCC(C4)O)C)C",
             vec!["hash", "hash", "wedge"],
         ),
-        ("C1CC[C@H]2CCCC[C@@H]2C1", vec!["hash", "wedge"]),
-        ("C1CC[C@H]2CCC[C@H]2C1", vec!["hash", "hash"]),
+        // RDKit #9208 reflects these layouts, reversing both H stereobonds.
+        ("C1CC[C@H]2CCCC[C@@H]2C1", vec!["wedge", "hash"]),
+        ("C1CC[C@H]2CCC[C@H]2C1", vec!["wedge", "wedge"]),
     ] {
         let doc = generated(text, DrawingOptions::default())?;
         let hydrogens = doc

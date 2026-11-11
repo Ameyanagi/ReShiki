@@ -67,6 +67,117 @@ fn distance(fragment: &Fragment, a: usize, b: usize) -> f64 {
 }
 
 #[test]
+fn crossed_bonds_use_the_farthest_topology_endpoints() -> anyhow::Result<()> {
+    // RDKit #9378: the midpoints are 4.5 units apart, but the bonds cross.
+    let (graph, fragment) = fixture(
+        &[(-10.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)],
+        &[(0, 1), (1, 2), (2, 3)],
+    );
+    let metadata = Metadata::unspecified(&graph);
+    let rings = RingCache::default();
+    let input = Input::new(&graph, &metadata, &rings)?;
+    assert!(input.find(&fragment, false)?.pairs.is_empty());
+    assert_eq!(input.find(&fragment, true)?.pairs, vec![(0, 3)]);
+    Ok(())
+}
+
+#[test]
+fn segment_intersections_include_overlap_and_endpoint_contact() -> anyhow::Result<()> {
+    for (points, expected) in [
+        ([(0., 0.), (4., 0.), (2., -2.), (2., 2.)], true),
+        ([(0., 0.), (4., 0.), (2., 0.), (6., 0.)], true),
+        ([(0., 0.), (4., 0.), (4., 0.), (4., 3.)], true),
+        ([(0., 0.), (1., 0.), (1. + 0.5e-6, 0.), (2., 0.)], true),
+        ([(0., 0.), (1., 0.), (1. + 2e-6, 0.), (2., 0.)], false),
+        // The second segment straddles the first line beyond its endpoint.
+        ([(0., 0.), (0.2, 0.), (0.3, -1.), (0.3, 1.)], false),
+        ([(0., 0.), (4., 0.), (0., 1.), (4., 1.)], false),
+        ([(0., 0.), (0., 4.), (1., 0.), (1., 4.)], false),
+    ] {
+        let [a, b, c, d] = points.map(|(x, y)| Point { x, y });
+        for (first, second) in [(a, b), (b, a)] {
+            for (third, fourth) in [(c, d), (d, c)] {
+                assert_eq!(segments_intersect(first, second, third, fourth)?, expected);
+                assert_eq!(segments_intersect(third, fourth, first, second)?, expected);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn adjacent_bonds_do_not_count_as_crossings() -> anyhow::Result<()> {
+    let (graph, fragment) = fixture(&[(0., 0.), (4., 0.), (2., 0.)], &[(0, 1), (1, 2)]);
+    let metadata = Metadata::unspecified(&graph);
+    let rings = RingCache::default();
+    let input = Input::new(&graph, &metadata, &rings)?;
+    assert!(input.find(&fragment, true)?.pairs.is_empty());
+    Ok(())
+}
+
+#[test]
+fn bonded_atom_filter_preserves_density_and_crossing_representatives() -> anyhow::Result<()> {
+    let (graph, mut fragment) = fixture(&[(0., 0.), (0.4, 0.)], &[(0, 1)]);
+    let metadata = Metadata::unspecified(&graph);
+    let rings = RingCache::default();
+    let input = Input::new(&graph, &metadata, &rings)?;
+    let report = input.find(&fragment, true)?;
+    assert_eq!(report.pairs, vec![(1, 0)]);
+    assert!(
+        input
+            .find_in_place(&mut fragment, true, false, &mut input.session())?
+            .is_empty()
+    );
+    assert_eq!(Input::density(&fragment)?, report.total_density);
+
+    // Every endpoint pair is bonded, so the farthest-distance tie keeps (0, 2).
+    // Suppressing bonded atom proximity must still retain this crossing pair.
+    let (graph, mut fragment) = fixture(
+        &[(-2., 0.), (2., 0.), (0., -2.), (0., 2.)],
+        &[(0, 1), (2, 3), (0, 2), (0, 3), (1, 2), (1, 3)],
+    );
+    let metadata = Metadata::unspecified(&graph);
+    let input = Input::new(&graph, &metadata, &rings)?;
+    assert_eq!(
+        input.find_in_place(&mut fragment, true, false, &mut input.session())?,
+        vec![(0, 2)]
+    );
+    Ok(())
+}
+
+#[test]
+fn path_angle_expansion_counts_duplicate_skips_toward_iteration_limit() -> anyhow::Result<()> {
+    // Collinear K2,6 edges yield 30 copies of (0, 1). Every shortest path
+    // between them lies within a four-cycle and cannot expand. Upstream #9378
+    // spends one iteration on each copy, reaching 20 before the chain crossing.
+    let mut points = vec![(0., 100.), (10., 100.)];
+    points.extend((2..8).map(|id| (20. + 10. * (id - 2) as f64, 100.)));
+    points.extend([(-10., 0.), (1., 0.), (0., -1.), (0., 1.)]);
+    let mut edges = (2..8).map(|id| (0, id)).collect::<Vec<_>>();
+    edges.extend((2..8).map(|id| (1, id)));
+    edges.extend([(8, 9), (9, 10), (10, 11)]);
+    let (graph, fragment) = fixture(&points, &edges);
+    let metadata = Metadata::unspecified(&graph);
+    let mut rings = RingCache::default();
+    for i in 2..8 {
+        for j in i + 1..8 {
+            rings.atoms.push(vec![0, i, 1, j]);
+        }
+    }
+    for extra_trials in [false, true] {
+        let input = Input::new(&graph, &metadata, &rings)?
+            .with_path_angle_expansion_extra_trials(extra_trials);
+        let pairs = input.find(&fragment, true)?.pairs;
+        assert_eq!(pairs.len(), 31);
+        assert!(pairs[..30].iter().all(|&pair| pair == (0, 1)));
+        assert_eq!(pairs[30], (8, 11));
+        let expanded = input.apply(&fragment, Stage::PathAngleExpansion)?;
+        assert_eq!(positions(&expanded), positions(&fragment));
+    }
+    Ok(())
+}
+
+#[test]
 fn path_angle_expansion_can_cross_a_temporary_extra_clash() -> anyhow::Result<()> {
     let (graph, fragment) = fixture(
         &[
@@ -83,8 +194,13 @@ fn path_angle_expansion_can_cross_a_temporary_extra_clash() -> anyhow::Result<()
     let rings = RingCache::default();
     let input = Input::new(&graph, &metadata, &rings)?;
     // A single-step rejection gets stuck with non-bonded atoms 0.52 apart.
+    let upstream = Input::new(&graph, &metadata, &rings)?
+        .with_path_angle_expansion_extra_trials(false)
+        .apply(&fragment, Stage::PathAngleExpansion)?;
+    assert!(!input.find(&upstream, false)?.pairs.is_empty());
     let expanded = input.apply(&fragment, Stage::PathAngleExpansion)?;
     assert!(input.find(&expanded, true)?.pairs.is_empty());
+    assert_ne!(positions(&expanded), positions(&upstream));
     for bond in &graph.bonds {
         assert!((distance(&expanded, bond.a, bond.b) - 1.5).abs() < 1e-12);
     }
@@ -235,11 +351,34 @@ fn spiro_refinement_keeps_unaffected_layout_bits_and_budget_fallback() -> anyhow
         "O=C1Cc2ccccc2C12CCC(=O)c1ccccc12",
     ] {
         let state = smiles::prepare(text)?.state;
-        for work_limit in [100, 1_000, 5_000, 10_000, 15_000, 20_000, 50_000] {
+        let ranks = vec![None; state.graph.atoms.len()];
+        let work_used = |preserve_spiro_rings| -> anyhow::Result<usize> {
+            let mut remaining = MAX_WORK;
+            depict::compute_with_work(
+                &state,
+                &ranks,
+                None,
+                depict::Options {
+                    preserve_spiro_rings,
+                    ..Default::default()
+                },
+                &mut remaining,
+            )?;
+            Ok(MAX_WORK - remaining)
+        };
+        // #9378 changes collision counts and their work cost. Derive an
+        // allowance that stops just before the optional retry can finish.
+        let mandatory_work = work_used(false)?;
+        let refined_work = work_used(true)?;
+        assert!(refined_work > mandatory_work);
+        for work_limit in [100, 1_000, 5_000, 10_000, 15_000, 20_000, 50_000]
+            .into_iter()
+            .chain([mandatory_work, refined_work - 1])
+        {
             let run = |preserve_spiro_rings| {
                 depict::compute(
                     &state,
-                    &vec![None; state.graph.atoms.len()],
+                    &ranks,
                     None,
                     depict::Options {
                         preserve_spiro_rings,
@@ -261,6 +400,9 @@ fn spiro_refinement_keeps_unaffected_layout_bits_and_budget_fallback() -> anyhow
                         a.x.to_bits() == b.x.to_bits() && a.y.to_bits() == b.y.to_bits()
                     });
                     assert!(distorted || identical, "{text}/{work_limit}");
+                    if work_limit == mandatory_work || work_limit == refined_work - 1 {
+                        assert!(identical, "optional retry fallback for {text}/{work_limit}");
+                    }
                     shortened_fallback |= distorted && identical;
                 }
                 (Err(before), Err(after)) => assert_eq!(before.to_string(), after.to_string()),

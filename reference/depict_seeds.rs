@@ -513,13 +513,14 @@ fn seed_bounds_indices_and_finite_inputs() -> anyhow::Result<()> {
 }
 
 #[test]
-fn quadratic_angle_storage_is_bounded_before_allocation() -> anyhow::Result<()> {
+fn consecutive_neighbor_angles_use_linear_storage() -> anyhow::Result<()> {
     let (graph, metadata, data, rings) = star(1416, 0, None);
     let input = Input::new(&graph, &metadata, &data, &rings)?;
     let mut coordinates: Coordinates = (1..1416).map(|id| (id, Point { x: 1.0, y: 0.0 })).collect();
     coordinates.insert(0, Point::default());
     let before = serde_json::to_value(&coordinates)?;
-    assert_eq!(input.from_coordinates(&coordinates), Err(Error::Limit));
+    // RDKit #9650 stores one gap per neighbor instead of every pair.
+    assert!(input.from_coordinates(&coordinates).is_ok());
     assert_eq!(serde_json::to_value(&coordinates)?, before);
     Ok(())
 }

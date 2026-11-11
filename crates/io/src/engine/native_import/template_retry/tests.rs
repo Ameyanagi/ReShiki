@@ -73,7 +73,9 @@ fn bridged_template_retry_separates_artemisinin_and_preserves_cleanup_identity()
         Default::default(),
     )?;
     assert!(bridged(state));
-    assert_eq!(collisions(state, &native.positions, 4096, 1.5), 11);
+    // #9208's normalized ring traversal changes the native layout: independently
+    // checked with RDKit 2026.09.1 legacy ring finding (11 in 2026.03.6).
+    assert_eq!(collisions(state, &native.positions, 4096, 1.5), 9);
     let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
     assert_eq!(collisions(state, &positions, 4096, 1.5), 0);
     assert_eq!(
@@ -115,7 +117,42 @@ fn bridged_template_retry_separates_artemisinin_and_preserves_cleanup_identity()
 
 #[test]
 fn old_overlapping_whole_molecule_keeps_the_visible_stereo_guard() -> anyhow::Result<()> {
-    let document = imported(ARTEMISININ, false)?;
+    let input = smiles::read(ARTEMISININ)?;
+    let mut molecule = super::super::molecule(input.prepared.state)?;
+    // Freeze the origin/main 19f6dfd4 layout: #9208's normalized ring traversal
+    // now generates another layout that no longer exercises this stereo guard.
+    // The old coordinates also match RDKit 2026.03.6 within 1e-12.
+    molecule.positions = [
+        (-1.9492295060020077, -3.607201941380124),
+        (-0.770654068654141, -2.6793226720350853),
+        (0.6222006689175417, -3.2360593063821734),
+        (1.800776106265408, -2.308180037037134),
+        (1.586496806041593, -0.823564133345006),
+        (2.765072243389461, 0.10431513600003438),
+        (2.550792943165645, 1.5889310396921619),
+        (3.7293683805135114, 2.516810309037202),
+        (1.1579382055939638, 2.1456676740392493),
+        (-0.020637231753902578, 1.2177884046942087),
+        (0.19364206846991214, -0.2668274989979183),
+        (-0.9849333688779551, -1.1947067683429577),
+        (-2.4452083594889316, -0.8517826487536329),
+        (-3.087566051251668, 0.5037160033420643),
+        (-2.4282980005598542, 1.851071055782592),
+        (-1.2868546146018736, 0.8778768322830984),
+        (-1.2141784744460777, 0.8703537539582965),
+        (-1.0204774577768714, 0.7138898026617155),
+        (-3.3561772699048933, 3.029646493130459),
+        (4.157926980961142, -0.452421498347052),
+    ]
+    .map(|(x, y)| Point3 { x, y, z: 0. })
+    .to_vec();
+    assert_eq!(
+        collisions(&molecule.state, &molecule.positions, 4096, 1.5),
+        11
+    );
+    let drawing = molecular::for_import(&molecule, false, &input.prepared.dummy_labels)?;
+    let labels = drawing.labels()?;
+    let document = drawing.finish(labels)?;
     let original = document.clone();
     let error = clean(&document).unwrap_err();
     assert!(matches!(error, cleanup::Error::VisibleChangedWhole));
@@ -180,7 +217,9 @@ fn a_template_that_increases_collisions_is_not_published() -> anyhow::Result<()>
         },
     )?
     .positions;
-    assert_eq!(collisions(state, &original, 4096, 1.5), 4);
+    // #9208 changes the untemplated layout from four overlaps to two; RDKit
+    // 2026.09.1 legacy agrees, while the unchanged template still has nine.
+    assert_eq!(collisions(state, &original, 4096, 1.5), 2);
     assert_eq!(collisions(state, &candidate, 4096, 1.5), 9);
     let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
     super::super::tests::assert_rigid_rotation(&original, &positions);

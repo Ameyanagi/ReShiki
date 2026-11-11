@@ -1,4 +1,5 @@
-//! Symmetric SSSR ring perception adapted from RDKit FindRings.cpp (2026.03.6).
+//! Figueras symmetric SSSR perception from RDKit FindRings.cpp (2026.03.6),
+//! with normalized traversal and legacy result ordering from 2026.09.1.
 //! Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 //!
@@ -65,6 +66,9 @@ fn invariant(ring: &[usize]) -> Vec<usize> {
     let mut result = ring.to_vec();
     result.sort_unstable_by(|a, b| b.cmp(a));
     result
+}
+fn compare(a: &Ring, b: &Ring) -> std::cmp::Ordering {
+    a.len().cmp(&b.len()).then_with(|| a.cmp(b))
 }
 
 struct Budget {
@@ -541,6 +545,18 @@ impl State {
         mut rings: Vec<Ring>,
         approximate: bool,
     ) -> Result<Rings, String> {
+        // #9208 normalizes traversal; 2026.09.1 legacy symmetrization appends
+        // sorted Figueras candidates minus the basis. Keep our basis selection.
+        for ring in rings.iter_mut().chain(&mut self.extras) {
+            normalize(ring);
+        }
+        rings.sort_unstable_by(compare);
+        self.extras.sort_unstable_by(compare);
+        self.extras.retain(|ring| {
+            rings
+                .binary_search_by(|basis| compare(basis, ring))
+                .is_err()
+        });
         let basis_count = rings.len();
         let basis_bonds = rings
             .iter()

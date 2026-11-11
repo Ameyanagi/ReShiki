@@ -325,7 +325,7 @@ fn ring_preparation_preserves_order_and_debits_failed_search() -> TestResult {
 }
 
 #[test]
-fn bond_crossing_grid_matches_all_pairs_scan() -> TestResult {
+fn bond_crossings_follow_native_order_and_farthest_paths() -> TestResult {
     let source = chain(60)?;
     let initial = prepared(&source, &mut { MAX_WORK })?;
     let graph = &initial.state.graph;
@@ -335,7 +335,7 @@ fn bond_crossing_grid_matches_all_pairs_scan() -> TestResult {
         .first()
         .ok_or_else(|| anyhow::anyhow!("missing fragment"))?
         .clone();
-    // Scatter the chain over a few grid cells so many bonds cross.
+    // Scatter the chain so many non-adjacent bonds cross.
     let mut seed = 1u64;
     for a in fragment.atoms.values_mut() {
         for v in [&mut a.location.x, &mut a.location.y] {
@@ -348,22 +348,30 @@ fn bond_crossing_grid_matches_all_pairs_scan() -> TestResult {
     let mut expected = input.find(&fragment, false)?.pairs;
     let atoms = expected.len();
     let p = |id: usize| fragment.atoms[&id].location;
-    let mid = |b: &Bond| ((p(b.a).x + p(b.b).x) / 2.0, (p(b.a).y + p(b.b).y) / 2.0);
-    let cross = |o: usize, a: usize, b: usize, c: usize| {
-        let (v1x, v1y) = (p(a).x - p(o).x, p(a).y - p(o).y);
-        let (v2x, v2y) = (p(b).x - p(o).x, p(b).y - p(o).y);
-        let (v3x, v3y) = (p(c).x - p(o).x, p(c).y - p(o).y);
-        (v1x * v2y - v1y * v2x) * (v1x * v3y - v1y * v3x)
-    };
+    let cross = |(ax, ay): (f64, f64), (bx, by): (f64, f64)| ax * by - ay * bx;
     for (i, b1) in graph.bonds.iter().enumerate() {
         for b2 in &graph.bonds[i + 1..] {
-            let (m1, m2) = (mid(b1), mid(b2));
-            let d2 = (m2.0 - m1.0).powi(2) + (m2.1 - m1.1).powi(2);
-            if d2 < 0.25 && cross(b1.a, b1.b, b2.a, b2.b) < -1e-6 {
+            if b1.a == b2.a || b1.a == b2.b || b1.b == b2.a || b1.b == b2.b {
+                continue;
+            }
+            // Independently solve a + t*r = c + u*s. These scattered segments
+            // are not collinear; dedicated collision tests cover that case.
+            // #9378 replaces midpoint proximity with actual intersection.
+            let (a, b, c, d) = (p(b1.a), p(b1.b), p(b2.a), p(b2.b));
+            let r = (b.x - a.x, b.y - a.y);
+            let s = (d.x - c.x, d.y - c.y);
+            let offset = (c.x - a.x, c.y - a.y);
+            let denominator = cross(r, s);
+            assert!(denominator.abs() > 1e-6);
+            let t = cross(offset, s) / denominator;
+            let u = cross(offset, r) / denominator;
+            if (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u) {
                 let candidates = [(b1.a, b2.a), (b1.a, b2.b), (b1.b, b2.a), (b1.b, b2.b)];
                 let mut best = candidates[0];
                 for pair in candidates {
-                    if pair.0.abs_diff(pair.1) < best.0.abs_diff(best.1) {
+                    // A chain's topology distance is the index difference.
+                    // #9378 picks the farthest pair, keeping the first tie.
+                    if pair.0.abs_diff(pair.1) > best.0.abs_diff(best.1) {
                         best = pair;
                     }
                 }

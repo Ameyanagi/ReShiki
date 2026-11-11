@@ -237,7 +237,8 @@ fn independent_native_collision_stages() -> anyhow::Result<()> {
     for case in &cases {
         let original = restore(&case.fragment)?;
         let before = serde_json::to_value((&case.state, &original))?;
-        let input = Input::new(&case.state.graph, &case.state.metadata, &case.state.rings)?;
+        let input = Input::new(&case.state.graph, &case.state.metadata, &case.state.rings)?
+            .with_path_angle_expansion_extra_trials(false);
         scalars += same(
             &original,
             &case.expected.initial,

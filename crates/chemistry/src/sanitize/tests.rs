@@ -223,7 +223,7 @@ fn normalized_dummy_ring_sanitizes_mixed_1457() -> TestResult {
         serde_json::to_value(state.metadata)?,
         serde_json::to_value(metadata)?
     );
-    assert_eq!(state.rings, [vec![0, 5, 4, 3, 2, 1]]);
+    assert_eq!(state.rings, [vec![0, 1, 2, 3, 4, 5]]);
     assert_eq!(state.conjugated, [false; 6]);
     assert_eq!(
         state.hybridizations,
