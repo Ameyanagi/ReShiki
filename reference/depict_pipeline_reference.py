@@ -160,8 +160,15 @@ def rejection_kind(exception_type, message):
     return "unclassified_native_exception"
 
 
-def observe(case):
+def chemical_state(mol, ring_kind):
     from perception_reference import snapshot
+
+    result = snapshot(mol, ring_kind)
+    result.pop("conformer", None)
+    return result
+
+
+def observe(case):
     from rdkit import Chem, rdBase
     from rdkit.Chem import rdDepictor
     from rdkit.Geometry import Point2D
@@ -172,7 +179,7 @@ def observe(case):
     molecule = Chem.Mol(bytes.fromhex(case["pickle"]))
     if molecule is None or molecule.GetNumAtoms() != count:
         raise ValueError("Invalid native reference pickle")
-    if json.loads(encoded(snapshot(molecule, case["ring_kind"]))) != case["state"]:
+    if json.loads(encoded(chemical_state(molecule, case["ring_kind"]))) != case["state"]:
         raise ValueError(f"Pickle and original chemical snapshot differ: {case['name']}")
     if (
         conformers(molecule) != case["before_conformers"]
@@ -208,7 +215,7 @@ def observe(case):
         result.update(success=False, exception_type=type(error).__name__, message=str(error)[:4096])
         result["rejection_kind"] = rejection_kind(result["exception_type"], result["message"])
     result["conformers"] = conformers(molecule)
-    result["state"] = snapshot(molecule, case["ring_kind"])
+    result["state"] = chemical_state(molecule, case["ring_kind"])
     result["properties"] = properties(molecule)
     result["atom_data"] = atom_data(molecule)
     result["finite"] = all(
@@ -352,7 +359,6 @@ def seed_cache_audit(cases):
 
 
 def requests(source):
-    from perception_reference import snapshot
     from rdkit import Chem, RDConfig, RDLogger, rdBase
 
     if rdBase.rdkitVersion != VERSION:
@@ -396,7 +402,7 @@ def requests(source):
         case = {
             "name": name,
             "ring_kind": kind,
-            "state": snapshot(mol, kind),
+            "state": chemical_state(mol, kind),
             "atom_data": atom_data(mol),
             "pickle": mol.ToBinary(
                 Chem.PropertyPickleOptions.AllProps | Chem.PropertyPickleOptions.CoordsAsDouble
