@@ -117,14 +117,16 @@ fn a_nonretryable_destination_error_returns_without_waiting_or_changing_data() {
     temp.write_all(b"unaccepted drawing").unwrap();
     temp.as_file().sync_all().unwrap();
     let started = Instant::now();
+    // A scanner can briefly lock the fresh temp file, which persist retries;
+    // only waiting out the whole budget means the error was treated as retryable.
     let error = persist(
         temp,
         &original.join("invalid-child"),
-        Duration::from_secs(2),
+        Duration::from_secs(30),
     )
     .unwrap_err();
     assert!(!matches!(error.raw_os_error(), Some(5 | 32)));
-    assert!(started.elapsed() < Duration::from_secs(1));
+    assert!(started.elapsed() < Duration::from_secs(10));
     assert_eq!(std::fs::read(&original).unwrap(), b"previous drawing");
     assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
 }
