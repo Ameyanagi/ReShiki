@@ -12,14 +12,17 @@ use reshiki::{
 
 fn equivalent_styles() -> Vec<DrawingStyle> {
     [
-        ["0.5 cm", "0.025 cm", "0.05 cm", "0.02 cm", "0.04 cm"],
-        ["5 mm", "0.25 mm", "0.5 mm", "0.2 mm", "0.4 mm"],
+        [
+            "0.5 cm", "0.025 cm", "0.05 cm", "0.02 cm", "0.04 cm", "0.01 cm",
+        ],
+        ["5 mm", "0.25 mm", "0.5 mm", "0.2 mm", "0.4 mm", "0.1 mm"],
         [
             "14.173228346456693 pt",
             "0.7086614173228346 pt",
             "1.4173228346456692 pt",
             "0.5669291338582677 pt",
             "1.1338582677165354 pt",
+            "0.28346456692913385 pt",
         ],
     ]
     .into_iter()
@@ -177,6 +180,7 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
                     ("BoldWidth", Dimension::Bold),
                     ("MarginWidth", Dimension::Margin),
                     ("HashSpacing", Dimension::Hash),
+                    ("ReShikiCrossingClearance", Dimension::Crossing),
                 ] {
                     let value = xml
                         .root_element()
@@ -223,8 +227,14 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
                     .all(|atom| atom.element == "C" && atom.charge == 0)
             );
             for dimension in Dimension::ALL {
+                // Binary CDX has no crossing-clearance property.
+                let expected = if format == "cdx" && dimension == Dimension::Crossing {
+                    reshiki::style::CROSSING_CLEARANCE_PT
+                } else {
+                    dimension.get(&style)
+                };
                 assert!(
-                    (dimension.get(&back.drawing_style) - dimension.get(&style)).abs() < 0.0011,
+                    (dimension.get(&back.drawing_style) - expected).abs() < 0.0011,
                     "{format}: {dimension:?}"
                 );
             }
@@ -252,7 +262,13 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
         let back = document_styles::load(&path).unwrap();
         assert!((back.font_size_pt - style.font_size_pt).abs() < 0.0011);
         for dimension in Dimension::ALL {
-            assert!((dimension.get(&back) - dimension.get(&style)).abs() < 0.0011);
+            // CDS stationery has no crossing-clearance property.
+            let expected = if dimension == Dimension::Crossing {
+                reshiki::style::CROSSING_CLEARANCE_PT
+            } else {
+                dimension.get(&style)
+            };
+            assert!((dimension.get(&back) - expected).abs() < 0.0011);
         }
         if let Some(previous) = reference_outputs.insert("cds", std::fs::read(path).unwrap()) {
             assert_eq!(

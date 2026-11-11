@@ -226,7 +226,9 @@ pub(crate) fn ring_stroke_with(
         // A front double bond's side rail must clear the curve too.
         let rails = sides.rails(bond);
         let (lo, hi) = rails.band();
-        let (lo, hi) = (lo - crossing_gap, hi + crossing_gap);
+        // The cut curve's round caps reach back half its width.
+        let curve_gap = crossing_gap.max(doc.drawing_style.world(style.width_pt) * 0.5);
+        let (lo, hi) = (lo - curve_gap, hi + curve_gap);
         let layer = depth::layer(graph, bond, &ring.atoms, projected);
         let front = |t: f32| {
             if layer == rank.0
@@ -282,7 +284,9 @@ pub(crate) fn ring_stroke_with(
             // Clear the curve for every rail of the bond where it lies
             // behind. Each flattened piece of the curve clears only its own
             // finite ink, so a cut never reaches a crossing in front.
-            let half = doc.drawing_style.world(style.width_pt) * 0.5 + crossing_gap;
+            // The cut bond's round caps reach back half a line width.
+            let half = doc.drawing_style.world(style.width_pt) * 0.5
+                + crossing_gap.max(doc.drawing_style.line_width() * 0.5);
             for edge in paths.iter().flat_map(|path| path.windows(2)) {
                 let [c, d] = edge else { continue };
                 let curve = Stroke {

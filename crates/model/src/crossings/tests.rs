@@ -1345,11 +1345,81 @@ fn crossing_clearance_sets_the_ring_circle_cut_behind_a_front_bond() {
     let style = crate::style::DEFAULT.clone();
     let fixed = crate::style::CROSSING_CLEARANCE_PT;
     for clearance in [fixed, 0.3, 0.] {
-        let expected = style.line_width() * 0.5 + style.world(clearance);
+        // Below the curve's half-width its round caps set the cut.
+        let expected =
+            style.line_width() * 0.5 + style.world(clearance).max(style.line_width() * 0.5);
         let found = nearest(clearance);
         assert!(
             (found - expected).abs() < 0.3,
             "{clearance} pt: circle ink {found} from the front bond, expected {expected}"
         );
+    }
+}
+
+#[test]
+fn small_crossing_clearances_keep_round_ring_caps_and_rear_bonds_apart() {
+    // Ring curves and Band ink have round caps that reach half a width past
+    // their ends; Area ink (filled bond outlines) has none.
+    let reach = |ink: &Ink, p: Point| match ink.shape {
+        Shape::Band(a, b, w) => crate::graphics::segment_distance(p, a, b) - w * 0.5,
+        _ => ink.shape.distance(p),
+    };
+    let width = Document::default().drawing_style.line_width();
+    for clearance in [0.1, 0.] {
+        for ring_z in [-20., 20.] {
+            let mut doc = Document::default();
+            doc.drawing_style.crossing_clearance_pt = clearance;
+            let ring: Vec<_> = (0..6)
+                .map(|i| {
+                    let angle = (i as f32 * 60.).to_radians();
+                    (Point::new(42. * angle.cos(), 42. * angle.sin()), ring_z)
+                })
+                .collect();
+            let ring = atoms_at(&mut doc, &ring);
+            for i in 0..6 {
+                doc.add_bond(ring[i], ring[(i + 1) % 6], 4, "plain");
+            }
+            let atoms = atoms_at(
+                &mut doc,
+                &[
+                    (Point::new(-40., 0.), -ring_z),
+                    (Point::new(40., 0.), -ring_z),
+                ],
+            );
+            doc.add_bond(atoms[0], atoms[1], 1, "plain");
+            tag(&mut doc);
+            let inks = inks(&crate::scene::primitives(&doc));
+            let circle: Vec<_> = inks.iter().filter(|i| i.owner.is_none()).collect();
+            let bond: Vec<_> = inks.iter().filter(|i| i.owner == Some(6)).collect();
+            assert!(!circle.is_empty() && !bond.is_empty());
+            let (rear, front) = if ring_z < 0. {
+                (&circle, &bond)
+            } else {
+                (&bond, &circle)
+            };
+            // Sample rear centre lines (keeping their cap radius) or outlines.
+            let nearest = rear
+                .iter()
+                .flat_map(|ink| match ink.shape {
+                    Shape::Band(a, b, w) => Shape::Band(a, b, 0.)
+                        .samples()
+                        .into_iter()
+                        .map(|p| (p, w * 0.5))
+                        .collect::<Vec<_>>(),
+                    _ => ink.shape.samples().into_iter().map(|p| (p, 0.)).collect(),
+                })
+                .map(|(p, radius)| {
+                    front
+                        .iter()
+                        .map(|f| reach(f, p) - radius)
+                        .fold(f32::INFINITY, f32::min)
+                })
+                .fold(f32::INFINITY, f32::min);
+            assert!(
+                nearest > -0.01 * width,
+                "{clearance} pt, ring at z {ring_z}: rear ink overlaps front ink by {}",
+                -nearest
+            );
+        }
     }
 }
