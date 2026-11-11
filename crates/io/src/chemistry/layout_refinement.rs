@@ -997,6 +997,18 @@ mod tests {
         Ok((state, positions))
     }
 
+    /// RDKit 2026.03.6 drew artemisinin's C14 methyl (atom 18) inside the ring
+    /// system; RDKit 2026.09.1 (#9650) places it outside. Restore an inward leaf
+    /// by reflecting it through C14 so the exterior repair has work to do.
+    fn inward_methyl(points: &mut [Point3]) {
+        let (anchor, leaf) = (points[14], points[18]);
+        points[18] = Point3 {
+            x: 2. * anchor.x - leaf.x,
+            y: 2. * anchor.y - leaf.y,
+            z: leaf.z,
+        };
+    }
+
     fn iupac_score(state: &State, points: &[Point3]) -> [i64; 4] {
         let system = largest_fused_system(state).unwrap();
         let centers = system
@@ -1423,7 +1435,8 @@ mod tests {
 
     #[test]
     fn exterior_repair_changes_only_the_leaf_and_respects_fixed_atoms() -> anyhow::Result<()> {
-        let (state, old) = layout(ARTEMISININ)?;
+        let (state, mut old) = layout(ARTEMISININ)?;
+        inward_methyl(&mut old);
         let mut repaired = old.clone();
         exterior_terminals(&state, &mut repaired, &Coordinates::new());
         assert_ne!(repaired[18], old[18]);
@@ -1460,6 +1473,7 @@ mod tests {
                 "{ARTEMISININ}.{}",
                 if mode == "collision" { "C" } else { "CC" }
             ))?;
+            inward_methyl(&mut points);
             let mut target = points.clone();
             exterior_terminals(&state, &mut target, &Coordinates::new());
             assert_ne!(target[18], points[18]);
