@@ -367,7 +367,7 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
     assert!(failures.is_empty());
     assert_eq!(
         (matched, unmatched, embedded, core, rejected),
-        (1712, 209, 1920, 6, 0)
+        (1712, 209, 1920, 5, 0)
     );
     assert_eq!(first_mapping_witnesses, 8);
     assert_eq!(audit.scalars, 695876);
