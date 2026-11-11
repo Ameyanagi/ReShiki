@@ -613,30 +613,94 @@ fn jointly_covered_endpoint_cores_keep_charge_clear_without_forcing_an_arrow() {
 }
 
 #[test]
-fn implicit_carbon_charge_and_genuinely_covered_short_bonds_are_not_repositioned() {
+fn implicit_carbon_charge_stays_and_a_metal_charge_clears_a_covered_contact() {
     for element in ["C", "Co"] {
         let mut doc = Document::default();
         let center = doc.add_atom(element, Point::default());
         let neighbor = doc.add_atom("N", Point::new(3., -1.));
         doc.add_bond(neighbor, center, 5, "plain");
         doc.atom_mut(center).unwrap().charge = 3;
-        assert_eq!(
-            format!("{:?}", atom_label_runs(doc.atom(center).unwrap(), &doc)),
-            format!(
-                "{:?}",
-                atom_label_runs_with_charge_layout(
-                    doc.atom(center).unwrap(),
-                    &doc,
-                    ChargeLayout::Unplaced
+        if element == "C" {
+            assert_eq!(
+                format!("{:?}", atom_label_runs(doc.atom(center).unwrap(), &doc)),
+                format!(
+                    "{:?}",
+                    atom_label_runs_with_charge_layout(
+                        doc.atom(center).unwrap(),
+                        &doc,
+                        ChargeLayout::Unplaced
+                    )
                 )
-            )
-        );
+            );
+        } else {
+            // Clear of the donor label that covers the contact.
+            assert_charge_clears_labels(&doc, center, "3+");
+        }
         assert!(
             primitives(&doc)
                 .iter()
                 .all(|p| { !matches!(p, Primitive::Polygon(points) if points.len() == 3) })
         );
     }
+}
+
+fn charge_center(doc: &Document) -> Point {
+    let ink = charge_ink(doc, 1, "3+");
+    let lo = ink
+        .iter()
+        .map(|b| b.0)
+        .reduce(|a, b| Point::new(a.x.min(b.x), a.y.min(b.y)));
+    let hi = ink
+        .iter()
+        .map(|b| b.1)
+        .reduce(|a, b| Point::new(a.x.max(b.x), a.y.max(b.y)));
+    let (lo, hi) = (lo.unwrap(), hi.unwrap());
+    Point::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5)
+}
+
+/// Co3+ with N donors at these angles (degrees), one bond length away.
+fn metal_with_donors(degrees: &[f32]) -> Document {
+    let mut doc = Document::default();
+    let co = doc.add_atom("Co", Point::default());
+    doc.atom_mut(co).unwrap().charge = 3;
+    for angle in degrees {
+        let (sin, cos) = angle.to_radians().sin_cos();
+        let n = doc.add_atom("N", Point::new(42. * cos, 42. * sin));
+        doc.add_bond(n, co, 5, "plain");
+    }
+    doc
+}
+
+/// Issue #246: a metal's automatic charge sits in a gap between its contacts,
+/// on the right ("Co3+") whenever a right-hand gap has room, clear of every
+/// shaft and label.
+#[test]
+fn metal_charge_prefers_a_right_hand_gap_between_contacts() {
+    let ce40: Document = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/coordination/integration-review/co-en3-six-contacts-ce40.rsk"
+    ))
+    .unwrap();
+    // The widest gap (180°) opens left; the 120° gap on the right still fits.
+    let right = metal_with_donors(&[30., 90., 270.]);
+    for (name, doc) in [
+        ("two-contact chelate", chelate(true)),
+        ("six-contact native", chelate(false)),
+        ("six-contact ce40", ce40),
+        ("left widest", right),
+    ] {
+        let center = charge_center(&doc);
+        assert!(
+            center.x > doc.atom(1).unwrap().position.x,
+            "{name}: 3+ at {center:?} is not right of Co"
+        );
+        assert_charge_clears_bonds(&doc, 1, "3+");
+        assert_charge_clears_labels(&doc, 1, "3+");
+    }
+    // Only 30° gaps open to the right: the charge takes the wide left gap.
+    let left = metal_with_donors(&[-30., 0., 30.]);
+    assert!(charge_center(&left).x < 0.);
+    assert_charge_clears_bonds(&left, 1, "3+");
+    assert_charge_clears_labels(&left, 1, "3+");
 }
 
 /// Issue #337: unjoined en donors around Co³⁺ keep their automatic H₂ clear
