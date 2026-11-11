@@ -22,6 +22,9 @@ else:
     from reaction_smiles_reference import cases as bare_cases
     from reaction_smiles_reference import cx_cases
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def cases():
     for index, (name, text) in enumerate(bare_cases()):

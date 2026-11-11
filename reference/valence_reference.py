@@ -5,6 +5,9 @@ from pathlib import Path
 
 from rdkit import Chem, RDLogger, rdBase
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 ORDERS = {
     0: Chem.BondType.HYDROGEN,
     1: Chem.BondType.SINGLE,

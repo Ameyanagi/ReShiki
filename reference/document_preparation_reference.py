@@ -17,6 +17,9 @@ else:
     from perception_reference import snapshot
     from valence_reference import ORDERS
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 STEREO = {"z": 2, "e": 3, "cis": 4, "trans": 5}
 DISPLAY = {"wedge": 1, "hash": 2, "hollow_wedge": 1, "bold": 1, "hashed": 2, "wavy": 6}
 

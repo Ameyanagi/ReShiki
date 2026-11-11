@@ -16,6 +16,9 @@ else:
     from cxsmarts_reference import cases as cx_cases
     from support.cx_stereo_groups import renumber
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def cases():
     yield from cx_cases()

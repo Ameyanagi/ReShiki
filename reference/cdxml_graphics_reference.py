@@ -13,10 +13,13 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from PIL import Image
-from rdkit import rdBase
+from rdkit import Chem, rdBase
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine import graphics_exchange
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 ROOT = Path(__file__).resolve().parents[1]
 POINTS = "0 0 1 2 3 4 5 6 7 8 9 10"

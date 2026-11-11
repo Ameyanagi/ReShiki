@@ -16,6 +16,9 @@ from abbreviation_detection_reference import document
 
 from engine import abbreviations, worker
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def geometry():
     templates = []

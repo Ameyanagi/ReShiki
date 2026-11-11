@@ -12,6 +12,9 @@ if TYPE_CHECKING or __package__:
 else:
     from valence_reference import graph
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def case(name, mol):
     return {

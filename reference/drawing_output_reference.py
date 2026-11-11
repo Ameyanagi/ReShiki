@@ -18,6 +18,9 @@ else:
     from document_preparation_reference import cases, molecule
     from perception_reference import snapshot
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def emit(name, doc):
     try:

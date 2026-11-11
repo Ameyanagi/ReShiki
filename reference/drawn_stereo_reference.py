@@ -21,6 +21,9 @@ else:
     from stereo_reference import group
     from valence_reference import ORDERS, atom_molecule, graph
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def state(mol):
     return dict(

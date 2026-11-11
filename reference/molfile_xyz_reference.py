@@ -17,6 +17,9 @@ from pathlib import Path
 from rdkit import Chem, rdBase
 from rdkit.Chem import rdMolDescriptors, rdMolTransforms
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def f32(value):
     return struct.unpack("f", struct.pack("f", value))[0]

@@ -26,6 +26,9 @@ else:
     from support.cx_stereo_groups import query_renumbering
     from valence_reference import ORDERS
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def read(text):
     if len(text.encode()) > 16 * 1024 * 1024:

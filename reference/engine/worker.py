@@ -50,6 +50,9 @@ else:
     from labels_exchange import visible as label_visible
     from marks_exchange import read_marks, write_marks
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 SCALE = 28.0
 DRAWING_STYLE = json.loads(
     (Path(__file__).resolve().parents[2] / "assets/drawing_style.json").read_text(encoding="utf-8")

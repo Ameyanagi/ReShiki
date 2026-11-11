@@ -18,6 +18,9 @@ from rdkit import Chem, RDConfig, RDLogger, rdBase
 from rdkit.Chem import rdDepictor
 from valence_reference import graph
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 

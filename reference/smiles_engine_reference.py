@@ -17,6 +17,9 @@ else:
     from smiles_read_reference import cases
     from valence_reference import ORDERS
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def main():
     RDLogger.DisableLog("rdApp.*")
