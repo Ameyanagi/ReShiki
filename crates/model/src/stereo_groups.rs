@@ -93,3 +93,34 @@ pub(crate) fn validate(atom: &Atom) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Number each kind's groups 1, 2, 3… in their current order. Returns whether
+/// anything changed.
+pub fn renumber(doc: &mut Document) -> bool {
+    let mut counts = HashMap::new();
+    let renamed: HashMap<_, _> = used(doc)
+        .into_iter()
+        .map(|group| {
+            let count = counts.entry(group.kind).or_insert(0);
+            *count += 1;
+            (
+                group,
+                StereoGroup {
+                    kind: group.kind,
+                    number: *count,
+                },
+            )
+        })
+        .collect();
+    let mut changed = false;
+    for atom in &mut doc.atoms {
+        if let Some(group) = &mut atom.stereo_group
+            && let Some(&fresh) = renamed.get(group)
+            && fresh != *group
+        {
+            *group = fresh;
+            changed = true;
+        }
+    }
+    changed
+}

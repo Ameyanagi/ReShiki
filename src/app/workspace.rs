@@ -2201,6 +2201,16 @@ impl App {
                     .unwrap_or(self.tab.doc.atom_labels.stereo)
             })
         };
+        let stereo_groups = if atoms.is_empty() {
+            self.tab.doc.atom_labels.stereo_groups
+        } else {
+            atoms.iter().all(|a| {
+                a.display
+                    .stereo_group
+                    .show
+                    .unwrap_or(self.tab.doc.atom_labels.stereo_groups)
+            })
+        };
         let position = atoms
             .first()
             .map(|a| a.display.hydrogen_position)
@@ -2306,7 +2316,7 @@ impl App {
                 .spacing(5),
             );
         }
-        body = self.atom_label_stereo_section(body, stereo);
+        body = self.atom_label_stereo_section(body, stereo, stereo_groups);
         self.atom_label_indicator_section(body)
     }
 
@@ -2346,6 +2356,7 @@ impl App {
         &'a self,
         mut body: iced::widget::Column<'a, Message>,
         stereo: bool,
+        stereo_groups: bool,
     ) -> iced::widget::Column<'a, Message> {
         use super::atom_labels::Action as A;
         use reshiki::atom_labels::AxialDescriptors;
@@ -2362,6 +2373,17 @@ impl App {
                      E/Z: double bond; unchanged in the mirror image.\n\
                      M/P: axial or planar chirality (Ra/Sa when chosen).\n\
                      seqCis/seqTrans: enantiomorphic double bond; swaps in the mirror image.",
+                tooltip::Position::Left,
+            ))
+            .push(hover_hint(
+                checkbox(stereo_groups)
+                    .label("Show stereo groups\n(abs, and1, or1)")
+                    .text_size(12)
+                    .on_toggle(|v| Message::Labels(A::StereoGroups(v))),
+                "abs: configuration exactly as drawn.\n\
+                     and1: racemic; the drawn form and its mirror image, 1:1.\n\
+                     or1: one of the two forms, not known which.\n\
+                     Centres with the same label flip together. Set groups in the inspector's Stereo groups section.",
                 tooltip::Position::Left,
             ))
             .push(

@@ -110,6 +110,7 @@ pub enum Action {
     Position(HydrogenPosition),
     Attachment(LabelAttachment),
     Stereo(bool),
+    StereoGroups(bool),
     DlDescriptors(bool),
     MarkUndefined(bool),
     UndefinedXi(bool),
@@ -465,6 +466,21 @@ impl App {
                 }
                 self.tab.labels_dirty = true;
             }
+            Action::StereoGroups(value) => {
+                if self.tab.labels.scope == Scope::Drawing {
+                    self.tab.doc.atom_labels.stereo_groups = value;
+                }
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
+                    a.display.stereo_group.show =
+                        (self.tab.labels.scope == Scope::Selection).then_some(value);
+                }
+            }
             Action::DlDescriptors(value) => self.tab.doc.atom_labels.dl_descriptors = value,
             Action::MarkUndefined(value) => {
                 self.tab.doc.atom_labels.mark_undefined_stereocentres = value;
@@ -559,6 +575,7 @@ impl App {
                 {
                     for s in std::iter::once(&mut a.display.stereo.style)
                         .chain(std::iter::once(&mut a.display.mapping.style))
+                        .chain(std::iter::once(&mut a.display.stereo_group.style))
                         .chain(a.display.number.iter_mut().map(|n| &mut n.style))
                     {
                         if let Some(size) = size {
@@ -592,6 +609,7 @@ impl App {
                 {
                     a.display.stereo.offset = None;
                     a.display.mapping.offset = None;
+                    a.display.stereo_group.offset = None;
                     if let Some(n) = &mut a.display.number {
                         n.offset = None;
                     }
@@ -621,6 +639,7 @@ impl App {
                     a.display.label_attachment = LabelAttachment::Auto;
                     a.display.stereo.show = None;
                     a.display.mapping.show = None;
+                    a.display.stereo_group.show = None;
                 }
                 for b in self
                     .tab

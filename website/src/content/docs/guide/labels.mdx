@@ -27,6 +27,16 @@ Adding a charge to a skeletal carbon leaves the carbon label implicit. The charg
   alt="Atom numbering, hydrogen labels, and stereochemistry controls."
 />
 
+## Mark racemic and relative stereocentres
+
+A wedge on its own says the configuration is exactly as drawn. To record a racemate or a relative configuration, select the stereocentres (or the whole molecule) and open **Stereo groups** in the inspector:
+
+- **abs**: exactly as drawn, as before.
+- **New AND group** (`and1`): racemic, the drawn form and its mirror image 1:1.
+- **New OR group** (`or1`): one of the two forms, not known which.
+
+Centres with the same label flip together. The labels appear next to the centres; turn them off with **Show stereo groups** under **Atom labels & numbering…**. MOL V3000, RXN, CXSMILES, CDXML and the ChemDraw clipboard keep the groups. InChI and naming don't support them yet and say so.
+
 ## Change OH to HO
 
 You can choose which side of an oxygen atom displays its hydrogen—for example, to change **OH** to **HO**.

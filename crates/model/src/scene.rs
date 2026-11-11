@@ -1384,7 +1384,10 @@ fn selections_bounds_in_axes(
     };
     for label in crate::atom_labels::indicators_with_geometry(doc, doc) {
         let id = match label.owner {
-            Owner::Number(id) | Owner::Mapping(id) | Owner::AtomStereo(id) => id,
+            Owner::Number(id)
+            | Owner::Mapping(id)
+            | Owner::AtomStereo(id)
+            | Owner::StereoGroup(id) => id,
             Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
             Owner::BondStereo(..) => continue,
         };
@@ -2528,7 +2531,10 @@ fn push_atom_labels(
     for indicator in crate::atom_labels::indicators_with_geometry(doc, doc) {
         use crate::atom_labels::Owner;
         let alpha = match indicator.owner {
-            Owner::Number(id) | Owner::Mapping(id) | Owner::AtomStereo(id) => opacity.atom(id),
+            Owner::Number(id)
+            | Owner::Mapping(id)
+            | Owner::AtomStereo(id)
+            | Owner::StereoGroup(id) => opacity.atom(id),
             Owner::BondStereo(a, b) => doc
                 .bonds
                 .iter()
