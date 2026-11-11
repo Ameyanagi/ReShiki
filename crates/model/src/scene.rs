@@ -1399,6 +1399,20 @@ fn selections_bounds_in_axes(
         let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
         grow(g.id, &mut [lo, hi].into_iter());
     }
+    // A moved repeat label counts with its bracket. Automatic labels keep the
+    // measurement older drawings were laid out with.
+    for unit in doc
+        .generic
+        .repeats
+        .iter()
+        .filter(|u| u.label_offset.is_some())
+    {
+        if let Some(id) = unit.bracket.filter(|id| owners.contains_key(id))
+            && let Some((lo, hi)) = unit.label_box(doc)
+        {
+            grow(id, &mut [lo, hi].into_iter());
+        }
+    }
     for model in doc
         .models
         .iter()

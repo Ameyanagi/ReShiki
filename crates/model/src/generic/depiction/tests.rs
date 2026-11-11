@@ -452,3 +452,18 @@ fn non_finite_repeat_label_offsets_are_rejected() {
     doc.generic.repeats[0].label_offset = Some(Point::new(f32::INFINITY, 0.));
     assert!(doc.validate().is_err());
 }
+
+#[test]
+fn moved_repeat_labels_count_in_bracket_and_drawing_bounds() {
+    let mut doc = repeat_source(false);
+    let bracket = doc.generic.repeats[0].bracket.unwrap();
+    let before = crate::scene::selection_bounds(&doc, &[bracket]);
+    generic::move_repeat_label(&mut doc, bracket, Point::new(500., 0.));
+    let (lo, hi) = crate::scene::selection_bounds(&doc, &[bracket]).unwrap();
+    let label = doc.generic.repeats[0].label_box(&doc).unwrap();
+    assert_eq!((lo, hi.x), (before.unwrap().0, label.1.x));
+    assert!(doc.bounds().1.x > label.1.x);
+    // The automatic place keeps today's measurement.
+    doc.generic.repeats[0].label_offset = None;
+    assert_eq!(crate::scene::selection_bounds(&doc, &[bracket]), before);
+}
