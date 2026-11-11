@@ -20,7 +20,7 @@ from pathlib import Path
 import rdkit
 from rdkit import rdBase
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 COMPONENTS = ("geometry", "rings", "attachment", "seeds", "templates")
 
 
@@ -65,7 +65,7 @@ def main():
     args = parser.parse_args()
     if sys.platform != "win32" or sysconfig.get_platform() != "win-amd64":
         raise SystemExit("Use the pinned x64 Windows RDKit Python and x64 MSVC compiler")
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     boost_header = args.boost_include / "boost/version.hpp"
     match = re.search(r"#define BOOST_VERSION\s+(\d+)", boost_header.read_text())
     assert match is not None

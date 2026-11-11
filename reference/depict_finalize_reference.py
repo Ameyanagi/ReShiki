@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 FIXTURE = ROOT / "tests/fixtures/depict-finalize-linux-native.json.gz"
 SOURCES = (
     "Code/GraphMol/Depictor/RDDepictor.cpp",
@@ -227,7 +227,7 @@ def main():
     import rdkit
     from rdkit import rdBase
 
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     assert args.rdkit_source is not None
     hashes = {n: hashlib.sha256((args.rdkit_source / n).read_bytes()).hexdigest() for n in SOURCES}
     if args.replay:

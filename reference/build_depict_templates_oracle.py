@@ -19,12 +19,12 @@ from pathlib import Path
 import rdkit
 from rdkit import rdBase
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 SOURCE_SHA256 = {
     "Code/GraphMol/Depictor/TemplateSmarts.h": "69530df08d9e532a2ce89275359333fe24a2c50868fe91f1942970bc03ee890b",
     "Code/GraphMol/Depictor/Templates.h": "a4870cc64682e1812dc5cd83028d19410dd4bdfd1876e59c719afba994879106",
-    "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
-    "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
+    "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a522803423899fa91e986f21db0d45b423b3d8ff85bdb2fb5fcb8ce614f1fa2b",
+    "Code/GraphMol/Depictor/EmbeddedFrag.h": "aa9531e31c0353abac3ad7fb637f179046326b03f09b2e96ca64ab58c8c8541a",
 }
 
 
@@ -75,7 +75,7 @@ def main():
     parser.add_argument("--rdkit-source", type=Path, required=True)
     parser.add_argument("--boost-include", type=Path, default=Path("/usr/include"))
     args = parser.parse_args()
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     boost_header = args.boost_include / "boost/version.hpp"
     match = re.search(r"#define BOOST_VERSION\s+(\d+)", boost_header.read_text())
     assert match is not None

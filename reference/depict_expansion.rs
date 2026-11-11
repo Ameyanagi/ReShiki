@@ -277,7 +277,7 @@ fn native_initial_orchestration_and_merge_stages() -> anyhow::Result<()> {
     let header: serde_json::Value = serde_json::from_str(&lines.next().context("header")??)?;
     assert_eq!(
         header["provenance"]["commit"],
-        "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+        "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
     );
     let mut audit = Audit {
         exact: cfg!(all(target_os = "linux", target_arch = "x86_64"))

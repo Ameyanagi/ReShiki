@@ -23,7 +23,7 @@ from pathlib import Path
 
 from download_tls import verified_context
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 BOOST_SHA256 = "7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617"
 BOOST_URL = "https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.bz2"
 ROOT = Path(__file__).resolve().parents[1]
@@ -210,8 +210,8 @@ def main():
     import rdkit
     from rdkit import rdBase
 
-    if (rdBase.rdkitVersion, rdBase.boostVersion) != ("2026.03.6", "1_85"):
-        raise ValueError("Install the pinned RDKit 2026.03.6 wheel with Boost 1_85 first")
+    if (rdBase.rdkitVersion, rdBase.boostVersion) != ("2026.09.1", "1_85"):
+        raise ValueError("Install the pinned RDKit 2026.09.1 wheel with Boost 1_85 first")
     compiler = shutil.which(os.environ.get("CXX", "c++"))
     if compiler is None:
         raise ValueError("A C++20 compiler executable is required")

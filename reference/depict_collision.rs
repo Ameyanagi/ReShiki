@@ -225,7 +225,7 @@ fn corpus() -> anyhow::Result<Vec<Case>> {
     let provenance: serde_json::Value =
         serde_json::from_str(lines.next().context("Missing provenance")?)?;
     anyhow::ensure!(
-        provenance["provenance"]["commit"] == "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        provenance["provenance"]["commit"] == "fece8caa860bdf6c9c82bdb9253f22a0cf87150c",
         "Wrong pinned source"
     );
     lines.map(|line| Ok(serde_json::from_str(line)?)).collect()

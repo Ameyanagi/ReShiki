@@ -19,8 +19,8 @@ import tempfile
 import time
 from pathlib import Path
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
-VERSION = "2026.03.6"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
+VERSION = "2026.09.1"
 ROOT = Path(__file__).resolve().parents[1]
 INPUTS = ROOT / "tests/fixtures/depict-pipeline-inputs.json.gz"
 MAX_CASES = 8192
@@ -32,18 +32,18 @@ MAX_OUTPUT = 256 * 1024 * 1024
 BATCH = 64
 SOURCE_SHA256 = {
     "license.txt": "daeb8d194502cbcf34c05c39541a0d02be65bc9bada5b891c1974cd24e9fca30",
-    "Code/GraphMol/Depictor/Wrap/rdDepictor.cpp": "062370d8b07b3b0a0d8834da4e1f97d4d7cbd9ab19736c4607621960dd4b6d38",
-    "Code/GraphMol/Depictor/RDDepictor.cpp": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
-    "Code/GraphMol/Depictor/RDDepictor.h": "b73674bd9bee4e1d7db337bc7361d7197e73cbeba3b10201f559c7c7b59608cb",
-    "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
-    "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
-    "Code/GraphMol/Depictor/DepictUtils.cpp": "ba3868f339635889b1533fc6a706a5a1d8f6739846e1e25e66e7efa0617eddd5",
+    "Code/GraphMol/Depictor/Wrap/rdDepictor.cpp": "5f71b097328495c1e31261937390f83d17c0bfc465de23d44554038fc5b0071f",
+    "Code/GraphMol/Depictor/RDDepictor.cpp": "0296929261958395437b04c8d5d34a7ffbeb95d81aa28e41eb1ec10f169642c3",
+    "Code/GraphMol/Depictor/RDDepictor.h": "5d54702004bba1eca4f8424027abfbdd670b46eca6a177f71e56894868a872a5",
+    "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a522803423899fa91e986f21db0d45b423b3d8ff85bdb2fb5fcb8ce614f1fa2b",
+    "Code/GraphMol/Depictor/EmbeddedFrag.h": "aa9531e31c0353abac3ad7fb637f179046326b03f09b2e96ca64ab58c8c8541a",
+    "Code/GraphMol/Depictor/DepictUtils.cpp": "31543385ae45049a153b67c3f26d6e37696e9d9c22669e78a647773e6bb45689",
     "Code/GraphMol/Depictor/TemplateSmarts.h": "69530df08d9e532a2ce89275359333fe24a2c50868fe91f1942970bc03ee890b",
     "Code/GraphMol/Depictor/Templates.cpp": "28f458d261fedddca7582c3ad175d225a5b1d820f2dc5a14b66e9b0d0c62790f",
     "Code/GraphMol/Depictor/Templates.h": "a4870cc64682e1812dc5cd83028d19410dd4bdfd1876e59c719afba994879106",
     "Code/GraphMol/Matrices.cpp": "fd69c704c084f7e9fd8c2279024f94e9421338bcf556ca45a55aba63937bb8ed",
     "Code/Geometry/Transform2D.cpp": "c8cf18d72544c276836d74a17312b7d425ed2cbeed67409ca09fe9b5c80d1a4f",
-    "Code/Geometry/point.h": "aa985364528748f3c94b0e0f969fe63cbeb2b830e93df26c5b22f8cee8bfb393",
+    "Code/Geometry/point.h": "730244c9f054011af88e802d0fd486a9ddd0e6c385dfbde534aab4e97088f085",
     "Code/Numerics/Vector.h": "e8821d0e72cca0b861339ba3b3074e957f436ca8687777593c0ec0fd40cfaa2a",
 }
 

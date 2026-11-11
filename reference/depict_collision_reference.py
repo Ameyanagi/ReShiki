@@ -27,7 +27,7 @@ def cases():
     from rdkit import Chem, rdBase
     from rdkit.Chem import rdDepictor
 
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     rng = random.Random(723649)
     molecules = [
         "",
@@ -174,7 +174,7 @@ def main():
     import rdkit
     from rdkit import rdBase
 
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     assert args.rdkit_source is not None
     for name, digest in SOURCE_SHA256.items():
         assert hashlib.sha256((args.rdkit_source / name).read_bytes()).hexdigest() == digest
@@ -226,7 +226,7 @@ def main():
     )
     header = {
         "provenance": {
-            "version": "2026.03.6",
+            "version": "2026.09.1",
             "commit": PIN,
             "source_sha256": SOURCE_SHA256,
             "platform": platform.platform(),

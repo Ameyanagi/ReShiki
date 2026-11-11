@@ -101,7 +101,7 @@ def main():
     parser.add_argument("--fma3", choices=("0", "1"))
     args = parser.parse_args()
     assert sys.platform == "win32" and sysconfig.get_platform() == "win-amd64"
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     boost = args.boost_include / "boost/version.hpp"
     version = re.search(r'#define BOOST_LIB_VERSION "([^"]+)"', boost.read_text())
     assert version and version[1] == rdBase.boostVersion

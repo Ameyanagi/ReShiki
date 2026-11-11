@@ -11,7 +11,7 @@ import struct
 import subprocess
 from pathlib import Path
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/depict-templates-linux-native.json.gz"
 SOURCES = (
@@ -192,7 +192,7 @@ def main():
     import rdkit
     from rdkit import RDLogger, rdBase
 
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     RDLogger.DisableLog("rdApp.*")
     assert args.rdkit_source is not None
     hashes = {p: hashlib.sha256((args.rdkit_source / p).read_bytes()).hexdigest() for p in SOURCES}
