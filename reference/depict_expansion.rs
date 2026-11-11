@@ -1,5 +1,7 @@
 #[path = "common/depict_windows.rs"]
 mod depict_windows;
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 
 use anyhow::Context;
 use reshiki::chemistry::{
@@ -288,6 +290,7 @@ fn native_initial_orchestration_and_merge_stages() -> anyhow::Result<()> {
     };
     let (mut accepted, mut rejected, mut merges, mut steps, mut restrictions) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
+    let mut other_basis = Vec::new();
     let source_adapter = header["provenance"]["native_build"]["source_adapter"].is_object();
     if cfg!(windows) {
         assert!(
@@ -398,7 +401,12 @@ fn native_initial_orchestration_and_merge_stages() -> anyhow::Result<()> {
             "{} ranks",
             case.name
         );
-        if serde_json::to_value(&result.state)? != serde_json::to_value(&expected.state)? {
+        let mut prepared = serde_json::to_value(&result.state)?;
+        let native = serde_json::to_value(&expected.state)?;
+        if ring_basis::adopt_rdkit_basis(&mut prepared, &native) > 0 {
+            other_basis.push(case.name.clone());
+        }
+        if prepared != native {
             failures.push(format!("{}: prepared chemical state differs", case.name));
         }
         if let Err(e) = compare(
@@ -523,6 +531,10 @@ fn native_initial_orchestration_and_merge_stages() -> anyhow::Result<()> {
     for failure in failures.iter().take(30) {
         eprintln!("{failure}");
     }
+    eprintln!(
+        "Prepared rings from a different SSSR basis: {} {other_basis:?}",
+        other_basis.len()
+    );
     eprintln!(
         "Independent full native boundary: {public_success} successes, {public_errors} errors, {public_scalars} scalar bits checked by the C++ observer"
     );

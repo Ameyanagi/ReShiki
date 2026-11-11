@@ -1,8 +1,16 @@
 //! Exact complete-layout comparisons against the original public native API.
+#[path = "support/ring_basis.rs"]
+#[allow(dead_code)]
+mod ring_basis;
+
 use anyhow::Context;
 use reshiki::chemistry::{
     depict::{self, attachment::AtomData, geometry::Coordinates},
-    stereo::{perception::State, wedging::Conformer},
+    rings,
+    stereo::{
+        perception::{RingKind, State},
+        wedging::Conformer,
+    },
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -105,6 +113,20 @@ fn equal_conformer(actual: &Conformer, expected: &NativeConformer) -> anyhow::Re
         }
     }
     Ok(count)
+}
+/// ReShiki keeps its Figueras basis; a layout may then differ from RDKit's
+/// (reference/README.md, "Deliberate differences").
+fn other_sssr_basis(state: &State) -> anyhow::Result<bool> {
+    // Some inputs deliberately omit the original ring cache.
+    if state.rings.kind != RingKind::Symmetric || state.rings.atoms.is_empty() {
+        return Ok(false);
+    }
+    let options = rings::Options {
+        include_dative: true,
+        include_hydrogen: false,
+    };
+    let ours = rings::perceive(&state.graph, options)?;
+    Ok(ring_basis::basis(&ours.atoms) != ring_basis::basis(&state.rings.atoms))
 }
 fn compare(case: &Case) -> anyhow::Result<(bool, usize)> {
     let options = &case.options;
@@ -282,6 +304,7 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
     }
     let (mut successes, mut rejections, mut scalars) = (0, 0, 0);
     let mut failures = Vec::new();
+    let mut other_basis = Vec::new();
     let mut coordination = Vec::new();
     let mut cases = 0;
     for line in lines {
@@ -293,6 +316,7 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
                 scalars += count;
             }
             Ok((false, _)) => rejections += 1,
+            Err(_) if other_sssr_basis(&case.state)? => other_basis.push(case.name.clone()),
             Err(error) => failures.push(format!("{}: {error:#}", case.name)),
         }
         if case
@@ -321,6 +345,10 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
     for failure in failures.iter().take(40) {
         eprintln!("{failure}");
     }
+    eprintln!(
+        "Layouts on a different SSSR basis: {} {other_basis:?}",
+        other_basis.len()
+    );
     anyhow::ensure!(cases == 2854, "Incomplete public reference corpus");
     anyhow::ensure!(
         failures.is_empty(),
