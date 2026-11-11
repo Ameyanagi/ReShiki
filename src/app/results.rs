@@ -299,7 +299,9 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Centroid
                 | Action::Attachment(..)
                 | Action::DepthBonds
-                | Action::RingArc => None,
+                | Action::RingArc
+                | Action::StereoGroup(_)
+                | Action::RenumberStereoGroups => None,
             }
         }
         Message::Nmr(action) => {

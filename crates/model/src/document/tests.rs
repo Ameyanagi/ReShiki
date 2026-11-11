@@ -381,7 +381,7 @@ fn history_caps_estimated_bytes_but_keeps_the_minimum_steps() {
 
     let mut large = Document::default();
     large.add_atom("C", Point::default());
-    large.atoms = vec![large.atoms[0].clone(); 12_000];
+    large.atoms = vec![large.atoms[0].clone(); 10_000];
     let mut history = History::default();
     edits(&mut large, &mut history);
     let kept = history.undo_frames().len();
