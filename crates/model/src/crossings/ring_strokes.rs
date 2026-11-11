@@ -5,7 +5,6 @@ use crate::{
     document::{Document, Point},
     graphics::{PathCommand, flattened},
     scene::Primitive,
-    style::DEFAULT,
 };
 
 #[derive(Clone, Copy)]
@@ -178,6 +177,9 @@ pub(crate) fn ring_stroke_with(
         .max()
         .unwrap_or_default();
     let mut gaps = Vec::new();
+    let crossing_gap = doc
+        .drawing_style
+        .world(doc.drawing_style.crossing_clearance_pt);
     let atoms: Option<Vec<_>> = ring.atoms.iter().map(|id| graph.atom(*id)).collect();
     let plane = atoms.and_then(|atoms| {
         depth::Plane::fit(&atoms).or_else(|| depth::Plane::least_squares(&atoms))
@@ -224,7 +226,7 @@ pub(crate) fn ring_stroke_with(
         // A front double bond's side rail must clear the curve too.
         let rails = sides.rails(bond);
         let (lo, hi) = rails.band();
-        let (lo, hi) = (lo - DEFAULT.world(1.1), hi + DEFAULT.world(1.1));
+        let (lo, hi) = (lo - crossing_gap, hi + crossing_gap);
         let layer = depth::layer(graph, bond, &ring.atoms, projected);
         let front = |t: f32| {
             if layer == rank.0
@@ -280,7 +282,7 @@ pub(crate) fn ring_stroke_with(
             // Clear the curve for every rail of the bond where it lies
             // behind. Each flattened piece of the curve clears only its own
             // finite ink, so a cut never reaches a crossing in front.
-            let half = doc.drawing_style.world(style.width_pt) * 0.5 + DEFAULT.world(1.1);
+            let half = doc.drawing_style.world(style.width_pt) * 0.5 + crossing_gap;
             for edge in paths.iter().flat_map(|path| path.windows(2)) {
                 let [c, d] = edge else { continue };
                 let curve = Stroke {

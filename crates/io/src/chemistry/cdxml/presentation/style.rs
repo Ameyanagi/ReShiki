@@ -20,6 +20,11 @@ pub struct NativeDrawingStyle {
     pub margin_width_pt: f64,
     pub hash_spacing_pt: f64,
     pub bond_spacing_ratio: f64,
+    #[serde(
+        default = "crossing_clearance",
+        skip_serializing_if = "is_crossing_clearance"
+    )]
+    pub crossing_clearance_pt: f64,
     #[serde(default, skip_serializing_if = "is_false")]
     pub two_wedge_stereocentres: bool,
     #[serde(default = "yes", skip_serializing_if = "is_true")]
@@ -38,6 +43,12 @@ fn is_true(value: &bool) -> bool {
 }
 fn is_false(value: &bool) -> bool {
     !value
+}
+fn crossing_clearance() -> f64 {
+    crate::style::CROSSING_CLEARANCE_PT.into()
+}
+fn is_crossing_clearance(value: &f64) -> bool {
+    *value == crossing_clearance()
 }
 impl NativeDrawingStyle {
     pub fn defaults() -> Result<Self> {
@@ -58,6 +69,12 @@ impl NativeDrawingStyle {
             ("line_width_pt", self.line_width_pt, 0.1, 6.0),
             ("bold_width_pt", self.bold_width_pt, 0.1, 12.0),
             ("margin_width_pt", self.margin_width_pt, 0.0, 12.0),
+            (
+                "crossing_clearance_pt",
+                self.crossing_clearance_pt,
+                0.0,
+                12.0,
+            ),
             ("hash_spacing_pt", self.hash_spacing_pt, 0.3, 12.0),
             ("bond_spacing_ratio", self.bond_spacing_ratio, 0.05, 0.4),
         ] {
@@ -102,6 +119,7 @@ impl NativeDrawingStyle {
             margin_width_pt: self.margin_width_pt as f32,
             hash_spacing_pt: self.hash_spacing_pt as f32,
             bond_spacing_ratio: self.bond_spacing_ratio as f32,
+            crossing_clearance_pt: self.crossing_clearance_pt as f32,
             center_chain_double_bonds: false,
             two_wedge_stereocentres: self.two_wedge_stereocentres,
             ring_fusion_hydrogens: self.ring_fusion_hydrogens,
@@ -127,6 +145,7 @@ pub fn drawing_style(root: Node<'_, '_>) -> Result<NativeDrawingStyle> {
         ("BoldWidth", &mut style.bold_width_pt),
         ("MarginWidth", &mut style.margin_width_pt),
         ("HashSpacing", &mut style.hash_spacing_pt),
+        ("ReShikiCrossingClearance", &mut style.crossing_clearance_pt),
     ] {
         if let Some(text) = root.attribute(attribute) {
             *value = numeric::float(text)?;

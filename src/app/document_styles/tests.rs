@@ -669,6 +669,7 @@ fn non_round_dimensions_survive_a_hundred_switches_and_untouched_apply() {
     style.bold_width_pt = 2.456_789;
     style.margin_width_pt = 0.123_456_79;
     style.hash_spacing_pt = 3.456_789;
+    style.crossing_clearance_pt = 0.234_567_8;
     app.tab.doc.validate().unwrap();
     let before = app.tab.doc.clone();
     app.tab.saved = before.clone();
@@ -1025,6 +1026,41 @@ fn a_real_unit_input_applies_once_and_history_restores_the_exact_document() {
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, after);
     assert_eq!(app.appearance.drawing_style_unit, Unit::Centimetres);
+}
+
+#[test]
+fn crossing_clearance_applies_below_the_old_fixed_gap_with_one_undo_step() {
+    let mut app = legacy_style_app();
+    let before = app.tab.doc.clone();
+    send(&mut app, Action::Open);
+    assert_eq!(
+        input(app.tab.styles.editor.as_ref().unwrap(), Field::Crossing).text,
+        "1.1"
+    );
+    send(&mut app, Action::Input(Field::Crossing, "-0.1".into()));
+    send(&mut app, Action::Apply);
+    assert!(app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, before);
+    send(&mut app, Action::Input(Field::Crossing, "0.1 mm".into()));
+    send(&mut app, Action::Apply);
+    assert!(!app.error, "{}", app.status);
+    let after = app.tab.doc.clone();
+    assert_eq!(
+        after.drawing_style.crossing_clearance_pt,
+        units::parse("0.1 mm", Unit::Points).unwrap().points
+    );
+    assert_eq!(after.atoms[0].position, before.atoms[0].position);
+    assert_eq!(
+        reshiki::document::Document::from_json(&after.file_json().unwrap())
+            .unwrap()
+            .drawing_style,
+        after.drawing_style
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
 }
 
 #[tokio::test]

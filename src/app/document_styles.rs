@@ -31,6 +31,7 @@ pub enum Field {
     Margin,
     Hash,
     Spacing,
+    Crossing,
 }
 impl Field {
     fn dimension(self) -> Option<Dimension> {
@@ -39,6 +40,7 @@ impl Field {
             Self::Line => Dimension::Line,
             Self::Bold => Dimension::Bold,
             Self::Margin => Dimension::Margin,
+            Self::Crossing => Dimension::Crossing,
             Self::Hash => Dimension::Hash,
             Self::FontSize | Self::Spacing => return None,
         })
@@ -302,6 +304,7 @@ impl Editor {
             (Field::Margin, style.margin_width_pt),
             (Field::Hash, style.hash_spacing_pt),
             (Field::Spacing, style.bond_spacing_ratio * 100.),
+            (Field::Crossing, style.crossing_clearance_pt),
         ]
         .into_iter()
         .map(|(field, n)| (field, Input::new(field, n, self.display_unit)))
@@ -831,6 +834,21 @@ impl App {
                 1.,
                 90.,
             );
+            // A crossing beside the ring previews Crossing clearance.
+            let right = preview
+                .atoms
+                .iter()
+                .map(|a| a.position.x)
+                .fold(f32::MIN, f32::max);
+            let middle = preview.atoms.iter().map(|a| a.position.y).sum::<f32>()
+                / preview.atoms.len() as f32;
+            let arm = style.bond_length_world * 0.4;
+            let centre = reshiki::document::Point::new(right + style.bond_length_world, middle);
+            for (dx, dy) in [(-arm, arm), (-arm, -arm)] {
+                let a = preview.add_atom("C", centre.offset(dx, dy));
+                let b = preview.add_atom("C", centre.offset(-dx, -dy));
+                preview.add_bond(a, b, 1, "plain");
+            }
             preview.drawing_style = style.clone();
             preview.canvas_theme = self.tab.doc.canvas_theme;
             preview.color_theme = self.tab.doc.color_theme;

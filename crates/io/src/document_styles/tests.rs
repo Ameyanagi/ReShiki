@@ -73,6 +73,56 @@ fn hydrogen_isotope_modes_survive_native_and_cdxml_style_roundtrips() {
 }
 
 #[test]
+fn crossing_clearance_survives_native_and_cdxml_style_roundtrips() {
+    use crate::chemistry::cdxml::{import_cdxml, presentation};
+
+    for (clearance, attribute) in [
+        (1.1, None),
+        (0.35, Some("0.3499999940395355")),
+        (0., Some("0.0")),
+    ] {
+        let style = DrawingStyle {
+            crossing_clearance_pt: clearance,
+            ..Default::default()
+        };
+        let name = std::path::Path::new("crossings.reshiki-style");
+        let bytes = to_bytes(name, &style).unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&bytes).contains("crossing_clearance_pt"),
+            attribute.is_some()
+        );
+        assert_eq!(load_bytes(name, bytes).unwrap(), style);
+        let mut doc = Document {
+            drawing_style: style,
+            ..Default::default()
+        };
+        let a = doc.add_atom("C", Point::new(0., 0.));
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let xml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
+        let tree = presentation::parse(&xml).unwrap();
+        assert_eq!(
+            tree.root_element().attribute("ReShikiCrossingClearance"),
+            attribute
+        );
+        let native = presentation::drawing_style(tree.root_element()).unwrap();
+        let native_back: presentation::NativeDrawingStyle =
+            serde_json::from_slice(&serde_json::to_vec(&native).unwrap()).unwrap();
+        assert_eq!(native_back, native);
+        for imported in [
+            native.into_document().unwrap(),
+            import_cdxml(&xml).unwrap().document.drawing_style,
+            from_chemdraw_xml(&xml, "Crossings").unwrap(),
+        ] {
+            assert_eq!(imported.crossing_clearance_pt, clearance);
+        }
+    }
+    let xml = presentation::parse("<CDXML BondLength=\"14.4\" ReShikiCrossingClearance=\"13\"/>")
+        .unwrap();
+    assert!(presentation::drawing_style(xml.root_element()).is_err());
+}
+
+#[test]
 fn cdxml_hydrogen_isotope_text_uses_document_mode_and_preserves_isotope_attributes() {
     use crate::chemistry::cdxml::import_cdxml;
     use crate::style::HydrogenIsotopes;

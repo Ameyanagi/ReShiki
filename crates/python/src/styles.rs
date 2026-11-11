@@ -15,6 +15,8 @@ fn complete_style_value(style: &DrawingStyle) -> Result<Value, String> {
     value["charge_before_radical"] = style.charge_before_radical.into();
     value["hydrogen_isotopes"] =
         serde_json::to_value(style.hydrogen_isotopes).map_err(|error| error.to_string())?;
+    value["crossing_clearance_pt"] = serde_json::from_str(&style.crossing_clearance_pt.to_string())
+        .map_err(|error| error.to_string())?;
     Ok(value)
 }
 
@@ -54,6 +56,7 @@ pub fn merge(base: &DrawingStyle, overrides: &str) -> Result<DrawingStyle, Strin
             "line_width" => "line_width_pt",
             "bold_width" => "bold_width_pt",
             "margin_width" => "margin_width_pt",
+            "crossing_clearance" => "crossing_clearance_pt",
             "hash_spacing" => "hash_spacing_pt",
             "bond_spacing" => "bond_spacing_ratio",
             other => other,
@@ -105,5 +108,14 @@ mod tests {
         assert!(reset.is_default());
         assert!(merge(&reset, r#"{"two_wedge_stereocentres":1}"#).is_err());
         assert!(merge(&reset, r#"{"unknown_style_option":true}"#).is_err());
+    }
+
+    #[test]
+    fn crossing_clearance_alias_sets_and_resets_the_point_value() {
+        let tight = merge(&DrawingStyle::default(), r#"{"crossing_clearance":0.4}"#).unwrap();
+        assert_eq!(tight.crossing_clearance_pt, 0.4);
+        let reset = merge(&tight, r#"{"crossing_clearance_pt":1.1}"#).unwrap();
+        assert!(reset.is_default());
+        assert!(merge(&reset, r#"{"crossing_clearance":-1}"#).is_err());
     }
 }

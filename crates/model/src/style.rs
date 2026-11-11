@@ -46,6 +46,12 @@ pub struct DrawingStyle {
     pub margin_width_pt: f32,
     pub hash_spacing_pt: f32,
     pub bond_spacing_ratio: f32,
+    /// Extra gap around a front stroke where a rear bond or ring curve passes behind it.
+    #[serde(
+        default = "default_crossing_clearance",
+        skip_serializing_if = "is_default_crossing_clearance"
+    )]
+    pub crossing_clearance_pt: f32,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub center_chain_double_bonds: bool,
     /// Draw a wedge and hash pair at stereocentres with four explicit substituents.
@@ -74,6 +80,14 @@ fn is_true(value: &bool) -> bool {
 fn is_false(value: &bool) -> bool {
     !value
 }
+/// Earlier documents drew every crossing with this fixed clearance.
+pub const CROSSING_CLEARANCE_PT: f32 = 1.1;
+fn default_crossing_clearance() -> f32 {
+    CROSSING_CLEARANCE_PT
+}
+fn is_default_crossing_clearance(value: &f32) -> bool {
+    value.to_bits() == CROSSING_CLEARANCE_PT.to_bits()
+}
 impl Default for DrawingStyle {
     fn default() -> Self {
         (*DEFAULT).clone()
@@ -92,6 +106,7 @@ pub static DEFAULT: LazyLock<DrawingStyle> = LazyLock::new(|| {
             margin_width_pt: 1.6,
             hash_spacing_pt: 2.5,
             bond_spacing_ratio: 0.18,
+            crossing_clearance_pt: CROSSING_CLEARANCE_PT,
             center_chain_double_bonds: false,
             two_wedge_stereocentres: false,
             ring_fusion_hydrogens: true,

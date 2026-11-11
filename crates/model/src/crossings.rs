@@ -2,7 +2,6 @@
 use crate::{
     document::{Document, Point},
     scene::Primitive,
-    style::DEFAULT,
 };
 mod depth;
 pub use depth::bond_over;
@@ -366,7 +365,7 @@ pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
 
 /// Occlusion: every opaque rear rail loses the part inside a front stroke's
 /// envelope (each drawn front rail, padded by both half-widths and the
-/// 1.1 pt clearance). Front and rear follow XYZ depth along the overlap, so one rule
+/// style's crossing clearance). Front and rear follow XYZ depth along the overlap, so one rule
 /// covers crossings at any angle, near-parallel overlaps and overlaps beside
 /// atoms. Bonds sharing an atom meet there and never cut each other.
 pub(crate) fn gaps_with_opacity(
@@ -380,7 +379,7 @@ pub(crate) fn gaps_with_opacity(
     // rails, two bold half-widths and the clearance.
     let pad = style.bond_length_world * style.bond_spacing_ratio * 1.5
         + style.world(style.bold_width_pt)
-        + DEFAULT.world(1.1)
+        + style.world(style.crossing_clearance_pt)
         + 0.001;
     let graph = sides.faces().graph();
     let mut segments: Vec<_> = doc
@@ -459,6 +458,9 @@ fn occlusion(
         return vec![];
     }
     let axis = Point::new((to.x - from.x) / length, (to.y - from.y) / length);
+    let crossing_gap = doc
+        .drawing_style
+        .world(doc.drawing_style.crossing_clearance_pt);
     let along = Point::new(
         (over_to.x - over_from.x) / front_length,
         (over_to.y - over_from.y) / front_length,
@@ -508,7 +510,7 @@ fn occlusion(
         };
         let range = (rail.span.0 - rail.width, rail.span.1 + rail.width);
         for (envelope, width) in &envelopes {
-            let radius = (width + rail.width) * 0.5 + DEFAULT.world(1.1);
+            let radius = (width + rail.width) * 0.5 + crossing_gap;
             let Some((low, high, _)) = envelope.span(point(0.), direction, range, radius) else {
                 continue;
             };
