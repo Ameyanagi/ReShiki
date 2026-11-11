@@ -9,7 +9,7 @@ from pathlib import Path
 
 from rdkit import Chem, rdBase
 
-VERSION = "2026.03.6"
+VERSION = "2026.09.1"
 ROOT = Path(__file__).resolve().parents[1]
 _OPERATIONS = {
     "AtomAnd": "all",
