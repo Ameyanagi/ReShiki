@@ -25,8 +25,8 @@ names the InChI Project; both notices are retained in LICENSE.
 Upstream: <https://github.com/IUPAC-InChI/InChI>
 
 Tag: `v1.07.3`, commit `0b3e941d29289f3e5024c9ecfd45186285319420`.
-The source archive is the same one pinned by RDKit 2026.03.6, commit
-`0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`, in
+The source archive is the same one pinned by RDKit 2026.09.1, commit
+`fece8caa860bdf6c9c82bdb9253f22a0cf87150c` (and earlier by 2026.03.6), in
 `Code/cmake/Modules/FindInchi.cmake`:
 
 <https://github.com/IUPAC-InChI/InChI/releases/download/v1.07.3/INCHI-1-SRC.zip>

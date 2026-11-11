@@ -89,7 +89,8 @@ def generate(args):
             capture_output=True,
             timeout=30,
             check=True,
-            env={**os.environ, loader: str(libs)},
+            # An explicit environment would drop the legacy ring finding set above.
+            env={**os.environ, loader: str(libs), "RDK_USE_LEGACY_RING_FINDING": "1"},
         )
         captured = json.loads(result.stdout)
         assert captured["raw"] is not None
@@ -102,7 +103,7 @@ def generate(args):
             )
         )
     header = dict(
-        rdkit_version="2026.03.6",
+        rdkit_version="2026.09.1",
         inchi_version="1.07.3",
         adapter_sha256=manifest["sources"][str(args.rdkit_source / "External/INCHI-API/inchi.cpp")],
         capture_sha256=hashlib.sha256(original.read_bytes()).hexdigest(),
