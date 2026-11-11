@@ -397,6 +397,8 @@ def cases(corpus):
 
 
 def main():
+    # ReShiki ports RDKit's legacy ring symmetrisation (#1117).
+    Chem.SetUseLegacyRingFinding(True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--worker", action="store_true")
     parser.add_argument("--validation-suite", type=Path)

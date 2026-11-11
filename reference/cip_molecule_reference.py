@@ -130,6 +130,8 @@ def molecules():
 
 
 def main():
+    # ReShiki ports RDKit's legacy ring symmetrisation (#1117).
+    Chem.SetUseLegacyRingFinding(True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--oracle", type=Path)
     parser.add_argument("--write-fixture", action="store_true")

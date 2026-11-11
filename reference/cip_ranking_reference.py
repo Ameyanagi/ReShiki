@@ -38,6 +38,8 @@ def pair(number):
 
 
 def main():
+    # ReShiki ports RDKit's legacy ring symmetrisation (#1117).
+    Chem.SetUseLegacyRingFinding(True)
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     rng = random.Random(619792)
