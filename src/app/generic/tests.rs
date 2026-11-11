@@ -807,3 +807,139 @@ fn generic_card_follows_generic_parts_and_repeat_section_one_selected_bracket() 
     .unwrap();
     assert!(app.generic_structure_section().is_some());
 }
+
+/// A defined `n` repeating unit with its bracket selected.
+fn defined_repeat() -> (App, u64) {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    for (index, element) in ["O", "C", "C", "N"].into_iter().enumerate() {
+        let id = app
+            .tab
+            .doc
+            .add_atom(element, Point::new(index as f32 * 42., 0.));
+        if index > 0 {
+            app.tab.doc.add_bond(id - 1, id, 1, "plain");
+        }
+    }
+    let bracket = app.tab.doc.next_id();
+    app.tab
+        .doc
+        .graphics
+        .push(reshiki::graphics::Graphic::dragged(
+            bracket,
+            reshiki::graphics::GraphicKind::Brackets,
+            Point::new(20., -20.),
+            Point::new(105., 20.),
+            Default::default(),
+            reshiki::graphics::BracketSides::Both,
+            false,
+        ));
+    app.tab.selected = vec![bracket];
+    let _ = app.update(Message::Generic(Action::DefineRepeat(bracket)));
+    assert!(!app.error, "{}", app.status);
+    (app, bracket)
+}
+
+fn label_offset(app: &App) -> Option<Point> {
+    app.tab.doc.generic.repeats[0].label_offset
+}
+
+#[test]
+fn repeat_label_drags_and_typed_offsets_are_undoable_steps() {
+    let (mut app, bracket) = defined_repeat();
+    assert_eq!(label_offset(&app), None);
+    assert!(app.repeating_unit_section().is_some());
+    let _ = app.update(Message::Generic(Action::PositionLabel));
+    assert_eq!(app.tool, Tool::EditPoints);
+
+    let defined = app.tab.doc.clone();
+    // 42 drawing units are 14.4 pt.
+    app.edit(crate::canvas::Edit::RepeatLabelMove(
+        bracket,
+        Point::new(42., -21.),
+    ));
+    assert_eq!(label_offset(&app), Some(Point::new(42., -21.)));
+    let fields = |app: &App| (app.generic.label_x.clone(), app.generic.label_y.clone());
+    assert_eq!(fields(&app), ("14.4".into(), "-7.2".into()));
+    assert_eq!(app.tab.doc.graphics, defined.graphics);
+    let dragged = app.tab.doc.clone();
+
+    // Enter applies only the submitted axis, so the other keeps its exact value.
+    let _ = app.update(Message::Generic(Action::LabelX(" 28.8".into())));
+    let _ = app.update(Message::Generic(Action::LabelY("99".into())));
+    let _ = app.update(Message::Generic(Action::ApplyLabelOffset(bracket, false)));
+    let typed = label_offset(&app).unwrap();
+    assert!((typed.x - 84.).abs() < 1e-4 && typed.y == -21.);
+    assert_eq!(fields(&app), ("28.8".into(), "-7.2".into()));
+
+    let typed = app.tab.doc.clone();
+    let _ = app.update(Message::Generic(Action::LabelY("down".into())));
+    let _ = app.update(Message::Generic(Action::ApplyLabelOffset(bracket, true)));
+    assert!(app.error);
+    assert_eq!(app.tab.doc, typed);
+
+    // Redefining the unit, such as a new repeat count, keeps the moved label.
+    let _ = app.update(Message::Generic(Action::RepeatLabel("1-3".into())));
+    let _ = app.update(Message::Generic(Action::DefineRepeat(bracket)));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.generic.repeats[0].label, "1-3");
+    assert_eq!(label_offset(&app), typed.generic.repeats[0].label_offset);
+    let redefined = app.tab.doc.clone();
+
+    let _ = app.update(Message::Generic(Action::AutomaticLabel(bracket)));
+    assert_eq!(label_offset(&app), None);
+    assert_eq!(fields(&app), ("0".into(), "0".into()));
+
+    for expected in [&redefined, &typed, &dragged, &defined] {
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc.generic, expected.generic);
+    }
+    assert_eq!(fields(&app), ("0".into(), "0".into()));
+    let _ = app.update(Message::Redo);
+    assert_eq!(label_offset(&app), Some(Point::new(42., -21.)));
+    assert_eq!(fields(&app), ("14.4".into(), "-7.2".into()));
+}
+
+#[test]
+fn pasted_repeat_units_keep_their_label_offset() {
+    let (mut app, bracket) = defined_repeat();
+    app.edit(crate::canvas::Edit::RepeatLabelMove(
+        bracket,
+        Point::new(-8., 12.),
+    ));
+    let part = reshiki::editing::selection(&app.tab.doc, &app.tab.doc.all_ids());
+    let contents = format!(
+        "{}{}",
+        reshiki::editing::CLIPBOARD_PREFIX,
+        serde_json::to_string(&part.current()).unwrap()
+    );
+    let _ = app.update(Message::Pasted(Some(contents)));
+    assert_eq!(app.status, "Selection pasted");
+    let offsets: Vec<_> = app
+        .tab
+        .doc
+        .generic
+        .repeats
+        .iter()
+        .map(|u| u.label_offset)
+        .collect();
+    assert_eq!(offsets, [Some(Point::new(-8., 12.)); 2]);
+}
+
+#[test]
+fn returning_to_a_tab_shows_its_own_repeat_label_offset() {
+    use crate::app::tabs;
+    let (mut app, bracket) = defined_repeat();
+    app.edit(crate::canvas::Edit::RepeatLabelMove(
+        bracket,
+        Point::new(42., -21.),
+    ));
+    let source = app.tab.id;
+    let _ = app.update(Message::New);
+    let _ = app.update(Message::Generic(Action::LabelY("12".into())));
+    let _ = app.update(Message::Tabs(tabs::Action::Select(source)));
+    assert_eq!(
+        (&*app.generic.label_x, &*app.generic.label_y),
+        ("14.4", "-7.2")
+    );
+}

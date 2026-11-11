@@ -49,6 +49,7 @@ fn repeat_source(branched: bool) -> Document {
             count: RepeatCount::Finite { min: 1, max: 3 },
             label: "1-3".into(),
             flip: "NoFlip".into(),
+            label_offset: None,
         },
     )
     .unwrap();
@@ -362,4 +363,107 @@ fn anchored_components_keep_atom_scan_and_stack_pop_traversal_order() {
         protect_references(&doc, &mut Work::new(usize::MAX)).unwrap_err(),
         INCOMPLETE_NAME
     );
+}
+
+/// The drawn repeat label's top-left corner and the bracket's lower right.
+fn repeat_label_and_corner(doc: &Document) -> (Point, Point) {
+    let label = crate::scene::primitives(doc)
+        .into_iter()
+        .find_map(|p| match p {
+            crate::scene::Primitive::Text { position, text, .. } if text == "1-3" => Some(position),
+            _ => None,
+        })
+        .unwrap();
+    let bracket = doc.generic.repeats[0].bracket.unwrap();
+    let (_, hi) = doc
+        .graphics
+        .iter()
+        .find(|g| g.id == bracket)
+        .unwrap()
+        .shape_bounds();
+    (label, hi)
+}
+
+#[test]
+fn repeat_labels_move_without_changing_the_bracket_or_chemistry() {
+    let mut doc = repeat_source(false);
+    let (label, corner) = repeat_label_and_corner(&doc);
+    // Existing drawings keep the automatic place.
+    assert_eq!(label, corner.offset(4., 4.));
+    let before = doc.clone();
+    let bracket = doc.generic.repeats[0].bracket.unwrap();
+    generic::move_repeat_label(&mut doc, bracket, Point::new(6., -20.));
+    generic::move_repeat_label(&mut doc, bracket, Point::new(1., 2.));
+    assert_eq!(
+        doc.generic.repeats[0].label_offset,
+        Some(Point::new(7., -18.))
+    );
+    assert_eq!(repeat_label_and_corner(&doc).0, corner.offset(11., -14.));
+    assert_eq!(doc.graphics, before.graphics);
+    let mut unit = doc.generic.repeats[0].clone();
+    unit.label_offset = None;
+    assert_eq!(unit, before.generic.repeats[0]);
+    assert_eq!(drawings(&doc), drawings(&before));
+}
+
+#[test]
+fn moved_repeat_labels_follow_the_bracket_and_survive_save_and_paste() {
+    let mut doc = repeat_source(false);
+    let bracket = doc.generic.repeats[0].bracket.unwrap();
+    generic::move_repeat_label(&mut doc, bracket, Point::new(5., -10.));
+    // Resizing the bracket carries the label with its lower-right corner.
+    crate::editing::scale_axes_about(&mut doc, &[bracket], Point::new(30., -30.), 2., 1.5);
+    let (label, corner) = repeat_label_and_corner(&doc);
+    assert_eq!(label, corner.offset(9., -6.));
+
+    let json = serde_json::to_string(&doc).unwrap();
+    assert!(json.contains("\"label_offset\""));
+    let reopened = Document::from_json(json.as_bytes()).unwrap();
+    assert_eq!(reopened.generic.repeats, doc.generic.repeats);
+
+    let mut pasted = Document::default();
+    let ids = crate::editing::append(
+        &mut pasted,
+        &crate::editing::selection(&doc, &doc.all_ids()),
+        Point::new(200., 50.),
+    );
+    assert!(!ids.is_empty());
+    assert_eq!(
+        pasted.generic.repeats[0].label_offset,
+        Some(Point::new(5., -10.))
+    );
+    let (label, corner) = repeat_label_and_corner(&pasted);
+    assert_eq!(label, corner.offset(9., -6.));
+}
+
+#[test]
+fn drawings_without_a_label_offset_load_and_save_unchanged() {
+    let doc = repeat_source(false);
+    let json = serde_json::to_string(&doc).unwrap();
+    assert!(!json.contains("label_offset"));
+    let reopened = Document::from_json(json.as_bytes()).unwrap();
+    assert_eq!(reopened.generic.repeats[0].label_offset, None);
+    assert_eq!(serde_json::to_string(&reopened).unwrap(), json);
+}
+
+#[test]
+fn non_finite_repeat_label_offsets_are_rejected() {
+    let mut doc = repeat_source(false);
+    doc.generic.repeats[0].label_offset = Some(Point::new(f32::INFINITY, 0.));
+    assert!(doc.validate().is_err());
+}
+
+#[test]
+fn moved_repeat_labels_count_in_bracket_and_drawing_bounds() {
+    let mut doc = repeat_source(false);
+    let bracket = doc.generic.repeats[0].bracket.unwrap();
+    let before = crate::scene::selection_bounds(&doc, &[bracket]);
+    generic::move_repeat_label(&mut doc, bracket, Point::new(500., 0.));
+    let (lo, hi) = crate::scene::selection_bounds(&doc, &[bracket]).unwrap();
+    let label = doc.generic.repeats[0].label_box(&doc).unwrap();
+    assert_eq!((lo, hi.x), (before.unwrap().0, label.1.x));
+    assert!(doc.bounds().1.x > label.1.x);
+    // The automatic place keeps today's measurement.
+    doc.generic.repeats[0].label_offset = None;
+    assert_eq!(crate::scene::selection_bounds(&doc, &[bracket]), before);
 }

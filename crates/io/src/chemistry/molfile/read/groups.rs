@@ -215,6 +215,7 @@ impl Groups {
                 count,
                 label,
                 flip: "Unspecified".into(),
+                label_offset: None,
             });
         }
         let mut aromatic = vec![false; p.graph.atoms.len()];

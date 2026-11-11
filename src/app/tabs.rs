@@ -292,6 +292,7 @@ impl App {
     fn enter_tab(&mut self) {
         self.sync_drawing_panel_context();
         self.sync_drawing_style_unit();
+        self.show_repeat_label_offset();
         if self.nmr_enter_tab() {
             return;
         }

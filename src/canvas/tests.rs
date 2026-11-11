@@ -3607,3 +3607,59 @@ fn unmarked_atoms_do_not_change_mark_hit_order_and_hidden_marks_stay_hidden() {
     doc.atom_mut(a).unwrap().marks.clear();
     assert_eq!(hit::hit_object(&doc, probe, 1.), Some(c));
 }
+
+#[test]
+fn edit_points_drag_a_selected_brackets_repeat_label_but_keep_its_corner_handle() {
+    let mut doc = Document::default();
+    doc.graphics.push(Graphic::dragged(
+        1,
+        reshiki::graphics::GraphicKind::Brackets,
+        World::new(-60., -40.),
+        World::new(40., 30.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    ));
+    doc.generic.repeats.push(reshiki::generic::RepeatUnit {
+        bracket: Some(1),
+        bracket_objects: vec![],
+        members: vec![],
+        crossings: vec![],
+        crossing_brackets: vec![],
+        head_count: None,
+        usage: "SRU".into(),
+        pattern: reshiki::generic::RepeatPattern::HeadToTail,
+        count: reshiki::generic::RepeatCount::Indefinite { label: "n".into() },
+        label: "n".into(),
+        flip: String::new(),
+        label_offset: None,
+    });
+    let (lo, hi) = doc.generic.repeats[0].label_box(&doc).unwrap();
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::EditPoints;
+    canvas.selected = &[1];
+    let screen = |p: World| Point::new(p.x + 200., p.y + 150.);
+    let label = screen(lo.lerp(hi, 0.5));
+    assert!(matches!(
+        pointer_gesture(&canvas, label, label + iced::Vector::new(10., -20.)),
+        Edit::RepeatLabelMove(1, World { x: 10., y: -20. })
+    ));
+    let corner = screen(doc.graphics[0].shape_bounds().1);
+    assert!(matches!(
+        pointer_gesture(&canvas, corner, corner + iced::Vector::new(10., 10.)),
+        Edit::GraphicPoint(1, ..)
+    ));
+    // Unselected, the label is not a handle.
+    canvas.selected = &[];
+    let mut state = State::default();
+    canvas.update(
+        &mut state,
+        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        Rectangle::with_size(iced::Size::new(400., 300.)),
+        mouse::Cursor::Available(label),
+    );
+    assert!(!matches!(
+        state.gesture,
+        Some(Gesture::RepeatLabelMove { .. })
+    ));
+}

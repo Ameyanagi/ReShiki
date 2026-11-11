@@ -136,6 +136,7 @@ fn define(doc: &mut Document, site: u64, kind: Definition) {
                 count,
                 label: "n".into(),
                 flip: "Unspecified".into(),
+                label_offset: None,
             });
         }
         Definition::Variable => {

@@ -490,11 +490,12 @@ impl App {
                 .generic
                 .repeats
                 .iter()
-                .find(|u| u.bracket == Some(g.id) || u.bracket_objects.contains(&g.id))
+                .find(|u| u.drawn_with(g.id))
             {
                 self.generic.label = unit.label.clone();
                 self.generic.pattern = unit.pattern;
             }
+            self.show_repeat_label_offset();
             if !matches!(
                 self.inspector_tab,
                 InspectorTab::Templates

@@ -159,6 +159,7 @@ fn polymer_members_and_crossings_round_trip_then_expand() {
             count: RepeatCount::Finite { min: 1, max: 3 },
             label: "1-3".into(),
             flip: "Unspecified".into(),
+            label_offset: None,
         },
     )
     .unwrap();
@@ -284,6 +285,7 @@ fn bracket_crossing_associations_survive_cdxml_and_cdx() {
         count: RepeatCount::Finite { min: 1, max: 3 },
         label: "1-3".into(),
         flip: "Unspecified".into(),
+        label_offset: None,
     });
     let x = xml(&d);
     let copy = import(&crate::exchange::from_cdx(&crate::exchange::to_cdx(&x).unwrap()).unwrap());

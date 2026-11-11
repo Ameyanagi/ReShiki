@@ -86,6 +86,7 @@ pub(super) fn repeat_document() -> Document {
         count: RepeatCount::Finite { min: 1, max: 3 },
         label: "1-3".into(),
         flip: "Unspecified".into(),
+        label_offset: None,
     });
     doc
 }

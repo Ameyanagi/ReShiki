@@ -374,7 +374,12 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::RepeatLabel(..)
                 | Action::Pattern(..)
                 | Action::DefineRepeat(..)
-                | Action::ClearRepeat(..) => None,
+                | Action::ClearRepeat(..)
+                | Action::LabelX(..)
+                | Action::LabelY(..)
+                | Action::ApplyLabelOffset(..)
+                | Action::PositionLabel
+                | Action::AutomaticLabel(..) => None,
             }
         }
         Message::DrawingStyle(action) => {

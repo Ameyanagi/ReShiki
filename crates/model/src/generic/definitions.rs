@@ -95,6 +95,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || set.iter().any(|id| !atoms.contains_key(id))
             || !printable(&unit.usage)
             || !printable(&unit.label)
+            || unit.label_offset.is_some_and(|p| !p.is_finite())
         {
             return Err("Invalid repeating unit".into());
         }
