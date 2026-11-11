@@ -27,7 +27,7 @@ fn cdxml_unknown_generic_nickname_prefixes_remain_dummy_atoms() {
 
 #[test]
 fn cdxml_recognized_generic_nickname_queries_remain_unsupported() {
-    for label in ["A", "Q", "M", "MH", "X", "R", "R1"] {
+    for label in ["A", "a", "Q", "M", "MH", "X", "R", "R1"] {
         assert!(
             matches!(
                 read(&generic_nickname_xml(label)),
@@ -35,6 +35,34 @@ fn cdxml_recognized_generic_nickname_queries_remain_unsupported() {
             ),
             "{label}"
         );
+    }
+}
+
+#[test]
+fn cdxml_any_atom_nicknames_prepare_as_labelled_dummies_for_drawing() {
+    for label in ["A", "a"] {
+        for element in ["", " Element='6'"] {
+            let xml = generic_nickname_xml(label).replace("p='0 0'", &format!("p='0 0'{element}"));
+            let (xml, variables) = drawing_variables(&xml).unwrap();
+            let prepared = prepare_drawing(&xml).unwrap();
+            assert_eq!(prepared.molecule.state.graph.atoms[0].atomic_number, 0);
+            let mut document = assemble_cdxml(&prepared)
+                .unwrap()
+                .into_unchecked_drawing()
+                .unwrap();
+            variables.restore(&prepared, &mut document).unwrap();
+            let atom = &document.atoms[0];
+            assert_eq!(atom.element, "*");
+            assert_eq!(atom.display.variable.as_deref(), Some(label));
+            assert!(atom.no_implicit);
+            assert_eq!(atom.label_h, 0);
+            assert!(variables.notice().contains("only the labels are kept"));
+            assert!(
+                variables
+                    .notice()
+                    .contains("any-atom (non-hydrogen) query meaning")
+            );
+        }
     }
 }
 
