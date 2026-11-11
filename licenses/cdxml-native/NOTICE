@@ -1,6 +1,6 @@
 The molecular CDXML parser in crates/io/src/chemistry/cdxml/ adapts:
 
-RDKit 2026.03.6, commit 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+RDKit 2026.09.1, commit fece8caa860bdf6c9c82bdb9253f22a0cf87150c
 External/ChemDraw/{chemdraw,node,bond,fragment,utils}.cpp
 Copyright (c) 2024 Glysade Inc.
 See glysade-LICENSE for the original license and disclaimer.

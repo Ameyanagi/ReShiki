@@ -1,4 +1,4 @@
-//! Adapted from RDKit MolSurf.cpp getTPSAAtomContribs (2026.03.6).
+//! Adapted from RDKit MolSurf.cpp getTPSAAtomContribs (2026.09.1).
 //! Copyright (C) 2007-2023 Greg Landrum. BSD-3-Clause; see licenses/rdkit/.
 use super::{Target, at};
 
