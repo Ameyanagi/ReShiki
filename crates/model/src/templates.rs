@@ -494,7 +494,9 @@ fn midpoint(a: Point, b: Point) -> Point {
     Point::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5)
 }
 
-fn compatible(a: &Atom, b: &Atom) -> bool {
+/// Whether two atoms can become one shared atom: same element and charge, and
+/// no isotope, radical, mark, map, stereo or fixed-hydrogen state to lose.
+pub fn compatible(a: &Atom, b: &Atom) -> bool {
     a.element == b.element
         && a.charge == b.charge
         && a.radical_electrons == 0

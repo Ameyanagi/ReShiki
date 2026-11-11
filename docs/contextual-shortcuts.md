@@ -332,7 +332,7 @@ With nothing selected, these keys format the whole label. Chemical abbreviations
 | Cmd/Ctrl+Shift+D                           | Start 3D optimization (MMFF94, MMFF94s, or UFF); preview before Apply                     |
 | Cmd/Ctrl+Shift+Right                       | Add a reaction arrow and a copy of the selected molecule to its right                     |
 | Space with Select active                   | Select the whole most recently edited molecule                                            |
-| Cmd/Ctrl+J                                 | Join two fragments, merge three or more atoms, or connect a donor to a metal              |
+| Cmd/Ctrl+J                                 | Join two fragments, merge three or more atoms, or connect selected donors to a metal      |
 | Cmd/Ctrl+Shift+K                           | Preview cleanup                                                                           |
 | Cmd/Ctrl+L / E                             | Toggle fixed bond length / fixed angles                                                   |
 | Option/Alt-drag                            | Temporarily draw or move freely, without bond constraints or smart guides                 |

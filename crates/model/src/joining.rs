@@ -11,8 +11,9 @@ mod atom_merge;
 pub use atom_merge::{merge_atoms, merge_atoms_at};
 mod coordination;
 pub use coordination::{
-    Coordination, coordinate_atoms, coordination_donor, coordination_metal,
-    coordination_metal_element,
+    Coordination, CoordinationPlan, ManyError, ManyOutcome, Skip, coordinate_atoms,
+    coordinate_many, coordination_donor, coordination_metal, coordination_metal_element,
+    coordination_plan,
 };
 mod plan;
 pub use plan::{JoinPlan, join_plan};
@@ -416,3 +417,5 @@ impl Prepared {
 mod endpoint_tests;
 #[cfg(test)]
 mod generic_tests;
+#[cfg(test)]
+mod metal_share_tests;
