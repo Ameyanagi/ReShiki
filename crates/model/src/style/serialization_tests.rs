@@ -86,3 +86,34 @@ fn hydrogen_isotopes_default_to_auto_and_roundtrip_without_changing_atoms() {
         assert!(serde_json::from_value::<DrawingStyle>(explicit.clone()).is_err());
     }
 }
+
+#[test]
+fn crossing_clearance_defaults_to_the_fixed_gap_and_only_serializes_changes() {
+    let source = include_str!("../../../../assets/drawing_style.json");
+    let legacy: DrawingStyle = serde_json::from_str(source).unwrap();
+    assert_eq!(legacy.crossing_clearance_pt, super::CROSSING_CLEARANCE_PT);
+    assert_eq!(
+        serde_json::to_string_pretty(&legacy).unwrap(),
+        source.trim_end()
+    );
+    for clearance in [0., 0.35, 12.] {
+        let style = DrawingStyle {
+            crossing_clearance_pt: clearance,
+            ..legacy.clone()
+        };
+        style.validate().unwrap();
+        let doc = Document {
+            drawing_style: style,
+            ..Default::default()
+        };
+        let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+        assert_eq!(reopened.drawing_style, doc.drawing_style);
+    }
+    for invalid in [-0.1, 12.5, f32::NAN] {
+        let style = DrawingStyle {
+            crossing_clearance_pt: invalid,
+            ..legacy.clone()
+        };
+        assert!(style.validate().is_err(), "{invalid}");
+    }
+}

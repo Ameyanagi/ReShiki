@@ -59,6 +59,7 @@ _STYLE_ALIASES = {
     "line_width": "line_width_pt",
     "bold_width": "bold_width_pt",
     "margin_width": "margin_width_pt",
+    "crossing_clearance": "crossing_clearance_pt",
     "hash_spacing": "hash_spacing_pt",
     "bond_spacing": "bond_spacing_ratio",
 }
@@ -123,7 +124,8 @@ class Style:
     """A validated app document style, optionally with keyword overrides.
 
     Common overrides include ``font_size``, ``font_family``, ``bond_length``,
-    ``line_width``, ``bold_width``, ``margin_width`` and ``bond_spacing``.
+    ``line_width``, ``bold_width``, ``margin_width``, ``crossing_clearance`` and
+    ``bond_spacing``.
     Sizes use points; ``bond_spacing`` is a ratio.
     """
 

@@ -537,6 +537,13 @@ impl<'a> Writer<'a> {
                 tree.set(0, attribute, if value { "yes" } else { "no" })?;
             }
         }
+        if style.crossing_clearance_pt != crate::style::CROSSING_CLEARANCE_PT {
+            tree.set(
+                0,
+                "ReShikiCrossingClearance",
+                number(style_real(style.crossing_clearance_pt)),
+            )?;
+        }
         match style.hydrogen_isotopes {
             HydrogenIsotopes::Auto => {}
             HydrogenIsotopes::Letters => tree.set(0, "ReShikiHydrogenIsotopes", "letters")?,

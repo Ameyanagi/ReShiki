@@ -127,6 +127,7 @@ fn from_chemdraw_xml(xml: &str, name: &str) -> Result<DrawingStyle, String> {
         margin_width_pt: number("MarginWidth")?,
         hash_spacing_pt: number("HashSpacing")?,
         bond_spacing_ratio: number("BondSpacing")? / 100.,
+        crossing_clearance_pt: presentation.crossing_clearance_pt as f32,
         two_wedge_stereocentres: presentation.two_wedge_stereocentres,
         ring_fusion_hydrogens: presentation.ring_fusion_hydrogens,
         wavy_unknown_alkenes: presentation.wavy_unknown_alkenes,

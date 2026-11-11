@@ -193,7 +193,7 @@ pub fn format(points: f32, unit: Unit) -> String {
     compact(format!("{amount:.16e}"))
 }
 
-/// The five physical Drawing Style fields share their existing point limits.
+/// The physical Drawing Style fields share their existing point limits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dimension {
     Bond,
@@ -201,15 +201,24 @@ pub enum Dimension {
     Bold,
     Margin,
     Hash,
+    Crossing,
 }
 impl Dimension {
-    pub const ALL: [Self; 5] = [Self::Bond, Self::Line, Self::Bold, Self::Margin, Self::Hash];
+    pub const ALL: [Self; 6] = [
+        Self::Bond,
+        Self::Line,
+        Self::Bold,
+        Self::Margin,
+        Self::Hash,
+        Self::Crossing,
+    ];
     pub fn name(self) -> &'static str {
         match self {
             Self::Bond => "Bond length",
             Self::Line => "Line width",
             Self::Bold => "Bold width",
             Self::Margin => "Label margin",
+            Self::Crossing => "Crossing clearance",
             Self::Hash => "Hash spacing",
         }
     }
@@ -218,7 +227,7 @@ impl Dimension {
             Self::Bond => (5., 100.),
             Self::Line => (0.1, 6.),
             Self::Bold => (0.1, 12.),
-            Self::Margin => (0., 12.),
+            Self::Margin | Self::Crossing => (0., 12.),
             Self::Hash => (0.3, 12.),
         }
     }
@@ -228,6 +237,7 @@ impl Dimension {
             Self::Line => style.line_width_pt,
             Self::Bold => style.bold_width_pt,
             Self::Margin => style.margin_width_pt,
+            Self::Crossing => style.crossing_clearance_pt,
             Self::Hash => style.hash_spacing_pt,
         }
     }
@@ -237,6 +247,7 @@ impl Dimension {
             Self::Line => style.line_width_pt = value,
             Self::Bold => style.bold_width_pt = value,
             Self::Margin => style.margin_width_pt = value,
+            Self::Crossing => style.crossing_clearance_pt = value,
             Self::Hash => style.hash_spacing_pt = value,
         }
     }
