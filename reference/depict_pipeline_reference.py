@@ -186,6 +186,7 @@ def observe(case):
         "forceRDKit": True,
         "useRingTemplates": options["use_ring_templates"],
         "nSample": 0,
+        "usePathAngleExpansion": True,
         "nFlipsPerSample": 0,
     }
     if options["bond_length"] is not None:
