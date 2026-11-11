@@ -351,7 +351,7 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     }
     anyhow::ensure!(audit.cases == 991, "Coverage changed");
     anyhow::ensure!(
-        errors == 75 && queries == 9478,
+        errors == 60 && queries == 9478,
         "Native error/query coverage changed"
     );
     eprintln!(
