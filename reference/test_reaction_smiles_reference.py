@@ -36,9 +36,16 @@ class ReactionSmilesReferenceTests(unittest.TestCase):
         )
         self.assertEqual(actual["agents"][0]["conformers"], [])
         self.assertEqual(actual["products"][0]["conformers"], [])
+
+        # The coordinates differ by design; the prepared chemistry must not.
+        def chemistry(prepared):
+            return {**prepared, "state": dict(prepared["state"], conformer=None)}
+
         for role, parts in read("CO>N>CC").items():
             for index, part in enumerate(parts):
-                self.assertEqual(actual[role][index]["prepared"], part["prepared"])
+                self.assertEqual(
+                    chemistry(actual[role][index]["prepared"]), chemistry(part["prepared"])
+                )
 
     def test_global_coverage_uses_reactants_then_agents_then_products(self):
         actual = read("C.O>N.C>CC |(0,0,;1,0,;2,0,;3,0,)|")

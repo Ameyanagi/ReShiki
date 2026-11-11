@@ -505,7 +505,7 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
     anyhow::ensure!(header.format_version == 1, "Unsupported fixture format");
     anyhow::ensure!(
         header.rdkit_version == reshiki::chemistry::RDKIT_VERSION
-            && header.rdkit_source == "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+            && header.rdkit_source == "fece8caa860bdf6c9c82bdb9253f22a0cf87150c",
         "Fixture RDKit identity differs"
     );
     anyhow::ensure!(

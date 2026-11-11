@@ -101,7 +101,7 @@ class PreparedMoleculeTests(unittest.TestCase):
                 for mol in [*native.GetReactants(), *native.GetAgents(), *native.GetProducts()]:
                     Chem.SanitizeMol(mol)
                     n = mol.GetNumAtoms()
-                    before = snapshot(mol, "symmetric")
+                    before = snapshot(mol, "symmetric", include_conformer=False)
                     inputs.append(
                         dict(
                             molecule=dict(
@@ -117,7 +117,7 @@ class PreparedMoleculeTests(unittest.TestCase):
                     )
                     next_id += n
                     rdDepictor.Compute2DCoords(mol)
-                    self.assertEqual(snapshot(mol, "symmetric"), before)
+                    self.assertEqual(snapshot(mol, "symmetric", include_conformer=False), before)
                     positions.append(
                         [
                             dict(x=p.x, y=p.y, z=p.z)
@@ -326,12 +326,13 @@ class PreparedMoleculeTests(unittest.TestCase):
         ):
             with self.subTest(text=text):
                 original = Chem.MolFromSmiles(text)
-                state = snapshot(original, "symmetric")
+                # Layout moves the conformer; the chemistry must not change.
+                state = snapshot(original, "symmetric", include_conformer=False)
                 expected = worker.handle(
                     dict(protocol=1, operation="import", format="smiles", text=text)
                 )
                 rdDepictor.Compute2DCoords(original)
-                self.assertEqual(snapshot(original, "symmetric"), state)
+                self.assertEqual(snapshot(original, "symmetric", include_conformer=False), state)
 
                 def payload(mol):
                     conf = mol.GetConformer()
