@@ -454,6 +454,7 @@ fn coordinates(state: &State, properties: &[Vec<(Vec<u8>, Vec<u8>)>]) -> Result<
             use_ring_templates: false,
             // RDKit 2026.09.1's path angle expansion (#735) is a refinement.
             path_angle_expansion: molecular::refine(),
+            preserve_spiro_rings: molecular::refine(),
             ..depict::Options::default()
         },
     )?;

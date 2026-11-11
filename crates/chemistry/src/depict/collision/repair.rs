@@ -2,6 +2,71 @@ use super::super::geometry::Transform;
 use super::*;
 
 impl Input<'_> {
+    pub(in crate::depict) fn preserve_spiro_rings_with_work(
+        &self,
+        original: &Fragment,
+        repaired: &Fragment,
+        bond_length: f64,
+        remaining: &mut usize,
+    ) -> Result<Fragment, Error> {
+        self.with_work(repaired, remaining, |value, session| {
+            let tolerance = bond_length * 1e-6;
+            let mut shortened_ring = false;
+            // Only rings drawn regular before repair qualify.
+            'rings: for ring in &self.rings.atoms {
+                session.spend(1)?;
+                if !original.atoms.contains_key(at(ring, 0)?) {
+                    continue;
+                }
+                let (mut minimum, mut maximum) = (f64::INFINITY, 0.0f64);
+                for (i, &a) in ring.iter().enumerate() {
+                    session.spend(1)?;
+                    let b = *at(ring, (i + 1) % ring.len())?;
+                    let length = |fragment: &Fragment| -> Result<f64, Error> {
+                        Ok(squared(sub(
+                            atom(fragment, a)?.location,
+                            atom(fragment, b)?.location,
+                        )?)?
+                        .sqrt())
+                    };
+                    if (length(original)? - bond_length).abs() > tolerance {
+                        continue 'rings;
+                    }
+                    let length = length(value)?;
+                    minimum = minimum.min(length);
+                    maximum = maximum.max(length);
+                }
+                shortened_ring |= maximum - minimum > tolerance;
+            }
+            if !shortened_ring {
+                return Ok(());
+            }
+            let mut spiro = false;
+            for &id in original.atoms.keys() {
+                session.spend(1)?;
+                if self.spiro(id, session)? {
+                    spiro = true;
+                    break;
+                }
+            }
+            if !spiro {
+                return Ok(());
+            }
+            // ShortenBonds can squash a regular ring to clear a spiro clash
+            // (#1112). Rotate the unshortened sides using the existing repair.
+            session.spend(original.atoms.len())?;
+            let mut candidate = original.clone();
+            self.path_angle_expansion(&mut candidate, session)?;
+            if self
+                .find_in_place(&mut candidate, true, session)?
+                .is_empty()
+            {
+                *value = candidate;
+            }
+            Ok(())
+        })
+    }
+
     fn one_side(
         &self,
         start: usize,

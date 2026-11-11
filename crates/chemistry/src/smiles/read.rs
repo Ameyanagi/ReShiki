@@ -364,6 +364,14 @@ fn int_property(
     value
 }
 
+fn attachment_label_number(label: &[u8]) -> Option<u32> {
+    let suffix = label.strip_prefix(b"_AP")?;
+    if suffix.is_empty() || !suffix.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    std::str::from_utf8(suffix).ok()?.parse().ok()
+}
+
 fn relative_stereo(state: &mut State, relative: &HashSet<usize>) -> Result<bool> {
     let metadata = &state.metadata;
     // Explicit enhanced stereo labels take precedence over relative flags.
@@ -489,6 +497,11 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
             entries
         })
         .collect();
+    let mut degree = vec![0usize; clean.graph.atoms.len()];
+    for bond in &clean.graph.bonds {
+        *degree.get_mut(bond.a).ok_or(Error::Limit)? += 1;
+        *degree.get_mut(bond.b).ok_or(Error::Limit)? += 1;
+    }
     let mut imported = Imported {
         dropped_cumulene_ez: false,
         relative: !annotations.relative.is_empty(),
@@ -498,12 +511,17 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
             .properties
             .iter()
             .zip(&clean.graph.atoms)
-            .map(|(props, atom)| {
-                props.contains_key(b"_fromAttachPoint".as_slice())
+            .zip(degree)
+            .map(|((props, atom), degree)| {
+                // WedgeBonds tests the native property, not marked attachment
+                // identity. CleanupAfterParsing (#9454) adds it only for labels 1/2.
+                props.contains_key(b"_fromAttchpt".as_slice())
                     || atom.atomic_number == 0
+                        && degree == 1
                         && props
                             .get(b"atomLabel".as_slice())
-                            .is_some_and(|s| matches!(s.as_slice(), b"_AP1" | b"_AP2"))
+                            .and_then(|label| attachment_label_number(label))
+                            .is_some_and(|number| matches!(number, 1 | 2))
             })
             .collect(),
         prepared: Prepared {

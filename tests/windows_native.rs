@@ -5,6 +5,65 @@ use reshiki::{
     printing::{self, Scope},
 };
 
+#[test]
+fn office_server_is_per_monitor_dpi_aware() {
+    use std::{
+        os::windows::io::AsRawHandle,
+        process::{Child, Command, Stdio},
+        time::{Duration, Instant},
+    };
+    use windows::Win32::{
+        Foundation::HANDLE,
+        UI::HiDpi::{
+            DPI_AWARENESS_PER_MONITOR_AWARE, GetAwarenessFromDpiAwarenessContext,
+            GetDpiAwarenessContextForProcess,
+        },
+    };
+
+    struct Server(Child);
+    impl Drop for Server {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    // #1123: edited Office previews must use the same display metrics as the
+    // per-monitor-aware editor. Session 0 (services, CI) makes every process
+    // per-monitor aware, so only an interactive desktop session detects a regression.
+    let data = tempfile::tempdir().unwrap();
+    let mut server = Server(
+        Command::new(env!("CARGO_BIN_EXE_reshiki"))
+            .arg("--ole-server")
+            .env("RESHIKI_DATA_DIR", data.path())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("start OLE server"),
+    );
+    let process = HANDLE(server.0.as_raw_handle());
+    let started = Instant::now();
+    let awareness = loop {
+        let awareness = unsafe {
+            GetAwarenessFromDpiAwarenessContext(GetDpiAwarenessContextForProcess(process))
+        };
+        if awareness == DPI_AWARENESS_PER_MONITOR_AWARE
+            || started.elapsed() >= Duration::from_secs(10)
+        {
+            break awareness;
+        }
+        if let Some(status) = server.0.try_wait().expect("query OLE server status") {
+            panic!("OLE server exited before setting DPI awareness: {status}");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert_eq!(
+        awareness, DPI_AWARENESS_PER_MONITOR_AWARE,
+        "OLE server did not become per-monitor DPI aware within 10 seconds"
+    );
+}
+
 fn emf_u32(bytes: &[u8], offset: usize) -> u32 {
     u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
 }

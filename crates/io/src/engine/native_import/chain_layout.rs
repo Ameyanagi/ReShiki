@@ -263,6 +263,7 @@ fn improve_with_limit(
                 depict::Options {
                     work_limit,
                     path_angle_expansion: crate::chemistry::document::refine(),
+                    preserve_spiro_rings: crate::chemistry::document::refine(),
                     ..Default::default()
                 },
             ) && clearance::geometry(state, &candidate.positions) == Quality::Clear
