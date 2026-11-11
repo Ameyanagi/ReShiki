@@ -277,6 +277,7 @@ fn generic_nmr_gate_covers_connected_dependencies_but_not_independent_components
         count: RepeatCount::Finite { min: 1, max: 3 },
         label: "1-3".into(),
         flip: "NoFlip".into(),
+        label_offset: None,
     };
     let mut touched = plain.clone();
     generic::set_repeat_unit(&mut touched, unit(2, 1, 3)).unwrap();

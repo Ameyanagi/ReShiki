@@ -1,10 +1,11 @@
 //! Finite expansion creates a new drawing; the source and its history stay intact.
 use super::inspector::Section;
-use super::workspace::{accessible_command, hover_hint, muted_text};
+use super::workspace::{accessible_command, accessible_unit_field, hover_hint, muted_text};
 use super::{App, Message, Tool, document_tab::TabId};
 use iced::widget::{Row, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
-use reshiki::generic::{Limits, PreparedExpansion, RepeatPattern};
+use reshiki::document::Point;
+use reshiki::generic::{Limits, PreparedExpansion, RepeatPattern, RepeatUnit};
 
 pub(super) const EXPANSION_DISCARDED: &str =
     "Generic expansion was discarded because another edit was open; expand again";
@@ -18,6 +19,10 @@ const DEFINE_HINT: &str = "Records the enclosed atoms and the existing crossing 
 const CLEAR_HINT: &str = "Removes the definition; the bracket stays";
 const NOTHING_TO_CLEAR: &str = "This bracket has no repeating unit";
 const REPEAT_HINT: &str = "Use n for an indefinite polymer.";
+const OFFSET_HINT: &str = "Moves the label from its automatic place; positive Y is down.";
+const POSITION_HINT: &str = "Drag the label's handle · Escape finishes";
+const AUTOMATIC_HINT: &str = "The label follows the bracket's lower-right corner";
+const AUTOMATIC_ALREADY: &str = "The label is already in its automatic place";
 /// The Repeats field and the Pattern list share one column.
 const FIELD_WIDTH: f32 = 140.;
 
@@ -34,10 +39,19 @@ pub enum Action {
     Pattern(RepeatPattern),
     DefineRepeat(u64),
     ClearRepeat(u64),
+    /// Typed label offsets in points; Enter applies that axis only.
+    LabelX(String),
+    LabelY(String),
+    /// The bracket and whether the Y field was submitted.
+    ApplyLabelOffset(u64, bool),
+    PositionLabel,
+    AutomaticLabel(u64),
 }
 pub struct State {
     pub label: String,
     pub pattern: RepeatPattern,
+    pub label_x: String,
+    pub label_y: String,
     pending: Option<(TabId, u64)>,
 }
 impl Default for State {
@@ -45,6 +59,8 @@ impl Default for State {
         Self {
             label: "n".into(),
             pattern: RepeatPattern::HeadToTail,
+            label_x: "0".into(),
+            label_y: "0".into(),
             pending: None,
         }
     }
@@ -113,6 +129,41 @@ impl App {
                     }
                     Err(error) => return self.generic_failed(error),
                 }
+            }
+            Action::LabelX(value) => self.generic.label_x = value,
+            Action::LabelY(value) => self.generic.label_y = value,
+            Action::ApplyLabelOffset(bracket, vertical) => {
+                let typed = if vertical {
+                    &self.generic.label_y
+                } else {
+                    &self.generic.label_x
+                };
+                let Some(points) = typed.trim().parse::<f32>().ok().filter(|v| v.is_finite())
+                else {
+                    return self
+                        .generic_failed("Type the label offset in points, such as 6 or -4.5");
+                };
+                let value = self.tab.doc.drawing_style.world(points);
+                let mut offset = self
+                    .repeat_unit(bracket)
+                    .and_then(|u| u.label_offset)
+                    .unwrap_or_default();
+                if vertical {
+                    offset.y = value;
+                } else {
+                    offset.x = value;
+                }
+                self.set_repeat_label_offset(bracket, Some(offset));
+                self.status = "Repeat label moved".into();
+            }
+            Action::PositionLabel => {
+                self.tool = Tool::EditPoints;
+                self.status = POSITION_HINT.into();
+                self.error = false;
+            }
+            Action::AutomaticLabel(bracket) => {
+                self.set_repeat_label_offset(bracket, None);
+                self.status = "Repeat label returned to its automatic place".into();
             }
             Action::ClearRepeat(bracket) => {
                 let before = self.tab.doc.clone();
@@ -234,6 +285,46 @@ impl App {
         }
         Task::none()
     }
+    fn repeat_unit(&self, bracket: u64) -> Option<&RepeatUnit> {
+        self.tab
+            .doc
+            .generic
+            .repeats
+            .iter()
+            .find(|u| u.drawn_with(bracket))
+    }
+    fn set_repeat_label_offset(&mut self, bracket: u64, offset: Option<Point>) {
+        let before = self.tab.doc.clone();
+        if let Some(unit) = self
+            .tab
+            .doc
+            .generic
+            .repeats
+            .iter_mut()
+            .find(|u| u.drawn_with(bracket))
+        {
+            unit.label_offset = offset;
+        }
+        self.changed(before);
+        self.error = false;
+        self.show_repeat_label_offset();
+    }
+    /// Show the selected bracket's label offset, in points, in the X and Y fields.
+    pub(super) fn show_repeat_label_offset(&mut self) {
+        let offset = self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .filter(|g| self.tab.selected.contains(&g.id))
+            .find_map(|g| self.repeat_unit(g.id))
+            .and_then(|u| u.label_offset)
+            .unwrap_or_default();
+        let points = self.tab.doc.drawing_style.points_per_world();
+        let shown = |v: f32| ((v * points * 100.).round() / 100.).to_string();
+        self.generic.label_x = shown(offset.x);
+        self.generic.label_y = shown(offset.y);
+    }
     fn generic_failed(&mut self, message: impl Into<String>) -> Task<Message> {
         self.status = message.into();
         self.error = true;
@@ -297,29 +388,49 @@ impl App {
             return None;
         }
         let id = bracket.id;
-        let defined = self
-            .tab
-            .doc
-            .generic
-            .repeats
-            .iter()
-            .any(|u| u.bracket == Some(id) || u.bracket_objects.contains(&id));
-        Some(
-            self.inspector_section(
-                Section::RepeatingUnit,
-                "Repeating unit",
-                "",
-                true,
-                column![
-                    self.repeat_count_row(id),
-                    self.pattern_row(),
-                    self.define_repeat_button(id),
-                    self.clear_repeat_button(defined, id),
-                    text(REPEAT_HINT).size(11).style(muted_text),
-                ]
-                .spacing(6),
-            ),
+        let unit = self.repeat_unit(id);
+        let mut body = column![
+            self.repeat_count_row(id),
+            self.pattern_row(),
+            self.define_repeat_button(id),
+            self.clear_repeat_button(unit.is_some(), id),
+            text(REPEAT_HINT).size(11).style(muted_text),
+        ]
+        .spacing(6);
+        // Only a unit drawn with its bracket shows a label to move.
+        if let Some(unit) = unit.filter(|u| u.bracket.is_some()) {
+            body = body
+                .push(label_offset_row(id, false, &self.generic.label_x))
+                .push(label_offset_row(id, true, &self.generic.label_y))
+                .push(self.position_label_button())
+                .push(self.automatic_label_button(unit.label_offset.is_some(), id))
+                .push(text(OFFSET_HINT).size(11).style(muted_text));
+        }
+        Some(self.inspector_section(Section::RepeatingUnit, "Repeating unit", "", true, body))
+    }
+    fn position_label_button(&self) -> Element<'_, Message> {
+        let label = "Position repeat label";
+        hover_hint(
+            accessible_command("position-polymer-label", label, label)
+                .on_press(Message::Generic(Action::PositionLabel)),
+            POSITION_HINT,
+            tooltip::Position::Top,
         )
+        .into()
+    }
+    fn automatic_label_button(&self, moved: bool, id: u64) -> Element<'_, Message> {
+        let label = "Restore automatic label position";
+        hover_hint(
+            accessible_command("automatic-polymer-label", label, label)
+                .on_press_maybe(moved.then_some(Message::Generic(Action::AutomaticLabel(id)))),
+            if moved {
+                AUTOMATIC_HINT
+            } else {
+                AUTOMATIC_ALREADY
+            },
+            tooltip::Position::Top,
+        )
+        .into()
     }
     fn repeat_count_row(&self, id: u64) -> Row<'_, Message> {
         let field = reshiki::accessibility::text_input(
@@ -374,6 +485,21 @@ impl App {
         )
         .into()
     }
+}
+
+/// One typed label offset; Enter applies that axis.
+fn label_offset_row(id: u64, vertical: bool, value: &str) -> Row<'_, Message> {
+    let (label, key, input): (_, _, fn(String) -> Action) = if vertical {
+        ("Label Y", "polymer-label-y", Action::LabelY)
+    } else {
+        ("Label X", "polymer-label-x", Action::LabelX)
+    };
+    let field =
+        reshiki::accessibility::text_input(key, format!("Repeat {label} offset (pt)"), "0", value)
+            .style(crate::appearance::input_style)
+            .on_input(move |s| Message::Generic(input(s)))
+            .on_submit(Message::Generic(Action::ApplyLabelOffset(id, vertical)));
+    labeled(label, accessible_unit_field(field, "pt"))
 }
 
 /// A label and its field on one centered row; fields share one column.

@@ -137,9 +137,10 @@ number of graphic objects. `.rsk` files keep ReShiki's exact model.
 
 `.rsk`/SVG/PDF/PNG keep dots. SVG/PDF/EMF/PNG draw path arrowheads, and
 CDXML/CDX keep their editable head settings on open curves.
-Chemical polymer semantics, unsupported legacy
-shapes, doubled/shaded curves, transparency, shadows and arbitrary
-external styling are not implemented.
+Unsupported legacy shapes, doubled/shaded curves, transparency, shadows and
+arbitrary external styling are not implemented. A bracket becomes a polymer
+repeating unit, with a movable repeat label, through **Define repeating unit**;
+see [generic structures](generic-structures.md#define-a-repeating-unit).
 
 Format references: the
 [published CDXML DTD](https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd),

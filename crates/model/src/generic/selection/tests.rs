@@ -29,6 +29,7 @@ fn empty_repeat() -> RepeatUnit {
         count: RepeatCount::Finite { min: 1, max: 1 },
         label: "1".into(),
         flip: String::new(),
+        label_offset: None,
     }
 }
 

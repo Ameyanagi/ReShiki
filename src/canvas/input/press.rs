@@ -251,6 +251,24 @@ impl MoleculeCanvas<'_> {
                     return Some(Action::request_redraw().and_capture());
                 }
             }
+            // After the bracket's own points, which win where they overlap.
+            let pad = self.camera.world_len(3.);
+            if let Some(bracket) = self
+                .doc
+                .generic
+                .repeats
+                .iter()
+                .filter(|u| self.selected.iter().any(|id| u.drawn_with(*id)))
+                .find_map(|u| {
+                    let (lo, hi) = u.label_box(self.doc)?;
+                    let inside = (lo.x - pad..=hi.x + pad).contains(&p.x)
+                        && (lo.y - pad..=hi.y + pad).contains(&p.y);
+                    inside.then_some(u.bracket?)
+                })
+            {
+                state.gesture = Some(Gesture::RepeatLabelMove { bracket, start: p });
+                return Some(Action::request_redraw().and_capture());
+            }
         }
         None
     }

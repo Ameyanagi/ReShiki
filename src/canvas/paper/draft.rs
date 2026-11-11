@@ -234,6 +234,13 @@ impl MoleculeCanvas<'_> {
                     Some(World::new(end.x - anchor.x, end.y - anchor.y)),
                 );
             }
+            if let Some(Gesture::RepeatLabelMove { bracket, start }) = &state.gesture {
+                reshiki::generic::move_repeat_label(
+                    preview.to_mut(),
+                    *bracket,
+                    World::new(end.x - start.x, end.y - start.y),
+                );
+            }
             if let Some(Gesture::GraphicPoint { id, index }) = &state.gesture
                 && let Some(g) = preview.to_mut().graphics.iter_mut().find(|g| g.id == *id)
             {

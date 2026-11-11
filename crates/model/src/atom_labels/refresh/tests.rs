@@ -471,6 +471,7 @@ fn generic_refresh_skips_prior_concrete_cache_and_keeps_independent_labels_usabl
             count: RepeatCount::Finite { min: 1, max: 3 },
             label: "1-3".into(),
             flip: "NoFlip".into(),
+            label_offset: None,
         },
     )
     .unwrap();

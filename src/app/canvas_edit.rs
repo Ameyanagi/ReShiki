@@ -198,6 +198,10 @@ impl App {
                     );
                 }
             }
+            Edit::RepeatLabelMove(bracket, delta) => {
+                reshiki::generic::move_repeat_label(&mut self.tab.doc, bracket, delta);
+                self.show_repeat_label_offset();
+            }
             Edit::AtomMark(id, index, p, free) => {
                 if let Some(a) = self.tab.doc.atom(id)
                     && let Some(mark) = a.marks.get(index)
