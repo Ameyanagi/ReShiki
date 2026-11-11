@@ -51,7 +51,7 @@ fn generated(text: &str, options: DrawingOptions) -> anyhow::Result<Document> {
 }
 
 #[test]
-fn import_stereo_groups_keep_atom_members_and_normalize_colliding_ids() -> anyhow::Result<()> {
+fn import_stereo_groups_keep_file_numbers_and_number_missing_ids() -> anyhow::Result<()> {
     use crate::stereo_groups::{Kind, StereoGroup};
     let (mut molecule, dummy_labels) = depicted("CCCCCCCC")?;
     let group = |kind, atoms, bonds, read_id, write_id| ranking::StereoGroup {
@@ -77,7 +77,7 @@ fn import_stereo_groups_keep_atom_members_and_normalize_colliding_ids() -> anyho
         }),
         Some(StereoGroup {
             kind: Kind::And,
-            number: 2,
+            number: 7,
         }),
         Some(StereoGroup {
             kind: Kind::And,
@@ -93,7 +93,7 @@ fn import_stereo_groups_keep_atom_members_and_normalize_colliding_ids() -> anyho
         }),
         Some(StereoGroup {
             kind: Kind::And,
-            number: 3,
+            number: 2,
         }),
         None,
         None,

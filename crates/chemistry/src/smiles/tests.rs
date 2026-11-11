@@ -874,6 +874,11 @@ fn cx_group_writer_remaps_members_and_keeps_ungrouped_centres_absolute() -> anyh
         assert!(super::write::cx_groups(&state.metadata, &output.atom_order)?.is_empty());
     }
     assert!(super::write::cx_groups(&state.metadata, &[0; 8]).is_err());
+    // Two groups without numbers stay two groups.
+    let state = super::read("C[C@H](O)[C@H](F)Cl |&0:1,r|")?.prepared.state;
+    let output = super::write::write(&state, Default::default())?;
+    let suffix = super::write::cx_groups(&state.metadata, &output.atom_order)?;
+    assert_eq!(suffix.matches('&').count(), 2, "{suffix}");
     Ok(())
 }
 

@@ -1116,8 +1116,8 @@ fn abbreviation_member_selection_analyzes_the_whole_abbreviation_without_labels(
     assert_eq!(app.tab.doc, before);
 }
 
-/// #766: the Stereo groups section assigns only the selected stereocentres,
-/// numbers new groups after the used ones, and each change is one Undo step.
+/// #766: the Stereo groups section assigns only the selected stereocentres.
+/// Numbers belong to each molecule, and each change is one Undo step.
 #[test]
 fn stereo_groups_assign_selected_centres_with_undo() {
     use reshiki::stereo_groups::{Kind, StereoGroup};
@@ -1134,29 +1134,28 @@ fn stereo_groups_assign_selected_centres_with_undo() {
         kind: Kind::And,
         number,
     };
-    doc.atom_mut(other).unwrap().stereo_group = Some(and(1));
+    doc.atom_mut(other).unwrap().stereo_group = Some(and(3));
     let groups =
         |app: &App| [centre, plain, other].map(|id| app.tab.doc.atom(id).unwrap().stereo_group);
     app.tab.selected = vec![centre, plain];
-    let new = GroupChoice::New(reshiki::stereo_groups::next(&app.tab.doc, Kind::And));
-    assert_eq!(new, GroupChoice::New(and(2)));
+    // The other molecule's and3 does not take this molecule's first number.
+    let new = GroupChoice::New(reshiki::stereo_groups::next(
+        &app.tab.doc,
+        &[centre],
+        Kind::And,
+    ));
+    assert_eq!(new, GroupChoice::New(and(1)));
     let _ = app.update(Message::InspectorAction(Action::StereoGroup(new)));
-    assert_eq!(groups(&app), [Some(and(2)), None, Some(and(1))]);
-    let _ = app.update(Message::InspectorAction(Action::RenumberStereoGroups));
-    assert_eq!(groups(&app), [Some(and(2)), None, Some(and(1))]);
+    assert_eq!(groups(&app), [Some(and(1)), None, Some(and(3))]);
     let _ = app.update(Message::InspectorAction(Action::StereoGroup(
         GroupChoice::Absolute,
     )));
-    assert_eq!(groups(&app), [None, None, Some(and(1))]);
+    assert_eq!(groups(&app), [None, None, Some(and(3))]);
     let _ = app.update(Message::Undo);
-    assert_eq!(groups(&app), [Some(and(2)), None, Some(and(1))]);
-    app.tab.selected = vec![other];
-    let _ = app.update(Message::InspectorAction(Action::StereoGroup(
-        GroupChoice::Absolute,
-    )));
+    assert_eq!(groups(&app), [Some(and(1)), None, Some(and(3))]);
     let _ = app.update(Message::InspectorAction(Action::RenumberStereoGroups));
-    assert_eq!(groups(&app), [Some(and(1)), None, None]);
+    assert_eq!(groups(&app), [Some(and(1)), None, Some(and(1))]);
     let _ = app.update(Message::Undo);
-    assert_eq!(groups(&app), [Some(and(2)), None, None]);
+    assert_eq!(groups(&app), [Some(and(1)), None, Some(and(3))]);
     app.tab.doc.validate().unwrap();
 }

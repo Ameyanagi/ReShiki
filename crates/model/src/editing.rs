@@ -441,7 +441,6 @@ fn mapped_append_part(
         model.remap(&mapping)?;
     }
     part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
-    crate::stereo_groups::renumber_incoming(doc, &mut part.atoms);
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
         if matches!(mode, AppendMode::Ordinary) && source.atom_labels != doc.atom_labels {
@@ -457,6 +456,10 @@ fn mapped_append_part(
                 .stereo
                 .show
                 .get_or_insert(source.atom_labels.stereo);
+            a.display
+                .stereo_group
+                .show
+                .get_or_insert(source.atom_labels.stereo_groups);
         }
         let mapped = mapping.get(&a.id).copied()?;
         a.id = mapped;

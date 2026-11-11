@@ -27,14 +27,31 @@ pub fn groups(metadata: &Metadata, atom_order: &[usize]) -> Result<String, Error
             .flatten()
             .ok_or_else(|| invalid("CX stereo atom was not written"))
     };
-    let mut fields = BTreeMap::<(u8, u32), BTreeSet<usize>>::new();
-    let mut grouped = HashSet::new();
-    for group in metadata.groups.iter().filter(|group| group.kind != 0) {
-        let id = if group.write_id != 0 {
+    let preferred = |group: &crate::ranking::StereoGroup| {
+        if group.write_id != 0 {
             group.write_id
         } else {
             group.read_id
-        };
+        }
+    };
+    // Each group is written separately: a group without a number, or one
+    // repeating an earlier group's number, gets a number nothing uses.
+    let numbered: HashSet<_> = metadata
+        .groups
+        .iter()
+        .map(|group| (group.kind, preferred(group)))
+        .collect();
+    let mut fields = BTreeMap::<(u8, u32), BTreeSet<usize>>::new();
+    let mut grouped = HashSet::new();
+    for group in metadata.groups.iter().filter(|group| group.kind != 0) {
+        let mut id = preferred(group);
+        if id == 0 || fields.contains_key(&(group.kind, id)) {
+            id = (1..)
+                .find(|&n| {
+                    !numbered.contains(&(group.kind, n)) && !fields.contains_key(&(group.kind, n))
+                })
+                .ok_or(Error::Limit)?;
+        }
         for &atom in &group.atoms {
             grouped.insert(atom);
             fields

@@ -3,7 +3,7 @@ use crate::document::{AtomStereo, Point};
 use anyhow::Context;
 
 #[test]
-fn drawing_stereo_groups_build_in_label_order_with_stable_ids() -> anyhow::Result<()> {
+fn drawing_stereo_groups_build_per_molecule_in_label_order() -> anyhow::Result<()> {
     use crate::stereo_groups::{Kind, StereoGroup};
     let mut source = Document::default();
     for group in [
@@ -35,8 +35,11 @@ fn drawing_stereo_groups_build_in_label_order_with_stable_ids() -> anyhow::Resul
             .iter()
             .map(|g| (g.kind, g.read_id, g.write_id, g.atoms.clone()))
             .collect::<Vec<_>>(),
+        // The atoms are separate molecules, so the second or1 is its own
+        // group and gets the next free number.
         [
-            (1, 1, 1, vec![0, 3]),
+            (1, 1, 1, vec![0]),
+            (1, 2, 2, vec![3]),
             (2, 1, 1, vec![2]),
             (2, 3, 3, vec![1])
         ]

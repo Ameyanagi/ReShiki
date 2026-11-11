@@ -153,14 +153,6 @@ impl Writer<'_> {
             } else if enhanced_stereo && centre {
                 self.tree.set(node, "EnhancedStereoType", "Absolute")?;
             }
-            if enhanced_stereo && centre {
-                let show = a
-                    .display
-                    .stereo_group
-                    .show
-                    .unwrap_or(doc.atom_labels.stereo_groups);
-                self.tree.set(node, "ShowAtomEnhancedStereo", yes(show))?;
-            }
             // ChemDraw's "not a stereocentre" tells import that this metal's
             // wedges are frame projection, not tetrahedral stereo.
             if frame_metals.get(&a.id) == Some(&true) {
@@ -610,6 +602,10 @@ impl Writer<'_> {
             ("ShowBondStereo", settings.stereo),
         ] {
             self.tree.set(0, k, yes(v))?;
+        }
+        if doc.atoms.iter().any(|a| a.stereo_group.is_some()) {
+            self.tree
+                .set(0, "ShowAtomEnhancedStereo", yes(settings.stereo_groups))?;
         }
         for a in &doc.atoms {
             let n = self.atom_node(a.id)?;

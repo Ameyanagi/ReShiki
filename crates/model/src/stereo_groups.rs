@@ -2,11 +2,12 @@
 //! its drawn configuration. A stereocentre without a group is absolute (ABS).
 //! Centres sharing an AND group are a 1:1 mixture of the drawn form and its
 //! mirror image at those centres; centres sharing an OR group are one of the
-//! two, not known which. Numbers are shared by the whole drawing, so equal
-//! labels always mean the same group.
+//! two, not known which. A group belongs to one molecule (connected
+//! component), as in a MOL file: `and1` on two separate molecules are two
+//! independent groups.
 use crate::document::{Atom, Document};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -34,88 +35,47 @@ impl std::fmt::Display for StereoGroup {
     }
 }
 
-/// The groups the drawing uses, in label order.
-pub fn used(doc: &Document) -> Vec<StereoGroup> {
-    let mut groups: Vec<_> = doc
-        .atoms
-        .iter()
-        .filter_map(|a| a.stereo_group)
-        .collect::<HashSet<_>>()
+/// The groups of the molecules that contain `ids`, in label order.
+pub fn used(doc: &Document, ids: &[u64]) -> Vec<StereoGroup> {
+    let groups: BTreeSet<_> = crate::reactions::molecules(doc, ids)
         .into_iter()
+        .flatten()
+        .filter_map(|id| doc.atom(id)?.stereo_group)
         .collect();
-    groups.sort();
-    groups
+    groups.into_iter().collect()
 }
 
-/// The lowest number of this kind that no atom uses.
-pub fn next(doc: &Document, kind: Kind) -> StereoGroup {
-    let taken: HashSet<_> = doc
-        .atoms
-        .iter()
-        .filter_map(|a| a.stereo_group.filter(|g| g.kind == kind))
-        .map(|g| g.number)
-        .collect();
-    let number = (1..).find(|n| !taken.contains(n)).unwrap_or(1);
-    StereoGroup { kind, number }
+/// The lowest number of this kind that the molecules containing `ids` do not
+/// use yet.
+pub fn next(doc: &Document, ids: &[u64], kind: Kind) -> StereoGroup {
+    let used = used(doc, ids);
+    (1..)
+        .map(|number| StereoGroup { kind, number })
+        .find(|group| !used.contains(group))
+        .unwrap_or(StereoGroup { kind, number: 1 })
 }
 
-/// Give pasted or inserted atoms group numbers the drawing does not use yet,
-/// so a pasted racemate never joins an existing group by accident. Groups
-/// within the incoming atoms stay together.
-pub fn renumber_incoming(doc: &Document, incoming: &mut [Atom]) {
-    let mut taken: HashSet<_> = doc.atoms.iter().filter_map(|a| a.stereo_group).collect();
-    let mut renamed = HashMap::new();
-    for atom in incoming {
-        let Some(group) = atom.stereo_group else {
-            continue;
-        };
-        atom.stereo_group = Some(*renamed.entry(group).or_insert_with(|| {
-            let fresh = (!taken.contains(&group))
-                .then_some(group)
-                .or_else(|| {
-                    (1..)
-                        .map(|number| StereoGroup {
-                            kind: group.kind,
-                            number,
-                        })
-                        .find(|g| !taken.contains(g))
-                })
-                .unwrap_or(group);
-            taken.insert(fresh);
-            fresh
-        }));
-    }
-}
-
-pub(crate) fn validate(atom: &Atom) -> Result<(), String> {
-    if atom.stereo_group.is_some_and(|g| g.number == 0) {
-        return Err("Stereo group numbers start at 1".into());
-    }
-    Ok(())
-}
-
-/// Number each kind's groups 1, 2, 3… in their current order. Returns whether
-/// anything changed.
+/// Number each molecule's AND and OR groups 1, 2, 3… in their current order.
+/// Returns whether anything changed.
 pub fn renumber(doc: &mut Document) -> bool {
-    let mut counts = HashMap::new();
-    let renamed: HashMap<_, _> = used(doc)
-        .into_iter()
-        .map(|group| {
+    let all: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+    let mut renamed = HashMap::new();
+    for molecule in crate::reactions::molecules(doc, &all) {
+        let mut counts = HashMap::new();
+        for group in used(doc, &molecule) {
             let count = counts.entry(group.kind).or_insert(0);
             *count += 1;
-            (
-                group,
-                StereoGroup {
-                    kind: group.kind,
-                    number: *count,
-                },
-            )
-        })
-        .collect();
+            let fresh = StereoGroup {
+                kind: group.kind,
+                number: *count,
+            };
+            renamed.extend(molecule.iter().map(|&id| ((id, group), fresh)));
+        }
+    }
     let mut changed = false;
     for atom in &mut doc.atoms {
         if let Some(group) = &mut atom.stereo_group
-            && let Some(&fresh) = renamed.get(group)
+            && let Some(&fresh) = renamed.get(&(atom.id, *group))
             && fresh != *group
         {
             *group = fresh;
@@ -123,4 +83,11 @@ pub fn renumber(doc: &mut Document) -> bool {
         }
     }
     changed
+}
+
+pub(crate) fn validate(atom: &Atom) -> Result<(), String> {
+    if atom.stereo_group.is_some_and(|g| g.number == 0) {
+        return Err("Stereo group numbers start at 1".into());
+    }
+    Ok(())
 }

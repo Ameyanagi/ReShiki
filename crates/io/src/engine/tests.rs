@@ -765,7 +765,8 @@ async fn reaction_relative_cx_keeps_explicit_and_relative_groups_separate() -> a
                 .collect::<Vec<_>>()
         };
         assert_eq!(labels(&actual), labels(&expected), "{text}: {output}");
-        let group_count = crate::stereo_groups::used(&document).len();
+        let ids: Vec<_> = document.atoms.iter().map(|atom| atom.id).collect();
+        let group_count = crate::stereo_groups::used(&document, &ids).len();
         assert_eq!(
             group_count,
             if text.contains("&:") { 3 } else { 2 },

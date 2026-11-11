@@ -721,69 +721,46 @@ fn reconstruct(
     })
 }
 
-/// Atom and bond memberships are independent. The drawing retains all atom
-/// members; import callers report any bond memberships it cannot represent.
+/// The drawing keeps atom members; import callers report bond members, which
+/// it cannot represent. A group keeps its file number; a group without one
+/// gets a number no group of the molecule uses.
 pub fn atom_stereo_groups(
     molecule: &Molecule,
 ) -> Result<Vec<Option<crate::stereo_groups::StereoGroup>>, Error> {
     use crate::stereo_groups::{Kind, StereoGroup};
-    let groups = &molecule.state.metadata.groups;
-    let kind = |code| match code {
-        1 => Some(Kind::Or),
-        2 => Some(Kind::And),
-        _ => None,
-    };
-    let preferred = |group: &ranking::StereoGroup| {
-        if group.read_id != 0 {
-            group.read_id
-        } else {
-            group.write_id
-        }
-    };
-    // Reserve file labels before allocating replacements, so a missing or
-    // repeated ID cannot take a valid label from a later group.
-    let mut taken: HashSet<_> = groups
+    let groups: Vec<_> = molecule
+        .state
+        .metadata
+        .groups
         .iter()
-        .filter_map(|group| kind(group.kind).map(|kind| (kind, group)))
-        .filter_map(|(kind, group)| {
-            let number = preferred(group);
-            (number != 0).then_some(StereoGroup { kind, number })
+        .filter_map(|group| {
+            let kind = match group.kind {
+                1 => Kind::Or,
+                2 => Kind::And,
+                _ => return None,
+            };
+            let number = if group.read_id != 0 {
+                group.read_id
+            } else {
+                group.write_id
+            };
+            Some((StereoGroup { kind, number }, &group.atoms))
         })
         .collect();
-    let mut assigned = HashSet::new();
-    let mut next = (1u32, 1u32);
+    let mut taken: HashSet<_> = groups.iter().map(|(label, _)| *label).collect();
     let mut atoms = vec![None; molecule.ids.len()];
-    for group in groups {
-        let Some(kind) = kind(group.kind) else {
-            continue;
-        };
-        let label = StereoGroup {
-            kind,
-            number: preferred(group),
-        };
-        let label = if label.number != 0 && !assigned.contains(&label) {
-            label
-        } else {
-            let number = match kind {
-                Kind::And => &mut next.0,
-                Kind::Or => &mut next.1,
-            };
-            while taken.contains(&StereoGroup {
-                kind,
-                number: *number,
-            }) {
-                *number = number
-                    .checked_add(1)
-                    .ok_or_else(|| invalid("Stereo group number overflow"))?;
-            }
-            StereoGroup {
-                kind,
-                number: *number,
-            }
-        };
-        taken.insert(label);
-        assigned.insert(label);
-        for &index in &group.atoms {
+    for (mut label, members) in groups {
+        if label.number == 0 {
+            label.number = (1..)
+                .find(|&number| {
+                    taken.insert(StereoGroup {
+                        kind: label.kind,
+                        number,
+                    })
+                })
+                .ok_or_else(|| invalid("Stereo group number overflow"))?;
+        }
+        for &index in members {
             let atom = atoms
                 .get_mut(index)
                 .ok_or_else(|| invalid("Missing stereo group atom"))?;

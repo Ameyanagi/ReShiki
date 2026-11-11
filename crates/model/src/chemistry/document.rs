@@ -238,24 +238,45 @@ fn build(document: &Document) -> Result<Input, Error> {
             m.chiral_tag = winding(&neighbors, &stereo.neighbors, stereo.winding == "cw")?;
         }
     }
+    // A group belongs to its molecule: equal labels on separate molecules are
+    // separate groups, so a later molecule gets a number nothing else uses.
     let mut groups = BTreeMap::<_, Vec<_>>::new();
-    for (i, atom) in document.atoms.iter().enumerate() {
-        if let Some(group) = atom.stereo_group {
-            let kind = match group.kind {
-                crate::stereo_groups::Kind::And => 2,
-                crate::stereo_groups::Kind::Or => 1,
-            };
-            groups.entry((kind, group.number)).or_default().push(i);
+    let ids: Vec<_> = document.atoms.iter().map(|a| a.id).collect();
+    for (molecule, members) in crate::reactions::molecules(document, &ids)
+        .into_iter()
+        .enumerate()
+    {
+        for id in members {
+            let i = index(&indices, id)?;
+            if let Some(group) = at(&document.atoms, i)?.stereo_group {
+                let kind = match group.kind {
+                    crate::stereo_groups::Kind::And => 2,
+                    crate::stereo_groups::Kind::Or => 1,
+                };
+                groups
+                    .entry((kind, group.number, molecule))
+                    .or_default()
+                    .push(i);
+            }
         }
     }
+    let mut taken = HashSet::new();
     metadata.groups = groups
         .into_iter()
-        .map(|((kind, number), atoms)| super::ranking::StereoGroup {
-            kind,
-            atoms,
-            read_id: number,
-            write_id: number,
-            ..Default::default()
+        .map(|((kind, number, _), mut atoms)| {
+            atoms.sort_unstable();
+            let number = if taken.insert((kind, number)) {
+                number
+            } else {
+                (1..).find(|&n| taken.insert((kind, n))).unwrap_or(number)
+            };
+            super::ranking::StereoGroup {
+                kind,
+                atoms,
+                read_id: number,
+                write_id: number,
+                ..Default::default()
+            }
         })
         .collect();
     let directions = document

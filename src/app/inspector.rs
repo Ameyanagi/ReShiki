@@ -1649,7 +1649,8 @@ impl App {
                     .stereo_group
                     .map_or(GroupChoice::Absolute, GroupChoice::Group)
             });
-        let used = stereo_groups::used(doc);
+        let ids: Vec<_> = centres.iter().map(|a| a.id).collect();
+        let used = stereo_groups::used(doc, &ids);
         let mut counts = HashMap::new();
         let gaps = used.iter().any(|group| {
             let count = counts.entry(group.kind).or_insert(0);
@@ -1659,7 +1660,8 @@ impl App {
         let choices: Vec<_> = std::iter::once(GroupChoice::Absolute)
             .chain(used.into_iter().map(GroupChoice::Group))
             .chain(
-                [Kind::And, Kind::Or].map(|kind| GroupChoice::New(stereo_groups::next(doc, kind))),
+                [Kind::And, Kind::Or]
+                    .map(|kind| GroupChoice::New(stereo_groups::next(doc, &ids, kind))),
             )
             .collect();
         let summary = match current {
@@ -1693,7 +1695,7 @@ impl App {
                     Message::InspectorAction(Action::RenumberStereoGroups),
                 )
                 .width(Length::Fill),
-                "Number the AND and the OR groups of the whole drawing 1, 2, 3… in order",
+                "Number each molecule's AND and OR groups 1, 2, 3… in order",
                 tooltip::Position::Top,
             ));
         }
