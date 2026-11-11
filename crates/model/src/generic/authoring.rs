@@ -307,7 +307,13 @@ pub fn define_bracket(
             count,
             label: label.trim().into(),
             flip: "Unspecified".into(),
-            label_offset: None,
+            // Redefining keeps a label the user already moved.
+            label_offset: source
+                .generic
+                .repeats
+                .iter()
+                .find(|u| u.bracket == Some(bracket))
+                .and_then(|u| u.label_offset),
         },
     )?;
     Ok(candidate)

@@ -289,7 +289,7 @@ pub struct RepeatUnit {
     pub label: String,
     #[serde(default)]
     pub flip: String,
-    /// The label's move from its automatic place, in points. Absent keeps
+    /// The label's move from its automatic place, in drawing units. Absent keeps
     /// the automatic place beside the bracket's lower-right corner.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label_offset: Option<Point>,

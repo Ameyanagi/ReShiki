@@ -60,8 +60,8 @@ it without changing the bracket or the unit:
 - Select the bracket, choose **Position repeat label** in the **Repeating
   unit** section, and drag the label's handle. Escape finishes. Each drag is one
   Undo step.
-- Or type **Label X** and **Label Y** in points and press Enter. They move the
-  label from its automatic place; positive Y is down.
+- Or type a **Label X** or **Label Y** offset in points and press Enter. It
+  moves the label from its automatic place; positive Y is down.
 
 **Restore automatic label position** puts it back. A moved label keeps its
 distance from the bracket's corner when you move or resize the bracket.

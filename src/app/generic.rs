@@ -39,10 +39,11 @@ pub enum Action {
     Pattern(RepeatPattern),
     DefineRepeat(u64),
     ClearRepeat(u64),
-    /// Typed label offsets, applied on Enter.
+    /// Typed label offsets in points; Enter applies that axis only.
     LabelX(String),
     LabelY(String),
-    ApplyLabelOffset(u64),
+    /// The bracket and whether the Y field was submitted.
+    ApplyLabelOffset(u64, bool),
     PositionLabel,
     AutomaticLabel(u64),
 }
@@ -131,15 +132,28 @@ impl App {
             }
             Action::LabelX(value) => self.generic.label_x = value,
             Action::LabelY(value) => self.generic.label_y = value,
-            Action::ApplyLabelOffset(bracket) => {
-                let parse = |s: &str| s.trim().parse::<f32>().ok().filter(|v| v.is_finite());
-                let (Some(x), Some(y)) =
-                    (parse(&self.generic.label_x), parse(&self.generic.label_y))
+            Action::ApplyLabelOffset(bracket, vertical) => {
+                let typed = if vertical {
+                    &self.generic.label_y
+                } else {
+                    &self.generic.label_x
+                };
+                let Some(points) = typed.trim().parse::<f32>().ok().filter(|v| v.is_finite())
                 else {
                     return self
-                        .generic_failed("Type the label offsets in points, such as 6 or -4.5");
+                        .generic_failed("Type the label offset in points, such as 6 or -4.5");
                 };
-                self.set_repeat_label_offset(bracket, Some(Point::new(x, y)));
+                let value = self.tab.doc.drawing_style.world(points);
+                let mut offset = self
+                    .repeat_unit(bracket)
+                    .and_then(|u| u.label_offset)
+                    .unwrap_or_default();
+                if vertical {
+                    offset.y = value;
+                } else {
+                    offset.x = value;
+                }
+                self.set_repeat_label_offset(bracket, Some(offset));
                 self.status = "Repeat label moved".into();
             }
             Action::PositionLabel => {
@@ -295,7 +309,7 @@ impl App {
         self.error = false;
         self.show_repeat_label_offset();
     }
-    /// Show the selected bracket's label offset in the X and Y fields.
+    /// Show the selected bracket's label offset, in points, in the X and Y fields.
     pub(super) fn show_repeat_label_offset(&mut self) {
         let offset = self
             .tab
@@ -306,7 +320,8 @@ impl App {
             .find_map(|g| self.repeat_unit(g.id))
             .and_then(|u| u.label_offset)
             .unwrap_or_default();
-        let shown = |v: f32| ((v * 10.).round() / 10.).to_string();
+        let points = self.tab.doc.drawing_style.points_per_world();
+        let shown = |v: f32| ((v * points * 100.).round() / 100.).to_string();
         self.generic.label_x = shown(offset.x);
         self.generic.label_y = shown(offset.y);
     }
@@ -385,20 +400,8 @@ impl App {
         // Only a unit drawn with its bracket shows a label to move.
         if let Some(unit) = unit.filter(|u| u.bracket.is_some()) {
             body = body
-                .push(label_offset_row(
-                    id,
-                    "Label X",
-                    "polymer-label-x",
-                    &self.generic.label_x,
-                    Action::LabelX,
-                ))
-                .push(label_offset_row(
-                    id,
-                    "Label Y",
-                    "polymer-label-y",
-                    &self.generic.label_y,
-                    Action::LabelY,
-                ))
+                .push(label_offset_row(id, false, &self.generic.label_x))
+                .push(label_offset_row(id, true, &self.generic.label_y))
                 .push(self.position_label_button())
                 .push(self.automatic_label_button(unit.label_offset.is_some(), id))
                 .push(text(OFFSET_HINT).size(11).style(muted_text));
@@ -484,19 +487,18 @@ impl App {
     }
 }
 
-/// A typed label offset; Enter applies both.
-fn label_offset_row<'a>(
-    id: u64,
-    label: &'static str,
-    key: &'static str,
-    value: &'a str,
-    input: fn(String) -> Action,
-) -> Row<'a, Message> {
+/// One typed label offset; Enter applies that axis.
+fn label_offset_row(id: u64, vertical: bool, value: &str) -> Row<'_, Message> {
+    let (label, key, input): (_, _, fn(String) -> Action) = if vertical {
+        ("Label Y", "polymer-label-y", Action::LabelY)
+    } else {
+        ("Label X", "polymer-label-x", Action::LabelX)
+    };
     let field =
         reshiki::accessibility::text_input(key, format!("Repeat {label} offset (pt)"), "0", value)
             .style(crate::appearance::input_style)
             .on_input(move |s| Message::Generic(input(s)))
-            .on_submit(Message::Generic(Action::ApplyLabelOffset(id)));
+            .on_submit(Message::Generic(Action::ApplyLabelOffset(id, vertical)));
     labeled(label, accessible_unit_field(field, "pt"))
 }
 

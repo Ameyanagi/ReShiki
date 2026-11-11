@@ -853,38 +853,51 @@ fn repeat_label_drags_and_typed_offsets_are_undoable_steps() {
     assert_eq!(app.tool, Tool::EditPoints);
 
     let defined = app.tab.doc.clone();
+    // 42 drawing units are 14.4 pt.
     app.edit(crate::canvas::Edit::RepeatLabelMove(
         bracket,
-        Point::new(6., -20.),
+        Point::new(42., -21.),
     ));
-    assert_eq!(label_offset(&app), Some(Point::new(6., -20.)));
-    assert_eq!((&*app.generic.label_x, &*app.generic.label_y), ("6", "-20"));
+    assert_eq!(label_offset(&app), Some(Point::new(42., -21.)));
+    let fields = |app: &App| (app.generic.label_x.clone(), app.generic.label_y.clone());
+    assert_eq!(fields(&app), ("14.4".into(), "-7.2".into()));
     assert_eq!(app.tab.doc.graphics, defined.graphics);
     let dragged = app.tab.doc.clone();
 
-    let _ = app.update(Message::Generic(Action::LabelX("3".into())));
-    let _ = app.update(Message::Generic(Action::LabelY(" 4.5".into())));
-    let _ = app.update(Message::Generic(Action::ApplyLabelOffset(bracket)));
-    assert_eq!(label_offset(&app), Some(Point::new(3., 4.5)));
+    // Enter applies only the submitted axis, so the other keeps its exact value.
+    let _ = app.update(Message::Generic(Action::LabelX(" 28.8".into())));
+    let _ = app.update(Message::Generic(Action::LabelY("99".into())));
+    let _ = app.update(Message::Generic(Action::ApplyLabelOffset(bracket, false)));
+    let typed = label_offset(&app).unwrap();
+    assert!((typed.x - 84.).abs() < 1e-4 && typed.y == -21.);
+    assert_eq!(fields(&app), ("28.8".into(), "-7.2".into()));
 
     let typed = app.tab.doc.clone();
-    let _ = app.update(Message::Generic(Action::LabelX("left".into())));
-    let _ = app.update(Message::Generic(Action::ApplyLabelOffset(bracket)));
+    let _ = app.update(Message::Generic(Action::LabelY("down".into())));
+    let _ = app.update(Message::Generic(Action::ApplyLabelOffset(bracket, true)));
     assert!(app.error);
     assert_eq!(app.tab.doc, typed);
 
+    // Redefining the unit, such as a new repeat count, keeps the moved label.
+    let _ = app.update(Message::Generic(Action::RepeatLabel("1-3".into())));
+    let _ = app.update(Message::Generic(Action::DefineRepeat(bracket)));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.generic.repeats[0].label, "1-3");
+    assert_eq!(label_offset(&app), typed.generic.repeats[0].label_offset);
+    let redefined = app.tab.doc.clone();
+
     let _ = app.update(Message::Generic(Action::AutomaticLabel(bracket)));
     assert_eq!(label_offset(&app), None);
-    assert_eq!((&*app.generic.label_x, &*app.generic.label_y), ("0", "0"));
+    assert_eq!(fields(&app), ("0".into(), "0".into()));
 
-    for expected in [&typed, &dragged, &defined] {
+    for expected in [&redefined, &typed, &dragged, &defined] {
         let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc.generic, expected.generic);
     }
-    assert_eq!((&*app.generic.label_x, &*app.generic.label_y), ("0", "0"));
+    assert_eq!(fields(&app), ("0".into(), "0".into()));
     let _ = app.update(Message::Redo);
-    assert_eq!(label_offset(&app), Some(Point::new(6., -20.)));
-    assert_eq!((&*app.generic.label_x, &*app.generic.label_y), ("6", "-20"));
+    assert_eq!(label_offset(&app), Some(Point::new(42., -21.)));
+    assert_eq!(fields(&app), ("14.4".into(), "-7.2".into()));
 }
 
 #[test]
@@ -911,4 +924,22 @@ fn pasted_repeat_units_keep_their_label_offset() {
         .map(|u| u.label_offset)
         .collect();
     assert_eq!(offsets, [Some(Point::new(-8., 12.)); 2]);
+}
+
+#[test]
+fn returning_to_a_tab_shows_its_own_repeat_label_offset() {
+    use crate::app::tabs;
+    let (mut app, bracket) = defined_repeat();
+    app.edit(crate::canvas::Edit::RepeatLabelMove(
+        bracket,
+        Point::new(42., -21.),
+    ));
+    let source = app.tab.id;
+    let _ = app.update(Message::New);
+    let _ = app.update(Message::Generic(Action::LabelY("12".into())));
+    let _ = app.update(Message::Tabs(tabs::Action::Select(source)));
+    assert_eq!(
+        (&*app.generic.label_x, &*app.generic.label_y),
+        ("14.4", "-7.2")
+    );
 }
