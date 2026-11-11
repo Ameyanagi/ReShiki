@@ -1,11 +1,10 @@
 //! Crossing clearance for cubic aromatic circles and partial ring curves.
-use super::{Gap, Sides, Stroke, clearance, cross, delta, depth};
+use super::{Gap, Sides, Stroke, clearance, cross, crossing_gap, delta, depth, overshoot};
 use crate::{
     aromatic::Circle,
     document::{Document, Point},
     graphics::{PathCommand, flattened},
     scene::Primitive,
-    style::DEFAULT,
 };
 
 #[derive(Clone, Copy)]
@@ -224,7 +223,13 @@ pub(crate) fn ring_stroke_with(
         // A front double bond's side rail must clear the curve too.
         let rails = sides.rails(bond);
         let (lo, hi) = rails.band();
-        let (lo, hi) = (lo - DEFAULT.world(1.1), hi + DEFAULT.world(1.1));
+        // The cut curve's round caps reach back half its width.
+        let curve_half = doc.drawing_style.world(style.width_pt) * 0.5;
+        let gap = crossing_gap(
+            &doc.drawing_style,
+            curve_half + overshoot(&doc.drawing_style, bond),
+        );
+        let (lo, hi) = (lo - gap, hi + gap);
         let layer = depth::layer(graph, bond, &ring.atoms, projected);
         let front = |t: f32| {
             if layer == rank.0
@@ -280,16 +285,18 @@ pub(crate) fn ring_stroke_with(
             // Clear the curve for every rail of the bond where it lies
             // behind. Each flattened piece of the curve clears only its own
             // finite ink, so a cut never reaches a crossing in front.
-            let half = doc.drawing_style.world(style.width_pt) * 0.5 + DEFAULT.world(1.1);
             for edge in paths.iter().flat_map(|path| path.windows(2)) {
                 let [c, d] = edge else { continue };
-                let curve = Stroke {
-                    from: *c,
-                    to: *d,
-                    ends: half,
-                    band: (-half, half),
-                };
                 for (line, rail) in rails.filters() {
+                    // The cut rail's round caps and corners reach back half its width.
+                    let half = doc.drawing_style.world(style.width_pt) * 0.5
+                        + crossing_gap(&doc.drawing_style, line.width * 0.5);
+                    let curve = Stroke {
+                        from: *c,
+                        to: *d,
+                        ends: half,
+                        band: (-half, half),
+                    };
                     let Some((low, high)) = clearance(curve, line.line(a, axis)) else {
                         continue;
                     };

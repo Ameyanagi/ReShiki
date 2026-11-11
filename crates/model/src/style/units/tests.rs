@@ -72,6 +72,7 @@ fn adjacent_physical_boundaries_have_the_same_result_in_every_unit() {
         (Dimension::Bold, 0.1, 12.0),
         (Dimension::Margin, 0.0, 12.0),
         (Dimension::Hash, 0.3, 12.0),
+        (Dimension::Crossing, 0.0, 12.0),
     ] {
         for (points, valid) in [
             (min.next_down(), false),

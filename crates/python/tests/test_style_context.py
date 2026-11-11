@@ -229,6 +229,7 @@ def test_online_name_resolution_is_forwarded_by_bound_constructors(
         ("wavy_unknown_alkenes", True, False),
         ("charge_before_radical", True, False),
         ("hydrogen_isotopes", "letters", "auto"),
+        ("crossing_clearance_pt", 0.3, 1.1),
     ],
 )
 def test_context_defaults_reset_existing_drawings(
