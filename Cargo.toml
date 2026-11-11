@@ -70,6 +70,7 @@ iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-s
 [target.'cfg(windows)'.dev-dependencies]
 # The partial-redraw regression tests exercise the software fallback directly.
 iced_tiny_skia = { version = "0.14", default-features = false }
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_HiDpi"] }
 
 [target.'cfg(all(not(windows), not(target_arch = "wasm32")))'.dependencies]
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
