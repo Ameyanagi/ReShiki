@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--write-fixture", action="store_true")
     args = parser.parse_args()
     RDLogger.DisableLog("rdApp.*")
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     if args.write_fixture and not args.oracle:
         parser.error("--write-fixture requires --oracle")
     records = {} if args.write_fixture else json.loads(gzip.decompress(FIXTURE.read_bytes()))

@@ -12,10 +12,12 @@ impl Configuration {
         }
         let b = at(&mol.state.graph.bonds, bond)?;
         let meta = at(&mol.state.metadata.bonds, bond)?;
-        if b.order != 2 || meta.stereo <= 1 {
-            return Err(invalid("Expected stereo double bond"));
+        if b.order == 2 && meta.stereo <= 1 {
+            return Err(invalid("Expected defined double-bond stereo"));
         }
-        let carriers = if !meta.stereo_atoms.is_empty() {
+        let mut carriers = if b.order != 2 {
+            Vec::new()
+        } else if !meta.stereo_atoms.is_empty() {
             meta.stereo_atoms.iter().copied().map(Some).collect()
         } else if matches!(meta.stereo, 2 | 3) {
             let a = highest(mol, b.a, b.b)?;
@@ -28,8 +30,25 @@ impl Configuration {
         } else {
             Vec::new()
         };
-        if carriers.len() != 2 {
-            return Err(invalid("Expected two double-bond carriers"));
+        let valid_carrier = |focus: usize, opposite: usize, carrier: Option<usize>| {
+            carrier.is_some_and(|atom| {
+                atom < mol.state.graph.atoms.len()
+                    && atom != focus
+                    && atom != opposite
+                    && mol
+                        .adjacent
+                        .get(focus)
+                        .is_some_and(|neighbors| neighbors.iter().any(|&(a, _)| a == atom))
+            })
+        };
+        let valid = match carriers.as_slice() {
+            [a, b] => {
+                a != b && valid_carrier(foci[0], foci[1], *a) && valid_carrier(foci[1], foci[0], *b)
+            }
+            _ => false,
+        };
+        if !valid {
+            carriers.clear();
         }
         Self::bond(mol, Kind::Sp2Bond, bond, foci, config, carriers)
     }
@@ -111,6 +130,9 @@ impl Configuration {
         let edges2 = graph.edges(mol, root2)?.to_vec();
         let edges1 = filtered(graph, &edges1, foci, self.kind)?;
         let edges2 = filtered(graph, &edges2, foci, self.kind)?;
+        if self.carriers.len() != 2 || edges1.is_empty() || edges2.is_empty() {
+            return Ok(Descriptor::Other);
+        }
         let mut carriers = [self.carrier(0)?, self.carrier(1)?];
         if graph.node(root1)?.atom == Some(foci[1]) {
             carriers.swap(0, 1);
@@ -147,7 +169,7 @@ impl Configuration {
             })
         } else {
             let ccw = (self.config == 7) ^ flip;
-            Ok(match (ccw, first.pseudo || second.pseudo) {
+            Ok(match (ccw, first.pseudo != second.pseudo) {
                 (true, false) => Descriptor::M,
                 (false, false) => Descriptor::P,
                 (true, true) => Descriptor::PseudoM,

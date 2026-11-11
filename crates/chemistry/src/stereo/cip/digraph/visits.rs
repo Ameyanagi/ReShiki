@@ -1,13 +1,13 @@
 //! Persistent visit maps share unchanged branches instead of copying an entire
-//! molecule-sized byte vector for every CIP node. Indices never escape the arena.
+//! molecule-sized vector for every CIP node. Indices never escape the arena.
 use super::{Error, Work, at, invalid};
-use std::{num::NonZeroU32, os::raw::c_char};
+use std::num::NonZeroU32;
 
 type Link = Option<NonZeroU32>;
 #[derive(Clone, Copy, Default)]
 struct Cell {
     children: [Link; 2],
-    value: c_char,
+    value: u32,
 }
 pub(super) struct Visits {
     cells: Vec<Cell>,
@@ -45,12 +45,7 @@ impl Visits {
             u32::try_from(self.cells.len()).map_err(|_| Error::Limit)?,
         ))
     }
-    pub(super) fn get(
-        &self,
-        mut root: Link,
-        atom: usize,
-        work: &mut Work,
-    ) -> Result<c_char, Error> {
+    pub(super) fn get(&self, mut root: Link, atom: usize, work: &mut Work) -> Result<u32, Error> {
         if atom >= self.atoms {
             return Err(invalid("Missing visit atom"));
         }
@@ -64,7 +59,7 @@ impl Visits {
         &mut self,
         mut root: Link,
         atom: usize,
-        value: c_char,
+        value: u32,
         work: &mut Work,
     ) -> Result<Link, Error> {
         if atom >= self.atoms {

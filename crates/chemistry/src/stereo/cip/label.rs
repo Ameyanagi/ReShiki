@@ -1,4 +1,4 @@
-//! Atomic full CIP labeling adapted from RDKit CIPLabeler.cpp (2026.03.6).
+//! Atomic full CIP labeling adapted from RDKit CIPLabeler.cpp (2026.09.1).
 //! Copyright (C) 2020 Schrödinger, LLC. BSD-3-Clause; see licenses/rdkit/.
 use super::{
     Error, Molecule, at, at_mut,
@@ -7,9 +7,12 @@ use super::{
     invalid,
     rules::{Iterations, Rules},
 };
-use crate::{native_order, stereo::perception::State};
+use crate::stereo::perception::State;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -19,7 +22,7 @@ pub struct Options {
     /// matching the native Python wrapper's truthiness-based selection.
     pub atoms: Option<Vec<usize>>,
     pub bonds: Option<Vec<usize>>,
-    /// Shared second-pass comparison budget; zero has the native unlimited meaning.
+    /// Shared comparison budget for both passes; zero means unlimited.
     pub max_iterations: u32,
 }
 impl Default for Options {
@@ -58,25 +61,18 @@ fn selected(selection: Option<&[usize]>, size: usize) -> Result<Vec<usize>, Erro
         .collect())
 }
 
-fn configurations(molecule: &Molecule<'_>, options: &Options) -> Result<Vec<Configuration>, Error> {
+fn configurations(molecule: &Molecule<'_>) -> Result<Vec<Configuration>, Error> {
     let mut configurations = Vec::new();
     let state = molecule.state;
-    let all = options.atoms.as_ref().is_none_or(Vec::is_empty)
-        && options.bonds.as_ref().is_none_or(Vec::is_empty);
-    let atoms = if all {
-        None
-    } else {
-        Some(options.atoms.as_deref().unwrap_or(&[]))
-    };
-    let bonds = if all {
-        None
-    } else {
-        Some(options.bonds.as_deref().unwrap_or(&[]))
-    };
-    for atom in selected(atoms, state.graph.atoms.len())? {
+    for atom in 0..state.graph.atoms.len() {
         let metadata = at(&state.metadata.atoms, atom)?;
         match metadata.chiral_tag {
-            1 | 2 => configurations.push(Configuration::tetrahedral(molecule, atom)?),
+            1 | 2 => {
+                let configuration = Configuration::tetrahedral(molecule, atom)?;
+                if configuration.carriers().len() == 4 {
+                    configurations.push(configuration);
+                }
+            }
             5 if matches!(metadata.chiral_permutation, Some(1 | 2))
                 && crate::stereo::allene::terminals(&state.graph, atom).is_some() =>
             {
@@ -85,16 +81,19 @@ fn configurations(molecule: &Molecule<'_>, options: &Options) -> Result<Vec<Conf
             _ => (),
         }
     }
-    for bond in selected(bonds, state.graph.bonds.len())? {
+    for bond in 0..state.graph.bonds.len() {
         let endpoints = at(&state.graph.bonds, bond)?;
         let foci = [endpoints.a, endpoints.b];
-        match at(&state.metadata.bonds, bond)?.stereo {
-            2 | 4 => configurations.push(Configuration::sp2(molecule, bond, foci, 4)?),
-            3 | 5 => configurations.push(Configuration::sp2(molecule, bond, foci, 5)?),
-            cfg @ (6 | 7) => {
-                configurations.push(Configuration::atropisomer(molecule, bond, foci, cfg)?)
+        let configuration = match at(&state.metadata.bonds, bond)?.stereo {
+            2 | 4 if endpoints.order == 2 => Configuration::sp2(molecule, bond, foci, 4)?,
+            3 | 5 if endpoints.order == 2 => Configuration::sp2(molecule, bond, foci, 5)?,
+            cfg @ (6 | 7) if endpoints.order == 1 => {
+                Configuration::atropisomer(molecule, bond, foci, cfg)?
             }
-            _ => (),
+            _ => continue,
+        };
+        if configuration.carriers().len() == 2 {
+            configurations.push(configuration);
         }
     }
     Ok(configurations)
@@ -119,7 +118,6 @@ fn auxiliary<'a>(
     iterations: &mut Iterations,
 ) -> Result<(), Error> {
     let mut candidates = Vec::new();
-    let mut keys = Vec::new();
     for (index, configuration) in configurations.iter().enumerate() {
         if index == center {
             continue;
@@ -151,18 +149,13 @@ fn auxiliary<'a>(
                 }
                 let distance = graph.node(low)?.distance;
                 candidates.push((low, index, distance));
-                keys.push(distance.checked_neg().ok_or(Error::Limit)?);
             }
         }
     }
-    let order = native_order::indices(&keys).map_err(|e| match e {
-        native_order::Error::Limit => Error::Limit,
-        e => invalid(e.to_string()),
-    })?;
+    candidates.sort_by_key(|&(_, _, distance)| std::cmp::Reverse(distance));
     let mut queue = BTreeMap::new();
     let mut previous = i32::MAX;
-    for index in order {
-        let &(node, configuration, distance) = at(&candidates, index)?;
+    for (node, configuration, distance) in candidates {
         if distance < previous {
             for (node, label) in std::mem::take(&mut queue) {
                 graph.set_node_aux(node, label)?;
@@ -171,8 +164,8 @@ fn auxiliary<'a>(
         }
         let label = at_mut(configurations, configuration)?
             .label_at(molecule, graph, node, rules, iterations)?;
-        // Native emplace keeps the first candidate for a node at this depth.
-        queue.entry(node).or_insert(label);
+        // RDKit #9577: the later configuration at the same node wins.
+        queue.insert(node, label);
     }
     for (node, label) in queue {
         graph.set_node_aux(node, label)?;
@@ -205,16 +198,75 @@ fn primary(
 /// Evaluate on detached graphs and publish only a complete successful result.
 /// Input chemical state, cached labels and ring order remain untouched on error.
 pub fn assign(input: &State, options: &Options) -> Result<Assignment, Error> {
-    let mut molecule = Molecule::new(input)?;
-    let mut configurations = configurations(&molecule, options)?;
-    let count = configurations.len();
+    let mut prepared = std::borrow::Cow::Borrowed(input);
+    for (index, bond) in input.metadata.bonds.iter().enumerate() {
+        if matches!(bond.stereo, 2..=5)
+            && (bond.stereo_atoms.len() > 2
+                || bond
+                    .stereo_atoms
+                    .iter()
+                    .any(|&a| a >= input.graph.atoms.len()))
+        {
+            let bond = at_mut(&mut prepared.to_mut().metadata.bonds, index)?;
+            bond.stereo = 0;
+            bond.stereo_atoms.clear();
+        }
+    }
+    let mut molecule = Molecule::new(&prepared)?;
+    let all = options.atoms.as_ref().is_none_or(Vec::is_empty)
+        && options.bonds.as_ref().is_none_or(Vec::is_empty);
+    let atoms = selected(
+        (!all).then(|| options.atoms.as_deref().unwrap_or(&[])),
+        input.graph.atoms.len(),
+    )?;
+    let bonds = selected(
+        (!all).then(|| options.bonds.as_deref().unwrap_or(&[])),
+        input.graph.bonds.len(),
+    )?;
+    let mut configurations = configurations(&molecule)?;
+    let mut valid_bonds = vec![false; input.graph.bonds.len()];
+    for configuration in &configurations {
+        if let Target::Bond(bond) = configuration.target() {
+            *at_mut(&mut valid_bonds, bond)? = true;
+        }
+    }
+    let invalid_bonds: Vec<_> = molecule
+        .state
+        .metadata
+        .bonds
+        .iter()
+        .zip(valid_bonds)
+        .enumerate()
+        .filter_map(|(i, (bond, valid))| (matches!(bond.stereo, 2..=7) && !valid).then_some(i))
+        .collect();
+    if !invalid_bonds.is_empty() {
+        drop(molecule);
+        for bond in invalid_bonds {
+            let bond = at_mut(&mut prepared.to_mut().metadata.bonds, bond)?;
+            bond.stereo = 0;
+            bond.stereo_atoms.clear();
+        }
+        molecule = Molecule::new(&prepared)?;
+    }
+    let selected: Vec<_> = configurations
+        .iter()
+        .enumerate()
+        .filter_map(|(i, configuration)| {
+            match configuration.target() {
+                Target::Atom(atom) => atoms.binary_search(&atom).is_ok(),
+                Target::Bond(bond) => bonds.binary_search(&bond).is_ok(),
+            }
+            .then_some(i)
+        })
+        .collect();
     let seen_units = input
         .graph
         .atoms
         .len()
         .div_ceil(std::mem::size_of::<usize>());
     // Every centre builds a graph with an atom-sized visit map: bound the total.
-    if count
+    if selected
+        .len()
         .checked_mul(seen_units + 64)
         .is_none_or(|n| n > STORAGE_UNITS)
     {
@@ -226,17 +278,19 @@ pub fn assign(input: &State, options: &Options) -> Result<Assignment, Error> {
     let mut iterations = Iterations::new(options.max_iterations);
     // Each centre needs only its own graph (auxiliary labels are computed on
     // it), so build it here and drop it once the centre is labelled. A fast
-    // pass with a small private budget comes first; centres it cannot decide
-    // continue on the same graph with the shared budget and the full rules.
-    for i in 0..count {
+    // pass capped at 2000 comparisons comes first; both passes consume the
+    // caller's budget, as in RDKit #9577.
+    for i in selected {
         let mut graph = at(&configurations, i)?.make_digraph(&molecule)?;
         bounded(&graph)?;
+        iterations.begin_preliminary();
         let fast = at_mut(&mut configurations, i)?.label(
             &mut molecule,
             &mut graph,
             &constitutional,
-            &mut Iterations::new(2000),
+            &mut iterations,
         );
+        iterations.end_preliminary();
         bounded(&graph)?;
         let descriptor = match fast {
             Ok(Descriptor::Unknown) | Err(Error::Iterations) => {
@@ -276,11 +330,11 @@ pub fn assign(input: &State, options: &Options) -> Result<Assignment, Error> {
     }
     let mut state = input.clone();
     state.rings = molecule.ring_cache.clone();
-    for configuration in &configurations {
-        match configuration.target() {
-            Target::Atom(atom) => at_mut(&mut state.properties.atoms, atom)?.cip_code = None,
-            Target::Bond(bond) => *at_mut(&mut state.properties.bond_codes, bond)? = None,
-        }
+    for atom in atoms {
+        at_mut(&mut state.properties.atoms, atom)?.cip_code = None;
+    }
+    for bond in bonds {
+        *at_mut(&mut state.properties.bond_codes, bond)? = None;
     }
     for label in &labels {
         let code = match label.descriptor {
