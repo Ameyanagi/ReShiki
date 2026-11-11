@@ -3,6 +3,7 @@ use crate::chemistry::smiles;
 
 const SPHOS: &str = "COc1cccc(OC)c1-c1ccccc1P(C1CCCCC1)C1CCCCC1";
 const XPHOS: &str = "CC(C)c1cc(C(C)C)c(-c2ccccc2P(C2CCCCC2)C2CCCCC2)c(C(C)C)c1";
+const SPIRO_INDANONE: &str = "O=C1Cc2ccccc2C12CCC(=O)c1ccccc12";
 
 #[test]
 fn only_fully_specified_odd_cumulene_smiles_warn_about_lost_ez() -> anyhow::Result<()> {
@@ -1805,6 +1806,90 @@ fn assert_separated(text: &str, state: &State, p: &[Point3]) {
             }
         }
     }
+}
+
+fn assert_regular_spiro_rings(text: &str, state: &State, positions: &[Point3]) {
+    for bond in &state.graph.bonds {
+        let a = positions[bond.a];
+        let b = positions[bond.b];
+        let length = (a.x - b.x).hypot(a.y - b.y);
+        assert!(
+            (length / 1.5 - 1.).abs() < 1e-3,
+            "{text}: bond {}-{} has length {length:.6}",
+            bond.a,
+            bond.b,
+        );
+    }
+    for ring in &state.rings.atoms {
+        let expected = std::f64::consts::PI * (ring.len() - 2) as f64 / ring.len() as f64;
+        for i in 0..ring.len() {
+            let a = positions[ring[(i + ring.len() - 1) % ring.len()]];
+            let b = positions[ring[i]];
+            let c = positions[ring[(i + 1) % ring.len()]];
+            let (ax, ay, cx, cy) = (a.x - b.x, a.y - b.y, c.x - b.x, c.y - b.y);
+            let angle = ((ax * cx + ay * cy) / (ax.hypot(ay) * cx.hypot(cy)))
+                .clamp(-1., 1.)
+                .acos();
+            assert!(
+                (angle - expected).abs() < 1e-3,
+                "{text}: ring {ring:?} angle at {} is {:.6}, expected {:.6}",
+                ring[i],
+                angle.to_degrees(),
+                expected.to_degrees(),
+            );
+        }
+    }
+    assert_separated(text, state, positions);
+}
+
+#[test]
+fn spiro_imports_keep_regular_rings_and_bond_lengths() -> anyhow::Result<()> {
+    for text in [
+        SPIRO_INDANONE,
+        "C1Cc2ccccc2C12CCCc1ccccc12",
+        "O=C1Cc2cc3ccccc3cc2C12CCC(=O)c1ccccc12",
+        "O=C1Cc2ccccc2C12CCCc1ccccc12",
+        // Fluorescein diacetate (NCI): RDKit squashes the phthalide benzene.
+        "CC(=O)OC1=CC2=C(C=C1)C3(OC(=O)C4=C3C=CC=C4)C5=C(O2)C=C(OC(C)=O)C=C5",
+        "C1CCC2(C1)CCCCC2",
+    ] {
+        let input = smiles::read(text)?;
+        assert_regular_spiro_rings(
+            text,
+            &input.prepared.state,
+            &coordinates(&input.prepared.state, &input.reaction_properties)?.positions,
+        );
+        let imported = imported_smiles(text)?;
+        assert_regular_spiro_rings(text, &imported.molecule.state, &imported.molecule.positions);
+    }
+    Ok(())
+}
+
+#[test]
+fn selected_spiro_cleanup_keeps_regular_rings_and_bond_lengths() -> anyhow::Result<()> {
+    let imported = imported_smiles(SPIRO_INDANONE)?;
+    let selected = imported.document.atoms.iter().map(|atom| atom.id).collect();
+    let bond_length = f64::from(imported.document.drawing_style.bond_length_world) / 28.;
+    let mut request = Request::molecule("clean", imported.document);
+    request.cleanup = Some(crate::cleanup::Options {
+        scope: crate::cleanup::Scope::SelectedAtoms,
+        ..Default::default()
+    });
+    // Selecting every atom exercises the app cleanup path without fixed atoms.
+    request.selected_ids = Some(selected);
+    let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+    let molecule = cleaned.molecule.expect("selected cleanup analysis");
+    let normalized = molecule
+        .positions
+        .iter()
+        .map(|p| Point3 {
+            x: p.x * 1.5 / bond_length,
+            y: p.y * 1.5 / bond_length,
+            z: p.z,
+        })
+        .collect::<Vec<_>>();
+    assert_regular_spiro_rings(SPIRO_INDANONE, &molecule.state, &normalized);
+    Ok(())
 }
 
 #[test]
