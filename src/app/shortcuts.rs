@@ -369,8 +369,11 @@ impl App {
                 self.changed(before);
             }
             Action::Join => {
-                let result = self.join_shortcut();
-                self.commit_hotkey(result, "Joined selected atoms or bonds");
+                let (result, status) = match self.join_shortcut() {
+                    Ok((doc, selected, status)) => (Ok((doc, selected)), status),
+                    Err(error) => (Err(error), String::new()),
+                };
+                self.commit_hotkey(result, &status);
             }
             Action::MergeAtoms => {
                 let result = self.merge_selected_atoms();
@@ -397,31 +400,77 @@ impl App {
         Task::none()
     }
 
-    pub(super) fn join_shortcut(&self) -> Result<(Document, Vec<u64>), String> {
+    /// The joined drawing, its selection and the status caption.
+    pub(super) fn join_shortcut(&self) -> Result<(Document, Vec<u64>, String), String> {
         use reshiki::{
             joining::{self, JoinPlan, Prepared},
             templates::{Anchor, Connection},
         };
-        if reshiki::generic::touches(&self.tab.doc, &self.tab.selected) {
-            return Err(reshiki::generic::JOIN_NOTICE.into());
+        const JOINED: &str = "Joined selected atoms or bonds";
+        let doc = &self.tab.doc;
+        let plan = joining::join_plan(doc, &self.tab.selected);
+        // Coordination checks each contact's own endpoints; atoms it ignores
+        // or skips must not block the others.
+        if !matches!(plan, Some(JoinPlan::Coordinate(_))) {
+            if reshiki::generic::touches(doc, &self.tab.selected) {
+                return Err(reshiki::generic::JOIN_NOTICE.into());
+            }
+            joining::shown_in_3d(doc, &self.tab.selected)?;
         }
-        joining::shown_in_3d(&self.tab.doc, &self.tab.selected)?;
-        match joining::join_plan(&self.tab.doc, &self.tab.selected) {
-            Some(JoinPlan::Coordinate { donor, metal }) => {
-                // A donor and metal remain distinct, even inside one molecule.
-                // Validate this pair before fragment preparation can remove an
-                // already-connected metal or attempt destructive atom sharing.
-                joining::coordinate_atoms(&self.tab.doc, donor, metal)
-                    .map(|outcome| (outcome.into_document(&self.tab.doc), vec![donor, metal]))
+        match plan {
+            Some(JoinPlan::Coordinate(plan)) => {
+                let mut selected: Vec<_> = plan.pairs.iter().map(|&(donor, _)| donor).collect();
+                for &(_, metal) in &plan.pairs {
+                    if !selected.contains(&metal) {
+                        selected.push(metal);
+                    }
+                }
+                match joining::coordinate_many(doc, &plan) {
+                    Ok(outcome) if outcome.added.is_empty() => Ok((
+                        outcome.document,
+                        selected,
+                        "All selected contacts already exist".into(),
+                    )),
+                    Ok(outcome) => {
+                        let mut status =
+                            format!("Coordinated {}", contacts_text(doc, &outcome.added));
+                        if !outcome.skipped.is_empty() {
+                            status += &format!(" · skipped {}", skipped_text(doc, &outcome.skipped));
+                        }
+                        Ok((outcome.document, selected, status))
+                    }
+                    // An explicit pair keeps its specific reason.
+                    Err(error) if self.tab.selected.len() == 2 => Err(error.message),
+                    Err(error) if error.skipped.is_empty() => Err("Select a donor (N, O, S or P) and a metal to coordinate; Join does not merge metals".into()),
+                    Err(error) => Err(format!(
+                        "No contact added: {}",
+                        skipped_text(doc, &error.skipped)
+                    )),
+                }
             }
             Some(JoinPlan::ShareAtom { source, target }) => {
+                if let (Some(a), Some(b)) = (doc.atom(source), doc.atom(target)) {
+                    if a.element != b.element || a.charge != b.charge {
+                        return Err(format!(
+                            "Join shares only atoms of the same element and charge; {} and {} differ",
+                            ion_name(a),
+                            ion_name(b)
+                        ));
+                    }
+                    // Metals skip the template check below; never drop their metadata.
+                    if !reshiki::templates::compatible(a, b) {
+                        return Err("Join cannot share atoms with an isotope, radical, mark, atom map, stereo or fixed hydrogens".into());
+                    }
+                }
                 let prepared = Prepared::new(&self.tab.doc, &[source])?;
                 let point = prepared
                     .base
                     .atom(target)
                     .ok_or("Select attachment atoms from two separate fragments")?
                     .position;
-                prepared.place(point, None, 1., Anchor::Atom(source), Connection::ShareAtom)
+                prepared
+                    .place(point, None, 1., Anchor::Atom(source), Connection::ShareAtom)
+                    .map(|(doc, selected)| (doc, selected, JOINED.into()))
             }
             Some(JoinPlan::FuseBond { source, target }) => {
                 let prepared = Prepared::new(&self.tab.doc, &[source.0, source.1])?;
@@ -435,15 +484,19 @@ impl App {
                     .atom(target.1)
                     .ok_or("Choose bonds from separate fragments")?
                     .position;
-                prepared.place(
-                    Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.),
-                    None,
-                    1.,
-                    Anchor::Bond(source.0, source.1),
-                    Connection::FuseBond,
-                )
+                prepared
+                    .place(
+                        Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.),
+                        None,
+                        1.,
+                        Anchor::Bond(source.0, source.1),
+                        Connection::FuseBond,
+                    )
+                    .map(|(doc, selected)| (doc, selected, JOINED.into()))
             }
-            Some(JoinPlan::Merge) => self.merge_selected_atoms(),
+            Some(JoinPlan::Merge) => self
+                .merge_selected_atoms()
+                .map(|(doc, selected)| (doc, selected, JOINED.into())),
             None => {
                 const SELECTION_NOTICE: &str = "Select two atoms or two bonds from separate fragments, or at least three atoms to merge";
                 Err(SELECTION_NOTICE.into())
@@ -832,3 +885,72 @@ mod coordination_tests;
 
 #[cfg(test)]
 mod integration_tests;
+
+/// "Co", "Co3+", "N−".
+fn ion_name(atom: &reshiki::document::Atom) -> String {
+    let sign = if atom.charge > 0 { "+" } else { "−" };
+    match atom.charge.unsigned_abs() {
+        0 => atom.element.clone(),
+        1 => format!("{}{sign}", atom.element),
+        n => format!("{}{n}{sign}", atom.element),
+    }
+}
+
+fn atom_name(doc: &Document, id: u64) -> String {
+    doc.atom(id).map_or_else(
+        || format!("#{id}"),
+        |atom| format!("{} #{id}", atom.element),
+    )
+}
+
+/// "N #2, N #5 → Co #1 and N #13 → Ni #14"; more than three donors of one
+/// metal are counted. `added` is ordered by metal.
+fn contacts_text(doc: &Document, added: &[(u64, u64)]) -> String {
+    let mut groups: Vec<(u64, Vec<u64>)> = vec![];
+    for &(donor, metal) in added {
+        match groups.last_mut() {
+            Some((last, donors)) if *last == metal => donors.push(donor),
+            _ => groups.push((metal, vec![donor])),
+        }
+    }
+    groups
+        .iter()
+        .map(|(metal, donors)| {
+            let who = if donors.len() > 3 {
+                format!("{} donors", donors.len())
+            } else {
+                donors
+                    .iter()
+                    .map(|id| atom_name(doc, *id))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            format!("{who} → {}", atom_name(doc, *metal))
+        })
+        .collect::<Vec<_>>()
+        .join(" and ")
+}
+
+/// "N #9 (too far from Co #1), O #4 (the donor has no supported lone pair …)".
+fn skipped_text(doc: &Document, skipped: &[(u64, u64, reshiki::joining::Skip)]) -> String {
+    skipped
+        .iter()
+        .map(|(donor, metal, why)| {
+            let why = match why {
+                reshiki::joining::Skip::TooFar => {
+                    format!("too far from {}", atom_name(doc, *metal))
+                }
+                // The first clause of the contact's own refusal, lowercased.
+                reshiki::joining::Skip::Rejected(message) => {
+                    let clause = message.split([';', '.']).next().unwrap_or(message).trim();
+                    let mut chars = clause.chars();
+                    chars.next().map_or_else(String::new, |first| {
+                        first.to_lowercase().chain(chars).collect()
+                    })
+                }
+            };
+            format!("{} ({why})", atom_name(doc, *donor))
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
