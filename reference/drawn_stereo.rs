@@ -1,3 +1,5 @@
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -28,6 +30,7 @@ struct Case {
     replace: bool,
     operation: String,
     expected: Option<serde_json::Value>,
+    failure: Option<String>,
 }
 
 #[test]
@@ -50,6 +53,7 @@ fn drawn_stereo_matches_independent_rdkit() -> anyhow::Result<()> {
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut rejected, mut changed, mut promoted, mut cleared, mut bond_cases) =
         (0, 0, 0, 0, 0, 0);
+    let (mut other_basis, mut precondition) = (0, 0);
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -89,9 +93,23 @@ fn drawn_stereo_matches_independent_rdkit() -> anyhow::Result<()> {
                         .zip(&case.before.metadata.atoms)
                         .any(|(a, b)| a.chiral_tag == 0 && b.chiral_tag != 0),
                 );
-                serde_json::to_value(actual)? == *expected
+                let mut actual = serde_json::to_value(actual)?;
+                other_basis += ring_basis::adopt_rdkit_basis(&mut actual, expected);
+                actual == *expected
             }
             (Err(_), None) => true,
+            // RDKit 2026.09.1 atropisomer detection (rdkit#9190) violates its
+            // own precondition at a metal axis end with more than three
+            // neighbours; RDKit gives no chemical result to compare.
+            (Ok(_), None)
+                if case
+                    .failure
+                    .as_deref()
+                    .is_some_and(|failure| failure.contains("bad bond size")) =>
+            {
+                precondition += 1;
+                true
+            }
             _ => false,
         };
         if !matches && failures.len() < 10 {
@@ -115,7 +133,7 @@ fn drawn_stereo_matches_independent_rdkit() -> anyhow::Result<()> {
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     eprintln!(
-        "Verified {count} drawn-stereo cases: {changed} changed, {promoted} H promotions, {cleared} tag removals, {rejected} rejected, {bond_cases} bond-direction cases"
+        "Verified {count} drawn-stereo cases: {changed} changed, {promoted} H promotions, {cleared} tag removals, {rejected} rejected, {bond_cases} bond-direction cases, {other_basis} RDKit SSSR basis differences, {precondition} RDKit atropisomer precondition failures"
     );
     Ok(())
 }

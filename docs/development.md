@@ -124,6 +124,8 @@ the updated certifi CA bundle. Offline packaging does not need certifi. The
 [dated security review](changes/security-dependency-audit.md) records runtime
 requirements and accepted exceptions.
 
+The reference is pinned to RDKit 2026.9.1 (`Release_2026_09_1`). RDKit 2026.09.2 is tagged but its wheel is not on PyPI yet; the pin moves to 2026.9.2 when it ships. Reference runs use RDKit's legacy ring symmetrization, which ReShiki keeps: every live oracle calls `Chem.SetUseLegacyRingFinding(True)` before any RDKit work. [`reference/README.md`](../reference/README.md#deliberate-differences) lists where ReShiki deliberately differs from the pinned RDKit.
+
 The pinned RDKit reference provides wheels for Apple Silicon macOS, Windows x64 and Linux x64/ARM64, but not Intel macOS. Intel Mac development and packaging use the native checks above; run optional reference comparisons on a supported platform. The distributed Intel app needs no Python or RDKit.
 
 Live layout comparisons on Linux and Windows need fresh references for their installed math libraries. Setup downloads the pinned RDKit source and verified Boost headers; it only builds test tools.

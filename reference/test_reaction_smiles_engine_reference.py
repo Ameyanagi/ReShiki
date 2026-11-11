@@ -117,7 +117,8 @@ class ReactionSmilesEngineReferenceTests(unittest.TestCase):
                 self.assertEqual((adapted["a"], adapted["b"]), endpoints)
 
     def test_rejected_inputs_keep_the_original_exception(self):
-        for text in ("invalid", "C>>", "C>>O |(bad)|", "C>>O |(nan,inf,-inf)|"):
+        # RDKit 2026.09 reads "(bad)" as a zero coordinate (rdkit#9273).
+        for text in ("invalid", "C>>", "C>>O |(", "C>>O |(nan,inf,-inf)|"):
             with self.subTest(text=text):
                 with self.assertRaises((ValueError, RuntimeError)) as original:
                     original_response(text)

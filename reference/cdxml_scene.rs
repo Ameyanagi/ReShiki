@@ -206,9 +206,10 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     reference_diagnostics::report("CDXML scene", &failures)?;
     // #792 (9e5ef83b) added tests/fixtures/chemdraw-acs1996-chain-alkenes.cdxml;
     // every top-level fixture runs twice, adding two native and two document accepts.
+    // tests/fixtures/aa-nicknames.cdxml (A and a generic nicknames) adds two more.
     assert_eq!(
         (accepted, rejected, converted, bounds),
-        (2647, 286, 2355, 578)
+        (2649, 286, 2357, 578)
     );
     // Nine original raw Documents failed the projection requirement. The
     // independently adapted paint now passes the same validation boundary.

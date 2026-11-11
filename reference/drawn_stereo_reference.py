@@ -55,9 +55,9 @@ def emit(name, original, replace=True, operation="atom"):
             Chem.SetBondStereoFromDirections(mol)
         else:
             Chem.AssignChiralTypesFromBondDirs(mol, replaceExistingTags=replace)
-        expected = state(mol)
-    except (ValueError, RuntimeError):
-        expected = None
+        expected, failure = state(mol), None
+    except (ValueError, RuntimeError) as error:
+        expected, failure = None, str(error)
     print(
         json.dumps(
             dict(
@@ -68,6 +68,7 @@ def emit(name, original, replace=True, operation="atom"):
                 replace=replace,
                 operation=operation,
                 expected=expected,
+                failure=failure,
             )
         )
     )

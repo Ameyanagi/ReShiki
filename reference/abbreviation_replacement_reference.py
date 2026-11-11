@@ -70,13 +70,13 @@ def emit(name, doc, selection, label, check_chemistry=False):
     except (ValueError, OverflowError) as exception:
         expected, error = None, str(exception)
     assert before == doc
-    chemistry_ok = None
+    chemistry_ok = chemistry_failure = None
     if expected is not None and check_chemistry:
         try:
             worker.from_document(expected)
             chemistry_ok = True
-        except (ValueError, RuntimeError):
-            chemistry_ok = False
+        except (ValueError, RuntimeError) as exception:
+            chemistry_ok, chemistry_failure = False, str(exception)
     print(
         json.dumps(
             dict(
@@ -87,6 +87,7 @@ def emit(name, doc, selection, label, check_chemistry=False):
                 expected=expected,
                 error=error,
                 chemistry_ok=chemistry_ok,
+                chemistry_failure=chemistry_failure,
             )
         )
     )

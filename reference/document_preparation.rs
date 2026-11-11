@@ -1,3 +1,5 @@
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, document::prepare},
@@ -60,7 +62,7 @@ fn document_preparation_matches_independent_rdkit() -> anyhow::Result<()> {
     let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
     let version: Value = serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
-    let (mut count, mut rejected, mut labels, mut mismatches) = (0, 0, 0, 0);
+    let (mut count, mut rejected, mut labels, mut mismatches, mut other_basis) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -76,7 +78,9 @@ fn document_preparation_matches_independent_rdkit() -> anyhow::Result<()> {
                     .iter()
                     .filter(|a| a.cip_code.is_some())
                     .count();
-                difference(&serde_json::to_value(actual)?, expected, "molecule")
+                let mut actual = serde_json::to_value(actual)?;
+                other_basis += ring_basis::adopt_rdkit_basis(&mut actual, expected);
+                difference(&actual, expected, "molecule")
             }
             (Err(_), None) => {
                 rejected += 1;
@@ -116,7 +120,7 @@ fn document_preparation_matches_independent_rdkit() -> anyhow::Result<()> {
         failures.join("\n")
     );
     eprintln!(
-        "Verified {count} drawings: {labels} stereo labels, {rejected} rejected, {mismatches} mismatches"
+        "Verified {count} drawings: {labels} stereo labels, {rejected} rejected, {other_basis} RDKit SSSR basis differences, {mismatches} mismatches"
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(

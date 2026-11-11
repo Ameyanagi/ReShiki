@@ -1,7 +1,11 @@
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/cx_lenience.rs"]
+mod cx_lenience;
 #[path = "support/cx_stereo_groups.rs"]
 mod cx_stereo_groups;
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -138,7 +142,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     let mut restrictions = BTreeMap::<String, usize>::new();
     let mut fields = BTreeMap::<String, usize>::new();
     let mut extensions = 0;
-    let mut renumberings = 0;
+    let (mut renumberings, mut lenient, mut other_basis) = (0, 0, 0);
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let result = molfile::read(&case.text);
@@ -185,13 +189,11 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
                 (Ok(actual), Some(expected)) => {
                     accepted += usize::from(case.extension.is_none());
                     groups_accepted += usize::from(group_case);
-                    difference(
-                        &serde_json::json!({"state":actual.molecule.state,"positions":actual.molecule.positions,
+                    let mut actual = serde_json::json!({"state":actual.molecule.state,"positions":actual.molecule.positions,
                         "is_3d":actual.annotations.is_3d,"attachment_points":actual.annotations.attachment_points,
-                        "dummy_labels":actual.annotations.dummy_labels}),
-                        expected,
-                        "molecule",
-                    )
+                        "dummy_labels":actual.annotations.dummy_labels});
+                    other_basis += ring_basis::adopt_rdkit_basis(&mut actual, expected);
+                    difference(&actual, expected, "molecule")
                 }
                 (Err(_), None) => {
                     rejected += 1;
@@ -210,6 +212,10 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
                         )?),
                     ) =>
                 {
+                    None
+                }
+                (Ok(_), None) if cx_lenience::lenient_query(&case.text) => {
+                    lenient += 1;
                     None
                 }
                 (Ok(_), None) => Some(format!("Accepted invalid input: {:?}", case.failure)),
@@ -262,7 +268,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     }
     let restricted = restrictions.values().sum::<usize>();
     eprintln!(
-        "MOL import: {accepted} accepted, {rejected} rejected, {restricted} restricted, {mismatches} mismatches"
+        "MOL import: {accepted} accepted, {rejected} rejected, {restricted} restricted, {lenient} accepted where RDKit applies a leniently read SMARTSQ, {other_basis} RDKit SSSR basis differences, {mismatches} mismatches"
     );
     for (category, count) in categories {
         eprintln!("MOL import mismatch category: {count} {category}");
