@@ -444,57 +444,12 @@ jobs:
           cargo clippy --workspace --all-targets --locked --no-default-features
           cargo clippy --workspace --all-targets --locked --features rdkit-reference
           cargo test --locked --features rdkit-reference --no-run --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --test native_aromatic
-  rust-lint:
-    name: rust lint (${{ matrix.os }}, ${{ matrix.target }})
+  # Lint and golden replay share one job per platform to spare macOS runners.
+  rust-lint-goldens:
+    name: rust lint+goldens (${{ matrix.os }}, ${{ matrix.target }})
     needs: [scope, images]
     if: needs.scope.outputs.native == 'true'
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            target: aarch64-apple-darwin
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-            msvc_arch: x64
-          - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-      packages: read
-    # Linux runs in the CI image; an empty string runs the other rows on the host.
-    container: ${{ matrix.os == 'ubuntu-24.04' && needs.images.outputs.noble || '' }}
-    # Container steps otherwise default to sh; keep each runner's own default shell.
-    defaults:
-      run:
-        shell: ${{ startsWith(matrix.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
-    steps:
-      - *actions_runtime
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
-      - run: rustup default 1.99.1
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          shared-key: rust
-          save-if: false
-      - name: Select the native Windows compiler
-        if: runner.os == 'Windows'
-        uses: ./.github/actions/setup-msvc
-        with:
-          arch: ${{ matrix.msvc_arch }}
-      - if: runner.os == 'Linux'
-        run: cargo fmt --all --check
-      - name: Check the native application without reference dependencies
-        run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
-      - name: Check all optional reference tests compile cleanly
-        run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
-  rust-goldens:
-    name: rust goldens (${{ matrix.os }}, ${{ matrix.target }})
-    needs: [scope, images]
-    if: needs.scope.outputs.native == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -525,7 +480,7 @@ jobs:
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -540,6 +495,12 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
+      - if: runner.os == 'Linux'
+        run: cargo fmt --all --check
+      - name: Check the native application without reference dependencies
+        run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
+      - name: Check all optional reference tests compile cleanly
+        run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
       - name: Build the Rust helper and test executable
         run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.target }}
       - name: Select the helper for runtime integration tests
@@ -552,7 +513,7 @@ jobs:
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
   rust-result:
     name: Rust checks
-    needs: [scope, rust, rust-lint, rust-goldens]
+    needs: [scope, rust, rust-lint-goldens]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -563,11 +524,10 @@ jobs:
           SCOPE_RESULT: ${{ needs.scope.result }}
           NATIVE: ${{ needs.scope.outputs.native }}
           RUST_RESULT: ${{ needs.rust.result }}
-          LINT_RESULT: ${{ needs.rust-lint.result }}
-          GOLDENS_RESULT: ${{ needs.rust-goldens.result }}
+          LINT_GOLDENS_RESULT: ${{ needs.rust-lint-goldens.result }}
         run: |
           [[ "$SCOPE_RESULT" == success ]] || exit 1
-          for result in "$RUST_RESULT" "$LINT_RESULT" "$GOLDENS_RESULT"; do
+          for result in "$RUST_RESULT" "$LINT_GOLDENS_RESULT"; do
             case "$result" in
               success) ;;
               skipped) [[ "$NATIVE" != true ]] || exit 1 ;;
