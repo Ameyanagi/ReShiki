@@ -24,7 +24,7 @@ use windows::{
     Win32::{
         Foundation::*,
         System::{Com::StructuredStorage::*, Com::*, Ole::*, Registry::*},
-        UI::WindowsAndMessaging::*,
+        UI::{HiDpi::*, WindowsAndMessaging::*},
     },
     core::*,
 };
@@ -526,6 +526,14 @@ fn read_data_object(
 }
 
 pub(super) fn run(render: Render) -> Result<()> {
+    // The editor records original previews with winit's per-monitor awareness.
+    // Match it so edited previews avoid virtualized display metrics above 100%
+    // scaling (#1123).
+    unsafe {
+        if SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).is_err() {
+            let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+        }
+    }
     let _apartment = Apartment::new()?;
     RENDER.with(|cell| cell.set(Some(render)));
     let factory: IClassFactory = Factory.into();
