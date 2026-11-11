@@ -440,3 +440,143 @@ fn codeine_import_keeps_every_atom_clear_of_bonds_it_does_not_belong_to() -> any
     }
     Ok(())
 }
+
+const PORPHINE: &str = "C1=Cc2cc3ccc(cc4ccc(cc5nc(cc1n2)C=C5)[nH]4)[nH]3";
+const TETRAPHENYLPORPHINE: &str =
+    "c1ccc(cc1)c2c3ccc(n3)c(c4ccccc4)c5ccc([nH]5)c(c6ccccc6)c7ccc(n7)c(c8ccccc8)c9ccc2[nH]9";
+/// RDKit has no template for the phthalocyanine core, so its default layout stays.
+const PHTHALOCYANINE: &str =
+    "c1ccc2c(c1)c3nc2nc4[nH]c(nc5nc(nc6[nH]c(n3)c7ccccc67)c8ccccc58)c9ccccc49";
+
+fn bond_lengths(document: &crate::document::Document) -> Vec<f32> {
+    let position = |id| document.atom(id).unwrap().position;
+    (document.bonds.iter())
+        .map(|bond| position(bond.a).distance(position(bond.b)))
+        .collect()
+}
+
+fn assert_uniform_bonds(document: &crate::document::Document) {
+    let lengths = bond_lengths(document);
+    let longest = lengths.iter().cloned().fold(0_f32, f32::max);
+    let shortest = lengths.iter().cloned().fold(f32::INFINITY, f32::min);
+    assert!(
+        longest - shortest < 0.01 * longest,
+        "bond lengths range from {shortest} to {longest}"
+    );
+}
+
+/// The four nitrogens of a regular porphyrin core form a square.
+fn assert_square_core(document: &crate::document::Document) {
+    let nitrogens: Vec<_> = (document.atoms.iter())
+        .filter(|atom| atom.element == "N")
+        .map(|atom| atom.position)
+        .collect();
+    assert_eq!(nitrogens.len(), 4);
+    let mut distances: Vec<f32> = (0..4)
+        .flat_map(|i| (i + 1..4).map(move |j| (i, j)))
+        .map(|(i, j)| nitrogens[i].distance(nitrogens[j]))
+        .collect();
+    distances.sort_by(f32::total_cmp);
+    let side = distances[0];
+    for &edge in &distances[..4] {
+        assert!((edge - side).abs() < 0.01 * side, "sides {distances:?}");
+    }
+    for &diagonal in &distances[4..] {
+        assert!(
+            (diagonal - side * 2_f32.sqrt()).abs() < 0.01 * side,
+            "diagonals {distances:?}"
+        );
+    }
+}
+
+fn pairwise_distances(document: &crate::document::Document) -> Vec<f32> {
+    let n = document.atoms.len();
+    (0..n)
+        .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+        .map(|(i, j)| {
+            document.atoms[i]
+                .position
+                .distance(document.atoms[j].position)
+        })
+        .collect()
+}
+
+#[test]
+fn stretched_porphine_import_takes_its_regular_template() -> anyhow::Result<()> {
+    let input = smiles::read(PORPHINE)?;
+    let state = &input.prepared.state;
+    let native = depict::compute(
+        state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        Default::default(),
+    )?
+    .positions;
+    assert!(bridged(state));
+    assert_eq!(collisions(state, &native, 4096, 1.5), 0);
+    assert!(
+        spread(state, &native, 1.5) > 0.25,
+        "RDKit's default layout stretches 1.50 to 1.95"
+    );
+    let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
+    assert!(spread(state, &positions, 1.5) <= 0.01);
+    assert_eq!(collisions(state, &positions, 4096, 1.5), 0);
+    assert_eq!(
+        positions,
+        super::super::coordinates(state, &input.reaction_properties)?.positions
+    );
+    Ok(())
+}
+
+#[test]
+fn porphyrin_imports_and_cleanups_draw_the_same_regular_macrocycle() -> anyhow::Result<()> {
+    for text in [PORPHINE, TETRAPHENYLPORPHINE] {
+        let expected =
+            smiles::write::write(&smiles::read(text)?.prepared.state, Default::default())?.text;
+        let document = imported(text, true)?;
+        assert_uniform_bonds(&document);
+        assert_square_core(&document);
+        let mut request = crate::engine::Request::molecule("clean", document.clone());
+        request.cleanup = Some(crate::cleanup::Options {
+            keep_orientation: true,
+            ..Default::default()
+        });
+        let cleaned = crate::engine::native_cleanup::prepare(&request)?.document;
+        assert_uniform_bonds(&cleaned);
+        assert_square_core(&cleaned);
+        for (a, b) in pairwise_distances(&document)
+            .iter()
+            .zip(pairwise_distances(&cleaned))
+        {
+            assert!(
+                (a - b).abs() < 1e-3 * a.max(1.),
+                "{text}: cleanup changed the shape"
+            );
+        }
+        for document in [&document, &cleaned] {
+            assert_eq!(
+                smiles::write::write(&molecular::prepare(document)?.state, Default::default())?
+                    .text,
+                expected
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_stretched_macrocycle_without_a_template_keeps_its_native_layout() -> anyhow::Result<()> {
+    let input = smiles::read(PHTHALOCYANINE)?;
+    let state = &input.prepared.state;
+    let ranks = vec![None; state.graph.atoms.len()];
+    let original = depict::compute(state, &ranks, None, Default::default())?.positions;
+    assert!(bridged(state));
+    assert_eq!(collisions(state, &original, 4096, 1.5), 0);
+    assert!(spread(state, &original, 1.5) > 0.25);
+    let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
+    let mut expected = original.clone();
+    crate::chemistry::layout_refinement::straighten(state, &mut expected, None);
+    crate::chemistry::layout_refinement::conventional_orientation(state, &mut expected);
+    assert_eq!(positions, expected);
+    Ok(())
+}
