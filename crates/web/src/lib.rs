@@ -4,8 +4,9 @@
 //! the MCP tools do, so the results match the desktop's. packages/editor
 //! wraps and tests these exports.
 use reshiki_io::{
+    engine::LocalEngine,
     export,
-    formats::{EXPORT_PNG_PIXELS, read, write},
+    formats::{self, EXPORT_PNG_PIXELS, write},
 };
 use reshiki_model::{document::Document, scene};
 use wasm_bindgen::prelude::*;
@@ -72,11 +73,28 @@ fn js(error: String) -> JsError {
     JsError::new(&error)
 }
 
+/// A native drawing and the warnings reported while importing it.
+#[wasm_bindgen(getter_with_clone)]
+pub struct ReadResult {
+    pub drawing: String,
+    pub warnings: Vec<String>,
+}
+
+/// Read `data` as `format`, keeping the native drawing and import warnings.
+#[wasm_bindgen(js_name = read)]
+pub async fn read(data: Vec<u8>, format: String) -> Result<ReadResult, JsError> {
+    let (doc, warnings) = formats::read_with_warnings(data, &format, &LocalEngine::default())
+        .await
+        .map_err(js)?;
+    let drawing = text(doc.file_json().map_err(js)?).map_err(js)?;
+    Ok(ReadResult { drawing, warnings })
+}
+
 /// Convert `data` read as `from` into the format `to`. The formats are those of
 /// [`reshiki_io::formats`].
 #[wasm_bindgen]
 pub async fn convert(data: Vec<u8>, from: String, to: String) -> Result<Vec<u8>, JsError> {
-    write(read(data, &from).await.map_err(js)?, &to)
+    write(formats::read(data, &from).await.map_err(js)?, &to)
         .await
         .map_err(js)
 }
@@ -84,7 +102,9 @@ pub async fn convert(data: Vec<u8>, from: String, to: String) -> Result<Vec<u8>,
 /// The editor's SVG preview of `data` read as `format`.
 #[wasm_bindgen(js_name = renderSvg)]
 pub async fn render_svg(data: Vec<u8>, format: String) -> Result<String, JsError> {
-    Ok(preview_svg(&read(data, &format).await.map_err(js)?))
+    Ok(preview_svg(
+        &formats::read(data, &format).await.map_err(js)?,
+    ))
 }
 
 /// The editor's PNG preview of `data` read as `format`, within
@@ -96,21 +116,21 @@ pub async fn render_png(
     max_width: Option<u32>,
     max_height: Option<u32>,
 ) -> Result<Vec<u8>, JsError> {
-    let doc = read(data, &format).await.map_err(js)?;
+    let doc = formats::read(data, &format).await.map_err(js)?;
     preview_png(&doc, max_width.unwrap_or(1600), max_height.unwrap_or(1000)).map_err(js)
 }
 
 /// The SMILES of `data` read as `format`.
 #[wasm_bindgen]
 pub async fn smiles(data: Vec<u8>, format: String) -> Result<String, JsError> {
-    let doc = read(data, &format).await.map_err(js)?;
+    let doc = formats::read(data, &format).await.map_err(js)?;
     text(write(doc, "smiles").await.map_err(js)?).map_err(js)
 }
 
 /// The standard InChI of `data` read as `format`.
 #[wasm_bindgen]
 pub async fn inchi(data: Vec<u8>, format: String) -> Result<String, JsError> {
-    let doc = read(data, &format).await.map_err(js)?;
+    let doc = formats::read(data, &format).await.map_err(js)?;
     text(write(doc, "inchi").await.map_err(js)?).map_err(js)
 }
 

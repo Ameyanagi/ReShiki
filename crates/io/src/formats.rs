@@ -30,8 +30,19 @@ pub async fn read_with_engine(
     format: &str,
     engine: &LocalEngine,
 ) -> Result<Document, String> {
+    read_with_warnings(data, format, engine)
+        .await
+        .map(|(doc, _)| doc)
+}
+
+/// [`read_with_engine`] with import warnings in the order the engine reports them.
+pub async fn read_with_warnings(
+    data: Vec<u8>,
+    format: &str,
+    engine: &LocalEngine,
+) -> Result<(Document, Vec<String>), String> {
     if matches!(format, "rsk" | "reshiki") {
-        return Document::from_native_file(&data);
+        return Document::from_native_file(&data).map(|doc| (doc, Vec::new()));
     }
     let text = compatibility::import_text(format, data)?;
     let format = match format {
@@ -42,7 +53,7 @@ pub async fn read_with_engine(
     request.text = Some(text);
     let response = engine.request(request).await?;
     let document = response.document.ok_or("Import returned no drawing")?;
-    finalize(&document)
+    Ok((finalize(&document)?, response.warnings))
 }
 
 /// The engine's drawing as the editor keeps it, as the `import` tool stores it.
