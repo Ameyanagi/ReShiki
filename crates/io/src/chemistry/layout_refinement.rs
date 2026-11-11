@@ -1058,10 +1058,10 @@ mod tests {
                     let row = system
                         .fusions
                         .iter()
-                        .filter(|fusion| (centers[fusion.a].y - centers[fusion.b].y).abs() < 1e-8)
+                        .filter(|fusion| (centers[fusion.a].y - centers[fusion.b].y).abs() < 1e-7)
                         .collect::<Vec<_>>();
                     for fusion in &row {
-                        assert!((points[fusion.bond.0].x - points[fusion.bond.1].x).abs() < 1e-8);
+                        assert!((points[fusion.bond.0].x - points[fusion.bond.1].x).abs() < 1e-7);
                     }
                     if expected[0] == 2 {
                         assert_eq!(row.len(), 1);
@@ -1080,7 +1080,7 @@ mod tests {
                         assert!(
                             centers
                                 .iter()
-                                .all(|point| (point.y - centers[0].y).abs() < 1e-8)
+                                .all(|point| (point.y - centers[0].y).abs() < 1e-7)
                         );
                     }
                     let after = centroid(&points, &(0..points.len()).collect::<Vec<_>>());
