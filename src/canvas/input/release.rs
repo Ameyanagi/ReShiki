@@ -81,6 +81,13 @@ impl MoleculeCanvas<'_> {
                 )
             }
             Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
+            Gesture::RepeatLabelMove { bracket, start } => {
+                // A click on the label leaves it where it was.
+                if !inside || start.distance(p) < self.camera.world_len(DRAG_SLOP_PX) {
+                    return Some(Action::request_redraw().and_capture());
+                }
+                Edit::RepeatLabelMove(bracket, World::new(p.x - start.x, p.y - start.y))
+            }
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
             Gesture::PathPoint(drag) => {
                 if !drag.dragged(p, self.camera) {

@@ -265,7 +265,7 @@ impl RepeatCount {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RepeatUnit {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bracket: Option<u64>,
@@ -289,10 +289,47 @@ pub struct RepeatUnit {
     pub label: String,
     #[serde(default)]
     pub flip: String,
+    /// The label's move from its automatic place, in points. Absent keeps
+    /// the automatic place beside the bracket's lower-right corner.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_offset: Option<Point>,
 }
 impl RepeatUnit {
     pub fn default_head_count(crossings: usize) -> Option<usize> {
         if crossings == 2 { Some(1) } else { None }
+    }
+    /// Whether this graphic is one of the unit's brackets.
+    pub fn drawn_with(&self, graphic: u64) -> bool {
+        self.bracket == Some(graphic) || self.bracket_objects.contains(&graphic)
+    }
+    /// The top-left corner of the label's text box. It follows the bracket's
+    /// lower-right corner, so moving or resizing the bracket carries it along.
+    pub fn label_position(&self, doc: &Document) -> Option<Point> {
+        let bracket = doc.graphics.iter().find(|g| Some(g.id) == self.bracket)?;
+        let (_, hi) = bracket.shape_bounds();
+        let moved = self.label_offset.unwrap_or_default();
+        Some(hi.offset(4. + moved.x, 4. + moved.y))
+    }
+    /// The label's text box, for picking and its drag handle.
+    pub fn label_box(&self, doc: &Document) -> Option<(Point, Point)> {
+        let lo = self.label_position(doc)?;
+        let style = doc.drawing_style.text_style();
+        let size = style.size();
+        let width = crate::style::styled_text_width(&self.label, size, &style);
+        Some((lo, lo.offset(width, size)))
+    }
+}
+/// Moves the repeat label drawn beside `bracket` by `delta`, leaving the
+/// bracket and the unit's chemistry as they are.
+pub fn move_repeat_label(doc: &mut Document, bracket: u64, delta: Point) {
+    if let Some(unit) = doc
+        .generic
+        .repeats
+        .iter_mut()
+        .find(|u| u.bracket == Some(bracket))
+    {
+        let from = unit.label_offset.unwrap_or_default();
+        unit.label_offset = Some(from.offset(delta.x, delta.y));
     }
 }
 #[derive(Debug, Clone, Copy)]

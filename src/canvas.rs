@@ -177,6 +177,8 @@ pub enum Edit {
     /// The pointer and whether Option/Alt or Shift freed the orbit.
     AtomMark(u64, usize, World, bool),
     AtomIndicator(reshiki::atom_labels::Owner, World),
+    /// Move the repeat label beside a bracket by this much.
+    RepeatLabelMove(u64, World),
     ArrowHandle(u64, usize, World),
     ArrowClick(u64),
     ArrowTarget(World, bool),
@@ -444,6 +446,10 @@ enum Gesture {
     },
     AtomIndicator {
         owner: reshiki::atom_labels::Owner,
+    },
+    RepeatLabelMove {
+        bracket: u64,
+        start: World,
     },
     AtomMark {
         id: u64,

@@ -470,6 +470,26 @@ impl MoleculeCanvas<'_> {
                     draw_handle(frame, center, HandleShape::Circle(4.), false);
                 }
             }
+            for unit in preview
+                .generic
+                .repeats
+                .iter()
+                .filter(|u| selected.iter().any(|id| u.drawn_with(*id)))
+            {
+                if let Some((lo, hi)) = unit.label_box(preview) {
+                    // The leader runs from the bracket corner the label follows.
+                    let moved = unit.label_offset.unwrap_or_default();
+                    let corner = lo.offset(-4. - moved.x, -4. - moved.y);
+                    let center = self
+                        .camera
+                        .screen(World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.), bounds);
+                    frame.stroke(
+                        &Path::line(self.camera.screen(corner, bounds), center),
+                        Stroke::default().with_color(rgb([120, 170, 155])),
+                    );
+                    draw_handle(frame, center, HandleShape::Circle(4.), false);
+                }
+            }
         }
         for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
             if let Some(handles) = graphic.path_handles() {

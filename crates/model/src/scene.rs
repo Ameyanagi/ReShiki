@@ -2552,14 +2552,10 @@ fn atom_label_parts(
 
 fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
     for unit in &doc.generic.repeats {
-        if let Some(graphic) = unit
-            .bracket
-            .and_then(|id| doc.graphics.iter().find(|g| g.id == id))
-        {
-            let (_, hi) = graphic.shape_bounds();
+        if let Some(position) = unit.label_position(doc) {
             let style = doc.drawing_style.text_style();
             out.push(Primitive::Text {
-                position: hi.offset(4., 4.),
+                position,
                 text: unit.label.clone(),
                 size: style.size(),
                 color: style.color.rgb(),

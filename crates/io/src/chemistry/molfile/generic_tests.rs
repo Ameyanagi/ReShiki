@@ -73,6 +73,7 @@ fn v3000_sru_preserves_members_crossings_and_indefinite_count() {
                 count: RepeatCount::parse(label).unwrap(),
                 label: label.into(),
                 flip: "Unspecified".into(),
+                label_offset: None,
             },
         )
         .unwrap();
@@ -142,6 +143,7 @@ fn v3000_preserves_absent_and_multi_head_assignments_and_multiple_group_counts()
         count: RepeatCount::Indefinite { label: "n".into() },
         label: "n".into(),
         flip: "Unspecified".into(),
+        label_offset: None,
     };
     source.generic.repeats.push(unit);
     let output = write_document(&source).unwrap();
@@ -191,6 +193,7 @@ fn unretained_polymer_relationships_and_count_label_mismatch_reject() {
         count: RepeatCount::Finite { min: 1, max: 3 },
         label: "1-3".into(),
         flip: "Unspecified".into(),
+        label_offset: None,
     });
     let output = write_document(&source).unwrap();
     for property in ["XBCORR=(2 1 3)", "PARENT=2", "COMPNO=2", "PATOMS=(1 2)"] {

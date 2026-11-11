@@ -52,6 +52,23 @@ A number gives one length; `1-3` gives every length from 1 to 3. Use `n` for an
 indefinite polymer. **Clear repeating unit** removes the definition; the
 bracket stays.
 
+### Move the repeat label
+
+The label, such as `n`, starts beside the bracket's lower-right corner. To move
+it without changing the bracket or the unit:
+
+- Select the bracket, choose **Position repeat label** in the **Repeating
+  unit** section, and drag the label's handle. Escape finishes. Each drag is one
+  Undo step.
+- Or type **Label X** and **Label Y** in points and press Enter. They move the
+  label from its automatic place; positive Y is down.
+
+**Restore automatic label position** puts it back. A moved label keeps its
+distance from the bracket's corner when you move or resize the bracket.
+`.rsk` files, copy and paste, and SVG, PDF and PNG exports keep the
+position. CDXML and MOL keep the label text only; ChemDraw and other programs
+place it themselves.
+
 ### Bracket annotations and ions
 
 The **Brackets** palette includes **Transition state [ ]‡**. Select brackets,

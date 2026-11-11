@@ -140,6 +140,7 @@ impl SourceGeneric {
                 count: source.count.clone(),
                 label: source.label.clone(),
                 flip: source.flip.clone(),
+                label_offset: None,
             });
         }
         let labels = self

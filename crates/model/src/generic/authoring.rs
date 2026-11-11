@@ -307,6 +307,7 @@ pub fn define_bracket(
             count,
             label: label.trim().into(),
             flip: "Unspecified".into(),
+            label_offset: None,
         },
     )?;
     Ok(candidate)
