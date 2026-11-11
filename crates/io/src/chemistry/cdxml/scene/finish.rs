@@ -33,6 +33,7 @@ fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
         label_attachment: Default::default(),
         stereo: indicator(value.stereo)?,
         mapping: Default::default(),
+        stereo_group: Default::default(),
         number: value
             .number
             .map(|n| -> Result<Number> {

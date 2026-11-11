@@ -135,7 +135,8 @@ impl Writer<'_> {
             )?;
             self.atom_nodes.push(node);
             self.objects.push((a.id, node));
-            if let Some(group) = a.stereo_group {
+            let centre = *stereocentres.get(i).ok_or(Error::Limit)?;
+            if let Some(group) = a.stereo_group.filter(|_| centre) {
                 let number = u16::try_from(group.number).map_err(|_| {
                     invalid("CDXML/CDX stereo group numbers must be between 1 and 65535")
                 })?;
@@ -149,8 +150,16 @@ impl Writer<'_> {
                 )?;
                 self.tree
                     .set(node, "EnhancedStereoGroupNum", number.to_string())?;
-            } else if enhanced_stereo && *stereocentres.get(i).ok_or(Error::Limit)? {
+            } else if enhanced_stereo && centre {
                 self.tree.set(node, "EnhancedStereoType", "Absolute")?;
+            }
+            if enhanced_stereo && centre {
+                let show = a
+                    .display
+                    .stereo_group
+                    .show
+                    .unwrap_or(doc.atom_labels.stereo_groups);
+                self.tree.set(node, "ShowAtomEnhancedStereo", yes(show))?;
             }
             // ChemDraw's "not a stereocentre" tells import that this metal's
             // wedges are frame projection, not tetrahedral stereo.
