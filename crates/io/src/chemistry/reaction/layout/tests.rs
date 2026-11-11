@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn reaction_attachment_labels_reach_layout_as_native_wedge_markers() -> anyhow::Result<()> {
+    for (text, expected) in [
+        ("*C>>O |$_AP01;;$|", vec![true, false]),
+        ("C*C>>O |$;_AP1;;$|", vec![false, false, false]),
+        ("*C>>O |$_AP37;;$|", vec![false, false]),
+        ("*C>>O |$_AP0;;$|", vec![false, false]),
+    ] {
+        let layout = super::super::read_smiles(text)?.layout()?;
+        assert_eq!(layout.parts[0].attachments, expected, "{text}");
+        assert_eq!(layout.parts[1].attachments, vec![false], "{text}");
+        assert!(
+            layout.parts.iter().all(|part| part
+                .source
+                .annotations
+                .attachment_points
+                .iter()
+                .all(Option::is_none)),
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn supplied_conformers_keep_their_coordinates_and_dimension() -> anyhow::Result<()> {
     let source = super::super::read_smiles("CO>O>N |(1,2,3;4,5,6;7,8,9;10,11,12),(99,99,99)|")?;
     let layout = source.layout()?;
