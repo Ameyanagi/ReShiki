@@ -225,9 +225,12 @@ def main():
         print(gzip.decompress(args.fixture.read_bytes()).decode(), end="")
         return
     import rdkit
-    from rdkit import rdBase
+    from rdkit import Chem, rdBase
 
     assert rdBase.rdkitVersion == "2026.09.1"
+    Chem.SetUseLegacyRingFinding(True)
+    # RDKit's setenv is invisible to os.environ; native observers inherit this copy.
+    os.environ["RDK_USE_LEGACY_RING_FINDING"] = "1"
     assert args.rdkit_source is not None
     hashes = {n: hashlib.sha256((args.rdkit_source / n).read_bytes()).hexdigest() for n in SOURCES}
     if args.replay:

@@ -7,6 +7,7 @@ from rdkit.Chem import rdDepictor
 
 
 def main():
+    Chem.SetUseLegacyRingFinding(True)
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     for smiles in ("C", "CC", "CCC", "CC(C)C", "C1CCCCC1", "CC1CCCCC1", "F/C=C/F", "[H]CC"):

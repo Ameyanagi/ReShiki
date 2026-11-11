@@ -16,6 +16,7 @@ SOURCE = "Code/GraphMol/Depictor/TemplateSmarts.h"
 
 def catalog(source):
     assert rdBase.rdkitVersion == "2026.09.1"
+    Chem.SetUseLegacyRingFinding(True)
     assert (
         subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
         == PIN

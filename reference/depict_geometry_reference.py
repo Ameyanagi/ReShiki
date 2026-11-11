@@ -11,6 +11,7 @@ import gzip
 import hashlib
 import json
 import math
+import os
 import platform
 import random
 import struct
@@ -197,6 +198,11 @@ def main():
     parser.add_argument("--write-fixture", action="store_true")
     args = parser.parse_args()
     if args.oracle:
+        from rdkit import Chem
+
+        Chem.SetUseLegacyRingFinding(True)
+        # RDKit's setenv is invisible to os.environ; native observers inherit this copy.
+        os.environ["RDK_USE_LEGACY_RING_FINDING"] = "1"
         assert args.rdkit_source is not None
         source_hashes = {
             name: hashlib.sha256((args.rdkit_source / name).read_bytes()).hexdigest()

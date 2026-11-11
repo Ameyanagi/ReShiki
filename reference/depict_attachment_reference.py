@@ -185,9 +185,12 @@ def main():
         print(gzip.decompress(args.fixture.read_bytes()).decode(), end="")
         return
     import rdkit
-    from rdkit import rdBase
+    from rdkit import Chem, rdBase
 
     assert rdBase.rdkitVersion == "2026.09.1"
+    Chem.SetUseLegacyRingFinding(True)
+    # RDKit's setenv is invisible to os.environ; native observers inherit this copy.
+    os.environ["RDK_USE_LEGACY_RING_FINDING"] = "1"
     package = Path(rdkit.__file__).parent
     library_dir = (
         package / ".dylibs" if platform.system() == "Darwin" else package.parent / "rdkit.libs"

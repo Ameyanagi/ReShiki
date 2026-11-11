@@ -220,8 +220,9 @@ def observe(case):
 
 
 def worker():
-    from rdkit import RDLogger
+    from rdkit import Chem, RDLogger
 
+    Chem.SetUseLegacyRingFinding(True)
     RDLogger.DisableLog("rdApp.*")
     for _ in range(BATCH):
         line = sys.stdin.buffer.readline(MAX_RECORD + 1)
@@ -355,6 +356,7 @@ def requests(source):
 
     if rdBase.rdkitVersion != VERSION:
         raise ValueError("Generate inputs with the pinned native version")
+    Chem.SetUseLegacyRingFinding(True)
     RDLogger.DisableLog("rdApp.*")
     rng = random.Random(637821)
 
