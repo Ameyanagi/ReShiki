@@ -129,6 +129,7 @@ fn compare(case: &Case) -> anyhow::Result<(bool, usize)> {
     let solver_options = if native_defaults {
         depict::Options {
             path_angle_expansion: false,
+            preserve_spiro_rings: false,
             ..Default::default()
         }
     } else {
@@ -142,6 +143,7 @@ fn compare(case: &Case) -> anyhow::Result<(bool, usize)> {
             canonical_orientation: options.canon_orient,
             use_ring_templates: options.use_ring_templates,
             path_angle_expansion: false,
+            preserve_spiro_rings: false,
             ..Default::default()
         }
     };

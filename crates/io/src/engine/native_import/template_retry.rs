@@ -103,6 +103,7 @@ pub(in crate::engine) fn improve(
             bond_length,
             use_ring_templates: true,
             path_angle_expansion: crate::chemistry::document::refine(),
+            preserve_spiro_rings: crate::chemistry::document::refine(),
             ..Default::default()
         },
     ) {

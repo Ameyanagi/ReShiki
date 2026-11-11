@@ -26,6 +26,9 @@ pub struct Options {
     /// Run the RDKit 2026.09.1 path angle expansion after the RDKit 2026.03.6
     /// collision stages (#632). Disable for exact 2026.03.6 parity.
     pub path_angle_expansion: bool,
+    /// Keep regular rings next to a spiro centre when RDKit's collision
+    /// shortening would squash them (#1112). ReShiki only; off for parity.
+    pub preserve_spiro_rings: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -35,6 +38,7 @@ impl Default for Options {
             use_ring_templates: false,
             work_limit: expansion::MAX_WORK,
             path_angle_expansion: true,
+            preserve_spiro_rings: false,
         }
     }
 }
@@ -147,7 +151,7 @@ fn compute_inner(
     );
     let allowance = remaining.saturating_sub(reserve);
     let mut available = allowance;
-    let repaired = repair(&initial, options.path_angle_expansion, &mut available);
+    let repaired = repair(&initial, options, &mut available);
     *remaining -= allowance - available;
     match repaired {
         Ok(fragments) => initial.fragments = fragments,
@@ -166,7 +170,7 @@ fn compute_inner(
 
 fn repair(
     initial: &expansion::Initial,
-    path_angle_expansion: bool,
+    options: Options,
     remaining: &mut usize,
 ) -> Result<Vec<rings::Fragment>, collision::Error> {
     let collision = collision::Input::new_with_work(
@@ -186,12 +190,28 @@ fn repair(
         *fragment = collision.apply_with_work(fragment, collision::Stage::OpenAngles, remaining)?;
         *fragment =
             collision.apply_with_work(fragment, collision::Stage::ShortenBonds, remaining)?;
-        if path_angle_expansion {
+        if options.path_angle_expansion {
             *fragment = collision.apply_with_work(
                 fragment,
                 collision::Stage::PathAngleExpansion,
                 remaining,
             )?;
+        }
+    }
+    if options.preserve_spiro_rings {
+        // Retry only after native repair is complete, so optional work cannot
+        // change its result when the shared allowance runs out (#1112).
+        for (original, repaired) in initial.fragments.iter().zip(&mut fragments) {
+            match collision.preserve_spiro_rings_with_work(
+                original,
+                repaired,
+                options.bond_length,
+                remaining,
+            ) {
+                Ok(candidate) => *repaired = candidate,
+                Err(collision::Error::Limit) => break,
+                Err(error) => return Err(error),
+            }
         }
     }
     Ok(fragments)

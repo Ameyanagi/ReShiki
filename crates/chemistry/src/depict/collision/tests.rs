@@ -174,3 +174,138 @@ fn path_angle_expansion_keeps_clear_drawings_and_shortened_bonds_in_place() -> a
     }
     Ok(())
 }
+
+#[test]
+fn spiro_refinement_replaces_ring_shortening_and_preserves_fixed_atoms() -> anyhow::Result<()> {
+    use crate::{depict::expansion, smiles};
+    let state = smiles::prepare("O=C1Cc2ccccc2C12CCC(=O)c1ccccc12")?.state;
+    let initial = expansion::compute_initial(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        expansion::Options {
+            use_ring_templates: false,
+            ..Default::default()
+        },
+    )?;
+    let input = Input::new(
+        &initial.state.graph,
+        &initial.state.metadata,
+        &initial.state.rings,
+    )?;
+    let original = &initial.fragments[0];
+    let flipped = input.apply(original, Stage::BondAndSpiroFlip)?;
+    let opened = input.apply(&flipped, Stage::OpenAngles)?;
+    for fragment in [original, &flipped, &opened] {
+        for bond in &state.graph.bonds {
+            assert!((distance(fragment, bond.a, bond.b) - 1.5).abs() < 1e-12);
+        }
+    }
+    let shortened = input.apply(&opened, Stage::ShortenBonds)?;
+    assert!((distance(&shortened, 15, 16) - 0.8).abs() < 1e-12);
+    for fixed in [false, true] {
+        let mut original = original.clone();
+        if fixed {
+            original.atoms.get_mut(&0).unwrap().fixed = true;
+            original.atoms.get_mut(&9).unwrap().fixed = true;
+        }
+        let repaired =
+            input.preserve_spiro_rings_with_work(&original, &shortened, 1.5, &mut { MAX_WORK })?;
+        for bond in &state.graph.bonds {
+            assert!((distance(&repaired, bond.a, bond.b) - 1.5).abs() < 1e-12);
+        }
+        assert!(input.find(&repaired, true)?.pairs.is_empty());
+        if fixed {
+            for id in [0, 9] {
+                assert_eq!(repaired.atoms[&id].location, original.atoms[&id].location);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn spiro_refinement_keeps_unaffected_layout_bits_and_budget_fallback() -> anyhow::Result<()> {
+    use crate::{depict, smiles};
+    let mut shortened_fallback = false;
+    for text in [
+        "C1Cc2ccccc2C12CCCc1ccccc12",
+        "C1CCC2(C1)CCCCC2",
+        "c1ccccc1.CCCCCCCC",
+        "O=C1Cc2ccccc2C12CCC(=O)c1ccccc12",
+    ] {
+        let state = smiles::prepare(text)?.state;
+        for work_limit in [100, 1_000, 5_000, 10_000, 15_000, 20_000, 50_000] {
+            let run = |preserve_spiro_rings| {
+                depict::compute(
+                    &state,
+                    &vec![None; state.graph.atoms.len()],
+                    None,
+                    depict::Options {
+                        preserve_spiro_rings,
+                        work_limit,
+                        ..Default::default()
+                    },
+                )
+            };
+            match (run(false), run(true)) {
+                (Ok(before), Ok(after)) => {
+                    let distorted = state.rings.atoms.iter().any(|ring| {
+                        ring.iter().enumerate().any(|(i, &a)| {
+                            let b = ring[(i + 1) % ring.len()];
+                            let (a, b) = (before.positions[a], before.positions[b]);
+                            ((a.x - b.x).hypot(a.y - b.y) - 1.5).abs() > 1e-6
+                        })
+                    });
+                    let identical = before.positions.iter().zip(&after.positions).all(|(a, b)| {
+                        a.x.to_bits() == b.x.to_bits() && a.y.to_bits() == b.y.to_bits()
+                    });
+                    assert!(distorted || identical, "{text}/{work_limit}");
+                    shortened_fallback |= distorted && identical;
+                }
+                (Err(before), Err(after)) => assert_eq!(before.to_string(), after.to_string()),
+                result => panic!("refinement changed success for {text}/{work_limit}: {result:?}"),
+            }
+        }
+    }
+    assert!(
+        shortened_fallback,
+        "exercise exhaustion during the optional retry"
+    );
+    Ok(())
+}
+
+#[test]
+fn spiro_refinement_ignores_an_irregular_pinned_ring_elsewhere() -> anyhow::Result<()> {
+    use crate::{depict, smiles};
+    let state = smiles::prepare("O=C1Cc2ccccc2C12CCC(=O)c1ccccc12.C1CCCCC1")?.state;
+    // Pins join both components into one fragment; the cyclohexane edge is
+    // not the standard length, which must not veto the squashed benzene.
+    let pins = depict::geometry::Coordinates::from([
+        (9, Point { x: 0., y: 0. }),
+        (10, Point { x: 1.5, y: 0. }),
+        (20, Point { x: 20., y: 0. }),
+        (21, Point { x: 21.5001, y: 0. }),
+    ]);
+    let positions = depict::compute(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        Some(&pins),
+        depict::Options {
+            canonical_orientation: false,
+            preserve_spiro_rings: true,
+            ..Default::default()
+        },
+    )?
+    .positions;
+    for ring in state.rings.atoms.iter().filter(|ring| ring.len() == 6) {
+        if ring.contains(&21) {
+            continue;
+        }
+        for (i, &a) in ring.iter().enumerate() {
+            let (a, b) = (positions[a], positions[ring[(i + 1) % ring.len()]]);
+            assert!(((a.x - b.x).hypot(a.y - b.y) - 1.5).abs() < 1e-9);
+        }
+    }
+    Ok(())
+}

@@ -118,6 +118,7 @@ pub(super) fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
                 canonical_orientation: request.canonical_orientation,
                 use_ring_templates: request.use_ring_templates,
                 path_angle_expansion: chemistry::document::refine(),
+                preserve_spiro_rings: chemistry::document::refine(),
                 ..Default::default()
             },
         )?
