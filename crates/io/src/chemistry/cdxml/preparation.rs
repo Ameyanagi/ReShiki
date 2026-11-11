@@ -478,6 +478,12 @@ fn prepare(text: &str, check_chemistry: bool) -> Result<PreparedCdxml> {
             graph: graph.clone(),
             metadata: combined.metadata.clone(),
             directions: combined.directions.clone(),
+            conformer: combined
+                .conformer_3d
+                .map(|is_3d| stereo::wedging::Conformer {
+                    positions: combined.positions.clone(),
+                    is_3d,
+                }),
             valences: at(
                 Sanitization,
                 graph
@@ -565,6 +571,12 @@ fn chemical_state(combined: &Combined) -> Result<perception::State> {
                 graph: drawn.graph,
                 metadata: geometry.metadata,
                 directions: geometry.directions,
+                conformer: combined
+                    .conformer_3d
+                    .map(|is_3d| stereo::wedging::Conformer {
+                        positions: combined.positions.clone(),
+                        is_3d,
+                    }),
                 valences: drawn.valences,
                 conjugated: sanitized.conjugated,
                 hybridizations: sanitized.hybridizations,

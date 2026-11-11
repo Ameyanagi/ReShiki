@@ -78,6 +78,15 @@ pub struct Molecule {
     pub state: perception::State,
 }
 
+impl Molecule {
+    /// Replace drawing coordinates and the geometry used by stereo perception
+    /// together, preserving the conformer's explicit 2D/3D flag.
+    pub fn set_conformer(&mut self, conformer: stereo::wedging::Conformer) {
+        self.positions.clone_from(&conformer.positions);
+        self.state.conformer = Some(conformer);
+    }
+}
+
 struct Input {
     graph: Graph,
     metadata: Metadata,
@@ -321,18 +330,9 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
             ));
         }
     }
-    let mut drawn = stereo::from_directions(
-        &sanitized.graph,
-        &sanitized.metadata,
-        &sanitized.directions,
-        Some(&input.positions),
-        false,
-    )
-    .map_err(Error::Stereo)?;
-    // Axis wedges are drawing input, so every prepare perceives them afresh.
-    // Remove provisional tags on small rings, as sanitized file imports do.
     // For axes only, a crossed double bond is EITHERDOUBLE, not the unknown
-    // single-bond direction that hides an axis at its endpoint.
+    // single-bond direction that hides an axis at its endpoint. Keep the
+    // original directions below for ordinary double-bond geometry.
     let directions: Vec<_> = sanitized
         .directions
         .iter()
@@ -342,22 +342,14 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
             direction => direction,
         })
         .collect();
-    if let Ok(metadata) = stereo::detect_atropisomers(
-        &drawn.graph,
-        &drawn.metadata,
+    let mut drawn = stereo::from_directions(
+        &sanitized.graph,
+        &sanitized.metadata,
         &directions,
-        Some(&stereo::wedging::Conformer {
-            positions: input.positions.clone(),
-            is_3d: false,
-        }),
-    ) && let Ok(metadata) = stereo::atropisomers(
-        &drawn.graph,
-        &metadata,
-        &sanitized.hybridizations,
-        &sanitized.rings,
-    ) {
-        drawn.metadata = metadata;
-    }
+        Some(&input.positions),
+        false,
+    )
+    .map_err(Error::Stereo)?;
     let edges: HashSet<_> = drawn
         .graph
         .bonds
@@ -437,10 +429,23 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
     }
     .map_err(Error::Stereo)?;
     let properties = perception::Properties::unspecified(&drawn.graph);
+    let perception_directions = geometry
+        .directions
+        .iter()
+        .zip(&document.bonds)
+        .map(|(&direction, bond)| match direction {
+            Direction::Unknown if bond.order == 2 => Direction::EitherDouble,
+            direction => direction,
+        })
+        .collect();
     let state = perception::State {
         graph: drawn.graph,
         metadata: geometry.metadata,
-        directions: geometry.directions,
+        directions: perception_directions,
+        conformer: Some(stereo::wedging::Conformer {
+            positions: input.positions.clone(),
+            is_3d: false,
+        }),
         valences: drawn.valences,
         conjugated: sanitized.conjugated,
         hybridizations: sanitized.hybridizations,
@@ -455,12 +460,36 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
         force: true,
         flag_possible: false,
     };
-    let state = if let Some(mask) = authoritative.as_deref() {
+    let mut state = if let Some(mask) = authoritative.as_deref() {
         perception::perceive_preserving_bonds(&state, options, mask)
     } else {
         perception::perceive(&state, options)
     }
     .map_err(Error::Stereo)?;
+    for ((direction, &original), bond) in state
+        .directions
+        .iter_mut()
+        .zip(&geometry.directions)
+        .zip(&document.bonds)
+    {
+        if original == Direction::Unknown
+            && bond.order == 2
+            && *direction == Direction::EitherDouble
+        {
+            *direction = original;
+        }
+    }
+    // Canvas wedges are read after sanitization. Preserve the drawing path's
+    // cleanup of provisional axes on small rings and non-sp2 endpoints even
+    // though its legacy assignment deliberately preserves existing tags.
+    if let Ok(metadata) = stereo::atropisomers(
+        &state.graph,
+        &state.metadata,
+        &state.hybridizations,
+        &state.rings.atoms,
+    ) {
+        state.metadata = metadata;
+    }
     if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || state.metadata.atoms.iter().enumerate().any(|(i, a)| {
             !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)

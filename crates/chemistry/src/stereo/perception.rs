@@ -1,7 +1,9 @@
-//! Legacy stereo perception adapted from RDKit Chirality.cpp (2026.03.6).
+//! Legacy stereo perception adapted from RDKit Chirality.cpp (2026.09.1, #9190).
 //! Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod atoms;
+#[cfg(test)]
+mod atrop_tests;
 mod bonds;
 mod cycles;
 #[cfg(test)]
@@ -78,6 +80,9 @@ pub struct State {
     pub hybridizations: Vec<Hybridization>,
     pub rings: RingCache,
     pub properties: Properties,
+    /// Coordinates for axial redetection, retained through graph remapping.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conformer: Option<super::wedging::Conformer>,
 }
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -558,6 +563,11 @@ fn with_work_preserving(
     } else if allene_axes {
         clear_allenes_without_axis(&mut ctx.state, work)?;
     }
+    ctx.detect_atropisomers(options.clean, work)?;
+    if options.clean {
+        ctx.cleanup_bonds(work)?;
+        ctx.cleanup_groups(work)?;
+    }
     ctx.state.properties.done = Some(true);
     Ok(ctx.state)
 }
@@ -660,7 +670,7 @@ impl Context {
         }
     }
     fn detectable(&self, bond: usize) -> Result<bool, String> {
-        Ok(*at(&self.minimum, bond)? >= 8)
+        Ok(*at(&self.minimum, bond)? >= super::MIN_RING_SIZE_FOR_DOUBLE_BOND_STEREO)
     }
     fn hydrogens(&self, atom: usize) -> Result<usize, String> {
         Ok(
@@ -756,8 +766,30 @@ impl Context {
         if allene_axes {
             clear_allenes_without_axis(&mut self.state, work)?;
         }
-        self.cleanup_bonds(work)?;
-        self.cleanup_groups(work)
+        Ok(())
+    }
+    fn detect_atropisomers(&mut self, clean: bool, work: &mut Work) -> Result<(), String> {
+        self.state.metadata = super::detect_atropisomers_with_bounds(
+            &self.state.graph,
+            &self.state.metadata,
+            &self.state.directions,
+            self.state.conformer.as_ref(),
+            clean,
+            super::CoordinateBounds::NativeImport,
+        )
+        .map_err(|e| e.to_string())?;
+        // RDKit 2026.09.2 #9682: use the sanitiser's cutoff, only with SSSR data.
+        if clean && matches!(self.state.rings.kind, RingKind::Basis | RingKind::Symmetric) {
+            for (id, meta) in self.state.metadata.bonds.iter_mut().enumerate() {
+                work.spend(1)?;
+                if matches!(meta.stereo, 6 | 7)
+                    && *at(&self.minimum, id)? < super::MIN_RING_SIZE_FOR_DOUBLE_BOND_STEREO
+                {
+                    meta.stereo = 0;
+                }
+            }
+        }
+        Ok(())
     }
     fn cleanup_groups(&mut self, work: &mut Work) -> Result<(), String> {
         let mut converted_storage = 0usize;

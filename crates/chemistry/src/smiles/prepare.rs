@@ -140,6 +140,7 @@ pub(super) fn finish(
     }
     let state = perception::perceive(
         &perception::State {
+            conformer: context.conformers.first().cloned(),
             graph: sanitized.graph,
             metadata: sanitized.metadata,
             directions: sanitized.directions,

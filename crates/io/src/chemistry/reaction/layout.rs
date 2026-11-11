@@ -120,7 +120,12 @@ impl Layout {
                 if positions.len() != part.source.molecule.ids.len() {
                     return Err(invalid("Reaction layout atom count changed"));
                 }
-                part.source.molecule.positions = positions;
+                part.source
+                    .molecule
+                    .set_conformer(crate::chemistry::stereo::wedging::Conformer {
+                        positions,
+                        is_3d: false,
+                    });
             }
             let row = match part.role {
                 Role::Reactant => &mut source.reactants,

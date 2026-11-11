@@ -98,6 +98,28 @@ fn binol_drawing_perceives_mirrored_single_axis_wedges() -> anyhow::Result<()> {
 }
 
 #[test]
+fn flipping_and_removing_canvas_axis_wedges_refreshes_stereo() -> anyhow::Result<()> {
+    let mut doc = labeled(&binol("wedge"))?;
+    let original = prepare(&doc)?.state.metadata.bonds[22].stereo;
+    assert!(matches!(original, 6 | 7));
+    assert_eq!(doc.bonds[22].cip_label.as_deref(), Some("P"));
+    doc.bonds[0].display = "hash".into();
+    let flipped = prepare(&doc)?;
+    assert_ne!(flipped.state.metadata.bonds[22].stereo, original);
+    assert!(matches!(flipped.state.metadata.bonds[22].stereo, 6 | 7));
+    assert_eq!(
+        flipped.state.conformer.as_ref().unwrap().positions,
+        flipped.positions
+    );
+    doc = labeled(&doc)?;
+    assert_eq!(doc.bonds[22].cip_label.as_deref(), Some("M"));
+    doc.bonds[0].display = "plain".into();
+    assert_eq!(prepare(&doc)?.state.metadata.bonds[22].stereo, 0);
+    assert!(labeled(&doc)?.bonds[22].cip_label.is_none());
+    Ok(())
+}
+
+#[test]
 fn axial_stereo_requires_wedges_originating_at_the_axis() -> anyhow::Result<()> {
     let plain = binol("plain");
     let mut distant = plain.clone();

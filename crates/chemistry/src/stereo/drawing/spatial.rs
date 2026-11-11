@@ -340,5 +340,15 @@ pub(crate) fn from_3d_with_bounds(
                 .ok_or(SpatialError::Invalid("Missing 3D stereo flag"))? = Some(1);
         }
     }
+    // RDKit 2026.09.1 #9190 also revisits tagged axes without wedges in 3D.
+    result.metadata = super::detect_atropisomers_with_bounds(
+        graph,
+        &result.metadata,
+        directions,
+        Some(conf),
+        options.replace_existing,
+        bounds,
+    )
+    .map_err(|e| SpatialError::Geometry(e.to_string()))?;
     Ok(result)
 }

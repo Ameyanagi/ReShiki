@@ -459,7 +459,10 @@ impl PythonEngine {
         if layout.rdkit_version != RDKIT_VERSION || layout.positions.len() != n {
             return Err("Import layout version or dimensions changed".into());
         }
-        molecule.positions = layout.positions;
+        molecule.set_conformer(crate::chemistry::stereo::wedging::Conformer {
+            positions: layout.positions,
+            is_3d: false,
+        });
         tokio::task::spawn_blocking(move || {
             let drawing = document::for_import(&molecule, false, &file.dummy_labels)
                 .map_err(|e| e.to_string())?;

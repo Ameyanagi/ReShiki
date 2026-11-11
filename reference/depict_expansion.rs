@@ -734,6 +734,7 @@ fn chemical_annotation_dimensions_fail_before_copying() -> anyhow::Result<()> {
     };
     let graph = chain(1);
     let mut state = State {
+        conformer: None,
         metadata: Metadata::unspecified(&graph),
         properties: Properties::unspecified(&graph),
         graph,

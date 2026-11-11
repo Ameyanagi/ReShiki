@@ -111,7 +111,12 @@ pub fn from_directions(
         graph,
         metadata,
         directions,
-        positions,
+        positions
+            .map(|positions| wedging::Conformer {
+                positions: positions.to_vec(),
+                is_3d: false,
+            })
+            .as_ref(),
         replace_existing,
         CoordinateBounds::Drawing,
     )
@@ -121,10 +126,11 @@ pub(crate) fn from_directions_with_bounds(
     graph: &Graph,
     metadata: &Metadata,
     directions: &[Direction],
-    positions: Option<&[Point3]>,
+    conformer: Option<&wedging::Conformer>,
     replace_existing: bool,
     bounds: CoordinateBounds,
 ) -> Result<DrawnStereo, String> {
+    let positions = conformer.map(|c| c.positions.as_slice());
     let cache = graph.provisional_valences()?;
     metadata.validate(graph)?;
     if directions.len() != graph.bonds.len() {
@@ -141,6 +147,15 @@ pub(crate) fn from_directions_with_bounds(
         valences: cache,
     };
     let Some(positions) = positions else {
+        result.metadata = detect_atropisomers_with_bounds(
+            &result.graph,
+            &result.metadata,
+            directions,
+            None,
+            replace_existing,
+            bounds,
+        )
+        .map_err(|e| e.to_string())?;
         return Ok(result);
     };
     let mut neighbors = vec![Vec::new(); graph.atoms.len()];
@@ -203,6 +218,16 @@ pub(crate) fn from_directions_with_bounds(
         .graph
         .refresh_atoms(&result.valences, &promoted, true)?;
     allene::perceive(&mut result, directions, positions, replace_existing)?;
+    // RDKit 2026.09.1 #9190: atom and axial assignment share replacement policy.
+    result.metadata = detect_atropisomers_with_bounds(
+        &result.graph,
+        &result.metadata,
+        directions,
+        conformer,
+        replace_existing,
+        bounds,
+    )
+    .map_err(|e| e.to_string())?;
     Ok(result)
 }
 

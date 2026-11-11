@@ -1,5 +1,63 @@
 use super::*;
 
+fn generic_nickname_xml(label: &str) -> String {
+    format!(
+        "<CDXML><page><fragment id='1'>\
+         <n id='2' p='0 0' NodeType='GenericNickname' GenericNickname='{label}'/>\
+         </fragment></page></CDXML>"
+    )
+}
+
+#[test]
+fn cdxml_exact_star_generic_nickname_is_a_dummy_atom() {
+    let parsed = read(&generic_nickname_xml("*")).unwrap();
+    assert_eq!(parsed.fragments[0].graph.atoms[0].atomic_number, 0);
+}
+
+#[test]
+fn cdxml_unknown_generic_nickname_prefixes_remain_dummy_atoms() {
+    for label in ["Ar", "Afoo", "Qfoo", "Xfoo", "Mfoo"] {
+        let parsed = read(&generic_nickname_xml(label)).unwrap();
+        assert_eq!(
+            parsed.fragments[0].graph.atoms[0].atomic_number, 0,
+            "{label}"
+        );
+    }
+}
+
+#[test]
+fn cdxml_recognized_generic_nickname_queries_remain_unsupported() {
+    for label in ["A", "Q", "M", "MH", "X", "R", "R1"] {
+        assert!(
+            matches!(
+                read(&generic_nickname_xml(label)),
+                Err(Error::Unsupported("query atom"))
+            ),
+            "{label}"
+        );
+    }
+}
+
+#[test]
+fn cdxml_preparation_retains_conformer_presence_and_dimension() {
+    let empty = prepare_cdxml("<CDXML><page/></CDXML>").unwrap();
+    assert!(empty.molecule.state.conformer.is_none());
+    for (first, second, is_3d) in [
+        ("p='0 0'", "p='30 0'", false),
+        ("p='0 0' xyz='0 0 1'", "p='0 0' xyz='0 0 2'", true),
+    ] {
+        let xml = format!(
+            "<CDXML BondLength='30'><page><fragment id='1'>\
+             <n id='2' {first}/><n id='3' {second} Element='8'/>\
+             <b id='4' B='2' E='3'/></fragment></page></CDXML>"
+        );
+        let prepared = prepare_cdxml(&xml).unwrap();
+        let conformer = prepared.molecule.state.conformer.as_ref().unwrap();
+        assert_eq!(conformer.is_3d, is_3d);
+        assert_eq!(conformer.positions, prepared.molecule.positions);
+    }
+}
+
 #[test]
 fn cdxml_preserves_singlet_and_triplet_spin() {
     for (radical, singlet) in [("Singlet", true), ("Triplet", false)] {

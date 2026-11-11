@@ -24,8 +24,18 @@ def boolean(obj, name):
     return bool(obj.GetPropsAsDict(True, True)[name]) if obj.HasProp(name) else None
 
 
-def snapshot(mol, ring_kind):
+def snapshot(mol, ring_kind, *, include_conformer=True):
     result = state(mol)
+    if include_conformer and mol.GetNumConformers():
+        # RDKit #9190 (2026.09): legacy perception re-detects axial stereo.
+        conf = mol.GetConformer()
+        result["conformer"] = dict(
+            is_3d=conf.Is3D(),
+            positions=[
+                dict(x=p.x, y=p.y, z=p.z)
+                for p in (conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms()))
+            ],
+        )
     result["valences"] = [
         dict(
             explicit_valence=a.GetValence(Chem.ValenceType.EXPLICIT),

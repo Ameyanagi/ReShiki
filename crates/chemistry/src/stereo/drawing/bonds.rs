@@ -243,7 +243,7 @@ fn with_work_preserving(
             || *at(directions, id)? == Direction::EitherDouble
             || at(&ctx.adjacent, bond.a)?.len() <= 1
             || at(&ctx.adjacent, bond.b)?.len() <= 1
-            || *at(&minimum, id)? < 8
+            || *at(&minimum, id)? < crate::stereo::MIN_RING_SIZE_FOR_DOUBLE_BOND_STEREO
         {
             continue;
         }

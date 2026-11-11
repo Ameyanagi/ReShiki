@@ -488,7 +488,10 @@ fn layout(
 ) -> Result<(Vec<String>, ComponentRow), Error> {
     molecular::validate_molecule(molecule)?;
     let layout = coordinates(&molecule.state, properties)?;
-    molecule.positions = layout.positions;
+    molecule.set_conformer(chemistry::stereo::wedging::Conformer {
+        positions: layout.positions,
+        is_3d: false,
+    });
     Ok((layout.warnings, layout.row))
 }
 

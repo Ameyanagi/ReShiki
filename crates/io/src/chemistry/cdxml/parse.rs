@@ -197,7 +197,7 @@ fn atom(node: Node<'_, '_>) -> Result<Atom> {
             if label.starts_with('R') || matches!(label, "A" | "Q" | "M" | "MH" | "X") {
                 return Err(Error::Unsupported("query atom"));
             }
-            if label.starts_with(['A', 'Q', 'X', 'M']) {
+            if label == "*" || label.starts_with(['A', 'Q', 'X', 'M']) {
                 number = 0;
             }
         }
