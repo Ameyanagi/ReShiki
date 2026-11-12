@@ -4,7 +4,6 @@ const QUERY_NOTICE: &str = "The input's query constraints (such as CXSMILES u, r
 const ANY_NOTICE: &str = "Bond C1–C2 has any order (~); bond order assumed single";
 const ZERO_NOTICE: &str =
     "Bond C1–Fe2 has zero order (CXSMILES Z); ReShiki imported the atoms without that bond";
-const ALLENE_NOTICE: &str = "The allene stereo tag (@AL) at C2 is invalid; ReShiki imported that atom without a configuration";
 
 fn imported(format: &str, text: &str) -> anyhow::Result<Box<Prepared>> {
     let Preparation::Complete(prepared) = prepare(Request::import(format, text))? else {
@@ -118,6 +117,8 @@ fn partial_import_replaces_excess_radicals_with_hydrogens_and_round_trips() -> a
         ("smiles", "[N]", 3, 0, "HN", vec![1]),
         ("smiles", "C |^5:0|", 3, 1, "CH2", vec![2]),
         ("smiles", "CCO |^5:0|", 3, 0, "C2H4O", vec![1, 2, 1]),
+        ("smiles", "S |^5:0|", 3, 1, "S", vec![0]),
+        ("smiles", "PC |^5:0|", 3, 1, "CH3P", vec![0, 3]),
         ("rsmi", "[CH]>>C |^4:0|", 3, 1, "C2H6", vec![2, 4]),
     ] {
         if format == "smiles" {
@@ -146,7 +147,6 @@ fn partial_import_replaces_excess_radicals_with_hydrogens_and_round_trips() -> a
             u32::from(hydrogens[0]),
             "{text}"
         );
-        assert!(prepared.document.atoms[0].no_implicit, "{text}");
         assert!(!prepared.document.atoms[0].singlet, "{text}");
 
         let assert_state =
@@ -172,8 +172,6 @@ fn partial_import_replaces_excess_radicals_with_hydrogens_and_round_trips() -> a
                         .collect::<Vec<_>>(),
                     "{text}: {name} radicals"
                 );
-                let corrected = atom_order.iter().position(|&atom| atom == 0).unwrap();
-                assert!(state.graph.atoms[corrected].no_implicit, "{text}: {name}");
                 assert_eq!(
                     chemistry::properties(&facts)
                         .map_err(anyhow::Error::msg)?
@@ -196,7 +194,6 @@ fn partial_import_replaces_excess_radicals_with_hydrogens_and_round_trips() -> a
             "{text}: native document round trip"
         );
         let mol = molfile::write_document(&prepared.document)?;
-        assert!(mol.contains("M  RAD  1   1   3"), "{text}: {mol}");
         assert_state(
             "MOL round trip",
             &molfile::read(&mol)?.molecule.state,
@@ -213,12 +210,64 @@ fn partial_import_replaces_excess_radicals_with_hydrogens_and_round_trips() -> a
 }
 
 #[test]
+fn partial_import_keeps_radicals_without_a_valence_derived_triplet_refused() -> anyhow::Result<()> {
+    let text = "CS(C)C |^5:1|";
+    let source = smiles::read(text)?.prepared.state;
+    assert_eq!(source.graph.atoms[1].radical_electrons, 3);
+    let mut bare = source.graph.clone();
+    bare.atoms[1].no_implicit = true;
+    bare.atoms[1].explicit_hydrogens = 0;
+    assert_eq!(
+        chemistry::sanitize::sanitize(&bare, &source.metadata, &source.directions)?
+            .graph
+            .atoms[1]
+            .radical_electrons,
+        1
+    );
+    assert_eq!(
+        smiles::read_partial(text)?.prepared.state.graph,
+        source.graph
+    );
+    assert!(prepare_smiles(text, false, Default::default(), true).is_err());
+    assert_eq!(
+        prepare(Request::import("smiles", text))
+            .err()
+            .unwrap()
+            .to_string(),
+        prepare_smiles(text, false, Default::default(), false)
+            .err()
+            .unwrap()
+            .to_string()
+    );
+    Ok(())
+}
+
+#[test]
 fn partial_import_clears_invalid_allene_tags() -> anyhow::Result<()> {
-    for (format, text, plain) in [
-        ("smiles", "C[C@AL1](F)Cl", "C[C](F)Cl"),
-        ("rsmi", "C[C@AL1](F)Cl>>CC", "C[C](F)Cl>>CC"),
+    for (format, text, plain, atom) in [
+        ("smiles", "C[C@AL1](F)Cl", "C[C](F)Cl", "C2"),
+        ("rsmi", "C[C@AL1](F)Cl>>CC", "C[C](F)Cl>>CC", "C2"),
+        ("smiles", "[Pt@AL1](F)(Cl)(Br)", "[Pt](F)(Cl)(Br)", "Pt1"),
+        (
+            "smiles",
+            "C[Pt@ALH](F)(Cl)(Br)(I)(N)(O)",
+            "C[PtH](F)(Cl)(Br)(I)(N)(O)",
+            "Pt2",
+        ),
+        ("smiles", "[S@AL2H1+0]", "[SH1+0]", "S1"),
+        ("smiles", "[H][C@AL1](F)Cl", "[H][C](F)Cl", "C2"),
     ] {
-        let prepared = assert_plain_import(format, text, plain, &[ALLENE_NOTICE])?;
+        if format == "smiles" {
+            assert_eq!(
+                smiles::read(text).unwrap_err().to_string(),
+                "SMILES contains unsupported chemistry: invalid allene stereochemistry",
+                "{text}"
+            );
+        }
+        let warning = format!(
+            "The allene stereo tag (@AL) at {atom} is invalid; ReShiki imported that atom without a configuration"
+        );
+        let prepared = assert_plain_import(format, text, plain, &[&warning])?;
         assert!(
             prepared
                 .document
@@ -647,6 +696,245 @@ async fn partial_import_exact_notices_reach_the_native_response() -> anyhow::Res
         let document = response.document.as_ref().unwrap();
         document.validate().map_err(anyhow::Error::msg)?;
         molecular::prepare(document)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn partial_import_any_bonds_keep_explicit_cx_bond_kinds() -> anyhow::Result<()> {
+    let any = imported("smiles", "C~C")?;
+    assert_eq!(any.warnings, [ANY_NOTICE]);
+    assert_eq!(any.molecule.state.graph.bonds[0].order, 1);
+    let prepared = imported("smiles", "C~[Fe] |C:0.0|")?;
+    assert!(prepared.warnings.is_empty());
+    assert_eq!(prepared.molecule.state.graph.bonds[0].order, 5);
+    assert_plain_import("smiles", "C~[Fe] |Z:0|", "C.[Fe]", &[ZERO_NOTICE])?;
+    assert_plain_import("smiles", "C~1CCCCC1 |u:0|", "C~1CCCCC1", &[QUERY_NOTICE])?;
+    let expected = prepare_smiles("C[Fe] |H:0.0|", false, Default::default(), false)
+        .err()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        prepare_smiles("C~[Fe] |H:0.0|", false, Default::default(), true)
+            .err()
+            .unwrap()
+            .to_string(),
+        expected
+    );
+    assert_eq!(
+        prepare(Request::import("smiles", "C~[Fe] |H:0.0|"))
+            .err()
+            .unwrap()
+            .to_string(),
+        "SMILES contains unsupported chemistry: query bond"
+    );
+    Ok(())
+}
+
+#[test]
+fn partial_import_does_not_drop_enhanced_groups_on_unsupported_centres() {
+    for (format, text, error) in [
+        (
+            "smiles",
+            "F[Pt@SP1](Cl)(Br)I |&1:1|",
+            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
+        ),
+        (
+            "smiles",
+            "F[Pt@SP1](Cl)(Br)I |o1:1|",
+            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
+        ),
+        (
+            "rsmi",
+            "F[Pt@SP1](Cl)(Br)I>>FI |&1:1|",
+            "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
+        ),
+    ] {
+        assert_eq!(
+            prepare(Request::import(format, text))
+                .err()
+                .unwrap()
+                .to_string(),
+            error,
+            "{text}"
+        );
+        if format == "smiles" {
+            assert!(
+                prepare_smiles(text, false, Default::default(), true).is_err(),
+                "{text}"
+            );
+        } else {
+            assert!(prepare_reaction_smiles(text, true).is_err(), "{text}");
+        }
+    }
+}
+
+#[test]
+fn partial_import_radical_notices_count_bonded_hydrogen_vertices() -> anyhow::Result<()> {
+    for (format, text) in [("rsmi", "[H][C]>>C"), ("smiles", "[2H][C]")] {
+        let prepared = imported(format, text)?;
+        assert_eq!(
+            prepared.warnings,
+            [
+                "Atom C2 had 3 radical electrons; ReShiki keeps at most 2 and drew it as a triplet; its hydrogen count changed from 1 to 2"
+            ],
+            "{text}"
+        );
+        let carbon = prepared
+            .molecule
+            .state
+            .graph
+            .atoms
+            .iter()
+            .find(|a| a.radical_electrons == 2)
+            .unwrap();
+        assert_eq!(carbon.explicit_hydrogens, 1, "{text}");
+    }
+    Ok(())
+}
+
+#[test]
+fn partial_import_warning_classifier_excludes_other_notices() -> anyhow::Result<()> {
+    for text in [
+        "F[Pt@SP1](Cl)(Br)I",
+        "[CH]",
+        "C[C@AL1](F)Cl",
+        "CCO |u:0|",
+        "C~C",
+        "C[Fe] |Z:0|",
+    ] {
+        let prepared = imported("smiles", text)?;
+        assert!(!prepared.warnings.is_empty(), "{text}");
+        assert!(
+            prepared
+                .warnings
+                .iter()
+                .all(|warning| is_partial_import_warning(warning)),
+            "{text}"
+        );
+    }
+    for warning in [
+        "",
+        CUMULENE_EZ_NOTICE,
+        RELATIVE_STEREO_NOTICE,
+        "Bond C1–C2",
+        "Atom C1 had 3 radical electrons",
+        "ReShiki cannot draw the atom",
+    ] {
+        assert!(!is_partial_import_warning(warning), "{warning}");
+    }
+    let prepared = imported(
+        "rsmi",
+        "F[Pt@SP1](Cl)(Br)I>N>CC |atomProp:1._chiralPermutation.bad|",
+    )?;
+    assert_eq!(
+        prepared.warnings,
+        [
+            "ReShiki cannot draw the square-planar configuration (@SP) at Pt2; it imported that atom without a configuration"
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn partial_import_keeps_strict_successes_and_errors_unchanged() -> anyhow::Result<()> {
+    for text in [
+        "C~1CC:1",
+        "C~%99CC~%99",
+        "C/1CC~1",
+        "C~1CCCCC1",
+        "[H]~C",
+        "C~[H]",
+        "[H]~C~[H]",
+        "C~[H+]",
+        "[H]~[C@](F)(Cl)Br",
+        "[13CH3]~[H]",
+        "[H]~C |H:0.0,Z:0|",
+        "CC=[C@AL1]=CC",
+        "CC=[C@AL2]=CC",
+        "CC=[C@]=CC",
+    ] {
+        let strict = smiles::read(text).unwrap_or_else(|error| panic!("{text}: {error}"));
+        let expected = prepare_smiles(text, false, Default::default(), false)
+            .unwrap_or_else(|error| panic!("{text}: {error}"));
+        let actual = imported("smiles", text)?;
+        assert!(actual.warnings.is_empty(), "{text}: {:?}", actual.warnings);
+        assert_eq!(
+            serde_json::to_vec(&actual.document)?,
+            serde_json::to_vec(&expected.document)?,
+            "{text}"
+        );
+        assert_eq!(
+            actual.molecule.state.graph, strict.prepared.state.graph,
+            "{text}: analysis graph"
+        );
+    }
+    let text = "O>C~0CC-0>O";
+    let expected = prepare_reaction_smiles(text, false)?;
+    let actual = imported("rsmi", text)?;
+    assert!(actual.warnings.is_empty());
+    assert_eq!(
+        serde_json::to_vec(&actual.document)?,
+        serde_json::to_vec(&expected.document)?
+    );
+    assert_eq!(actual.molecule.state.graph, expected.molecule.state.graph);
+    for (format, text, strict) in [
+        (
+            "smiles",
+            "C~[Fe] |H:0.0|",
+            prepare_smiles("C~[Fe] |H:0.0|", false, Default::default(), false),
+        ),
+        (
+            "rsmi",
+            "FC(Cl)=C(F)Cl>>C |Z:0,t:2|",
+            prepare_reaction_smiles("FC(Cl)=C(F)Cl>>C |Z:0,t:2|", false),
+        ),
+    ] {
+        assert_eq!(
+            prepare(Request::import(format, text))
+                .err()
+                .unwrap()
+                .to_string(),
+            strict.err().unwrap().to_string(),
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn partial_import_reference_coordination_examples_warn_without_configuration() -> anyhow::Result<()>
+{
+    for (text, atom, class) in [
+        (
+            "[Pt@SP1](Cl)(F)(Br)I",
+            "Pt1",
+            "square-planar configuration (@SP)",
+        ),
+        (
+            "[P@TB5](F)(Cl)(Br)(I)N",
+            "P1",
+            "trigonal-bipyramidal configuration (@TB)",
+        ),
+        (
+            "[Co@OH23](F)(Cl)(Br)(I)(N)O",
+            "Co1",
+            "octahedral configuration (@OH)",
+        ),
+    ] {
+        let prepared = imported("smiles", text)?;
+        assert_eq!(
+            prepared.warnings,
+            [format!(
+                "ReShiki cannot draw the {class} at {atom}; it imported that atom without a configuration"
+            )],
+            "{text}"
+        );
+        assert_eq!(
+            prepared.molecule.state.metadata.atoms[0].chiral_tag, 0,
+            "{text}"
+        );
+        assert!(prepared.document.atoms[0].stereo.is_none(), "{text}");
     }
     Ok(())
 }

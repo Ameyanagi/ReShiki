@@ -323,6 +323,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
     let (mut tag_wins, mut kept_ez) = (Vec::new(), Vec::new());
+    let mut partial_imports = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let actual = local.execute(Request::import(format, &case.text)).await;
@@ -497,6 +498,17 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 tag_wins.push(case.name.clone());
                 None
             }
+            (Ok(actual), None)
+                if partial_import_replaces_failure(
+                    format,
+                    case.failure.as_deref(),
+                    &actual.warnings,
+                ) =>
+            {
+                accepted += 1;
+                partial_imports.push(case.name.clone());
+                None
+            }
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
@@ -518,6 +530,10 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     );
     eprintln!("{format} E/Z kept under wedge flags (#1042): {kept_ez:?}");
     eprintln!(
+        "{format} partial imports replacing frozen rejections (#1138): {} {partial_imports:?}",
+        partial_imports.len()
+    );
+    eprintln!(
         "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
     );
@@ -538,6 +554,75 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         "Insufficient import response coverage"
     );
     Ok(())
+}
+
+fn partial_import_replaces_failure(
+    format: &str,
+    failure: Option<&str>,
+    warnings: &[String],
+) -> bool {
+    matches!(format, "smiles" | "rsmi")
+        && (matches!(
+            failure,
+            Some(
+                "More than two unpaired electrons on an atom are not supported yet"
+                    | "Query atoms are not supported yet; import was cancelled."
+                    | "This bond type is not supported yet."
+                    | "This stereochemistry class is not supported yet."
+            )
+        ) || format == "rsmi"
+            && matches!(
+                failure,
+                // Reaction sanitization reads a CX _chiralPermutation string
+                // before the frozen worker checks its unsupported SP/TB/OH tag.
+                // A malformed value fails its unsigned cast. Partial import
+                // drops that configuration and reports the omission instead.
+                Some("Query reaction atoms are not supported yet" | "bad any cast")
+            ))
+        && warnings
+            .iter()
+            .any(|warning| reshiki::engine::native_import::is_partial_import_warning(warning))
+}
+
+#[test]
+fn partial_import_exception_requires_replaced_failure_format_and_warning() {
+    let warnings = vec!["Bond C1–C2 has any order (~); bond order assumed single".into()];
+    let bond_failure = Some("This bond type is not supported yet.");
+    for (format, failure, accepted) in [
+        ("smiles", bond_failure, true),
+        (
+            "rsmi",
+            Some("Query reaction atoms are not supported yet"),
+            true,
+        ),
+        ("rsmi", Some("bad any cast"), true),
+        ("smiles", Some("bad any cast"), false),
+        ("rsmi", Some("bad any_cast"), false),
+        ("mol", bond_failure, false),
+        ("rsmi", None, false),
+        (
+            "rsmi",
+            Some("This bond type is not supported yet. Extra failure"),
+            false,
+        ),
+        (
+            "rsmi",
+            Some("Enhanced stereo groups are not supported yet; import was cancelled."),
+            false,
+        ),
+    ] {
+        assert_eq!(
+            partial_import_replaces_failure(format, failure, &warnings),
+            accepted,
+            "{format}: {failure:?}"
+        );
+    }
+    assert!(!partial_import_replaces_failure("rsmi", bond_failure, &[]));
+    assert!(!partial_import_replaces_failure(
+        "rsmi",
+        bond_failure,
+        &["Extended double-bond stereochemistry (e.g. C=C=C=C) ignored".into()],
+    ));
 }
 
 fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
@@ -1393,15 +1478,60 @@ async fn rust_smiles_export_preserves_analysis_and_complete_drawing() -> TestRes
         "[P@TB5](F)(Cl)(Br)(I)N",
         "[Co@OH23](F)(Cl)(Br)(I)(N)O",
     ] {
-        let imported = match reference.execute(Request::import_smiles(text)).await {
-            Ok(response) => response,
-            Err(_) => {
-                let actual = local.execute(Request::import_smiles(text)).await;
-                assert!(
-                    actual.is_err(),
-                    "Unsupported native drawing was accepted: {text}"
-                );
-                continue;
+        let partial_configuration = match text {
+            "[Pt@SP1](Cl)(F)(Br)I" => Some((
+                "Pt",
+                "ReShiki cannot draw the square-planar configuration (@SP) at Pt1; it imported that atom without a configuration",
+            )),
+            "[P@TB5](F)(Cl)(Br)(I)N" => Some((
+                "P",
+                "ReShiki cannot draw the trigonal-bipyramidal configuration (@TB) at P1; it imported that atom without a configuration",
+            )),
+            "[Co@OH23](F)(Cl)(Br)(I)(N)O" => Some((
+                "Co",
+                "ReShiki cannot draw the octahedral configuration (@OH) at Co1; it imported that atom without a configuration",
+            )),
+            _ => None,
+        };
+        let imported = if let Some((element, warning)) = partial_configuration {
+            let failure = reference
+                .execute(Request::import_smiles(text))
+                .await
+                .expect_err("Frozen worker accepted unsupported coordination stereo");
+            assert_eq!(
+                failure, "This stereochemistry class is not supported yet.",
+                "{text}"
+            );
+            let actual = local
+                .execute(Request::import_smiles(text))
+                .await
+                .map_err(anyhow::Error::msg)?;
+            assert_eq!(actual.warnings, [warning], "{text}");
+            let center = actual
+                .document
+                .as_ref()
+                .context("Missing partial-import drawing")?
+                .atoms
+                .iter()
+                .find(|atom| atom.element == element)
+                .context("Missing coordination center")?;
+            assert!(center.stereo.is_none(), "{text}: configuration retained");
+            assert!(
+                center.cip_label.is_none(),
+                "{text}: configuration label retained"
+            );
+            actual
+        } else {
+            match reference.execute(Request::import_smiles(text)).await {
+                Ok(response) => response,
+                Err(_) => {
+                    let actual = local.execute(Request::import_smiles(text)).await;
+                    assert!(
+                        actual.is_err(),
+                        "Unsupported native drawing was accepted: {text}"
+                    );
+                    continue;
+                }
             }
         };
         let document = imported.document.context("Missing drawing")?;

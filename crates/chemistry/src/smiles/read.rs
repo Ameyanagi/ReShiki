@@ -621,6 +621,31 @@ fn partial_state(
     dropped: &mut Vec<Dropped>,
 ) -> Result<bool> {
     let mut changed = false;
+    let bare_radicals = if state.graph.atoms.iter().any(|a| a.radical_electrons > 2) {
+        let mut graph = state.graph.clone();
+        for atom in &mut graph.atoms {
+            if atom.radical_electrons > 2 {
+                atom.no_implicit = true;
+                atom.explicit_hydrogens = 0;
+            }
+        }
+        crate::sanitize::sanitize(&graph, &state.metadata, &state.directions)?
+            .graph
+            .atoms
+            .into_iter()
+            .map(|atom| atom.radical_electrons)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let mut bonded_hydrogens = vec![0u32; state.graph.atoms.len()];
+    for bond in &state.graph.bonds {
+        for (atom, neighbour) in [(bond.a, bond.b), (bond.b, bond.a)] {
+            if at(&state.graph.atoms, neighbour)?.atomic_number == 1 {
+                *bonded_hydrogens.get_mut(atom).ok_or(Error::Limit)? += 1;
+            }
+        }
+    }
     for (id, (atom, meta)) in state
         .graph
         .atoms
@@ -642,18 +667,24 @@ fn partial_state(
             changed = true;
         }
         if atom.radical_electrons > 2 {
+            let r0 = *at(&bare_radicals, id)?;
+            if r0 < 2 {
+                continue;
+            }
             let before =
                 u32::from(atom.explicit_hydrogens) + at(&state.valences, id)?.implicit_hydrogens;
-            let after = before + u32::from(atom.radical_electrons - 2);
+            let after = u32::from(r0 - 2);
             dropped.push(Dropped::Radical {
                 atom: input,
                 electrons: atom.radical_electrons,
-                hydrogens: (before, after),
+                hydrogens: (
+                    before + at(&bonded_hydrogens, id)?,
+                    after + at(&bonded_hydrogens, id)?,
+                ),
             });
-            // Fill the excess valence deficit so sanitization also derives a triplet.
-            atom.explicit_hydrogens = u8::try_from(after).map_err(|_| Error::Limit)?;
+            // Store a valence-derived triplet that survives preparation and export.
             atom.no_implicit = true;
-            atom.radical_electrons = 2;
+            atom.explicit_hydrogens = r0 - 2;
             changed = true;
         }
     }
@@ -702,7 +733,7 @@ fn partial_graph(
         .enumerate()
     {
         let zero = *at(&annotations.context.unsupported_bonds, id)?;
-        if zero || *query {
+        if zero || (*query && bond.order == 1) {
             let atom = |id| input_atom(at(&parsed.graph.atoms, id)?, *at(positions, id)?);
             let mut ends = [atom(bond.a)?, atom(bond.b)?];
             ends.sort_by_key(|atom| atom.position);
@@ -712,9 +743,9 @@ fn partial_graph(
                 dropped.push(Dropped::AnyBond(ends[0], ends[1]));
                 bond.order = 1;
                 bond.aromatic = false;
-                *query = false;
             }
         }
+        *query = false;
         if !zero {
             put(&mut mapping, id, Some(kept))?;
             kept += 1;
@@ -937,7 +968,10 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     }
     annotations.atropisomers(&mut parsed)?;
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
-    if partial && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)? {
+    if partial
+        && prepared.state.metadata.groups.is_empty()
+        && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)?
+    {
         prepared.state = stereo::perception::perceive(
             &prepared.state,
             stereo::perception::Options {

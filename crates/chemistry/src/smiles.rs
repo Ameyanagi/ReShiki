@@ -437,10 +437,13 @@ impl Reader<'_> {
                     }
                     branches.push(active);
                 }
-                let spec = self.spec()?;
+                let mut spec = self.spec()?;
                 if !branch && self.peek().is_some_and(|b| b.is_ascii_digit() || b == b'%') {
                     self.ring(active, spec)?;
                 } else {
+                    if self.partial && spec.query {
+                        spec.order = Some(1);
+                    }
                     let next = self.add_atom(false)?;
                     self.add_bond(active, next, spec, self.bond_count)?;
                     self.bond_count += 1;
@@ -505,12 +508,8 @@ impl Reader<'_> {
                 // token's type. An unspecified query token loses its predicate
                 // here, then receives the endpoints' default bond order.
                 if spec.query {
-                    if self.partial {
-                        spec.order = Some(1);
-                    } else {
-                        spec.query = false;
-                        spec.order = None;
-                    }
+                    spec.query = false;
+                    spec.order = None;
                 }
                 // A direction copied from the opposite end changes orientation.
                 if spec.direction == Direction::None {
