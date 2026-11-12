@@ -213,6 +213,7 @@ fn a_render_burst_gets_one_response_each() {
         "max_width": null,
         "max_height": null,
         "ids": null,
+        "svg_text": null,
     });
     for id in 0..RENDERS {
         session.send(modern_call(100 + id, "render", render.clone()));

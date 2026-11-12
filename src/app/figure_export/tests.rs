@@ -88,6 +88,91 @@ fn office_svg_uses_figure_snapshot_without_changing_selection_or_document() {
     assert_eq!(app.tab.selected, vec![a]);
 }
 
+#[tokio::test]
+async fn svg_export_preferences_control_live_text_and_payload_independently() {
+    use iced::futures::StreamExt;
+    use reshiki::document::{Annotation, Document};
+
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    app.tab.path = Some("figure.rsk".into());
+    app.tab.doc = Document::default();
+    app.tab.doc.annotations.push(Annotation {
+        id: 1,
+        position: Default::default(),
+        text: "Editable figure text".into(),
+        format: Default::default(),
+    });
+    app.tab.selected = vec![1];
+    let snapshot = app.tab.doc.clone();
+    for live_text in [false, true] {
+        let _ = app.update(Message::View(
+            super::super::view_settings::Action::ExportSvgLiveText(live_text),
+        ));
+        for editable in [false, true] {
+            let _ = app.update(Message::View(
+                super::super::view_settings::Action::ExportEditableDrawing(editable),
+            ));
+            for format in ["svg", "svg-office"] {
+                let mut stream = iced_runtime::task::into_stream(app.prepare_figure(
+                    format,
+                    false,
+                    app.appearance.export_editable_drawing,
+                ))
+                .expect("SVG prepares asynchronously");
+                let Some(iced_runtime::Action::Output(result)) = stream.next().await else {
+                    panic!("Missing prepared SVG");
+                };
+                let prepared = result.unwrap();
+                assert_eq!(prepared.format, format);
+                assert_eq!(prepared.name, "figure.svg");
+                let svg = std::str::from_utf8(&prepared.bytes).unwrap();
+                let xml = roxmltree::Document::parse(svg).unwrap();
+                assert_eq!(
+                    xml.descendants().any(|node| node.has_tag_name("text")),
+                    format == "svg" && live_text,
+                    "Format: {format}; keep text editable: {live_text}; include drawing: {editable}"
+                );
+                if editable {
+                    assert_eq!(
+                        reshiki::payload::read(&prepared.bytes).unwrap().unwrap(),
+                        reshiki::payload::visible(&snapshot.current())
+                    );
+                    assert!(
+                        prepared
+                            .details
+                            .iter()
+                            .any(|detail| detail == "Includes the editable drawing")
+                    );
+                } else {
+                    assert!(reshiki::payload::read(&prepared.bytes).is_none());
+                }
+                assert_eq!(app.tab.doc, snapshot);
+                assert_eq!(app.tab.selected, [1]);
+            }
+        }
+    }
+}
+
+#[test]
+fn svg_export_keeps_its_name_and_figure_route_with_either_text_preference() {
+    for live_text in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.appearance.export_svg_live_text = live_text;
+        let atom = app.tab.doc.add_atom("O", Default::default());
+        app.tab.selected = vec![atom];
+        let snapshot = app.tab.doc.clone();
+        let _ = app.update(Message::Export("svg"));
+        assert!(app.figure_exporting);
+        assert!(!app.tab.busy);
+        assert_eq!(app.status, "Preparing SVG export…");
+        assert_eq!(app.tab.doc, snapshot);
+        assert_eq!(app.tab.selected, [atom]);
+    }
+}
+
 #[cfg(windows)]
 #[test]
 fn emf_uses_figure_snapshot_without_changing_selection_or_document() {

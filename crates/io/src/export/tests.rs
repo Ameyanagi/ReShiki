@@ -830,6 +830,7 @@ fn editable_pdf_has_catalog_xmp_without_compression_and_valid_cross_references()
 async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
     let doc = vector_payload_document();
     let engine = Default::default();
+    let mut live_drawing = None;
     for format in ["svg", "svg-office", "pdf"] {
         let plain = publication(&engine, doc.clone(), format, false, false, FILE_PIXELS)
             .await
@@ -838,11 +839,26 @@ async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
             .await
             .unwrap();
         assert!(crate::payload::read(&plain.bytes).is_none(), "{format}");
+        let restored = crate::payload::read(&editable.bytes).unwrap().unwrap();
         assert_eq!(
-            crate::payload::read(&editable.bytes).unwrap().unwrap(),
+            restored,
             crate::payload::visible(&doc.current()),
             "{format}"
         );
+        if format == "svg" {
+            live_drawing = Some(restored);
+        } else if format == "svg-office" {
+            assert_eq!(&restored, live_drawing.as_ref().unwrap());
+        }
+        if matches!(format, "svg" | "svg-office") {
+            let xml =
+                roxmltree::Document::parse(std::str::from_utf8(&editable.bytes).unwrap()).unwrap();
+            assert_eq!(
+                xml.descendants().any(|node| node.has_tag_name("text")),
+                format == "svg",
+                "{format}"
+            );
+        }
         assert!(plain.details.is_empty(), "{format}");
         assert_eq!(
             editable.details,

@@ -136,6 +136,8 @@ class Server:
             error = {"code": code, "message": message}
             return {"isError": True, "structuredContent": {"error": error}, "content": []}
 
+        if name in ("render", "file_save") and "svg_text" not in arguments:
+            return error("invalid_arguments", "missing field `svg_text`")
         if name == "import":
             return value({"document": "doc_1"})
         if name == "analyze":

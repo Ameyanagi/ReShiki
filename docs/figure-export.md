@@ -2,17 +2,23 @@
 
 Open **Export → Figure**, choose a format from the menu (**Vector**: **SVG**, **SVG for Office**, **PDF** and, on Windows, **EMF for Office**; **Raster**: **PNG**), then click the export button (for example **Export SVG…**) and choose a destination. File export includes the whole drawing. **Copy image** uses the selected objects, or the whole drawing when nothing is selected.
 
-| Format                   | Output                                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------- |
-| PDF                      | Vector artwork at the drawing's physical publication size.                                        |
-| SVG                      | Vector artwork for illustration and layout applications. Text remains text.                       |
-| SVG for Office           | Physical-size SVG for Word and PowerPoint. Text becomes outlines, so labels stay in place.        |
-| PNG                      | An opaque image, normally at 1200 dpi, with physical resolution metadata.                         |
-| EMF for Office (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines. |
+| Format                   | Output                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| PDF                      | Vector artwork at the drawing's physical publication size.                                                  |
+| SVG                      | Vector artwork for illustration and layout applications. Text becomes outlines unless you keep it editable. |
+| SVG for Office           | Physical-size SVG for Word and PowerPoint. Text always becomes outlines, so labels stay in place.           |
+| PNG                      | An opaque image, normally at 1200 dpi, with physical resolution metadata.                                   |
+| EMF for Office (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines.           |
 
 File exports in all formats include the document’s canvas colors and background. **Copy image** instead uses a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI.
 
 Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Export pages as PDF** uses an explicitly configured publication layout; ordinary figure export crops to the artwork. See [publication pages](publication-pages.md).
+
+## Text in SVG files
+
+SVG export draws text as outlines by default. The outlines have the same glyphs, positions and sizes as the PNG, so labels look the same in every app, including apps and computers that do not have the drawing's font. The file keeps the drawing's physical size.
+
+Turn on **Keep text editable**, below the export button when **SVG** is chosen, to write text as `<text>` elements instead. You can then edit and search the labels in an illustration app, but each app draws them with its own copy of the font (usually Arial), and an app without that font substitutes another one, so labels can shift or, in some viewers, disappear. The option is off by default, and ReShiki remembers your choice. **SVG for Office** always draws outlines.
 
 ## Keep the drawing editable inside a picture
 

@@ -1,6 +1,6 @@
 //! `reshiki --cli convert`: import, then export through the ops tools.
 use super::{
-    args::{Convert, Export, Output, SvgText},
+    args::{Convert, Export, Output},
     host::{CliError, Session, labelled},
     io::write_output,
 };
@@ -63,7 +63,12 @@ pub(crate) async fn write(
     let result = session
         .call(
             "export",
-            json!({"document": document, "format": format, "pages": pages}),
+            json!({
+                "document": document,
+                "format": format,
+                "pages": pages,
+                "svg_text": svg_text,
+            }),
             err,
         )
         .await?;
@@ -72,35 +77,18 @@ pub(crate) async fn write(
             "internal error: export returned no file".into(),
         ));
     };
-    let bytes = svg_text_as(&format, svg_text, file.bytes)?;
-    emit(&bytes, &output, force, out)?;
+    emit(&file.bytes, &output, force, out)?;
     if receipt {
-        let mut receipt = result
+        let receipt = result
             .value
             .get("value")
             .and_then(|value| value.get("receipt"))
             .cloned()
             .unwrap_or(Value::Null);
-        if let Some(receipt) = receipt.as_object_mut() {
-            receipt.insert("byte_len".into(), bytes.len().into());
-        }
         let line = labelled(Map::from_iter([("receipt".to_owned(), receipt)]));
         writeln!(out, "{line}").map_err(CliError::Stdout)?;
     }
     Ok(())
-}
-
-/// The `format` file `bytes`, with svg text outlined unless `svg_text` is live.
-pub(crate) fn svg_text_as(
-    format: &str,
-    svg_text: SvgText,
-    bytes: Vec<u8>,
-) -> Result<Vec<u8>, CliError> {
-    if format != "svg" || svg_text == SvgText::Live {
-        return Ok(bytes);
-    }
-    let svg = String::from_utf8(bytes).map_err(|error| CliError::Failed(error.to_string()))?;
-    crate::export::outlined_svg(svg).map_err(CliError::Failed)
 }
 
 /// Writes `bytes` to `out`, or to the file `output` names.

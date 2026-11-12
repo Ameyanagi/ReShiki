@@ -3,7 +3,7 @@
 use super::*;
 use crate::{
     access::AccessError,
-    document::Document,
+    document::{Annotation, Document},
     ops::{
         exec::Hooks,
         headless::HeadlessHost,
@@ -91,7 +91,7 @@ fn open_args(path: &Path) -> Value {
 }
 
 fn save_args(document: &Value, path: &Path, overwrite: bool) -> Value {
-    json!({"document": document, "path": text(path), "format": null, "overwrite": overwrite, "pages": null})
+    json!({"document": document, "path": text(path), "format": null, "overwrite": overwrite, "pages": null, "svg_text": null})
 }
 
 fn stored(host: &HeadlessHost, value: &Value) -> Arc<Document> {
@@ -323,7 +323,7 @@ fn file_open_decodes_the_format_from_the_extension() {
 #[test]
 fn file_save_decodes_the_format_from_the_extension() {
     let decoded = |path: &str, format: Value, pages: Value| {
-        decode_save(json!({"document": "doc_1", "path": path, "format": format, "overwrite": false, "pages": pages}))
+        decode_save(json!({"document": "doc_1", "path": path, "format": format, "overwrite": false, "pages": pages, "svg_text": null}))
             .map(|save| (save.format, save.pages))
     };
     for (path, format, expected) in [
@@ -377,6 +377,102 @@ fn file_save_decodes_the_format_from_the_extension() {
     }
 }
 
+#[test]
+fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
+    let args = |path: &str, value: Value| {
+        json!({
+            "document": "doc_1", "path": path, "format": null,
+            "overwrite": false, "pages": null, "svg_text": value,
+        })
+    };
+    for path in ["/x/a.svg", "/x/a.png", "/x/a.pdf", "/x/a.rsk", "/x/a.mol"] {
+        for (value, expected) in [
+            (Value::Null, SvgText::Outline),
+            (json!("outline"), SvgText::Outline),
+            (json!("live"), SvgText::Live),
+        ] {
+            assert_eq!(
+                decode_save(args(path, value)).unwrap().svg_text,
+                expected,
+                "{path}"
+            );
+        }
+    }
+    for value in [json!("invalid"), json!("Outline"), json!(true), json!(0)] {
+        assert_eq!(
+            decode_save(args("/x/a.svg", value)).unwrap_err().kind,
+            ErrorKind::InvalidArguments
+        );
+    }
+    let mut omitted = args("/x/a.svg", Value::Null);
+    omitted.as_object_mut().unwrap().remove("svg_text");
+    assert_eq!(
+        decode_save(omitted).unwrap_err().message,
+        "missing field `svg_text`"
+    );
+    assert_eq!(save_schema()["properties"]["svg_text"], svg_text_schema());
+    assert!(
+        save_schema()["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("svg_text"))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn svg_file_saves_default_to_outlines_and_allow_live_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let host = host(both(dir.path()));
+    let mut doc = Document::default();
+    doc.annotations.push(Annotation {
+        id: 1,
+        position: Default::default(),
+        text: "SVG file".into(),
+        format: Default::default(),
+    });
+    let document = host
+        .store()
+        .create(&Principal::local(), doc.clone())
+        .unwrap()
+        .handle;
+    let live = crate::scene::svg_with_background(&doc).into_bytes();
+    let outlined = crate::export::outlined_svg(crate::scene::svg_with_background(&doc)).unwrap();
+    assert!(String::from_utf8_lossy(&live).contains("<text"));
+    assert!(!String::from_utf8_lossy(&outlined).contains("<text"));
+    assert!(String::from_utf8_lossy(&outlined).contains("<path"));
+    for (name, mode, expected) in [
+        ("default", Value::Null, &outlined),
+        ("outline", json!("outline"), &outlined),
+        ("live", json!("live"), &live),
+    ] {
+        let path = dir.path().join(format!("{name}.svg"));
+        let mut args = save_args(&json!(document.as_str()), &path, false);
+        args["svg_text"] = mode;
+        let saved = ok(&host, "file_save", args).await;
+        assert_eq!(fs::read(&path).unwrap(), *expected);
+        assert_eq!(
+            saved["value"]["receipt"],
+            json!({
+                "path": text(&path), "format": "svg", "byte_len": expected.len(),
+                "replaced": false, "detail": null,
+            })
+        );
+    }
+    for (name, mode) in [
+        ("default", Value::Null),
+        ("outline", json!("outline")),
+        ("live", json!("live")),
+    ] {
+        let path = dir.path().join(format!("{name}.rsk"));
+        let mut args = save_args(&json!(document.as_str()), &path, false);
+        args["svg_text"] = mode;
+        let saved = ok(&host, "file_save", args).await;
+        let expected = doc.file_json().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), expected);
+        assert_eq!(saved["value"]["receipt"]["byte_len"], expected.len());
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn file_open_gives_what_import_gives_for_the_same_text() {
     let dir = tempfile::tempdir().unwrap();
@@ -386,7 +482,7 @@ async fn file_open_gives_what_import_gives_for_the_same_text() {
     let exported = run(
         &host,
         "export",
-        json!({"document": ethanol, "format": "mol", "pages": null}),
+        json!({"document": ethanol, "format": "mol", "pages": null, "svg_text": null}),
     )
     .await;
     let [mol] = exported.files.as_slice() else {
@@ -473,7 +569,7 @@ async fn file_save_writes_every_format() {
             let exported = run(
                 &host,
                 "export",
-                json!({"document": document, "format": format, "pages": null}),
+                json!({"document": document, "format": format, "pages": null, "svg_text": null}),
             )
             .await;
             assert_eq!(exported.files[0].bytes, bytes, "{ext}");

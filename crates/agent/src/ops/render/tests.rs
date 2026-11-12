@@ -41,6 +41,7 @@ fn arguments(handle: &DocHandle, format: &str, size: [Value; 2], ids: Value) -> 
         "max_width": max_width,
         "max_height": max_height,
         "ids": ids,
+        "svg_text": null,
     })
 }
 
@@ -77,7 +78,7 @@ fn drawing() -> (Document, [u64; 4]) {
 
 fn decode_size(width: Value, height: Value) -> Result<(u32, u32), OpError> {
     decode(
-        json!({"document": "doc_1", "format": "png", "max_width": width, "max_height": height, "ids": null}),
+        json!({"document": "doc_1", "format": "png", "max_width": width, "max_height": height, "ids": null, "svg_text": null}),
         &Budgets::default(),
     )
     .map(|render| (render.width, render.height))
@@ -124,7 +125,7 @@ fn ids_over_the_budget_are_refused_at_decode_time() {
     let budgets = Budgets::default();
     let decoded = |n: usize| {
         decode(
-            json!({"document": "doc_1", "format": "svg", "max_width": null, "max_height": null, "ids": vec![json!("1"); n]}),
+            json!({"document": "doc_1", "format": "svg", "max_width": null, "max_height": null, "ids": vec![json!("1"); n], "svg_text": null}),
             &budgets,
         )
         .map(drop)
@@ -133,6 +134,48 @@ fn ids_over_the_budget_are_refused_at_decode_time() {
     assert_eq!(
         decoded(budgets.max_ids + 1).unwrap_err().kind,
         ErrorKind::Budget
+    );
+}
+
+#[test]
+fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
+    let budgets = Budgets::default();
+    let handle = DocHandle::new("doc_1").unwrap();
+    for format in FORMATS {
+        for (value, expected) in [
+            (Value::Null, SvgText::Outline),
+            (json!("outline"), SvgText::Outline),
+            (json!("live"), SvgText::Live),
+        ] {
+            let mut args = arguments(&handle, format, [Value::Null, Value::Null], Value::Null);
+            args["svg_text"] = value;
+            assert_eq!(
+                decode(args, &budgets).unwrap().svg_text,
+                expected,
+                "{format}"
+            );
+        }
+    }
+    for value in [json!("invalid"), json!("Outline"), json!(true), json!(0)] {
+        let mut args = arguments(&handle, "svg", [Value::Null, Value::Null], Value::Null);
+        args["svg_text"] = value;
+        assert_eq!(
+            decode(args, &budgets).unwrap_err().kind,
+            ErrorKind::InvalidArguments
+        );
+    }
+    let mut args = arguments(&handle, "svg", [Value::Null, Value::Null], Value::Null);
+    args.as_object_mut().unwrap().remove("svg_text");
+    assert_eq!(
+        decode(args, &budgets).unwrap_err().message,
+        "missing field `svg_text`"
+    );
+    assert_eq!(schema()["properties"]["svg_text"], svg_text_schema());
+    assert!(
+        schema()["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("svg_text"))
     );
 }
 
@@ -217,12 +260,85 @@ async fn svg_is_the_preview_svg() {
     );
     assert!(file.bytes.starts_with(b"<svg"));
     // Preview semantics: no background, unlike a publication export.
-    assert_eq!(file.bytes, scene::svg(&doc).into_bytes());
+    assert_eq!(
+        file.bytes,
+        crate::export::outlined_svg(scene::svg(&doc)).unwrap()
+    );
     assert_ne!(file.bytes, scene::svg_with_background(&doc).into_bytes());
     assert_eq!(
         result.value["value"],
         json!({"width": null, "height": null, "byte_len": file.bytes.len()})
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn svg_text_modes_preserve_preview_semantics_and_final_byte_lengths() {
+    let (doc, _) = drawing();
+    let (host, handle) = hosting(doc.clone());
+    let live = scene::svg(&doc).into_bytes();
+    let outlined = crate::export::outlined_svg(scene::svg(&doc)).unwrap();
+    assert!(String::from_utf8_lossy(&live).contains("<text"));
+    assert!(!String::from_utf8_lossy(&outlined).contains("<text"));
+    assert!(String::from_utf8_lossy(&outlined).contains("<path"));
+    for (mode, expected) in [
+        (Value::Null, &outlined),
+        (json!("outline"), &outlined),
+        (json!("live"), &live),
+    ] {
+        let mut args = arguments(&handle, "svg", [Value::Null, Value::Null], Value::Null);
+        args["svg_text"] = mode;
+        let result = render_ok(&host, args).await;
+        let file = &result.files[0];
+        assert_eq!(file.bytes, *expected);
+        assert_eq!(
+            result.value["value"],
+            json!({
+                "width": null, "height": null, "byte_len": expected.len(),
+            })
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn png_ignores_the_svg_text_mode() {
+    let (doc, _) = drawing();
+    let expected = canvas_tools::image_within(&doc, 120, 80).unwrap();
+    let (host, handle) = hosting(doc);
+    for mode in [Value::Null, json!("outline"), json!("live")] {
+        let mut args = arguments(&handle, "png", [json!(120), json!(80)], Value::Null);
+        args["svg_text"] = mode;
+        let result = render_ok(&host, args).await;
+        assert_eq!(result.images[0].bytes, expected);
+        assert_eq!(result.value["value"]["byte_len"], expected.len());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn svg_preview_budget_counts_the_outlined_bytes() {
+    let (doc, _) = drawing();
+    let live = scene::svg(&doc).into_bytes();
+    let outlined = crate::export::outlined_svg(scene::svg(&doc)).unwrap();
+    assert!(outlined.len() > live.len());
+    let (host, handle) = hosting_with(
+        doc,
+        Budgets {
+            max_output_bytes: live.len(),
+            ..Budgets::default()
+        },
+    );
+    let args = arguments(&handle, "svg", [Value::Null, Value::Null], Value::Null);
+    let result = host.call(call("render", args.clone())).await.unwrap();
+    assert!(result.is_error);
+    assert_eq!(result.value["error"]["code"], "budget");
+    assert!(
+        result.value["error"]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("The svg preview is {} bytes;", outlined.len()))
+    );
+    let mut args = args;
+    args["svg_text"] = json!("live");
+    render_ok(&host, args).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -237,7 +353,10 @@ async fn a_selection_renders_only_its_part() {
         arguments(&handle, "svg", [Value::Null, Value::Null], ids.clone()),
     )
     .await;
-    assert_eq!(svg.files[0].bytes, scene::svg(&part).into_bytes());
+    assert_eq!(
+        svg.files[0].bytes,
+        crate::export::outlined_svg(scene::svg(&part)).unwrap()
+    );
     let png = render_ok(
         &host,
         arguments(&handle, "png", [json!(300), json!(200)], ids),

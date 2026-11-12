@@ -10,7 +10,10 @@ use super::{
     policy::Access,
     result::{Blob, Image, ToolResult},
     store::Documents,
-    wire::{DocHandle, ObjectId, Principal, handle_schema, ids_schema, nullable},
+    wire::{
+        DocHandle, ObjectId, Principal, SvgText, handle_schema, ids_schema, nullable,
+        svg_text_schema,
+    },
 };
 use crate::{
     canvas_tools, editing,
@@ -28,7 +31,7 @@ pub const FORMATS: &[&str] = &["png", "svg"];
 pub const RENDER: ToolSpec = ToolSpec {
     name: "render",
     title: Some("Render preview"),
-    description: "Render a session document, or the part ids select (null for the whole drawing), as a preview to look at. png is drawn on white, scaled up to 3x and down to fit within max_width × max_height pixels (null for 1600 × 1000; each side 1 to 8192, and at most render.max_pixels in all, as info reports). svg is the drawing with a transparent surround. This is the editor's preview, not a publication file; use export for files. Read-only.",
+    description: "Render a session document, or the part ids select (null for the whole drawing), as a preview to look at. png is drawn on white, scaled up to 3x and down to fit within max_width × max_height pixels (null for 1600 × 1000; each side 1 to 8192, and at most render.max_pixels in all, as info reports). svg is the drawing with a transparent surround. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. This is the editor's preview, not a publication file; use export for files. Read-only.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: true,
@@ -47,8 +50,9 @@ fn schema() -> Value {
             "max_width": nullable(side_schema()),
             "max_height": nullable(side_schema()),
             "ids": nullable(ids_schema()),
+            "svg_text": svg_text_schema(),
         },
-        "required": ["document", "format", "max_width", "max_height", "ids"],
+        "required": ["document", "format", "max_width", "max_height", "ids", "svg_text"],
         "additionalProperties": false,
     })
 }
@@ -82,6 +86,8 @@ struct Arguments {
     max_height: Option<u32>,
     #[serde(deserialize_with = "Option::deserialize")]
     ids: Option<Vec<ObjectId>>,
+    #[serde(deserialize_with = "Option::deserialize")]
+    svg_text: Option<SvgText>,
 }
 
 /// The decoded `render` arguments, with the default size filled in.
@@ -92,6 +98,7 @@ pub(crate) struct Render {
     width: u32,
     height: u32,
     ids: Option<Vec<ObjectId>>,
+    svg_text: SvgText,
 }
 
 /// Decodes the arguments and checks the size before any work runs.
@@ -110,6 +117,7 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Render, OpError> 
         max_width,
         max_height,
         ids,
+        svg_text,
     } = arguments(args)?;
     if let Some(ids) = &ids {
         ids::check_count(ids, budgets)?;
@@ -147,6 +155,7 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Render, OpError> 
         width,
         height,
         ids,
+        svg_text: svg_text.unwrap_or_default(),
     })
 }
 
@@ -180,8 +189,8 @@ fn png_size(png: &[u8]) -> Option<(u32, u32)> {
 ///
 /// A selection is checked with [`ids::resolve`] and cut out with
 /// [`editing::selection`]. png is [`canvas_tools::image_within`] at the
-/// decoded size and comes back as an image; svg is [`scene::svg`] and comes
-/// back as the file `drawing.svg`. Either must fit
+/// decoded size and comes back as an image; svg is [`scene::svg`], outlined
+/// by default, and comes back as the file `drawing.svg`. Either must fit
 /// [`Budgets::max_output_bytes`].
 ///
 /// The successful result contract is in [`super::catalog::RESULTS`].
@@ -199,6 +208,7 @@ pub(crate) async fn render(
         width,
         height,
         ids,
+        svg_text,
     } = render;
     ctx.blocking(move || {
         let snapshot = store.snapshot(&who, &document, Access::Read)?;
@@ -217,7 +227,16 @@ pub(crate) async fn render(
                 let size = png_size(&png).ok_or_else(|| OpError::failed("internal error"))?;
                 (png, Some(size), "png")
             }
-            Format::Svg => (scene::svg(doc).into_bytes(), None, "svg"),
+            Format::Svg => {
+                let svg = scene::svg(doc);
+                let bytes = match svg_text {
+                    SvgText::Outline => {
+                        crate::export::outlined_svg(svg).map_err(OpError::failed)?
+                    }
+                    SvgText::Live => svg.into_bytes(),
+                };
+                (bytes, None, "svg")
+            }
         };
         if bytes.len() > budgets.max_output_bytes {
             return Err(OpError::new(

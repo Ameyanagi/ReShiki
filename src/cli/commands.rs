@@ -94,8 +94,12 @@ const SVG_TEXT: OptionSpec = OptionSpec {
     value: Some("MODE"),
     help: "SVG text: outline (default) or live; ignored for other formats.",
     default: Some(|| "outline".into()),
-    sets: None,
+    sets: Some("export.svg_text"),
     equivalent: None,
+};
+const RENDER_SVG_TEXT: OptionSpec = OptionSpec {
+    sets: Some("render.svg_text"),
+    ..SVG_TEXT
 };
 const OUTPUT: OptionSpec = OptionSpec {
     flag: "-o",
@@ -213,7 +217,7 @@ const RENDER: CommandSpec = CommandSpec {
         FROM,
         IMAGE_TO,
         IMAGE_OUTPUT,
-        SVG_TEXT,
+        RENDER_SVG_TEXT,
         WIDTH,
         HEIGHT,
         IMAGE_FORCE,
