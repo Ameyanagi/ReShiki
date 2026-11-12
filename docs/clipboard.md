@@ -6,6 +6,8 @@ Use **Ctrl+Shift+C** / **Cmd+Shift+C**, or **Export → Copy image**, for a pict
 
 Pictures use the canvas colors with a transparent background. Switch the canvas to black for dark slides, and to white for light slides.
 
+[Clipboard compatibility](clipboard-compatibility.md) lists what each app receives on Windows, macOS, Linux and in the browser, and the exact clipboard formats. For example, on Windows use Copy Image for new Outlook and other web-based apps.
+
 ## What Paste uses
 
 **Cmd/Ctrl+V** tries the available formats in this order:

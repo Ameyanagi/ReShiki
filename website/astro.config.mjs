@@ -216,6 +216,7 @@ export default defineConfig({
                 "changes-0.2",
                 "chemistry-resource-policy",
                 "clipboard",
+                "clipboard-compatibility",
                 "contextual-shortcuts",
                 "crystal-structures",
                 "drawing-styles",
