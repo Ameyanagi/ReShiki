@@ -85,7 +85,7 @@ pub(super) fn run(mode: &str) -> Result<()> {
     }
     let output = match mode {
         mode if mode == EMF_IMPORT_WORKER => super::printing::import_metafile(&bytes)?,
-        mode if mode == EMF_FILE_WORKER => super::printing::file_metafile(&bytes)?,
+        mode if mode == EMF_FILE_WORKER => super::printing::metafile(&bytes)?,
         mode if mode == EMF_OFFICE_WORKER => super::printing::metafile(&bytes)?,
         _ => return Err(anyhow::anyhow!("Unknown EMF worker operation")),
     };

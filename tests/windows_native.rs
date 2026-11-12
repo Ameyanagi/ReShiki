@@ -28,9 +28,9 @@ fn office_server_is_per_monitor_dpi_aware() {
         }
     }
 
-    // #1123: edited Office previews must use the same display metrics as the
-    // per-monitor-aware editor. Session 0 (services, CI) makes every process
-    // per-monitor aware, so only an interactive desktop session detects a regression.
+    // Keep the server's display metrics unvirtualized, like the editor's.
+    // Session 0 (services, CI) makes every process per-monitor aware, so only an
+    // interactive desktop session detects a regression.
     let data = tempfile::tempdir().unwrap();
     let mut server = Server(
         Command::new(env!("CARGO_BIN_EXE_reshiki"))
