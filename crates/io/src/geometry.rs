@@ -245,6 +245,9 @@ impl Prepared {
         part.abbreviations
             .retain(|a| a.members.iter().all(|id| selected.contains(id)));
         for atom in &part.atoms {
+            if atom.stereo_group.is_some() {
+                return Err(Error::Unsupported("enhanced stereo groups"));
+            }
             if !atom.centroid.is_empty() || atom.attachment.is_some() {
                 return Err(Error::Unsupported("multi-centre or variable attachments"));
             }
