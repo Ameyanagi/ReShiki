@@ -49,6 +49,76 @@ fn reaction_part_wedge_flags_still_replace_stated_directions() -> anyhow::Result
 }
 
 #[test]
+fn reaction_attachment_labels_follow_native_wedge_markers() -> anyhow::Result<()> {
+    use crate::cx::Event;
+    for (molecule, atom, label, expected) in [
+        ("*C", 0, "_AP1", true),
+        ("*C", 0, "_AP2", true),
+        ("*C", 0, "_AP01", true),
+        ("*C", 0, "_AP002", true),
+        ("*C", 0, "_AP0", false),
+        ("*C", 0, "_AP000", false),
+        ("*C", 0, "_AP3", false),
+        ("*C", 0, "_AP37", false),
+        ("*C", 0, "_AP4294967295", false),
+        ("*C", 0, "_AP4294967296", false),
+        ("*C", 0, "_AP", false),
+        ("*C", 0, "_AP1x", false),
+        ("*C", 0, "_AP+1", false),
+        ("*C", 0, "_AP-1", false),
+        ("*C", 0, "_AP 1", false),
+        ("*C", 0, "_AP1 ", false),
+        ("C*C", 1, "_AP1", false),
+        ("*", 0, "_AP1", false),
+        ("CC", 0, "_AP1", false),
+    ] {
+        let imported = super::reaction_part(
+            super::parse(molecule)?,
+            vec![Event::AtomProperty {
+                atom,
+                name: b"atomLabel".to_vec(),
+                value: label.as_bytes().to_vec(),
+            }],
+        )?;
+        let mut markers = vec![false; imported.prepared.state.graph.atoms.len()];
+        markers[atom] = expected;
+        assert_eq!(
+            imported.reaction_attachments, markers,
+            "{molecule}: {label}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn reaction_attachment_native_property_is_a_presence_flag() -> anyhow::Result<()> {
+    use crate::cx::Event;
+    for (molecule, atom, name, value, expected) in [
+        ("*C", 0, "_fromAttchpt", "0", true),
+        ("*C", 0, "_fromAttchpt", "invalid", true),
+        ("C*C", 1, "_fromAttchpt", "1", true),
+        ("CC", 0, "_fromAttchpt", "1", true),
+        ("*C", 0, "_fromAttachPoint", "1", false),
+    ] {
+        let imported = super::reaction_part(
+            super::parse(molecule)?,
+            vec![Event::AtomProperty {
+                atom,
+                name: name.as_bytes().to_vec(),
+                value: value.as_bytes().to_vec(),
+            }],
+        )?;
+        let mut markers = vec![false; imported.prepared.state.graph.atoms.len()];
+        markers[atom] = expected;
+        assert_eq!(
+            imported.reaction_attachments, markers,
+            "{molecule}: {name}={value}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn protium_does_not_create_configuration() -> anyhow::Result<()> {
     for text in [
         "[1H][C@@H](C)O",

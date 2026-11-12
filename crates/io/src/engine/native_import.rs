@@ -1,9 +1,10 @@
 //! Finish molecular, drawing and reaction imports without a Python worker.
 //!
-//! Molecular files and drawing scenes retain their original chemical state for
-//! analysis. Reactions deliberately prepare their finished combined drawing,
-//! matching the original reaction import path. Layout and drawing construction
-//! stay detached; parse, chemistry and helper errors never request a fallback.
+//! Retained file coordinates and drawing scenes keep their chemical state for
+//! analysis. Fresh atropisomer layouts use the stereo their wedges show.
+//! Reactions prepare their finished combined drawing, matching the original
+//! reaction import path. Layout and drawing construction stay detached; parse,
+//! chemistry and helper errors never request a fallback.
 use super::{Request, Response, native_response};
 use crate::{
     chemistry::{
@@ -27,6 +28,8 @@ mod cdxml_tests;
 pub(super) mod chain_layout;
 #[cfg(test)]
 mod molfile_atrop_tests;
+#[cfg(test)]
+mod partial_tests;
 pub(super) mod template_retry;
 #[cfg(test)]
 mod tests;
@@ -99,6 +102,78 @@ pub enum Error {
 
 const CUMULENE_EZ_NOTICE: &str = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored";
 const RELATIVE_STEREO_NOTICE: &str = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
+const CONFIGURATION_NOTICE_END: &str = "; it imported that atom without a configuration";
+const RADICAL_NOTICE: &str = " radical electrons; ReShiki keeps at most 2 and drew it as a triplet";
+const ALLENE_NOTICE_END: &str = " is invalid; ReShiki imported that atom without a configuration";
+const QUERY_NOTICE: &str = "The input's query constraints (such as CXSMILES u, rb or s) were ignored; ReShiki imported the plain structure";
+const ANY_BOND_NOTICE_END: &str = " has any order (~); bond order assumed single";
+const ZERO_BOND_NOTICE_END: &str =
+    " has zero order (CXSMILES Z); ReShiki imported the atoms without that bond";
+
+/// Recognize the feature-loss notices emitted only by partial SMILES import.
+pub fn is_partial_import_warning(warning: &str) -> bool {
+    (warning.starts_with("ReShiki cannot draw the ") && warning.ends_with(CONFIGURATION_NOTICE_END))
+        || (warning.starts_with("Atom ") && warning.contains(RADICAL_NOTICE))
+        || (warning.starts_with("The allene stereo tag (@AL) at ")
+            && warning.ends_with(ALLENE_NOTICE_END))
+        || warning == QUERY_NOTICE
+        || (warning.starts_with("Bond ")
+            && (warning.ends_with(ANY_BOND_NOTICE_END) || warning.ends_with(ZERO_BOND_NOTICE_END)))
+}
+
+fn dropped_notices(dropped: impl IntoIterator<Item = smiles::Dropped>) -> Vec<String> {
+    use smiles::{Configuration, Dropped};
+    let name = |atom: smiles::InputAtom| format!("{}{}", atom.element, atom.position + 1);
+    let mut queries = false;
+    let mut notices = Vec::new();
+    for item in dropped {
+        let notice = match item {
+            Dropped::Configuration { atom, class } => {
+                let class = match class {
+                    Configuration::SquarePlanar => "square-planar configuration (@SP)",
+                    Configuration::TrigonalBipyramidal => {
+                        "trigonal-bipyramidal configuration (@TB)"
+                    }
+                    Configuration::Octahedral => "octahedral configuration (@OH)",
+                };
+                format!(
+                    "ReShiki cannot draw the {class} at {}{CONFIGURATION_NOTICE_END}",
+                    name(atom)
+                )
+            }
+            Dropped::Radical {
+                atom,
+                electrons,
+                hydrogens: (before, after),
+            } => {
+                let mut notice = format!("Atom {} had {electrons}{RADICAL_NOTICE}", name(atom));
+                if before != after {
+                    notice.push_str(&format!(
+                        "; its hydrogen count changed from {before} to {after}"
+                    ));
+                }
+                notice
+            }
+            Dropped::Allene(atom) => format!(
+                "The allene stereo tag (@AL) at {}{ALLENE_NOTICE_END}",
+                name(atom)
+            ),
+            Dropped::Queries => {
+                if queries {
+                    continue;
+                }
+                queries = true;
+                QUERY_NOTICE.into()
+            }
+            Dropped::AnyBond(a, b) => format!("Bond {}–{}{ANY_BOND_NOTICE_END}", name(a), name(b)),
+            Dropped::ZeroBond(a, b) => {
+                format!("Bond {}–{}{ZERO_BOND_NOTICE_END}", name(a), name(b))
+            }
+        };
+        notices.push(notice);
+    }
+    notices
+}
 
 struct Prepared {
     molecule: molecular::Molecule,
@@ -231,46 +306,14 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             return Ok(Preparation::Drawing(Box::new(document), warnings));
         }
         "smiles" | "naming_smiles" => {
-            let mut imported = smiles::read(&text)?;
-            if format == "naming_smiles" {
-                imported.prepared.state =
-                    crate::molecule_names::apply_axis_markers(&imported.prepared.state)
-                        .map_err(|_| Error::AxisMarkers)?;
+            let strict = prepare_smiles(&text, format == "naming_smiles", drawing_options, false);
+            if format == "smiles" {
+                strict.or_else(|error| {
+                    prepare_smiles(&text, false, drawing_options, true).map_err(|_| error)
+                })?
+            } else {
+                strict?
             }
-            // Wedges were read at the 2D input coordinates, which the fresh
-            // layout replaces (#1037). Without coordinates the @/@@ tags state
-            // the configuration (#1044); smiles::read has already taken any
-            // axial configuration from the flags. Either way, draw wedges again
-            // from the stereo, keeping wavy bonds' unknown stereo (#1049).
-            let directions = &mut imported.prepared.state.directions;
-            // Parity keeps the wavy exclusion from #1044.
-            let tag_wins = imported.conformers.is_empty()
-                && (molecular::refine() || !directions.contains(&Direction::Unknown));
-            if tag_wins || imported.conformers.iter().any(|c| !c.is_3d) {
-                for direction in directions {
-                    if matches!(direction, Direction::Wedge | Direction::Hash) {
-                        *direction = Direction::None;
-                    }
-                }
-            }
-            let relative = imported.draw_relative_as_stated();
-            let mut molecule = molecule(imported.prepared.state)?;
-            let (mut warnings, row) = layout(&mut molecule, &imported.reaction_properties)?;
-            // Import perception does not keep cumulene E/Z; say so.
-            if imported.dropped_cumulene_ez {
-                warnings.push(CUMULENE_EZ_NOTICE.into());
-            }
-            if relative {
-                warnings.push(RELATIVE_STEREO_NOTICE.into());
-            }
-            let mut prepared = finish_molecule(
-                molecule,
-                &imported.prepared.dummy_labels,
-                drawing_options,
-                &row,
-            )?;
-            prepared.warnings.extend(warnings);
-            prepared
         }
         "mol" => {
             let imported = molfile::read(&text)?;
@@ -354,39 +397,111 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             }
         }
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
-        "rsmi" => {
-            let mut reaction = reaction::read_smiles(&text)?;
-            let relative = reaction
-                .reactants
-                .iter_mut()
-                .chain(&mut reaction.agents)
-                .chain(&mut reaction.products)
-                .fold(false, |relative, part| {
-                    relative | part.draw_relative_as_stated()
-                });
-            let layout = reaction.layout()?;
-            let layouts = layout
-                .requests()
-                .map(|request| {
-                    molecular::validate_molecule(request.molecule())?;
-                    coordinates(&request.molecule().state, request.atom_properties())
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
-            let (positions, warnings): (Vec<_>, Vec<_>) = layouts
-                .into_iter()
-                .map(|layout| (layout.positions, layout.warnings))
-                .unzip();
-            let mut prepared = finish_reaction(layout.finish(positions)?)?;
-            prepared.warnings.extend(warnings.into_iter().flatten());
-            if relative {
-                prepared.warnings.push(RELATIVE_STEREO_NOTICE.into());
-            }
-            prepared
-        }
+        "rsmi" => prepare_reaction_smiles(&text, false)
+            .or_else(|error| prepare_reaction_smiles(&text, true).map_err(|_| error))?,
         _ => return Err(Error::Format),
     };
     prepared.document.validate().map_err(Error::Document)?;
     Ok(Preparation::Complete(Box::new(prepared)))
+}
+
+fn prepare_smiles(
+    text: &str,
+    naming: bool,
+    drawing_options: molecular::DrawingOptions,
+    partial: bool,
+) -> Result<Prepared, Error> {
+    let mut imported = if partial {
+        smiles::read_partial(text)?
+    } else {
+        smiles::read(text)?
+    };
+    if naming {
+        imported.prepared.state =
+            crate::molecule_names::apply_axis_markers(&imported.prepared.state)
+                .map_err(|_| Error::AxisMarkers)?;
+    }
+    // Wedges were read at the 2D input coordinates, which the fresh
+    // layout replaces (#1037). Without coordinates the @/@@ tags state
+    // the configuration (#1044); smiles::read has already taken any
+    // axial configuration from the flags. Either way, draw wedges again
+    // from the stereo, keeping wavy bonds' unknown stereo (#1049).
+    let directions = &mut imported.prepared.state.directions;
+    // Parity keeps the wavy exclusion from #1044.
+    let tag_wins = imported.conformers.is_empty()
+        && (molecular::refine() || !directions.contains(&Direction::Unknown));
+    if tag_wins || imported.conformers.iter().any(|c| !c.is_3d) {
+        for direction in directions {
+            if matches!(direction, Direction::Wedge | Direction::Hash) {
+                *direction = Direction::None;
+            }
+        }
+    }
+    let relative = imported.draw_relative_as_stated();
+    let mut molecule = molecule(imported.prepared.state)?;
+    let (mut warnings, row) = layout(&mut molecule, &imported.reaction_properties)?;
+    // Import perception does not keep cumulene E/Z; say so.
+    if imported.dropped_cumulene_ez {
+        warnings.push(CUMULENE_EZ_NOTICE.into());
+    }
+    if relative {
+        warnings.push(RELATIVE_STEREO_NOTICE.into());
+    }
+    warnings.extend(dropped_notices(imported.dropped));
+    let mut prepared = finish_molecule(
+        molecule,
+        &imported.prepared.dummy_labels,
+        drawing_options,
+        &row,
+    )?;
+    prepared.warnings.extend(warnings);
+    Ok(prepared)
+}
+
+fn prepare_reaction_smiles(text: &str, partial: bool) -> Result<Prepared, Error> {
+    let mut reaction = if partial {
+        reaction::read_smiles_partial(text)?
+    } else {
+        reaction::read_smiles(text)?
+    };
+    if partial {
+        reaction.drop_undrawable_wedges();
+    }
+    let dropped = dropped_notices(
+        reaction
+            .reactants
+            .iter_mut()
+            .chain(&mut reaction.agents)
+            .chain(&mut reaction.products)
+            .flat_map(|part| std::mem::take(&mut part.dropped)),
+    );
+    let relative = reaction
+        .reactants
+        .iter_mut()
+        .chain(&mut reaction.agents)
+        .chain(&mut reaction.products)
+        .fold(false, |relative, part| {
+            relative | part.draw_relative_as_stated()
+        });
+    let layout = reaction.layout()?;
+    let layouts = layout
+        .requests()
+        .map(|request| {
+            molecular::validate_molecule(request.molecule())?;
+            coordinates(&request.molecule().state, request.atom_properties())
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let (positions, warnings): (Vec<_>, Vec<_>) = layouts
+        .into_iter()
+        .map(|layout| (layout.positions, layout.warnings))
+        .unzip();
+    let mut prepared = finish_reaction(layout.finish(positions)?)?;
+    prepared.warnings.extend(warnings.into_iter().flatten());
+    if relative {
+        prepared.warnings.push(RELATIVE_STEREO_NOTICE.into());
+    }
+    prepared.warnings.extend(dropped);
+    Ok(prepared)
 }
 
 // Sanitization can normalize an overvalent metal contact to a dative bond.
@@ -508,34 +623,99 @@ fn finish_molecule(
     let mut document = drawing.finish(labels)?;
     layout_refinement::space_component_labels(row, &mut molecule, &mut document);
     document.validate().map_err(Error::Document)?;
-    // An axis end reads a wedge from a neighbouring centre as its own, as
-    // RDKit does, so some fresh layouts' wedges hide an axis (#1056). Refuse
-    // such a drawing, as the reference refuses atropisomer bond stereo,
-    // rather than silently lose the axis.
-    // A drawing that cannot be prepared again (named dummy atoms) keeps
-    // main's behaviour.
+    let mut warnings = Vec::new();
     let expected = axes(&molecule)?;
-    if !expected.is_empty()
-        && let Ok(read) = molecular::prepare(&document)
-        && expected
-            .iter()
-            .any(|axis| !axes(&read).is_ok_and(|read| read.contains(axis)))
-    {
-        return Err(molecular::Error::WedgeAssignment(
-            "The wedges in this layout cannot show the atropisomer axis next to a wedged stereocentre"
-                .into(),
-        )
-        .into());
+    let mut readback = None;
+    if !expected.is_empty() {
+        let mut visible = document.clone();
+        // Stored source windings must not conceal centres the wedges lost.
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        // Named dummy atoms can prevent preparation; keep their import path.
+        if let Ok(mut read) = molecular::prepare(&visible) {
+            let source_centres = centres(&molecule);
+            // A failed repair retains the reference wedges, which can reverse
+            // an axis. Remove only its own carriers, not a neighbour's wedge.
+            let mut changed = false;
+            loop {
+                let unwanted: Vec<_> = axes(&read)?
+                    .into_iter()
+                    .filter(|axis| !expected.contains(axis))
+                    .flat_map(|(a, b, _)| [a, b])
+                    .collect();
+                let mut cleared = false;
+                for bond in &mut visible.bonds {
+                    if !bond.projection
+                        && bond.order == 1
+                        && unwanted.contains(&bond.a)
+                        && matches!(
+                            bond.display.as_str(),
+                            "wedge" | "hollow_wedge" | "bold" | "hash" | "hashed"
+                        )
+                    {
+                        bond.display = "plain".into();
+                        cleared = true;
+                    }
+                }
+                if !cleared {
+                    break;
+                }
+                changed = true;
+                read = molecular::prepare(&visible)?;
+            }
+            let actual = axes(&read)?;
+            for (a, b, stereo) in expected {
+                if !actual.contains(&(a, b, stereo)) {
+                    let a = chemistry::stereo_lint::atom_name(&visible, a);
+                    let b = chemistry::stereo_lint::atom_name(&visible, b);
+                    warnings.push(format!(
+                        "The wedges in this layout cannot show the atropisomer axis {a}–{b}; ReShiki drew the structure without that axis"
+                    ));
+                }
+            }
+            let read_centres = centres(&read);
+            for id in source_centres {
+                if !read_centres.contains(&id) {
+                    let atom = chemistry::stereo_lint::atom_name(&visible, id);
+                    warnings.push(format!(
+                        "The wedges in this layout cannot show the stereocentre {atom}; ReShiki drew the structure without it"
+                    ));
+                }
+            }
+            // Labels and the first analysis must describe the same wedges as
+            // later preparation/export. Preserve the finished drawing's paint.
+            // A drawing that shows every source element stays as finished.
+            if changed || !warnings.is_empty() {
+                let drawing = molecular::for_drawing(&read, &visible)?;
+                let labels = drawing.labels()?;
+                document = drawing.finish_preserving(labels, &visible)?;
+                readback = Some(read);
+            }
+        }
     }
-    let warnings = chemistry::drop_added_axis_wedges(&mut document, &molecule)
-        .into_iter()
-        .collect();
+    warnings.extend(chemistry::drop_added_axis_wedges(&mut document, &molecule));
+    if let Some(read) = readback {
+        molecule = read;
+    }
     Ok(Prepared {
         molecule,
         document,
         warnings,
         file_xyz: false,
     })
+}
+
+/// Tetrahedral centres the molecule specifies, by stable atom IDs. Wedges
+/// either show a generated centre's configuration or leave it unspecified.
+fn centres(molecule: &molecular::Molecule) -> std::collections::BTreeSet<u64> {
+    molecule
+        .ids
+        .iter()
+        .zip(&molecule.state.metadata.atoms)
+        .filter(|(_, atom)| matches!(atom.chiral_tag, 1 | 2))
+        .map(|(&id, _)| id)
+        .collect()
 }
 
 /// Atropisomer axes by stable atom IDs.

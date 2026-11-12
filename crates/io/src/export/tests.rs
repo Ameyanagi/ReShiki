@@ -1,5 +1,169 @@
 use super::*;
 
+#[tokio::test]
+async fn editable_png_contains_the_prepared_drawing_and_preserves_pixels() -> anyhow::Result<()> {
+    use crate::{engine::LocalEngine, export};
+    use anyhow::Context;
+
+    let mut doc: Document = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/ui-drawn-ethanol.reshiki"
+    ))?;
+    for atom in &mut doc.atoms {
+        atom.label_h = 0;
+    }
+    let engine = LocalEngine::in_process();
+    let (prepared, notice) = export::figure_document(&engine, doc.clone())
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(notice, None);
+    assert_ne!(
+        prepared, doc,
+        "The prepared snapshot refreshes hydrogen labels"
+    );
+    let plain = export::publication(
+        &engine,
+        doc.clone(),
+        "png",
+        false,
+        false,
+        export::FILE_PIXELS,
+    )
+    .await
+    .map_err(anyhow::Error::msg)?;
+    assert!(crate::payload::read(&plain.bytes).is_none());
+    assert_eq!(plain.details.len(), 1);
+    let editable = export::publication(&engine, doc, "png", false, true, export::FILE_PIXELS)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let embedded = crate::payload::read(&editable.bytes)
+        .context("embedded drawing")?
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(embedded, crate::payload::visible(&prepared.current()));
+    assert_eq!(
+        editable.details,
+        [
+            plain.details[0].clone(),
+            "Includes the editable drawing".into()
+        ]
+    );
+    let mut decoded = Vec::new();
+    for bytes in [&plain.bytes, &editable.bytes] {
+        let mut reader = png::Decoder::new(std::io::Cursor::new(bytes)).read_info()?;
+        let mut pixels = vec![0; reader.output_buffer_size()];
+        let frame = reader.next_frame(&mut pixels)?;
+        pixels.truncate(frame.buffer_size());
+        decoded.push((frame.width, frame.height, pixels));
+    }
+    assert_eq!(decoded[0], decoded[1]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn editable_png_preserves_custom_colors_from_older_dark_snapshots() {
+    use crate::{
+        canvas_theme::CanvasTheme,
+        document::{Annotation, Point},
+        palette::Color,
+        typography::TextFormat,
+    };
+
+    for version in [15, 16] {
+        let mut doc = Document {
+            version,
+            canvas_theme: CanvasTheme::Dark,
+            ..Default::default()
+        };
+        let color = Color::Custom([49, 87, 123]);
+        let mut format = TextFormat::default();
+        format.style.color = color;
+        doc.annotations.push(Annotation {
+            id: 1,
+            position: Point::default(),
+            text: "O".into(),
+            format,
+        });
+        let snapshot = doc.current();
+        let exported = publication(
+            &Default::default(),
+            doc.clone(),
+            "png",
+            false,
+            true,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
+        let restored = crate::payload::read(&exported.bytes).unwrap().unwrap();
+        assert_eq!(restored, snapshot);
+        assert_eq!(restored.annotations[0].format.style.color, color);
+        assert_eq!(
+            crate::scene::svg_with_background(&restored),
+            crate::scene::svg_with_background(&snapshot)
+        );
+        assert_eq!(
+            crate::scene::svg_with_background(&snapshot),
+            crate::scene::svg_with_background(&doc)
+        );
+        assert_eq!(doc.version, version);
+    }
+}
+
+#[tokio::test]
+async fn editable_figure_export_skips_a_drawing_over_the_embed_limit() {
+    let mut doc = Document::default();
+    // A detailed picture retains more editable data than its small printed size.
+    let mut state = 0x1234_5678_u32;
+    let pixels: Vec<u8> = (0..1024 * 1024 * 3)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as u8
+        })
+        .collect();
+    let mut source = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut source, 1024, 1024);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(&pixels)
+            .unwrap();
+    }
+    let picture = crate::pictures::Picture::import(&source).unwrap();
+    let mut graphic = picture.graphic(1, Default::default());
+    crate::pictures::resize(&mut graphic, 12., 12.).unwrap();
+    doc.graphics.push(graphic);
+    assert!(crate::payload::encode(&doc).unwrap().len() > crate::payload::EMBED_LIMIT);
+    for format in ["png", "svg", "svg-office", "pdf"] {
+        let export = publication(
+            &Default::default(),
+            doc.clone(),
+            format,
+            false,
+            true,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
+        assert!(crate::payload::read(&export.bytes).is_none(), "{format}");
+        assert_eq!(
+            export.details.last().map(String::as_str),
+            Some("Saved without the editable drawing: it is larger than 2 MB"),
+            "{format}",
+        );
+        if format == "png" {
+            let mut reader = png::Decoder::new(std::io::Cursor::new(export.bytes))
+                .read_info()
+                .unwrap();
+            let mut pixels = vec![0; reader.output_buffer_size()];
+            reader.next_frame(&mut pixels).unwrap();
+        }
+    }
+}
+
 #[test]
 fn steroid_alpha_beta_figure_exports_share_the_canvas_labels() {
     use crate::document::Point;
@@ -465,6 +629,226 @@ fn transparent_label_halo_reaches_vector_readers_as_a_named_knockout_mask() {
         pdf.windows(6).any(|window| window == b"/SMask"),
         "A transparent PDF knocks the halo out with a soft mask"
     );
+}
+
+fn vector_payload_document() -> Document {
+    let mut doc = Document::default();
+    doc.annotations.push(crate::document::Annotation {
+        id: 1,
+        position: Default::default(),
+        text: "Editable 日本語".into(),
+        format: Default::default(),
+    });
+    doc
+}
+
+fn pdf_media_box(bytes: &[u8]) -> Vec<f32> {
+    let text = String::from_utf8_lossy(bytes);
+    text.split_once("/MediaBox [")
+        .unwrap()
+        .1
+        .split_once(']')
+        .unwrap()
+        .0
+        .split_whitespace()
+        .map(|number| number.parse().unwrap())
+        .collect()
+}
+
+fn pdf_text_object(bytes: &[u8], id: u32) -> &str {
+    let marker = format!("\n{id} 0 obj\n");
+    let start = bytes
+        .windows(marker.len())
+        .position(|window| window == marker.as_bytes())
+        .unwrap()
+        + marker.len();
+    let rest = &bytes[start..];
+    let end = rest
+        .windows(6)
+        .position(|window| window == b"endobj")
+        .unwrap();
+    std::str::from_utf8(&rest[..end]).unwrap()
+}
+
+fn assert_pdf_xref(bytes: &[u8]) {
+    let marker = b"startxref\n";
+    let start = bytes
+        .windows(marker.len())
+        .rposition(|window| window == marker)
+        .unwrap()
+        + marker.len();
+    let offset: usize = std::str::from_utf8(&bytes[start..])
+        .unwrap()
+        .lines()
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let xref = std::str::from_utf8(&bytes[offset..]).unwrap();
+    let mut lines = xref.lines();
+    assert_eq!(lines.next(), Some("xref"));
+    let header = lines.next().unwrap().split_whitespace().collect::<Vec<_>>();
+    assert_eq!(header[0], "0");
+    let count: usize = header[1].parse().unwrap();
+    for (id, line) in lines.take(count).enumerate() {
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields[2] == "n" {
+            let offset: usize = fields[0].parse().unwrap();
+            let object = format!("{id} {} obj", fields[1].parse::<u16>().unwrap());
+            assert!(
+                bytes[offset..].starts_with(object.as_bytes()),
+                "xref object {id}"
+            );
+        }
+    }
+}
+
+#[test]
+fn single_pdf_preserves_the_old_physical_size_and_scales_the_xobject() {
+    let doc = vector_payload_document();
+    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    let old = svg2pdf::to_pdf(
+        &tree,
+        svg2pdf::ConversionOptions::default(),
+        svg2pdf::PageOptions { dpi: 96. },
+    )
+    .unwrap();
+    let new = drawing(&doc, "pdf").unwrap();
+    let envelope = crate::payload::encode(&doc).unwrap();
+    let editable = single_pdf(&tree, Some(&envelope)).unwrap();
+    let old_box = pdf_media_box(&old);
+    assert_eq!(old_box.len(), 4);
+    for bytes in [&new, &editable] {
+        assert!(pdf_text_object(bytes, 2).contains("/Count 1"));
+        assert_eq!(
+            String::from_utf8_lossy(bytes)
+                .matches("/MediaBox [")
+                .count(),
+            1
+        );
+        let new_box = pdf_media_box(bytes);
+        assert!(
+            String::from_utf8_lossy(bytes)
+                .contains("/Group <<\n    /Type /Group\n    /S /Transparency")
+        );
+        assert_eq!(new_box.len(), 4);
+        for (old, new) in old_box.iter().zip(&new_box) {
+            assert!((old - new).abs() < 0.01, "old {old}, new {new}");
+        }
+    }
+    let content = pdf_text_object(&new, 4);
+    let transform = content.lines().find(|line| line.ends_with(" cm")).unwrap();
+    let transform = transform
+        .strip_suffix(" cm")
+        .unwrap()
+        .split_whitespace()
+        .map(|number| number.parse::<f32>().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(transform.len(), 6);
+    assert!((transform[0] - tree.size().width() * 0.75).abs() < 0.01);
+    assert!((transform[3] - tree.size().height() * 0.75).abs() < 0.01);
+    assert_eq!(
+        [transform[1], transform[2], transform[4], transform[5]],
+        [0.; 4]
+    );
+    assert!(content.contains("/Drawing Do"));
+    assert!(!pdf_text_object(&new, 1).contains("/Metadata"));
+    assert_pdf_xref(&new);
+}
+
+#[test]
+fn editable_pdf_has_catalog_xmp_without_compression_and_valid_cross_references() {
+    use std::io::Write;
+
+    let doc = vector_payload_document();
+    let envelope = crate::payload::encode(&doc).unwrap();
+    let bytes = clipboard_figure_with_drawing(&doc, "pdf", Some(&envelope))
+        .unwrap()
+        .bytes;
+    let catalog = pdf_text_object(&bytes, 1);
+    let metadata_id = catalog
+        .split_once("/Metadata ")
+        .unwrap()
+        .1
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .parse::<u32>()
+        .unwrap();
+    let metadata = pdf_text_object(&bytes, metadata_id);
+    let (dictionary, stream) = metadata.split_once("stream\n").unwrap();
+    assert!(dictionary.contains("/Type /Metadata"));
+    assert!(dictionary.contains("/Subtype /XML"));
+    assert!(!dictionary.contains("/Filter"));
+    let packet = stream.split_once("\nendstream").unwrap().0;
+    assert_eq!(packet, crate::payload::xmp(&envelope));
+    roxmltree::Document::parse(packet).unwrap();
+    assert_eq!(
+        crate::payload::read(&bytes).unwrap().unwrap(),
+        crate::payload::visible(&doc)
+    );
+    assert_pdf_xref(&bytes);
+    let mut file = tempfile::NamedTempFile::new().unwrap();
+    file.write_all(&bytes).unwrap();
+    match std::process::Command::new("qpdf")
+        .arg("--check")
+        .arg(file.path())
+        .output()
+    {
+        Ok(output) => assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => panic!("Could not check the PDF: {error}"),
+    }
+}
+
+#[tokio::test]
+async fn publication_vectors_include_the_prepared_drawing_only_when_enabled() {
+    let doc = vector_payload_document();
+    let engine = Default::default();
+    for format in ["svg", "svg-office", "pdf"] {
+        let plain = publication(&engine, doc.clone(), format, false, false, FILE_PIXELS)
+            .await
+            .unwrap();
+        let editable = publication(&engine, doc.clone(), format, false, true, FILE_PIXELS)
+            .await
+            .unwrap();
+        assert!(crate::payload::read(&plain.bytes).is_none(), "{format}");
+        assert_eq!(
+            crate::payload::read(&editable.bytes).unwrap().unwrap(),
+            crate::payload::visible(&doc.current()),
+            "{format}"
+        );
+        assert!(plain.details.is_empty(), "{format}");
+        assert_eq!(
+            editable.details,
+            ["Includes the editable drawing"],
+            "{format}"
+        );
+        if format == "pdf" {
+            assert_eq!(pdf_media_box(&plain.bytes), pdf_media_box(&editable.bytes));
+        } else {
+            let original = parse_svg(String::from_utf8(plain.bytes).unwrap()).unwrap();
+            let restored = parse_svg(String::from_utf8(editable.bytes).unwrap()).unwrap();
+            assert_eq!(
+                original.to_string(&Default::default()),
+                restored.to_string(&Default::default())
+            );
+        }
+    }
+    let mut pages = doc;
+    pages.page_layout = Some(Default::default());
+    let plain = publication(&engine, pages.clone(), "pdf", true, false, FILE_PIXELS)
+        .await
+        .unwrap();
+    let editable = publication(&engine, pages, "pdf", true, true, FILE_PIXELS)
+        .await
+        .unwrap();
+    assert_eq!(editable.details, plain.details);
+    assert!(crate::payload::read(&editable.bytes).is_none());
 }
 
 /// Space-filling balls that overlap export as the visible part of each, a

@@ -164,7 +164,7 @@ pub(super) fn bond_paint_radius(style: &crate::style::DrawingStyle) -> f32 {
         .max(line * 1.25 + bold * 0.5)
         .max(bold * 2.);
     let highlight = radius(style).max(envelope + line) * CAPSULE_RADIUS_SCALE;
-    // The dative arrowhead's fixed 10 by 3.5 world-unit wings also fit here.
+    // The dative arrowhead's wings, at most 10 by 3.5 world units, also fit here.
     highlight
         .max(crate::scene::DATIVE_HEAD_LENGTH.hypot(crate::scene::DATIVE_HEAD_HALF_WIDTH) + line)
 }

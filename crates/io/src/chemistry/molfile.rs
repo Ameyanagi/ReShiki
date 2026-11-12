@@ -14,9 +14,12 @@ mod generic;
 mod import;
 mod read;
 #[cfg(test)]
+mod superatom_tests;
+mod superatoms;
+#[cfg(test)]
 mod tests;
 pub(crate) use read::read_reaction;
-pub use read::{FileAnnotations, Imported, ReadError, read};
+pub use read::{FileAnnotations, Imported, ReadError, Superatom, read};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -79,7 +82,8 @@ pub(crate) fn write_drawing_absolute(
     doc: &crate::document::Document,
     options: Options,
 ) -> Result<(String, bool), Error> {
-    write_drawing_part(molecule, doc, options, false, &[], true)
+    let (output, fallback) = write_drawing_part(molecule, doc, options, false, &[], true)?;
+    Ok((superatoms::restore_output(output, doc, molecule)?, fallback))
 }
 
 fn write_drawing_part(
@@ -294,7 +298,11 @@ pub(crate) fn write_document_with_fallback(
         &endpoints,
         true,
     )?;
-    Ok((generic::restore_output(output, doc)?, fallback))
+    let output = generic::restore_output(output, doc)?;
+    Ok((
+        superatoms::restore_output(output, doc, &molecule)?,
+        fallback,
+    ))
 }
 
 /// Reaction CTABs retain aromatic bond types instead of assigning Kekulé bonds.

@@ -478,6 +478,7 @@ fn native_fixture_visual_center_uses_recomputed_labels() {
 fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
     use super::super::shortcuts;
     use reshiki::atom_text::{self, Mode};
+    use reshiki::joining::CoordinationPlan;
 
     struct Case {
         name: &'static str,
@@ -506,7 +507,10 @@ fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
             elements: &["N", "Co"],
             bonds: &[],
             selected: &[1, 2],
-            route: JoinPlan::Coordinate { donor: 1, metal: 2 },
+            route: JoinPlan::Coordinate(CoordinationPlan {
+                pairs: vec![(1, 2)],
+                skipped: vec![],
+            }),
             merge: false,
             generic_sites: &[1],
         },
@@ -515,7 +519,10 @@ fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
             elements: &["N", "Co"],
             bonds: &[],
             selected: &[2, 1],
-            route: JoinPlan::Coordinate { donor: 1, metal: 2 },
+            route: JoinPlan::Coordinate(CoordinationPlan {
+                pairs: vec![(1, 2)],
+                skipped: vec![],
+            }),
             merge: false,
             generic_sites: &[1],
         },
@@ -602,7 +609,12 @@ fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
             } else {
                 reshiki::joining::join_plan(&app.tab.doc, &app.tab.selected)
             };
-            assert_eq!(plan, Some(case.route), "{} {generic_site:?}", case.name);
+            assert_eq!(
+                plan,
+                Some(case.route.clone()),
+                "{} {generic_site:?}",
+                case.name
+            );
             assert_eq!(
                 case.route.generic_blocked(&app.tab.doc, &app.tab.selected),
                 blocked,
@@ -613,13 +625,16 @@ fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
             let mut expected = if blocked {
                 (before.clone(), app.tab.selected.clone())
             } else {
-                match case.route {
-                    JoinPlan::Coordinate { donor, metal } => (
-                        reshiki::joining::coordinate_atoms(&before, donor, metal)
-                            .unwrap()
-                            .into_document(&before),
-                        vec![donor, metal],
-                    ),
+                match case.route.clone() {
+                    JoinPlan::Coordinate(plan) => {
+                        let (donor, metal) = plan.pairs[0];
+                        (
+                            reshiki::joining::coordinate_atoms(&before, donor, metal)
+                                .unwrap()
+                                .into_document(&before),
+                            vec![donor, metal],
+                        )
+                    }
                     JoinPlan::ShareAtom { source, target } => Prepared::new(&before, &[source])
                         .unwrap()
                         .place(
@@ -663,6 +678,8 @@ fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
                     reshiki::generic::JOIN_NOTICE
                 } else if case.merge {
                     "Merged selected atoms"
+                } else if matches!(case.route, JoinPlan::Coordinate(_)) {
+                    "Coordinated N #1 → Co #2"
                 } else {
                     "Joined selected atoms or bonds"
                 },

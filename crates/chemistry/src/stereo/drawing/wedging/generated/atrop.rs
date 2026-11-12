@@ -18,7 +18,7 @@ const READBACK_LIMIT: usize = 256;
 
 /// A wave marks only its begin atom; its tagged far end still needs a wedge (#1049).
 /// The normal generated drawing is authoritative whenever it reads back.
-/// Failed or exhausted searches retain it: import owns the refusal policy,
+/// Failed or exhausted searches retain it: import owns the warning policy,
 /// while other callers may discard or restore these wedges afterwards.
 pub fn wedge_molecule(
     input: &WedgeState,

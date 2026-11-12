@@ -281,7 +281,9 @@ async fn haworth_engine_mol_export_uses_2d_without_a_fallback_notice() -> anyhow
         (Sugar::Glucose, Anomer::Alpha),
         (Sugar::Galactose, Anomer::Beta),
     ] {
-        let document = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+        let mut document = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+        // Compare coordinates only; molfile superatom tests cover the CH2OH SUP records.
+        document.abbreviations.clear();
         let molecule = molecular::prepare(&document)?;
         let expected = molfile::write_projected_absolute(&molecule, Default::default())?;
         let expected_smiles = smiles::write::write(&molecule.state, Default::default())?.text;

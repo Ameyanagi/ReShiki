@@ -139,3 +139,43 @@ fn large_ring_assignment_does_not_recurse() -> Result<(), String> {
     );
     Ok(())
 }
+
+#[test]
+fn normalized_rings_match_2026_09_dummy_assignments() -> anyhow::Result<()> {
+    // The four #9208 output changes in kekulize_reference.py, 2026.09.1 legacy.
+    for line in include_str!("../../../../tests/fixtures/kekulize-2026-09.jsonl").lines() {
+        let case: serde_json::Value = serde_json::from_str(line)?;
+        let graph: Graph = serde_json::from_value(case["graph"].clone())?;
+        let directions: Vec<Direction> = serde_json::from_value(case["directions"].clone())?;
+        let mut rings = crate::rings::perceive(&graph, crate::rings::Options::default())?.atoms;
+        for ring in &mut rings {
+            crate::rings::normalize(ring);
+        }
+        assert_eq!(
+            serde_json::to_value(&rings)?,
+            case["rings"],
+            "{}",
+            case["name"]
+        );
+        let options = || Options {
+            clear_aromaticity: case["clear"] == true,
+            ..Options::default()
+        };
+        let assigned = assign(&graph, &rings, &directions, options()).ok();
+        assert_eq!(
+            serde_json::to_value(assigned)?,
+            case["expected"],
+            "{}",
+            case["name"]
+        );
+        let attempt =
+            if_possible(&graph, &rings, &directions, options()).map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            serde_json::to_value(attempt)?,
+            case["attempt"],
+            "{}",
+            case["name"]
+        );
+    }
+    Ok(())
+}

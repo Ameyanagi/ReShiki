@@ -3962,6 +3962,7 @@ dependencies = [
  "web-sys",
  "web-time",
  "window_clipboard",
+ "windows 0.58.0",
  "zune-core 0.5.3",
  "zune-jpeg 0.5.15",
 ]
@@ -4022,6 +4023,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "directories-next",
+ "flate2",
  "pdf-writer",
  "png 0.17.16",
  "reshiki-geometry",
@@ -4033,6 +4035,7 @@ dependencies = [
  "rustix 1.1.4",
  "serde",
  "serde_json",
+ "sha2",
  "svg2pdf",
  "tempfile",
  "thiserror 2.0.20",

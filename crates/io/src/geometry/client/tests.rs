@@ -183,3 +183,104 @@ async fn ready_deadline_wins_before_worker_spawn() {
         Err(Error::Io(_))
     ));
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn relaxed_operations_forward_mode_and_return_bounded_approximation_notes() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let executable = directory.path().join("worker");
+    let request_path = directory.path().join("request");
+    let response_path = directory.path().join("response");
+    let quote = |path: &std::path::Path| path.to_string_lossy().replace('\'', "'\\''");
+    std::fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\n/bin/cat > '{}'\n/bin/cat '{}'\n",
+            quote(&request_path),
+            quote(&response_path),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let client = Client::new(
+        executable,
+        Limits {
+            timeout: Duration::from_secs(10),
+            heap_bytes: 64 * 1024 * 1024,
+        },
+    )
+    .unwrap();
+    let mut document = crate::document::Document::default();
+    document.add_atom("C", crate::document::Point::new(0., 0.));
+    let prepared = Prepared::relaxed(&document, &[]).unwrap();
+    let conformer = Conformer {
+        positions: vec![Point3::default()],
+        original_atom_count: 1,
+        hydrogen_parents: Vec::new(),
+    };
+    let approximations: Vec<_> = (0..101)
+        .map(|index| format!("Metal {index} uses a generic term"))
+        .collect();
+    let response = wire::Response {
+        version: reshiki_geometry::RDKIT_VERSION.into(),
+        result: Ok(reshiki_geometry::Response {
+            coordinates: vec![[0., 0., 0.]],
+            hydrogen_parents: Vec::new(),
+            original_count: 1,
+            initial_energy: 0.,
+            energy: 0.,
+            gradient: Some(vec![[0., 0., 0.]]),
+            converged: true,
+            field: reshiki_geometry::ForceField::UFF,
+            diagnostics: Vec::new(),
+            approximations: approximations.clone(),
+        }),
+    };
+    std::fs::write(
+        &response_path,
+        wire::encode(&response, wire::MAX_RESPONSE_BYTES).unwrap(),
+    )
+    .unwrap();
+    for operation in [
+        reshiki_geometry::Operation::Generate,
+        reshiki_geometry::Operation::Relax,
+        reshiki_geometry::Operation::Evaluate,
+    ] {
+        let result = match operation {
+            reshiki_geometry::Operation::Generate => {
+                client.generate(&prepared, ForceField::Uff).await
+            }
+            reshiki_geometry::Operation::Relax => {
+                client
+                    .relax(&prepared, &conformer, ForceField::Uff, &[], 1)
+                    .await
+            }
+            reshiki_geometry::Operation::Evaluate => {
+                client
+                    .evaluate(&prepared, &conformer, ForceField::Uff, &[])
+                    .await
+            }
+        }
+        .unwrap();
+        assert_eq!(result.approximations, approximations);
+        let captured: wire::Request = wire::decode(
+            &std::fs::read(&request_path).unwrap(),
+            wire::MAX_REQUEST_BYTES,
+        )
+        .unwrap();
+        assert!(captured.operation.relaxed);
+        assert_eq!(captured.operation.operation, operation);
+    }
+    let mut oversized = response;
+    oversized.result.as_mut().unwrap().approximations = vec!["x".repeat(8193)];
+    std::fs::write(
+        &response_path,
+        wire::encode(&oversized, wire::MAX_RESPONSE_BYTES).unwrap(),
+    )
+    .unwrap();
+    assert!(matches!(
+        client.generate(&prepared, ForceField::Uff).await,
+        Err(Error::Protocol(_))
+    ));
+}

@@ -37,6 +37,20 @@ pub struct Rings {
     pub approximate: bool,
 }
 
+/// Rotate to the smallest atom, then visit its smaller neighbour first
+/// (RDKit RingUtils::normalizeRing, #9208).
+pub fn normalize(ring: &mut [usize]) {
+    let Some(start) = ring.iter().enumerate().min_by_key(|(_, atom)| *atom) else {
+        return;
+    };
+    ring.rotate_left(start.0);
+    if let Some((_, tail)) = ring.split_first_mut()
+        && tail.last() < tail.first()
+    {
+        tail.reverse();
+    }
+}
+
 fn at<T>(items: &[T], index: usize) -> Result<&T, String> {
     items
         .get(index)

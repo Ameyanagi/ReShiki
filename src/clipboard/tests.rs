@@ -1,6 +1,317 @@
 use super::*;
 
 #[tokio::test]
+async fn copied_pictures_restore_the_visible_snapshot_on_desktop_and_browser() {
+    use crate::{
+        document::Point,
+        models3d::{ForceField, Model3d, Placed},
+    };
+    let mut source = Document::default();
+    let selected = source.add_atom("O", Point::default());
+    let unselected = source.add_atom("N", Point::new(240., 0.));
+    let mut model = Model3d::new(
+        &source,
+        vec![Placed {
+            id: selected,
+            xyz: [0.; 3],
+        }],
+        vec![],
+        ForceField::Mmff94s,
+    );
+    model.notes.push("Private import note".into());
+    source.models.push(model);
+    crate::models3d::require_version(&mut source);
+    source.recent_colors.push([1, 2, 3]);
+    let mut theme = crate::theme_files::bundled().unwrap().remove(0);
+    theme.author = "Private author".into();
+    theme.source = "Private source".into();
+    theme.license = "Private license".into();
+    source.custom_theme = Some(Box::new(theme));
+    for selection in [false, true] {
+        let snapshot = if selection {
+            editing::selection(&source, &[selected])
+        } else {
+            source.clone()
+        };
+        for browser in [false, true] {
+            for image_only in [false, true] {
+                let (_, representations) = prepare_copy_for(
+                    LocalEngine::in_process(),
+                    snapshot.clone(),
+                    image_only,
+                    browser,
+                )
+                .await
+                .unwrap();
+                let pictures: Vec<_> = representations
+                    .iter()
+                    .filter(|item| {
+                        matches!(
+                            item.kind.as_str(),
+                            "public.png" | "public.svg-image" | "com.adobe.pdf"
+                        )
+                    })
+                    .collect();
+                assert_eq!(pictures.len(), if browser { 2 } else { 3 });
+                for picture in pictures {
+                    let restored = payload::read(&picture.bytes().unwrap()).unwrap().unwrap();
+                    assert_eq!(restored.all_ids(), snapshot.all_ids(), "{}", picture.kind);
+                    assert_eq!(restored.atom(unselected).is_none(), selection);
+                    assert!(restored.recent_colors.is_empty());
+                    assert!(restored.models.iter().all(|model| model.notes.is_empty()));
+                    let theme = restored.custom_theme.unwrap();
+                    assert!(
+                        theme.author.is_empty()
+                            && theme.source.is_empty()
+                            && theme.license.is_empty()
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn png_paste_restores_the_drawing_unless_paste_picture_was_requested() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    let png = export::clipboard_png(&source).unwrap();
+    let envelope = payload::encode(&source).unwrap();
+    let png = payload::embed("png", png, &envelope).unwrap();
+    for image_only in [false, true] {
+        let restored = paste_packet_with_warnings(
+            LocalEngine::in_process(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![Representation::new("public.png", &png)],
+            },
+            image_only,
+        )
+        .await
+        .unwrap();
+        assert_eq!(restored.native, !image_only);
+        if image_only {
+            assert!(restored.document.atoms.is_empty());
+            assert!(restored.document.graphics[0].picture.is_some());
+            assert!(restored.warnings.is_empty());
+        } else {
+            assert_eq!(restored.document.all_ids(), source.all_ids());
+            assert_eq!(
+                restored.warnings,
+                [
+                    "Restored the editable drawing from the picture · Paste picture inserts the image instead"
+                ]
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_corrupt_png_payload_pastes_as_a_picture_with_a_warning() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    let png = export::clipboard_png(&source).unwrap();
+    // A damaged envelope, and iTXt fields the png crate itself rejects
+    // (compression flag 2), both still paste the picture.
+    let mut malformed = png[..33].to_vec();
+    let text = b"dev.reshiki.drawing\0\x02\0\0\0x";
+    malformed.extend_from_slice(&(text.len() as u32).to_be_bytes());
+    let mut chunk = b"iTXt".to_vec();
+    chunk.extend_from_slice(text);
+    let mut crc = flate2::Crc::new();
+    crc.update(&chunk);
+    malformed.extend_from_slice(&chunk);
+    malformed.extend_from_slice(&crc.sum().to_be_bytes());
+    malformed.extend_from_slice(&png[33..]);
+    for png in [
+        payload::embed("png", png.clone(), b"invalid").unwrap(),
+        malformed,
+    ] {
+        for image_only in [false, true] {
+            let restored = paste_packet_with_warnings(
+                LocalEngine::in_process(),
+                Packet {
+                    generation: Some("test".into()),
+                    representations: vec![Representation::new("public.png", &png)],
+                },
+                image_only,
+            )
+            .await
+            .unwrap();
+            assert!(!restored.native);
+            assert!(restored.document.atoms.is_empty());
+            assert!(restored.document.graphics[0].picture.is_some());
+            assert_eq!(restored.warnings.len(), usize::from(!image_only));
+            assert!(restored.warnings.iter().all(|warning| {
+                warning.starts_with("Pasted as a picture: its editable drawing could not be read (")
+            }));
+        }
+    }
+}
+
+#[tokio::test]
+async fn oversized_picture_payload_is_omitted_from_all_formats_with_one_notice() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    for browser in [false, true] {
+        for image_only in [false, true] {
+            let (outcome, representations) = prepare_copy_with_limit(
+                LocalEngine::in_process(),
+                source.clone(),
+                image_only,
+                browser,
+                0,
+            )
+            .await
+            .unwrap();
+            let notice = if image_only {
+                "Picture copied without the editable drawing (too large)"
+            } else {
+                OVERSIZED_DRAWING_NOTICE
+            };
+            assert_eq!(
+                outcome
+                    .notices
+                    .iter()
+                    .filter(|item| item.as_str() == notice)
+                    .count(),
+                1
+            );
+            let mut pictures = 0;
+            for picture in &representations {
+                if matches!(
+                    picture.kind.as_str(),
+                    "public.png" | "public.svg-image" | "com.adobe.pdf"
+                ) {
+                    assert!(payload::read(&picture.bytes().unwrap()).is_none());
+                    pictures += 1;
+                }
+            }
+            assert_eq!(pictures, if browser { 2 } else { 3 });
+            // Normal Copy keeps its drawing; Copy Image's own one keeps to
+            // the same limit as the drawing in its pictures.
+            let native = representations.iter().find(|item| item.kind == NATIVE);
+            assert_eq!(native.is_none(), image_only);
+            if let Some(native) = native {
+                assert_eq!(
+                    Document::from_json(&native.bytes().unwrap())
+                        .unwrap()
+                        .all_ids(),
+                    source.all_ids()
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn vector_only_paste_restores_the_drawing_and_paste_picture_refuses_it() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    let envelope = payload::encode(&source).unwrap();
+    for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
+        let bytes = clipboard_figure(&source, format, Some(&envelope))
+            .unwrap()
+            .bytes;
+        let item = Representation::new(kind, &bytes);
+        let restored = paste_packet_with_warnings(
+            LocalEngine::in_process(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![item.clone()],
+            },
+            false,
+        )
+        .await
+        .unwrap();
+        assert!(restored.native, "{format}");
+        assert_eq!(restored.document.all_ids(), source.all_ids());
+        assert_eq!(restored.warnings, [RESTORED_DRAWING_NOTICE]);
+        let error = import_representation(LocalEngine::in_process(), item.clone(), true)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error,
+            "Paste supports PNG, JPEG, TIFF and WebP pictures. Export this PDF or SVG to PNG first"
+        );
+        let error = paste_packet_with_warnings(
+            LocalEngine::in_process(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![item],
+            },
+            true,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error, "No picture on the clipboard");
+    }
+}
+
+/// Office hands back ReShiki's own SVG or PDF beside a PNG it re-rendered
+/// itself; the drawing in the vector picture wins over that plain PNG, and a
+/// vector picture without one still leaves the PNG to paste.
+#[tokio::test]
+async fn an_office_copy_back_restores_the_drawing_from_its_vector_picture() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    let envelope = payload::encode(&source).unwrap();
+    let office_png = export::clipboard_png(&source).unwrap();
+    for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
+        for drawing in [Some(envelope.as_slice()), None] {
+            let vector = clipboard_figure(&source, format, drawing).unwrap().bytes;
+            let pasted = paste_packet_with_warnings(
+                LocalEngine::in_process(),
+                Packet {
+                    generation: Some("test".into()),
+                    representations: vec![
+                        Representation::new("public.png", &office_png),
+                        Representation::new(kind, &vector),
+                    ],
+                },
+                false,
+            )
+            .await
+            .unwrap();
+            assert_eq!(pasted.native, drawing.is_some(), "{format}");
+            assert_eq!(pasted.document.atoms.len(), usize::from(drawing.is_some()));
+        }
+    }
+}
+
+#[tokio::test]
+async fn vector_paste_distinguishes_unreadable_drawings_from_plain_pictures() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
+        for drawing in [None, Some(b"invalid".as_slice())] {
+            let bytes = clipboard_figure(&source, format, drawing).unwrap().bytes;
+            let error = import_representation(
+                LocalEngine::in_process(),
+                Representation::new(kind, &bytes),
+                false,
+            )
+            .await
+            .unwrap_err();
+            if drawing.is_some() {
+                assert!(
+                    error.starts_with(&format!(
+                        "This {} carries a ReShiki drawing that could not be read: ",
+                        format.to_uppercase()
+                    )),
+                    "{error}"
+                );
+            } else {
+                assert_eq!(
+                    error,
+                    "Paste supports PNG, JPEG, TIFF and WebP pictures. Export this PDF or SVG to PNG first"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn fischer_copy_keeps_native_configuration_and_offers_external_picture() {
     let source = crate::fischer::document(crate::fischer::Compound::LAlanine, 42.).unwrap();
     let (outcome, representations) = prepare_copy(LocalEngine::in_process(), source.clone(), false)
@@ -932,12 +1243,13 @@ async fn only_reshiki_clipboards_keep_palette_references() -> anyhow::Result<()>
 }
 
 #[tokio::test]
-async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a_clipboard_write() {
+async fn copy_image_retains_the_drawing_and_raster_paste_keeps_the_picture() {
     let doc: Document = serde_json::from_str(include_str!(
         "../../tests/fixtures/ui-drawn-ethanol.reshiki"
     ))
     .unwrap();
-    let images = copy_images(&doc, true, false);
+    let envelope = payload::encode(&doc).unwrap();
+    let images = copy_images_with_drawing(&doc, true, false, Some(&envelope));
     #[cfg(windows)]
     {
         let svg = images
@@ -952,10 +1264,14 @@ async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a
         let text = std::str::from_utf8(&svg).unwrap();
         assert!(!text.contains("<text"), "Office needs outlined labels");
         assert!(text.contains("<path"));
+        assert_eq!(
+            payload::read(&svg).unwrap().unwrap().all_ids(),
+            doc.all_ids()
+        );
     }
     let native = images
         .iter()
-        .find(|(format, _)| *format == "native picture")
+        .find(|(format, _)| *format == "native drawing")
         .unwrap()
         .1
         .as_ref()
@@ -978,20 +1294,23 @@ async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a
     )
     .await
     .unwrap();
-    let raster = paste_packet(
+    let raster = paste_packet_with_warnings(
         LocalEngine::default(),
         Packet {
             generation: Some("test".into()),
             representations: vec![png],
         },
+        true,
     )
     .await
-    .unwrap();
-    assert!(restored.atoms.is_empty());
-    assert_eq!(restored.graphics.len(), 1);
-    assert_eq!(raster.graphics[0].picture, restored.graphics[0].picture);
-    assert!((raster.graphics[0].axis_x.x - restored.graphics[0].axis_x.x).abs() < 0.01);
-    assert!((raster.graphics[0].axis_y.y - restored.graphics[0].axis_y.y).abs() < 0.01);
+    .unwrap()
+    .document;
+    assert_eq!(restored.all_ids(), doc.all_ids());
+    assert_eq!(restored.atoms, doc.atoms);
+    assert!(restored.graphics.is_empty());
+    assert!(raster.atoms.is_empty());
+    assert_eq!(raster.graphics.len(), 1);
+    assert!(raster.graphics[0].picture.is_some());
     let invalid = Representation::new("public.png", b"not a PNG");
     assert!(
         paste_packet(
@@ -1352,7 +1671,7 @@ async fn lazy_paste_reads_only_until_success_and_explicit_picture_paste_ignores_
                     representations: item.into_iter().collect(),
                 }))
             },
-            |item| paste_representation(Default::default(), item),
+            |item| paste_representation(Default::default(), item, picture_only),
         )
         .await
         .unwrap()
@@ -1399,7 +1718,7 @@ async fn failed_office_drawing_retries_standalone_native_without_repeating_offic
                 }],
             }))
         },
-        |item| paste_representation(Default::default(), item),
+        |item| paste_representation(Default::default(), item, false),
     )
     .await
     .unwrap()
@@ -1435,7 +1754,7 @@ async fn failed_transport_alias_is_consumed_once_before_the_next_alias() {
                 representations: item.into_iter().collect(),
             }))
         },
-        |item| paste_representation(Default::default(), item),
+        |item| paste_representation(Default::default(), item, false),
     )
     .await
     .unwrap()
@@ -1504,7 +1823,7 @@ async fn later_clipboard_owner_failure_keeps_the_newer_drawing_diagnostic() {
                 Err("The clipboard owner is unavailable".into())
             })
         },
-        |item| paste_representation(Default::default(), item),
+        |item| paste_representation(Default::default(), item, false),
     )
     .await
     .unwrap_err();
@@ -1615,4 +1934,25 @@ async fn native_generation_change_error_overrides_an_earlier_update_diagnostic()
     .unwrap_err();
     assert_eq!(result, priority::CLIPBOARD_CHANGED);
     assert_eq!(calls, 2);
+}
+
+#[test]
+fn an_unreadable_embedded_drawing_outranks_its_text_alias_failure() {
+    let mut failure = None;
+    remember_failure(
+        &mut failure,
+        "public.utf8-plain-text",
+        "Unsupported text".into(),
+    );
+    remember_failure(
+        &mut failure,
+        "public.svg-image",
+        "This SVG carries a ReShiki drawing that could not be read: bad".into(),
+    );
+    assert!(
+        failure
+            .unwrap()
+            .1
+            .starts_with("This SVG carries a ReShiki drawing")
+    );
 }

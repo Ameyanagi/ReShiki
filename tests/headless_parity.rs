@@ -339,6 +339,7 @@ fn native_figures_match_the_library() {
                 doc.clone(),
                 format,
                 false,
+                false,
                 budget,
             ))
             .expect("a publication figure");
@@ -377,6 +378,7 @@ fn figure_warnings_come_in_ops_order() {
             &LocalEngine::default(),
             doc,
             "png",
+            false,
             false,
             Budgets::default().export_png_pixels,
         ))

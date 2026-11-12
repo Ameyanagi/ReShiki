@@ -166,6 +166,7 @@ fn optimized() -> std::sync::Arc<reshiki::geometry::Optimized> {
         iterations: 20,
         force_field: ForceField::Mmff94,
         diagnostics: vec![],
+        approximations: vec![],
     })
 }
 
