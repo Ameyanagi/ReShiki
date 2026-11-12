@@ -266,7 +266,7 @@ fn improve_with_limit(
                 Some(&coordinates),
                 depict::Options {
                     work_limit,
-                    path_angle_expansion: crate::chemistry::document::refine(),
+                    path_angle_expansion_extra_trials: crate::chemistry::document::refine(),
                     preserve_spiro_rings: crate::chemistry::document::refine(),
                     ..Default::default()
                 },

@@ -454,8 +454,8 @@ fn coordinates(state: &State, properties: &[Vec<(Vec<u8>, Vec<u8>)>]) -> Result<
             // Native public Compute2DCoords defaults. Cleanup explicitly opts in
             // to templates, while original import calls supply no such option.
             use_ring_templates: false,
-            // RDKit 2026.09.1's path angle expansion (#735) is a refinement.
-            path_angle_expansion: molecular::refine(),
+            // RDKit 2026.09.1 runs path angle expansion; the #632 extra trial is ReShiki's.
+            path_angle_expansion_extra_trials: molecular::refine(),
             preserve_spiro_rings: molecular::refine(),
             ..depict::Options::default()
         },
