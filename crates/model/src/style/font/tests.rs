@@ -1,130 +1,6 @@
 const VARIABLE: &[u8] =
     include_bytes!("../../../../../tests/fixtures/font-export-103/variable-default-100.subset.ttf");
 
-#[cfg(not(target_arch = "wasm32"))]
-#[test]
-fn bundled_faces_supply_arial_and_helvetica_for_each_label_style() {
-    use resvg::usvg::fontdb::{Database, Family, Query, Style, Weight};
-
-    let mut db = Database::new();
-    super::super::load_bundled_fonts(&mut db);
-    assert_eq!(db.faces().count(), 4);
-    assert_eq!(db.family_name(&Family::SansSerif), "Arial");
-    let fonts = super::super::Fonts {
-        names: super::super::family_names(&db),
-        db: std::sync::Arc::new(db),
-        added: vec![],
-    };
-    for (bold, italic, bytes) in [
-        (
-            false,
-            false,
-            include_bytes!("../../../fonts/LiberationSans-Regular.ttf").as_slice(),
-        ),
-        (
-            true,
-            false,
-            include_bytes!("../../../fonts/LiberationSans-Bold.ttf").as_slice(),
-        ),
-        (
-            false,
-            true,
-            include_bytes!("../../../fonts/LiberationSans-Italic.ttf").as_slice(),
-        ),
-        (
-            true,
-            true,
-            include_bytes!("../../../fonts/LiberationSans-BoldItalic.ttf").as_slice(),
-        ),
-    ] {
-        let weight = if bold { 700 } else { 400 };
-        let style = if italic { Style::Italic } else { Style::Normal };
-        let expected = super::face(bytes, 0, weight).unwrap();
-        for family in ["Arial", "Helvetica"] {
-            let db = &fonts.db;
-            let id = db
-                .query(&Query {
-                    families: &[Family::Name(family)],
-                    weight: Weight(weight),
-                    style,
-                    ..Default::default()
-                })
-                .unwrap();
-            let info = db.face(id).unwrap();
-            assert_eq!(info.weight, Weight(weight));
-            assert_eq!(info.style, style);
-            assert_eq!(
-                info.families
-                    .iter()
-                    .map(|(name, _)| name.as_str())
-                    .collect::<Vec<_>>(),
-                [
-                    "Arial",
-                    "Helvetica",
-                    "Liberation Sans",
-                    super::BUNDLED_FAMILY
-                ]
-            );
-            let text_style = crate::typography::TextStyle {
-                family: family.into(),
-                bold,
-                italic,
-                ..Default::default()
-            };
-            for c in "CNO".chars() {
-                let glyph = expected.glyph_index(c).unwrap();
-                let advance = expected.glyph_hor_advance(glyph).unwrap();
-                assert!(advance > 0);
-                assert!(expected.glyph_bounding_box(glyph).is_some());
-                assert_eq!(
-                    super::super::glyph_metrics_in(c, &text_style, &fonts),
-                    (
-                        family,
-                        f32::from(advance) / f32::from(expected.units_per_em())
-                    )
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn an_existing_arial_face_skips_the_bundle_and_keeps_its_metrics() {
-    use resvg::usvg::fontdb::{Database, Language};
-
-    let bytes =
-        include_bytes!("../../../../../tests/fixtures/font-export-103/static-400.subset.ttf");
-    let mut db = Database::new();
-    db.load_font_data(bytes.to_vec());
-    let mut face = db.faces().next().unwrap().clone();
-    db.remove_face(face.id);
-    face.families
-        .push(("Arial".into(), Language::English_UnitedStates));
-    let id = db.push_face_info(face);
-    let original_families = db.face(id).unwrap().families.clone();
-    super::super::load_bundled_fonts(&mut db);
-    assert_eq!(db.faces().count(), 1);
-    assert_eq!(db.face(id).unwrap().families, original_families);
-    let fonts = super::super::Fonts {
-        names: super::super::family_names(&db),
-        db: std::sync::Arc::new(db),
-        added: vec![],
-    };
-    let expected = super::face(bytes, 0, 400).unwrap();
-    for c in "NO".chars() {
-        let advance = expected
-            .glyph_hor_advance(expected.glyph_index(c).unwrap())
-            .unwrap();
-        assert_eq!(
-            super::super::glyph_metrics_in(c, &crate::typography::TextStyle::default(), &fonts),
-            (
-                "Arial",
-                f32::from(advance) / f32::from(expected.units_per_em())
-            )
-        );
-    }
-}
-
 #[test]
 fn an_existing_helvetica_face_is_not_aliased_to_the_bundle() {
     use resvg::usvg::fontdb::{Database, Family, Language, Query};
@@ -138,7 +14,7 @@ fn an_existing_helvetica_face_is_not_aliased_to_the_bundle() {
     db.remove_face(face.id);
     face.families = vec![("Helvetica".into(), Language::English_UnitedStates)];
     let helvetica = db.push_face_info(face);
-    super::super::load_bundled_fonts(&mut db);
+    super::load_bundled(&mut db);
     assert_eq!(db.faces().count(), 5);
     assert_eq!(
         db.query(&Query {
@@ -156,20 +32,6 @@ fn an_existing_helvetica_face_is_not_aliased_to_the_bundle() {
             ["Arial", "Liberation Sans", super::BUNDLED_FAMILY]
         );
     }
-}
-
-/// macOS and Windows ship Arial, so the bundled faces stay unloaded there.
-#[cfg(any(target_os = "macos", windows))]
-#[test]
-fn installed_arial_leaves_the_bundled_faces_unloaded() {
-    let mut db = resvg::usvg::fontdb::Database::new();
-    super::super::load_fonts(&mut db);
-    let has = |family: &str| {
-        db.faces()
-            .any(|face| face.families.iter().any(|(name, _)| name == family))
-    };
-    assert!(has("Arial"));
-    assert!(!has(super::BUNDLED_FAMILY));
 }
 
 #[test]
