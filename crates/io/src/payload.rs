@@ -13,7 +13,10 @@ const VERSION: u8 = 1;
 const HEADER_LEN: usize = 4 + 1 + 4 + 32;
 const PNG: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 const KEYWORD: &[u8] = b"dev.reshiki.drawing";
-const NAMESPACE: &str = "https://reshiki.dev/ns/drawing/1";
+/// SVG metadata and the PDF's XMP packet both hold the envelope in exactly
+/// this element, so the reader can find it without parsing either format.
+const OPEN: &str = r#"<reshiki:drawing xmlns:reshiki="https://reshiki.dev/ns/drawing/1/">"#;
+const CLOSE: &str = "</reshiki:drawing>";
 
 /// Preserve the visible figure while removing editor history and provenance.
 pub fn visible(doc: &Document) -> Document {
@@ -126,9 +129,7 @@ pub fn embed(format: &str, mut bytes: Vec<u8>, envelope: &[u8]) -> Result<Vec<u8
             let end = start
                 + find(bytes.get(start..).unwrap_or_default(), b">").ok_or("Invalid SVG")?
                 + 1;
-            let metadata = format!(
-                r#"<metadata><reshiki:drawing xmlns:reshiki="{NAMESPACE}">{text}</reshiki:drawing></metadata>"#
-            );
+            let metadata = format!("<metadata>{OPEN}{text}{CLOSE}</metadata>");
             bytes.splice(end..end, metadata.into_bytes());
         }
         _ => return Err("Embedded drawings require PNG, SVG or PDF output".into()),
@@ -140,7 +141,7 @@ pub fn embed(format: &str, mut bytes: Vec<u8>, envelope: &[u8]) -> Result<Vec<u8
 /// [`read`] finds the drawing without parsing the PDF.
 pub fn xmp(envelope: &[u8]) -> String {
     format!(
-        r#"<?xpacket begin="{}" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:reshiki="{NAMESPACE}/"><reshiki:drawing>{}</reshiki:drawing></rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="r"?>"#,
+        r#"<?xpacket begin="{}" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="">{OPEN}{}{CLOSE}</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="r"?>"#,
         '\u{feff}',
         STANDARD.encode(envelope),
     )
@@ -159,13 +160,12 @@ pub fn read(bytes: &[u8]) -> Option<Result<Document, String>> {
     {
         return None;
     }
-    // The first element, in SVG metadata or a PDF's XMP packet.
-    let start = find(bytes, b"<reshiki:drawing")?;
-    let rest = bytes.get(start..)?;
-    let text = find(rest, b">").and_then(|open| {
-        let text = rest.get(open + 1..)?;
-        text.get(..find(text, b"</reshiki:drawing>")?)
-    });
+    // The element in SVG metadata or a PDF's XMP packet; the marker is long
+    // enough that drawing text or font data never imitates it.
+    let start = find(bytes, OPEN.as_bytes())? + OPEN.len();
+    let text = bytes
+        .get(start..)
+        .and_then(|rest| rest.get(..find(rest, CLOSE.as_bytes())?));
     Some(match text {
         Some(text) => base64(
             &text

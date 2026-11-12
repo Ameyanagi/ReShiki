@@ -727,6 +727,10 @@ fn single_pdf_preserves_the_old_physical_size_and_scales_the_xobject() {
             1
         );
         let new_box = pdf_media_box(bytes);
+        assert!(
+            String::from_utf8_lossy(bytes)
+                .contains("/Group <<\n    /Type /Group\n    /S /Transparency")
+        );
         assert_eq!(new_box.len(), 4);
         for (old, new) in old_box.iter().zip(&new_box) {
             assert!((old - new).abs() < 0.01, "old {old}, new {new}");
@@ -754,7 +758,6 @@ fn single_pdf_preserves_the_old_physical_size_and_scales_the_xobject() {
 
 #[test]
 fn editable_pdf_has_catalog_xmp_without_compression_and_valid_cross_references() {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
     use std::io::Write;
 
     let doc = vector_payload_document();
@@ -778,13 +781,7 @@ fn editable_pdf_has_catalog_xmp_without_compression_and_valid_cross_references()
     assert!(dictionary.contains("/Subtype /XML"));
     assert!(!dictionary.contains("/Filter"));
     let packet = stream.split_once("\nendstream").unwrap().0;
-    assert_eq!(
-        packet,
-        format!(
-            "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?><x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description rdf:about=\"\" xmlns:reshiki=\"https://reshiki.dev/ns/drawing/1/\"><reshiki:drawing>{}</reshiki:drawing></rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end=\"r\"?>",
-            STANDARD.encode(envelope),
-        )
-    );
+    assert_eq!(packet, crate::payload::xmp(&envelope));
     roxmltree::Document::parse(packet).unwrap();
     assert_eq!(
         crate::payload::read(&bytes).unwrap().unwrap(),

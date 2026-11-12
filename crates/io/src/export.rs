@@ -403,6 +403,13 @@ fn single_pdf(tree: &resvg::usvg::Tree, drawing: Option<&[u8]>) -> Result<Vec<u8
     page.parent(pages)
         .media_box(Rect::new(0., 0., width, height))
         .contents(content_id);
+    // Blend translucent ink in RGB, as svg2pdf's own pages do.
+    page.group()
+        .transparency()
+        .isolated(true)
+        .knockout(false)
+        .color_space()
+        .device_rgb();
     page.resources().x_objects().pair(name, root);
     page.finish();
     let mut content = Content::new();

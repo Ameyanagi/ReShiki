@@ -15,9 +15,10 @@ Pictures use the canvas colors with a transparent background. Switch the canvas 
 1. ReShiki drawing data.
 2. ChemDraw CDX, then CDXML.
 3. MOL, then SMILES offered as chemical formats.
-4. Plain text that imports as chemistry: MOL, SMILES, reaction SMILES, InChI, RXN, CDXML or ReShiki clipboard JSON.
-5. PNG, TIFF, JPEG, then WebP pictures. A PNG that carries a ReShiki drawing pastes as that editable drawing.
-6. PDF and SVG carrying a ReShiki drawing restore that drawing; other plain text, PDF or SVG use the usual error messages if nothing can be pasted.
+4. A PDF, then an SVG, that carries a ReShiki drawing. Office hands back ReShiki's own SVG or PDF but a PNG it drew itself, so these come before pictures.
+5. Plain text that imports as chemistry: MOL, SMILES, reaction SMILES, InChI, RXN, CDXML or ReShiki clipboard JSON.
+6. PNG, TIFF, JPEG, then WebP pictures. A PNG that carries a ReShiki drawing pastes as that editable drawing.
+7. Other plain text, PDF or SVG use the usual error messages if nothing can be pasted.
 
 On Windows, drawings embedded in Office objects are tried first. If a format fails, Paste tries the next one. PDF and SVG pictures without a ReShiki drawing need conversion to PNG. If every available format fails, Paste explains the problem. For a drawing from a newer version, the message asks you to update ReShiki. **Import → Paste picture** prefers pictures even when editable formats are present, and always inserts a picture, even from a PNG that carries a drawing.
 

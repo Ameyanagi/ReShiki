@@ -785,7 +785,9 @@ where
 fn remember_failure(failure: &mut Option<(usize, String)>, kind: &str, error: String) {
     let rank = if error.contains("newer version of ReShiki") {
         0
-    } else if matches!(kind, NATIVE | "dev.moruno.drawing") {
+    } else if matches!(kind, NATIVE | "dev.moruno.drawing")
+        || error.contains("carries a ReShiki drawing")
+    {
         1
     } else if kind.contains("cdx") || kind == "application/x-chemdraw" {
         2

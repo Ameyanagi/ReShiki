@@ -248,6 +248,37 @@ async fn vector_only_paste_restores_the_drawing_and_paste_picture_refuses_it() {
     }
 }
 
+/// Office hands back ReShiki's own SVG or PDF beside a PNG it re-rendered
+/// itself; the drawing in the vector picture wins over that plain PNG, and a
+/// vector picture without one still leaves the PNG to paste.
+#[tokio::test]
+async fn an_office_copy_back_restores_the_drawing_from_its_vector_picture() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    let envelope = payload::encode(&source).unwrap();
+    let office_png = export::clipboard_png(&source).unwrap();
+    for (format, kind) in [("pdf", "com.adobe.pdf"), ("svg", "public.svg-image")] {
+        for drawing in [Some(envelope.as_slice()), None] {
+            let vector = clipboard_figure(&source, format, drawing).unwrap().bytes;
+            let pasted = paste_packet_with_warnings(
+                LocalEngine::in_process(),
+                Packet {
+                    generation: Some("test".into()),
+                    representations: vec![
+                        Representation::new("public.png", &office_png),
+                        Representation::new(kind, &vector),
+                    ],
+                },
+                false,
+            )
+            .await
+            .unwrap();
+            assert_eq!(pasted.native, drawing.is_some(), "{format}");
+            assert_eq!(pasted.document.atoms.len(), usize::from(drawing.is_some()));
+        }
+    }
+}
+
 #[tokio::test]
 async fn vector_paste_distinguishes_unreadable_drawings_from_plain_pictures() {
     let mut source = Document::default();
@@ -1903,4 +1934,25 @@ async fn native_generation_change_error_overrides_an_earlier_update_diagnostic()
     .unwrap_err();
     assert_eq!(result, priority::CLIPBOARD_CHANGED);
     assert_eq!(calls, 2);
+}
+
+#[test]
+fn an_unreadable_embedded_drawing_outranks_its_text_alias_failure() {
+    let mut failure = None;
+    remember_failure(
+        &mut failure,
+        "public.utf8-plain-text",
+        "Unsupported text".into(),
+    );
+    remember_failure(
+        &mut failure,
+        "public.svg-image",
+        "This SVG carries a ReShiki drawing that could not be read: bad".into(),
+    );
+    assert!(
+        failure
+            .unwrap()
+            .1
+            .starts_with("This SVG carries a ReShiki drawing")
+    );
 }

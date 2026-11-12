@@ -305,8 +305,8 @@ fn svg_metadata_has_the_exact_namespace_and_preserves_rendered_pixels() {
         let bytes = embed(format, source.as_bytes().to_vec(), &envelope).unwrap();
         let svg = std::str::from_utf8(&bytes).unwrap();
         let metadata = format!(
-            "<metadata><reshiki:drawing xmlns:reshiki=\"https://reshiki.dev/ns/drawing/1\">{}</reshiki:drawing></metadata>",
-            STANDARD.encode(&envelope),
+            "<metadata>{OPEN}{}{CLOSE}</metadata>",
+            STANDARD.encode(&envelope)
         );
         let root_end = source.find('>').unwrap() + 1;
         assert_eq!(
@@ -320,7 +320,7 @@ fn svg_metadata_has_the_exact_namespace_and_preserves_rendered_pixels() {
         assert_eq!(payload.tag_name().name(), "drawing");
         assert_eq!(
             payload.tag_name().namespace(),
-            Some("https://reshiki.dev/ns/drawing/1")
+            Some("https://reshiki.dev/ns/drawing/1/")
         );
         assert_eq!(render(source), render(svg));
         assert_eq!(read(&bytes).unwrap().unwrap(), doc);
@@ -337,9 +337,7 @@ fn svg_and_pdf_readers_accept_whitespace_attributes_and_only_the_first_payload()
         .map(|chunk| std::str::from_utf8(chunk).unwrap())
         .collect::<Vec<_>>()
         .join("\n \t\r");
-    let element = format!(
-        "<reshiki:drawing xmlns:reshiki=\"https://reshiki.dev/ns/drawing/1\">\n{wrapped}\n</reshiki:drawing>"
-    );
+    let element = format!("{OPEN}\n{wrapped}\n{CLOSE}");
     for prefix in [
         "<svg>",
         "\u{feff} \r\n\t<svg>",
@@ -347,10 +345,13 @@ fn svg_and_pdf_readers_accept_whitespace_attributes_and_only_the_first_payload()
         "<!-- comment --><?processing test?><svg>",
         "%PDF-1.7\nstream\n",
     ] {
-        let bytes = format!("{prefix}{element}<reshiki:drawing>broken</reshiki:drawing>");
+        // A bare element, as page text or a font name might hold, is skipped.
+        let bytes = format!(
+            "{prefix}<reshiki:drawing>broken</reshiki:drawing>{element}{OPEN}broken{CLOSE}"
+        );
         assert_eq!(read(bytes.as_bytes()).unwrap().unwrap(), doc, "{prefix:?}");
     }
-    let first_bad = format!("<svg><reshiki:drawing>broken</reshiki:drawing>{element}");
+    let first_bad = format!("<svg>{OPEN}broken{CLOSE}{element}");
     assert!(read(first_bad.as_bytes()).unwrap().is_err());
 }
 
@@ -366,20 +367,16 @@ fn svg_and_pdf_without_payload_are_absent_and_damaged_payloads_are_errors() {
         assert!(read(bytes).is_none(), "{bytes:?}");
     }
     for body in [
-        "<reshiki:drawing",
-        "<reshiki:drawing>",
-        "<reshiki:drawing>!</reshiki:drawing>",
-        "<reshiki:drawing></reshiki:drawing>",
-        "<reshiki:drawing>YnJva2Vu</reshiki:drawing>",
+        OPEN.to_owned(),
+        format!("{OPEN}!{CLOSE}"),
+        format!("{OPEN}{CLOSE}"),
+        format!("{OPEN}YnJva2Vu{CLOSE}"),
     ] {
         for prefix in ["<svg>", "%PDF-1.7\n"] {
             assert!(read(format!("{prefix}{body}").as_bytes()).unwrap().is_err());
         }
     }
-    let bytes = format!(
-        "{}<svg><reshiki:drawing>!</reshiki:drawing>",
-        "x".repeat(1024)
-    );
+    let bytes = format!("{}<svg>{OPEN}!{CLOSE}", "x".repeat(1024));
     assert!(
         read(bytes.as_bytes()).is_none(),
         "SVG sniff is bounded to 1 KiB"
