@@ -212,6 +212,32 @@ fn custom_colors_labels_appendages_and_tints_use_the_visible_paper_once() {
 }
 
 #[test]
+fn materialized_stereo_group_labels_fade_like_stereo_descriptors() {
+    for mode in CanvasTheme::ALL {
+        let mut doc = chain();
+        doc.canvas_theme = mode;
+        let rear = doc.atoms[0].id;
+        let base_color = Color::Custom([20, 80, 140]);
+        let atom = doc.atom_mut(rear).unwrap();
+        atom.display.stereo.style.color = base_color;
+        atom.display.stereo_group.style.color = base_color;
+        let ids = doc.all_ids();
+        depth::enable(&mut doc, &ids, 0.6).unwrap();
+        let paint = Paint::new(&doc);
+        let expected = paint.color(base_color, paint.amount(rear));
+        assert_ne!(expected, base_color);
+        let baked = paint.materialize(&doc).into_owned();
+        let atom = baked.atom(rear).unwrap();
+        assert_eq!(atom.display.stereo.style.color, expected, "{mode}");
+        assert_eq!(atom.display.stereo_group.style.color, expected, "{mode}");
+        assert_eq!(
+            doc.atom(rear).unwrap().display.stereo_group.style.color,
+            base_color
+        );
+    }
+}
+
+#[test]
 fn ring_fill_highlight_and_aromatic_curve_remain_attached_and_share_depth_paint() {
     let mut doc = Document::default();
     let ids = reshiki::editing::ring(&mut doc, Point::default(), 6, true, 0.);

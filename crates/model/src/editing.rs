@@ -807,6 +807,7 @@ fn map_positions(
             for offset in [
                 a.display.number.as_mut().and_then(|n| n.offset.as_mut()),
                 a.display.stereo.offset.as_mut(),
+                a.display.stereo_group.offset.as_mut(),
                 a.display.mapping.offset.as_mut(),
             ]
             .into_iter()

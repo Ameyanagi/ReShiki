@@ -49,6 +49,8 @@ pub struct NativeAtomDisplay {
     pub carbons: Carbons,
     pub hydrogens: bool,
     pub stereo: NativeStereo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stereo_group: Option<NativeStereo>,
     pub hydrogen_position: HydrogenPosition,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number: Option<NativeNumber>,
@@ -249,6 +251,10 @@ where
             carbons: carbons(&attrs)?,
             hydrogens: !yes(&attrs, "HideImplicitHydrogens")?,
             stereo: NativeStereo::new(yes(&attrs, "ShowAtomStereo")?),
+            stereo_group: attrs
+                .get("ShowAtomEnhancedStereo")
+                .map(|_| yes(&attrs, "ShowAtomEnhancedStereo").map(NativeStereo::new))
+                .transpose()?,
             hydrogen_position: HydrogenPosition::Auto,
             number: None,
         };

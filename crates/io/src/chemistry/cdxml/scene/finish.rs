@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    atom_labels::{AtomDisplay, Number, StereoDisplay},
+    atom_labels::{AtomDisplay, MappingDisplay, Number, StereoDisplay},
     bonds::dative_projects,
 };
 
@@ -33,7 +33,10 @@ fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
         label_attachment: Default::default(),
         stereo: indicator(value.stereo)?,
         mapping: Default::default(),
-        stereo_group: Default::default(),
+        stereo_group: MappingDisplay {
+            show: value.stereo_group.map(|group| group.show),
+            ..Default::default()
+        },
         number: value
             .number
             .map(|n| -> Result<Number> {

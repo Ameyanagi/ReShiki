@@ -394,14 +394,23 @@ fn mapping_only_palette_resolves_on_both_canvases_with_embedded_hues() {
 }
 
 #[test]
-fn applying_a_theme_resets_mapping_ink_without_changing_labels_or_chemistry() {
+fn applying_a_theme_resets_mapping_and_group_ink_without_changing_labels_or_chemistry() {
     for theme in ColorTheme::ALL {
         let (mut doc, id) = mapping_color_sample(Color::Custom([31, 78, 121]));
+        let atom = doc.atom_mut(id).unwrap();
+        atom.display.stereo_group = atom.display.mapping.clone();
         set_hues(&mut doc, Hues::default());
         let mut expected = doc.clone();
         expected.color_theme = theme;
         expected.custom_theme = None;
         expected.atom_mut(id).unwrap().display.mapping.style.color = Color::Ink;
+        expected
+            .atom_mut(id)
+            .unwrap()
+            .display
+            .stereo_group
+            .style
+            .color = Color::Ink;
         theme.apply(&mut doc);
         assert_eq!(doc, expected);
     }

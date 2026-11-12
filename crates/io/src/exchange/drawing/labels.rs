@@ -593,6 +593,7 @@ impl Writer<'_> {
         let doc = self.doc;
         let settings = &doc.atom_labels;
         let atom_stereo = crate::atom_labels::atom_stereo_texts(doc);
+        let enhanced_stereo = doc.atoms.iter().any(|a| a.stereo_group.is_some());
         for (k, v) in carbon_attributes(settings.carbons) {
             self.tree.set(0, k, v)?;
         }
@@ -603,7 +604,7 @@ impl Writer<'_> {
         ] {
             self.tree.set(0, k, yes(v))?;
         }
-        if doc.atoms.iter().any(|a| a.stereo_group.is_some()) {
+        if enhanced_stereo {
             self.tree
                 .set(0, "ShowAtomEnhancedStereo", yes(settings.stereo_groups))?;
         }
@@ -646,6 +647,10 @@ impl Writer<'_> {
             }
             let show = d.stereo.show.unwrap_or(settings.stereo);
             self.tree.set(n, "ShowAtomStereo", yes(show))?;
+            if enhanced_stereo {
+                let show = d.stereo_group.show.unwrap_or(settings.stereo_groups);
+                self.tree.set(n, "ShowAtomEnhancedStereo", yes(show))?;
+            }
             if show && let Some(text) = atom_stereo.get(&a.id) {
                 self.indicator(
                     n,
