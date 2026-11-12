@@ -776,6 +776,39 @@ async fn reaction_relative_cx_keeps_explicit_and_relative_groups_separate() -> a
     Ok(())
 }
 
+#[test]
+fn reaction_relative_cx_shares_one_group_when_sanitization_drops_an_explicit_group()
+-> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    // The tetrahedral tag on the alkene carbon is cleared with its &1 group,
+    // so the reactant's relative group is its first group.
+    let text = "C[C@](F)=CC[C@H](O)Cl>>C[C@H](O)Cl |&1:1,r|";
+    // The any-order bond is read only by the partial (fallback) reader.
+    let partial = "C~[C@](F)=CC[C@H](O)Cl>>C[C@H](O)Cl |&1:1,r|";
+    for imported in [
+        reaction::read_smiles(text)?,
+        reaction::read_smiles_partial(text)?,
+        reaction::read_smiles_partial(partial)?,
+    ] {
+        let groups: Vec<_> = imported
+            .reactants
+            .iter()
+            .chain(&imported.products)
+            .map(|part| {
+                part.prepared
+                    .state
+                    .metadata
+                    .groups
+                    .iter()
+                    .map(|group| (group.kind, group.read_id))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert_eq!(groups, [[(2, 1)], [(2, 1)]]);
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn reaction_relative_cx_keeps_unselected_stereo_absolute() -> anyhow::Result<()> {
     use crate::chemistry::reaction;

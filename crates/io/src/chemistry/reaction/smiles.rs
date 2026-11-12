@@ -139,27 +139,15 @@ struct Part {
     queries: Vec<bool>,
     positions: Vec<usize>,
 }
-struct Finished {
-    imported: molecule::Imported,
-    relative_group: Option<usize>,
-}
 
 // File group numbers are reaction-global. Reserve them before assigning the
 // relative flag or an explicit group without a number, even when their centres
 // belong to different participants.
-fn stereo_groups(parts: &mut [&mut Finished]) -> Result<()> {
+fn stereo_groups(parts: &mut [&mut molecule::Imported]) -> Result<()> {
     let mut taken = HashSet::new();
     let mut missing = HashSet::new();
     for part in parts.iter() {
-        for (index, group) in part
-            .imported
-            .prepared
-            .state
-            .metadata
-            .groups
-            .iter()
-            .enumerate()
-        {
+        for (index, group) in part.prepared.state.metadata.groups.iter().enumerate() {
             if group.kind == 0 || part.relative_group == Some(index) {
                 continue;
             }
@@ -189,15 +177,7 @@ fn stereo_groups(parts: &mut [&mut Finished]) -> Result<()> {
         None
     };
     for part in parts.iter_mut() {
-        for (index, group) in part
-            .imported
-            .prepared
-            .state
-            .metadata
-            .groups
-            .iter_mut()
-            .enumerate()
-        {
+        for (index, group) in part.prepared.state.metadata.groups.iter_mut().enumerate() {
             let number = if part.relative_group == Some(index) {
                 relative
             } else if group.kind != 0 && group.read_id == 0 {
@@ -249,7 +229,7 @@ impl Part {
         bonds: &mut usize,
         fragments: &mut usize,
         partial: bool,
-    ) -> Result<Finished> {
+    ) -> Result<molecule::Imported> {
         let topology = cx::Topology {
             atoms: self.graph.atoms.len(),
             bonds: self
@@ -288,30 +268,14 @@ impl Part {
             bond_indices: self.indices,
             ring_bonds: self.rings,
         };
-        let explicit_groups = events
-            .iter()
-            .filter_map(|event| match event {
-                cx::Event::StereoGroup { kind, id, .. } => Some((*kind, *id)),
-                _ => None,
-            })
-            .collect::<HashSet<_>>()
-            .len();
         let imported = if partial {
             molecule::reaction_part_partial(parsed, events, &self.positions)
         } else {
             molecule::reaction_part(parsed, events)
         };
-        let imported = imported.map_err(|error| match error {
+        imported.map_err(|error| match error {
             molecule::Error::Sanitization(error) => ReadError::Sanitization(error),
             error => ReadError::Molecule(error),
-        })?;
-        // The chemistry reader retains explicit groups and appends at most one
-        // normalized relative group after them.
-        let relative_group = (imported.prepared.state.metadata.groups.len() > explicit_groups)
-            .then_some(explicit_groups);
-        Ok(Finished {
-            imported,
-            relative_group,
         })
     }
 
@@ -477,7 +441,7 @@ fn read_with(text: &str, partial: bool) -> Result<SmilesReaction> {
         return Err(ReadError::Limit);
     }
     let (mut atoms, mut bonds, mut fragments) = (0, 0, 0);
-    let mut finish = |parts: Vec<Part>| -> Result<Vec<Finished>> {
+    let mut finish = |parts: Vec<Part>| -> Result<Vec<molecule::Imported>> {
         parts
             .into_iter()
             .map(|p| p.finish(suffix, &mut atoms, &mut bonds, &mut fragments, partial))
@@ -494,8 +458,8 @@ fn read_with(text: &str, partial: bool) -> Result<SmilesReaction> {
             .collect::<Vec<_>>(),
     )?;
     Ok(SmilesReaction {
-        reactants: reactants.into_iter().map(|part| part.imported).collect(),
-        products: products.into_iter().map(|part| part.imported).collect(),
-        agents: agents.into_iter().map(|part| part.imported).collect(),
+        reactants,
+        products,
+        agents,
     })
 }

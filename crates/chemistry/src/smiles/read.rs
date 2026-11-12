@@ -55,6 +55,9 @@ pub struct Imported {
     /// Some fragment has a CX relative flag, normalized into stereo groups.
     #[serde(skip)]
     pub relative: bool,
+    /// Index of the stereo group the relative flag added, if any.
+    #[serde(skip)]
+    pub relative_group: Option<usize>,
     /// Reaction CX attachment markers affect wedge selection before drawing.
     #[serde(skip)]
     pub reaction_attachments: Vec<bool>,
@@ -561,6 +564,7 @@ fn reaction_part_with(
         dropped,
         dropped_cumulene_ez: false,
         relative: !annotations.relative.is_empty(),
+        relative_group: None,
         reaction_properties,
         reaction_attachments: annotations
             .properties
@@ -587,7 +591,10 @@ fn reaction_part_with(
         name: None,
     };
     if imported.relative {
-        relative_stereo(&mut imported.prepared.state, &annotations.relative)?;
+        let index = imported.prepared.state.metadata.groups.len();
+        if relative_stereo(&mut imported.prepared.state, &annotations.relative)? {
+            imported.relative_group = Some(index);
+        }
     }
     Ok(imported)
 }
@@ -623,6 +630,14 @@ fn partial_state(
             }
         }
     }
+    // A centre in an enhanced stereo group keeps its tag, so the import is
+    // refused instead of silently dropping it from the group.
+    let grouped: HashSet<usize> = state
+        .metadata
+        .groups
+        .iter()
+        .flat_map(|group| group.atoms.iter().copied())
+        .collect();
     for (id, (atom, meta)) in state
         .graph
         .atoms
@@ -630,6 +645,9 @@ fn partial_state(
         .zip(&mut state.metadata.atoms)
         .enumerate()
     {
+        if grouped.contains(&id) {
+            continue;
+        }
         let input = input_atom(atom, *at(positions, id)?)?;
         let class = match meta.chiral_tag {
             6 => Some(Configuration::SquarePlanar),
@@ -973,13 +991,17 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     }
     // After cumulene detection: an `r` group would make enantiomorphic ligands
     // rank equal and hide the dropped E/Z.
+    let mut relative_group = None;
     if !annotations.relative.is_empty() {
         let relative = kept_atoms
             .iter()
             .enumerate()
             .filter_map(|(atom, original)| annotations.relative.contains(original).then_some(atom))
             .collect();
-        relative_stereo(&mut prepared.state, &relative)?;
+        let index = prepared.state.metadata.groups.len();
+        if relative_stereo(&mut prepared.state, &relative)? {
+            relative_group = Some(index);
+        }
     }
     // Native RemoveHs preserves properties on retained atoms. Keep the raw
     // values for the later depiction stage, which converts rank properties
@@ -1002,6 +1024,7 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
         dropped,
         dropped_cumulene_ez,
         relative: !annotations.relative.is_empty(),
+        relative_group,
         prepared,
         conformers,
         name: (!name.is_empty()).then(|| name.to_owned()),
