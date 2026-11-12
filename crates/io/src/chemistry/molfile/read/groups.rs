@@ -15,6 +15,7 @@ const TYPES: &[&str] = &[
 #[derive(Default)]
 pub(super) struct Groups {
     entries: BTreeMap<i32, Group>,
+    order: Vec<i32>,
     data: String,
     data_group: i32,
     data_lines: usize,
@@ -28,6 +29,8 @@ struct Group {
     multiplier: Option<u32>,
     atoms: Vec<usize>,
     atom_set: HashSet<usize>,
+    attachments: Vec<(usize, String)>,
+    expanded: bool,
     bonds: Vec<usize>,
     bond_set: HashSet<usize>,
     field: Option<String>,
@@ -77,6 +80,8 @@ impl Group {
             multiplier: None,
             atoms: Vec::new(),
             atom_set: HashSet::new(),
+            attachments: Vec::new(),
+            expanded: false,
             bonds: Vec::new(),
             bond_set: HashSet::new(),
             field: None,
@@ -117,6 +122,35 @@ impl Group {
 }
 
 impl Groups {
+    pub(super) fn superatoms(&self, ids: &[u64]) -> Result<Vec<Superatom>> {
+        self.order
+            .iter()
+            .filter_map(|id| self.entries.get(id))
+            .filter(|group| group.kind == "SUP")
+            .map(|group| {
+                Ok(Superatom {
+                    label: group.label.clone().unwrap_or_default(),
+                    members: group
+                        .atoms
+                        .iter()
+                        .map(|&index| ids.get(index).copied().ok_or(ReadError::Limit))
+                        .collect::<Result<_>>()?,
+                    attachments: group
+                        .attachments
+                        .iter()
+                        .map(|(index, label)| {
+                            ids.get(*index)
+                                .copied()
+                                .map(|id| (id, label.clone()))
+                                .ok_or(ReadError::Limit)
+                        })
+                        .collect::<Result<_>>()?,
+                    expanded: group.expanded,
+                })
+            })
+            .collect()
+    }
+
     // This pass follows the file's explicit valence processing. Native field
     // storage narrows signed charges and H counts to eight bits; retain that
     // defined conversion, including negative and overflowing extension values.

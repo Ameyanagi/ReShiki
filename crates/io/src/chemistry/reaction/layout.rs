@@ -73,6 +73,7 @@ impl SmilesReaction {
                     },
                     annotations: molfile::FileAnnotations {
                         generic: Default::default(),
+                        superatoms: Vec::new(),
                         chemdraw_directions: Vec::new(),
                         singlets: vec![false; n],
                         attachments: Vec::new(),
