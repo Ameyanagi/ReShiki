@@ -9,7 +9,10 @@ use super::{
     policy::Access,
     result::{Blob, ToolResult},
     store::Documents,
-    wire::{DocHandle, ExportReceiptJson, Principal, handle_schema, nullable, warnings},
+    wire::{
+        DocHandle, ExportReceiptJson, Principal, SvgText, handle_schema, nullable, svg_text_schema,
+        warnings,
+    },
 };
 use crate::{
     document::Document,
@@ -25,7 +28,7 @@ use std::sync::Arc;
 pub const EXPORT: ToolSpec = ToolSpec {
     name: "export",
     title: Some("Export file"),
-    description: "Export a session document as a file, exactly as the app's Export command makes it: svg, pdf or png figures on the drawing's background, or cdxml, mol, smiles or inchi chemistry. pages: true exports every publication page as one PDF; it needs format pdf and a drawing with publication pages. Pass null or false otherwise. PNG resolution steps down from the style's dpi until the image fits export_png_pixels. The file comes back inline, at most max_output_bytes (info reports both budgets), with a receipt {format, byte_len, detail}. Read-only.",
+    description: "Export a session document as a file, exactly as the app's Export command makes it: svg, pdf or png figures on the drawing's background, or cdxml, mol, smiles or inchi chemistry. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. pages: true exports every publication page as one PDF; it needs format pdf and a drawing with publication pages. Pass null or false otherwise. PNG resolution steps down from the style's dpi until the image fits export_png_pixels. The file comes back inline, at most max_output_bytes (info reports both budgets), with a receipt {format, byte_len, detail}. Read-only.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: true,
@@ -42,8 +45,9 @@ fn schema() -> Value {
             "document": handle_schema(),
             "format": {"type": "string", "enum": EXPORT_FORMATS},
             "pages": nullable(json!({"type": "boolean"})),
+            "svg_text": svg_text_schema(),
         },
-        "required": ["document", "format", "pages"],
+        "required": ["document", "format", "pages", "svg_text"],
         "additionalProperties": false,
     })
 }
@@ -104,6 +108,8 @@ pub(crate) struct Export {
     format: Format,
     #[serde(deserialize_with = "Option::deserialize")]
     pages: Option<bool>,
+    #[serde(deserialize_with = "Option::deserialize")]
+    svg_text: Option<SvgText>,
 }
 
 /// Decodes the arguments. `pages: true` needs format pdf; `null` and
@@ -133,7 +139,7 @@ struct Exported {
 ///   (src/app/figure_export.rs) calls it with `FILE_PIXELS`. Its details
 ///   become the warnings in order: the PNG size first, then the notice that
 ///   the drawing was preserved for review. The receipt's detail is the PNG
-///   size.
+///   size. SVG uses `svg-office` for outlined text, or `svg` for live text.
 /// - cdxml, mol, smiles and inchi: an engine `export` request with the
 ///   format set, as `App::export_drawing` (src/app/files.rs) sends it. Its
 ///   warnings become the warnings. No output is [`ErrorKind::Failed`]; the
@@ -147,21 +153,35 @@ pub(crate) async fn export_bytes(
     doc: Document,
     format: Format,
     pages: bool,
+    svg_text: SvgText,
     budgets: &Budgets,
 ) -> Result<(Vec<u8>, ExportReceipt, Vec<Warning>), OpError> {
     let name = format.name();
     ctx.checkpoint()?;
     let made = if format.figure() {
-        crate::export::publication(engine, doc, name, pages, false, budgets.export_png_pixels)
-            .await
-            .map(|Publication { bytes, details }| {
-                let detail = if format == Format::Png {
-                    details.first().cloned()
-                } else {
-                    None
-                };
-                (bytes, detail, details)
-            })
+        let figure_format = if format == Format::Svg && svg_text == SvgText::Outline {
+            // SVG for Office is the publication export with text outlined as paths.
+            "svg-office"
+        } else {
+            name
+        };
+        crate::export::publication(
+            engine,
+            doc,
+            figure_format,
+            pages,
+            false,
+            budgets.export_png_pixels,
+        )
+        .await
+        .map(|Publication { bytes, details }| {
+            let detail = if format == Format::Png {
+                details.first().cloned()
+            } else {
+                None
+            };
+            (bytes, detail, details)
+        })
     } else {
         let mut request = Request::molecule("export", doc);
         request.format = Some(name.into());
@@ -209,6 +229,7 @@ pub(crate) async fn export(
         document,
         format,
         pages,
+        svg_text,
     } = export;
     let doc = ctx
         .blocking(move || {
@@ -216,8 +237,16 @@ pub(crate) async fn export(
             Ok(Arc::unwrap_or_clone(snapshot.doc))
         })
         .await?;
-    let (bytes, receipt, warnings) =
-        export_bytes(&ctx, &engine, doc, format, pages.unwrap_or(false), &budgets).await?;
+    let (bytes, receipt, warnings) = export_bytes(
+        &ctx,
+        &engine,
+        doc,
+        format,
+        pages.unwrap_or(false),
+        svg_text.unwrap_or_default(),
+        &budgets,
+    )
+    .await?;
     Ok(ToolResult::valid(
         Exported {
             receipt: ExportReceiptJson::from(&receipt),

@@ -452,7 +452,7 @@ Result: `{value, warnings, validation, versions}`. value is {analysis, analyzed_
 
 **Render preview**
 
-Render a session document, or the part ids select (null for the whole drawing), as a preview to look at. png is drawn on white, scaled up to 3x and down to fit within max_width × max_height pixels (null for 1600 × 1000; each side 1 to 8192, and at most render.max_pixels in all, as info reports). svg is the drawing with a transparent surround. This is the editor's preview, not a publication file; use export for files. Read-only.
+Render a session document, or the part ids select (null for the whole drawing), as a preview to look at. png is drawn on white, scaled up to 3x and down to fit within max_width × max_height pixels (null for 1600 × 1000; each side 1 to 8192, and at most render.max_pixels in all, as info reports). svg is the drawing with a transparent surround. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. This is the editor's preview, not a publication file; use export for files. Read-only.
 
 | Hint | Value |
 | --- | --- |
@@ -468,6 +468,7 @@ Render a session document, or the part ids select (null for the whole drawing), 
 | `ids` | `null or array<string>` | true | true | maxItems: `5000`; items.pattern: `"^[1-9][0-9]{0,19}$"` |
 | `max_height` | `null or integer` | true | true | minimum: `1`; maximum: `8192` |
 | `max_width` | `null or integer` | true | true | minimum: `1`; maximum: `8192` |
+| `svg_text` | `null or string` | true | true | enum: `["outline","live"]` |
 
 Result: `{value, warnings, validation, versions}`. value is {width, height, byte_len}. width and height are the PNG's pixel dimensions, or null for SVG; byte_len is the attached content's size in bytes, at most max_output_bytes. PNG is attached as an image with MIME type image/png; SVG as the file drawing.svg with MIME type image/svg+xml. warnings is empty.
 
@@ -475,7 +476,7 @@ Result: `{value, warnings, validation, versions}`. value is {width, height, byte
 
 **Export file**
 
-Export a session document as a file, exactly as the app's Export command makes it: svg, pdf or png figures on the drawing's background, or cdxml, mol, smiles or inchi chemistry. pages: true exports every publication page as one PDF; it needs format pdf and a drawing with publication pages. Pass null or false otherwise. PNG resolution steps down from the style's dpi until the image fits export_png_pixels. The file comes back inline, at most max_output_bytes (info reports both budgets), with a receipt {format, byte_len, detail}. Read-only.
+Export a session document as a file, exactly as the app's Export command makes it: svg, pdf or png figures on the drawing's background, or cdxml, mol, smiles or inchi chemistry. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. pages: true exports every publication page as one PDF; it needs format pdf and a drawing with publication pages. Pass null or false otherwise. PNG resolution steps down from the style's dpi until the image fits export_png_pixels. The file comes back inline, at most max_output_bytes (info reports both budgets), with a receipt {format, byte_len, detail}. Read-only.
 
 | Hint | Value |
 | --- | --- |
@@ -489,6 +490,7 @@ Export a session document as a file, exactly as the app's Export command makes i
 | `document` | `string` | true | false | pattern: `"^[A-Za-z0-9_-]{1,64}$"` |
 | `format` | `string` | true | false | enum: `["svg","pdf","png","cdxml","mol","smiles","inchi"]` |
 | `pages` | `null or boolean` | true | true |  |
+| `svg_text` | `null or string` | true | true | enum: `["outline","live"]` |
 
 Result: `{value, warnings, validation, versions}`. value is {receipt: {format, byte_len, detail}}. The attached file is drawing.{format} with the format's MIME type, at most max_output_bytes. detail is the PNG size, or null for other formats. For png the first warning is the PNG size. svg, pdf and png add a notice only when it applies: the drawing was preserved for review, or arrow attachment links were left out. Chemistry formats pass on the engine's warnings.
 
@@ -516,7 +518,7 @@ Result: `{value, warnings, validation, versions}`. value is import's {document, 
 
 **Save file**
 
-Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. Every file is at most max_output_bytes. Use an absolute path inside a folder the user granted for writing when the server started; info lists the granted folders and the extensions files save to. The parent folder must exist; folders are never created. format null follows the extension; any other format must be the extension's own. Existing files are kept unless overwrite is true, which replaces them. pages: true saves every publication page as one PDF; pass null or false otherwise. Returns a receipt {path, format, byte_len, replaced, detail}.
+Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. Every file is at most max_output_bytes. Use an absolute path inside a folder the user granted for writing when the server started; info lists the granted folders and the extensions files save to. The parent folder must exist; folders are never created. format null follows the extension; any other format must be the extension's own. Existing files are kept unless overwrite is true, which replaces them. pages: true saves every publication page as one PDF; pass null or false otherwise. Returns a receipt {path, format, byte_len, replaced, detail}.
 
 | Hint | Value |
 | --- | --- |
@@ -532,6 +534,7 @@ Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg
 | `overwrite` | `boolean` | true | false |  |
 | `pages` | `null or boolean` | true | true |  |
 | `path` | `string` | true | false | maxLength: `4096` |
+| `svg_text` | `null or string` | true | true | enum: `["outline","live"]` |
 
 Result: `{value, warnings, validation, versions}`. value is {receipt: {path, format, byte_len, replaced, detail}}. path names the saved file; replaced reports whether an existing file was replaced. byte_len is at most max_output_bytes; detail is the PNG size, or null for other formats. The producer's warnings come first, then the write's.
 

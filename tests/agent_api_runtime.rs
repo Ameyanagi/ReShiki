@@ -65,6 +65,7 @@ fn with_drawing() -> (McpSession, Value) {
         "max_width": side,
         "max_height": side,
         "ids": null,
+        "svg_text": null,
     });
     (session, arguments)
 }

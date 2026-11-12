@@ -406,7 +406,7 @@ async fn documented_result_keys_match_successful_operations() {
                     json!({
                         "document": created["document"],
                         "path": directory.path().join("output.rsk"),
-                        "format": null, "overwrite": false, "pages": null,
+                        "format": null, "overwrite": false, "pages": null, "svg_text": null,
                     })
                 }
             }

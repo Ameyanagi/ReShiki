@@ -127,6 +127,24 @@ impl App {
         self.error = false;
         let label = super::export_format_label(format);
         self.status = format!("Preparing {label} export…");
+        self.prepare_figure(format, pages, editable)
+            .then(|result| match result {
+                Ok(export) => export.start(),
+                Err(error) => Task::done(Message::FigureExported(Err(error))),
+            })
+    }
+
+    fn prepare_figure(
+        &self,
+        format: &'static str,
+        pages: bool,
+        editable: bool,
+    ) -> Task<Result<Prepared, String>> {
+        let render_format = if format == "svg" && !self.appearance.export_svg_live_text {
+            "svg-office"
+        } else {
+            format
+        };
         let doc = self.tab.doc.clone();
         let engine = self.engine.clone();
         let stem = self.export_stem();
@@ -135,7 +153,7 @@ impl App {
                 let p = reshiki::export::publication(
                     &engine,
                     doc,
-                    format,
+                    render_format,
                     pages,
                     editable,
                     reshiki::export::FILE_PIXELS,
@@ -151,10 +169,6 @@ impl App {
             },
             std::convert::identity,
         )
-        .then(|result| match result {
-            Ok(export) => export.start(),
-            Err(error) => Task::done(Message::FigureExported(Err(error))),
-        })
     }
 
     pub(super) fn figure_exported(&mut self, result: Result<Option<Saved>, String>) {

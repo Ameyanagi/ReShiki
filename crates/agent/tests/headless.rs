@@ -186,7 +186,7 @@ async fn a_session_goes_from_import_through_compose_and_apply_to_close() {
     let rendered = ok(
         &host,
         "render",
-        json!({"document": document, "format": "png", "max_width": 400, "max_height": 300, "ids": null}),
+        json!({"document": document, "format": "png", "max_width": 400, "max_height": 300, "ids": null, "svg_text": null}),
     )
     .await;
     let [image] = rendered.images.as_slice() else {
@@ -205,7 +205,7 @@ async fn a_session_goes_from_import_through_compose_and_apply_to_close() {
         let exported = ok(
             &host,
             "export",
-            json!({"document": document, "format": format, "pages": null}),
+            json!({"document": document, "format": format, "pages": null, "svg_text": null}),
         )
         .await;
         let [file] = exported.files.as_slice() else {
@@ -267,7 +267,7 @@ async fn errors_are_a_protocol_error_or_coded_tool_errors() {
         ("inspect", json!({"document": document, "ids": [1]})),
         (
             "render",
-            json!({"document": document, "format": "gif", "max_width": null, "max_height": null, "ids": null}),
+            json!({"document": document, "format": "gif", "max_width": null, "max_height": null, "ids": null, "svg_text": null}),
         ),
         (
             "apply",
@@ -301,7 +301,7 @@ async fn errors_are_a_protocol_error_or_coded_tool_errors() {
     for (tool, arguments) in [
         (
             "render",
-            json!({"document": document, "format": "png", "max_width": 8192, "max_height": 8192, "ids": null}),
+            json!({"document": document, "format": "png", "max_width": 8192, "max_height": 8192, "ids": null, "svg_text": null}),
         ),
         ("inspect", json!({"document": document, "ids": too_many})),
     ] {
@@ -350,7 +350,7 @@ async fn files_open_and_save_only_inside_granted_folders() {
 
     let imported = ok(&host, "import", json!({"format": "smiles", "text": "CCO"})).await;
     let document = handle(&imported);
-    let save = |overwrite: bool| json!({"document": document, "path": path("ethanol.mol"), "format": null, "overwrite": overwrite, "pages": null});
+    let save = |overwrite: bool| json!({"document": document, "path": path("ethanol.mol"), "format": null, "overwrite": overwrite, "pages": null, "svg_text": null});
     let saved = ok(&host, "file_save", save(false)).await;
     assert!(saved.files.is_empty());
     let bytes = std::fs::read(folder.join("ethanol.mol")).unwrap();
@@ -409,7 +409,7 @@ async fn files_open_and_save_only_inside_granted_folders() {
         ),
         (
             "file_save",
-            json!({"document": ungranted_document, "path": path("methane.svg"), "format": null, "overwrite": true, "pages": null}),
+            json!({"document": ungranted_document, "path": path("methane.svg"), "format": null, "overwrite": true, "pages": null, "svg_text": null}),
         ),
     ] {
         assert_eq!(

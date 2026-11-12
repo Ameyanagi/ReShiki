@@ -17,7 +17,7 @@ use super::{
     policy::Access,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, handle_schema, nullable, warnings},
+    wire::{DocHandle, Principal, SvgText, handle_schema, nullable, svg_text_schema, warnings},
 };
 use crate::{
     access::{
@@ -52,7 +52,7 @@ pub const FILE_OPEN: ToolSpec = ToolSpec {
 pub const FILE_SAVE: ToolSpec = ToolSpec {
     name: "file_save",
     title: Some("Save file"),
-    description: "Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. Every file is at most max_output_bytes. Use an absolute path inside a folder the user granted for writing when the server started; info lists the granted folders and the extensions files save to. The parent folder must exist; folders are never created. format null follows the extension; any other format must be the extension's own. Existing files are kept unless overwrite is true, which replaces them. pages: true saves every publication page as one PDF; pass null or false otherwise. Returns a receipt {path, format, byte_len, replaced, detail}.",
+    description: "Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. svg_text null or outline (default) turns SVG text into paths for the same appearance in every viewer; live keeps text elements; other formats ignore it. Every file is at most max_output_bytes. Use an absolute path inside a folder the user granted for writing when the server started; info lists the granted folders and the extensions files save to. The parent folder must exist; folders are never created. format null follows the extension; any other format must be the extension's own. Existing files are kept unless overwrite is true, which replaces them. pages: true saves every publication page as one PDF; pass null or false otherwise. Returns a receipt {path, format, byte_len, replaced, detail}.",
     input_schema: save_schema,
     hints: Some(Hints {
         read_only: false,
@@ -92,8 +92,9 @@ fn save_schema() -> Value {
             "format": nullable(json!({"type": "string", "enum": SAVE_FORMATS})),
             "overwrite": {"type": "boolean"},
             "pages": nullable(json!({"type": "boolean"})),
+            "svg_text": svg_text_schema(),
         },
-        "required": ["document", "path", "format", "overwrite", "pages"],
+        "required": ["document", "path", "format", "overwrite", "pages", "svg_text"],
         "additionalProperties": false,
     })
 }
@@ -184,6 +185,8 @@ struct SaveArgs {
     overwrite: bool,
     #[serde(deserialize_with = "Option::deserialize")]
     pages: Option<bool>,
+    #[serde(deserialize_with = "Option::deserialize")]
+    svg_text: Option<SvgText>,
 }
 
 /// Decoded `file_save` arguments: the format is resolved.
@@ -194,6 +197,7 @@ pub(crate) struct Save {
     format: SaveFormat,
     overwrite: bool,
     pages: bool,
+    svg_text: SvgText,
 }
 
 fn check_length(path: &str) -> Result<(), OpError> {
@@ -252,6 +256,7 @@ pub(crate) fn decode_save(args: Value) -> Result<Save, OpError> {
         format,
         overwrite,
         pages,
+        svg_text,
     } = arguments(args)?;
     check_length(&path)?;
     let requested = format.map(SaveFormat::name);
@@ -270,6 +275,7 @@ pub(crate) fn decode_save(args: Value) -> Result<Save, OpError> {
         format,
         overwrite,
         pages,
+        svg_text: svg_text.unwrap_or_default(),
     })
 }
 
@@ -347,7 +353,7 @@ fn native_bytes(doc: &Document, limit: usize) -> Result<Vec<u8>, OpError> {
 /// Saves a snapshot of the document to a granted file.
 ///
 /// - reshiki: the native file, [`native_bytes`];
-/// - every other format: [`export_bytes`].
+/// - every other format: [`export_bytes`], with SVG text outlined unless live.
 ///
 /// Both are at most [`Budgets::max_output_bytes`], as export's files are.
 ///
@@ -373,6 +379,7 @@ pub(crate) async fn file_save(
         format,
         overwrite,
         pages,
+        svg_text,
     } = save;
     let doc = ctx
         .blocking(move || {
@@ -381,7 +388,7 @@ pub(crate) async fn file_save(
         })
         .await?;
     let (bytes, receipt, mut messages) = match format.export() {
-        Some(export) => export_bytes(&ctx, &engine, doc, export, pages, &budgets).await?,
+        Some(export) => export_bytes(&ctx, &engine, doc, export, pages, svg_text, &budgets).await?,
         None => {
             let limit = budgets.max_output_bytes;
             let bytes = ctx.blocking(move || native_bytes(&doc, limit)).await?;

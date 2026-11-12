@@ -368,7 +368,7 @@ async fn cancelled_queued_calls_end_cancelled_while_the_rest_complete() {
         .map(|_| {
             let request = call(
                 "render",
-                json!({"document": handle.as_str(), "format": "svg", "max_width": null, "max_height": null, "ids": null}),
+                json!({"document": handle.as_str(), "format": "svg", "max_width": null, "max_height": null, "ids": null, "svg_text": null}),
             );
             let id = request.request.clone();
             let host = host.clone();

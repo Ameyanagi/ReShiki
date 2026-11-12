@@ -148,7 +148,8 @@ that `import` made from the SMILES `CCO`:
       "format": "png",
       "max_width": null,
       "max_height": null,
-      "ids": null
+      "ids": null,
+      "svg_text": null
     }
   }
 }
@@ -208,6 +209,12 @@ embedded resources at `reshiki:result/{name}`: text for SVG, CDXML, MOL,
 SMILES and InChI, a base64 blob for PDF and PNG. No resources capability is
 declared; files travel inline. Every `structuredContent` carries `versions`
 (see [Versioning](#versioning)).
+
+SVG from `export`, `file_save` and `render` draws text as outlines, with the
+glyphs, positions and sizes of the PNG, so it looks the same in every viewer.
+Pass `svg_text: "live"` to keep `<text>` elements, which a viewer without the
+drawing's font (usually Arial) draws with a substitute; `null` or `"outline"`
+outlines. Other formats ignore `svg_text`.
 
 `structuredContent` has one of two shapes:
 

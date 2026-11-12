@@ -57,7 +57,7 @@ The interface explicitly chooses an installed Japanese sans-serif font (Hiragino
 
 Drawing styles default to Arial. Where Arial is not installed, such as the browser and most Linux systems and containers, ReShiki loads its bundled Liberation Sans faces (regular, bold, italic and bold italic) under the name Arial. Liberation Sans has Arial's character widths, so labels are measured and placed as on macOS and Windows, even with no fonts installed. Outside the browser they also answer to Helvetica when no Helvetica is installed, since Helvetica has the same widths. An installed Arial always takes precedence, and the bundled faces are then not loaded. Source and license: [licenses/liberation-fonts](../licenses/liberation-fonts/NOTICE).
 
-SVG files from `reshiki --cli` and the Python package draw text as outlines by default, so other programs show the same glyphs as the PNG; `--svg-text live` and `text="live"` keep `<text>` elements. The app's **Export → SVG** keeps text; **SVG for Office** and Copy Image outline it.
+SVG files draw text as outlines by default, so other programs show the same glyphs as the PNG: the app's **Export → SVG**, the agent tools (`export`, `file_save` and `render`), `reshiki --cli` and the Python package. **Keep text editable** in **Export → Figure**, `svg_text: "live"`, `--svg-text live` and `text="live"` keep `<text>` elements. **SVG for Office** and Copy Image on Windows always outline it.
 
 ## Canvas editing verification
 
