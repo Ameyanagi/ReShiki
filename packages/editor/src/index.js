@@ -19,6 +19,14 @@ export function init(module) {
 
 const bytes = (data) => (typeof data === "string" ? encoder.encode(data) : data);
 
+export async function read(data, format) {
+  await init();
+  const result = await wasm.read(bytes(data), format);
+  const output = { drawing: result.drawing, warnings: [...result.warnings] };
+  result.free();
+  return output;
+}
+
 export async function convert(data, from, to) {
   await init();
   const output = await wasm.convert(bytes(data), from, to);

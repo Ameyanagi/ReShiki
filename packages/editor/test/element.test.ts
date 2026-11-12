@@ -4,6 +4,9 @@ import { expect, mock, test } from "bun:test";
 
 let loads = 0;
 let mounts = 0;
+let freed = 0;
+const warnings = ["First import warning", "Second import warning"];
+const imported: { data: Uint8Array; format: string }[] = [];
 mock.module("../dist/editor/reshiki.js", () => ({
   default: async () => {
     loads += 1;
@@ -11,6 +14,15 @@ mock.module("../dist/editor/reshiki.js", () => ({
   },
   mount: async () => {
     mounts += 1;
+  },
+  load: async (data: Uint8Array, format: string) => {
+    imported.push({ data, format });
+    return {
+      warnings,
+      free() {
+        freed += 1;
+      },
+    };
   },
   onChange() {},
   setWorker() {},
@@ -56,4 +68,17 @@ test("a src that answers with an HTTP error fires error and does not mount", asy
   } finally {
     globalThis.fetch = fetched;
   }
+});
+
+test("the element forwards load's copied import warnings", async () => {
+  const element = new ReshikiEditor();
+  element.connectedCallback();
+  const result = await element.load("CCO", "smiles");
+  expect(result).toEqual({ warnings });
+  expect(result.warnings).not.toBe(warnings);
+  expect(Array.isArray(result.warnings)).toBeTrue();
+  expect(imported).toEqual([{ data: new TextEncoder().encode("CCO"), format: "smiles" }]);
+  expect(freed).toBe(1);
+  result.warnings.push("Only in the caller's array");
+  expect(warnings).toEqual(["First import warning", "Second import warning"]);
 });

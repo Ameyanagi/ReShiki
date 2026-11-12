@@ -19,6 +19,10 @@ def verify_wheel(wheel, licenses=LICENSES):
         raise ValueError(
             f"No generated notices in {licenses}; run scripts/license_notices.py first"
         )
+    attribution_lines = expected["THIRD-PARTY-NOTICES.txt"].splitlines()
+    for name in ("licenses/liberation-fonts/LICENSE", "licenses/liberation-fonts/NOTICE"):
+        if f"  {name}".encode() not in attribution_lines:
+            raise ValueError(f"Missing source attribution: {name}")
     with zipfile.ZipFile(wheel) as archive:
         metadata_path = next(
             name for name in archive.namelist() if name.endswith(".dist-info/METADATA")

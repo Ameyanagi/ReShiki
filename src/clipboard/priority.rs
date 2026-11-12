@@ -40,14 +40,16 @@ pub const READABLE: &[&str] = &[
     "public.cdxml",
     "com.mdli.molfile",
     "org.opensmiles.smiles",
+    // A PDF or SVG is read only for a ReShiki drawing inside it. Apps such as
+    // Office hand back ReShiki's own SVG or PDF but a re-rendered PNG.
+    "com.adobe.pdf",
+    "public.svg-image",
     "public.utf8-plain-text",
     "public.png",
     "public.tiff",
     "public.jpeg",
     "org.webmproject.webp",
     "public.webp",
-    "com.adobe.pdf",
-    "public.svg-image",
 ];
 
 /// Keep read requests bounded and make the same default apply to every worker.

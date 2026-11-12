@@ -1,5 +1,5 @@
 //! Drawing import policy, separate from the lossless MOL parser snapshot.
-use super::{Imported, ReadError};
+use super::{Imported, ReadError, Superatom};
 use crate::{
     chemistry::{
         document::{self, Molecule, WORLD_PER_DEPICT_UNIT},
@@ -9,7 +9,7 @@ use crate::{
     document::Document,
     engine::native_import::Error,
 };
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 impl Imported {
     /// Build the display drawing and retain the imported molecular state unless
@@ -21,15 +21,63 @@ impl Imported {
         let mut document =
             drawing.finish_with(labels, |document| imported.restore_xyz(document))?;
         let restored = imported.restore_haworth(&mut document);
-        let notices = crate::chemistry::drop_added_axis_wedges(&mut document, &imported.molecule)
-            .into_iter()
-            .collect();
+        let mut notices: Vec<_> =
+            crate::chemistry::drop_added_axis_wedges(&mut document, &imported.molecule)
+                .into_iter()
+                .collect();
+        if let Some(notice) = imported.restore_superatoms(&mut document) {
+            notices.push(notice);
+        }
         let molecule = if restored {
             document::prepare(&document)?
         } else {
             imported.molecule
         };
         Ok((document, molecule, notices))
+    }
+
+    fn restore_superatoms(&self, document: &mut Document) -> Option<String> {
+        let mut count = 0;
+        let mut labels = Vec::new();
+        let mut reason = String::new();
+        // A group without drawn atoms has nothing to collapse or keep expanded.
+        for group in self
+            .annotations
+            .superatoms
+            .iter()
+            .filter(|g| !g.expanded && !g.members.is_empty())
+        {
+            let version = document.version;
+            if let Err(error) = group.collapse(document) {
+                // Contraction may have raised the version before the SAPs failed.
+                document.version = version;
+                count += 1;
+                if count == 1 {
+                    reason = error;
+                }
+                if labels.len() < 3 {
+                    let label: String = group
+                        .label
+                        .chars()
+                        .filter(|c| !c.is_control())
+                        .take(32)
+                        .collect();
+                    labels.push(if label.trim().is_empty() {
+                        "unlabeled".into()
+                    } else {
+                        label
+                    });
+                }
+            }
+        }
+        (count != 0).then(|| {
+            format!(
+                "Kept {count} superatom group{} expanded: {}{} ({reason})",
+                if count == 1 { "" } else { "s" },
+                labels.join(", "),
+                if count > labels.len() { ", …" } else { "" },
+            )
+        })
     }
 
     /// Fold ordinary terminal H only after file stereo has been assigned.
@@ -199,6 +247,11 @@ impl Imported {
         self.molecule.state = folded;
         self.molecule.ids = select(&self.molecule.ids, &removed.kept_atoms)?;
         self.molecule.positions = select(&self.molecule.positions, &removed.kept_atoms)?;
+        let kept: HashSet<_> = self.molecule.ids.iter().copied().collect();
+        for group in &mut self.annotations.superatoms {
+            // Keep SAP identities so a folded attachment leaves the group expanded.
+            group.members.retain(|id| kept.contains(id));
+        }
         self.annotations.attachment_points =
             select(&self.annotations.attachment_points, &removed.kept_atoms)?;
         self.annotations.dummy_labels =
@@ -293,6 +346,51 @@ impl Imported {
                 bond.projection = true;
             }
         }
+        Ok(())
+    }
+}
+
+impl Superatom {
+    fn collapse(&self, document: &mut Document) -> Result<(), String> {
+        let mut attachments: Vec<(u64, &str)> = Vec::new();
+        for (atom, id) in &self.attachments {
+            if !attachments.iter().any(|(other, _)| other == atom) {
+                attachments.push((*atom, id));
+            }
+        }
+        if attachments.len() > 2 {
+            return Err("a collapsed group connects through at most two atoms".into());
+        }
+        if self.label.chars().count() > 32 {
+            return Err("labels contain at most 32 characters".into());
+        }
+        // contract expands overlapping selections for editing; import keeps them separate.
+        if document
+            .abbreviations
+            .iter()
+            .any(|group| group.members.iter().any(|id| self.members.contains(id)))
+        {
+            return Err("the groups overlap".into());
+        }
+        document.contract(&self.members, &self.label, "")?;
+        // Explicit SAPs override contract's choice; Al (N side) precedes Br.
+        attachments.sort_by_key(|(_, id)| *id == "Br");
+        let [(anchor, _), rest @ ..] = attachments.as_slice() else {
+            return Ok(());
+        };
+        let mut group = document
+            .abbreviations
+            .pop()
+            .ok_or("the group could not be collapsed")?;
+        group.anchor = *anchor;
+        group.exit = rest.first().map(|(atom, _)| *atom);
+        group
+            .validate(document)
+            .map_err(|_| "its attachment points do not match its bonds")?;
+        if group.exit.is_some() {
+            document.require_version(crate::document::RESIDUE_GROUPS);
+        }
+        document.abbreviations.push(group);
         Ok(())
     }
 }

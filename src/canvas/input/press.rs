@@ -154,8 +154,25 @@ impl MoleculeCanvas<'_> {
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
             {
                 if let Some(index) = a.handle_at(p, self.camera.world_len(HANDLE_PICK_PX)) {
-                    state.gesture = Some(Gesture::ArrowHandle { id: a.id, index });
+                    let node = reshiki::arrows::node_handle(index);
+                    let grab = node
+                        .and_then(|_| a.handle_point(index))
+                        .map_or(World::default(), |h| World::new(h.x - p.x, h.y - p.y));
+                    state.gesture = Some(Gesture::ArrowHandle {
+                        id: a.id,
+                        index,
+                        free: node.is_some_and(|(_, part)| part != reshiki::arrows::NodePart::Node)
+                            && state.modifiers.alt(),
+                        grab,
+                    });
                     return Some(Action::request_redraw().and_capture());
+                }
+                // In Edit points, a click on the selected arrow's shaft adds a node.
+                if self.tool == Tool::EditPoints
+                    && a.kind != "bent"
+                    && a.nearest_shaft_point(p).2 < self.camera.world_len(PICK_RADIUS_PX)
+                {
+                    return Some(Action::publish(Edit::ArrowNodeInsert(a.id, p)).and_capture());
                 }
             }
         }

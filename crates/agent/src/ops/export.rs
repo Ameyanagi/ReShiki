@@ -152,7 +152,7 @@ pub(crate) async fn export_bytes(
     let name = format.name();
     ctx.checkpoint()?;
     let made = if format.figure() {
-        crate::export::publication(engine, doc, name, pages, budgets.export_png_pixels)
+        crate::export::publication(engine, doc, name, pages, false, budgets.export_png_pixels)
             .await
             .map(|Publication { bytes, details }| {
                 let detail = if format == Format::Png {

@@ -41,10 +41,15 @@ export interface MountOptions {
 /** A font's URL, or its bytes. */
 export type FontSource = string | URL | Uint8Array | ArrayBuffer;
 
+export interface LoadResult {
+  /** Import warnings, in order; the editor's status line shows them too. */
+  warnings: string[];
+}
+
 export interface Editor {
-  /** Replace the drawing in front. Rejects with the app's message when the
-   * data cannot be read. */
-  load(data: Input, format?: InputFormat): Promise<void>;
+  /** Replace the drawing in front and return its import warnings. Rejects
+   * with the app's message when the data cannot be read. */
+  load(data: Input, format?: InputFormat): Promise<LoadResult>;
   /** The drawing in front; `rsk` (a native drawing) by default. */
   save(format: BinaryFormat): Promise<Uint8Array>;
   save(format?: TextFormat): Promise<string>;

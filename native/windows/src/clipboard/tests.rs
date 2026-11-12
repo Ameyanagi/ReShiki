@@ -110,7 +110,7 @@ fn explicit_structure_formats_keep_native_bytes_and_unicode_text() {
 }
 
 #[test]
-fn editable_office_copy_omits_standalone_bitmap_but_copy_image_keeps_it() {
+fn editable_office_copy_and_copy_image_both_offer_a_bitmap() {
     let image = image::RgbaImage::from_pixel(20, 10, image::Rgba([30, 70, 150, 255]));
     let mut png = Vec::new();
     let mut encoder = png::Encoder::new(&mut png, 20, 10);
@@ -140,7 +140,7 @@ fn editable_office_copy_omits_standalone_bitmap_but_copy_image_keeps_it() {
         ]
     };
     let office = prepare_formats(reps(), true).unwrap();
-    assert!(!office.contains_key(&DIB));
+    assert_eq!(bitmap(&from_dib(&office[&DIB]).unwrap()).unwrap(), image);
     assert_eq!(office[&format("PNG").unwrap()], png);
     assert!(office.contains_key(&format("dev.reshiki.drawing").unwrap()));
     let picture = prepare_formats(reps(), false).unwrap();
@@ -335,9 +335,24 @@ fn typed_aliases_and_vector_formats_keep_requested_kinds() {
     assert!(registered_formats("com.mdli.molfile").contains(&"MDLCT"));
     for (kind, name) in [
         ("com.adobe.pdf", "PDF"),
+        ("com.adobe.pdf", "Portable Document Format"),
+        ("com.adobe.pdf", "application/pdf"),
         ("public.svg-image", "image/svg+xml"),
     ] {
         assert!(registered_formats(kind).contains(&name));
+        let selected = read_kind_with(
+            kind,
+            &[],
+            |source| Ok(source == name),
+            |source| {
+                assert_eq!(source, name);
+                Ok(b"vector".to_vec())
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(selected.source, name);
+        assert_eq!(selected.bytes.unwrap(), b"vector");
         let requested = vec![kind.to_owned()];
         let formats = priority::read_formats(&requested, false).unwrap();
         let packet = read_requested(&formats, |_| Ok(Some(candidate(kind, b"vector"))));

@@ -1,7 +1,9 @@
 //! Snapshot printing through AppKit/PDFKit, on the worker's main thread.
 use objc2::{
-    AnyThread, DefinedClass, MainThreadOnly, define_class, msg_send, rc::Retained,
-    runtime::ProtocolObject,
+    AnyThread, DefinedClass, MainThreadOnly, define_class, msg_send,
+    rc::Retained,
+    runtime::{ProtocolObject, Sel},
+    sel,
 };
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSGraphicsContext, NSPaperOrientation,
@@ -76,18 +78,25 @@ define_class!(
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, dirty: NSRect) {
             let Some(graphics) = NSGraphicsContext::currentContext() else { return };
-            let context = graphics.CGContext();
+            // Print preview on macOS 27 makes the current context an NSProxy
+            // that forwards -CGContext. objc2's debug check looks up methods
+            // without following forwarding and panics, so send it directly.
+            // SAFETY: This is the documented getter's ABI. The returned inner
+            // pointer is borrowed no longer than the retained graphics context.
+            let send: unsafe extern "C-unwind" fn(&NSGraphicsContext, Sel) -> Option<&CGContext> =
+                unsafe { std::mem::transmute(objc2::ffi::objc_msgSend as unsafe extern "C-unwind" fn()) };
+            let Some(context) = (unsafe { send(&graphics, sel!(CGContext)) }) else { return };
             let scale = self.print_scale();
             for (index, page) in self.ivars().pages.iter().enumerate() {
                 let rect = self.rectForPage(index as isize + 1);
                 if !intersects(rect, dirty) { continue; }
-                CGContext::save_g_state(Some(&context));
-                CGContext::translate_ctm(Some(&context), rect.origin.x, rect.origin.y);
-                CGContext::scale_ctm(Some(&context), scale, scale);
+                CGContext::save_g_state(Some(context));
+                CGContext::translate_ctm(Some(context), rect.origin.x, rect.origin.y);
+                CGContext::scale_ctm(Some(context), scale, scale);
                 // SAFETY: The page and graphics context are retained for this
                 // synchronous main-thread call; MediaBox is a valid PDF box.
-                unsafe { page.drawWithBox_toContext(PDFDisplayBox::MediaBox, &context); }
-                CGContext::restore_g_state(Some(&context));
+                unsafe { page.drawWithBox_toContext(PDFDisplayBox::MediaBox, context); }
+                CGContext::restore_g_state(Some(context));
             }
         }
     }

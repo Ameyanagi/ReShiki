@@ -152,6 +152,7 @@ pub fn arrange(doc: &mut Document, directions: &[f32]) {
             arrow.end = end;
             arrow.control = None;
             arrow.cubic = None;
+            arrow.nodes.clear();
         }
         if let Some(id) = condition
             && let Some(note) = doc.annotations.iter_mut().find(|a| a.id == id)

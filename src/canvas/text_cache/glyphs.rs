@@ -18,6 +18,8 @@ pub(super) fn prepare_fonts() {
         let mut fonts = text::font_system()
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        #[cfg(not(target_arch = "wasm32"))]
+        reshiki::style::load_bundled_fonts(fonts.raw().db_mut());
         // The browser has no system fonts; use the faces the drawing renders with.
         #[cfg(target_arch = "wasm32")]
         {

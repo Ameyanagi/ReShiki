@@ -315,7 +315,7 @@ impl App {
                 }
             }
             Action::Export => {
-                return self.export_figure("pdf", true);
+                return self.export_figure("pdf", true, false);
             }
         }
         Task::none()

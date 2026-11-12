@@ -295,8 +295,16 @@ mod tests {
         let first = pick(&formats, &read).unwrap();
         assert_eq!(first.kind, NATIVE);
         assert_eq!(first.bytes().unwrap(), br#"{"atoms":[]}"#);
-        // Without the HTML, text comes before pictures.
+        // Without the HTML, an SVG is tried for its drawing, then text, then
+        // pictures.
         let first = pick(&formats, &read[1..]).unwrap();
+        assert_eq!(first.kind, "public.svg-image");
+        let without_svg: Vec<_> = read[1..]
+            .iter()
+            .filter(|(mime, _)| mime != "image/svg+xml")
+            .cloned()
+            .collect();
+        let first = pick(&formats, &without_svg).unwrap();
         assert_eq!(first.kind, "public.utf8-plain-text");
         // Paste picture asks for pictures only.
         let pictures = vec!["public.png".to_owned()];

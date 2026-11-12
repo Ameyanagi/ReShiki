@@ -12,6 +12,57 @@ fn molecule() -> Document {
     doc
 }
 
+#[tokio::test]
+async fn copy_as_pictures_contain_the_selected_editable_drawing() {
+    let mut source = molecule();
+    source.version = 15;
+    source.canvas_theme = crate::canvas_theme::CanvasTheme::Dark;
+    source.bonds[0].color = crate::palette::Color::Custom([180, 50, 55]);
+    let selected: Vec<_> = source.all_ids();
+    let unselected = source.add_atom("N", Point::new(240., 0.));
+    source.recent_colors.push([1, 2, 3]);
+    let mut theme = crate::theme_files::bundled().unwrap().remove(0);
+    theme.author = "Private author".into();
+    theme.source = "Private source".into();
+    theme.license = "Private license".into();
+    source.custom_theme = Some(Box::new(theme));
+    let source = selection_or_drawing(&source, &selected);
+    let engine = LocalEngine::in_process();
+    let (snapshot, _) = export::figure_document(&engine, source.clone())
+        .await
+        .unwrap();
+    for (format, kind) in [
+        (CopyFormat::Png, "public.png"),
+        (CopyFormat::Svg, "public.svg-image"),
+        (CopyFormat::Pdf, "com.adobe.pdf"),
+    ] {
+        let copy = prepare_as(engine.clone(), source.clone(), format)
+            .await
+            .unwrap();
+        let bytes = copy
+            .representations
+            .iter()
+            .find(|item| item.kind == kind)
+            .unwrap()
+            .bytes()
+            .unwrap();
+        let restored = payload::read(&bytes).unwrap().unwrap();
+        assert_eq!(restored.all_ids(), source.all_ids(), "{format:?}");
+        assert!(restored.atom(unselected).is_none());
+        assert_eq!(restored.bonds, source.bonds);
+        assert_eq!(crate::scene::svg(&restored), crate::scene::svg(&snapshot));
+        assert!(restored.recent_colors.is_empty());
+        let theme = restored.custom_theme.unwrap();
+        assert!(theme.author.is_empty() && theme.source.is_empty() && theme.license.is_empty());
+        #[cfg(windows)]
+        if format == CopyFormat::Svg {
+            let svg = std::str::from_utf8(&bytes).unwrap();
+            assert!(!svg.contains("<text"), "Office needs outlined labels");
+            assert!(svg.contains("<path"));
+        }
+    }
+}
+
 #[test]
 fn name_follows_inchi_in_copy_formats_and_uses_the_name_code() {
     let index = CopyFormat::ALL
@@ -593,7 +644,7 @@ async fn molecular_formats_export_selected_graph_and_invalid_conversion_has_no_p
 }
 
 #[tokio::test]
-async fn figure_payloads_are_the_chosen_format_without_a_hidden_editable_drawing() {
+async fn figure_payloads_keep_the_chosen_format_with_the_editable_drawing() {
     let mut drawing = Document::default();
     drawing.arrows.push(crate::document::Arrow::new(
         1,
@@ -608,6 +659,10 @@ async fn figure_payloads_are_the_chosen_format_without_a_hidden_editable_drawing
             .unwrap();
         assert_eq!(copy.format, format);
         let bytes = copy.representations[0].bytes().unwrap();
+        assert_eq!(
+            payload::read(&bytes).unwrap().unwrap().all_ids(),
+            drawing.all_ids()
+        );
         match format {
             CopyFormat::Png => {
                 let image = image::load_from_memory(&bytes).unwrap().into_rgba8();
