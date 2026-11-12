@@ -92,6 +92,66 @@ fn png_open_keeps_ordinary_refusal_and_opens_a_damaged_payload_as_a_picture() {
     assert!(app.tab.path.is_none());
 }
 
+#[tokio::test]
+async fn vector_payloads_open_as_untitled_drawings() -> Result<(), String> {
+    let mut drawing = Document::default();
+    drawing.add_atom("O", Point::default());
+    let drawing = drawing.current();
+    let envelope = reshiki::payload::encode(&drawing)?;
+    for format in ["svg", "pdf"] {
+        let contents =
+            reshiki::export::clipboard_figure_with_drawing(&drawing, format, Some(&envelope))?
+                .bytes;
+        let path = PathBuf::from(format!("images/oxygen.{}", format.to_ascii_uppercase()));
+        let opened = prepare_contents(path, Ok(contents)).await;
+        assert!(matches!(&opened, Some((_, Ok(Prepared::Picture(_, None))))));
+        let (mut app, _) = App::new();
+        app.cancel_engine_job();
+        app.tab.busy = false;
+        let _ = app.update(Message::FilePrepared(opened));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc, drawing);
+        assert!(app.tab.path.is_none() && app.dirty());
+        assert_eq!(app.drawing_save_target(false), (None, "oxygen.rsk".into()));
+        assert_eq!(
+            app.status,
+            format!(
+                "Opened the editable drawing from oxygen.{}",
+                format.to_ascii_uppercase()
+            )
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn vector_open_keeps_the_refusal_without_a_payload_and_explains_damage() -> Result<(), String> {
+    for format in ["svg", "pdf"] {
+        let name = format!("picture.{format}");
+        let path = std::path::Path::new(&name);
+        let ordinary = reshiki::export::drawing(&Document::default(), format)?;
+        assert_eq!(
+            prepare(path, ordinary).unwrap_err(),
+            format!("Can't import .{format}")
+        );
+        let invalid = reshiki::export::clipboard_figure_with_drawing(
+            &Document::default(),
+            format,
+            Some(b"invalid payload"),
+        )?
+        .bytes;
+        let reason = reshiki::payload::read(&invalid).unwrap().unwrap_err();
+        assert_eq!(
+            prepare(path, invalid).unwrap_err(),
+            format!(
+                "This {} carries a ReShiki drawing that could not be read: {reason}",
+                format.to_ascii_uppercase()
+            )
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn opening_takes_an_empty_tab_and_keeps_edited_and_drafting_tabs() {
     let (mut app, _) = App::new();

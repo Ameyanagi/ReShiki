@@ -56,6 +56,15 @@ pub enum Error {
     },
 }
 
+/// Chemistry admission policy. Strict retains the ordinary molecular checks;
+/// Relaxed is an explicit approximation for drawing geometry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Mode {
+    #[default]
+    Strict,
+    Relaxed,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ForceField {
     Mmff94,
@@ -143,6 +152,8 @@ pub struct Optimized {
     pub iterations: u32,
     pub force_field: ForceField,
     pub diagnostics: Vec<String>,
+    /// Approximations actually used by the native force-field calculation.
+    pub approximations: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -153,6 +164,9 @@ pub struct Prepared {
     ids: Vec<u64>,
     drawing_positions: Vec<Point3>,
     units: f64,
+    mode: Mode,
+    skipped_checks: Vec<String>,
+    has_metal: bool,
 }
 impl Prepared {
     /// Select one full molecular component. An empty selection is accepted only
@@ -161,11 +175,26 @@ impl Prepared {
         Self::with_limits(source, selection, Limits::default())
     }
 
+    /// Prepare the same complete component while allowing approximate chemistry.
+    /// Structural, identity and machine-budget checks remain mandatory.
+    pub fn relaxed(source: &Document, selection: &[u64]) -> Result<Self, Error> {
+        Self::with_mode(source, selection, Limits::default(), Mode::Relaxed)
+    }
+
     /// Explicit budgets support reproducible checks and advanced callers.
     pub fn with_limits(
         source: &Document,
         selection: &[u64],
         limits: Limits,
+    ) -> Result<Self, Error> {
+        Self::with_mode(source, selection, limits, Mode::Strict)
+    }
+
+    fn with_mode(
+        source: &Document,
+        selection: &[u64],
+        limits: Limits,
+        mode: Mode,
     ) -> Result<Self, Error> {
         limits.validate()?;
         let capacity = limits.capacity();
@@ -222,16 +251,28 @@ impl Prepared {
             if atom.element == "*" || atom.display.variable.is_some() {
                 return Err(Error::Unsupported("wildcard or query atoms"));
             }
-            if atom.radical_electrons != 0 {
+            if mode == Mode::Strict && atom.radical_electrons != 0 {
                 return Err(Error::Unsupported("radicals"));
             }
         }
-        if part.bonds.iter().any(|b| !matches!(b.order, 1..=4)) {
+        if mode == Mode::Strict && part.bonds.iter().any(|b| !matches!(b.order, 1..=4)) {
             return Err(Error::Unsupported(
                 "hydrogen, coordination, partial or quadruple bonds",
             ));
         }
-        let molecule = molecular::prepare(&part)?;
+        if mode == Mode::Relaxed && part.bonds.iter().any(|b| b.order == 0) {
+            return Err(Error::Unsupported("hydrogen interaction bonds"));
+        }
+        // A drawing the ordinary preparation accepts keeps its checked graph,
+        // hydrogens and stereo; otherwise Relaxed takes the drawn graph as is.
+        let (mut molecule, fallback) = match molecular::prepare(&part) {
+            Ok(molecule) => (molecule, false),
+            Err(error) if mode == Mode::Strict => return Err(error.into()),
+            Err(_) => (
+                drawing_molecule(&part, molecular::drawing_graph(&part)?),
+                true,
+            ),
+        };
         if molecule.state.graph.bonds.len() > capacity.bonds {
             return Err(Error::Capacity {
                 kind: "bonds",
@@ -240,12 +281,14 @@ impl Prepared {
             });
         }
         for atom in &molecule.state.graph.atoms {
-            if ![1, 5, 6, 7, 8, 9, 14, 15, 16, 17, 33, 34, 35, 53].contains(&atom.atomic_number) {
+            if mode == Mode::Strict
+                && ![1, 5, 6, 7, 8, 9, 14, 15, 16, 17, 33, 34, 35, 53].contains(&atom.atomic_number)
+            {
                 return Err(Error::Unsupported(
                     "elements outside H/B/C/N/O/F/Si/P/S/Cl/As/Se/Br/I",
                 ));
             }
-            if atom.radical_electrons != 0 {
+            if mode == Mode::Strict && atom.radical_electrons != 0 {
                 return Err(Error::Unsupported("radicals or incomplete valence"));
             }
             if !(-8..=8).contains(&atom.charge) || atom.isotope > 500 || atom.explicit_hydrogens > 8
@@ -253,15 +296,15 @@ impl Prepared {
                 return Err(Error::Unsupported("this charge, isotope or hydrogen count"));
             }
         }
-        if !molecule.state.metadata.groups.is_empty()
-            || molecule
-                .state
-                .metadata
-                .atoms
-                .iter()
-                .any(|a| a.chiral_tag > 2)
-            || molecule.state.metadata.bonds.iter().any(|b| b.stereo > 5)
-        {
+        let enhanced = !molecule.state.metadata.groups.is_empty();
+        let non_tetrahedral = molecule
+            .state
+            .metadata
+            .atoms
+            .iter()
+            .any(|a| a.chiral_tag > 2)
+            || molecule.state.metadata.bonds.iter().any(|b| b.stereo > 5);
+        if mode == Mode::Strict && (enhanced || non_tetrahedral) {
             return Err(Error::Unsupported(
                 "enhanced or non-tetrahedral stereochemistry",
             ));
@@ -285,8 +328,36 @@ impl Prepared {
             })
             .collect::<Result<Vec<_>, Error>>()?;
         let mut materialized = source.clone();
-        materialize_stereo(&molecule, &mut materialized)?;
+        if !fallback {
+            materialize_stereo(&molecule, &mut materialized, mode)?;
+        }
+        let skipped_checks = if mode == Mode::Relaxed {
+            relaxed_skipped_checks(&part, &molecule, fallback, non_tetrahedral, enhanced)
+        } else {
+            Vec::new()
+        };
+        if mode == Mode::Relaxed {
+            molecule.state.metadata.groups.clear();
+            for atom in &mut molecule.state.metadata.atoms {
+                if atom.chiral_tag > 2 {
+                    atom.chiral_tag = 0;
+                    atom.chiral_permutation = None;
+                }
+            }
+            for bond in &mut molecule.state.metadata.bonds {
+                if bond.stereo > 5 {
+                    bond.stereo = 0;
+                    bond.stereo_atoms.clear();
+                }
+            }
+        }
         materialized.validate().map_err(Error::Invalid)?;
+        let has_metal = molecule
+            .state
+            .graph
+            .atoms
+            .iter()
+            .any(|a| reshiki_geometry::is_metal_atomic_number(u32::from(a.atomic_number)));
         let prepared = Self {
             source: source.clone(),
             materialized,
@@ -294,6 +365,9 @@ impl Prepared {
             ids,
             drawing_positions,
             units,
+            mode,
+            skipped_checks,
+            has_metal,
         };
         prepared
             .native_request(
@@ -307,12 +381,24 @@ impl Prepared {
             .map_err(Error::Invalid)?;
         Ok(prepared)
     }
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+    pub fn skipped_checks(&self) -> &[String] {
+        &self.skipped_checks
+    }
+    /// Metal-containing drawings require UFF; parameter availability for other
+    /// elements is checked by the native force field when it is requested.
+    pub fn mmff_available(&self) -> bool {
+        !self.has_metal
+    }
     pub fn ids(&self) -> &[u64] {
         &self.ids
     }
-    /// The same molecule without the drawing's retained depth, so generation
-    /// always embeds fresh conformers instead of relaxing the drawing's own 3D
-    /// coordinates. Only for generation: [`Self::view_frame`] needs the depth.
+    /// The same molecule without the drawing's retained depth, so ordinary
+    /// generation embeds fresh conformers. Relaxed metal coordination can still
+    /// use the drawing's planar positions as an approximate seed.
+    /// Only for generation: [`Self::view_frame`] needs the depth.
     pub fn without_retained_depth(mut self) -> Self {
         for p in &mut self.drawing_positions {
             p.z = 0.;
@@ -404,6 +490,8 @@ impl Prepared {
     pub fn source(&self) -> &Document {
         &self.source
     }
+    /// Detached geometry input. In Relaxed mode this may contain an unchecked
+    /// drawing graph and must not be used as validated chemical properties.
     pub fn molecule(&self) -> &Molecule {
         &self.molecule
     }
@@ -479,7 +567,15 @@ impl Prepared {
                 Ok(reshiki_geometry::BondInput {
                     a: b.a,
                     b: b.b,
-                    order: if b.aromatic { 12 } else { u32::from(b.order) },
+                    order: if b.aromatic {
+                        12
+                    } else {
+                        match b.order {
+                            5 => 17,
+                            6 => 4,
+                            order => u32::from(order),
+                        }
+                    },
                     aromatic: b.aromatic,
                     stereo: u32::from(m.stereo),
                     stereo_atoms,
@@ -490,15 +586,16 @@ impl Prepared {
             c.validate(self.ids.len())?;
             c.positions.iter().map(|p| [p.x, p.y, p.z]).collect()
         } else if operation == reshiki_geometry::Operation::Generate
-            && self.drawing_positions.first().is_some_and(|first| {
-                self.drawing_positions
-                    .iter()
-                    .any(|p| (p.z - first.z).abs() > 1e-4)
-            })
+            && (self.mode == Mode::Relaxed && self.has_metal
+                || self.drawing_positions.first().is_some_and(|first| {
+                    self.drawing_positions
+                        .iter()
+                        .any(|p| (p.z - first.z).abs() > 1e-4)
+                }))
         {
-            // Retained XYZ is only a candidate: the worker checks intrinsic
+            // Retained XYZ is only a candidate: ordinary generation checks
             // dimensionality, physical geometry and stereo before adding H.
-            // In particular, a tilted planar drawing is not a valid 3D seed.
+            // Relaxed metal coordination also accepts approximate planar input.
             self.drawing_positions
                 .iter()
                 .map(|p| [p.x, p.y, p.z])
@@ -524,6 +621,7 @@ impl Prepared {
             fixed_atoms.clear();
         }
         let request = reshiki_geometry::Request {
+            relaxed: self.mode == Mode::Relaxed,
             atoms,
             bonds,
             field: field.native(),
@@ -560,6 +658,92 @@ pub(super) fn valid_point(p: Point3) -> bool {
     [p.x, p.y, p.z]
         .iter()
         .all(|v| v.is_finite() && v.abs() <= 1_000_000.)
+}
+
+fn drawing_molecule(document: &Document, graph: crate::chemistry::graph::Graph) -> Molecule {
+    use crate::chemistry::{
+        kekulize::Direction,
+        ranking::Metadata,
+        stereo::perception::{Properties, RingCache, State},
+    };
+    let metadata = Metadata::unspecified(&graph);
+    let properties = Properties::unspecified(&graph);
+    let directions = vec![Direction::None; graph.bonds.len()];
+    Molecule {
+        rdkit_version: crate::chemistry::RDKIT_VERSION,
+        ids: document.atoms.iter().map(|atom| atom.id).collect(),
+        positions: document
+            .atoms
+            .iter()
+            .map(|atom| Point3 {
+                x: f64::from(atom.position.x) / molecular::WORLD_PER_DEPICT_UNIT,
+                y: -f64::from(atom.position.y) / molecular::WORLD_PER_DEPICT_UNIT,
+                z: 0.,
+            })
+            .collect(),
+        state: State {
+            graph,
+            metadata,
+            directions,
+            // No chemical caches are claimed for this structurally checked
+            // drawing. Geometry uses only its graph and stereo metadata.
+            valences: Vec::new(),
+            conjugated: Vec::new(),
+            hybridizations: Vec::new(),
+            rings: RingCache::default(),
+            properties,
+        },
+    }
+}
+
+fn relaxed_skipped_checks(
+    document: &Document,
+    molecule: &Molecule,
+    fallback: bool,
+    non_tetrahedral: bool,
+    enhanced: bool,
+) -> Vec<String> {
+    let mut checks = Vec::new();
+    if fallback {
+        checks.push("Valence not checked".into());
+    }
+    // Preparation also turns single bonds from saturated donors to metals,
+    // such as crown-ether O–K, into coordination bonds.
+    if molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .any(|bond| bond.order == 5)
+    {
+        checks.push("Coordination bonds do not count toward ligand valence".into());
+    }
+    if document
+        .atoms
+        .iter()
+        .any(|atom| atom.radical_electrons != 0)
+    {
+        checks.push("Radicals taken as drawn".into());
+    }
+    // Double bonds count too: their drawn geometry defines E/Z.
+    let drawn_stereo = document.atoms.iter().any(|atom| atom.stereo.is_some())
+        || document.bonds.iter().any(|bond| {
+            bond.order == 2
+                || bond.stereo.is_some()
+                || bond.order == 1
+                    && !bond.projection
+                    && crate::bonds::is_stereo_marker(&bond.display)
+        });
+    if fallback && drawn_stereo {
+        checks.push("Drawn stereochemistry not enforced".into());
+    }
+    if non_tetrahedral {
+        checks.push("Non-tetrahedral stereo ignored".into());
+    }
+    if enhanced {
+        checks.push("Enhanced stereo groups ignored".into());
+    }
+    checks
 }
 
 fn component(source: &Document, selection: &[u64]) -> Result<HashSet<u64>, Error> {
@@ -615,7 +799,11 @@ fn component(source: &Document, selection: &[u64]) -> Result<HashSet<u64>, Error
     Ok(component)
 }
 
-fn materialize_stereo(molecule: &Molecule, document: &mut Document) -> Result<(), Error> {
+fn materialize_stereo(
+    molecule: &Molecule,
+    document: &mut Document,
+    mode: Mode,
+) -> Result<(), Error> {
     let graph = &molecule.state.graph;
     let mut neighbors = vec![Vec::new(); molecule.ids.len()];
     for b in &graph.bonds {
@@ -651,6 +839,7 @@ fn materialize_stereo(molecule: &Molecule, document: &mut Document) -> Result<()
                 winding: if meta.chiral_tag == 1 { "cw" } else { "ccw" }.into(),
                 neighbors,
             }),
+            _ if mode == Mode::Relaxed => continue,
             _ => return Err(Error::Unsupported("non-tetrahedral stereo")),
         };
     }
@@ -678,6 +867,7 @@ fn materialize_stereo(molecule: &Molecule, document: &mut Document) -> Result<()
             3 => Some("e"),
             4 => Some("cis"),
             5 => Some("trans"),
+            _ if mode == Mode::Relaxed => continue,
             _ => return Err(Error::Unsupported("nonstandard bond stereo")),
         }
         .map(str::to_owned);

@@ -18,7 +18,10 @@ impl Groups {
                 f.minimum(8)?;
                 let id = f.integer(false)?;
                 let group = Group::new(r, r.field(text, f.pos + 1, f.pos + 4)?)?;
-                self.entries.entry(id).or_insert(group);
+                if let std::collections::btree_map::Entry::Vacant(entry) = self.entries.entry(id) {
+                    entry.insert(group);
+                    self.order.push(id);
+                }
                 f.pos += 4;
             }
             return Ok(());
@@ -53,7 +56,11 @@ impl Groups {
                     ));
                 }
                 match kind {
-                    "SDS" => (),
+                    "SDS" => {
+                        if let Some(group) = self.entries.get_mut(&id) {
+                            group.expanded = true;
+                        }
+                    }
                     "SST" | "SCN" => {
                         let len = if kind == "SCN" { 2 } else { 3 };
                         let value = r.field(text, f.pos + 1, f.pos + 1 + len)?;
@@ -193,11 +200,21 @@ impl Groups {
             "SAP" => {
                 for _ in 0..f.count()? {
                     f.minimum(11)?;
-                    r.index(f.integer(false)?, p.graph.atoms.len())?;
+                    let atom = r.index(f.integer(false)?, p.graph.atoms.len())?;
                     let leaving = f.integer(false)?;
                     if leaving != 0 {
                         r.index(leaving, p.graph.atoms.len())?;
                     }
+                    // These identifier bytes were previously skipped, including
+                    // their encoding; retaining them adds no validation rule.
+                    let label = String::from_utf8_lossy(
+                        text.as_bytes()
+                            .get(f.pos + 1..f.pos + 3)
+                            .ok_or(ReadError::Limit)?,
+                    )
+                    .trim()
+                    .to_owned();
+                    group.attachments.push((atom, label));
                     f.pos += 3;
                 }
             }

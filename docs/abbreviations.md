@@ -28,13 +28,25 @@ Properties → Labels & chemistry → Chemical abbreviations provides compact la
 
 Each action is one Undo step. Native version-10 documents preserve custom names and reversed labels. SVG, PDF and PNG display the abbreviated drawing. Editable binary/XML exchange carries explicit nested chemical fragments; imported labels can expand back to real atoms. Common reversed labels are recognized on import. Custom reversed spellings are native-only.
 
+MOL export writes every collapsed group as a superatom (`SUP`) substance group
+over its real atoms, so programs that ignore groups still read the full
+structure. Each attachment atom gets an attachment point: `1` for a one-sided
+group, and `Al` (N side) then `Br` (C side) for a two-sided group, the
+convention used for amino-acid residues. Opening a MOL file collapses its
+superatom groups under their labels, ordering a two-sided group by those
+attachment names. A group the file marks as expanded stays expanded. A group
+that cannot be shown as one label, such as one with no label or with more than
+two attachment atoms, also stays expanded and the status bar names it.
+SMILES and InChI carry only the expanded structure; CXSMILES has no superatom
+groups.
+
 For amino-acid residues, choose a three-letter label such as **Ala** and use
 **Find selected label**. The 20 standard L residues and their **D-Xaa** mirrors
 (except achiral Gly) match the full residue, including stereochemistry. In
 Boc–Ala–OMe, Ala connects through its N side on the left and carbonyl C side on
 the right; Automatic alignment centers its label. Boc and OMe can also be
 collapsed. Two-sided groups use native document version 34 and round-trip
-through CDXML/CDX. Residue labels cannot replace or insert an endpoint;
+through CDXML/CDX and MOL. Residue labels cannot replace or insert an endpoint;
 **Contract common groups** does not search for residues. A custom residue label
 warns when the selected chemistry does not match its definition.
 

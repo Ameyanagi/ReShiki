@@ -118,6 +118,11 @@ def test_offline_name_resolution() -> None:
     [
         (reshiki.Molecule.from_smiles, RELATIVE_SMILES, RELATIVE_WARNING),
         (reshiki.parse, "C/C=C=C=C/C", CUMULENE_WARNING),
+        (
+            reshiki.Molecule.from_smiles,
+            "C~C",
+            "Bond C1–C2 has any order (~); bond order assumed single",
+        ),
     ],
 )
 def test_structure_import_warnings(

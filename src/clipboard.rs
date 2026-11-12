@@ -26,6 +26,10 @@ mod priority;
 const NATIVE: &str = "dev.reshiki.drawing";
 const LIMIT: usize = 64 * 1024 * 1024;
 const JSON_LIMIT: usize = LIMIT * 2;
+const OVERSIZED_DRAWING_NOTICE: &str =
+    "Pictures copied without the editable drawing (too large); pasting into ReShiki still keeps it";
+const RESTORED_DRAWING_NOTICE: &str =
+    "Restored the editable drawing from the picture · Paste picture inserts the image instead";
 #[cfg(test)]
 mod browser_tests;
 mod copy_as;
@@ -354,6 +358,16 @@ async fn prepare_copy_for(
     image_only: bool,
     browser: bool,
 ) -> Result<(CopyOutcome, Vec<Representation>), String> {
+    prepare_copy_with_limit(engine, original, image_only, browser, payload::EMBED_LIMIT).await
+}
+
+async fn prepare_copy_with_limit(
+    engine: LocalEngine,
+    original: Document,
+    image_only: bool,
+    browser: bool,
+    embed_limit: usize,
+) -> Result<(CopyOutcome, Vec<Representation>), String> {
     original.validate()?;
     if original.all_ids().is_empty() {
         return Err("There is nothing to copy".into());
@@ -449,35 +463,31 @@ async fn prepare_copy_for(
                 .push(format!("Editable exchange unavailable: {error}")),
         }
     }
-    let (images, envelope) = crate::task::spawn_blocking(move || {
+    let (images, oversized) = crate::task::spawn_blocking(move || {
         let envelope = payload::encode(&doc)?;
-        Ok::<_, String>((copy_images(&doc, image_only, browser), envelope))
+        let drawing = (envelope.len() <= embed_limit).then_some(envelope.as_slice());
+        Ok::<_, String>((
+            copy_images_with_drawing(&doc, image_only, browser, drawing),
+            drawing.is_none(),
+        ))
     })
     .await
     .map_err(|e| format!("Could not render clipboard images: {e}"))??;
+    if oversized {
+        outcome.notices.push(
+            if image_only {
+                "Picture copied without the editable drawing (too large)"
+            } else {
+                OVERSIZED_DRAWING_NOTICE
+            }
+            .into(),
+        );
+    }
     let mut image_count = 0;
     for (format, result) in images {
         match result {
-            Ok(mut image) => {
-                // Copy Image's own drawing keeps to the limit of the one in
-                // its pictures, so a huge drawing cannot overflow the clipboard.
-                if format == "native drawing" && envelope.len() > payload::EMBED_LIMIT {
-                    continue;
-                }
+            Ok(image) => {
                 if format == "png" {
-                    // A PNG over the clipboard limit keeps its own error.
-                    if let Ok(bytes) = image.bytes() {
-                        let (bytes, notice) = editable_png(bytes, &envelope, payload::EMBED_LIMIT)?;
-                        outcome.notices.extend(notice.map(|notice| {
-                            if image_only {
-                                "Picture copied without the editable drawing (too large)"
-                            } else {
-                                notice
-                            }
-                            .to_owned()
-                        }));
-                        image = Representation::new("public.png", &bytes);
-                    }
                     let dpi = image
                         .bytes()
                         .ok()
@@ -533,27 +543,41 @@ async fn prepare_copy_for(
     Ok((outcome, representations))
 }
 
-fn editable_png(
-    bytes: Vec<u8>,
-    envelope: &[u8],
-    limit: usize,
-) -> Result<(Vec<u8>, Option<&'static str>), String> {
-    if envelope.len() > limit {
-        Ok((
-            bytes,
-            Some(
-                "Pictures copied without the editable drawing (too large); pasting into ReShiki still keeps it",
-            ),
-        ))
-    } else {
-        payload::embed("png", bytes, envelope).map(|bytes| (bytes, None))
+/// Preserve Office's outlined SVG while adding the same payload as the other
+/// pictures. PDF needs its drawing passed to the exporter before serialization.
+fn clipboard_figure(
+    doc: &Document,
+    format: &str,
+    drawing: Option<&[u8]>,
+) -> Result<export::Figure, String> {
+    #[cfg(windows)]
+    if format == "svg" {
+        let bytes = export::clipboard_svg(doc)?;
+        return Ok(export::Figure {
+            bytes: match drawing {
+                Some(drawing) => payload::embed("svg", bytes, drawing)?,
+                None => bytes,
+            },
+            detail: None,
+        });
     }
+    export::clipboard_figure_with_drawing(doc, format, drawing)
 }
 
+#[cfg(test)]
 fn copy_images(
     doc: &Document,
     image_only: bool,
     browser: bool,
+) -> Vec<(&'static str, Result<Representation, String>)> {
+    copy_images_with_drawing(doc, image_only, browser, None)
+}
+
+fn copy_images_with_drawing(
+    doc: &Document,
+    image_only: bool,
+    browser: bool,
+    drawing: Option<&[u8]>,
 ) -> Vec<(&'static str, Result<Representation, String>)> {
     let mut images: Vec<_> = [
         ("com.adobe.pdf", "pdf"),
@@ -563,19 +587,11 @@ fn copy_images(
     .into_iter()
     .filter(|(_, format)| !browser || *format != "pdf")
     .map(|(kind, format)| {
-        #[cfg(windows)]
-        let image = match format {
-            "svg" => export::clipboard_svg(doc),
-            "png" => export::clipboard_png(doc),
-            _ => export::clipboard_drawing(doc, format),
-        };
-        #[cfg(not(windows))]
-        let image = if format == "png" {
-            export::clipboard_png(doc)
-        } else {
-            export::clipboard_drawing(doc, format)
-        };
-        (format, image.map(|bytes| Representation::new(kind, &bytes)))
+        let image = clipboard_figure(doc, format, drawing);
+        (
+            format,
+            image.map(|figure| Representation::new(kind, &figure.bytes)),
+        )
     })
     .collect();
     #[cfg(windows)]
@@ -586,7 +602,9 @@ fn copy_images(
                 .map(|bytes| Representation::new("dev.reshiki.office-metafile", &bytes)),
         ));
     }
-    if image_only {
+    // Copy Image's own drawing keeps to the limit of the one in its pictures,
+    // so a huge drawing cannot overflow the clipboard.
+    if image_only && drawing.is_some() {
         let native = serde_json::to_vec(&payload::visible(doc))
             .map(|bytes| Representation::new(NATIVE, &bytes))
             .map_err(|e| e.to_string());
@@ -767,7 +785,9 @@ where
 fn remember_failure(failure: &mut Option<(usize, String)>, kind: &str, error: String) {
     let rank = if error.contains("newer version of ReShiki") {
         0
-    } else if matches!(kind, NATIVE | "dev.moruno.drawing") {
+    } else if matches!(kind, NATIVE | "dev.moruno.drawing")
+        || error.contains("carries a ReShiki drawing")
+    {
         1
     } else if kind.contains("cdx") || kind == "application/x-chemdraw" {
         2
@@ -872,12 +892,16 @@ async fn import_representation(
         return crate::task::spawn_blocking(move || {
             let warning = if item.kind == "public.png" && !image_only {
                 match payload::read(&data) {
-                    Some(Ok(document)) => return Ok(PasteOutcome {
-                        document,
-                        warnings: vec!["Restored the editable drawing from the picture · Paste picture inserts the image instead".into()],
-                        native: true,
-                    }),
-                    Some(Err(error)) => Some(format!("Pasted as a picture: its editable drawing could not be read ({error})")),
+                    Some(Ok(document)) => {
+                        return Ok(PasteOutcome {
+                            document,
+                            warnings: vec![RESTORED_DRAWING_NOTICE.into()],
+                            native: true,
+                        });
+                    }
+                    Some(Err(error)) => Some(format!(
+                        "Pasted as a picture: its editable drawing could not be read ({error})"
+                    )),
                     None => None,
                 }
             } else {
@@ -889,6 +913,33 @@ async fn import_representation(
         })
         .await
         .map_err(|e| e.to_string())?;
+    }
+    if !image_only && matches!(item.kind.as_str(), "com.adobe.pdf" | "public.svg-image") {
+        let format = if item.kind == "com.adobe.pdf" {
+            "PDF"
+        } else {
+            "SVG"
+        };
+        if let Some(result) = crate::task::spawn_blocking(move || payload::read(&data))
+            .await
+            .map_err(|e| e.to_string())?
+        {
+            return result
+                .map(|document| PasteOutcome {
+                    document,
+                    warnings: vec![RESTORED_DRAWING_NOTICE.into()],
+                    native: true,
+                })
+                .map_err(|error| {
+                    format!(
+                        "This {format} carries a ReShiki drawing that could not be read: {error}"
+                    )
+                });
+        }
+        return Err(
+            "Paste supports PNG, JPEG, TIFF and WebP pictures. Export this PDF or SVG to PNG first"
+                .into(),
+        );
     }
     let request = if item.kind.contains("cdxml") {
         Request::import(

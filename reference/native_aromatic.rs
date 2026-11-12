@@ -524,6 +524,7 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
                 Some("aromatic-graphics-exchange-source.py.gz")
             }
             "reference/engine/worker.py" => Some("aromatic-worker-source.py.gz"),
+            "reference/engine/reactions.py" => Some("aromatic-reactions-source.py.gz"),
             _ => None,
         };
         let bytes = if let Some(snapshot) = snapshot {

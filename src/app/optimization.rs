@@ -8,7 +8,7 @@ use iced::widget::{Space, column, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::geometry::{
-    Client, Conformer, ForceField, Optimized, Pin, Point3, Prepared, ViewFrame,
+    Client, Conformer, ForceField, Mode, Optimized, Pin, Point3, Prepared, ViewFrame,
 };
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -35,6 +35,7 @@ fn preview_control(
     );
     let value = match &action {
         Action::Field(field) => Some(field.to_string()),
+        Action::Mode(mode) => Some(format!("{mode:?}")),
         _ => None,
     };
     let mut control = reshiki::accessibility::button(id, name, text(label).size(12))
@@ -70,6 +71,7 @@ pub(crate) struct Key {
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Begin,
+    Mode(Mode),
     Field(ForceField),
     Start,
     Stop,
@@ -226,6 +228,11 @@ pub(super) struct Session {
     drag_original: Option<Conformer>,
     drag_original_energy: Option<f64>,
     field: ForceField,
+    /// The chosen chemistry checks. Strict stays selected but cannot
+    /// generate when its checks failed; `prepared` is then the Relaxed one.
+    mode: Mode,
+    strict_error: Option<String>,
+    approximations: Vec<String>,
     energy: Option<f64>,
     iterations: u64,
     converged: bool,
@@ -239,6 +246,7 @@ pub(super) struct Session {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct AccessibilityContext {
     session: u64,
+    mode: Mode,
     field: ForceField,
     running: bool,
     original: bool,
@@ -254,6 +262,7 @@ impl Session {
         let ready = self.conformer.is_some() && self.phase != Phase::Applying;
         AccessibilityContext {
             session: self.id,
+            mode: self.mode,
             field: self.field,
             running: self.running,
             original: self.original,
@@ -267,8 +276,52 @@ impl Session {
                 Phase::Failed => 4,
             },
             ready,
-            can_start: self.phase != Phase::Applying && (ready || self.flight.is_none()),
+            can_start: self.can_start(),
         }
+    }
+
+    fn blocked(&self) -> bool {
+        self.mode == Mode::Strict && self.strict_error.is_some()
+    }
+
+    fn can_start(&self) -> bool {
+        let ready = self.conformer.is_some() && self.phase != Phase::Applying;
+        self.phase != Phase::Applying && !self.blocked() && (ready || self.flight.is_none())
+    }
+
+    /// Switch chemistry checks: discard the conformer, pins and view, then
+    /// generate again, because the two modes can add different hydrogens.
+    fn restart(&mut self, mode: Mode, prepared: Arc<Prepared>) -> Task<Message> {
+        self.abort();
+        if !prepared.mmff_available() {
+            self.field = ForceField::Uff;
+        }
+        self.mode = mode;
+        self.preview = prepared.source().clone();
+        self.prepared = prepared;
+        self.pins.clear();
+        self.pin_ids.clear();
+        self.conformer = None;
+        self.frame = None;
+        self.original = false;
+        self.running = false;
+        self.pending = false;
+        self.drag = None;
+        self.drag_original = None;
+        self.drag_original_energy = None;
+        self.approximations.clear();
+        self.energy = None;
+        self.iterations = 0;
+        self.converged = false;
+        self.initialization = None;
+        self.relaxation = Relaxation::default();
+        self.notice = None;
+        if self.blocked() {
+            self.phase = Phase::Failed;
+            return Task::none();
+        }
+        self.phase = Phase::Preparing;
+        self.dispatch(Work::Generate)
     }
 
     pub(super) fn current(&self, tab: TabId, epoch: u64, revision: u64) -> bool {
@@ -587,13 +640,18 @@ impl App {
             if self.tab.busy || self.tab.drawing_edit_active() {
                 return Task::none();
             }
-            let prepared = match Prepared::new(&self.tab.doc, &self.tab.selected) {
-                Ok(prepared) => Arc::new(prepared),
-                Err(error) => {
-                    self.status = error.to_string();
-                    self.error = true;
-                    return Task::none();
-                }
+            // When Strict checks refuse a molecule that Relaxed mode accepts,
+            // the preview opens with the reason and waits for the user to opt in.
+            let (prepared, strict_error) = match Prepared::new(&self.tab.doc, &self.tab.selected) {
+                Ok(prepared) => (Arc::new(prepared), None),
+                Err(error) => match Prepared::relaxed(&self.tab.doc, &self.tab.selected) {
+                    Ok(prepared) => (Arc::new(prepared), Some(error.to_string())),
+                    Err(_) => {
+                        self.status = error.to_string();
+                        self.error = true;
+                        return Task::none();
+                    }
+                },
             };
             // Optimizing would rewrite the hidden drawing of a molecule shown
             // only as a 3D model.
@@ -641,6 +699,8 @@ impl App {
                 drag_original: None,
                 drag_original_energy: None,
                 field: ForceField::Mmff94s,
+                mode: Mode::Strict,
+                approximations: vec![],
                 energy: None,
                 iterations: 0,
                 converged: false,
@@ -649,11 +709,18 @@ impl App {
                 notice: None,
                 depth_enhancement: true,
                 depth_scopes: self.tab.doc.depth_appearance.clone(),
+                strict_error,
             };
-            let task = session.dispatch(Work::Generate);
+            let task = if session.blocked() {
+                session.phase = Phase::Failed;
+                self.status = "3D preview · Strict checks failed · Choose Relaxed to optimize without valence checks".into();
+                Task::none()
+            } else {
+                self.status = "Generating stereo-preserving 3D · MMFF94s".into();
+                session.dispatch(Work::Generate)
+            };
             self.tab.optimization = Some(session);
             self.tool = Tool::Select;
-            self.status = "Generating stereo-preserving 3D · MMFF94s".into();
             self.error = false;
             return Task::batch([task, self.show_optimization_properties()]);
         }
@@ -738,6 +805,7 @@ impl App {
                 .saturating_add(u64::from(result.iterations));
             session.converged = result.converged;
             if flight.work == Work::Generate {
+                session.approximations = result.approximations.clone();
                 session.initialization = result.diagnostics.iter().rev().find_map(|diagnostic| {
                     if diagnostic.starts_with("initialization=existing-3d") {
                         Some("Existing 3D geometry")
@@ -772,14 +840,19 @@ impl App {
                 return Task::none();
             }
             if flight.work == Work::Apply {
+                let relaxed = session.mode == Mode::Relaxed;
                 let document = session.preview.clone();
                 self.cancel_optimization();
                 let before = self.tab.doc.clone();
                 self.tab.doc = document;
                 self.changed(before);
                 if !self.error {
-                    self.status =
-                        "3D projection applied · Undo restores the original drawing".into();
+                    self.status = if relaxed {
+                        "3D projection applied · Relaxed: chemistry not validated · Undo restores the original drawing"
+                    } else {
+                        "3D projection applied · Undo restores the original drawing"
+                    }
+                    .into();
                 }
                 return Task::none();
             }
@@ -798,10 +871,14 @@ impl App {
             } else {
                 Phase::Paused
             };
-            self.status = if result.converged {
-                "3D preview converged · Enter to apply · Esc to cancel"
-            } else {
-                "3D preview · Pin or drag atoms · Enter to apply · Esc to cancel"
+            self.status = match (session.mode, result.converged) {
+                (Mode::Relaxed, _) => {
+                    "Relaxed 3D preview · Chemistry not validated · Enter to apply · Esc to cancel"
+                }
+                (Mode::Strict, true) => "3D preview converged · Enter to apply · Esc to cancel",
+                (Mode::Strict, false) => {
+                    "3D preview · Pin or drag atoms · Enter to apply · Esc to cancel"
+                }
             }
             .into();
             self.error = false;
@@ -811,7 +888,48 @@ impl App {
             return Task::none();
         }
         match action {
+            Action::Mode(mode) => {
+                if mode == session.mode {
+                    return Task::none();
+                }
+                let source = session.prepared.source();
+                let ids = session.prepared.ids().to_vec();
+                let prepared = match mode {
+                    Mode::Strict if session.strict_error.is_some() => Ok(session.prepared.clone()),
+                    Mode::Strict => Prepared::new(source, &ids).map(Arc::new),
+                    Mode::Relaxed if session.prepared.mode() == Mode::Relaxed => {
+                        Ok(session.prepared.clone())
+                    }
+                    Mode::Relaxed => Prepared::relaxed(source, &ids).map(Arc::new),
+                };
+                return match prepared {
+                    Ok(prepared) => {
+                        let task = session.restart(mode, prepared);
+                        self.status = match mode {
+                            Mode::Relaxed => format!(
+                                "Generating relaxed 3D · {} · Chemistry not validated",
+                                session.field
+                            ),
+                            Mode::Strict if session.blocked() => {
+                                "Strict checks failed · Choose Relaxed to optimize without valence checks".into()
+                            }
+                            Mode::Strict => format!("Generating stereo-preserving 3D · {}", session.field),
+                        };
+                        self.error = false;
+                        task
+                    }
+                    Err(error) => {
+                        session.notice = Some(error.to_string());
+                        self.status = error.to_string();
+                        self.error = true;
+                        Task::none()
+                    }
+                };
+            }
             Action::Start => {
+                if session.blocked() {
+                    return Task::none();
+                }
                 if session.conformer.is_none() {
                     session.phase = Phase::Preparing;
                     return session.dispatch(Work::Generate);
@@ -844,6 +962,9 @@ impl App {
                 session.field = field;
                 session.energy = None;
                 session.notice = None;
+                if session.blocked() {
+                    return Task::none();
+                }
                 if session.conformer.is_none() {
                     session.phase = Phase::Preparing;
                     return session.dispatch(Work::Generate);
@@ -1033,6 +1154,7 @@ impl App {
             }
             Phase::Running => "Relaxing…",
             Phase::Applying => "Checking projection…",
+            Phase::Failed if session.blocked() => "Strict checks failed",
             Phase::Failed => "3D needs attention",
         };
         let energy = session
@@ -1050,16 +1172,40 @@ impl App {
             || phase.to_owned(),
             |initialization| format!("{phase} · {initialization}"),
         );
+        let mmff = session.prepared.mmff_available();
         let field = |id, name, label, field| {
+            let available = mmff || field == ForceField::Uff;
             preview_control(
                 id,
                 name,
                 label,
                 Action::Field(field),
-                editable,
+                editable && available,
                 Some(session.field == field),
-                "Choose the force field used to relax this molecule",
+                if available {
+                    "Choose the force field used to relax this molecule"
+                } else {
+                    "MMFF has no parameters for metals; Relaxed mode uses UFF"
+                },
             )
+        };
+        let mode = |id, name, label, mode, hint| {
+            preview_control(
+                id,
+                name,
+                label,
+                Action::Mode(mode),
+                editable,
+                Some(session.mode == mode),
+                hint,
+            )
+        };
+        let warning = |message: String| {
+            text(message)
+                .size(11)
+                .style(crate::appearance::text_color(iced::Color::from_rgb8(
+                    182, 66, 61,
+                )))
         };
         fn section<'a>(
             title: &'static str,
@@ -1077,6 +1223,12 @@ impl App {
             text(phase).size(12),
             text(format!("{} pinned · {energy}", session.pins.len()))
                 .size(11).style(super::workspace::muted_text),
+            section("Chemistry checks", row![
+                mode("optimization.mode.strict", "Use strict chemistry checks", "Strict", Mode::Strict,
+                    "Check valences and drawn chemistry before optimizing"),
+                mode("optimization.mode.relaxed", "Use relaxed chemistry checks", "Relaxed", Mode::Relaxed,
+                    "Optimize metal complexes and unusual valences without valence checks; the result is approximate"),
+            ].spacing(4).align_y(Alignment::Center).width(Length::Fill).wrap().into()),
             section("Force field & relaxation", column![
                 row![
                     field("optimization.field.mmff94", "Use MMFF94 force field", "MMFF94", ForceField::Mmff94),
@@ -1086,7 +1238,7 @@ impl App {
                 preview_control("optimization.run", if session.running { "Stop relaxation" } else if session.conformer.is_none() { "Generate 3D" } else { "Start relaxation" },
                     if session.running { "Stop relaxation" } else if session.conformer.is_none() { "Generate 3D" } else { "Start relaxation" },
                     if session.running { Action::Stop } else { Action::Start },
-                    editable && (ready || session.flight.is_none()), None,
+                    session.can_start(), None,
                     "Start or pause relaxation; the preview stays editable until you Apply or Cancel"),
             ].spacing(6).into()),
             section("Pins", row![
@@ -1117,6 +1269,37 @@ impl App {
             text("Shift-click selects atoms to pin. Unpin to drag; use the Tilt tool to rotate freely.")
                 .size(11).style(super::workspace::muted_text),
         ].spacing(10).width(Length::Fill);
+        if let Some(error) = session.strict_error.as_ref().filter(|_| session.blocked()) {
+            panel = panel.push(warning(format!("Strict: {error}"))).push(
+                text("Choose Relaxed to optimize it without valence checks. The result is approximate.")
+                    .size(11)
+                    .style(super::workspace::muted_text),
+            );
+        }
+        if session.mode == Mode::Relaxed {
+            let notes = session
+                .prepared
+                .skipped_checks()
+                .iter()
+                .chain(&session.approximations)
+                .fold(column![].spacing(2), |notes, note| {
+                    notes.push(
+                        text(format!("· {note}"))
+                            .size(11)
+                            .style(super::workspace::muted_text),
+                    )
+                });
+            panel = panel.push(
+                column![
+                    warning("Relaxed: chemistry not validated".into()),
+                    text(format!("Force field: {}", session.field))
+                        .size(11)
+                        .style(super::workspace::muted_text),
+                    notes
+                ]
+                .spacing(3),
+            );
+        }
         if session.phase == Phase::Preparing {
             panel = panel.push(
                 text("Building the preview. Apply becomes available when it is ready.")
@@ -1131,9 +1314,7 @@ impl App {
             );
         }
         if let Some(notice) = &session.notice {
-            panel = panel.push(text(notice).size(11).style(crate::appearance::text_color(
-                iced::Color::from_rgb8(182, 66, 61),
-            )));
+            panel = panel.push(warning(notice.clone()));
         }
         panel.into()
     }
