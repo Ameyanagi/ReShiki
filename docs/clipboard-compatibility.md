@@ -156,7 +156,11 @@ The portable names below are what `src/clipboard.rs` prepares
 in `native/macos/src/clipboard.rs`, `native/windows/src/clipboard.rs` and
 `native/windows/src/ole.rs`, `native/linux/src/protocol.rs`, and
 `src/clipboard/browser.rs`. The Copy PNG is 1200 dpi with transparency and
-`pHYs` metadata. On Windows it is limited to 16 megapixels.
+`pHYs` metadata. On Windows it is limited to 16 megapixels. Every clipboard SVG
+(Copy, Copy Image and Copy as → SVG, on every platform and in the browser) is
+the outlined `svg-office` figure: text drawn as paths, width and height in
+points with a matching `viewBox`, a transparent background and the drawing
+inside it.
 
 ### macOS: NSPasteboard types
 
@@ -170,8 +174,8 @@ command:
 | 3   | `com.perkinelmer.chemdraw.cdx-clipboard` (same bytes) | `com.perkinelmer.chemdraw.cdx-clipboard`                                     |
 | 4   | `com.cambridgesoft.cdx` (same bytes)                  | `com.cambridgesoft.cdx`                                                      |
 | 5   | `com.adobe.pdf`                                       | `public.png`                                                                 |
-| 6   | `public.png`                                          | `public.svg-image`                                                           |
-| 7   | `public.svg-image`                                    | `dev.reshiki.drawing` (the drawing, when it fits the 2 MB limit)             |
+| 6   | `public.png`                                          | `public.svg-image` (text outlined)                                           |
+| 7   | `public.svg-image` (text outlined)                    | `dev.reshiki.drawing` (the drawing, when it fits the 2 MB limit)             |
 
 Copy writes no `public.tiff`, `public.html`, `public.rtf` or text type. When
 editable CDX export fails, Copy writes the picture-only CDX instead, just before
@@ -251,7 +255,7 @@ image/png
 image/svg+xml
 ```
 
-X11 adds `TARGETS`, `TIMESTAMP` and `MULTIPLE`. Wayland adds a private random
+`image/svg+xml` draws its text as outlines. X11 adds `TARGETS`, `TIMESTAMP` and `MULTIPLE`. Wayland adds a private random
 receipt type. There is no `text/plain`, `UTF8_STRING` or `text/html`.
 
 Observed picks: LibreOffice lists `application/pdf`, `application/x-chemdraw`,
@@ -263,7 +267,7 @@ Observed picks: LibreOffice lists `application/pdf`, `application/x-chemdraw`,
 
 The browser editor writes one `ClipboardItem`:
 
-- **Copy:** `text/html`, `image/png`, `image/svg+xml` (only where
+- **Copy:** `text/html`, `image/png`, `image/svg+xml` (text outlined, only where
   `ClipboardItem.supports` allows it, as in Chromium) and `text/plain` with
   SMILES when the selection has molecules. The HTML is
   `<img src="data:image/png…" data-reshiki="…">`, sized in CSS pixels from the

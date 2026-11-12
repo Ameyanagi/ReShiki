@@ -543,24 +543,18 @@ async fn prepare_copy_with_limit(
     Ok((outcome, representations))
 }
 
-/// Preserve Office's outlined SVG while adding the same payload as the other
-/// pictures. PDF needs its drawing passed to the exporter before serialization.
+/// Every clipboard SVG outlines its text so apps that paste SVG keep the labels
+/// without the fonts. PDF needs its drawing passed to the exporter before serialization.
 fn clipboard_figure(
     doc: &Document,
     format: &str,
     drawing: Option<&[u8]>,
 ) -> Result<export::Figure, String> {
-    #[cfg(windows)]
-    if format == "svg" {
-        let bytes = export::clipboard_svg(doc)?;
-        return Ok(export::Figure {
-            bytes: match drawing {
-                Some(drawing) => payload::embed("svg", bytes, drawing)?,
-                None => bytes,
-            },
-            detail: None,
-        });
-    }
+    let format = if format == "svg" {
+        "svg-office"
+    } else {
+        format
+    };
     export::clipboard_figure_with_drawing(doc, format, drawing)
 }
 

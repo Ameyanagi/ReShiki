@@ -58,13 +58,6 @@ pub fn outlined_svg(svg: String) -> Result<Vec<u8>, String> {
     office_svg(&parse_svg(svg)?)
 }
 
-/// A transparent outlined picture for the Windows clipboard.
-#[cfg(any(windows, test))]
-pub fn clipboard_svg(doc: &Document) -> Result<Vec<u8>, String> {
-    doc.validate()?;
-    office_svg(&parse_svg(scene::svg(doc))?)
-}
-
 /// Refresh derived chemistry for an export snapshot without touching editing history.
 pub async fn checked_document(
     engine: &crate::engine::LocalEngine,

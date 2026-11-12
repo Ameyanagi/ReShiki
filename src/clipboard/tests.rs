@@ -54,7 +54,19 @@ async fn copied_pictures_restore_the_visible_snapshot_on_desktop_and_browser() {
                     .collect();
                 assert_eq!(pictures.len(), if browser { 2 } else { 3 });
                 for picture in pictures {
-                    let restored = payload::read(&picture.bytes().unwrap()).unwrap().unwrap();
+                    let bytes = picture.bytes().unwrap();
+                    if picture.kind == "public.svg-image" {
+                        let svg = std::str::from_utf8(&bytes).unwrap();
+                        let xml = roxmltree::Document::parse(svg).unwrap();
+                        assert!(!xml.descendants().any(|node| node.has_tag_name("text")));
+                        assert!(xml.descendants().any(|node| node.has_tag_name("path")));
+                        let root = xml.root_element();
+                        for dimension in ["width", "height"] {
+                            assert!(root.attribute(dimension).unwrap().ends_with("pt"));
+                        }
+                        assert!(root.attribute("viewBox").is_some());
+                    }
+                    let restored = payload::read(&bytes).unwrap().unwrap();
                     assert_eq!(restored.all_ids(), snapshot.all_ids(), "{}", picture.kind);
                     assert_eq!(restored.atom(unselected).is_none(), selection);
                     assert!(restored.recent_colors.is_empty());
@@ -1250,25 +1262,22 @@ async fn copy_image_retains_the_drawing_and_raster_paste_keeps_the_picture() {
     .unwrap();
     let envelope = payload::encode(&doc).unwrap();
     let images = copy_images_with_drawing(&doc, true, false, Some(&envelope));
-    #[cfg(windows)]
-    {
-        let svg = images
-            .iter()
-            .find(|(format, _)| *format == "svg")
-            .unwrap()
-            .1
-            .as_ref()
-            .unwrap()
-            .bytes()
-            .unwrap();
-        let text = std::str::from_utf8(&svg).unwrap();
-        assert!(!text.contains("<text"), "Office needs outlined labels");
-        assert!(text.contains("<path"));
-        assert_eq!(
-            payload::read(&svg).unwrap().unwrap().all_ids(),
-            doc.all_ids()
-        );
-    }
+    let svg = images
+        .iter()
+        .find(|(format, _)| *format == "svg")
+        .unwrap()
+        .1
+        .as_ref()
+        .unwrap()
+        .bytes()
+        .unwrap();
+    let text = std::str::from_utf8(&svg).unwrap();
+    assert!(!text.contains("<text"), "pasting apps need outlined labels");
+    assert!(text.contains("<path"));
+    assert_eq!(
+        payload::read(&svg).unwrap().unwrap().all_ids(),
+        doc.all_ids()
+    );
     let native = images
         .iter()
         .find(|(format, _)| *format == "native drawing")

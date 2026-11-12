@@ -54,10 +54,9 @@ async fn copy_as_pictures_contain_the_selected_editable_drawing() {
         assert!(restored.recent_colors.is_empty());
         let theme = restored.custom_theme.unwrap();
         assert!(theme.author.is_empty() && theme.source.is_empty() && theme.license.is_empty());
-        #[cfg(windows)]
         if format == CopyFormat::Svg {
             let svg = std::str::from_utf8(&bytes).unwrap();
-            assert!(!svg.contains("<text"), "Office needs outlined labels");
+            assert!(!svg.contains("<text"), "pasting apps need outlined labels");
             assert!(svg.contains("<path"));
         }
     }
