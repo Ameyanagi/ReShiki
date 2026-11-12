@@ -17,7 +17,12 @@ pub fn differs(rdkit: Option<&Vec<Vec<usize>>>, document: Option<&Document>) -> 
     let Ok(molecule) = chemistry::document::prepare(&molecules) else {
         return false;
     };
-    let Ok(rings) = chemistry::rings::perceive(&molecule.state.graph, Default::default()) else {
+    // Layout rings include dative bonds, as RDKit's RingInfo does.
+    let options = chemistry::rings::Options {
+        include_dative: true,
+        include_hydrogen: false,
+    };
+    let Ok(rings) = chemistry::rings::perceive(&molecule.state.graph, options) else {
         return false;
     };
     let ours: BTreeSet<Vec<usize>> = rings.atoms[..rings.basis_count]

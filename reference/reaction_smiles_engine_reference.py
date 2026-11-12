@@ -207,7 +207,8 @@ def sssr(expected):
         mol = from_document(expected["document"])
     except (ValueError, RuntimeError):  # The worker cannot read every drawing it returns.
         return None
-    return sorted(sorted(ring) for ring in Chem.GetSSSR(mol))
+    # Layout rings include dative bonds, as RingInfo does.
+    return sorted(sorted(ring) for ring in Chem.GetSSSR(mol, includeDativeBonds=True))
 
 
 if __name__ == "__main__":
