@@ -26,9 +26,10 @@ x64. Dumps, scripts and screenshots are in the
   can double-click to edit in ReShiki. Use **Copy Image** for a static figure.
 - **ChemDraw:** use **Copy** for editable chemistry.
 - **Web and WebView apps on Windows:** this covers new Outlook, Outlook on the
-  web, Gmail, Google Docs, Teams, Slack and Notion. Use **Copy Image**. **Copy**
-  currently pastes nothing into them
-  ([#1146](https://github.com/Ameyanagi/ReShiki/issues/1146)).
+  web, Gmail, Google Docs, Teams, Slack and Notion. Both **Copy** and **Copy
+  Image** paste a bitmap picture. Before
+  [#1148](https://github.com/Ameyanagi/ReShiki/pull/1148), **Copy** pasted
+  nothing into them ([#1146](https://github.com/Ameyanagi/ReShiki/issues/1146)).
 - **Mac apps:** **Copy** and **Copy Image** both paste a picture. Only ChemDraw
   and ReShiki read the editable drawing. Mac Office has no editable ReShiki
   object, so keep the `.rsk` original.
@@ -49,9 +50,9 @@ its picture, and a double-click opens the drawing in ReShiki. "Vector" and
 | --------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------- |
 | Word, PowerPoint, Excel (Microsoft 365)                         | Object; double-click edits in ReShiki                       | Vector (SVG graphic)     | Tested                                                                                                  |
 | Classic Outlook (Win32, Word editor)                            | Probably an object, like Word; the recipient gets a picture | Vector or bitmap picture | Unknown: no mail profile on the test machine                                                            |
-| New Outlook for Windows (WebView2)                              | **Nothing**                                                 | Bitmap (PNG)             | Tested in Edge 157, the same engine as the test machine's WebView2 157; the app itself needs an account |
-| Outlook on the web, Gmail, Google Docs/Slides in Edge or Chrome | **Nothing**                                                 | Bitmap (PNG)             | Tested in Edge; the sites need accounts                                                                 |
-| Teams, Slack, Notion desktop apps (Chromium-based)              | **Nothing**                                                 | Bitmap (PNG)             | Docs/code: same clipboard reader as Edge                                                                |
+| New Outlook for Windows (WebView2)                              | Bitmap (since #1148)                                        | Bitmap (PNG)             | Tested in Edge 157, the same engine as the test machine's WebView2 157; the app itself needs an account |
+| Outlook on the web, Gmail, Google Docs/Slides in Edge or Chrome | Bitmap (since #1148)                                        | Bitmap (PNG)             | Tested in Edge; the sites need accounts                                                                 |
+| Teams, Slack, Notion desktop apps (Chromium-based)              | Bitmap (since #1148)                                        | Bitmap (PNG)             | Docs/code: same clipboard reader as Edge                                                                |
 | OneNote desktop                                                 | Probably an object or picture                               | Picture                  | Unknown                                                                                                 |
 | Paint                                                           | Nothing or metafile                                         | Bitmap                   | Unknown; Paint reads bitmaps                                                                            |
 | LibreOffice                                                     | Unknown                                                     | Picture                  | Unknown: not installed on the test machine                                                              |
@@ -153,8 +154,10 @@ Copy goes through OLE: `OleSetClipboard`, then `OleFlushClipboard`. This is the
 | 9   | `Ole Private Data`            | Added by OLE                                                      |
 | 10  | `CF_METAFILEPICT`             | Synthesized by Windows                                            |
 
-`ole::copy` removes `PNG`, `CF_DIB` and `image/svg+xml` from Copy, so there is no
-`HTML Format`, `CF_UNICODETEXT`, `PNG` or bitmap.
+`ole::copy` removes `PNG` and `image/svg+xml` from Copy but keeps `CF_DIB`
+([#1148](https://github.com/Ameyanagi/ReShiki/pull/1148)), so browser and WebView2
+apps receive a bitmap while Office still takes `Embed Source`. Copy has no
+`HTML Format`, `CF_UNICODETEXT` or `PNG`.
 
 Copy Image uses plain `SetClipboardData`, in format-ID order: `CF_DIB` (24-bit, on
 white), `PDF`, `PNG`, `image/svg+xml` (text outlined), `ChemDraw Interchange
@@ -167,7 +170,8 @@ Observed picks:
   `image/svg+xml` from Copy Image.
 - **Chromium and WebView2** (Edge, new Outlook, Teams and other web apps) read
   only `HTML Format`, `PNG`, `CF_DIB`/`CF_DIBV5`/`CF_BITMAP`, `CF_UNICODETEXT`,
-  `image/svg+xml` and file lists. A Copy gives them an empty paste event.
+  `image/svg+xml` and file lists. They take `CF_DIB` from Copy (before #1148 a
+  Copy gave them an empty paste event).
 
 Experiment from [#1146](https://github.com/Ameyanagi/ReShiki/issues/1146): the Copy
 formats were re-published with one extra format.
@@ -254,9 +258,6 @@ Native names for these:
 
 ## Open questions
 
-- [#1146](https://github.com/Ameyanagi/ReShiki/issues/1146) proposes keeping
-  `CF_DIB` in the Windows Copy, so WebView2 and browser apps receive a picture
-  while Office keeps the object.
 - The web picture size: an `HTML Format` or `text/html` flavor with CSS
   `width`/`height` would fix it, but on Windows it makes Office paste a picture
   instead of the object.
