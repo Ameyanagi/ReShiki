@@ -25,6 +25,73 @@ fn prepared() -> Opened {
     ))
 }
 
+fn png() -> Vec<u8> {
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgba8(3, 2)
+        .write_to(&mut bytes, image::ImageFormat::Png)
+        .unwrap();
+    bytes.into_inner()
+}
+
+#[tokio::test]
+async fn editable_png_opens_as_an_untitled_drawing_with_native_save_target() -> Result<(), String> {
+    let mut drawing = Document::default();
+    drawing.add_atom("O", Point::default());
+    let contents = reshiki::payload::embed("png", png(), &reshiki::payload::encode(&drawing)?)?;
+    let path = PathBuf::from("images/oxygen.PNG");
+    let opened = prepare_contents(path.clone(), Ok(contents.clone())).await;
+    assert!(matches!(&opened, Some((_, Ok(Prepared::Picture(_, None))))));
+    let (mut app, _) = App::new();
+    app.cancel_engine_job();
+    app.tab.busy = false;
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("N", Point::default());
+    app.changed(before);
+    let kept = app.tab.doc.clone();
+    let _ = app.update(Message::FilePrepared(opened));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.name(), "oxygen");
+    assert!(app.tab.path.is_none() && app.dirty());
+    assert_eq!(app.tabs.background.len(), 1);
+    assert_eq!(app.tabs.background[0].doc, kept);
+    assert_eq!(app.drawing_save_target(false), (None, "oxygen.rsk".into()));
+    assert_eq!(app.status, "Opened the editable drawing from oxygen.PNG");
+    // Opening the same PNG again is another editable import, not a saved-file duplicate.
+    let _ = app.update(Message::FilePrepared(
+        prepare_contents(path, Ok(contents)).await,
+    ));
+    assert_eq!(app.tabs.background.len(), 2);
+    assert!(app.strip().all(|tab| tab.path.is_none()));
+    Ok(())
+}
+
+#[test]
+fn png_open_keeps_ordinary_refusal_and_opens_a_damaged_payload_as_a_picture() {
+    let path = std::path::Path::new("picture.png");
+    let ordinary = png();
+    assert_eq!(
+        prepare(path, ordinary.clone()).unwrap_err(),
+        "Can't import .png"
+    );
+    let invalid = reshiki::payload::embed("png", ordinary, b"invalid payload").unwrap();
+    let reason = reshiki::payload::read(&invalid).unwrap().unwrap_err();
+    let prepared = prepare(path, invalid).unwrap();
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::FilePrepared(Some((path.into(), Ok(prepared)))));
+    assert!(!app.error);
+    assert_eq!(
+        app.status,
+        format!(
+            "Opened picture.png as a picture: its editable drawing could not be read ({reason})"
+        )
+    );
+    assert!(app.tab.doc.atoms.is_empty());
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+    assert!(app.tab.doc.graphics[0].picture.is_some());
+    assert!(app.tab.path.is_none());
+}
+
 #[test]
 fn opening_takes_an_empty_tab_and_keeps_edited_and_drafting_tabs() {
     let (mut app, _) = App::new();
@@ -363,6 +430,7 @@ fn cli_input_formats_match_the_app() {
         let chosen = match prepare(&path, contents).unwrap() {
             Prepared::Native(_) => "reshiki",
             Prepared::Import { format, .. } => format,
+            Prepared::Picture(..) => panic!("Structure files are not pictures"),
         };
         assert_eq!(
             chosen,

@@ -110,7 +110,7 @@ fn explicit_structure_formats_keep_native_bytes_and_unicode_text() {
 }
 
 #[test]
-fn editable_office_copy_omits_standalone_bitmap_but_copy_image_keeps_it() {
+fn editable_office_copy_and_copy_image_both_offer_a_bitmap() {
     let image = image::RgbaImage::from_pixel(20, 10, image::Rgba([30, 70, 150, 255]));
     let mut png = Vec::new();
     let mut encoder = png::Encoder::new(&mut png, 20, 10);
@@ -140,7 +140,7 @@ fn editable_office_copy_omits_standalone_bitmap_but_copy_image_keeps_it() {
         ]
     };
     let office = prepare_formats(reps(), true).unwrap();
-    assert!(!office.contains_key(&DIB));
+    assert_eq!(bitmap(&from_dib(&office[&DIB]).unwrap()).unwrap(), image);
     assert_eq!(office[&format("PNG").unwrap()], png);
     assert!(office.contains_key(&format("dev.reshiki.drawing").unwrap()));
     let picture = prepare_formats(reps(), false).unwrap();

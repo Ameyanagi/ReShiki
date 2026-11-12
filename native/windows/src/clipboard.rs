@@ -329,11 +329,18 @@ fn prepare_formats(
             return Err(anyhow::anyhow!("Invalid clipboard format"));
         }
         let bytes = decode(&rep.data)?;
-        // OLE carries its own cached PNG/EMF preview. It removes standalone
-        // bitmaps so Word keeps the object editable; don't allocate a DIB
-        // only to discard it (or reject Copy because that unused DIB is huge).
-        if rep.kind == "public.png" && !embedded {
-            formats.insert(DIB, to_dib(&bytes)?);
+        // Browsers and WebView2 apps (new Outlook, Teams) read only bitmaps,
+        // PNG or HTML. Word, PowerPoint and Excel still paste the editable
+        // object when a bitmap is offered, but not with PNG or HTML. An
+        // editable copy leaves out a bitmap it cannot fit.
+        if rep.kind == "public.png" {
+            match to_dib(&bytes) {
+                Ok(dib) => {
+                    formats.insert(DIB, dib);
+                }
+                Err(error) if !embedded => return Err(error),
+                Err(_) => {}
+            }
         }
         let (id, bytes) = if rep.kind == "public.utf8-plain-text" {
             (
@@ -353,6 +360,9 @@ fn prepare_formats(
             (format(mapped(&rep.kind))?, bytes)
         };
         formats.entry(id).or_insert(bytes);
+    }
+    if embedded && formats.values().map(Vec::len).sum::<usize>() > LIMIT {
+        formats.remove(&DIB);
     }
     if formats.values().map(Vec::len).sum::<usize>() > LIMIT {
         return Err(anyhow::anyhow!(

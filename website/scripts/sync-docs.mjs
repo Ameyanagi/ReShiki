@@ -48,7 +48,7 @@ const guides = {
     "publication-pages",
     "scientific-symbols",
   ],
-  sharing: ["clipboard"],
+  sharing: ["clipboard", "clipboard-compatibility"],
 };
 const guideForTopic = new Map(
   Object.entries(guides).flatMap(([guide, topics]) => topics.map((topic) => [topic, guide])),

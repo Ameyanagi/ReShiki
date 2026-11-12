@@ -1,9 +1,10 @@
 //! Finish molecular, drawing and reaction imports without a Python worker.
 //!
-//! Molecular files and drawing scenes retain their original chemical state for
-//! analysis. Reactions deliberately prepare their finished combined drawing,
-//! matching the original reaction import path. Layout and drawing construction
-//! stay detached; parse, chemistry and helper errors never request a fallback.
+//! Retained file coordinates and drawing scenes keep their chemical state for
+//! analysis. Fresh atropisomer layouts use the stereo their wedges show.
+//! Reactions prepare their finished combined drawing, matching the original
+//! reaction import path. Layout and drawing construction stay detached; parse,
+//! chemistry and helper errors never request a fallback.
 use super::{Request, Response, native_response};
 use crate::{
     chemistry::{
@@ -508,34 +509,99 @@ fn finish_molecule(
     let mut document = drawing.finish(labels)?;
     layout_refinement::space_component_labels(row, &mut molecule, &mut document);
     document.validate().map_err(Error::Document)?;
-    // An axis end reads a wedge from a neighbouring centre as its own, as
-    // RDKit does, so some fresh layouts' wedges hide an axis (#1056). Refuse
-    // such a drawing, as the reference refuses atropisomer bond stereo,
-    // rather than silently lose the axis.
-    // A drawing that cannot be prepared again (named dummy atoms) keeps
-    // main's behaviour.
+    let mut warnings = Vec::new();
     let expected = axes(&molecule)?;
-    if !expected.is_empty()
-        && let Ok(read) = molecular::prepare(&document)
-        && expected
-            .iter()
-            .any(|axis| !axes(&read).is_ok_and(|read| read.contains(axis)))
-    {
-        return Err(molecular::Error::WedgeAssignment(
-            "The wedges in this layout cannot show the atropisomer axis next to a wedged stereocentre"
-                .into(),
-        )
-        .into());
+    let mut readback = None;
+    if !expected.is_empty() {
+        let mut visible = document.clone();
+        // Stored source windings must not conceal centres the wedges lost.
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        // Named dummy atoms can prevent preparation; keep their import path.
+        if let Ok(mut read) = molecular::prepare(&visible) {
+            let source_centres = centres(&molecule);
+            // A failed repair retains the reference wedges, which can reverse
+            // an axis. Remove only its own carriers, not a neighbour's wedge.
+            let mut changed = false;
+            loop {
+                let unwanted: Vec<_> = axes(&read)?
+                    .into_iter()
+                    .filter(|axis| !expected.contains(axis))
+                    .flat_map(|(a, b, _)| [a, b])
+                    .collect();
+                let mut cleared = false;
+                for bond in &mut visible.bonds {
+                    if !bond.projection
+                        && bond.order == 1
+                        && unwanted.contains(&bond.a)
+                        && matches!(
+                            bond.display.as_str(),
+                            "wedge" | "hollow_wedge" | "bold" | "hash" | "hashed"
+                        )
+                    {
+                        bond.display = "plain".into();
+                        cleared = true;
+                    }
+                }
+                if !cleared {
+                    break;
+                }
+                changed = true;
+                read = molecular::prepare(&visible)?;
+            }
+            let actual = axes(&read)?;
+            for (a, b, stereo) in expected {
+                if !actual.contains(&(a, b, stereo)) {
+                    let a = chemistry::stereo_lint::atom_name(&visible, a);
+                    let b = chemistry::stereo_lint::atom_name(&visible, b);
+                    warnings.push(format!(
+                        "The wedges in this layout cannot show the atropisomer axis {a}–{b}; ReShiki drew the structure without that axis"
+                    ));
+                }
+            }
+            let read_centres = centres(&read);
+            for id in source_centres {
+                if !read_centres.contains(&id) {
+                    let atom = chemistry::stereo_lint::atom_name(&visible, id);
+                    warnings.push(format!(
+                        "The wedges in this layout cannot show the stereocentre {atom}; ReShiki drew the structure without it"
+                    ));
+                }
+            }
+            // Labels and the first analysis must describe the same wedges as
+            // later preparation/export. Preserve the finished drawing's paint.
+            // A drawing that shows every source element stays as finished.
+            if changed || !warnings.is_empty() {
+                let drawing = molecular::for_drawing(&read, &visible)?;
+                let labels = drawing.labels()?;
+                document = drawing.finish_preserving(labels, &visible)?;
+                readback = Some(read);
+            }
+        }
     }
-    let warnings = chemistry::drop_added_axis_wedges(&mut document, &molecule)
-        .into_iter()
-        .collect();
+    warnings.extend(chemistry::drop_added_axis_wedges(&mut document, &molecule));
+    if let Some(read) = readback {
+        molecule = read;
+    }
     Ok(Prepared {
         molecule,
         document,
         warnings,
         file_xyz: false,
     })
+}
+
+/// Tetrahedral centres the molecule specifies, by stable atom IDs. Wedges
+/// either show a generated centre's configuration or leave it unspecified.
+fn centres(molecule: &molecular::Molecule) -> std::collections::BTreeSet<u64> {
+    molecule
+        .ids
+        .iter()
+        .zip(&molecule.state.metadata.atoms)
+        .filter(|(_, atom)| matches!(atom.chiral_tag, 1 | 2))
+        .map(|(&id, _)| id)
+        .collect()
 }
 
 /// Atropisomer axes by stable atom IDs.

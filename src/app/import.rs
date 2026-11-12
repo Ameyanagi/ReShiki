@@ -6,6 +6,7 @@ use crate::canvas::Tool;
 use iced::widget::canvas::{self, Geometry, Path as Outline, Stroke};
 use iced::widget::{column, container, row, stack, text, text_editor, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Rectangle, Renderer, Task, Theme, mouse};
+use reshiki::canvas_theme::CanvasTheme;
 use reshiki::chemistry::document::DrawingOptions;
 use reshiki::document::{Document, Point};
 use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
@@ -234,15 +235,40 @@ async fn read(
     engine: &LocalEngine,
     file: Picked,
     options: DrawingOptions,
+    canvas_theme: CanvasTheme,
 ) -> Result<(Document, Vec<String>), String> {
     match kind(&file.path) {
         Kind::Picture => {
-            let picture = reshiki::metafile::open_bytes(&file.path, file.contents).await?;
-            let warnings = if picture.emf().is_some() {
-                vec![reshiki::metafile::EMF_IMPORT_NOTICE.into()]
+            let mut warnings = vec![];
+            let file = if extension(&file.path) == "png" {
+                let (file, payload) = reshiki::task::spawn_blocking(move || {
+                    let payload = reshiki::payload::read(&file.contents);
+                    (file, payload)
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+                match payload {
+                    Some(Ok(drawing)) => {
+                        let warning =
+                            format!("Restored the editable drawing from {}", name(&file.path));
+                        return Ok((
+                            reshiki::canvas_theme::for_native_paste(drawing, canvas_theme),
+                            vec![warning],
+                        ));
+                    }
+                    Some(Err(error)) => warnings.push(format!(
+                        "Inserted as a picture: its editable drawing could not be read ({error})"
+                    )),
+                    None => {}
+                }
+                file
             } else {
-                vec![]
+                file
             };
+            let picture = reshiki::metafile::open_bytes(&file.path, file.contents).await?;
+            if picture.emf().is_some() {
+                warnings.push(reshiki::metafile::EMF_IMPORT_NOTICE.into());
+            }
             Ok((picture_drawing(&picture), warnings))
         }
         Kind::Structure(format) => {
@@ -262,6 +288,7 @@ async fn load(
     engine: LocalEngine,
     files: Vec<Picked>,
     options: DrawingOptions,
+    canvas_theme: CanvasTheme,
 ) -> Result<Batch, String> {
     let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
     let mut batch = Batch {
@@ -269,7 +296,7 @@ async fn load(
         ..Default::default()
     };
     for (file, path) in files.into_iter().zip(&paths) {
-        let (drawing, warnings) = read(&engine, file, options)
+        let (drawing, warnings) = read(&engine, file, options, canvas_theme)
             .await
             .map_err(|e| format!("Could not import {}: {e}", name(path)))?;
         batch.drawings.push(drawing);
@@ -409,11 +436,13 @@ impl App {
                     }
                     let engine = self.engine.clone();
                     let options = (&self.tab.doc.drawing_style).into();
+                    let canvas_theme = self.tab.doc.canvas_theme;
                     let load = async move {
                         load(
                             engine,
                             super::files::read_paths(paths, limit).await?,
                             options,
+                            canvas_theme,
                         )
                         .await
                     };
@@ -451,8 +480,9 @@ impl App {
                         }
                         let ticket = self.import_ticket();
                         let options = (&self.tab.doc.drawing_style).into();
+                        let canvas_theme = self.tab.doc.canvas_theme;
                         return Task::perform(
-                            load(self.engine.clone(), files, options),
+                            load(self.engine.clone(), files, options, canvas_theme),
                             move |result| {
                                 Message::Imports(Action::Loaded(ticket, Box::new(result)))
                             },

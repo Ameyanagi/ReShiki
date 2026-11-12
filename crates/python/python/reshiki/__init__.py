@@ -10,6 +10,8 @@ from __future__ import annotations
 import importlib
 import json
 import math
+import sys
+import warnings
 from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
@@ -30,6 +32,7 @@ __all__ = [
     "StyleContext",
     "Properties",
     "RenderResults",
+    "StructureWarning",
     "parse",
     "render",
     "convert",
@@ -66,6 +69,10 @@ _STYLE_ALIASES = {
 _D = TypeVar("_D", bound="Drawing")
 
 
+class StructureWarning(UserWarning):
+    """The structure was imported, but ReShiki changed or assumed part of it; the message says what."""
+
+
 def _format(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("format must be a string")
@@ -92,15 +99,38 @@ def _data(value: str | bytes) -> bytes:
     raise TypeError("structure input must be text or bytes")
 
 
-def _from_native(result: tuple[bytes, str]) -> Drawing:
-    data, kind = result
+def _read_path(
+    path: str | PathLike[str], format: str | None = None
+) -> tuple[bytes, str, list[str]]:
+    source = Path(path)
+    inferred = source.suffix.lstrip(".")
+    if not inferred and source.name.upper() in {"POSCAR", "CONTCAR"}:
+        inferred = "poscar"
+    name = _format(format or inferred or "auto")
+    return _native.parse(source.read_bytes(), name)
+
+
+def _from_native(result: tuple[bytes, str, list[str]]) -> Drawing:
+    data, kind, messages = result
     cls = {"molecule": Molecule, "reaction": Reaction, "drawing": Drawing}.get(kind)
     if cls is None:
         raise RuntimeError(f"Native engine returned unknown drawing kind: {kind!r}")
+    if messages:
+        frame = sys._getframe()
+        stacklevel = 1
+        package = Path(__file__).resolve().parent
+        while frame is not None and Path(frame.f_code.co_filename).resolve().is_relative_to(
+            package
+        ):
+            stacklevel += 1
+            frame = frame.f_back
+        del frame
+        for message in messages:
+            warnings.warn(message, StructureWarning, stacklevel=stacklevel)
     return cls(data)
 
 
-def _from_constructor(cls: type[_D], result: tuple[bytes, str]) -> _D:
+def _from_constructor(cls: type[_D], result: tuple[bytes, str, list[str]]) -> _D:
     drawing = _from_native(result)
     if cls is Drawing:
         return cast(_D, drawing)
@@ -218,12 +248,7 @@ class Drawing:
     @classmethod
     def open(cls: type[_D], path: str | PathLike[str], *, format: str | None = None) -> _D:
         """Read a structure file, including extensionless POSCAR and CONTCAR."""
-        source = Path(path)
-        inferred = source.suffix.lstrip(".")
-        if not inferred and source.name.upper() in {"POSCAR", "CONTCAR"}:
-            inferred = "poscar"
-        name = _format(format or inferred or "auto")
-        return _from_constructor(cls, _native.parse(source.read_bytes(), name))
+        return _from_constructor(cls, _read_path(path, format))
 
     @classmethod
     def from_smiles(cls: type[_D], smiles: str) -> _D:
@@ -433,13 +458,20 @@ def properties(input: Drawing | str | bytes | PathLike[str]) -> Properties:
 
 
 class RenderResults(list[bytes | str | None]):
-    """Batch results with ``(row_index, message)`` entries in :attr:`errors`."""
+    """Batch results with ``(row_index, message)`` entries in errors and warnings."""
 
     errors: list[tuple[int, str]]
+    warnings: list[tuple[int, str]]
 
-    def __init__(self, values: Iterable[bytes | str | None], errors: list[tuple[int, str]]) -> None:
+    def __init__(
+        self,
+        values: Iterable[bytes | str | None],
+        errors: list[tuple[int, str]],
+        warnings: list[tuple[int, str]] | None = None,
+    ) -> None:
         super().__init__(values)
         self.errors = errors
+        self.warnings = [] if warnings is None else warnings
 
 
 def render_many(
@@ -455,7 +487,8 @@ def render_many(
 ) -> RenderResults:
     """Render rows in parallel; bad rows are ``None`` unless ``errors='raise'``.
 
-    Error indexes are zero based and retain the original input order.
+    Error and warning indexes are zero based and retain the original input order.
+    Import warnings are collected in the result instead of emitted individually.
     Configuration errors (such as invalid dimensions or styles) always raise.
     """
     if errors not in {"none", "raise"}:
@@ -465,19 +498,22 @@ def render_many(
     style_json = _style_json(style, overrides)
     items: list[tuple[bytes, str]] = []
     early_errors: list[tuple[int, str]] = []
+    early_warnings: list[tuple[int, str]] = []
     for index, value in enumerate(inputs):
         try:
             if isinstance(value, Drawing):
                 items.append((value._data, "rsk"))
             elif isinstance(value, PathLike):
-                items.append((Drawing.open(value)._data, "rsk"))
+                data, _, messages = _read_path(value)
+                early_warnings.extend((index, message) for message in messages)
+                items.append((data, "rsk"))
             else:
                 items.append((_data(value), "auto"))
         except (TypeError, ValueError, OSError) as error:
             early_errors.append((index, str(error)))
             # Keep indexes stable without parsing invalid Python inputs natively.
             items.append((b"", "auto"))
-    values, failures = _native.render_many(items, name, style_json, width, height, dpi)
+    values, failures, messages = _native.render_many(items, name, style_json, width, height, dpi)
     merged = dict(failures)
     merged.update(early_errors)
     failures = sorted(merged.items())
@@ -492,6 +528,7 @@ def render_many(
             for value in values
         ),
         failures,
+        sorted(early_warnings + messages, key=lambda warning: warning[0]),
     )
 
 
