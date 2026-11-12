@@ -48,8 +48,8 @@ Keep `rdkit_version` and the first 62 templates (`CORE` in
 must stay in the same order.
 
 The 2026.09.1 captures were retaken on macOS arm64, Arch Linux x64, Ubuntu
-arm64 and Windows x64 (Python 3.12, Boost 1_85). The four platforms changed
-the same 19 of the 62 templates:
+arm64, Windows x64 and Windows ARM (Python 3.12, Boost 1_85). The five platforms
+changed the same 19 of the 62 templates:
 
 - 14 single-benzene groups (Ph, Bn, Cbz, Bz, OBz, Ts, OTs, OBn, PMB, OPMB, Tol,
   SPh, STol and the benzene ring of the others) keep the same point set with the
@@ -62,9 +62,11 @@ the same 19 of the 62 templates:
   ring order also decides which ring is embedded first.
 - NPhth and Tr differ only in the last bits (at most 4e-15).
 
-Windows ARM was not retaken: there is no Windows ARM host, and the capture
-workflow was retired. `rdkit-geometry-windows-aarch64.json` still holds the
-2026.03.6 capture, so the check fails on Windows ARM until it is retaken.
+Windows ARM was retaken on a GitHub `windows-11-arm` runner with the pinned x64
+Python/RDKit worker under emulation, as before, in
+[capture run 43308311050](https://github.com/Ameyanagi/ReShiki/actions/runs/43308311050)
+(`--geometry` output, first 62 templates). As at 2026.03.6, it differs from the
+Windows x64 capture only in the last bits (at most 3e-15).
 
 ## History of the frozen captures
 
