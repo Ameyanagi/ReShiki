@@ -5,15 +5,14 @@
 Every abbreviation is one entry in
 [`catalog.json`](../crates/model/src/chemistry/abbreviations/catalog.json). The
 template coordinates are not stored. On first use, each group's SMILES is laid
-out with `depict::compute`, the Rust port of RDKit 2026.03.6 `Compute2DCoords`
+out with `depict::compute`, the Rust port of RDKit 2026.09.1 `Compute2DCoords`
 that SMILES import also uses. Adding a group therefore needs no Python, RDKit or
 per-platform capture.
 
 The depiction port reproduces the pinned RDKit wheel's floating-point behaviour
 on each supported host (see [the depiction pipeline](depict_pipeline.md)).
-For the original 62 groups it gives the same coordinates as the former captured
-tables, bit for bit on Apple Silicon. Existing documents and replacements
-therefore keep their layouts.
+For the original 62 groups it gives the same coordinates as the captured
+tables, bit for bit on Apple Silicon.
 
 Two checks keep it that way:
 
@@ -30,12 +29,46 @@ Two checks keep it that way:
   `abbreviation_detection` likewise compares the matching query that ReShiki
   derives from each SMILES with RDKit's `ParseAbbreviations` query.
 
-The frozen captures are never regenerated. They record the layouts that
-documents saved before the catalog relied on.
+The captures follow the pinned RDKit. When the pin moves, they are retaken with
+the new wheel, and any layout they change also changes for documents that
+expand those groups again.
+
+## Regenerating the captures
+
+On each matching host, with the locked environment:
+
+```sh
+uv run --locked python reference/abbreviation_replacement_reference.py --geometry > geometry.json
+```
+
+Keep `rdkit_version` and the first 62 templates (`CORE` in
+`engine/abbreviations.py`), and write them to
+`replacement/rdkit-geometry-<os>-<arch>.json` as
+`json.dumps(value, indent=2) + "\n"` with LF line endings. Labels and SMILES
+must stay in the same order.
+
+The 2026.09.1 captures were retaken on macOS arm64, Arch Linux x64, Ubuntu
+arm64 and Windows x64 (Python 3.12, Boost 1_85). The four platforms changed
+the same 19 of the 62 templates:
+
+- 14 single-benzene groups (Ph, Bn, Cbz, Bz, OBz, Ts, OTs, OBn, PMB, OPMB, Tol,
+  SPh, STol and the benzene ring of the others) keep the same point set with the
+  ring atoms placed in the opposite direction. RDKit 2026.09 normalizes each
+  ring to start at its lowest atom index and continue to the lower-index
+  neighbour ([rdkit#9208](https://github.com/rdkit/rdkit/pull/9208)), and the
+  depictor embeds rings in that order.
+- TBDPS is mirrored; Fmoc, OTBDPS and OTr keep their shape but are placed in a
+  different orientation. These groups have several rings, so the normalized
+  ring order also decides which ring is embedded first.
+- NPhth and Tr differ only in the last bits (at most 4e-15).
+
+Windows ARM was not retaken: there is no Windows ARM host, and the capture
+workflow was retired. `rdkit-geometry-windows-aarch64.json` still holds the
+2026.03.6 capture, so the check fails on Windows ARM until it is retaken.
 
 ## History of the frozen captures
 
-The 62 frozen templates were captured from RDKit 2026.03.6 by the retired
+The 62 templates were first captured from RDKit 2026.03.6 by the retired
 `Abbreviation geometry capture` workflow. TBDPS and OTBDPS were captured on all
 five native reference ABIs in
 [capture run 36483117507](https://github.com/Ameyanagi/ReShiki/actions/runs/36483117507)

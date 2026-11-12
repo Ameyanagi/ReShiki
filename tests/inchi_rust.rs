@@ -1,5 +1,7 @@
 #[path = "common/fixture.rs"]
 mod fixture;
+#[path = "../reference/support/ring_basis.rs"]
+mod ring_basis;
 
 use anyhow::Context;
 use reshiki::chemistry::inchi::{kernel, output};
@@ -40,8 +42,21 @@ fn rust_kernel_import_matches_independent_molecules() -> anyhow::Result<()> {
         );
         match (actual, case.expected, case.error) {
             (Ok(actual), expected, None)
-                if serde_json::to_value(&actual.state)?
-                    == expected.clone().unwrap_or(Value::Null) => {}
+                if {
+                    let (mut actual, expected) = (
+                        serde_json::to_value(&actual.state)?,
+                        expected.clone().unwrap_or(Value::Null),
+                    );
+                    // RDKit 2026.09.1 labels rings after legacy symmetrization as
+                    // an SSSR basis (rdkit#9753, fixed in 2026.09.2).
+                    if actual["rings"]["kind"] == "symmetric"
+                        && expected["rings"]["kind"] == "basis"
+                    {
+                        actual["rings"]["kind"] = "basis".into();
+                    }
+                    ring_basis::adopt_rdkit_basis(&mut actual, &expected);
+                    actual == expected
+                } => {}
             (Err(_), None, Some(_)) => {}
             (actual, expected, expected_error) => {
                 if failures.len() < 10 {

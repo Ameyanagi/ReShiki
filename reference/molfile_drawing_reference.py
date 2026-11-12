@@ -32,6 +32,9 @@ else:
     from perception_reference import snapshot
     from support.cx_stereo_groups import query_renumbering
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def emit(name, text):
     expected, labels, document, failure = None, None, None, None

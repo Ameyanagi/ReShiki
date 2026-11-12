@@ -1,6 +1,7 @@
 """Complete legacy stereo assignment from RDKit's API, independent of the worker."""
 
 import json
+import math
 import random
 from itertools import product
 from pathlib import Path
@@ -15,6 +16,9 @@ else:
     from kekulize_reference import DIRECTIONS
     from stereo_reference import group, state
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def optional(obj, name, getter):
     return getter(name) if obj.HasProp(name) else None
@@ -24,8 +28,19 @@ def boolean(obj, name):
     return bool(obj.GetPropsAsDict(True, True)[name]) if obj.HasProp(name) else None
 
 
-def snapshot(mol, ring_kind):
+def snapshot(mol, ring_kind, *, include_conformer=True):
     result = state(mol)
+    if include_conformer and mol.GetNumConformers():
+        # RDKit #9190 (2026.09): legacy perception re-detects axial stereo.
+        conf = mol.GetConformer()
+        result["conformer"] = dict(
+            is_3d=conf.Is3D(),
+            positions=[
+                # JSON has no NaN or infinity; serde writes them as null too.
+                {k: v if math.isfinite(v) else None for k, v in zip("xyz", p)}
+                for p in (conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms()))
+            ],
+        )
     result["valences"] = [
         dict(
             explicit_valence=a.GetValence(Chem.ValenceType.EXPLICIT),

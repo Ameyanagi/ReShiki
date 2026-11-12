@@ -35,7 +35,7 @@ fn prepared_arrays_match_the_pinned_native_adapter() -> anyhow::Result<()> {
     assert_eq!(capture.rdkit_version, RDKIT_VERSION);
     assert_eq!(
         capture.rdkit_commit,
-        "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+        "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
     );
     assert_eq!(
         capture.adapter_sha256,

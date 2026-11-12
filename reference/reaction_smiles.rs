@@ -1,4 +1,9 @@
 //! Native reaction parsing is separate from default molecular SMILES import.
+#[path = "support/cx_lenience.rs"]
+#[allow(dead_code)]
+mod cx_lenience;
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 #[path = "support/smiles_extensions.rs"]
 #[allow(dead_code)]
 mod smiles_extensions;
@@ -101,23 +106,28 @@ fn compare_reference(suite: &str) -> anyhow::Result<()> {
     let version: Value =
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
-    let (mut accepted, mut rejected) = (0, 0);
+    let (mut accepted, mut rejected, mut lenient, mut other_basis) = (0, 0, 0, 0);
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
-        let actual = match reaction::read_smiles(&case.text) {
+        let mut actual = match reaction::read_smiles(&case.text) {
             Ok(reaction) => Ok(smiles_extensions::without_cumulene_flag(
                 serde_json::to_value(reaction)?,
             )),
             Err(error) => Err(error.to_string()),
         };
-        let failure = match (&actual, &case.expected) {
+        let failure = match (&mut actual, &case.expected) {
             (Ok(a), Some(e)) => {
                 accepted += 1;
+                other_basis += ring_basis::adopt_rdkit_basis(a, e);
                 difference(a, e, "reaction")
             }
             (Err(_), None) => {
                 rejected += 1;
+                None
+            }
+            (Err(_), Some(_)) if cx_lenience::lenient_number(&case.text) => {
+                lenient += 1;
                 None
             }
             (Err(e), Some(_)) => Some(format!("Rejected supported input: {e}")),
@@ -142,7 +152,7 @@ fn compare_reference(suite: &str) -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success(), "Reaction SMILES reference failed");
     eprintln!(
-        "Reaction SMILES ({suite}): {accepted} accepted, {rejected} rejected, {} mismatches",
+        "Reaction SMILES ({suite}): {accepted} accepted, {rejected} rejected, {lenient} rejected where RDKit reads lenient CX numbers, {other_basis} RDKit SSSR basis differences, {} mismatches",
         failures.len()
     );
     if !failures.is_empty() {

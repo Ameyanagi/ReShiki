@@ -22,6 +22,9 @@ else:
     from reaction_smiles_reference import cases as bare_cases
     from reaction_smiles_reference import cx_cases
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def cases():
     for index, (name, text) in enumerate(bare_cases()):
@@ -195,6 +198,18 @@ def unspecified_ez(text):
     )
 
 
+def sssr(expected):
+    """RDKit 2026.09's SSSR basis for the drawing, in document atom order
+    (rdkit#9105); engine_migration compares it with ReShiki's basis."""
+    if not expected or not expected.get("document"):
+        return None
+    try:
+        mol = from_document(expected["document"])
+    except (ValueError, RuntimeError):  # The worker cannot read every drawing it returns.
+        return None
+    return sorted(sorted(ring) for ring in Chem.GetSSSR(mol))
+
+
 if __name__ == "__main__":
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
@@ -211,6 +226,7 @@ if __name__ == "__main__":
                     text=text,
                     expected=expected,
                     failure=failure,
+                    sssr=sssr(expected),
                     unspecified_ez=unspecified_ez(text) if expected else None,
                     molecule_reading=molecule_reading(text) if expected else None,
                 )

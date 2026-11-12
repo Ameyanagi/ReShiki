@@ -22,6 +22,9 @@ from valence_reference import ORDERS  # noqa: E402
 
 from engine import abbreviations  # noqa: E402
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def catalog():
     presets = []

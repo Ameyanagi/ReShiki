@@ -16,6 +16,9 @@ from rdkit import Chem, rdBase
 from engine.labels_exchange import read_labels
 from engine.worker import cdxml_text_reader
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def emit(name, root, atoms=None, positions=None, bonds=None, scale=1, restriction=None):
     text = root if isinstance(root, str) else ET.tostring(root, encoding="unicode")

@@ -25,6 +25,9 @@ else:
     from smiles_read_reference import prepared_snapshot
     from valence_reference import ORDERS
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def read(text):
     if len(text.encode()) > 16 * 1024 * 1024:

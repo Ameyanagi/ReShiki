@@ -25,6 +25,9 @@ else:
     from reaction_import_reference import cases as parser_cases
     from reaction_import_reference import query_cases
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def expected(text, format="rxn"):
     participants, labels = [], []

@@ -6,11 +6,14 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from rdkit import RDLogger, rdBase
+from rdkit import Chem, RDLogger, rdBase
 from reference_annotations import molecular_extension
-from smiles_engine_reference import unspecified_ez
+from smiles_engine_reference import sssr, unspecified_ez
 
 from engine.worker import handle
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 
 def emit(name, text, restriction=None, *, format="cdxml"):
@@ -35,6 +38,7 @@ def emit(name, text, restriction=None, *, format="cdxml"):
                 restriction=restriction,
                 molecular_extension=molecular_extension(name, text),
                 unspecified_ez=unspecified_ez(text) if expected and format == "smiles" else None,
+                sssr=sssr(expected),
             )
         )
     )

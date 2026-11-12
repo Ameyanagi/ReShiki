@@ -17,6 +17,9 @@ if TYPE_CHECKING or __package__:
 else:
     from document_preparation_reference import cases, drawing, f32, molecule
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def scheme(part):
     doc = copy.deepcopy(part)

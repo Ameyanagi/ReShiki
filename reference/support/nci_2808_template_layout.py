@@ -24,10 +24,13 @@ REFERENCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REFERENCE))
 from engine import worker  # noqa: E402
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 INPUT = "CC1(C)[CH]2CC[CH](CC(O)=O)[CH]1C2"
 REACTION_INPUT = f"O>{INPUT}>O"
 CONTROL = "C1C2CC3CC1CC(C2)C3"
-RDKIT_VERSION = "2026.03.6"
+RDKIT_VERSION = "2026.09.1"
 CLEARANCE = 0.75
 
 

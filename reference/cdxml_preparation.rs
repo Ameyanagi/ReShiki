@@ -1,3 +1,5 @@
+#[path = "support/query_nicknames.rs"]
+mod query_nicknames;
 #[path = "support/reference_dative.rs"]
 mod reference_dative;
 #[path = "support/reference_diagnostics.rs"]
@@ -92,7 +94,7 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
     let mut lines = BufReader::new(child.stdout.take().context("Missing oracle stdout")?).lines();
     let header: Value = serde_json::from_str(&lines.next().context("Missing oracle header")??)?;
     assert_eq!(header["rdkit_version"], reshiki::chemistry::RDKIT_VERSION);
-    let (mut accepted, mut errors, mut restricted, mut stages) = (0, 0, 0, 0);
+    let (mut accepted, mut errors, mut restricted, mut stages, mut query_atoms) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     let mut extensions = 0;
     let (mut application_accepted, mut application_rejected) = (0, 0);
@@ -147,7 +149,14 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
             }
             (Err(actual), None) => {
                 errors += 1;
-                if serde_json::to_value(actual.stage)?.as_str() != case.failure_stage.as_deref() {
+                if actual.stage == PreparationStage::Parser
+                    && actual.cause.to_string().ends_with("query atom")
+                    && query_nicknames::present(&case.text)
+                {
+                    query_atoms += 1;
+                } else if serde_json::to_value(actual.stage)?.as_str()
+                    != case.failure_stage.as_deref()
+                {
                     stages += 1;
                     anyhow::ensure!(
                         actual.stage == PreparationStage::Parser
@@ -193,7 +202,7 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
     }
     anyhow::ensure!(child.wait()?.success(), "Oracle failed");
     eprintln!(
-        "CDXML preparation: {accepted} accepted, {errors} original errors ({stages} earlier bounded stages), {restricted} separately classified restrictions; {} mismatches",
+        "CDXML preparation: {accepted} accepted, {errors} original errors ({stages} earlier bounded stages), {restricted} separately classified restrictions, {query_atoms} refused A/a/Q query nicknames; {} mismatches",
         failures.len()
     );
     eprintln!(

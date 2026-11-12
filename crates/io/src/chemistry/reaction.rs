@@ -1,5 +1,5 @@
 //! RXN and reaction SMILES interchange with explicit participant roles.
-//! Component arrangement follows RDKit ReactionWriter.cpp (2026.03.6).
+//! Component arrangement follows RDKit ReactionWriter.cpp (2026.09.1).
 //! Copyright (C) 2010-2024 Novartis Institutes for BioMedical Research Inc.
 //! and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.

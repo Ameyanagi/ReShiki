@@ -12,6 +12,9 @@ from rdkit.Geometry import Point2D, Point3D
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine import cleanup
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 rng = random.Random(48127)
 orientations = []
 for n in [1, 2, 3, 8, 63]:

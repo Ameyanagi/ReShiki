@@ -1,3 +1,6 @@
+#[path = "support/cx_lenience.rs"]
+#[allow(dead_code)]
+mod cx_lenience;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -43,6 +46,7 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected) = (0, 0);
     let mut renumberings = 0;
+    let mut lenient = 0;
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -67,7 +71,12 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
             }
             Err(error) => anyhow::bail!("Unexpected parser error for {:?}: {error}", case.text),
         };
-        if actual != expected.expected {
+        if actual.is_none()
+            && expected.expected.is_some()
+            && cx_lenience::lenient_number(&case.text)
+        {
+            lenient += 1;
+        } else if actual != expected.expected {
             failures.push(format!(
                 "{:?}: {actual:?} != {:?}",
                 case.text, expected.expected
@@ -84,7 +93,7 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success());
     eprintln!(
-        "SMARTS: {accepted} accepted, {rejected} rejected, {renumberings} stereo-group renumberings, {} mismatches",
+        "SMARTS: {accepted} accepted, {rejected} rejected ({lenient} only by RDKit's lenient CX numbers), {renumberings} stereo-group renumberings, {} mismatches",
         failures.len()
     );
     if !failures.is_empty() {

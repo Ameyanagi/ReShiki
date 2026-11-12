@@ -1,3 +1,8 @@
+#[path = "support/cx_lenience.rs"]
+#[allow(dead_code)]
+mod cx_lenience;
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 #[path = "support/smiles_extensions.rs"]
 mod smiles_extensions;
 use anyhow::Context;
@@ -69,7 +74,8 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
     let version: Value =
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
-    let (mut accepted, mut rejected, mut mismatches) = (0, 0, 0);
+    let (mut accepted, mut rejected, mut mismatches, mut lenient, mut other_basis) =
+        (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     let mut all_failures = Vec::new();
     for line in lines {
@@ -85,6 +91,7 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
                     &mut actual["prepared"]["state"],
                     &expected["prepared"]["state"],
                 );
+                other_basis += ring_basis::adopt_rdkit_basis(&mut actual, expected);
                 difference(&actual, expected, "molecule")
             }
             (Err(_), None) => {
@@ -95,6 +102,10 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
                 if smiles_extensions::refused_allene(&case.text, &error.to_string()) =>
             {
                 rejected += 1;
+                None
+            }
+            (Err(_), Some(_)) if cx_lenience::lenient_number(&case.text) => {
+                lenient += 1;
                 None
             }
             (Err(error), Some(_)) => Some(format!("Rejected supported input: {error}")),
@@ -128,7 +139,9 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
             all_failures.join("\n"),
         )?;
     }
-    eprintln!("Extended SMILES: {accepted} accepted, {rejected} rejected, {mismatches} mismatches");
+    eprintln!(
+        "Extended SMILES: {accepted} accepted, {rejected} rejected, {lenient} rejected where RDKit reads lenient CX numbers, {other_basis} RDKit SSSR basis differences, {mismatches} mismatches"
+    );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         accepted > 5000 && rejected > 1000,

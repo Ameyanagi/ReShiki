@@ -112,10 +112,18 @@ async fn reference_smiles_notice_is_derived_from_expected_drawing() -> anyhow::R
         ("(c1(-c2ccccc2)ccccc1.CC)>>O", false),
         ("C[C@H](O)Cl>>O", false),
     ] {
-        let expected = reference
-            .execute(Request::import("rsmi", text))
-            .await
-            .map_err(anyhow::Error::msg)?;
+        let expected = reference.execute(Request::import("rsmi", text)).await;
+        // RDKit 2026.09 perceives the wedged biaryl axis (rdkit#9190), which the
+        // original worker refuses; axial_extension checks ReShiki's import.
+        if axial {
+            assert_eq!(
+                expected.as_ref().err().map(String::as_str),
+                Some("This bond stereochemistry is not supported yet."),
+                "{text}"
+            );
+            continue;
+        }
+        let expected = expected.map_err(anyhow::Error::msg)?;
         let analysis = expected.analysis.as_ref().context("Missing analysis")?;
         assert!(analysis.smiles_notice.is_none());
         assert!(!analysis.smiles.is_empty());

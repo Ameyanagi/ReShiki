@@ -5,11 +5,14 @@ import gzip
 import hashlib
 import itertools
 import json
+import os
 import random
 import subprocess
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import rdkit
 from rdkit import Chem, RDLogger, rdBase
 
 if TYPE_CHECKING or __package__:
@@ -20,6 +23,9 @@ else:
     from build_inchi_input_oracle import ADAPTER_SHA256, HEADER_SHA256
     from cip_molecule_reference import molecules
     from perception_reference import snapshot
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 FIXTURE = Path(__file__).resolve().parents[1] / "tests/fixtures/inchi-input-native.json.gz"
 
@@ -133,12 +139,21 @@ def corpus():
 
 
 def generate(oracle):
+    # The 2026.09 macOS wheel records absolute build paths as library names.
+    libs = (
+        Path(rdkit.__file__).parent / ".dylibs"
+        if sys.platform == "darwin"
+        else Path(rdkit.__file__).parent.parent / "rdkit.libs"
+    )
+    loader = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
     process = subprocess.Popen(
         [str(oracle)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
+        # An explicit environment would drop the legacy ring finding set above.
+        env={**os.environ, loader: str(libs), "RDK_USE_LEGACY_RING_FINDING": "1"},
     )
     assert process.stdin is not None and process.stdout is not None
     rows = []
@@ -190,7 +205,7 @@ def generate(oracle):
     assert process.returncode == 0
     return dict(
         rdkit_version=rdBase.rdkitVersion,
-        rdkit_commit="0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        rdkit_commit="fece8caa860bdf6c9c82bdb9253f22a0cf87150c",
         adapter_sha256=ADAPTER_SHA256,
         header_sha256=HEADER_SHA256,
         rows=rows,
@@ -204,7 +219,7 @@ def main():
     parser.add_argument("--verify-fixture", action="store_true")
     args = parser.parse_args()
     RDLogger.DisableLog("rdApp.*")
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     if args.oracle:
         data = generate(args.oracle)
         if args.verify_fixture:

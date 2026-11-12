@@ -9,6 +9,8 @@ use std::{
     process::{Command, Stdio},
 };
 
+#[path = "support/query_nicknames.rs"]
+mod query_nicknames;
 #[path = "support/reference_dative.rs"]
 mod reference_dative;
 
@@ -103,6 +105,7 @@ fn molecular_cdxml_matches_direct_native_reader() -> anyhow::Result<()> {
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     assert_eq!(version["chemdraw"], true);
     let (mut accepted, mut rejected, mut restricted_native, mut restricted_invalid) = (0, 0, 0, 0);
+    let (mut nickname_carbons, mut query_atoms) = (0, 0);
     let mut failures = Vec::new();
     let mut category_counts = BTreeMap::<String, usize>::new();
     let mut mismatch_cases = Vec::new();
@@ -177,6 +180,12 @@ fn molecular_cdxml_matches_direct_native_reader() -> anyhow::Result<()> {
                 (Err(_), None) => {
                     rejected += 1;
                 }
+                (Err(error), Some(_))
+                    if error.to_string().ends_with("query atom")
+                        && query_nicknames::present(&case.text) =>
+                {
+                    query_atoms += 1;
+                }
                 (Err(error), Some(_)) => case_failures.push((
                     "rejected_native_input".to_owned(),
                     format!("Rejected native input: {error}"),
@@ -186,6 +195,17 @@ fn molecular_cdxml_matches_direct_native_reader() -> anyhow::Result<()> {
                     format!("Accepted native failure: {:?}", case.failure),
                 )),
             }
+        }
+        // RDKit 2026.09 reads an unknown generic nickname such as `Ar` as
+        // carbon (rdkit#9567); ReShiki keeps the dummy atom of 2026.03.6.
+        if !case_failures.is_empty()
+            && case.text.contains("NodeType=\"GenericNickname\"")
+            && case_failures
+                .iter()
+                .all(|(_, detail)| detail.ends_with(".atomic_number: 0 != 6"))
+        {
+            nickname_carbons += 1;
+            case_failures.clear();
         }
         if !case_failures.is_empty() {
             if failures.is_empty() {
@@ -229,7 +249,7 @@ fn molecular_cdxml_matches_direct_native_reader() -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success());
     eprintln!(
-        "CDXML: {accepted} native accepted, {rejected} native rejected; {restricted_native} deliberate restrictions of native accepted inputs, {restricted_invalid} restricted native failures"
+        "CDXML: {accepted} native accepted, {rejected} native rejected; {restricted_native} deliberate restrictions of native accepted inputs, {restricted_invalid} restricted native failures, {nickname_carbons} unknown generic nicknames read as carbon by RDKit, {query_atoms} refused A/a/Q query nicknames"
     );
     let categories = category_counts
         .iter()

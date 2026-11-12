@@ -24,6 +24,7 @@ struct Case {
     expected: Option<Document>,
     error: Option<String>,
     chemistry_ok: Option<bool>,
+    chemistry_failure: Option<String>,
 }
 
 /// #909: a group's double bond that its SMILES leaves without E/Z stays
@@ -195,7 +196,7 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
     );
     let mut count = 0;
     let mut successful = 0;
-    let mut rejected_chemistry = 0;
+    let (mut rejected_chemistry, mut bold_axes) = (0, 0);
     let mut failures = Vec::new();
     for line in lines {
         // The actual bridge parses the worker line into Value before decoding
@@ -219,7 +220,24 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
                 let chemistry = if let Some(allowed) = case.chemistry_ok {
                     rejected_chemistry += usize::from(!allowed);
                     let prepared = document::prepare(&actual);
-                    if prepared.is_ok() != allowed {
+                    // The worker reads a 'bold' display as a wedge, and RDKit
+                    // 2026.09.1 perception (rdkit#9190) turns such a wedge into
+                    // an atropisomer axis. Bold is not stereo input in ReShiki.
+                    let bold_axis = !allowed
+                        && prepared.is_ok()
+                        && case.chemistry_failure.as_deref()
+                            == Some("This bond stereochemistry is not supported yet.")
+                        && actual.bonds.iter().any(|b| b.display == "bold")
+                        && actual.bonds.iter().all(|b| {
+                            !matches!(
+                                b.display.as_str(),
+                                "wedge" | "hash" | "hollow_wedge" | "hashed"
+                            )
+                        });
+                    if bold_axis {
+                        bold_axes += 1;
+                        None
+                    } else if prepared.is_ok() != allowed {
                         Some(format!(
                             "Final chemistry mismatch: native allowed={allowed}, local={:?}",
                             prepared.err()
@@ -256,7 +274,7 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
         "Incomplete corpus: {count}/{successful}/{rejected_chemistry}"
     );
     eprintln!(
-        "Verified {count} replacement cases, {successful} complete documents, {rejected_chemistry} rejected final chemical states"
+        "Verified {count} replacement cases, {successful} complete documents, {rejected_chemistry} rejected final chemical states ({bold_axes} only by RDKit's axis on a bold bond)"
     );
     Ok(())
 }
