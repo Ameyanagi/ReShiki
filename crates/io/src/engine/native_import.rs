@@ -22,6 +22,8 @@ use std::sync::Arc;
 mod allene_tests;
 #[cfg(test)]
 mod atrop_tests;
+#[cfg(test)]
+mod cdxml_tests;
 pub(super) mod chain_layout;
 #[cfg(test)]
 mod molfile_atrop_tests;
@@ -307,13 +309,13 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))? {
                 warnings.push(cdxml::schemes::NOTICE.into());
             }
-            if !variables.0.is_empty() {
+            if !variables.is_empty() {
                 let prepared = cdxml::prepare_drawing(&xml)?;
                 let mut document = cdxml::assemble_cdxml(&prepared)?.into_unchecked_drawing()?;
                 variables
                     .restore(&prepared, &mut document)
                     .map_err(|e| Error::Binary(e.to_string()))?;
-                warnings.push("Drawing imported with variable labels as uninterpreted atom text; query semantics and molecular properties are unavailable".into());
+                warnings.push(variables.notice().into());
                 return Ok(Preparation::Drawing(Box::new(document), warnings));
             }
             let prepared = match cdxml::prepare_cdxml(&xml) {
@@ -488,7 +490,10 @@ fn layout(
 ) -> Result<(Vec<String>, ComponentRow), Error> {
     molecular::validate_molecule(molecule)?;
     let layout = coordinates(&molecule.state, properties)?;
-    molecule.positions = layout.positions;
+    molecule.set_conformer(chemistry::stereo::wedging::Conformer {
+        positions: layout.positions,
+        is_3d: false,
+    });
     Ok((layout.warnings, layout.row))
 }
 

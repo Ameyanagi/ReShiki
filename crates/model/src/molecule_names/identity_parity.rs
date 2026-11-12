@@ -13,8 +13,15 @@ use chemistry::stereo::perception::State;
 use nazuchem_kernel::{budget::Budget, identity as kernel};
 
 // Serialization is test-only: production naming uses kernel State directly.
+// The kernel identity API has no conformer; geometry is outside this contract.
+fn identity_state_json(state: &State) -> serde_json::Value {
+    let mut value = serde_json::to_value(state).unwrap();
+    value.as_object_mut().unwrap().remove("conformer");
+    value
+}
+
 fn kernel_state(state: &State) -> nazuchem_kernel::stereo::perception::State {
-    serde_json::from_value(serde_json::to_value(state).unwrap()).unwrap()
+    serde_json::from_value(identity_state_json(state)).unwrap()
 }
 
 fn assert_identity_parity(state: &State) -> Result<String, IdentityRejection> {
@@ -34,7 +41,7 @@ fn assert_encoding_parity(state: &State) -> Result<State, IdentityRejection> {
     assert_eq!(
         expected
             .as_ref()
-            .map(|state| serde_json::to_value(state).unwrap())
+            .map(identity_state_json)
             .map_err(|error| format!("{error:?}")),
         actual.map_err(|error| format!("{error:?}")),
     );
@@ -48,7 +55,7 @@ fn assert_decoding_parity(state: &State) -> Result<State, IdentityRejection> {
     assert_eq!(
         expected
             .as_ref()
-            .map(|state| serde_json::to_value(state).unwrap())
+            .map(identity_state_json)
             .map_err(|error| format!("{error:?}")),
         actual.map_err(|error| format!("{error:?}")),
     );

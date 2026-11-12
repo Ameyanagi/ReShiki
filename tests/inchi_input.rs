@@ -96,6 +96,7 @@ fn malformed_arrays_and_unrepresentable_input_fail_without_mutation() -> anyhow:
         bonds: vec![],
     };
     let mut state = State {
+        conformer: None,
         valences: graph.valences().map_err(anyhow::Error::msg)?,
         metadata: Metadata::unspecified(&graph),
         directions: vec![],

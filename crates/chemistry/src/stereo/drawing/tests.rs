@@ -73,6 +73,54 @@ fn invalid_geometry_and_metadata_are_rejected_atomically() -> TestResult {
 }
 
 #[test]
+fn cx_atrop_axis_parallel_to_z_retains_3d_geometry_through_bond_assignment() -> TestResult {
+    // RDKit 2026.09.1 #9190 passes the actual conformer when bond directions
+    // trigger axial assignment. Its 3D frame also supports an axis along Z.
+    let imported = crate::smiles::read(
+        "CC1=CC=CC(I)=C1N1C(C)=CC=C1Br |(0,1.732,0;-0.5,0.866,0;-1.5,0.866,0;-2,0,0;-1.5,-0.866,0;-0.5,-0.866,0;0,-1.732,0;0,0,0;0,0,1.5;0,0.951,2.191;0,1.9,2;0,0.588,3.309;0,-0.588,3.309;0,-0.951,2.191;0,-1.9,2),wU:7.7|",
+    )?;
+    let state = imported.prepared.state;
+    let conformer = state.conformer.as_ref().unwrap();
+    assert!(conformer.is_3d);
+    assert_eq!(conformer.positions[7].x, conformer.positions[8].x);
+    assert_eq!(conformer.positions[7].y, conformer.positions[8].y);
+    assert_ne!(conformer.positions[7].z, conformer.positions[8].z);
+    assert_eq!(state.metadata.bonds[7].stereo, 7);
+    Ok(())
+}
+
+#[test]
+fn cached_stereo_defers_geometry_validation_until_forced() -> TestResult {
+    let mut state = crate::smiles::prepare("CC")?.state;
+    state.conformer = Some(wedging::Conformer {
+        positions: Vec::new(),
+        is_3d: true,
+    });
+    let options = crate::stereo::perception::Options {
+        clean: true,
+        force: false,
+        flag_possible: false,
+    };
+    let cached =
+        crate::stereo::perception::perceive(&state, options).map_err(anyhow::Error::msg)?;
+    assert_eq!(
+        serde_json::to_value(&cached)?,
+        serde_json::to_value(&state)?
+    );
+    assert!(
+        crate::stereo::perception::perceive(
+            &state,
+            crate::stereo::perception::Options {
+                force: true,
+                ..options
+            },
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
+#[test]
 fn many_promotions_and_high_degree_atoms_stay_linear() -> TestResult {
     let (base, points, directions) = molecule();
     let mut graph = Graph {

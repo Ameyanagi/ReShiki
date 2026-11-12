@@ -164,6 +164,7 @@ fn fragment(preset: &Preset) -> Result<(perception::State, bool)> {
         graph: sanitized.graph,
         metadata: sanitized.metadata,
         directions: sanitized.directions,
+        conformer: None,
         valences: sanitized.valences,
         conjugated: sanitized.conjugated,
         hybridizations: sanitized.hybridizations,
@@ -389,12 +390,16 @@ fn build_replacement_part(
     anchor: &crate::document::Atom,
 ) -> Result<Document> {
     let (state, added_hydrogen) = fragment(preset)?;
-    let molecule = Molecule {
+    let mut molecule = Molecule {
         rdkit_version: RDKIT_VERSION,
         ids,
         positions,
         state,
     };
+    molecule.set_conformer(crate::chemistry::stereo::wedging::Conformer {
+        positions: molecule.positions.clone(),
+        is_3d: false,
+    });
     let drawing = document::for_import(&molecule, false, &vec![None; molecule.ids.len()])?;
     let state = &drawing.molecule().state;
     if state.metadata.atoms.iter().any(|a| a.chiral_tag != 0)

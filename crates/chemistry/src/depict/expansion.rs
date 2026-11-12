@@ -370,6 +370,7 @@ fn compute_initial_inner(
     // Original cached rings are replaced before stereo assignment. Do not clone
     // an arbitrarily large discarded cache merely to overwrite it afterwards.
     let mut state = State {
+        conformer: input.conformer.clone(),
         graph: input.graph.clone(),
         metadata: input.metadata.clone(),
         directions: input.directions.clone(),

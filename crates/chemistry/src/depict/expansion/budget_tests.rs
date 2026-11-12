@@ -28,6 +28,7 @@ fn chain(count: usize) -> anyhow::Result<State> {
             .collect(),
     };
     Ok(State {
+        conformer: None,
         metadata: Metadata::unspecified(&graph),
         directions: vec![Direction::None; graph.bonds.len()],
         valences: graph.provisional_valences().map_err(anyhow::Error::msg)?,
@@ -466,6 +467,7 @@ fn finalization_reserve_is_what_finalization_charges() -> TestResult {
     let mut source = chain(30)?;
     source.graph.bonds.remove(11);
     let source = State {
+        conformer: None,
         metadata: Metadata::unspecified(&source.graph),
         directions: vec![Direction::None; source.graph.bonds.len()],
         valences: source

@@ -44,6 +44,7 @@ fn perception_state(sanitized: sanitize::Sanitized) -> perception::State {
         graph: sanitized.graph,
         metadata: sanitized.metadata,
         directions: sanitized.directions,
+        conformer: None,
         valences: sanitized.valences,
         conjugated: sanitized.conjugated,
         hybridizations: sanitized.hybridizations,
@@ -362,6 +363,21 @@ pub fn name_import_projection(input: &Prepared) -> Result<(Prepared, Vec<usize>)
     let sanitized = sanitize::sanitize(&removed.graph, &removed.metadata, &removed.directions)
         .map_err(|error| error.to_string())?;
     let mut state = perception_state(sanitized);
+    state.conformer = input
+        .state
+        .conformer
+        .as_ref()
+        .map(|conformer| {
+            Ok::<_, String>(stereo::wedging::Conformer {
+                positions: removed
+                    .kept_atoms
+                    .iter()
+                    .map(|&index| at(&conformer.positions, index).copied())
+                    .collect::<Result<_, _>>()?,
+                is_3d: conformer.is_3d,
+            })
+        })
+        .transpose()?;
     for (property, unknown) in state.properties.atoms.iter_mut().zip(removed.unknown_atoms) {
         property.unknown = unknown;
     }

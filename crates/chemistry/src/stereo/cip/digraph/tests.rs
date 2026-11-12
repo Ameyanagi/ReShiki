@@ -27,6 +27,7 @@ fn chain(n: usize) -> anyhow::Result<State> {
             .collect(),
     };
     Ok(State {
+        conformer: None,
         metadata: Metadata::unspecified(&graph),
         directions: vec![Direction::None; graph.bonds.len()],
         valences: graph.provisional_valences().map_err(anyhow::Error::msg)?,

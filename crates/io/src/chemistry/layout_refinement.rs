@@ -746,6 +746,9 @@ pub(crate) fn space_component_labels(
             }
         }
     }
+    if let Some(conformer) = &mut molecule.state.conformer {
+        conformer.positions.clone_from(&molecule.positions);
+    }
 }
 
 pub(crate) fn bridged(state: &State) -> bool {
