@@ -313,7 +313,7 @@ to 9 decimal places to remove floating-point noise. This is
   },
   "versions": {
     "app": "0.14.0",
-    "document": 34,
+    "document": 36,
     "engine_protocol": 1,
     "operation_api": 1
   },
@@ -467,7 +467,7 @@ window.
   "stability": "experimental",
   "versions": {
     "app": "0.14.0",
-    "document": 34,
+    "document": 36,
     "engine_protocol": 1,
     "operation_api": 1
   }

@@ -50,17 +50,17 @@ fn invalid(message: impl Into<String>) -> Error {
 
 pub const EXPORT_WARNING: &str = "Reaction files preserve participants, atom maps and stereo. Save .rsk to retain captions, arrow appearance and drawing layout.";
 
-struct OutputRow {
+struct OutputRow<T> {
     label: &'static str,
-    parts: Vec<(String, usize)>,
+    parts: Vec<(T, usize)>,
     count: usize,
 }
 
-fn prepare_output(
+fn prepare_output<T>(
     doc: &Document,
     selected: Option<&[u64]>,
-    mut render: impl FnMut(&document::Molecule) -> Result<String, Error>,
-) -> Result<Vec<OutputRow>, Error> {
+    mut render: impl FnMut(&document::Molecule) -> Result<T, Error>,
+) -> Result<Vec<OutputRow<T>>, Error> {
     doc.validate().map_err(invalid)?;
     let selected: HashSet<_> = selected.unwrap_or_default().iter().copied().collect();
     let mut reactions = doc
@@ -222,7 +222,7 @@ pub(crate) fn write_smiles_with_axial_loss(
     use super::smiles::write;
     let mut axial_loss = false;
     let rows = prepare_output(doc, selected, |molecule| {
-        let text = write::write(&molecule.state, write::Options::default())?.text;
+        let output = write::write(&molecule.state, write::Options::default())?;
         axial_loss |= molecule
             .state
             .metadata
@@ -231,13 +231,16 @@ pub(crate) fn write_smiles_with_axial_loss(
             .any(|bond| matches!(bond.stereo, 6 | 7));
         // Default molecular output has no custom symbols: a dot identifies a
         // disconnected participant, which reaction SMILES groups in parentheses.
-        Ok(if text.contains('.') {
-            format!("({text})")
+        let text = if output.text.contains('.') {
+            format!("({})", output.text)
         } else {
-            text
-        })
+            output.text
+        };
+        Ok((text, output.atom_order, molecule.state.metadata.clone()))
     })?;
     let mut output = String::new();
+    let mut metadata = super::ranking::Metadata::default();
+    let mut groups = std::collections::BTreeMap::<(u8, u32), Vec<usize>>::new();
     // RXN records products before agents; reaction SMILES puts agents between.
     for (position, id) in [0, 2, 1].into_iter().enumerate() {
         if position > 0 {
@@ -247,13 +250,13 @@ pub(crate) fn write_smiles_with_axial_loss(
         let mut parts = row
             .parts
             .iter()
-            .flat_map(|(text, count)| std::iter::repeat_n(text.as_str(), *count))
+            .flat_map(|(part, count)| std::iter::repeat_n(part, *count))
             .collect::<Vec<_>>();
-        parts.sort_unstable();
-        for (i, part) in parts.into_iter().enumerate() {
+        parts.sort_by(|a, b| a.0.cmp(&b.0));
+        for (i, (text, atom_order, source)) in parts.into_iter().enumerate() {
             let length = output
                 .len()
-                .checked_add(part.len())
+                .checked_add(text.len())
                 .and_then(|s| s.checked_add(3))
                 .ok_or(Error::Limit)?;
             if length > 16 * 1024 * 1024 {
@@ -262,8 +265,36 @@ pub(crate) fn write_smiles_with_axial_loss(
             if i > 0 {
                 output.push('.');
             }
-            output.push_str(part);
+            output.push_str(text);
+            let offset = metadata.atoms.len();
+            let mut indices = vec![0; source.atoms.len()];
+            for (position, &atom) in atom_order.iter().enumerate() {
+                metadata
+                    .atoms
+                    .push(source.atoms.get(atom).ok_or(Error::Limit)?.clone());
+                *indices.get_mut(atom).ok_or(Error::Limit)? = offset + position;
+            }
+            for group in &source.groups {
+                // One field per label: readers split it by participant again,
+                // and each molecule's label is its own group.
+                let members = groups.entry((group.kind, group.read_id)).or_default();
+                for &atom in &group.atoms {
+                    members.push(*indices.get(atom).ok_or(Error::Limit)?);
+                }
+            }
         }
     }
+    metadata.groups = groups
+        .into_iter()
+        .map(|((kind, number), atoms)| super::ranking::StereoGroup {
+            kind,
+            atoms,
+            bonds: Vec::new(),
+            read_id: number,
+            write_id: number,
+        })
+        .collect();
+    let atom_order = (0..metadata.atoms.len()).collect::<Vec<_>>();
+    output.push_str(&write::cx_groups(&metadata, &atom_order)?);
     Ok((output, axial_loss))
 }

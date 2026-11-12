@@ -131,7 +131,7 @@ substituent wedges do not specify the axis. Rotation barriers are not inferred.
 Allene stereo requires terminal substituent wedges at one end only; wedges at
 both ends receive an ST-1.6 drawing note. Its indicator belongs to the central
 carbon. SMILES retains `@AL1`/`@AL2`, and MOL/CDXML retain terminal wedges.
-Longer cumulenes and enhanced-group stereochemistry are not implemented.
+Longer cumulenes are not implemented.
 InChI generation uses verified terminal wedges with real 2D coordinates;
 coordinate-free or projected allene input cannot use that path. The raw InChI
 adapter maps allene parity, but native InChI import still discards it with a
@@ -147,3 +147,56 @@ native/CDXML ownership, transform/copy, exported geometry, stale refreshes and
 history. Native computer checks cover the imported interchange fixture, numbering,
 manual drag, Undo/Redo, native persistence and external reopening of the export.
 Local artifacts and logs: `artifacts/atom-labels-qa-20260920/`.
+
+## Enhanced stereo groups
+
+Enhanced stereo groups record what is known about a sample beyond its drawn
+wedges:
+
+| Label  | Group       | Meaning                                                                                             |
+| ------ | ----------- | --------------------------------------------------------------------------------------------------- |
+| `abs`  | ABS         | The configuration is exactly as drawn, for example (_S_)-alanine.                                   |
+| `and1` | AND 1 (rac) | A 1:1 mixture of the drawn form and its mirror image at these centres, for example racemic alanine. |
+| `or1`  | OR 1 (rel)  | One of the two forms, not known which; the centres keep their relation to each other.               |
+
+Centres of one molecule with the same label flip together; different groups
+vary independently. A group belongs to its molecule (connected structure), as
+in a MOL file: `and1` on two separate molecules are two independent racemates.
+A stereocentre without a group is absolute, so existing
+drawings and new ones keep their meaning.
+
+Select stereocentres (or whole molecules) and open **Stereo groups** in the
+inspector. Choose **abs**, an existing group, **New AND group** or **New OR
+group**; only atoms with an assigned R/S descriptor change. Each change is one
+Undo step. **Renumber groups** appears when the numbers have gaps and numbers
+each molecule's AND and OR groups 1, 2, 3… in order.
+
+Copy and paste, Undo/Redo, Clean up and flipping keep the groups; flipping a
+racemate or a relative structure leaves it racemic or relative. Bonding two
+molecules that use the same label joins those groups. When several molecules
+are written to one MOL or SMILES record, a molecule whose label another
+molecule already uses is written with the next free number, so the groups stay
+independent.
+
+Group labels are shown by default as plain 7.5 pt text beside the centre:
+`and1` and `or1` on grouped centres, and `abs` on the other stereocentres of a
+molecule that has a group. **Show stereo groups (abs, and1, or1)** under
+Atom labels & numbering hides or shows them for the scope, and the command
+palette has **Show/Hide stereo groups**. R/S descriptors stay as computed for
+the drawn form. The labels are positioned, styled and exported to SVG, PDF and
+PNG like the other indicators. CDXML and CDX carry the groups and whether
+their labels are shown; ChemDraw places its own labels.
+
+Formats:
+
+- MOL V3000 and RXN V3000 read and write `MDLV30/STEABS`, `STERACn` and
+  `STERELn`. A drawing with groups is written as V3000, because V2000 cannot
+  hold them; ungrouped centres stay in `STEABS`.
+- SMILES output adds a CXSMILES extension, for example
+  `C[C@H](N)C(=O)O |&1:1|`, with `a:` for the ungrouped centres. CXSMILES input
+  reads `a`, `&n` and `on`. A relative flag (`|r|`, or `r:` on fragments)
+  imports as an AND group of the configured centres, as RDKit reads it.
+- CDXML and CDX, including the clipboard, read and write `EnhancedStereoType`
+  and `EnhancedStereoGroupNum`.
+- InChI and naming do not support the groups yet and say so instead of giving
+  an identifier for the drawn enantiomer.

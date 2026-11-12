@@ -199,6 +199,9 @@ where
             carbons: carbons(&root_attrs)?,
             hydrogens: !yes(&root_attrs, "HideImplicitHydrogens")?,
             stereo: yes(&root_attrs, "ShowAtomStereo")?,
+            stereo_groups: root_attrs
+                .get("ShowAtomEnhancedStereo")
+                .is_none_or(|value| value != "no"),
             ..Default::default()
         },
         atoms: Vec::new(),

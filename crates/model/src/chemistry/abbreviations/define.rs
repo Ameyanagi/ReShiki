@@ -33,6 +33,13 @@ pub fn from_selection(
     if members.is_empty() {
         return Err("Select the atoms of the group first".into());
     }
+    if doc
+        .atoms
+        .iter()
+        .any(|atom| members.contains(&atom.id) && atom.stereo_group.is_some())
+    {
+        return Err("Enhanced stereo groups cannot be retained in collapsed abbreviations".into());
+    }
     // A repeat, link or alternative stands for more than the drawn atoms.
     let generic = &doc.generic;
     if generic
@@ -107,6 +114,7 @@ pub fn from_selection(
             dummy.singlet = false;
             dummy.aromatic = false;
             dummy.stereo = None;
+            dummy.stereo_group = None;
             dummy.map_num = 0;
             part.atoms.push(dummy);
         }

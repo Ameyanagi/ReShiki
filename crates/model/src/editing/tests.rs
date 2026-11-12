@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn pasted_stereo_groups_keep_their_numbers_and_label_visibility() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut destination = Document::default();
+    destination.atom_labels.stereo_groups = false;
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    let and = StereoGroup {
+        kind: Kind::And,
+        number: 1,
+    };
+    source.atom_mut(id).unwrap().stereo_group = Some(and);
+    let (part, _, _) = mapped_append_part(
+        &destination,
+        &source,
+        Point::new(84., 0.),
+        AppendMode::Ordinary,
+    )
+    .unwrap();
+    // Groups belong to their molecule, so a pasted copy keeps its label.
+    assert_eq!(part.atoms[0].stereo_group, Some(and));
+    assert_eq!(part.atoms[0].display.stereo_group.show, Some(true));
+}
+
+#[test]
 fn fixed_hydrogen_positions_follow_reflections_and_rotations() {
     use crate::atom_labels::HydrogenPosition::{self as H, Above, Auto, Below, Left, Right};
     for (operation, expected) in [

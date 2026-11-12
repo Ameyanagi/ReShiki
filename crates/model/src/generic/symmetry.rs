@@ -155,17 +155,21 @@ impl Identity {
             n.saturating_mul(atom_storage)
                 .saturating_add(m.saturating_mul(edge_storage)),
         )?;
+        if !state.metadata.groups.is_empty() {
+            return Err(
+                "Generic expansion does not yet compare enhanced stereo group identities".into(),
+            );
+        }
         if state.metadata.atoms.len() != n
             || state.metadata.bonds.len() != m
             || state.valences.len() != n
             || state.properties.atoms.len() != n
-            || !state.metadata.groups.is_empty()
             || state.metadata.atoms.iter().enumerate().any(|(i, a)| {
                 !allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
             })
             || state.metadata.bonds.iter().any(|b| b.stereo > 5)
         {
-            // Biaryl bond axes and enhanced stereo require separate identities.
+            // Biaryl bond axes require separate identities.
             return Err(invalid());
         }
         let mut degrees = vec![0usize; n];

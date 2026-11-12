@@ -485,8 +485,7 @@ fn identity_case_document(case: &str) -> Document {
 
 #[test]
 fn identity_characterization_table() {
-    const UNSUPPORTED: &str =
-        "Naming does not support query atoms, radicals, exotic bonds or relative stereo groups";
+    const UNSUPPORTED: &str = "Naming does not support query atoms, radicals or exotic bonds";
     for (case, expected) in [
         ("plain", Ok("CCO")),
         ("isotope", Ok("[13CH3]CO")),
@@ -533,8 +532,7 @@ fn identity_characterization_table() {
 
 #[test]
 fn canonical_state_preserves_rejection_order_and_writer_errors() {
-    const UNSUPPORTED: &str =
-        "Naming does not support query atoms, radicals, exotic bonds or relative stereo groups";
+    const UNSUPPORTED: &str = "Naming does not support query atoms, radicals or exotic bonds";
     const NONCLASSICAL: &str = "Naming supports tetrahedral, ordinary alkene and biaryl axis stereochemistry; other stereo classes cannot be discarded";
     let doc = identity_case_document("plain");
     let base = chemistry::document::prepare(&doc).unwrap().state;

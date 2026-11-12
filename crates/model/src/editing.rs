@@ -456,6 +456,10 @@ fn mapped_append_part(
                 .stereo
                 .show
                 .get_or_insert(source.atom_labels.stereo);
+            a.display
+                .stereo_group
+                .show
+                .get_or_insert(source.atom_labels.stereo_groups);
         }
         let mapped = mapping.get(&a.id).copied()?;
         a.id = mapped;

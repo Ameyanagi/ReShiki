@@ -92,64 +92,116 @@ async fn cumulene_smiles_loss_warning_reaches_the_import_response() -> anyhow::R
 }
 
 #[tokio::test]
-async fn relative_cx_smiles_imports_the_stated_enantiomer_with_notice() -> anyhow::Result<()> {
+async fn cx_smiles_imports_groups_and_keeps_relative_controls() -> anyhow::Result<()> {
     let engine = crate::engine::LocalEngine::in_process();
-    for (text, warned) in [
-        ("C[C@H](O)C(=O)O |r|", true),
-        ("C[C@@H](O)C(=O)O |r|", true),
-        ("C[C@H](O)[C@@H](C)Cl |r|", true),
-        ("[H][C@](C)(O)C(=O)O |r|", true),
-        ("C[C@H](O)F.C[C@H](O)Cl |r:1|", true),
-        ("C[C@H](O)F.C[C@H](O)Cl |r:0|", true),
-        ("CCO |r|", false),
-        ("CC(O)C(=O)O |r|", false),
-        ("O[C@H]1CC[C@@H](O)CC1 |r|", false),
-        ("C[C@H](O)[C@H](O)C |r|", false),
-        ("C[C@H](O)F.CCO |r:1|", false),
+    for (text, members) in [
+        ("C[C@H](O)C(=O)O |r|", 1),
+        ("C[C@@H](O)C(=O)O |r|", 1),
+        ("C[C@H](O)[C@@H](C)Cl |r|", 2),
+        ("[H][C@](C)(O)C(=O)O |r|", 1),
+        ("C[C@H](O)F.C[C@H](O)Cl |r:1|", 1),
+        ("C[C@H](O)F.C[C@H](O)Cl |r:0|", 1),
+        ("C[C@H](O)[C@@H](C)Cl |&1:1,3|", 2),
+        ("C[C@H](O)[C@@H](C)Cl |o2:1,3|", 2),
+        ("C[C@H](O)[C@H](F)Cl |r,o1:1,a:3|", 1),
+        ("C[C@H](O)[C@H](F)Cl |a:1,&2:3|", 1),
+        ("C[C@H](O)C(=O)O |a:1|", 0),
+        ("CCO |r|", 0),
+        ("CC(O)C(=O)O |r|", 0),
+        ("O[C@H]1CC[C@@H](O)CC1 |r|", 0),
+        ("C[C@H](O)[C@H](O)C |r|", 0),
+        ("C[C@H](O)F.CCO |r:1|", 0),
     ] {
-        let bare = text.split_once(" |").unwrap().0;
-        let mut expected = engine
-            .request(Request::import_smiles(bare))
-            .await
-            .map_err(anyhow::Error::msg)?;
         let actual = engine
             .request(Request::import_smiles(text))
             .await
             .map_err(anyhow::Error::msg)?;
-        assert_eq!(
+        assert!(actual.analysis.is_some(), "{text}");
+        assert!(
             actual
                 .warnings
                 .iter()
-                .filter(|notice| notice.as_str() == RELATIVE_STEREO_NOTICE)
-                .count(),
-            usize::from(warned),
+                .all(|notice| !notice.contains("stated enantiomer")),
             "{text}: {:?}",
             actual.warnings
         );
-        let inchi = &actual.analysis.as_ref().unwrap().inchi;
-        assert_eq!(inchi, &expected.analysis.as_ref().unwrap().inchi, "{text}");
-        if warned {
-            assert!(inchi.contains("/m"), "{text}: {inchi}");
-            expected.warnings.push(RELATIVE_STEREO_NOTICE.into());
-        }
+        let document = actual.document.unwrap();
         assert_eq!(
-            serde_json::to_value(actual)?,
-            serde_json::to_value(expected)?,
+            document
+                .atoms
+                .iter()
+                .filter(|atom| atom.stereo_group.is_some())
+                .count(),
+            members,
             "{text}"
         );
+        let source = smiles::read(text)?;
+        let rebuilt = molecular::prepare(&document)?;
+        let source_members: usize = source
+            .prepared
+            .state
+            .metadata
+            .groups
+            .iter()
+            .filter(|group| matches!(group.kind, 1 | 2))
+            .map(|group| group.atoms.len())
+            .sum();
+        let rebuilt_members: usize = rebuilt
+            .state
+            .metadata
+            .groups
+            .iter()
+            .map(|group| group.atoms.len())
+            .sum();
+        assert_eq!(source_members, rebuilt_members, "{text}");
     }
-    for text in [
-        "C[C@H](O)[C@@H](C)Cl |&1:1,3|",
-        "C[C@H](O)[C@@H](C)Cl |o1:1,3|",
-        "C[C@H](O)[C@H](F)Cl |r,o1:1,a:3|",
+    Ok(())
+}
+
+#[tokio::test]
+async fn stereo_group_bond_loss_reaches_import_response_once() -> anyhow::Result<()> {
+    const BINOL: &str = include_str!("../../../../../tests/fixtures/mol-atrop-import/binol-2d.mol");
+    let mut input = molfile::read(BINOL)?;
+    let axis = input
+        .molecule
+        .state
+        .metadata
+        .bonds
+        .iter()
+        .position(|bond| matches!(bond.stereo, 6 | 7))
+        .unwrap();
+    input.molecule.state.metadata.groups = vec![chemistry::ranking::StereoGroup {
+        kind: 2,
+        bonds: vec![axis],
+        read_id: 7,
+        ..Default::default()
+    }];
+    let text = molfile::write_absolute(&input.molecule, Default::default())?;
+    let prepared = smiles::Prepared {
+        dummy_labels: vec![None; input.molecule.state.graph.atoms.len()],
+        state: input.molecule.state,
+    };
+    let engine = crate::engine::LocalEngine::in_process();
+    for request in [
+        Request::import("mol", &text),
+        Request::import_prepared(prepared),
     ] {
-        let error = engine
-            .request(Request::import_smiles(text))
-            .await
-            .unwrap_err();
+        let response = engine.request(request).await.map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            response
+                .warnings
+                .iter()
+                .filter(|notice| notice.as_str() == chemistry::STEREO_GROUP_BONDS_NOTICE)
+                .count(),
+            1
+        );
         assert!(
-            error.contains("Unsupported drawing stereochemistry"),
-            "{text}: {error}"
+            response
+                .document
+                .unwrap()
+                .atoms
+                .iter()
+                .all(|atom| atom.stereo_group.is_none())
         );
     }
     Ok(())

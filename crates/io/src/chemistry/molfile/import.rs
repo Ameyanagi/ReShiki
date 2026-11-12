@@ -28,6 +28,16 @@ impl Imported {
         if let Some(notice) = imported.restore_superatoms(&mut document) {
             notices.push(notice);
         }
+        if imported
+            .molecule
+            .state
+            .metadata
+            .groups
+            .iter()
+            .any(|group| !group.bonds.is_empty())
+        {
+            notices.push(crate::chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+        }
         let molecule = if restored {
             document::prepare(&document)?
         } else {

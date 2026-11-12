@@ -9,6 +9,8 @@ const STEREO: &str =
     "ChemDoodle reaction copy does not yet preserve stereochemistry; use RXN or reaction SMILES.";
 const NORMALIZATION: &str =
     "ChemDoodle reaction copy would require chemical normalization; use RXN or reaction SMILES.";
+const GROUPS: &str =
+    "ChemDoodle reaction copy does not preserve enhanced stereo groups; use RXN or native ReShiki.";
 
 /// Cheap source checks for the menu. Prepared chemistry is checked again below.
 pub(super) fn reason(doc: &Document) -> Option<&'static str> {
@@ -49,6 +51,9 @@ pub(super) fn reason(doc: &Document) -> Option<&'static str> {
     }
     if !doc.abbreviations.is_empty() {
         return Some("Expand abbreviations before ChemDoodle reaction copy.");
+    }
+    if doc.atoms.iter().any(|atom| atom.stereo_group.is_some()) {
+        return Some(GROUPS);
     }
     if doc.atoms.iter().any(|a| a.map_num != 0) {
         return Some(
@@ -116,13 +121,15 @@ fn molecule(doc: &Document, participant: &Participant) -> Result<(Value, String)
     }
     let prepared = crate::chemistry::document::prepare(&fragment).map_err(|e| e.to_string())?;
     let state = &prepared.state;
+    if !state.metadata.groups.is_empty() {
+        return Err(GROUPS.into());
+    }
     if state.metadata.atoms.iter().any(|a| a.chiral_tag != 0)
         || state
             .metadata
             .bonds
             .iter()
             .any(|b| b.stereo != 0 || b.unknown_stereo)
-        || !state.metadata.groups.is_empty()
     {
         return Err(STEREO.into());
     }

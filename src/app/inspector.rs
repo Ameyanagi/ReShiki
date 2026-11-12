@@ -96,6 +96,7 @@ pub enum Section {
     RepeatingUnit,
     GenericStructure,
     AtomMaps,
+    StereoGroups,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -213,7 +214,33 @@ pub enum Action {
     Attachment(reshiki::attachments::Kind),
     DepthBonds,
     RingArc,
+    StereoGroup(GroupChoice),
+    RenumberStereoGroups,
     PropertiesCalculated(PropertyKey, Box<Result<Analysis, String>>),
+}
+
+/// A stereo group menu entry for the selected stereocentres.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupChoice {
+    Absolute,
+    Group(reshiki::stereo_groups::StereoGroup),
+    New(reshiki::stereo_groups::StereoGroup),
+}
+impl std::fmt::Display for GroupChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use reshiki::stereo_groups::Kind;
+        match self {
+            Self::Absolute => f.write_str("abs · absolute, as drawn"),
+            Self::Group(group) => match group.kind {
+                Kind::And => write!(f, "{group} · racemic"),
+                Kind::Or => write!(f, "{group} · relative"),
+            },
+            Self::New(group) => match group.kind {
+                Kind::And => write!(f, "New AND group ({group}) · racemic"),
+                Kind::Or => write!(f, "New OR group ({group}) · relative"),
+            },
+        }
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PropertyKey {
@@ -362,6 +389,8 @@ impl State {
             | Action::Centroid
             | Action::Attachment(_)
             | Action::RingArc
+            | Action::StereoGroup(_)
+            | Action::RenumberStereoGroups
             | Action::DepthBonds => {}
         }
     }
@@ -657,6 +686,33 @@ impl App {
                         self.status = error;
                         self.error = true;
                     }
+                }
+                Task::none()
+            }
+            Action::StereoGroup(choice) => {
+                let group = match choice {
+                    GroupChoice::Absolute => None,
+                    GroupChoice::Group(group) | GroupChoice::New(group) => Some(group),
+                };
+                let before = self.tab.doc.clone();
+                for atom in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| a.cip_label.is_some() && self.tab.selected.contains(&a.id))
+                {
+                    atom.stereo_group = group;
+                }
+                if self.tab.doc != before {
+                    self.changed(before);
+                }
+                Task::none()
+            }
+            Action::RenumberStereoGroups => {
+                let before = self.tab.doc.clone();
+                if reshiki::stereo_groups::renumber(&mut self.tab.doc) {
+                    self.changed(before);
                 }
                 Task::none()
             }
@@ -1552,6 +1608,9 @@ impl App {
                 controls,
             ));
         }
+        if let Some(section) = self.stereo_group_section(&atoms) {
+            body = body.push(section);
+        }
         body = body.push(self.transform_section());
         body = body.push(self.inspector_section_lazy(
             Section::Groups,
@@ -1571,6 +1630,76 @@ impl App {
             .on_press(Message::Delete),
         )
         .into()
+    }
+
+    /// Assign the selected stereocentres to ABS, an AND group or an OR group.
+    fn stereo_group_section(
+        &self,
+        atoms: &[&reshiki::document::Atom],
+    ) -> Option<Element<'_, Message>> {
+        use reshiki::stereo_groups::{self, Kind};
+        let centres: Vec<_> = atoms.iter().filter(|a| a.cip_label.is_some()).collect();
+        let first = centres.first()?;
+        let doc = &self.tab.doc;
+        let current = centres
+            .iter()
+            .all(|a| a.stereo_group == first.stereo_group)
+            .then(|| {
+                first
+                    .stereo_group
+                    .map_or(GroupChoice::Absolute, GroupChoice::Group)
+            });
+        let ids: Vec<_> = centres.iter().map(|a| a.id).collect();
+        let used = stereo_groups::used(doc, &ids);
+        let mut counts = HashMap::new();
+        let gaps = used.iter().any(|group| {
+            let count = counts.entry(group.kind).or_insert(0);
+            *count += 1;
+            group.number != *count
+        });
+        let choices: Vec<_> = std::iter::once(GroupChoice::Absolute)
+            .chain(used.into_iter().map(GroupChoice::Group))
+            .chain(
+                [Kind::And, Kind::Or]
+                    .map(|kind| GroupChoice::New(stereo_groups::next(doc, &ids, kind))),
+            )
+            .collect();
+        let summary = match current {
+            Some(GroupChoice::Group(group)) => group.to_string(),
+            Some(_) => "abs".into(),
+            None => "Mixed".into(),
+        };
+        let mut body = column![
+            text(match centres.len() {
+                1 => "Group of the selected stereocentre".into(),
+                n => format!("Group of the {n} selected stereocentres"),
+            })
+            .size(11)
+            .style(muted_text),
+            crate::appearance::pick_list(choices, current, |choice| {
+                Message::InspectorAction(Action::StereoGroup(choice))
+            })
+            .placeholder("Mixed groups")
+            .text_size(12)
+            .padding(7)
+            .width(Length::Fill),
+            text("abs: exactly as drawn. AND: racemic, the drawn form and its mirror image 1:1. OR: one of the two forms, not known which. Centres in the same group flip together.")
+                .size(11)
+                .style(muted_text),
+        ]
+        .spacing(7);
+        if gaps {
+            body = body.push(hover_hint(
+                command(
+                    "Renumber groups",
+                    Message::InspectorAction(Action::RenumberStereoGroups),
+                )
+                .width(Length::Fill),
+                "Number each molecule's AND and OR groups 1, 2, 3… in order",
+                tooltip::Position::Top,
+            ));
+        }
+        Some(self.inspector_section(Section::StereoGroups, "Stereo groups", summary, false, body))
     }
 
     fn bond_appearance_controls(

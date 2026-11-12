@@ -209,9 +209,9 @@ fn both_color_visitors_see_every_stored_color() {
         visited += 1;
         *c = Color::Palette(Hue::ALL[visited % 8], Row::Strong);
     });
-    // Atom 5 (style, H, stereo, mapping, number) + second atom stereo/mapping,
-    // bond 2, text 2, arrow 1, graphic 2, ring fill 1.
-    assert_eq!(visited, 15);
+    // Atom 6 (style, H, stereo, mapping, stereo group, number) + second atom
+    // stereo/mapping/stereo group, bond 2, text 2, arrow 1, graphic 2, ring fill 1.
+    assert_eq!(visited, 17);
     let seen = std::cell::Cell::new(0);
     assert!(!any_color(&doc, |c| {
         seen.set(seen.get() + 1);
