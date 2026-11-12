@@ -125,6 +125,7 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     let mut fields = BTreeMap::<String, usize>::new();
     let (mut mismatches, mut extensions, mut generic_additions) = (0, 0, 0);
     let mut renumberings = 0;
+    let mut stereo_groups = 0;
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let imported = molfile::read(&case.text);
@@ -302,6 +303,17 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
                         .then(|| "Accepted axial drawing changed an axis or its label".into()),
                     }
                 }
+                // The original drawing converter refuses enhanced stereo
+                // groups, which #766 draws; molfile_import compares their state.
+                (Ok(_), None)
+                    if case.failure.as_deref()
+                        == Some(
+                            "Enhanced stereo groups are not supported yet; import was cancelled.",
+                        ) =>
+                {
+                    stereo_groups += 1;
+                    None
+                }
                 (Ok(_), None) => Some(format!("Accepted invalid drawing: {:?}", case.failure)),
             }
         };
@@ -373,6 +385,9 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
         eprintln!("MOL drawing mismatch field: {count} {field}");
     }
     eprintln!("MOL drawings: {renumberings} stereo-group renumberings");
+    eprintln!(
+        "MOL drawings: {stereo_groups} stereo-group drawings the original converter refused (#766)"
+    );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         accepted > 1000 && rejected > 100 && spatial > 100 && wedges > 100,

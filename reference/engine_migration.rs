@@ -15,6 +15,11 @@ use anyhow::Context;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reshiki::engine::{ChemistryEngine, LocalEngine, PythonEngine, Request, Response};
 
+/// The frozen Python worker's refusal of enhanced stereo groups, which #766 imports.
+const STEREO_GROUPS_REFUSAL: &str =
+    "Enhanced stereo groups are not supported yet; import was cancelled.";
+const STEREO_GROUPS_INPUT: &str = "F[C@H](Cl)[C@@H](Br)I |o1:1,3|";
+
 type TestResult = anyhow::Result<()>;
 
 #[path = "support/coordinate_free_wedges.rs"]
@@ -250,7 +255,7 @@ async fn overlapping_imports_keep_their_own_layout_and_recover_after_errors() ->
         "C(=O)O",
         "C1CC",
         "[CH5]",
-        "F[C@H](Cl)[C@@H](Br)I |o1:1,3|",
+        STEREO_GROUPS_INPUT,
         "[13CH3:90][NH3+]",
         "CC |(nan,inf,-inf)|",
     ] {
@@ -263,6 +268,15 @@ async fn overlapping_imports_keep_their_own_layout_and_recover_after_errors() ->
         match result? {
             (Ok(actual), Ok(expected)) => assert_response_matches(actual, expected)?,
             (Err(_), Err(_)) => (),
+            // Enhanced stereo groups import since #766.
+            (Ok(actual), Err(expected)) if expected.contains(STEREO_GROUPS_REFUSAL) => {
+                anyhow::ensure!(
+                    actual
+                        .document
+                        .is_some_and(|doc| doc.atoms.iter().any(|a| a.stereo_group.is_some())),
+                    "{STEREO_GROUPS_INPUT} imported without its OR group"
+                );
+            }
             (actual, expected) => {
                 anyhow::bail!("Import result changed: {actual:?} != {expected:?}")
             }
@@ -329,6 +343,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
     let (mut tag_wins, mut kept_ez) = (Vec::new(), Vec::new());
     let mut partial_imports = Vec::new();
+    let mut stereo_groups = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let actual = local.execute(Request::import(format, &case.text)).await;
@@ -558,6 +573,12 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 partial_imports.push(case.name.clone());
                 None
             }
+            // Enhanced stereo groups import since #766.
+            (Ok(_), None) if case.failure.as_deref() == Some(STEREO_GROUPS_REFUSAL) => {
+                accepted += 1;
+                stereo_groups.push(case.name.clone());
+                None
+            }
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
@@ -581,6 +602,10 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     eprintln!(
         "{format} partial imports replacing frozen rejections (#1138): {} {partial_imports:?}",
         partial_imports.len()
+    );
+    eprintln!(
+        "{format} stereo groups the frozen worker refused (#766): {} {stereo_groups:?}",
+        stereo_groups.len()
     );
     eprintln!(
         "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",

@@ -20,6 +20,35 @@ struct Case {
     failure: Option<String>,
 }
 
+/// RDKit leaves a group without a number (and the relative flag's group) at
+/// read id 0 in each participant. ReShiki gives such groups numbers that are
+/// unique across the reaction (#766), so compare them as unnumbered.
+fn without_allocated_group_numbers(actual: &mut Value, expected: &Value) {
+    for role in ["reactants", "agents", "products"] {
+        let (Some(actual), Some(expected)) = (
+            actual.get_mut(role).and_then(Value::as_array_mut),
+            expected.get(role).and_then(Value::as_array),
+        ) else {
+            continue;
+        };
+        for (actual, expected) in actual.iter_mut().zip(expected) {
+            let pointer = "/prepared/state/metadata/groups";
+            let (Some(actual), Some(expected)) = (
+                actual.pointer_mut(pointer).and_then(Value::as_array_mut),
+                expected.pointer(pointer).and_then(Value::as_array),
+            ) else {
+                continue;
+            };
+            for (actual, expected) in actual.iter_mut().zip(expected) {
+                if expected["read_id"] == 0 && expected["write_id"] == 0 {
+                    actual["read_id"] = 0.into();
+                    actual["write_id"] = 0.into();
+                }
+            }
+        }
+    }
+}
+
 fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
     if actual == expected {
         return None;
@@ -105,15 +134,16 @@ fn compare_reference(suite: &str) -> anyhow::Result<()> {
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
-        let actual = match reaction::read_smiles(&case.text) {
+        let mut actual = match reaction::read_smiles(&case.text) {
             Ok(reaction) => Ok(smiles_extensions::without_cumulene_flag(
                 serde_json::to_value(reaction)?,
             )),
             Err(error) => Err(error.to_string()),
         };
-        let failure = match (&actual, &case.expected) {
+        let failure = match (&mut actual, &case.expected) {
             (Ok(a), Some(e)) => {
                 accepted += 1;
+                without_allocated_group_numbers(a, e);
                 difference(a, e, "reaction")
             }
             (Err(_), None) => {

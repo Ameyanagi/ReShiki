@@ -32,16 +32,13 @@ def read(text):
     mol = Chem.MolFromMolBlock(text, removeHs=False, strictParsing=True)
     if mol is None:
         raise ValueError("Native MOL reader rejected input")
-    if (
-        mol.GetStereoGroups()
-        or any(
-            a.HasQuery() or a.GetNumRadicalElectrons() > 2 or int(a.GetChiralTag()) > 2
-            for a in mol.GetAtoms()
-        )
-        or any(
-            b.HasQuery() or b.GetBondType() not in ORDERS.values() or int(b.GetStereo()) > 5
-            for b in mol.GetBonds()
-        )
+    # Enhanced stereo groups are editable since #766.
+    if any(
+        a.HasQuery() or a.GetNumRadicalElectrons() > 2 or int(a.GetChiralTag()) > 2
+        for a in mol.GetAtoms()
+    ) or any(
+        b.HasQuery() or b.GetBondType() not in ORDERS.values() or int(b.GetStereo()) > 5
+        for b in mol.GetBonds()
     ):
         raise ValueError("Outside the existing editable chemistry contract")
     return mol
