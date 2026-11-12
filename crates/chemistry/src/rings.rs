@@ -369,22 +369,17 @@ impl State {
     }
 
     fn remove_extra(&mut self, top: &Topology, rings: &mut Vec<Ring>) -> Result<(), String> {
-        let keys = rings
-            .iter()
-            .map(|r| i32::try_from(r.len()).map_err(|_| "Ring size limit exceeded".to_string()))
-            .collect::<Result<Vec<_>, _>>()?;
         self.budget.spend(
             rings
                 .len()
                 .saturating_mul(1 + rings.len().checked_ilog2().unwrap_or(0) as usize),
         )?;
-        let order = super::native_order::indices(&keys).map_err(|e| e.to_string())?;
-        let mut original = std::mem::take(rings);
-        for i in order {
-            rings.push(std::mem::take(
-                original.get_mut(i).ok_or("Missing sorted ring")?,
-            ));
-        }
+        // 2026.03.6 sorted on size with the platform's std::sort, so equal
+        // sizes reached the greedy choice below in a libc++, libstdc++ or MSVC
+        // order. 2026.09.1 picks its basis greedily from cycles ranked by size
+        // with a stable sort (RingDecomposerLib, qsort overridden), so equal
+        // sizes keep the order they were found in on every platform.
+        rings.sort_by_key(Vec::len);
         let bonds = rings
             .iter()
             .map(|r| top.bonds(r).map(|v| v.into_iter().collect::<HashSet<_>>()))

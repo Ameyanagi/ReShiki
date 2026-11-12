@@ -235,6 +235,9 @@ fn dense_ordering_is_local_and_search_is_budgeted() -> TestResult {
         "../../../../tests/fixtures/ring-order-dependent.json"
     ))?;
     let rings = perceive(&graph, Options::default())?;
+    // RDKit 2026.03.6's std::sort tie order made this 20-ring basis
+    // symmetrize to 32 rings with libc++ and libstdc++ but 33 with MSVC.
+    assert_eq!((rings.basis_count, rings.atoms.len()), (20, 33));
     assert_cycles(&graph, &rings);
     let mut budget = Budget { work: 0, stored: 0 };
     let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
@@ -262,5 +265,45 @@ fn malformed_graphs_fail_without_mutation() -> TestResult {
         assert!(fast(&bad).is_err());
         assert_eq!(serde_json::to_value(&bad)?, before);
     }
+    Ok(())
+}
+
+#[test]
+fn equal_size_candidates_keep_their_order_on_every_platform() -> TestResult {
+    // RDKit 2026.03.6 sorted candidates with std::sort, which reorders equal
+    // sizes from 17 (libstdc++), 24 (libc++) or 33 (MSVC) rings upwards.
+    // 2026.09.1 ranks basis candidates with a stable sort instead.
+    let rings = (0..40)
+        .map(|i| {
+            let size = if i % 2 == 0 { 4 } else { 3 };
+            (i * 4..i * 4 + size).collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let edges = rings
+        .iter()
+        .flat_map(|ring| {
+            ring.iter()
+                .zip(ring.iter().cycle().skip(1))
+                .map(|(&a, &b)| (a, b))
+        })
+        .collect::<Vec<_>>();
+    let graph = graph(160, &edges);
+    let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
+    let mut state = State {
+        active: vec![true; edges.len()],
+        degrees: Vec::new(),
+        ring_atoms: Vec::new(),
+        ring_bonds: Vec::new(),
+        seen: BTreeSet::new(),
+        extras: Vec::new(),
+        budget: Budget::default(),
+    };
+    let mut sorted = rings.clone();
+    state
+        .remove_extra(&top, &mut sorted)
+        .map_err(anyhow::Error::msg)?;
+    let (triangles, squares): (Vec<_>, Vec<_>) = rings.into_iter().partition(|r| r.len() == 3);
+    assert_eq!(sorted, [triangles, squares].concat());
+    assert!(state.extras.is_empty());
     Ok(())
 }
