@@ -84,7 +84,6 @@ fn run_child(command: &mut Command, request: &[u8], cancel: &Cancel) -> Result<V
     let mut write_error = None;
     let mut status = None;
     let mut exited = None;
-    let mut missing_samples = 0;
     loop {
         if cancel.stopped() {
             return Err(Error::Cancelled("Local name parsing was cancelled".into()));
@@ -129,32 +128,18 @@ fn run_child(command: &mut Command, request: &[u8], cancel: &Cancel) -> Result<V
                 child.terminate();
                 exited = Some(Instant::now());
             } else {
-                match child.check() {
-                    Ok(()) => missing_samples = 0,
-                    Err(error) => {
-                        // Task info can disappear during exec/exit before
-                        // the PID is waitable; Linux also omits VmRSS once
-                        // the address space is gone. Permit four retries;
-                        // measured excess and other failures stop
-                        // even if the worker exits successfully immediately.
-                        if !transient_measurement_error(&error) {
-                            return Err(Error::Worker(format!(
-                                "Local parser resource check failed: {error}"
-                            )));
-                        }
-                        if child
-                            .try_wait()
-                            .map_err(|e| Error::Worker(e.to_string()))?
-                            .is_none()
-                        {
-                            missing_samples += 1;
-                            if missing_samples > 4 {
-                                return Err(Error::Worker(format!(
-                                    "Local parser resource check failed: {error}"
-                                )));
-                            }
-                        }
-                    }
+                // Task info disappears during exec and exit before the PID
+                // is waitable; Linux also omits VmRSS once the address space
+                // is gone. Under load that teardown outlasts any fixed number
+                // of polls, so a missing sample waits for the exit within the
+                // deadline. Measured excess and other failures stop even if
+                // the worker exits successfully immediately.
+                if let Err(error) = child.check()
+                    && !transient_measurement_error(&error)
+                {
+                    return Err(Error::Worker(format!(
+                        "Local parser resource check failed: {error}"
+                    )));
                 }
             }
         }

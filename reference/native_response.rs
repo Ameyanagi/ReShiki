@@ -7,6 +7,8 @@ mod hydrogen_isotopes;
 mod rdkit_parity;
 #[path = "support/reference_response.rs"]
 mod reference_response;
+#[path = "support/superatom_export.rs"]
+mod superatom_export;
 use anyhow::Context;
 use reshiki::{
     arrows::ArrowStyle,
@@ -209,6 +211,13 @@ async fn compare(
     );
     match (actual, expected) {
         (Ok(mut a), Ok(e)) => {
+            // #870: the MOL export writes collapsed abbreviations as SUP groups.
+            if request.format.as_deref() == Some("mol")
+                && let (Some(document), Some(prepared), Some(output)) =
+                    (&request.document, &prepared, a.output.as_mut())
+            {
+                superatom_export::adapt(document, &prepared.molecule.ids, output)?;
+            }
             match format.as_deref() {
                 Some("cdxml") => {
                     a.output = a.output.map(|xml| hydrogen_isotopes::as_mass_numbers(&xml));
