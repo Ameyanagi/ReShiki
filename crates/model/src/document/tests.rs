@@ -157,6 +157,7 @@ fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
         kind: "forward".into(),
         control: None,
         cubic: None,
+        nodes: Vec::new(),
         style: None,
     });
     doc.graphics.push(crate::graphics::Graphic::dragged(
@@ -339,6 +340,28 @@ fn history_caps_estimated_bytes_but_keeps_the_minimum_steps() {
     history.max_bytes = 0;
     edits(&mut large, &mut history);
     assert_eq!(history.undo_frames().len(), History::MIN_STEPS);
+}
+#[test]
+fn history_frames_count_arrow_node_buffers() {
+    let mut doc = Document::default();
+    doc.arrows.push(crate::document::Arrow::new(
+        1,
+        Point::default(),
+        Point::new(120., 0.),
+        crate::arrows::Preset::Forward,
+        crate::arrows::ArrowStyle::default(),
+    ));
+    let without = frame_bytes(&doc);
+    let node = crate::document::ArrowNode {
+        point: Point::new(60., 0.),
+        controls: [Point::new(50., 0.), Point::new(70., 0.)],
+        kind: crate::graphics::PathNodeType::Corner,
+    };
+    doc.arrows[0].nodes = vec![node; 1000];
+    assert_eq!(
+        frame_bytes(&doc) - without,
+        1000 * std::mem::size_of_val(&node)
+    );
 }
 #[test]
 fn native_files_open_at_version_15_or_later_without_computed_labels() {

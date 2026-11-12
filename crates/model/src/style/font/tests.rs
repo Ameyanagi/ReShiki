@@ -2,49 +2,36 @@ const VARIABLE: &[u8] =
     include_bytes!("../../../../../tests/fixtures/font-export-103/variable-default-100.subset.ttf");
 
 #[test]
-fn bundled_faces_supply_generic_sans_in_an_empty_database_for_each_label_style() {
-    use resvg::usvg::fontdb::{Database, Family, Query, Style, Weight};
+fn an_existing_helvetica_face_is_not_aliased_to_the_bundle() {
+    use resvg::usvg::fontdb::{Database, Family, Language, Query};
 
     let mut db = Database::new();
+    db.load_font_data(
+        include_bytes!("../../../../../tests/fixtures/font-export-103/static-400.subset.ttf")
+            .to_vec(),
+    );
+    let mut face = db.faces().next().unwrap().clone();
+    db.remove_face(face.id);
+    face.families = vec![("Helvetica".into(), Language::English_UnitedStates)];
+    let helvetica = db.push_face_info(face);
     super::load_bundled(&mut db);
-    assert_eq!(db.faces().count(), 4);
-    for weight in [400, 700] {
-        for style in [Style::Normal, Style::Italic] {
-            let id = db
-                .query(&Query {
-                    families: &[Family::SansSerif],
-                    weight: Weight(weight),
-                    style,
-                    ..Default::default()
-                })
-                .unwrap();
-            let info = db.face(id).unwrap();
-            assert_eq!(info.weight, Weight(weight));
-            assert_eq!(info.style, style);
-            assert!(
-                info.families
-                    .iter()
-                    .any(|(name, _)| name == "Liberation Sans")
-            );
-            db.with_face_data(id, |bytes, index| {
-                let face = super::face(bytes, index, weight).unwrap();
-                for c in "CHO".chars() {
-                    let glyph = face.glyph_index(c).unwrap();
-                    assert!(face.glyph_hor_advance(glyph).unwrap() > 0);
-                    assert!(face.glyph_bounding_box(glyph).is_some());
-                }
-            })
-            .unwrap();
-        }
-    }
+    assert_eq!(db.faces().count(), 5);
     assert_eq!(
         db.query(&Query {
-            families: &[Family::Name("Arial")],
+            families: &[Family::Name("Helvetica")],
             ..Default::default()
-        })
-        .is_some(),
-        cfg!(target_arch = "wasm32")
+        }),
+        Some(helvetica)
     );
+    for face in db.faces().filter(|face| face.id != helvetica) {
+        assert_eq!(
+            face.families
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            ["Arial", "Liberation Sans", super::BUNDLED_FAMILY]
+        );
+    }
 }
 
 #[test]

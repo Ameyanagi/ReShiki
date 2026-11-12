@@ -1,6 +1,163 @@
 use super::*;
 
 #[tokio::test]
+async fn multi_node_arrow_exports_all_control_triples_to_cdxml_and_cdx() {
+    use crate::{
+        arrows::{ArrowStyle, Preset},
+        document::{Arrow, ArrowNode},
+        graphics::PathNodeType,
+    };
+
+    let points = [
+        Point::new(0., 0.),
+        Point::new(0., 0.),
+        Point::new(10., -15.),
+        Point::new(20., -30.),
+        Point::new(30., -25.),
+        Point::new(40., -20.),
+        Point::new(50., 5.),
+        Point::new(60., 10.),
+        Point::new(70., 15.),
+        Point::new(80., -10.),
+        Point::new(90., -5.),
+        Point::new(100., 0.),
+        Point::new(110., 15.),
+        Point::new(120., 20.),
+        Point::new(120., 20.),
+    ];
+    for (node_count, point_count) in [(2, 12), (3, 15)] {
+        let mut arrow = Arrow::new(
+            1,
+            points[0],
+            points[13],
+            Preset::Curved,
+            ArrowStyle::preset(Preset::Curved),
+        );
+        arrow.cubic = Some([points[2], points[12]]);
+        arrow.nodes = points[3..12]
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .take(node_count)
+            .map(|&[arriving, point, leaving]| ArrowNode {
+                point,
+                controls: [arriving, leaving],
+                kind: PathNodeType::Corner,
+            })
+            .collect();
+        let document = Document {
+            arrows: vec![arrow],
+            ..Default::default()
+        };
+        let scale = f64::from(document.drawing_style.bond_length_pt)
+            / f64::from(document.drawing_style.bond_length_world);
+        let expected = points[..3 * (node_count + 1)].iter().chain(&points[12..]);
+        for format in ["cdxml", "cdx"] {
+            let bytes = crate::formats::write(document.clone(), format)
+                .await
+                .unwrap();
+            let xml = if format == "cdx" {
+                crate::exchange::from_cdx(&bytes).unwrap()
+            } else {
+                String::from_utf8(bytes).unwrap()
+            };
+            let tree = roxmltree::Document::parse(&xml).unwrap();
+            assert!(!tree.descendants().any(|node| node.has_tag_name("arrow")));
+            let curve = tree
+                .descendants()
+                .find(|node| node.has_tag_name("curve"))
+                .unwrap();
+            let coordinates: Vec<f64> = curve
+                .attribute("CurvePoints")
+                .unwrap()
+                .split_whitespace()
+                .map(|value| value.parse().unwrap())
+                .collect();
+            assert_eq!(coordinates.len(), 2 * point_count);
+            assert_eq!(curve.attribute("Closed").unwrap_or("no"), "no");
+            for (actual, expected) in coordinates.as_chunks::<2>().0.iter().zip(expected.clone()) {
+                // Editable exchange translates the page and CDX quantizes points.
+                assert!(
+                    (actual[0] - coordinates[0] - f64::from(expected.x) * scale).abs() < 0.0001
+                );
+                assert!(
+                    (actual[1] - coordinates[1] - f64::from(expected.y) * scale).abs() < 0.0001
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn short_terminal_node_arrow_keeps_head_size_after_cdxml_and_cdx_roundtrip() {
+    use crate::{
+        arrows::{ArrowStyle, Preset},
+        document::{Arrow, ArrowNode},
+        graphics::{PathCommand, PathNodeType},
+        scene::Primitive,
+    };
+
+    fn head_length(document: &Document) -> f32 {
+        let commands = crate::scene::primitives(document)
+            .into_iter()
+            .find_map(|part| match part {
+                Primitive::Path {
+                    commands,
+                    filled: true,
+                    ..
+                } => Some(commands),
+                _ => None,
+            })
+            .unwrap();
+        let [
+            PathCommand::Move(tip),
+            PathCommand::Line(left),
+            _,
+            PathCommand::Line(right),
+            PathCommand::Close,
+        ] = commands.as_slice()
+        else {
+            panic!("Expected a full arrowhead polygon");
+        };
+        tip.distance(left.lerp(*right, 0.5))
+    }
+
+    let mut arrow = Arrow::new(
+        1,
+        Point::default(),
+        Point::new(100., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    );
+    arrow.cubic = Some([Point::new(30., 40.), Point::new(97., 0.)]);
+    arrow.nodes = vec![ArrowNode {
+        point: Point::new(90., 0.),
+        controls: [Point::new(60., 40.), Point::new(93., 0.)],
+        kind: PathNodeType::Corner,
+    }];
+    let document = Document {
+        arrows: vec![arrow],
+        ..Default::default()
+    };
+    let expected = head_length(&document);
+    assert!((expected - 17.5).abs() < 0.001);
+    for format in ["cdxml", "cdx"] {
+        let bytes = crate::formats::write(document.clone(), format)
+            .await
+            .unwrap();
+        let restored = crate::formats::read(bytes, format).await.unwrap();
+        assert!(restored.arrows.is_empty());
+        assert_eq!(restored.graphics.len(), 1);
+        assert!(restored.graphics[0].heads.is_some());
+        // Allow 0.001 world units for exchange coordinate rounding and CDX quantization.
+        assert!(
+            (head_length(&restored) - expected).abs() < 0.001,
+            "{format}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
     use crate::{
         arrows::{ArrowStyle, Head, HeadShape, Preset},
@@ -43,6 +200,7 @@ async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
             end_anchor: None,
             control: None,
             cubic: None,
+            nodes: Vec::new(),
             style,
         });
         document.arrows.push(Arrow {
@@ -162,6 +320,7 @@ fn retrosynthesis_exchange_refuses_curves() {
                 end_anchor: None,
                 control,
                 cubic,
+                nodes: Vec::new(),
                 style: Some(ArrowStyle::preset(Preset::Retro)),
             }],
             ..Default::default()

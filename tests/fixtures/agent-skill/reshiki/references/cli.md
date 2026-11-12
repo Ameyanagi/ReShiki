@@ -55,7 +55,8 @@ Documentation: https://reshiki.com/guide/agents/
 ```text
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
 Usage: reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
-                             [-o OUTPUT|-] [--pages] [--force] [--receipt]
+                             [-o OUTPUT|-] [--svg-text MODE] [--pages]
+                             [--force] [--receipt]
 
 Converts a structure or drawing, making the file as the app's Export does.
 
@@ -78,6 +79,9 @@ Options:
                  goes to stdout and needs --to; pdf and png are never written
                  to a terminal.
   --pages        Export every publication page as one PDF (pdf only).
+  --svg-text MODE
+                 Draw svg text as outlines (outline, the default), the same
+                 in every viewer, or keep it as text (live).
   --force        Replace OUTPUT if it exists; otherwise that is an error.
   --receipt      With -o OUTPUT, print one JSON line to stdout:
                  {"receipt": {"format", "byte_len", "detail"}, "api": {…}}.
@@ -95,7 +99,8 @@ Export details, such as PNG size and dpi, are printed to stderr as a
 ```text
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
 Usage: reshiki --cli render (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
-                            [-o OUTPUT|-] [--width N] [--height N] [--force]
+                            [-o OUTPUT|-] [--svg-text MODE] [--width N]
+                            [--height N] [--force]
 
 Renders the preview the assistant looks at: png on white, scaled to fit
 --width × --height, or svg with a transparent surround. For figures to
@@ -107,6 +112,9 @@ Options:
                Without --to, the extension of OUTPUT picks it.
   -o OUTPUT    Write the image to OUTPUT. Without -o, or with -o -, it goes
                to stdout and needs --to; png is never written to a terminal.
+  --svg-text MODE
+               Draw svg text as outlines (outline, the default), the same
+               in every viewer, or keep it as text (live).
   --width N    The widest a png may be, in pixels (default 1600).
   --height N   The tallest a png may be, in pixels (default 1000).
                Each is 1 to 8192, and a png has at most 16000000 pixels.
@@ -118,7 +126,7 @@ Options:
 ```text
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
 Usage: reshiki --cli compose (PROPOSAL | -) [--to FORMAT] [-o OUTPUT|-] [--pages]
-                             [--force] [--receipt]
+                             [--svg-text MODE] [--force] [--receipt]
 
 Lays out a Proposal as ReShiki's assistant composes its drafts, in the
 default style, then writes the drawing as convert does.
@@ -135,6 +143,9 @@ Options:
                goes to stdout and needs --to; pdf and png are never written
                to a terminal.
   --pages      Export every publication page as one PDF (pdf only).
+  --svg-text MODE
+               Draw svg text as outlines (outline, the default), the same
+               in every viewer, or keep it as text (live).
   --force      Replace OUTPUT if it exists; otherwise that is an error.
   --receipt    With -o OUTPUT, print one receipt JSON line to stdout, as
                convert does.

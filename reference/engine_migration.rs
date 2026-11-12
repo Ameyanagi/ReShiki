@@ -37,12 +37,16 @@ mod molecule_reading;
 mod molfile_restrictions;
 #[path = "support/nci_2808_template_layout.rs"]
 mod nci_2808_template_layout;
+#[path = "support/partial_import.rs"]
+mod partial_import;
 #[path = "support/reaction_presentation.rs"]
 mod reaction_presentation;
 #[path = "support/reference_mol.rs"]
 mod reference_mol;
 #[path = "support/reference_presentation.rs"]
 mod reference_presentation;
+#[path = "support/superatoms.rs"]
+mod superatoms;
 
 #[tokio::test]
 async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
@@ -318,6 +322,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         molecule_reading: Option<molecule_reading::MoleculeReading>,
         #[serde(default)]
         sssr: Option<Vec<Vec<usize>>>,
+        superatoms: Option<Vec<superatoms::Group>>,
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
@@ -460,14 +465,18 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                     && strict_error(format, &case.text).is_some_and(|error| {
                         smiles_extensions::refused_allene(&case.text, &error)
                     })
-                    && actual
-                        .warnings
-                        .iter()
-                        .any(|w| w.starts_with("The allene stereo tag (@AL) at ")) =>
+                    && partial_import::drops_allene_tag(&actual.warnings) =>
             {
                 accepted += 1;
                 partial_imports.push(case.name.clone());
-                None
+                let text = partial_import::without_allene_tags(&case.text);
+                local
+                    .execute(Request::import(format, &text))
+                    .await
+                    .map_err(anyhow::Error::msg)
+                    .and_then(|plain| partial_import::matches_without_allene_tags(&actual, &plain))
+                    .err()
+                    .map(|e| e.to_string())
             }
             (Ok(actual), Some(mut expected)) => {
                 accepted += 1;
@@ -482,7 +491,12 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 if let Some(reading) = &case.molecule_reading {
                     molecule_reading::adapt(reading, &actual, &mut expected);
                 }
-                let expected = if format == "mol" {
+                let superatoms = case.superatoms.as_deref().map_or(Ok(()), |groups| {
+                    superatoms::adapt(groups, &actual, &mut expected)
+                });
+                let expected = if let Err(error) = superatoms {
+                    Err(error)
+                } else if format == "mol" {
                     let before = serde_json::to_value(&expected)?;
                     reference_mol::mol_source_xyz(expected, &case.text).inspect(|response| {
                         if serde_json::to_value(response).ok().as_ref() != Some(&before) {
@@ -570,7 +584,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 None
             }
             (Ok(actual), None)
-                if partial_import_replaces_failure(
+                if partial_import::replaces_failure(
                     format,
                     case.failure.as_deref(),
                     &actual.warnings,
@@ -646,34 +660,6 @@ fn strict_error(format: &str, text: &str) -> Option<String> {
     }
 }
 
-fn partial_import_replaces_failure(
-    format: &str,
-    failure: Option<&str>,
-    warnings: &[String],
-) -> bool {
-    matches!(format, "smiles" | "rsmi")
-        && (matches!(
-            failure,
-            Some(
-                "More than two unpaired electrons on an atom are not supported yet"
-                    | "Query atoms are not supported yet; import was cancelled."
-                    | "This bond type is not supported yet."
-                    | "This stereochemistry class is not supported yet."
-            )
-        ) || format == "rsmi"
-            && matches!(
-                failure,
-                // Reaction sanitization reads a CX _chiralPermutation string
-                // before the frozen worker checks its unsupported SP/TB/OH tag.
-                // A malformed value fails its unsigned cast. Partial import
-                // drops that configuration and reports the omission instead.
-                Some("Query reaction atoms are not supported yet" | "bad any cast")
-            ))
-        && warnings
-            .iter()
-            .any(|warning| reshiki::engine::native_import::is_partial_import_warning(warning))
-}
-
 #[test]
 fn partial_import_exception_requires_replaced_failure_format_and_warning() {
     let warnings = vec!["Bond C1–C2 has any order (~); bond order assumed single".into()];
@@ -686,8 +672,11 @@ fn partial_import_exception_requires_replaced_failure_format_and_warning() {
             true,
         ),
         ("rsmi", Some("bad any cast"), true),
+        ("rsmi", Some("bad any_cast"), true),
+        ("rsmi", Some("Bad any_cast"), true),
         ("smiles", Some("bad any cast"), false),
-        ("rsmi", Some("bad any_cast"), false),
+        ("smiles", Some("bad any_cast"), false),
+        ("rsmi", Some("bad cast"), false),
         ("mol", bond_failure, false),
         ("rsmi", None, false),
         (
@@ -702,13 +691,13 @@ fn partial_import_exception_requires_replaced_failure_format_and_warning() {
         ),
     ] {
         assert_eq!(
-            partial_import_replaces_failure(format, failure, &warnings),
+            partial_import::replaces_failure(format, failure, &warnings),
             accepted,
             "{format}: {failure:?}"
         );
     }
-    assert!(!partial_import_replaces_failure("rsmi", bond_failure, &[]));
-    assert!(!partial_import_replaces_failure(
+    assert!(!partial_import::replaces_failure("rsmi", bond_failure, &[]));
+    assert!(!partial_import::replaces_failure(
         "rsmi",
         bond_failure,
         &["Extended double-bond stereochemistry (e.g. C=C=C=C) ignored".into()],

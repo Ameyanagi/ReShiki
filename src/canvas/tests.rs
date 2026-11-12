@@ -2935,7 +2935,7 @@ pub(super) fn guided_drag(
             World::new(p.x - start.x, p.y - start.y),
             bounds,
         )),
-        Some(Gesture::ArrowHandle { id, index }) => canvas
+        Some(Gesture::ArrowHandle { id, index, .. }) => canvas
             .doc
             .arrows
             .iter()
@@ -3267,7 +3267,12 @@ fn mechanism_attachment_379_aimed_end_preview_matches_the_commit() {
     let screen = canvas.camera.screen(end.offset(-11.5, -16.4), bounds);
     let target = canvas.camera.world(screen, bounds);
     let state = State {
-        gesture: Some(Gesture::ArrowHandle { id, index: 4 }),
+        gesture: Some(Gesture::ArrowHandle {
+            id,
+            index: 4,
+            free: false,
+            grab: World::default(),
+        }),
         cursor: Some(screen),
         ..Default::default()
     };
@@ -3309,7 +3314,12 @@ fn arrow_end_drag_preview_keeps_condition_labels_like_the_commit() {
     let start = doc.arrows[0].start;
     let canvas = chain_canvas(&doc, ChainMode::Straight);
     let state = State {
-        gesture: Some(Gesture::ArrowHandle { id: 1, index: 1 }),
+        gesture: Some(Gesture::ArrowHandle {
+            id: 1,
+            index: 1,
+            free: false,
+            grab: World::default(),
+        }),
         cursor: Some(canvas.camera.screen(start.offset(5., 0.), bounds)),
         ..Default::default()
     };
@@ -3661,5 +3671,76 @@ fn edit_points_drag_a_selected_brackets_repeat_label_but_keep_its_corner_handle(
     assert!(!matches!(
         state.gesture,
         Some(Gesture::RepeatLabelMove { .. })
+    ));
+}
+
+#[test]
+fn edit_points_arrow_shaft_click_adds_a_node_and_node_handles_drag_click_and_free() {
+    use iced::keyboard::Modifiers;
+    use reshiki::arrows::{ArrowStyle, FIRST_NODE_HANDLE, Preset};
+    let mut doc = Document::default();
+    let mut arrow = reshiki::document::Arrow::new(
+        1,
+        World::new(-120., 0.),
+        World::new(120., 0.),
+        Preset::Curved,
+        ArrowStyle::default(),
+    );
+    let node = arrow.insert_node(World::new(0., -60.)).unwrap();
+    assert_eq!(node, FIRST_NODE_HANDLE);
+    doc.arrows.push(arrow);
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::EditPoints;
+    canvas.selected = &[1];
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
+    let screen = |p| canvas.camera.screen(p, bounds);
+    let arrow = &doc.arrows[0];
+    let point = arrow.nodes[0].point;
+    let leaving = arrow.nodes[0].controls[1];
+
+    // A press on the shaft, away from every handle, adds a node there.
+    let on_shaft = arrow.point(0.25);
+    let mut state = State::default();
+    let cursor = mouse::Cursor::Available(screen(on_shaft));
+    canvas.update(
+        &mut state,
+        &Event::Mouse(mouse::Event::CursorMoved {
+            position: screen(on_shaft),
+        }),
+        bounds,
+        cursor,
+    );
+    let pressed = canvas
+        .update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        )
+        .and_then(|action| action.into_inner().0);
+    assert!(
+        matches!(pressed, Some(Edit::ArrowNodeInsert(1, p)) if p.distance(on_shaft) < 0.01),
+        "{pressed:?}"
+    );
+
+    let moved = point.offset(10., -20.);
+    assert!(matches!(
+        pointer_gesture_with(&canvas, screen(point), screen(moved), Modifiers::empty()),
+        Edit::ArrowHandle(1, index, p) if index == node && p.distance(moved) < 0.01
+    ));
+    // A click or drag inside the node, off its centre, keeps the grab offset.
+    let inside = point.offset(4., 3.);
+    assert!(matches!(
+        pointer_gesture_with(&canvas, screen(inside), screen(inside), Modifiers::empty()),
+        Edit::ArrowNodeClick(1, index) if index == node
+    ));
+    assert!(matches!(
+        pointer_gesture_with(&canvas, screen(inside), screen(inside.offset(10., -20.)), Modifiers::empty()),
+        Edit::ArrowHandle(1, index, p) if index == node && p.distance(moved) < 0.01
+    ));
+    let target = leaving.offset(15., 25.);
+    assert!(matches!(
+        pointer_gesture_with(&canvas, screen(leaving), screen(target), Modifiers::ALT),
+        Edit::ArrowControlFree(1, index, p) if index == node + 2 && p.distance(target) < 0.01
     ));
 }

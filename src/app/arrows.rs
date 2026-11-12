@@ -107,6 +107,9 @@ pub enum Action {
     Flip,
     Straighten,
     Reset,
+    /// Change the selected interior node's type.
+    NodeType(reshiki::graphics::PathNodeType),
+    DeleteNode,
 }
 impl App {
     fn selected_arrow_anchors(&self) -> (bool, bool) {
@@ -201,6 +204,31 @@ impl App {
             }
             Action::Color(s) => {
                 self.tab.arrows.color = s;
+                return;
+            }
+            Action::NodeType(_) | Action::DeleteNode => {
+                let Some((id, index, _)) = self.selected_arrow_node() else {
+                    self.status = "Select an arrow node".into();
+                    self.error = true;
+                    return;
+                };
+                let before = self.tab.doc.clone();
+                let Some(a) = self.tab.doc.arrows.iter_mut().find(|a| a.id == id) else {
+                    return;
+                };
+                let result = match action {
+                    Action::NodeType(kind) => a.set_node_type(index, kind),
+                    _ => a.delete_node(index),
+                };
+                if let Err(error) = result {
+                    self.status = error;
+                    self.error = true;
+                    return;
+                }
+                if matches!(action, Action::DeleteNode) {
+                    self.tab.path_point = None;
+                }
+                self.changed(before);
                 return;
             }
             _ => {}
@@ -511,6 +539,53 @@ impl App {
                     ]
                     .spacing(4),
                 );
+            }
+            // Interior nodes are edited with the shared Edit points tool.
+            if let Some(arrow) = self.selected_node_arrow() {
+                commands = commands.push(if self.tool == Tool::EditPoints {
+                    let nodes = arrow.nodes.len();
+                    column![
+                        text(format!(
+                            "{nodes} node{} · Click the shaft to add one",
+                            if nodes == 1 { "" } else { "s" }
+                        ))
+                        .size(11)
+                        .style(muted_text),
+                        row![
+                            accessible_command(
+                                "arrow.delete-node",
+                                "Delete arrow node",
+                                "Delete node"
+                            )
+                            .width(Length::Fill)
+                            .on_press_maybe(
+                                self.selected_arrow_node()
+                                    .map(|_| Message::ArrowAction(Action::DeleteNode))
+                            ),
+                            Space::new().width(Length::Fill),
+                        ]
+                        .spacing(4),
+                    ]
+                    .spacing(4)
+                } else {
+                    column![
+                        row![
+                            hover_hint(
+                                accessible_command(
+                                    "arrow.edit-points",
+                                    "Edit arrow points",
+                                    "Edit points"
+                                )
+                                .width(Length::Fill)
+                                .on_press(Message::Tool(Tool::EditPoints)),
+                                "Add nodes so the arrow can follow a path",
+                                tooltip::Position::Top,
+                            ),
+                            Space::new().width(Length::Fill),
+                        ]
+                        .spacing(4)
+                    ]
+                });
             }
             // Unavailable Detach buttons say why on hover.
             let detach = |id, name, label, message: Option<Action>, why| {

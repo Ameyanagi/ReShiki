@@ -15,6 +15,7 @@ def render(
     width: int | None = None,
     height: int | None = None,
     dpi: float | None = None,
+    svg_text: str = "outline",
 ) -> bytes: ...
 def properties(data: bytes) -> str: ...
 def render_many(
@@ -24,4 +25,5 @@ def render_many(
     width: int | None = None,
     height: int | None = None,
     dpi: float | None = None,
+    svg_text: str = "outline",
 ) -> tuple[list[bytes | None], list[tuple[int, str]], list[tuple[int, str]]]: ...

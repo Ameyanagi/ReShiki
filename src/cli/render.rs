@@ -2,7 +2,7 @@
 //! tools.
 use super::{
     args::Render,
-    convert::{emit, refuse_binary},
+    convert::{emit, refuse_binary, svg_text_as},
     host::{CliError, Session},
 };
 use serde_json::json;
@@ -10,8 +10,8 @@ use std::io::Write;
 
 /// Renders as `render` says. `terminal` tells whether stdout is one.
 ///
-/// png is the render tool's image and svg its file, as `reshiki --mcp`
-/// returns them; either goes to `out` or to the -o file.
+/// png is the render tool's image; svg text is outlined unless live text
+/// is requested. Either goes to `out` or to the -o file.
 pub(crate) async fn run(
     render: Render,
     out: &mut dyn Write,
@@ -21,6 +21,7 @@ pub(crate) async fn run(
     let Render {
         input,
         format,
+        svg_text,
         output,
         width,
         height,
@@ -47,5 +48,5 @@ pub(crate) async fn run(
             "internal error: render returned no image".into(),
         ));
     };
-    emit(&bytes, &output, force, out)
+    emit(&svg_text_as(&format, svg_text, bytes)?, &output, force, out)
 }

@@ -97,6 +97,7 @@ impl NativeArrow {
             start: drawing_point(self.start)?,
             end: drawing_point(self.end)?,
             control: self.control.map(drawing_point).transpose()?,
+            nodes: Vec::new(),
             cubic: self
                 .cubic
                 .map(|[a, b]| -> Result<_> { Ok([drawing_point(a)?, drawing_point(b)?]) })

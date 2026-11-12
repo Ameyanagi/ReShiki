@@ -53,6 +53,12 @@ Desktop checks on 2026-09-20 used a separate QA window: Select All plus blue col
 
 The interface explicitly chooses an installed Japanese sans-serif font (Hiragino Sans on macOS). Drawing styles retain their selected family and JACS/ACS defaults. When a glyph is absent from that font, shared layout resolves a sans-serif fallback and uses its actual advances for positioning and wrapping; canvas, SVG, PDF and PNG receive the same resolved text runs. This avoids half-width measurements for full-width Japanese characters.
 
+## Missing fonts
+
+Drawing styles default to Arial. Where Arial is not installed, such as the browser and most Linux systems and containers, ReShiki loads its bundled Liberation Sans faces (regular, bold, italic and bold italic) under the name Arial. Liberation Sans has Arial's character widths, so labels are measured and placed as on macOS and Windows, even with no fonts installed. Outside the browser they also answer to Helvetica when no Helvetica is installed, since Helvetica has the same widths. An installed Arial always takes precedence, and the bundled faces are then not loaded. Source and license: [licenses/liberation-fonts](../licenses/liberation-fonts/NOTICE).
+
+SVG files from `reshiki --cli` and the Python package draw text as outlines by default, so other programs show the same glyphs as the PNG; `--svg-text live` and `text="live"` keep `<text>` elements. The app's **Export → SVG** keeps text; **SVG for Office** and Copy Image outline it.
+
 ## Canvas editing verification
 
 Canvas drafts are separate from the document until applied. File and tool commands finish the draft first, recovery snapshots include it, and cancellation keeps unrelated edits. A changed/deleted label or switched document rejects a stale draft. Background assistant proposals wait until text editing finishes; text and assistant changes retain separate Undo steps.
