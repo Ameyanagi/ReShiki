@@ -39,6 +39,7 @@ pub mod geometry;
 #[doc(hidden)]
 pub mod native_windows;
 pub mod nmr;
+pub mod payload;
 pub mod recovery;
 pub mod task;
 pub mod template_library;

@@ -152,6 +152,7 @@ async fn ops_export_details_match_the_app_figure_export() {
             Document::from_native_file(native.as_bytes()).unwrap(),
             format,
             false,
+            false,
             reshiki::export::FILE_PIXELS,
         )
         .await

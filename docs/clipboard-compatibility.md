@@ -8,6 +8,9 @@ explains the commands themselves.
 - **Copy** (**Cmd/Ctrl+C**) carries the editable drawing plus pictures.
 - **Copy Image** (**Cmd/Ctrl+Shift+C**, or **Export → Copy image**) carries
   pictures only.
+- Both also hide the ReShiki drawing inside their PNG, SVG and PDF pictures.
+  [Does the editable drawing survive?](#does-the-editable-drawing-survive)
+  shows which apps hand it back.
 
 Each result is marked:
 
@@ -32,7 +35,8 @@ x64. Dumps, scripts and screenshots are in the
   nothing into them ([#1146](https://github.com/Ameyanagi/ReShiki/issues/1146)).
 - **Mac apps:** **Copy** and **Copy Image** both paste a picture. Only ChemDraw
   and ReShiki read the editable drawing. Mac Office has no editable ReShiki
-  object, so keep the `.rsk` original.
+  object, but it keeps ReShiki's PDF: copy the picture in Word, PowerPoint or
+  Excel and paste it into ReShiki to get the editable drawing back.
 - **Web apps:** the picture has 1200 dpi resolution metadata, which browsers
   ignore, so it pastes large. A 3 cm drawing appears about 35 cm wide. Resize it
   after pasting.
@@ -57,7 +61,7 @@ its picture, and a double-click opens the drawing in ReShiki. "Vector" and
 | Paint                                                           | Nothing or metafile                                         | Bitmap                   | Unknown; Paint reads bitmaps                                                                            |
 | LibreOffice                                                     | Unknown                                                     | Picture                  | Unknown: not installed on the test machine                                                              |
 | ChemDraw                                                        | Editable (CDX)                                              | Picture                  | Docs/code                                                                                               |
-| ReShiki                                                         | Editable                                                    | Picture                  | Docs/code; covered by Windows integration tests                                                         |
+| ReShiki                                                         | Editable                                                    | Editable                 | Tested                                                                                                  |
 
 Tip: if Word pastes the object but you want a plain picture, use **Paste
 Special → Picture (Enhanced Metafile)**, or **Copy Image** in ReShiki.
@@ -76,7 +80,7 @@ Special → Picture (Enhanced Metafile)**, or **Copy Image** in ReShiki.
 | Chrome (Gmail, Google Docs, Outlook on the web) | Bitmap (PNG)              | Bitmap (PNG)              | Tested with a Chrome 156 paste event; the sites need accounts                |
 | Safari                                          | Bitmap (PNG)              | Bitmap (PNG)              | Docs/code                                                                    |
 | ChemDraw 26.1                                   | **Editable**              | Picture                   | Tested                                                                       |
-| ReShiki                                         | **Editable**              | Picture                   | Tested                                                                       |
+| ReShiki                                         | **Editable**              | **Editable**              | Tested                                                                       |
 | Illustrator                                     | Vector paths from the PDF | Vector paths from the PDF | Docs/code                                                                    |
 
 ### Linux
@@ -87,7 +91,7 @@ Special → Picture (Enhanced Metafile)**, or **Copy Image** in ReShiki.
 | Chromium and Chrome-based apps (web apps, Slack, Teams, Notion) | Bitmap (PNG)              | Bitmap (PNG)              | Tested with a Chromium 149 paste event on X11 |
 | Inkscape                                                        | Vector paths from the SVG | Vector paths from the SVG | Docs/code                                     |
 | GIMP                                                            | Bitmap (PNG)              | Bitmap (PNG)              | Docs/code                                     |
-| ReShiki                                                         | Editable                  | Picture                   | Docs/code                                     |
+| ReShiki                                                         | Editable                  | Editable                  | Docs/code                                     |
 
 The Linux tests published the Copy and Copy Image bytes through ReShiki's own X11
 clipboard worker under Xvfb. Wayland offers the same MIME types; it is
@@ -98,9 +102,40 @@ docs/code only.
 | Paste into              | Copy                                                   | Copy Image | Status    |
 | ----------------------- | ------------------------------------------------------ | ---------- | --------- |
 | Word, Google Docs, mail | Bitmap (PNG, from the HTML or PNG flavor)              | Bitmap     | Docs/code |
-| Another browser ReShiki | Editable (the drawing travels inside the HTML picture) | Picture    | Docs/code |
+| Another browser ReShiki | Editable (the drawing travels inside the HTML picture) | Editable   | Docs/code |
 | Desktop ReShiki         | Editable molecule from the SMILES text, re-laid out    | Picture    | Docs/code |
 | Text fields             | SMILES                                                 | Nothing    | Docs/code |
+
+## Does the editable drawing survive?
+
+ReShiki puts the drawing inside its PNG, SVG and PDF pictures (see
+[Keep the drawing editable inside a picture](figure-export.md#keep-the-drawing-editable-inside-a-picture)).
+This table shows whether it comes back when you paste a ReShiki **Copy Image**
+into the app, copy the picture there, and paste it into ReShiki, and whether it
+survives in files the app saves. "Yes" means ReShiki pasted the editable atoms
+and bonds again. Tested on 2026-11-12 with builds of
+[#1153](https://github.com/Ameyanagi/ReShiki/pull/1153) and
+[#1154](https://github.com/Ameyanagi/ReShiki/pull/1154) on macOS 27 arm64 and
+Windows 11 x64; dumps and scripts are in the
+[evidence folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/a0ef99368019c802456a33d3d977bb2956667d50/pr-reviews/pr1154).
+
+| Platform | App                                                                                        | Copy back into ReShiki                                 | Saved files                                                                                                 | Status                                                                       |
+| -------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Windows  | Word, Excel (Microsoft 365)                                                                | **Yes**: Office hands back ReShiki's SVG unchanged     | **No**: `.docx`/`.xlsx` rewrite the SVG                                                                     | Tested                                                                       |
+| Windows  | PowerPoint (Microsoft 365)                                                                 | Probably yes, like Word and Excel                      | Probably no                                                                                                 | Not tested: the test machine's PowerPoint was in use                         |
+| Windows  | Word with **Copy** (the ReShiki object)                                                    | **Yes**, through the object itself                     | The object keeps the drawing; its saved preview picture does not                                            | Tested                                                                       |
+| Windows  | Edge 157 and WebView2 apps (new Outlook)                                                   | **No**: Edge keeps the PNG but copies back only HTML   | n/a                                                                                                         | Tested in Edge 157; ReShiki does not read a picture from HTML                |
+| macOS    | Word, PowerPoint, Excel 16.115                                                             | **Yes**: Office hands back ReShiki's PDF byte for byte | `.docx`/`.pptx` keep it inside their EMF, which ReShiki cannot read yet; **Save as Picture** (PNG) does not | Tested                                                                       |
+| macOS    | TextEdit                                                                                   | **No**: it copies back rich text                       | Not tested                                                                                                  | Tested                                                                       |
+| macOS    | Chrome 157                                                                                 | **No**: Chrome keeps the PNG but copies back only HTML | n/a                                                                                                         | Tested                                                                       |
+| macOS    | Preview, Keynote, Pages                                                                    | Unknown                                                | Unknown                                                                                                     | Not tested: Preview could not be driven; Keynote and Pages are not installed |
+| Any      | Apps that re-encode or compress pictures (web mail, chat, **Compress Pictures** in Office) | **No**                                                 | **No**                                                                                                      | Docs/code                                                                    |
+| Any      | ReShiki itself (**Copy Image** → **Paste**)                                                | **Yes**                                                | Exported PNG, SVG and PDF with **Include editable drawing**: **Yes**                                        | Tested                                                                       |
+
+Measured payload sizes: 628 bytes for caffeine, 902 bytes for an
+esterification scheme and 4.5 KB for five atorvastatin molecules (205 atoms).
+Each picture grows by about 4/3 of that. A drawing over 2 MB compressed, such
+as one with a large photo, is not put in pictures.
 
 ## Developer reference
 
@@ -124,7 +159,7 @@ command:
 | 4   | `com.cambridgesoft.cdx` (same bytes)                  | `com.cambridgesoft.cdx`                                                      |
 | 5   | `com.adobe.pdf`                                       | `public.png`                                                                 |
 | 6   | `public.png`                                          | `public.svg-image`                                                           |
-| 7   | `public.svg-image`                                    | `dev.reshiki.drawing` (a drawing holding the picture)                        |
+| 7   | `public.svg-image`                                    | `dev.reshiki.drawing` (the drawing, when it fits the 2 MB limit)             |
 
 Copy writes no `public.tiff`, `public.html`, `public.rtf` or text type. When
 editable CDX export fails, Copy writes the picture-only CDX instead, just before
@@ -161,8 +196,9 @@ apps receive a bitmap while Office still takes `Embed Source`. Copy has no
 
 Copy Image uses plain `SetClipboardData`, in format-ID order: `CF_DIB` (24-bit, on
 white), `PDF`, `PNG`, `image/svg+xml` (text outlined), `ChemDraw Interchange
-Format` (picture only) and `dev.reshiki.drawing` (a picture drawing). Windows
-synthesizes `CF_BITMAP` and `CF_DIBV5`.
+Format` (picture only) and `dev.reshiki.drawing` (the drawing, when it fits the
+2 MB limit). Windows synthesizes `CF_BITMAP` and `CF_DIBV5`. The `PDF`, `PNG` and
+`image/svg+xml` pictures carry the drawing; `CF_DIB` cannot.
 
 Observed picks:
 
@@ -186,7 +222,7 @@ formats were re-published with one extra format.
 ### Linux: X11 and Wayland MIME types
 
 Copy and Copy Image offer the same MIME types in sorted order. Only the bytes
-differ: Copy Image's CDX and native drawing hold the picture.
+differ: Copy Image's CDX holds the picture.
 
 ```text
 application/pdf
@@ -220,8 +256,8 @@ The browser editor writes one `ClipboardItem`:
   SMILES when the selection has molecules. The HTML is
   `<img src="data:image/png…" data-reshiki="…">`, sized in CSS pixels from the
   PNG resolution. `data-reshiki` holds the base64 native drawing.
-- **Copy Image:** the same without `text/plain`. Its `data-reshiki` holds a
-  picture drawing.
+- **Copy Image:** the same without `text/plain`. Its `data-reshiki` holds the
+  drawing too.
 
 ### What ReShiki reads on Paste
 
@@ -237,16 +273,19 @@ imports (`src/clipboard/priority.rs`):
    `com.cambridgesoft.cdxml`, `com.perkinelmer.chemdraw.cdxml`,
    `chemical/x-cdxml` and `public.cdxml`.
 4. `com.mdli.molfile`, then `org.opensmiles.smiles`.
-5. Plain text.
-6. Pictures: `public.png`, `public.tiff`, `public.jpeg`, then WebP.
-7. `com.adobe.pdf` and `public.svg-image`. These are only recognized, so that
-   Paste can explain why a PDF or SVG cannot be pasted.
+5. `com.adobe.pdf`, then `public.svg-image`, read only for a ReShiki drawing
+   inside them. Office hands back ReShiki's own PDF or SVG next to a PNG it drew
+   itself, so these come before pictures. Without a drawing, Paste moves on.
+6. Plain text.
+7. Pictures: `public.png` (its drawing, if it has one, else the picture),
+   `public.tiff`, `public.jpeg`, then WebP.
 
 Native names for these:
 
 - **Windows:** `ChemDraw Interchange Format`, `ChemDraw XML`, `MDLCT`,
-  `chemical/x-mdl-molfile`, `SMILES`, `PNG`/`image/png`, `CF_DIBV5`/`CF_DIB`,
-  `JFIF`/`JPEG`, `TIFF` and `CF_UNICODETEXT`. Windows first reads `Embed Source`
+  `chemical/x-mdl-molfile`, `SMILES`, `PDF`/`Portable Document Format`/`application/pdf`,
+  `image/svg+xml`, `PNG`/`image/png`, `CF_DIBV5`/`CF_DIB`, `JFIF`/`JPEG`, `TIFF`
+  and `CF_UNICODETEXT`. Windows first reads `Embed Source`
   or `Embedded Object` storage. A ReShiki object gives back its drawing; a
   foreign object can give ChemDraw CDX from its `CONTENTS` stream.
 - **Linux:** `application/x-reshiki-drawing+json`, `chemical/x-mdl-molfile`,
