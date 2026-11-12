@@ -413,22 +413,14 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             (Ok(Outcome::Complete(a)), None)
                 if partial_import::implicit_dummy_query(
                     format,
+                    &case.text,
                     case.failure.as_deref(),
                     &a.warnings,
                 ) =>
             {
                 accepted += 1;
                 partial_imports += 1;
-                let text = partial_import::without_cx_suffix(&case.text);
-                let config = Some(Config::new(helper.clone()));
-                match native_import::execute(Request::import(format, text), config).await {
-                    Ok(Outcome::Complete(plain)) => {
-                        partial_import::matches_without_cx_suffix(&a, &plain)
-                            .err()
-                            .map(|e| e.to_string())
-                    }
-                    other => Some(format!("The input without its CX suffix gave {other:?}")),
-                }
+                None
             }
             // Partial import draws an atom whose invalid `@AL` tag the strict
             // reader refuses (#892) and the frozen worker silently drops.

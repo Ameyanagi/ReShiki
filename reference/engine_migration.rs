@@ -554,20 +554,14 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             (Ok(actual), None)
                 if partial_import::implicit_dummy_query(
                     format,
+                    &case.text,
                     case.failure.as_deref(),
                     &actual.warnings,
                 ) =>
             {
                 accepted += 1;
                 partial_imports.push(case.name.clone());
-                let text = partial_import::without_cx_suffix(&case.text);
-                local
-                    .execute(Request::import(format, text))
-                    .await
-                    .map_err(anyhow::Error::msg)
-                    .and_then(|plain| partial_import::matches_without_cx_suffix(&actual, &plain))
-                    .err()
-                    .map(|e| e.to_string())
+                None
             }
             (Ok(actual), None)
                 if plain.is_some() && serde_json::to_value(&actual).ok() == plain =>

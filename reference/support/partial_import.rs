@@ -1,6 +1,6 @@
 //! #1138 imports SMILES features that the frozen worker refused, with a
 //! warning naming what was dropped or assumed. A bare dummy's implicit CX
-//! query marker needs no warning when the suffix leaves its import unchanged.
+//! query marker needs no warning when no explicit query constraint remains.
 
 /// The frozen refusal is one that partial import replaces, and the import
 /// reports a partial-import warning.
@@ -33,39 +33,56 @@ pub fn replaces_failure(format: &str, failure: Option<&str>, warnings: &[String]
             .any(|warning| reshiki::engine::native_import::is_partial_import_warning(warning))
 }
 
-/// The frozen worker refused a query atom, but partial import needed no warning.
-/// This allowance must also compare the import with the suffix-free input.
-pub fn implicit_dummy_query(format: &str, failure: Option<&str>, warnings: &[String]) -> bool {
-    warnings.is_empty()
-        && match format {
-            "smiles" => failure == Some("Query atoms are not supported yet; import was cancelled."),
-            // The frozen reaction importer's own refusal (reference/engine/reactions.py).
-            "rsmi" => matches!(
-                failure,
-                Some(
-                    "Query atoms are not supported yet; import was cancelled."
-                        | "Query reaction atoms are not supported yet"
-                )
-            ),
-            _ => false,
+/// The frozen query refusal needs no warning only if replacing dummy atoms
+/// removes all unsupported features, as checked by the strict reader.
+pub fn implicit_dummy_query(
+    format: &str,
+    text: &str,
+    failure: Option<&str>,
+    warnings: &[String],
+) -> bool {
+    let query_failure = match format {
+        "smiles" => failure == Some("Query atoms are not supported yet; import was cancelled."),
+        // The frozen reaction importer's own refusal (reference/engine/reactions.py).
+        "rsmi" => matches!(
+            failure,
+            Some(
+                "Query atoms are not supported yet; import was cancelled."
+                    | "Query reaction atoms are not supported yet"
+            )
+        ),
+        _ => false,
+    };
+    if !query_failure || !warnings.is_empty() {
+        return false;
+    }
+    let text = with_uranium_atoms(text);
+    match format {
+        "smiles" => reshiki::chemistry::smiles::read(&text).is_ok(),
+        "rsmi" => reshiki::chemistry::reaction::read_smiles(&text).is_ok(),
+        _ => false,
+    }
+}
+
+/// Replace each dummy atom while preserving atom indices and the CX suffix.
+fn with_uranium_atoms(text: &str) -> String {
+    let end = text.find('|').unwrap_or(text.len());
+    let mut replaced = String::with_capacity(text.len());
+    let mut bracketed = false;
+    for c in text[..end].chars() {
+        match c {
+            '[' => bracketed = true,
+            ']' => bracketed = false,
+            _ => (),
         }
-}
-
-/// The SMILES or reaction body before its CX suffix.
-pub fn without_cx_suffix(text: &str) -> &str {
-    &text[..text.find([' ', '\t']).unwrap_or(text.len())]
-}
-
-/// Ignoring an implicit query marker must otherwise leave the complete import unchanged.
-pub fn matches_without_cx_suffix(
-    actual: &reshiki::engine::Response,
-    plain: &reshiki::engine::Response,
-) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        serde_json::to_value(actual)? == serde_json::to_value(plain)?,
-        "The import differs from that of the input without its CX suffix"
-    );
-    Ok(())
+        if c == '*' {
+            replaced.push_str(if bracketed { "U" } else { "[U]" });
+        } else {
+            replaced.push(c);
+        }
+    }
+    replaced.push_str(&text[end..]);
+    replaced
 }
 
 const ALLENE: &str = "The allene stereo tag (@AL) at ";
@@ -113,44 +130,81 @@ mod tests {
     fn implicit_dummy_query_requires_exact_refusal_format_and_no_warnings() {
         let failure = Some("Query atoms are not supported yet; import was cancelled.");
         let reaction = Some("Query reaction atoms are not supported yet");
-        assert!(implicit_dummy_query("rsmi", reaction, &[]));
-        assert!(!implicit_dummy_query("smiles", reaction, &[]));
-        for format in ["smiles", "rsmi"] {
-            assert!(implicit_dummy_query(format, failure, &[]));
-            assert!(!implicit_dummy_query(format, None, &[]));
+        assert!(implicit_dummy_query("rsmi", "*>>*", reaction, &[]));
+        assert!(!implicit_dummy_query("smiles", "*", reaction, &[]));
+        for (format, text) in [("smiles", "*"), ("rsmi", "*>>*")] {
+            assert!(implicit_dummy_query(format, text, failure, &[]));
+            assert!(!implicit_dummy_query(format, text, None, &[]));
             assert!(!implicit_dummy_query(
                 format,
+                text,
                 Some("Query atoms are not supported yet; import was cancelled. Extra failure"),
                 &[],
             ));
-            assert!(!implicit_dummy_query(format, failure, &["Warning".into()]));
+            assert!(!implicit_dummy_query(
+                format,
+                text,
+                failure,
+                &["Warning".into()],
+            ));
         }
-        assert!(!implicit_dummy_query("mol", failure, &[]));
+        assert!(!implicit_dummy_query("mol", "*", failure, &[]));
     }
 
     #[test]
-    fn cx_suffix_comparison_keeps_the_whole_response() {
-        for (text, plain) in [
-            ("* |rb:0:*|", "*"),
-            ("*>>C\t|rb:0:*|", "*>>C"),
-            ("* |atomProp:0.key.value with spaces|", "*"),
-            ("*", "*"),
+    fn uranium_substitution_preserves_brackets_framing_and_cx_suffix() {
+        for (text, replaced) in [
+            ("C**", "C[U][U]"),
+            ("[*:1].[2*].[*]", "[U:1].[2U].[U]"),
+            ("  *C > [*:1] > [2*]C", "  [U]C > [U:1] > [2U]C"),
+            (
+                "*C>>*C|(0,0,;1,0,;0,0,;1,0,)|",
+                "[U]C>>[U]C|(0,0,;1,0,;0,0,;1,0,)|",
+            ),
+            (
+                "* |atomProp:0.key.*| title *",
+                "[U] |atomProp:0.key.*| title *",
+            ),
+            ("CCO", "CCO"),
         ] {
-            assert_eq!(without_cx_suffix(text), plain);
+            assert_eq!(with_uranium_atoms(text), replaced);
         }
-        let plain = reshiki::engine::Response {
-            document: None,
-            analysis: None,
-            output: None,
-            engine_version: String::new(),
-            warnings: Vec::new(),
-        };
-        assert!(matches_without_cx_suffix(&plain, &plain).is_ok());
-        let mut changed = plain.clone();
-        changed.output = Some("Changed output".into());
-        assert!(matches_without_cx_suffix(&changed, &plain).is_err());
-        changed.output = None;
-        changed.warnings.push("Warning".into());
-        assert!(matches_without_cx_suffix(&changed, &plain).is_err());
+    }
+
+    #[test]
+    fn implicit_dummy_query_requires_strict_acceptance_after_substitution() {
+        let failure = Some("Query atoms are not supported yet; import was cancelled.");
+        for text in [
+            "* |(0,0,)|",
+            "* |atomProp:0.molAtomMapNumber.1|",
+            "C* |atomProp:0._UnknownStereo.bad|",
+        ] {
+            assert!(implicit_dummy_query("smiles", text, failure, &[]), "{text}");
+        }
+        for text in [
+            "CCO |u:0|",
+            "* |u:0|",
+            "* |$Q_e$|",
+            "* |$star_e$|",
+            "CC* |rb:2:2|",
+        ] {
+            assert!(
+                !implicit_dummy_query("smiles", text, failure, &[]),
+                "{text}"
+            );
+        }
+        let reaction = Some("Query reaction atoms are not supported yet");
+        assert!(implicit_dummy_query(
+            "rsmi",
+            "*C>>*C |(0,0,;1,0,;0,0,;1,0,)|",
+            reaction,
+            &[],
+        ));
+        assert!(!implicit_dummy_query(
+            "rsmi",
+            "*C>>*C |u:0,2|",
+            reaction,
+            &[],
+        ));
     }
 }
