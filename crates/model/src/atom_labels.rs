@@ -1110,6 +1110,10 @@ pub(crate) fn indicators_with_geometry(doc: &Document, drawn: &Document) -> Vec<
 fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     let mut atom_stereo = atom_stereo_texts(doc);
     let mut groups = stereo_group_texts(doc);
+    let centres: Vec<_> = groups
+        .keys()
+        .filter_map(|id| Some(doc.atom(*id)?.position))
+        .collect();
     let mut labels = Vec::new();
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         if let Some(n) = &a.display.number {
@@ -1229,6 +1233,7 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
         let width = indicator_width(&text, height, &format);
         let dl = matches!(owner, Owner::AtomStereo(_))
             && (text.starts_with("D (") || text.starts_with("L ("));
+        let group = matches!(owner, Owner::StereoGroup(_));
         let outward = if matches!(owner, Owner::Number(_)) {
             outward_extent(width, height)
         } else {
@@ -1297,12 +1302,18 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
                             score += 500.;
                         }
                     }
+                    let distance2 = |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
                     if mapping.is_some() || dl {
                         // Extended stereo labels must still read as this atom's.
-                        let distance2 =
-                            |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
                         let own = distance2(&anchor);
                         if visible.iter().any(|p| distance2(p) < own) {
+                            score += 1000.;
+                        }
+                    } else if group {
+                        // Between two labelled centres a group label reads as
+                        // either's, so the others must be 1.3 times as far.
+                        let own = distance2(&anchor) * 1.3f32.powi(2);
+                        if centres.iter().any(|p| *p != anchor && distance2(p) < own) {
                             score += 1000.;
                         }
                     }

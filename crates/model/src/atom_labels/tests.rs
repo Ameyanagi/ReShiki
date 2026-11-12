@@ -740,3 +740,57 @@ fn stereo_group_labels_mark_grouped_and_absolute_centres() {
     doc.atom_labels.stereo_groups = false;
     assert!(labels(&doc).is_empty());
 }
+
+/// #766: with two adjacent centres (`C[C@H](O)[C@H](F)Cl |a:1,&1:3|`), each
+/// group label sits on its own centre's open side, not between the centres.
+#[test]
+fn stereo_group_labels_sit_on_their_own_centres_open_side() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    for stereo in [false, true] {
+        let mut doc = Document::default();
+        doc.atom_labels.stereo = stereo;
+        let left = doc.add_atom("C", Point::new(0., 0.));
+        let right = doc.add_atom("C", Point::new(42., 0.));
+        let others = [
+            (left, "Cl", Point::new(-21., -36.4)),
+            (left, "F", Point::new(-21., 36.4)),
+            (right, "C", Point::new(63., -36.4)),
+            (right, "O", Point::new(63., 36.4)),
+        ];
+        doc.add_bond(left, right, 1, "plain");
+        for (centre, element, position) in others {
+            let id = doc.add_atom(element, position);
+            doc.add_bond(centre, id, 1, "plain");
+        }
+        for id in [left, right] {
+            doc.atom_mut(id).unwrap().cip_label = Some("S".into());
+        }
+        doc.atom_mut(left).unwrap().stereo_group = Some(StereoGroup {
+            kind: Kind::And,
+            number: 1,
+        });
+        let groups: Vec<_> = indicators(&doc)
+            .into_iter()
+            .filter_map(|i| match i.owner {
+                Owner::StereoGroup(id) => Some((id, i.center)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(groups.len(), 2);
+        for (id, center) in groups {
+            let own = doc.atom(id).unwrap().position;
+            let other = doc
+                .atom(if id == left { right } else { left })
+                .unwrap()
+                .position;
+            assert!(
+                other.distance(center) > own.distance(center) * 1.3,
+                "{stereo} {id}"
+            );
+            if !stereo {
+                // The open side faces away from the other centre.
+                assert!((center.x - own.x) * (own.x - other.x) > 0., "{id}");
+            }
+        }
+    }
+}
