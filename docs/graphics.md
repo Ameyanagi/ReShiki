@@ -38,6 +38,8 @@ head** and **No end head** remove it. Each change applies to all selected open
 paths and curves in one Undo step. Heads follow the end directions, and the
 line stops under each head. These paths remain free drawing objects and do
 not attach to atoms.
+On a multi-segment path, head sizing uses the whole path when an end segment
+is too short.
 
 Select pen paths, Bézier curves or curved arrows and choose **Smooth** or
 **Symmetrise** from the canvas menu or command palette. Both commands apply to

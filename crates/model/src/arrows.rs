@@ -973,13 +973,34 @@ impl Arrow {
     /// Walk from a cubic tip by a drawing-space distance. Endpoint derivatives
     /// can vanish when a tangent handle is placed directly on its endpoint.
     fn cubic_inset(&self, at: f32, toward: f32, length: f32, limit: f32, offset: f32) -> f32 {
+        if !self.nodes.is_empty() {
+            let steps = 64 * (self.nodes.len() + 1);
+            let points: Vec<_> = (0..=steps)
+                .map(|i| {
+                    let t = at + (toward - at) * i as f32 / steps as f32;
+                    self.offset_point_side(t, offset, toward < at)
+                })
+                .collect();
+            let steps_between = || points.iter().zip(points.iter().skip(1));
+            let total: f32 = steps_between().map(|(a, b)| a.distance(*b)).sum();
+            // Equal parameter spans can have very different physical lengths.
+            let mut remaining = length.min(limit * total);
+            for (i, (a, b)) in steps_between().enumerate() {
+                let step = a.distance(*b);
+                if step >= remaining && step > 0. {
+                    return at + (toward - at) * (i as f32 + remaining / step) / steps as f32;
+                }
+                remaining -= step;
+            }
+            return toward;
+        }
         let end = at + (toward - at) * limit;
-        let steps = 32 * (self.nodes.len() + 1);
-        let mut previous = self.offset_point_side(at, offset, toward < at);
+        let steps = 32;
+        let mut previous = self.offset_point(at, offset);
         let mut distance = 0.;
         for i in 1..=steps {
             let t = at + (end - at) * i as f32 / steps as f32;
-            let point = self.offset_point_side(t, offset, toward < at);
+            let point = self.offset_point(t, offset);
             let step = previous.distance(point);
             if distance + step >= length && step > 0. {
                 let fraction = (length - distance) / step;
@@ -1202,9 +1223,15 @@ impl Arrow {
             .max(0.001);
             let head_length = DEFAULT.world(s.head_length_pt).min(length * 0.4);
             let head_width = DEFAULT.world(s.head_width_pt).max(0.001);
-            let inset = (head_length * gap / head_width / length).min(0.4);
-            path(self.shaft_body(n, 0., 1. - inset, -gap), false, false);
-            path(self.shaft_body(n, 0., 1. - inset, gap), false, false);
+            if self.nodes.is_empty() {
+                let inset = (head_length * gap / head_width / length).min(0.4);
+                path(self.shaft_body(n, 0., 1. - inset, -gap), false, false);
+                path(self.shaft_body(n, 0., 1. - inset, gap), false, false);
+            } else {
+                let to = self.cubic_inset(1., 0., head_length * gap / head_width, 0.4, 0.);
+                path(self.shaft_body(n, 0., to, -gap), false, false);
+                path(self.shaft_body(n, 0., to, gap), false, false);
+            }
             self.head_path(
                 s,
                 self.end,

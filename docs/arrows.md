@@ -250,8 +250,9 @@ SVG/PDF/PNG and supported CDXML/CDX export the resolved attached curve and
 report that editing attachment links are omitted. `.rsk` files keep those links.
 This drawing metadata does not change molecular connectivity or electron counts.
 
-The importer reads multi-segment arrowed splines as pen paths with arrowheads
-and rejects circular/elliptical arrow arcs, unknown head/stroke types and unsupported decoration. The exporter
+The importer reads multi-segment arrowed splines as pen paths with arrowheads,
+preserving head size even when an end segment is short. It rejects
+circular/elliptical arrow arcs, unknown head/stroke types and unsupported decoration. The exporter
 rejects dotted arrows, curved retrosynthesis arrows, bent/unequal equilibrium,
 equilibrium with full/absent heads, dipoles with a tail head, and curved arrows
 with hollow/angled heads or dipole/no-go decoration. Those combinations remain

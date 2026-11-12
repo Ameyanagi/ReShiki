@@ -89,6 +89,75 @@ async fn multi_node_arrow_exports_all_control_triples_to_cdxml_and_cdx() {
 }
 
 #[tokio::test]
+async fn short_terminal_node_arrow_keeps_head_size_after_cdxml_and_cdx_roundtrip() {
+    use crate::{
+        arrows::{ArrowStyle, Preset},
+        document::{Arrow, ArrowNode},
+        graphics::{PathCommand, PathNodeType},
+        scene::Primitive,
+    };
+
+    fn head_length(document: &Document) -> f32 {
+        let commands = crate::scene::primitives(document)
+            .into_iter()
+            .find_map(|part| match part {
+                Primitive::Path {
+                    commands,
+                    filled: true,
+                    ..
+                } => Some(commands),
+                _ => None,
+            })
+            .unwrap();
+        let [
+            PathCommand::Move(tip),
+            PathCommand::Line(left),
+            _,
+            PathCommand::Line(right),
+            PathCommand::Close,
+        ] = commands.as_slice()
+        else {
+            panic!("Expected a full arrowhead polygon");
+        };
+        tip.distance(left.lerp(*right, 0.5))
+    }
+
+    let mut arrow = Arrow::new(
+        1,
+        Point::default(),
+        Point::new(100., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    );
+    arrow.cubic = Some([Point::new(30., 40.), Point::new(97., 0.)]);
+    arrow.nodes = vec![ArrowNode {
+        point: Point::new(90., 0.),
+        controls: [Point::new(60., 40.), Point::new(93., 0.)],
+        kind: PathNodeType::Corner,
+    }];
+    let document = Document {
+        arrows: vec![arrow],
+        ..Default::default()
+    };
+    let expected = head_length(&document);
+    assert!((expected - 17.5).abs() < 0.001);
+    for format in ["cdxml", "cdx"] {
+        let bytes = crate::formats::write(document.clone(), format)
+            .await
+            .unwrap();
+        let restored = crate::formats::read(bytes, format).await.unwrap();
+        assert!(restored.arrows.is_empty());
+        assert_eq!(restored.graphics.len(), 1);
+        assert!(restored.graphics[0].heads.is_some());
+        // Allow 0.001 world units for exchange coordinate rounding and CDX quantization.
+        assert!(
+            (head_length(&restored) - expected).abs() < 0.001,
+            "{format}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
     use crate::{
         arrows::{ArrowStyle, Head, HeadShape, Preset},

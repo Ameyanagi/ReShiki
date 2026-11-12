@@ -12,6 +12,13 @@ fn near(actual: Point, expected: Point) {
     );
 }
 
+fn path_ends(commands: &[PathCommand]) -> [Point; 2] {
+    [
+        commands[0].points()[0],
+        *commands.last().unwrap().points().last().unwrap(),
+    ]
+}
+
 fn handle(node: usize, part: NodePart) -> usize {
     FIRST_NODE_HANDLE
         + node * 3
@@ -357,6 +364,75 @@ fn looping_shaft_keeps_a_full_size_head_when_its_endpoints_are_close() {
             (length - crate::style::DEFAULT.world(arrow.appearance().head_length_pt)).abs() < 0.001
         );
         assert!(length > arrow.start.distance(arrow.end));
+    }
+}
+
+#[test]
+fn adding_a_node_keeps_hollow_heads_and_both_shaft_ends_in_place() {
+    let arrow = Arrow::new(
+        1,
+        Point::default(),
+        Point::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle {
+            shape: HeadShape::Hollow,
+            tail: Head::Full,
+            ..ArrowStyle::default()
+        },
+    );
+    let before = arrow.paths();
+    for x in [10., 60., 100., 104., 112.] {
+        let mut split = arrow.clone();
+        split.insert_node(Point::new(x, 0.)).unwrap();
+        let after = split.paths();
+        assert_eq!(after.len(), before.len());
+        for (actual, expected) in path_ends(&after[0].commands)
+            .into_iter()
+            .zip(path_ends(&before[0].commands))
+        {
+            near(actual, expected);
+        }
+        for (actual, expected) in after[1..].iter().zip(&before[1..]) {
+            let actual: Vec<_> = actual
+                .commands
+                .iter()
+                .flat_map(PathCommand::points)
+                .collect();
+            let expected: Vec<_> = expected
+                .commands
+                .iter()
+                .flat_map(PathCommand::points)
+                .collect();
+            assert_eq!(actual.len(), expected.len());
+            for (actual, expected) in actual.into_iter().zip(expected) {
+                near(actual, expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn adding_a_node_keeps_both_retro_shafts_in_place() {
+    let arrow = Arrow::new(
+        1,
+        Point::default(),
+        Point::new(120., 0.),
+        Preset::Retro,
+        ArrowStyle::preset(Preset::Retro),
+    );
+    let before = arrow.paths();
+    for x in [24., 60., 100.] {
+        let mut split = arrow.clone();
+        split.insert_node(Point::new(x, 0.)).unwrap();
+        let after = split.paths();
+        for index in [0, 1] {
+            for (actual, expected) in path_ends(&after[index].commands)
+                .into_iter()
+                .zip(path_ends(&before[index].commands))
+            {
+                near(actual, expected);
+            }
+        }
     }
 }
 

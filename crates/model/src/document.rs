@@ -955,6 +955,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + doc.abbreviations.len();
     let text: usize = doc.annotations.iter().map(|a| a.text.len()).sum();
     let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
+    let nodes: usize = doc.arrows.iter().map(|a| bytes(&a.nodes[..])).sum();
     let models: usize = doc
         .models
         .iter()
@@ -987,6 +988,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + objects * OWNED
         + text
         + paths
+        + nodes
         + models
 }
 impl History {
