@@ -98,9 +98,9 @@ fn relaxed_bond_codes_preserve_dative_donor_direction_and_nonaromatic_partial_or
 }
 
 #[test]
-fn relaxed_never_turns_a_drawn_metal_single_bond_into_a_dative_bond() {
-    // Four N bonds make sanitization eligible to clean up the N--Fe single
-    // bond as coordination. Geometry must still receive what was drawn.
+fn relaxed_keeps_the_checked_coordination_bond_and_says_so() {
+    // Four N bonds make preparation clean up the N--Fe single bond as
+    // coordination, as RDKit does; the geometry and hydrogens are the same.
     let mut document = pair("N", "Fe", 1);
     for x in [-42., 0., 42.] {
         let carbon = document.add_atom("C", Point::new(x, 42.));
@@ -110,14 +110,29 @@ fn relaxed_never_turns_a_drawn_metal_single_bond_into_a_dative_bond() {
     let request = prepared
         .generation_request(ForceField::Uff, DEFAULT_SEED)
         .unwrap();
-    assert_eq!(request.bonds[0].order, 1);
-    assert!(
-        !prepared
-            .skipped_checks()
-            .iter()
-            .any(|check| check.contains("Dative"))
+    assert_eq!(request.bonds[0].order, 17);
+    assert_eq!(
+        prepared.skipped_checks(),
+        ["Coordination bonds do not count toward ligand valence"]
     );
     assert_eq!(prepared.source(), &document);
+}
+
+#[test]
+fn relaxed_amine_oxide_keeps_the_checked_charges_and_adds_no_o_h() {
+    // (CH3)3N->O is N+-O- once prepared; the drawn dative alone would give O
+    // one bond and an invented hydrogen.
+    let mut document = pair("N", "O", 5);
+    for x in [-42., 0., 42.] {
+        let carbon = document.add_atom("C", Point::new(x, 42.));
+        document.add_bond(1, carbon, 1, "plain");
+    }
+    let request = Prepared::relaxed(&document, &[])
+        .unwrap()
+        .generation_request(ForceField::Uff, DEFAULT_SEED)
+        .unwrap();
+    assert_eq!((request.atoms[0].charge, request.atoms[1].charge), (1, -1));
+    assert!(request.bonds.iter().all(|bond| bond.order == 1));
 }
 
 #[test]
@@ -304,7 +319,7 @@ fn relaxed_skips_have_stable_order() {
         prepared.skipped_checks(),
         [
             "Valence not checked",
-            "Dative bonds treated as coordination bonds",
+            "Coordination bonds do not count toward ligand valence",
             "Radicals taken as drawn",
             "Drawn stereochemistry not enforced",
         ]
@@ -482,16 +497,17 @@ fn reported_crown_and_cisplatin_drawings_keep_legacy_errors_and_exact_relaxed_no
     );
     let prepared = Prepared::relaxed(&crown, &[]).unwrap();
     assert!(!prepared.mmff_available());
-    assert_eq!(prepared.skipped_checks(), ["Valence not checked"]);
-    assert_eq!(prepared.ids().len(), 19);
-    assert!(
-        prepared
-            .generation_request(ForceField::Uff, DEFAULT_SEED)
-            .unwrap()
-            .bonds
-            .iter()
-            .all(|bond| bond.order == 1)
+    assert_eq!(
+        prepared.skipped_checks(),
+        ["Coordination bonds do not count toward ligand valence"]
     );
+    assert_eq!(prepared.ids().len(), 19);
+    let bonds = prepared
+        .generation_request(ForceField::Uff, DEFAULT_SEED)
+        .unwrap()
+        .bonds;
+    assert_eq!(bonds.iter().filter(|bond| bond.order == 17).count(), 6);
+    assert_eq!(bonds.iter().filter(|bond| bond.order == 1).count(), 18);
 
     let mut platinum = Document::default();
     let pt = platinum.add_atom("Pt", Point::new(0., 0.));
@@ -520,6 +536,6 @@ fn reported_crown_and_cisplatin_drawings_keep_legacy_errors_and_exact_relaxed_no
     assert!(!prepared.mmff_available());
     assert_eq!(
         prepared.skipped_checks(),
-        ["Dative bonds treated as coordination bonds"]
+        ["Coordination bonds do not count toward ligand valence"]
     );
 }

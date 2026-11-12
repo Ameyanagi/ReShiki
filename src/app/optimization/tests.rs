@@ -133,7 +133,7 @@ fn strict_failure_waits_for_relaxed_and_relaxed_results_are_labeled() {
             .prepared
             .skipped_checks()
             .iter()
-            .any(|check| check == "Valence not checked")
+            .any(|check| check == "Coordination bonds do not count toward ligand valence")
     );
     let key = session.flight.as_ref().unwrap().key;
     let mut computed = result(session);

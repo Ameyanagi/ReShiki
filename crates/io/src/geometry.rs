@@ -263,22 +263,15 @@ impl Prepared {
         if mode == Mode::Relaxed && part.bonds.iter().any(|b| b.order == 0) {
             return Err(Error::Unsupported("hydrogen interaction bonds"));
         }
-        let (mut molecule, fallback) = if mode == Mode::Strict {
-            (molecular::prepare(&part)?, false)
-        } else {
-            let graph = molecular::drawing_graph(&part)?;
-            match molecular::prepare(&part) {
-                Ok(mut molecule) if molecule.state.graph == graph || graph.valences().is_ok() => {
-                    // Sanitization can turn a drawn metal single bond into a
-                    // dative bond or infer radicals. Relaxed takes these as drawn.
-                    molecule.state.graph = graph;
-                    (molecule, false)
-                }
-                // Sanitization may have repaired a valence that the drawing
-                // itself does not satisfy. Treat that drawing as unchecked,
-                // including its stereo, just like a failed strict preparation.
-                Ok(_) | Err(_) => (drawing_molecule(&part, graph), true),
-            }
+        // A drawing the ordinary preparation accepts keeps its checked graph,
+        // hydrogens and stereo; otherwise Relaxed takes the drawn graph as is.
+        let (mut molecule, fallback) = match molecular::prepare(&part) {
+            Ok(molecule) => (molecule, false),
+            Err(error) if mode == Mode::Strict => return Err(error.into()),
+            Err(_) => (
+                drawing_molecule(&part, molecular::drawing_graph(&part)?),
+                true,
+            ),
         };
         if molecule.state.graph.bonds.len() > capacity.bonds {
             return Err(Error::Capacity {
@@ -339,7 +332,7 @@ impl Prepared {
             materialize_stereo(&molecule, &mut materialized, mode)?;
         }
         let skipped_checks = if mode == Mode::Relaxed {
-            relaxed_skipped_checks(&part, fallback, non_tetrahedral, enhanced)
+            relaxed_skipped_checks(&part, &molecule, fallback, non_tetrahedral, enhanced)
         } else {
             Vec::new()
         };
@@ -705,6 +698,7 @@ fn drawing_molecule(document: &Document, graph: crate::chemistry::graph::Graph) 
 
 fn relaxed_skipped_checks(
     document: &Document,
+    molecule: &Molecule,
     fallback: bool,
     non_tetrahedral: bool,
     enhanced: bool,
@@ -713,8 +707,16 @@ fn relaxed_skipped_checks(
     if fallback {
         checks.push("Valence not checked".into());
     }
-    if document.bonds.iter().any(|bond| bond.order == 5) {
-        checks.push("Dative bonds treated as coordination bonds".into());
+    // Preparation also turns single bonds from saturated donors to metals,
+    // such as crown-ether O–K, into coordination bonds.
+    if molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .any(|bond| bond.order == 5)
+    {
+        checks.push("Coordination bonds do not count toward ligand valence".into());
     }
     if document
         .atoms
@@ -723,12 +725,13 @@ fn relaxed_skipped_checks(
     {
         checks.push("Radicals taken as drawn".into());
     }
+    // Double bonds count too: their drawn geometry defines E/Z.
     let drawn_stereo = document.atoms.iter().any(|atom| atom.stereo.is_some())
         || document.bonds.iter().any(|bond| {
-            bond.stereo.is_some()
-                || !bond.stereo_atoms.is_empty()
-                || !bond.projection
-                    && (bond.order == 1 || bond.order == 2 && bond.display == "wavy")
+            bond.order == 2
+                || bond.stereo.is_some()
+                || bond.order == 1
+                    && !bond.projection
                     && crate::bonds::is_stereo_marker(&bond.display)
         });
     if fallback && drawn_stereo {
