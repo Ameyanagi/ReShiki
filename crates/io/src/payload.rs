@@ -26,6 +26,11 @@ pub fn visible(doc: &Document) -> Document {
         theme.author.clear();
         theme.source.clear();
         theme.license.clear();
+        if let Some(reference) = theme.generator.as_mut().and_then(|g| g.reference.as_mut()) {
+            reference.author.clear();
+            reference.source.clear();
+            reference.license.clear();
+        }
     }
     doc
 }
@@ -129,8 +134,8 @@ pub fn read(bytes: &[u8]) -> Option<Result<Document, String>> {
                 .strip_prefix(KEYWORD)
                 .is_some_and(|after| after.starts_with(b"\0"))
         {
-            let (Some(data), Some(checksum)) = (after.get(..length), after.get(length..length + 4))
-            else {
+            let end = length.checked_add(4)?;
+            let (Some(data), Some(checksum)) = (after.get(..length), after.get(length..end)) else {
                 return Some(Err("Truncated embedded PNG chunk".into()));
             };
             if checksum != crc(kind, data).to_be_bytes() {
@@ -138,7 +143,7 @@ pub fn read(bytes: &[u8]) -> Option<Result<Document, String>> {
             }
             return Some(text(data.get(KEYWORD.len() + 1..).unwrap_or_default()));
         }
-        rest = after.get(length + 4..)?;
+        rest = after.get(length.checked_add(4)?..)?;
     }
     None
 }
@@ -156,6 +161,10 @@ fn text(fields: &[u8]) -> Result<Document, String> {
     let text = fields
         .strip_prefix(b"\0\0\0\0")
         .ok_or("Unsupported embedded PNG text fields")?;
+    // ReShiki never embeds a larger envelope; refuse before decoding base64.
+    if text.len() > EMBED_LIMIT.div_ceil(3) * 4 {
+        return Err("Embedded drawing is larger than 2 MB".into());
+    }
     decode(
         &STANDARD
             .decode(text)

@@ -40,7 +40,7 @@ async fn editable_png_opens_as_an_untitled_drawing_with_native_save_target() -> 
     let contents = reshiki::payload::embed("png", png(), &reshiki::payload::encode(&drawing)?)?;
     let path = PathBuf::from("images/oxygen.PNG");
     let opened = prepare_contents(path.clone(), Ok(contents.clone())).await;
-    assert!(matches!(&opened, Some((_, Ok(Prepared::Picture(_))))));
+    assert!(matches!(&opened, Some((_, Ok(Prepared::Picture(_, None))))));
     let (mut app, _) = App::new();
     app.cancel_engine_job();
     app.tab.busy = false;
@@ -67,7 +67,7 @@ async fn editable_png_opens_as_an_untitled_drawing_with_native_save_target() -> 
 }
 
 #[test]
-fn png_open_preserves_ordinary_picture_refusal_and_explains_invalid_payload() {
+fn png_open_keeps_ordinary_refusal_and_opens_a_damaged_payload_as_a_picture() {
     let path = std::path::Path::new("picture.png");
     let ordinary = png();
     assert_eq!(
@@ -76,21 +76,20 @@ fn png_open_preserves_ordinary_picture_refusal_and_explains_invalid_payload() {
     );
     let invalid = reshiki::payload::embed("png", ordinary, b"invalid payload").unwrap();
     let reason = reshiki::payload::read(&invalid).unwrap().unwrap_err();
-    let error = prepare(path, invalid).unwrap_err();
-    assert_eq!(
-        error,
-        format!("This picture's editable drawing could not be read: {reason}")
-    );
+    let prepared = prepare(path, invalid).unwrap();
     let (mut app, _) = App::new();
-    let before = app.tab.doc.clone();
-    let _ = app.update(Message::FilePrepared(Some((
-        path.into(),
-        Err(error.clone()),
-    ))));
-    assert!(app.error);
-    assert_eq!(app.status, error);
-    assert_eq!(app.tab.doc, before);
-    assert!(app.tabs.background.is_empty());
+    let _ = app.update(Message::FilePrepared(Some((path.into(), Ok(prepared)))));
+    assert!(!app.error);
+    assert_eq!(
+        app.status,
+        format!(
+            "Opened picture.png as a picture: its editable drawing could not be read ({reason})"
+        )
+    );
+    assert!(app.tab.doc.atoms.is_empty());
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+    assert!(app.tab.doc.graphics[0].picture.is_some());
+    assert!(app.tab.path.is_none());
 }
 
 #[test]
@@ -431,7 +430,7 @@ fn cli_input_formats_match_the_app() {
         let chosen = match prepare(&path, contents).unwrap() {
             Prepared::Native(_) => "reshiki",
             Prepared::Import { format, .. } => format,
-            Prepared::Picture(_) => panic!("Structure files are not pictures"),
+            Prepared::Picture(..) => panic!("Structure files are not pictures"),
         };
         assert_eq!(
             chosen,

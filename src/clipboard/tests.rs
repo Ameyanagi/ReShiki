@@ -102,25 +102,43 @@ async fn png_paste_restores_the_drawing_unless_paste_picture_was_requested() {
 async fn a_corrupt_png_payload_pastes_as_a_picture_with_a_warning() {
     let mut source = Document::default();
     source.add_atom("O", Default::default());
-    let png = payload::embed("png", export::clipboard_png(&source).unwrap(), b"invalid").unwrap();
-    let restored = paste_packet_with_warnings(
-        LocalEngine::in_process(),
-        Packet {
-            generation: Some("test".into()),
-            representations: vec![Representation::new("public.png", &png)],
-        },
-        false,
-    )
-    .await
-    .unwrap();
-    assert!(!restored.native);
-    assert!(restored.document.atoms.is_empty());
-    assert!(restored.document.graphics[0].picture.is_some());
-    assert_eq!(restored.warnings.len(), 1);
-    assert!(
-        restored.warnings[0]
-            .starts_with("Pasted as a picture: its editable drawing could not be read (")
-    );
+    let png = export::clipboard_png(&source).unwrap();
+    // A damaged envelope, and iTXt fields the png crate itself rejects
+    // (compression flag 2), both still paste the picture.
+    let mut malformed = png[..33].to_vec();
+    let text = b"dev.reshiki.drawing\0\x02\0\0\0x";
+    malformed.extend_from_slice(&(text.len() as u32).to_be_bytes());
+    let mut chunk = b"iTXt".to_vec();
+    chunk.extend_from_slice(text);
+    let mut crc = flate2::Crc::new();
+    crc.update(&chunk);
+    malformed.extend_from_slice(&chunk);
+    malformed.extend_from_slice(&crc.sum().to_be_bytes());
+    malformed.extend_from_slice(&png[33..]);
+    for png in [
+        payload::embed("png", png.clone(), b"invalid").unwrap(),
+        malformed,
+    ] {
+        for image_only in [false, true] {
+            let restored = paste_packet_with_warnings(
+                LocalEngine::in_process(),
+                Packet {
+                    generation: Some("test".into()),
+                    representations: vec![Representation::new("public.png", &png)],
+                },
+                image_only,
+            )
+            .await
+            .unwrap();
+            assert!(!restored.native);
+            assert!(restored.document.atoms.is_empty());
+            assert!(restored.document.graphics[0].picture.is_some());
+            assert_eq!(restored.warnings.len(), usize::from(!image_only));
+            assert!(restored.warnings.iter().all(|warning| {
+                warning.starts_with("Pasted as a picture: its editable drawing could not be read (")
+            }));
+        }
+    }
 }
 
 #[test]

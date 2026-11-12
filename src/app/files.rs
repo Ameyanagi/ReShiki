@@ -273,7 +273,9 @@ pub(super) struct State {
 #[derive(Debug, Clone)]
 pub enum Prepared {
     Native(Box<reshiki::document::Document>),
-    Picture(Box<reshiki::document::Document>),
+    /// A picture's embedded drawing, or the picture itself with the reason
+    /// its drawing could not be read.
+    Picture(Box<reshiki::document::Document>, Option<String>),
     Import {
         format: &'static str,
         contents: String,
@@ -321,9 +323,13 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
     if extension == "png"
         && let Some(payload) = reshiki::payload::read(&contents)
     {
-        payload
-            .map(|drawing| Prepared::Picture(Box::new(drawing)))
-            .map_err(|e| format!("This picture's editable drawing could not be read: {e}"))
+        Ok(match payload {
+            Ok(drawing) => Prepared::Picture(Box::new(drawing), None),
+            Err(error) => Prepared::Picture(
+                Box::new(reshiki::pictures::clipboard_document(&contents)?),
+                Some(format!("its editable drawing could not be read ({error})")),
+            ),
+        })
     } else if reshiki::compatibility::is_native_extension(&extension) {
         let doc = reshiki::document::Document::from_native_file(&contents)
             .map_err(|e| format!("Could not open document: {e}"))?;
@@ -395,7 +401,7 @@ pub(super) fn open_picked(
                     #[cfg(target_arch = "wasm32")]
                     let result = match (file.handle, result) {
                         (Some(handle), Ok(prepared))
-                            if !matches!(&prepared, Prepared::Picture(_)) =>
+                            if !matches!(&prepared, Prepared::Picture(..)) =>
                         {
                             let mut duplicate = None;
                             for (id, other) in handles {
@@ -617,19 +623,21 @@ impl super::App {
                     self.show_opened(*doc, Some(path));
                 }
             }
-            Ok(Prepared::Picture(doc)) => {
+            Ok(Prepared::Picture(doc, warning)) => {
                 self.open_target(None);
                 self.show_opened(*doc, None);
                 self.tab.untitled_name = path
                     .file_stem()
                     .map(|name| name.to_string_lossy().into_owned());
                 self.tab.mark_saved(reshiki::document::Document::default());
-                self.status = format!(
-                    "Opened the editable drawing from {}",
-                    path.file_name()
-                        .unwrap_or(path.as_os_str())
-                        .to_string_lossy()
-                );
+                let name = path
+                    .file_name()
+                    .unwrap_or(path.as_os_str())
+                    .to_string_lossy();
+                self.status = match warning {
+                    None => format!("Opened the editable drawing from {name}"),
+                    Some(warning) => format!("Opened {name} as a picture: {warning}"),
+                };
             }
         }
         iced::Task::none()

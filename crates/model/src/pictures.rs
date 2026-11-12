@@ -341,9 +341,10 @@ pub fn clipboard_document(bytes: &[u8]) -> Result<Document, String> {
     let picture = Picture::import(bytes)?;
     let mut doc = picture.document();
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        let reader = png::Decoder::new(Cursor::new(bytes))
-            .read_info()
-            .map_err(|e| e.to_string())?;
+        let mut decoder = png::Decoder::new(Cursor::new(bytes));
+        // Text chunks, such as an embedded ReShiki drawing, never affect size.
+        decoder.set_ignore_text_chunk(true);
+        let reader = decoder.read_info().map_err(|e| e.to_string())?;
         if let Some(dims) = reader
             .info()
             .pixel_dims

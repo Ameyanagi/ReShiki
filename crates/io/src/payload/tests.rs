@@ -147,6 +147,14 @@ fn visible_removes_private_metadata_and_preserves_rendering() {
     theme.author = "Private Author".into();
     theme.source = "Private Source".into();
     theme.license = "Private License".into();
+    let mut reference = crate::theme_generator::Reference::capture(&theme);
+    reference.author = "Private Reference Author".into();
+    reference.source = "Private Reference Source".into();
+    reference.license = "Private Reference License".into();
+    theme.generator = Some(crate::theme_generator::Recipe {
+        reference: Some(reference),
+        ..crate::theme_generator::Recipe::PRESENTATION
+    });
     doc.custom_theme = Some(Box::new(theme));
     let mut model = Model3d::new(
         &doc,
@@ -175,6 +183,16 @@ fn visible_removes_private_metadata_and_preserves_rendering() {
     theme.author.clear();
     theme.source.clear();
     theme.license.clear();
+    let reference = theme
+        .generator
+        .as_mut()
+        .unwrap()
+        .reference
+        .as_mut()
+        .unwrap();
+    reference.author.clear();
+    reference.source.clear();
+    reference.license.clear();
     assert_eq!(public, expected);
     assert_eq!(crate::scene::svg(&doc), crate::scene::svg(&public));
     let decoded = decode(&encode(&doc).unwrap()).unwrap();
@@ -268,4 +286,28 @@ fn embed_rejects_other_formats_and_invalid_png_headers() {
     assert!(embed("svg", png(), &[]).is_err());
     assert!(embed("png", vec![], &[]).is_err());
     assert!(embed("png", png()[..32].to_vec(), &[]).is_err());
+}
+
+#[test]
+fn hostile_chunk_lengths_and_oversized_text_are_rejected() {
+    let plain = png();
+    let mut bytes = plain[..33].to_vec();
+    bytes.extend_from_slice(&u32::MAX.to_be_bytes());
+    bytes.extend_from_slice(b"iTXt");
+    bytes.extend_from_slice(KEYWORD);
+    bytes.push(0);
+    assert!(read(&bytes).unwrap().unwrap_err().contains("Truncated"));
+    let mut bytes = plain[..33].to_vec();
+    bytes.extend_from_slice(&u32::MAX.to_be_bytes());
+    bytes.extend_from_slice(b"tEXt");
+    assert!(read(&bytes).is_none());
+    let mut text = KEYWORD.to_vec();
+    text.extend_from_slice(&[0; 5]);
+    text.resize(text.len() + EMBED_LIMIT.div_ceil(3) * 4 + 4, b'A');
+    assert!(
+        read(&insert_chunk(plain, b"iTXt", &text))
+            .unwrap()
+            .unwrap_err()
+            .contains("larger than 2 MB")
+    );
 }
