@@ -82,7 +82,9 @@ fn style(name: &str, overrides_json: &str) -> PyResult<String> {
     styles::named(name, overrides_json).map_err(PyValueError::new_err)
 }
 
-#[pyfunction(name = "render", signature = (data, format="png", style_json=None, width=None, height=None, dpi=None))]
+// The arguments mirror the Python keywords.
+#[allow(clippy::too_many_arguments)]
+#[pyfunction(name = "render", signature = (data, format="png", style_json=None, width=None, height=None, dpi=None, svg_text="outline"))]
 fn render_drawing(
     py: Python<'_>,
     data: Vec<u8>,
@@ -91,9 +93,10 @@ fn render_drawing(
     width: Option<u32>,
     height: Option<u32>,
     dpi: Option<f64>,
+    svg_text: &str,
 ) -> PyResult<Py<PyBytes>> {
-    let options =
-        render::Options::new(style_json, width, height, dpi).map_err(PyValueError::new_err)?;
+    let options = render::Options::new(style_json, width, height, dpi, svg_text)
+        .map_err(PyValueError::new_err)?;
     let data = py
         .detach(|| {
             drawing::run(async {
@@ -116,7 +119,9 @@ type BatchOutput = (
     Vec<(usize, String)>,
 );
 
-#[pyfunction(signature = (items, format="png", style_json=None, width=None, height=None, dpi=None))]
+// The arguments mirror the Python keywords.
+#[allow(clippy::too_many_arguments)]
+#[pyfunction(signature = (items, format="png", style_json=None, width=None, height=None, dpi=None, svg_text="outline"))]
 fn render_many(
     py: Python<'_>,
     items: Vec<(Vec<u8>, String)>,
@@ -125,9 +130,10 @@ fn render_many(
     width: Option<u32>,
     height: Option<u32>,
     dpi: Option<f64>,
+    svg_text: &str,
 ) -> PyResult<BatchOutput> {
-    let options =
-        render::Options::new(style_json, width, height, dpi).map_err(PyValueError::new_err)?;
+    let options = render::Options::new(style_json, width, height, dpi, svg_text)
+        .map_err(PyValueError::new_err)?;
     let results: Vec<_> = py.detach(|| {
         items
             .into_par_iter()

@@ -8,6 +8,7 @@ pub struct Options<'a> {
     width: Option<u32>,
     height: Option<u32>,
     dpi: Option<f64>,
+    outline_svg: bool,
 }
 
 impl<'a> Options<'a> {
@@ -16,7 +17,13 @@ impl<'a> Options<'a> {
         width: Option<u32>,
         height: Option<u32>,
         dpi: Option<f64>,
+        svg_text: &str,
     ) -> Result<Self, String> {
+        let outline_svg = match svg_text {
+            "outline" => true,
+            "live" => false,
+            _ => return Err("text must be 'outline' or 'live'".into()),
+        };
         if width == Some(0) || height == Some(0) {
             return Err("Image dimensions must be positive".into());
         }
@@ -31,6 +38,7 @@ impl<'a> Options<'a> {
             width,
             height,
             dpi,
+            outline_svg,
         })
     }
 
@@ -66,9 +74,13 @@ pub async fn document(
     }
     let (doc, _) = export::figure_document(&engine, doc).await?;
     let svg = scene::svg_with_background(&doc);
-    // Keep SVG text and physical style dimensions intact unless a box was requested.
+    // Keep physical style dimensions intact unless a box was requested.
     if format == "svg" && options.width.is_none() && options.height.is_none() {
-        return Ok(svg.into_bytes());
+        return if options.outline_svg {
+            export::outlined_svg(svg)
+        } else {
+            Ok(svg.into_bytes())
+        };
     }
     let tree = export::parse_svg(svg.clone())?;
     let width = f64::from(tree.size().width());
@@ -85,7 +97,11 @@ pub async fn document(
             svg
         };
         if format == "svg" {
-            return Ok(svg.into_bytes());
+            return if options.outline_svg {
+                export::outlined_svg(svg)
+            } else {
+                Ok(svg.into_bytes())
+            };
         }
         return svg2pdf::to_pdf(
             &export::parse_svg(svg)?,

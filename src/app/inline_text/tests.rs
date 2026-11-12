@@ -415,6 +415,8 @@ fn full_range_styles_are_reflected_in_the_toolbar_after_commit() {
 #[test]
 fn empty_editor_is_wide_enough_for_the_zoomed_placeholder() {
     use iced::advanced::{graphics::text::Paragraph, text::Paragraph as _};
+    // As at startup: Iced gets the bundled Arial where none is installed.
+    crate::canvas::prepare_fonts();
     let format = TextFormat::default();
     let natural = reshiki::typography::layout(PLACEHOLDER, &format);
     for zoom in [1.5, 3.] {

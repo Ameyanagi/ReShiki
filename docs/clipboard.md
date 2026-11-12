@@ -55,7 +55,7 @@ Tracked in [#110](https://github.com/Ameyanagi/ReShiki/issues/110). Clipboard re
 
 ## Office and macOS
 
-On Windows, normal Copy supplies an editable Office object with the full drawing and a cached preview. Double-click opens ReShiki; **Ctrl+S** updates the open Office document. Copy Image supplies a static figure with SVG text converted to outlines to preserve label placement. SVG file export continues to contain text. [Office editing steps](windows.md#edit-a-drawing-in-office).
+On Windows, normal Copy supplies an editable Office object with the full drawing and a cached preview. Double-click opens ReShiki; **Ctrl+S** updates the open Office document. Copy Image supplies a static figure with SVG text converted to outlines to preserve label placement. The app's SVG file export continues to contain text; SVG from `reshiki --cli` and the Python package is outlined by default ([Missing fonts](typography.md#missing-fonts)). [Office editing steps](windows.md#edit-a-drawing-in-office).
 
 Windows desktop Office supports ReShiki OLE objects. Copy the object back into ReShiki to recover its native drawing; Paste picture explicitly reads its preview. Normal Copy also offers a standard bitmap, so new Outlook, Teams and browser-based apps paste a picture; Word, PowerPoint and Excel still choose the editable object. It omits standalone PNG and SVG, which Office would prefer over the object, and keeps the metafile presentation that Office requires. Copy Image gives a static picture in every application.
 

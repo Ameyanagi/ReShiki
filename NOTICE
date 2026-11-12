@@ -20,7 +20,7 @@ of adaptations, copyright notices, and license texts are recorded in:
   licenses/oklab/          Public-domain perceptual color conversion matrices
   licenses/iced/           Canvas glyph rendering adaptation and patched Iced crates (MIT)
   licenses/vesta-colors/   VESTA element colours via pymatgen (MIT)
-  licenses/liberation-fonts/ Liberation Sans fonts for browser and native fallback (OFL-1.1)
+  licenses/liberation-fonts/ Liberation Sans, the bundled Arial fallback (OFL-1.1)
   licenses/dejavu-fonts/   Interface symbols from DejaVu Sans in the browser build (Bitstream Vera)
   licenses/nmrshiftdb2/    Observed-shift derivative database (separate data license)
   data/nmr/               Offline index, provenance and held-out validation

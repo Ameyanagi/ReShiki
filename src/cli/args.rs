@@ -69,11 +69,20 @@ pub(crate) enum Output {
     File(PathBuf),
 }
 
+/// How SVG labels are written; other output formats ignore this option.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SvgText {
+    Live,
+    #[default]
+    Outline,
+}
+
 /// The file convert and compose write: `format` is one of the ops export
 /// formats.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Export {
     pub(crate) format: String,
+    pub(crate) svg_text: SvgText,
     pub(crate) output: Output,
     pub(crate) pages: bool,
     pub(crate) force: bool,
@@ -93,6 +102,7 @@ pub(crate) struct Convert {
 pub(crate) struct Render {
     pub(crate) input: Input,
     pub(crate) format: String,
+    pub(crate) svg_text: SvgText,
     pub(crate) output: Output,
     pub(crate) width: Option<u32>,
     pub(crate) height: Option<u32>,
@@ -235,6 +245,7 @@ struct Options {
     name: Option<OsString>,
     executable: Option<OsString>,
     isotope_style: Option<OsString>,
+    svg_text: SvgText,
     pages: bool,
     force: bool,
     receipt: bool,
@@ -287,6 +298,13 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--name" => options.name = Some(value),
                 "--executable" => options.executable = Some(value),
                 "--isotope-style" => options.isotope_style = Some(value),
+                "--svg-text" => {
+                    options.svg_text = match value.to_str() {
+                        Some("live") => SvgText::Live,
+                        Some("outline") => SvgText::Outline,
+                        _ => return Err("--svg-text must be live or outline".into()),
+                    };
+                }
                 _ => options.output = Some(value),
             }
         } else {
@@ -451,6 +469,7 @@ fn render(options: &Options) -> Result<Command, String> {
     Ok(Command::Render(Render {
         input,
         format,
+        svg_text: options.svg_text,
         output,
         width: side("--width", options.width.as_deref())?,
         height: side("--height", options.height.as_deref())?,
@@ -498,6 +517,7 @@ fn export(options: &Options) -> Result<Export, String> {
     }
     Ok(Export {
         format,
+        svg_text: options.svg_text,
         output,
         pages: options.pages,
         force: options.force,

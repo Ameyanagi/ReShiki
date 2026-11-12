@@ -1,6 +1,7 @@
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
 Usage: reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
-                             [-o OUTPUT|-] [--pages] [--force] [--receipt]
+                             [-o OUTPUT|-] [--svg-text MODE] [--pages]
+                             [--force] [--receipt]
 
 Converts a structure or drawing, making the file as the app's Export does.
 
@@ -23,6 +24,9 @@ Options:
                  goes to stdout and needs --to; pdf and png are never written
                  to a terminal.
   --pages        Export every publication page as one PDF (pdf only).
+  --svg-text MODE
+                 Draw svg text as outlines (outline, the default), the same
+                 in every viewer, or keep it as text (live).
   --force        Replace OUTPUT if it exists; otherwise that is an error.
   --receipt      With -o OUTPUT, print one JSON line to stdout:
                  {"receipt": {"format", "byte_len", "detail"}, "api": {…}}.
