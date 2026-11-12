@@ -420,7 +420,35 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             kept_ez.push(case.name);
             continue;
         }
+        // A `~` bond that CX redefines needs no assumption; it must import
+        // exactly as the same text without `~` does.
+        let plain = if matches!(format, "smiles" | "rsmi") && case.text.contains('~') {
+            let plain = local
+                .execute(Request::import(format, &case.text.replace('~', "")))
+                .await;
+            plain
+                .ok()
+                .and_then(|plain| serde_json::to_value(plain).ok())
+        } else {
+            None
+        };
         let failure = match (actual, expected) {
+            // Partial import draws an atom whose invalid `@AL` tag the strict
+            // reader refuses (#892) and the frozen worker silently drops.
+            (Ok(actual), Some(_))
+                if matches!(format, "smiles" | "rsmi")
+                    && strict_error(format, &case.text).is_some_and(|error| {
+                        smiles_extensions::refused_allene(&case.text, &error)
+                    })
+                    && actual
+                        .warnings
+                        .iter()
+                        .any(|w| w.starts_with("The allene stereo tag (@AL) at ")) =>
+            {
+                accepted += 1;
+                partial_imports.push(case.name.clone());
+                None
+            }
             (Ok(actual), Some(mut expected)) => {
                 accepted += 1;
                 if let Some(open) = &case.unspecified_ez {
@@ -509,6 +537,13 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 partial_imports.push(case.name.clone());
                 None
             }
+            (Ok(actual), None)
+                if plain.is_some() && serde_json::to_value(&actual).ok() == plain =>
+            {
+                accepted += 1;
+                partial_imports.push(case.name.clone());
+                None
+            }
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
@@ -554,6 +589,15 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         "Insufficient import response coverage"
     );
     Ok(())
+}
+
+fn strict_error(format: &str, text: &str) -> Option<String> {
+    use reshiki::chemistry::{reaction, smiles};
+    if format == "smiles" {
+        smiles::read(text).err().map(|e| e.to_string())
+    } else {
+        reaction::read_smiles(text).err().map(|e| e.to_string())
+    }
 }
 
 fn partial_import_replaces_failure(

@@ -741,7 +741,6 @@ fn partial_graph(
                 dropped.push(Dropped::ZeroBond(ends[0], ends[1]));
             } else {
                 dropped.push(Dropped::AnyBond(ends[0], ends[1]));
-                bond.order = 1;
                 bond.aromatic = false;
             }
         }
@@ -767,8 +766,16 @@ fn partial_graph(
                 .collect();
         }
     }
+    // A tag in an enhanced stereo group stays, so the import is refused as before.
+    let grouped: HashSet<usize> = parsed
+        .metadata
+        .groups
+        .iter()
+        .flat_map(|group| group.atoms.iter().copied())
+        .collect();
     for (id, meta) in parsed.metadata.atoms.iter_mut().enumerate() {
         if meta.chiral_tag == 5
+            && !grouped.contains(&id)
             && !stereo::allene::supported(
                 &parsed.graph,
                 id,

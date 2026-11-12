@@ -749,6 +749,16 @@ fn partial_import_does_not_drop_enhanced_groups_on_unsupported_centres() {
             "F[Pt@SP1](Cl)(Br)I>>FI |&1:1|",
             "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
         ),
+        (
+            "smiles",
+            "C[C@AL1](F)Cl |&1:1|",
+            "SMILES contains unsupported chemistry: invalid allene stereochemistry",
+        ),
+        (
+            "rsmi",
+            "C[C@AL1](F)Cl>>CC |&1:1|",
+            "SMILES contains unsupported chemistry: invalid allene stereochemistry",
+        ),
     ] {
         assert_eq!(
             prepare(Request::import(format, text))
