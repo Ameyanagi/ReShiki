@@ -113,7 +113,7 @@ pub struct Publication {
 /// Prepare a figure snapshot and render it off the async executor, as the
 /// app's figure export does. `pages` exports every publication page as a PDF;
 /// otherwise PNG exports stay within `max_pixels` (at most [`FILE_PIXELS`]).
-/// `editable` includes the prepared drawing in PNG files when it fits the limit.
+/// `editable` includes the prepared drawing in supported figures when it fits the limit.
 pub async fn publication(
     engine: &crate::engine::LocalEngine,
     doc: Document,
@@ -128,25 +128,33 @@ pub async fn publication(
         .then(|| crate::arrow_anchors::export_notice(&doc))
         .flatten();
     let (figure, editable_detail) = crate::task::spawn_blocking(move || {
-        let mut figure = if pages {
+        let (drawing, detail) = if editable
+            && !pages
+            && matches!(format, "png" | "svg" | "svg-office" | "pdf")
+        {
+            let envelope = crate::payload::encode(&doc)?;
+            if envelope.len() <= crate::payload::EMBED_LIMIT {
+                (
+                    Some(envelope),
+                    Some("Includes the editable drawing".to_owned()),
+                )
+            } else {
+                (
+                    None,
+                    Some("Saved without the editable drawing: it is larger than 2 MB".to_owned()),
+                )
+            }
+        } else {
+            (None, None)
+        };
+        let figure = if pages {
             pages_pdf(&doc).map(|bytes| Figure {
                 bytes,
                 detail: None,
             })
         } else {
-            figure_with_budget(&doc, format, max_pixels)
+            figure_with_budget_and_drawing(&doc, format, max_pixels, drawing.as_deref())
         }?;
-        let detail = if editable && !pages && format == "png" {
-            let envelope = crate::payload::encode(&doc)?;
-            Some(if envelope.len() <= crate::payload::EMBED_LIMIT {
-                figure.bytes = crate::payload::embed("png", figure.bytes, &envelope)?;
-                "Includes the editable drawing".to_owned()
-            } else {
-                "Saved without the editable drawing: it is larger than 2 MB".to_owned()
-            })
-        } else {
-            None
-        };
         Ok::<_, String>((figure, detail))
     })
     .await
@@ -171,12 +179,24 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
 
 /// Include the actual raster dimensions and resolution for the export receipt.
 pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    with_attachment_notice(doc, render_drawing(doc, format, false, RasterBudget::FILE))
+    with_attachment_notice(
+        doc,
+        render_drawing(doc, format, false, RasterBudget::FILE, None),
+    )
 }
 
 /// [`figure`] with PNG resolution chosen to fit `max_pixels`, capped at
 /// [`FILE_PIXELS`].
 pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Result<Figure, String> {
+    figure_with_budget_and_drawing(doc, format, max_pixels, None)
+}
+
+fn figure_with_budget_and_drawing(
+    doc: &Document,
+    format: &str,
+    max_pixels: u64,
+    drawing: Option<&[u8]>,
+) -> Result<Figure, String> {
     with_attachment_notice(
         doc,
         render_drawing(
@@ -188,6 +208,7 @@ pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Resu
                 pixels: max_pixels.min(FILE_PIXELS),
                 side: u32::MAX,
             },
+            drawing,
         ),
     )
 }
@@ -204,7 +225,19 @@ pub fn clipboard_drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String
 /// Preserve format details (including bounded PNG dimensions/DPI) in an
 /// explicit format-copy receipt as well as in file-export receipts.
 pub fn clipboard_figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    with_attachment_notice(doc, render_drawing(doc, format, true, RasterBudget::FILE))
+    clipboard_figure_with_drawing(doc, format, None)
+}
+
+/// Render a clipboard figure, optionally carrying an already prepared drawing.
+pub fn clipboard_figure_with_drawing(
+    doc: &Document,
+    format: &str,
+    drawing: Option<&[u8]>,
+) -> Result<Figure, String> {
+    with_attachment_notice(
+        doc,
+        render_drawing(doc, format, true, RasterBudget::FILE, drawing),
+    )
 }
 
 #[cfg(windows)]
@@ -236,6 +269,7 @@ fn render_drawing(
     format: &str,
     clipboard: bool,
     file_budget: RasterBudget,
+    drawing: Option<&[u8]>,
 ) -> Result<Figure, String> {
     doc.validate()?;
     let svg = if clipboard {
@@ -244,13 +278,17 @@ fn render_drawing(
         scene::svg_with_background(doc)
     };
     if format == "svg" {
+        let mut bytes = svg.into_bytes();
+        if let Some(drawing) = drawing {
+            bytes = crate::payload::embed(format, bytes, drawing)?;
+        }
         return Ok(Figure {
-            bytes: svg.into_bytes(),
+            bytes,
             detail: None,
         });
     }
     let tree = parse_svg(svg)?;
-    match format {
+    let mut figure = match format {
         "svg-office" => office_svg(&tree).map(|bytes| Figure {
             bytes,
             detail: None,
@@ -265,17 +303,10 @@ fn render_drawing(
             bytes,
             detail: None,
         }),
-        "pdf" => svg2pdf::to_pdf(
-            &tree,
-            svg2pdf::ConversionOptions::default(),
-            // usvg resolves CSS physical units at 96 px/in.
-            svg2pdf::PageOptions { dpi: 96.0 },
-        )
-        .map(|bytes| Figure {
+        "pdf" => single_pdf(&tree, drawing).map(|bytes| Figure {
             bytes,
             detail: None,
-        })
-        .map_err(|e| e.to_string()),
+        }),
         "png" => {
             let budget = if clipboard {
                 RasterBudget::clipboard(cfg!(windows))
@@ -328,7 +359,64 @@ fn render_drawing(
             })
         }
         _ => Err("Unsupported drawing export".into()),
+    }?;
+    if let Some(drawing) = drawing
+        && matches!(format, "png" | "svg-office")
+    {
+        figure.bytes = crate::payload::embed(format, figure.bytes, drawing)?;
     }
+    Ok(figure)
+}
+
+/// Embed the SVG as a unit-square XObject scaled to its physical point size.
+fn single_pdf(tree: &resvg::usvg::Tree, drawing: Option<&[u8]>) -> Result<Vec<u8>, String> {
+    use pdf_writer::{Content, Finish, Name, Pdf, Rect, Ref};
+    use std::collections::HashMap;
+    let (chunk, root) = svg2pdf::to_chunk(tree, svg2pdf::ConversionOptions::default())
+        .map_err(|error| error.to_string())?;
+    let mut next = Ref::new(1);
+    let catalog = next.bump();
+    let pages = next.bump();
+    let page = next.bump();
+    let content_id = next.bump();
+    let metadata = drawing.map(|_| next.bump());
+    let mut mapping = HashMap::new();
+    let chunk = chunk.renumber(|old| *mapping.entry(old).or_insert_with(|| next.bump()));
+    let root = mapping
+        .get(&root)
+        .copied()
+        .ok_or("Could not embed the drawing in the PDF.")?;
+    let mut pdf = Pdf::new();
+    {
+        let mut catalog = pdf.catalog(catalog);
+        catalog.pages(pages);
+        if let Some(metadata) = metadata {
+            catalog.metadata(metadata);
+        }
+    }
+    pdf.pages(pages).kids([page]).count(1);
+    // usvg resolves CSS physical units at 96 px/in; PDF uses 72 pt/in.
+    let width = tree.size().width() * 0.75;
+    let height = tree.size().height() * 0.75;
+    let name = Name(b"Drawing");
+    let mut page = pdf.page(page);
+    page.parent(pages)
+        .media_box(Rect::new(0., 0., width, height))
+        .contents(content_id);
+    page.resources().x_objects().pair(name, root);
+    page.finish();
+    let mut content = Content::new();
+    content
+        .save_state()
+        .transform([width, 0., 0., height, 0., 0.])
+        .x_object(name)
+        .restore_state();
+    pdf.stream(content_id, &content.finish());
+    if let (Some(metadata), Some(drawing)) = (metadata, drawing) {
+        pdf.metadata(metadata, crate::payload::xmp(drawing).as_bytes());
+    }
+    pdf.extend(&chunk);
+    Ok(pdf.finish())
 }
 
 /// The pixel budget of a file-export PNG.

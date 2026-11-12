@@ -1962,7 +1962,10 @@ impl App {
             ),
         ]
         .spacing(9);
-        if figure == FigureFormat::Png {
+        if matches!(
+            figure,
+            FigureFormat::Png | FigureFormat::Svg | FigureFormat::SvgOffice | FigureFormat::Pdf
+        ) {
             figures = figures.push(
                 column![
                     checkbox(self.appearance.export_editable_drawing)

@@ -335,9 +335,24 @@ fn typed_aliases_and_vector_formats_keep_requested_kinds() {
     assert!(registered_formats("com.mdli.molfile").contains(&"MDLCT"));
     for (kind, name) in [
         ("com.adobe.pdf", "PDF"),
+        ("com.adobe.pdf", "Portable Document Format"),
+        ("com.adobe.pdf", "application/pdf"),
         ("public.svg-image", "image/svg+xml"),
     ] {
         assert!(registered_formats(kind).contains(&name));
+        let selected = read_kind_with(
+            kind,
+            &[],
+            |source| Ok(source == name),
+            |source| {
+                assert_eq!(source, name);
+                Ok(b"vector".to_vec())
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(selected.source, name);
+        assert_eq!(selected.bytes.unwrap(), b"vector");
         let requested = vec![kind.to_owned()];
         let formats = priority::read_formats(&requested, false).unwrap();
         let packet = read_requested(&formats, |_| Ok(Some(candidate(kind, b"vector"))));

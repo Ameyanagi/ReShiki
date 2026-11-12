@@ -328,28 +328,12 @@ pub async fn prepare_as(
         let doc = doc.current();
         notices.extend(notice);
         let (figure, notice) = crate::task::spawn_blocking(move || {
-            #[cfg(windows)]
-            if format == CopyFormat::Svg {
-                return export::clipboard_svg(&doc).map(|bytes| {
-                    (
-                        export::Figure {
-                            bytes,
-                            detail: None,
-                        },
-                        None,
-                    )
-                });
-            }
-            let mut figure = export::clipboard_figure(&doc, format.code())?;
-            let notice = if format == CopyFormat::Png {
-                let envelope = payload::encode(&doc)?;
-                let (bytes, notice) =
-                    super::editable_png(figure.bytes, &envelope, payload::EMBED_LIMIT)?;
-                figure.bytes = bytes;
-                notice.map(|_| "Picture copied without the editable drawing (too large)")
-            } else {
-                None
-            };
+            let envelope = payload::encode(&doc)?;
+            let drawing = (envelope.len() <= payload::EMBED_LIMIT).then_some(envelope.as_slice());
+            let figure = super::clipboard_figure(&doc, format.code(), drawing)?;
+            let notice = drawing
+                .is_none()
+                .then_some("Picture copied without the editable drawing (too large)");
             Ok::<_, String>((figure, notice))
         })
         .await

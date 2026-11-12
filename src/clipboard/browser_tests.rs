@@ -200,6 +200,39 @@ async fn a_browser_copy_says_when_its_smiles_drops_an_axis() {
     }
 }
 
+#[tokio::test]
+async fn a_browser_svg_only_pick_restores_the_editable_drawing() {
+    let source = rings(false);
+    let (_, representations) =
+        prepare_copy_for(LocalEngine::in_process(), source.clone(), false, true)
+            .await
+            .unwrap();
+    let svg = representations
+        .iter()
+        .find(|item| item.kind == "public.svg-image")
+        .unwrap()
+        .bytes()
+        .unwrap();
+    let items = vec![("image/svg+xml".into(), svg)];
+    let formats: Vec<_> = priority::READABLE
+        .iter()
+        .map(|kind| (*kind).into())
+        .collect();
+    let item = browser::pick(&formats, &items).unwrap();
+    assert_eq!(item.kind, "public.svg-image");
+    let restored = paste_representation(LocalEngine::in_process(), item, false)
+        .await
+        .unwrap();
+    assert!(restored.native);
+    assert_eq!(restored.document.all_ids(), source.all_ids());
+    assert_eq!(restored.warnings, [RESTORED_DRAWING_NOTICE]);
+    let pictures: Vec<_> = priority::PICTURES
+        .iter()
+        .map(|kind| (*kind).into())
+        .collect();
+    assert!(browser::pick(&pictures, &items).is_none());
+}
+
 #[test]
 fn a_browser_name_copy_keeps_html_and_plain_text_without_rtf() {
     let text = "(1R)-N6-methyl";

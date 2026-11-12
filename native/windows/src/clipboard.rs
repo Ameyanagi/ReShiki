@@ -408,7 +408,7 @@ fn registered_formats(kind: &str) -> Vec<&str> {
             "public.tiff" => &["TIFF", "image/tiff"],
             "public.jpeg" => &["JFIF", "JPEG", "image/jpeg"],
             "org.webmproject.webp" | "public.webp" => &["WebP", "image/webp"],
-            "com.adobe.pdf" => &["PDF", "application/pdf"],
+            "com.adobe.pdf" => &["PDF", "Portable Document Format", "application/pdf"],
             "public.svg-image" => &["image/svg+xml"],
             "public.utf8-plain-text" => return vec![],
             _ => &[],

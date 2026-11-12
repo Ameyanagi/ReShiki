@@ -16,16 +16,16 @@ Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Exp
 
 ## Keep the drawing editable inside a picture
 
-A PNG picture from ReShiki can carry the ReShiki drawing inside the file. Paste that picture into ReShiki, drop the file on the window, or open it with **File → Open**, and you get the editable drawing back instead of a picture. **Import → Paste picture** still inserts the image.
+A PNG, SVG or single-figure PDF from ReShiki can carry the ReShiki drawing inside the file. Paste that picture into ReShiki, drop the file on the window, or open it with **File → Open**, and you get the editable drawing back instead of a picture. **Import → Paste picture** still inserts raster images instead of restoring their drawing. SVG and PDF without a ReShiki drawing cannot be imported.
 
-- **Copy** and **Copy image** always put the drawing in their PNG picture.
-- **File export** adds it only when **Include editable drawing** is on, below the export button. It is off by default, and ReShiki remembers your choice.
+- **Copy**, **Copy image** and **Copy as → PNG / SVG / PDF** put the drawing in their PNG, SVG and PDF pictures when it fits the limit.
+- **File export** adds it only when **Include editable drawing** is on, below the export button. It is off by default, and ReShiki remembers your choice. **Export pages as PDF** never includes it, because page edges can clip parts of the drawing. **EMF for Office** does not carry it yet.
 
 The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so leave **Include editable drawing** off for figures you send to a journal or publish.
 
 A drawing larger than 2 MB compressed, usually one with large embedded photos, is not put in pictures. The status bar says so, and the file or clipboard picture is still written. Normal **Copy** keeps the editable drawing for ReShiki either way.
 
-Apps that re-encode a picture remove the drawing. These include most web apps and Office's **Compress Pictures**. A picture whose drawing comes from a newer ReShiki, or is damaged, comes in as a picture with a note that says why.
+Apps that re-encode a picture remove the drawing. These include most web apps and Office's **Compress Pictures**. A PNG whose drawing comes from a newer ReShiki, or is damaged, comes in as a picture with a note that says why. An SVG or PDF with an unreadable drawing is refused with the reason.
 
 ## EMF pictures for Office on Windows
 

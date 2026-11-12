@@ -1,4 +1,4 @@
-//! Editable drawing snapshots carried by ordinary PNG images.
+//! Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
 use crate::document::Document;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use flate2::{Compression, Crc, bufread::ZlibDecoder, write::ZlibEncoder};
@@ -13,6 +13,7 @@ const VERSION: u8 = 1;
 const HEADER_LEN: usize = 4 + 1 + 4 + 32;
 const PNG: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 const KEYWORD: &[u8] = b"dev.reshiki.drawing";
+const NAMESPACE: &str = "https://reshiki.dev/ns/drawing/1";
 
 /// Preserve the visible figure while removing editor history and provenance.
 pub fn visible(doc: &Document) -> Document {
@@ -95,34 +96,89 @@ pub fn decode(bytes: &[u8]) -> Result<Document, String> {
     Document::from_json(&json)
 }
 
-/// Insert an uncompressed iTXt chunk immediately after the PNG's IHDR chunk.
+/// Insert an uncompressed PNG iTXt chunk, or SVG metadata right after the root
+/// start tag, without changing the ink.
 pub fn embed(format: &str, mut bytes: Vec<u8>, envelope: &[u8]) -> Result<Vec<u8>, String> {
+    let text = STANDARD.encode(envelope);
     match format {
-        "png" => {}
-        _ => return Err("Embedded drawings require PNG output".into()),
+        "png" => {
+            if !bytes.starts_with(PNG)
+                || bytes.get(8..16) != Some(b"\0\0\0\rIHDR")
+                || bytes.len() < 33
+            {
+                return Err("Invalid PNG header".into());
+            }
+            let mut data = KEYWORD.to_vec();
+            // Keyword terminator, compression flag/method, language and translated key.
+            data.extend_from_slice(&[0; 5]);
+            data.extend_from_slice(text.as_bytes());
+            let length =
+                u32::try_from(data.len()).map_err(|_| "Embedded PNG chunk is too large")?;
+            let mut chunk = length.to_be_bytes().to_vec();
+            chunk.extend_from_slice(b"iTXt");
+            chunk.extend_from_slice(&data);
+            chunk.extend_from_slice(&crc(b"iTXt", &data).to_be_bytes());
+            bytes.splice(33..33, chunk);
+        }
+        // ReShiki's own SVG start tags hold no '>' inside attribute values.
+        "svg" | "svg-office" => {
+            let start = find(&bytes, b"<svg").ok_or("Invalid SVG")?;
+            let end = start
+                + find(bytes.get(start..).unwrap_or_default(), b">").ok_or("Invalid SVG")?
+                + 1;
+            let metadata = format!(
+                r#"<metadata><reshiki:drawing xmlns:reshiki="{NAMESPACE}">{text}</reshiki:drawing></metadata>"#
+            );
+            bytes.splice(end..end, metadata.into_bytes());
+        }
+        _ => return Err("Embedded drawings require PNG, SVG or PDF output".into()),
     }
-    if !bytes.starts_with(PNG) || bytes.get(8..16) != Some(b"\0\0\0\rIHDR") || bytes.len() < 33 {
-        return Err("Invalid PNG header".into());
-    }
-    let mut data = Vec::new();
-    data.extend_from_slice(KEYWORD);
-    // Keyword terminator, compression flag/method, language and translated key.
-    data.extend_from_slice(&[0; 5]);
-    data.extend_from_slice(STANDARD.encode(envelope).as_bytes());
-    let length = u32::try_from(data.len()).map_err(|_| "Embedded PNG chunk is too large")?;
-    let tail = bytes.split_off(33);
-    bytes.extend_from_slice(&length.to_be_bytes());
-    bytes.extend_from_slice(b"iTXt");
-    bytes.extend_from_slice(&data);
-    bytes.extend_from_slice(&crc(b"iTXt", &data).to_be_bytes());
-    bytes.extend_from_slice(&tail);
     Ok(bytes)
+}
+
+/// The XMP packet for a PDF's catalog `/Metadata`. It stays uncompressed so
+/// [`read`] finds the drawing without parsing the PDF.
+pub fn xmp(envelope: &[u8]) -> String {
+    format!(
+        r#"<?xpacket begin="{}" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:reshiki="{NAMESPACE}/"><reshiki:drawing>{}</reshiki:drawing></rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="r"?>"#,
+        '\u{feff}',
+        STANDARD.encode(envelope),
+    )
 }
 
 /// Find a drawing without decoding pixels: None when there is none, an error
 /// when one is present but damaged.
 pub fn read(bytes: &[u8]) -> Option<Result<Document, String>> {
-    let mut rest = bytes.strip_prefix(PNG)?;
+    if let Some(rest) = bytes.strip_prefix(PNG) {
+        return read_png(rest);
+    }
+    let head = bytes.get(..1024).unwrap_or(bytes);
+    if !bytes.starts_with(b"%PDF-")
+        && find(head, b"<svg").is_none()
+        && find(head, b"<?xml").is_none()
+    {
+        return None;
+    }
+    // The first element, in SVG metadata or a PDF's XMP packet.
+    let start = find(bytes, b"<reshiki:drawing")?;
+    let rest = bytes.get(start..)?;
+    let text = find(rest, b">").and_then(|open| {
+        let text = rest.get(open + 1..)?;
+        text.get(..find(text, b"</reshiki:drawing>")?)
+    });
+    Some(match text {
+        Some(text) => base64(
+            &text
+                .iter()
+                .copied()
+                .filter(|b| !b.is_ascii_whitespace())
+                .collect::<Vec<_>>(),
+        ),
+        None => Err("Truncated embedded drawing".into()),
+    })
+}
+
+fn read_png(mut rest: &[u8]) -> Option<Result<Document, String>> {
     while let Some((header, after)) = rest.split_first_chunk::<8>() {
         let (length, kind) = header.split_at(4);
         let length = u32::from_be_bytes(length.try_into().ok()?) as usize;
@@ -141,11 +197,23 @@ pub fn read(bytes: &[u8]) -> Option<Result<Document, String>> {
             if checksum != crc(kind, data).to_be_bytes() {
                 return Some(Err("Embedded PNG chunk checksum does not match".into()));
             }
-            return Some(text(data.get(KEYWORD.len() + 1..).unwrap_or_default()));
+            // Uncompressed flag and method, empty language and translated keyword.
+            return Some(
+                data.get(KEYWORD.len() + 1..)
+                    .and_then(|fields| fields.strip_prefix(b"\0\0\0\0"))
+                    .ok_or_else(|| "Unsupported embedded PNG text fields".to_owned())
+                    .and_then(base64),
+            );
         }
         rest = after.get(length.checked_add(4)?..)?;
     }
     None
+}
+
+fn find(bytes: &[u8], pattern: &[u8]) -> Option<usize> {
+    bytes
+        .windows(pattern.len())
+        .position(|window| window == pattern)
 }
 
 fn crc(kind: &[u8], data: &[u8]) -> u32 {
@@ -155,12 +223,7 @@ fn crc(kind: &[u8], data: &[u8]) -> u32 {
     crc.sum()
 }
 
-/// The iTXt fields after the keyword: uncompressed flag and method, an empty
-/// language tag and translated keyword, then the base64 envelope.
-fn text(fields: &[u8]) -> Result<Document, String> {
-    let text = fields
-        .strip_prefix(b"\0\0\0\0")
-        .ok_or("Unsupported embedded PNG text fields")?;
+fn base64(text: &[u8]) -> Result<Document, String> {
     // ReShiki never embeds a larger envelope; refuse before decoding base64.
     if text.len() > EMBED_LIMIT.div_ceil(3) * 4 {
         return Err("Embedded drawing is larger than 2 MB".into());
@@ -168,7 +231,7 @@ fn text(fields: &[u8]) -> Result<Document, String> {
     decode(
         &STANDARD
             .decode(text)
-            .map_err(|e| format!("Invalid embedded drawing encoding: {e}"))?,
+            .map_err(|error| format!("Invalid embedded drawing encoding: {error}"))?,
     )
 }
 
