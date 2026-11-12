@@ -211,6 +211,15 @@ pub fn prepare_offer(representations: &[Representation]) -> Result<Offer, String
     Ok(offer)
 }
 
+pub(crate) fn exit_text_filter(offer: &Offer) -> &'static [&'static str] {
+    // Omit text only when GNOME's clipboard manager can retain a picture.
+    if offer.contains_key("image/png") || offer.contains_key("image/svg+xml") {
+        TEXT
+    } else {
+        &[]
+    }
+}
+
 pub fn choose_type<'a>(
     available: impl Fn(&str) -> bool,
     formats: &[&'a str],

@@ -626,9 +626,9 @@ class Session:
         if self.args.compositor == "sway":
             assert not after_exit["formats"], after_exit
         else:
-            # Mutter's clipboard manager keeps one type and prefers UTF-8 text over pictures.
-            assert after_exit["formats"] == [TEXT], after_exit
-            assert after_exit[TEXT]["sha256"] == final_copy[TEXT]["sha256"]
+            # The exit handoff lets Mutter's clipboard manager retain only the SVG picture.
+            assert after_exit["formats"] == ["image/svg+xml"], after_exit
+            assert after_exit["image/svg+xml"]["sha256"] == final_copy["image/svg+xml"]["sha256"]
 
         protocol = (self.out / "app.log").read_text()
         assert "wl_keyboard" in protocol and "set_selection" in protocol

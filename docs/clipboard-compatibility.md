@@ -27,7 +27,7 @@ x64. Dumps, scripts and screenshots are in the [evidence
 folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/35d36522504604bc275cfc51154da61f09b2a1b7/issues/1146);
 the plain-text rows, Paint and the browser editor results are in
 [another](https://github.com/Ameyanagi/ReShiki-evidence/tree/5998c1d1eddc0640a912a1822e61195684aa8c33/pr-reviews/pr1157),
-and the Linux Copy text results in [a third](https://github.com/Ameyanagi/ReShiki-evidence/tree/15da76a6457cf1b167fabd1e0abc00c80335afee/pr-reviews/pr1161).
+and the Linux Copy text results in [a third](https://github.com/Ameyanagi/ReShiki-evidence/tree/79ecc509cd3d47cfea5da355b24b398a56a6e6eb/pr-reviews/pr1161).
 
 ## Quick advice
 
@@ -115,11 +115,14 @@ ReShiki on X11 under Xvfb. Wayland offers the same MIME types; it is docs/code
 only, apart from the Wayland clipboard check on GNOME and Sway, which pastes a
 drawing offered next to different SMILES text and gets the drawing.
 
-On GNOME, once ReShiki quits, the desktop keeps one format of the last copy, and
-it prefers text to pictures. So after quitting, a ReShiki **Copy** pastes as the
-SMILES text, where it pasted a picture before
-[#1161](https://github.com/Ameyanagi/ReShiki/pull/1161). Paste before quitting,
-or use **Copy Image**. While ReShiki runs, nothing changes.
+On GNOME, once ReShiki quits, the desktop keeps one format of the last copy,
+and it prefers text to pictures. So when ReShiki quits while its **Copy** is
+still on the clipboard, it offers that copy again without the SMILES text and
+waits up to 1.5 seconds for the desktop to save it. A later paste then gives
+the SVG picture, as before
+[#1161](https://github.com/Ameyanagi/ReShiki/pull/1161). This needs ReShiki to
+have keyboard focus as it quits; without it, the desktop keeps the SMILES. On
+X11, ReShiki's clipboard process keeps every format after the app quits.
 
 ### The browser editor
 
@@ -385,6 +388,7 @@ Native names for these:
 - On Linux, web apps that read a paste themselves, such as Slack or Google
   Docs, may prefer Copy's SMILES text over the picture. They need accounts to
   test.
-- On GNOME, a Copy pasted after ReShiki quits gives the SMILES text instead of
-  a picture, because the desktop keeps one format and prefers text. KDE and
-  other clipboard managers are not tested.
+- After ReShiki quits on Wayland with its window focused, GNOME keeps the
+  picture (tested); without focus it keeps the SMILES. KDE and other clipboard
+  managers are not tested; one that keeps text over pictures and reads only
+  when the app quits could keep the SMILES instead.

@@ -3,6 +3,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::os::fd::AsFd;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
+use std::time::{Duration, Instant};
 
 use sctk::data_device_manager::data_device::{DataDevice, DataDeviceHandler};
 use sctk::data_device_manager::data_offer::{DataOfferError, DataOfferHandler, DragOffer};
@@ -45,6 +46,14 @@ mod transfers;
 struct ClipboardSource {
     source: CopyPasteSource,
     offer: Arc<StoredOffer>,
+    exit_mime_types: Option<Vec<String>>,
+}
+
+struct ExitHandoff {
+    source: ObjectId,
+    deadline: Instant,
+    limit: Instant,
+    completed: bool,
 }
 
 struct PrimarySource {
@@ -57,6 +66,7 @@ pub struct State {
     pub data_device_manager_state: Option<DataDeviceManagerState>,
     pub reply_tx: Sender<Result<String>>,
     pub exit: bool,
+    pub exit_requested: bool,
 
     registry_state: RegistryState,
     seat_state: SeatState,
@@ -73,6 +83,7 @@ pub struct State {
     transfers: transfers::Transfers,
     primary_sources: Vec<PrimarySource>,
     data_sources: Vec<ClipboardSource>,
+    exit_handoff: Option<ExitHandoff>,
 }
 
 impl State {
@@ -109,9 +120,11 @@ impl State {
             primary_sources: Vec::new(),
             data_device_manager_state,
             data_sources: Vec::new(),
+            exit_handoff: None,
             latest_seat: None,
             loop_handle,
             exit: false,
+            exit_requested: false,
             seat_state,
             reply_tx,
             seats,
@@ -146,7 +159,7 @@ impl State {
                 let source =
                     mgr.create_copy_paste_source(&self.queue_handle, ALLOWED_MIME_TYPES.iter());
                 source.set_selection(seat.data_device.as_ref()?, seat.latest_serial);
-                self.data_sources.push(ClipboardSource { source, offer });
+                self.data_sources.push(ClipboardSource { source, offer, exit_mime_types: None });
             },
             SelectionTarget::Primary => {
                 let mgr = self.primary_selection_manager_state.as_ref()?;
@@ -161,6 +174,52 @@ impl State {
         }
 
         Some(())
+    }
+
+    pub fn begin_exit(&mut self) {
+        self.exit = self.start_exit_handoff().is_none();
+    }
+
+    fn start_exit_handoff(&mut self) -> Option<()> {
+        let seat = self.seats.get(self.latest_seat.as_ref()?)?;
+        if !seat.has_focus || seat.latest_serial == 0 {
+            return None;
+        }
+        let device = seat.data_device.as_ref()?;
+        let selection = device.data().selection_offer()?;
+        let current = selection.with_mime_types(|types| {
+            self.data_sources.iter().find(|entry| {
+                entry.offer.marker.as_ref().is_some_and(|marker| types.contains(marker))
+            })
+        })?;
+        let types = current.exit_mime_types.as_ref()?;
+        let offer = current.offer.clone();
+        let source = self
+            .data_device_manager_state
+            .as_ref()?
+            .create_copy_paste_source(&self.queue_handle, types);
+        source.set_selection(device, seat.latest_serial);
+        let now = Instant::now();
+        // With no clipboard manager, give a reader only a short time to appear.
+        self.exit_handoff = Some(ExitHandoff {
+            source: source.inner().id(),
+            deadline: now + Duration::from_millis(250),
+            limit: now + Duration::from_millis(1500),
+            completed: false,
+        });
+        self.data_sources.push(ClipboardSource { source, offer, exit_mime_types: None });
+        Some(())
+    }
+
+    fn exit_transfer_finished(&mut self, source: &ObjectId) {
+        if let Some(handoff) = &mut self.exit_handoff
+            && &handoff.source == source
+            && !handoff.completed
+        {
+            handoff.completed = true;
+            // EOF has reached the receiver; allow its asynchronous read to finish.
+            handoff.deadline = (Instant::now() + Duration::from_millis(250)).min(handoff.limit);
+        }
     }
 
     /// Load selection for the given target.
@@ -388,11 +447,20 @@ impl DataSourceHandler for State {
         if let Some(offer) = offer
             && let Some(bytes) = offer.bytes(&mime)
         {
-            self.send_pipe(write_pipe, offer, bytes);
+            if let Some(handoff) = &mut self.exit_handoff
+                && handoff.source == source.id()
+                && !handoff.completed
+            {
+                handoff.deadline = handoff.limit;
+            }
+            self.send_pipe(write_pipe, offer, bytes, source.id());
         }
     }
 
     fn cancelled(&mut self, _: &Connection, _: &QueueHandle<Self>, deleted: &WlDataSource) {
+        if self.exit_handoff.as_ref().is_some_and(|handoff| handoff.source == deleted.id()) {
+            self.exit = true;
+        }
         self.source_cancelled(&deleted.id());
         self.data_sources.retain(|entry| entry.source.inner() != deleted);
     }
@@ -468,7 +536,7 @@ impl PrimarySelectionSourceHandler for State {
         if let Some(offer) = offer
             && let Some(bytes) = offer.bytes(&mime)
         {
-            self.send_pipe(write_pipe, offer, bytes);
+            self.send_pipe(write_pipe, offer, bytes, source.id());
         }
     }
 

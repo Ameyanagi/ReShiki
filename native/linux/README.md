@@ -27,8 +27,10 @@ consumer. Primary selections are not changed by drawing Copy/Paste.
 
 Wayland ownership lasts with the GUI clipboard owner. Persistence after ReShiki
 exits depends on the desktop clipboard manager and must be tested separately.
-GNOME's keeps one MIME type and prefers UTF-8 text, so after exit an ordinary
-Copy with SMILES leaves only that text.
+GNOME's keeps one MIME type and prefers UTF-8 text, so at exit the GUI owner
+re-offers an ordinary Copy without its text aliases and waits up to 1.5 s for a
+reader to finish, leaving the SVG picture. This needs keyboard focus at exit;
+without it GNOME keeps the text.
 The standalone worker is X11-only. The optional LibreOffice adapter must publish
 through its host's `SystemClipboard` and use workers only to validate/render data.
 
