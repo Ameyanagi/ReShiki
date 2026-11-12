@@ -1,9 +1,12 @@
 """Optional independent RDKit oracle for the native application geometry worker.
 
-Run after building the app, using the locked development RDKit environment:
+Run after building the app, with the geometry reference's own RDKit (VERSION),
+not the locked reference pin: under 2026.09 every ETKDG embedding, including the
+C60 reference coordinates, changes while force-field energies stay identical.
   RESHIKI_GEOMETRY_REFERENCE_APP=/absolute/path/to/reshiki \
   RESHIKI_REQUIRE_GEOMETRY_REFERENCE=1 \
-  uv run --locked python -m unittest tests.test_geometry_reference
+  uv run --no-project --isolated --with rdkit==2026.3.6 \
+    python -m unittest tests.test_geometry_reference
 
 The application never executes Python. Python is only this development oracle.
 Sampling is not compared across compilers: force-field values are compared at

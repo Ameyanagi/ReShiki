@@ -321,7 +321,9 @@ jobs:
         env:
           RESHIKI_GEOMETRY_REFERENCE_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
           RESHIKI_REQUIRE_GEOMETRY_REFERENCE: "1"
-        run: uv run --locked python -m unittest tests.test_geometry_reference
+        # The geometry oracle keeps its own RDKit, not the locked reference pin:
+        # under 2026.09 every ETKDG embedding changes (energies are identical).
+        run: uv run --no-project --isolated --python 3.12.15 --with rdkit==2026.3.6 python -m unittest tests.test_geometry_reference
       - name: Test native macOS clipboard and physical print coordinates
         if: runner.os == 'macOS'
         env:
