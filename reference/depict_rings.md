@@ -1,3 +1,13 @@
+The complete depiction pipeline now receives normalized rings from
+`rings::perceive()` (RDKit 2026.09.1 #9208). Each ring starts at its smallest atom
+and proceeds toward the smaller adjacent atom; bond rings follow this traversal.
+The retained Figueras basis is sorted by size and atom sequence, then eligible
+symmetric extras are appended in normalized size/lexicographic candidate order,
+matching the legacy symmetrizer's ordering when its basis agrees. ReShiki keeps
+its basis selection and symmetrization instead of adopting #9105 RDL cycles.
+`rings::fast()` retains its original DFS traversal. The native captures below
+remain the historical 2026.03.6 checkpoint pending multi-platform recapture.
+
 The current ABI arithmetic policy and strict platform checks are documented in
 [depict_numeric.md](depict_numeric.md). The historical cross-native differences
 below describe platform build differences; same-platform Mac comparisons now

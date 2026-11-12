@@ -20,7 +20,7 @@ from pathlib import Path
 import rdkit
 from rdkit import rdBase
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
         "--component", choices=("geometry", "rings", "attachment", "seeds"), default="geometry"
     )
     args = parser.parse_args()
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     boost_version = re.search(
         r"#define BOOST_VERSION\s+(\d+)",
         (args.boost_include / "boost/version.hpp").read_text(),
@@ -112,6 +112,11 @@ def main():
             "-I" + str(source),
             "-I" + str(source / "GraphMol/Depictor"),
             "-I" + str(args.boost_include),
+            "-I"
+            + str(
+                args.rdkit_source.resolve()
+                / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib"
+            ),
             str(root / f"reference/depict_{args.component}_reference.cpp"),
             *library_files,
             "-o",

@@ -23,9 +23,12 @@ pub struct Options {
     pub canonical_orientation: bool,
     pub use_ring_templates: bool,
     pub work_limit: usize,
-    /// Run the RDKit 2026.09.1 path angle expansion after the RDKit 2026.03.6
-    /// collision stages (#632). Disable for exact 2026.03.6 parity.
+    /// Run RDKit 2026.09.1 path angle expansion after the other collision stages.
+    /// The shared RDKit 2026.09.1 detector also applies when this is disabled.
     pub path_angle_expansion: bool,
+    /// Try a second 5-degree batch before rejecting a temporary increase in
+    /// clashes (#632). ReShiki only; disable for RDKit 2026.09.1 parity.
+    pub path_angle_expansion_extra_trials: bool,
     /// Keep regular rings next to a spiro centre when RDKit's collision
     /// shortening would squash them (#1112). ReShiki only; off for parity.
     pub preserve_spiro_rings: bool,
@@ -38,6 +41,7 @@ impl Default for Options {
             use_ring_templates: false,
             work_limit: expansion::MAX_WORK,
             path_angle_expansion: true,
+            path_angle_expansion_extra_trials: true,
             preserve_spiro_rings: false,
         }
     }
@@ -178,7 +182,8 @@ fn repair(
         &initial.state.metadata,
         &initial.state.rings,
         remaining,
-    )?;
+    )?
+    .with_path_angle_expansion_extra_trials(options.path_angle_expansion_extra_trials);
     let mut fragments = initial.fragments.clone();
     // Native ordering completes flips for every fragment before opening angles
     // or shortening bonds. Never publish the temporary stereo/ring state.

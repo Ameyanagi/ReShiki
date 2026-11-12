@@ -192,7 +192,7 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
     let header: Value = serde_json::from_str(&lines.next().context("header")??)?;
     assert_eq!(
         header["provenance"]["commit"],
-        "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+        "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
     );
     let catalog: Value = serde_json::from_str(include_str!(
         "../crates/chemistry/src/depict/templates/builtin.json"
@@ -367,7 +367,7 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
     assert!(failures.is_empty());
     assert_eq!(
         (matched, unmatched, embedded, core, rejected),
-        (1712, 209, 1920, 6, 0)
+        (1712, 209, 1920, 5, 0)
     );
     assert_eq!(first_mapping_witnesses, 8);
     assert_eq!(audit.scalars, 695876);
