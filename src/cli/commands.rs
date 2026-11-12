@@ -89,6 +89,14 @@ const IMAGE_TO: OptionSpec = OptionSpec {
     sets: Some("render.format"),
     ..TO
 };
+const SVG_TEXT: OptionSpec = OptionSpec {
+    flag: "--svg-text",
+    value: Some("MODE"),
+    help: "SVG text: outline (default) or live; ignored for other formats.",
+    default: Some(|| "outline".into()),
+    sets: None,
+    equivalent: None,
+};
 const OUTPUT: OptionSpec = OptionSpec {
     flag: "-o",
     value: Some("OUTPUT"),
@@ -186,8 +194,9 @@ const CONVERT: CommandSpec = CommandSpec {
     name: "convert",
     summary: "Convert a structure or drawing to another file format",
     usage: "reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
-                             [-o OUTPUT|-] [--pages] [--force] [--receipt]",
-    options: &[SMILES, FROM, TO, OUTPUT, PAGES, FORCE, RECEIPT],
+                             [-o OUTPUT|-] [--svg-text MODE] [--pages]
+                             [--force] [--receipt]",
+    options: &[SMILES, FROM, TO, OUTPUT, SVG_TEXT, PAGES, FORCE, RECEIPT],
     tools: &["import", "export"],
     operand: Some(INPUT),
     body: convert_help,
@@ -197,12 +206,14 @@ const RENDER: CommandSpec = CommandSpec {
     name: "render",
     summary: "Render a preview image of a structure or drawing",
     usage: "reshiki --cli render (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
-                            [-o OUTPUT|-] [--width N] [--height N] [--force]",
+                            [-o OUTPUT|-] [--svg-text MODE] [--width N]
+                            [--height N] [--force]",
     options: &[
         SMILES,
         FROM,
         IMAGE_TO,
         IMAGE_OUTPUT,
+        SVG_TEXT,
         WIDTH,
         HEIGHT,
         IMAGE_FORCE,
@@ -216,8 +227,8 @@ const COMPOSE: CommandSpec = CommandSpec {
     name: "compose",
     summary: "Lay out an assistant Proposal (JSON) and write it as a file",
     usage: "reshiki --cli compose (PROPOSAL | -) [--to FORMAT] [-o OUTPUT|-] [--pages]
-                             [--force] [--receipt]",
-    options: &[TO, OUTPUT, PAGES, FORCE, RECEIPT],
+                             [--svg-text MODE] [--force] [--receipt]",
+    options: &[TO, OUTPUT, SVG_TEXT, PAGES, FORCE, RECEIPT],
     tools: &["compose", "export"],
     operand: Some(Operand {
         name: "PROPOSAL",
@@ -537,6 +548,9 @@ Options:
                  goes to stdout and needs --to; pdf and png are never written
                  to a terminal.
   --pages        Export every publication page as one PDF (pdf only).
+  --svg-text MODE
+                 Draw svg text as outlines (outline, the default), the same
+                 in every viewer, or keep it as text (live).
   --force        Replace OUTPUT if it exists; otherwise that is an error.
   --receipt      With -o OUTPUT, print one JSON line to stdout:
                  {{\"receipt\": {{\"format\", \"byte_len\", \"detail\"}}, \"api\": {{…}}}}.
@@ -570,6 +584,9 @@ Options:
                Without --to, the extension of OUTPUT picks it.
   -o OUTPUT    Write the image to OUTPUT. Without -o, or with -o -, it goes
                to stdout and needs --to; png is never written to a terminal.
+  --svg-text MODE
+               Draw svg text as outlines (outline, the default), the same
+               in every viewer, or keep it as text (live).
   --width N    The widest a png may be, in pixels (default {width}).
   --height N   The tallest a png may be, in pixels (default {height}).
                Each is {min} to {max}, and a png has at most {pixels} pixels.
@@ -605,6 +622,9 @@ Options:
                goes to stdout and needs --to; pdf and png are never written
                to a terminal.
   --pages      Export every publication page as one PDF (pdf only).
+  --svg-text MODE
+               Draw svg text as outlines (outline, the default), the same
+               in every viewer, or keep it as text (live).
   --force      Replace OUTPUT if it exists; otherwise that is an error.
   --receipt    With -o OUTPUT, print one receipt JSON line to stdout, as
                convert does.

@@ -598,13 +598,13 @@ fn bond_ink(
         // end; a line as wide as the head's base covers that triangle.
         if bond.is_dative()
             && bond.display == "plain"
-            && let Some((_, end)) = crate::scene::bond_segment(doc, bond, None)
+            && let Some((start, end)) = crate::scene::bond_segment(doc, bond, None)
         {
-            let length = crate::scene::DATIVE_HEAD_LENGTH;
+            let length = crate::scene::dative_head_length(start.distance(end));
             lines.push((
                 end,
                 end.offset(-u.x * length, -u.y * length),
-                crate::scene::DATIVE_HEAD_HALF_WIDTH,
+                length * crate::scene::DATIVE_HEAD_HALF_WIDTH / crate::scene::DATIVE_HEAD_LENGTH,
             ));
         }
     }

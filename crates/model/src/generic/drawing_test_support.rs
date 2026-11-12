@@ -219,6 +219,7 @@ pub(super) fn union_source() -> Document {
         kind: "equilibrium".into(),
         control: None,
         cubic: Some([Point::new(-500., -190.), Point::new(-500., 300.)]),
+        nodes: Vec::new(),
         style: None,
     });
     source.validate().unwrap();

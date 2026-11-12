@@ -42,6 +42,23 @@ fn assert_cycles(graph: &Graph, rings: &Rings) {
 }
 
 #[test]
+fn normalization_preserves_ring_edges() {
+    for expected in [vec![0, 1, 2, 3, 4], vec![0, 1, 2, 3, 4, 5]] {
+        for offset in 0..expected.len() {
+            for reverse in [false, true] {
+                let mut ring = expected.clone();
+                ring.rotate_left(offset);
+                if reverse {
+                    ring.reverse();
+                }
+                normalize(&mut ring);
+                assert_eq!(ring, expected);
+            }
+        }
+    }
+}
+
+#[test]
 fn cubane_has_six_symmetric_rings_and_five_basis_rings() -> TestResult {
     let edges = (0usize..8)
         .flat_map(|a| {

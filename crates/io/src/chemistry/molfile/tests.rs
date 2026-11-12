@@ -505,7 +505,9 @@ fn haworth_drawing_export_keeps_existing_2d_bytes_and_stereo() -> anyhow::Result
         Sugar::Fructose,
     ] {
         for anomer in [Anomer::Alpha, Anomer::Beta] {
-            let doc = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+            let mut doc = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+            // Compare coordinates only; superatom_tests covers the CH2OH label's SUP records.
+            doc.abbreviations.clear();
             assert!(doc.atoms.iter().any(|atom| atom.depth.abs() > 0.028));
             let molecule = document::prepare(&doc)?;
             let expected_smiles =
@@ -579,6 +581,8 @@ fn haworth_export_only_excludes_drawings_with_recognized_exported_atoms() -> any
         haworth::{Anomer, Sugar, sugar_document},
     };
     let mut doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
+    // Compare coordinates only; superatom_tests covers the CH2OH label's SUP records.
+    doc.abbreviations.clear();
     // Even when only the unrelated component has depth, the exported Haworth
     // atoms require the same 2D depiction of the whole molecule as before.
     for atom in &mut doc.atoms {
@@ -696,6 +700,57 @@ fn attachment_document_export_keeps_3d_coordinates() -> anyhow::Result<()> {
         assert!((position.z - f64::from(atom.depth) / 28.).abs() < 1e-4);
     }
     assert_eq!(doc, before);
+    Ok(())
+}
+
+#[test]
+fn rxn_v2000_preserves_reactant_charge() -> anyhow::Result<()> {
+    let methoxide = format!(
+        "\n     RDKit          2D\n\n  2  1  0  0  0  0  0  0  0  0999 V2000\n\
+         {}\n{}\n  1  2  1  0\nM  CHG  1   2  -1\nM  END\n",
+        v2000_atom(-0.75, 0., "C"),
+        v2000_atom(0.75, 0., "O"),
+    );
+    let iodomethane = methoxide
+        .replace(" O ", " I ")
+        .replace("M  CHG  1   2  -1\n", "");
+    let ether = format!(
+        "\n     RDKit          2D\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n\
+         {}\n{}\n{}\n  1  2  1  0\n  2  3  1  0\nM  END\n",
+        v2000_atom(-1.299, -0.25, "C"),
+        v2000_atom(0., 0.5, "O"),
+        v2000_atom(1.299, -0.25, "C"),
+    );
+    let text =
+        format!("$RXN\n\n      RDKit\n\n  2  1\n$MOL\n{methoxide}$MOL\n{iodomethane}$MOL\n{ether}");
+    let imported = crate::chemistry::reaction::read_rxn(&text)?;
+    assert_eq!(
+        imported.reactants[0].molecule.state.graph.atoms[1].charge,
+        -1
+    );
+    imported.drawing()?;
+    Ok(())
+}
+
+#[test]
+fn rxn_v2000_preserves_participant_isotope_and_radical() -> anyhow::Result<()> {
+    let methanol = format!(
+        "\n     RDKit          2D\n\n  2  1  0  0  0  0  0  0  0  0999 V2000\n\
+         {}\n{}\n  1  2  1  0\nM  END\n",
+        v2000_atom(-0.75, 0., "C"),
+        v2000_atom(0.75, 0., "O"),
+    );
+    for (property, isotope, radical) in [("ISO  1   1  13", 13, 0), ("RAD  1   1   2", 0, 1)] {
+        let reactant = methanol.replace("M  END", &format!("M  {property}\nM  END"));
+        let product = reactant.replace(" O ", " Cl");
+        let text = format!("$RXN\n\n      RDKit\n\n  1  1\n$MOL\n{reactant}$MOL\n{product}");
+        let imported = crate::chemistry::reaction::read_rxn(&text)?;
+        for participant in imported.reactants.iter().chain(&imported.products) {
+            let atom = &participant.molecule.state.graph.atoms[0];
+            assert_eq!((atom.isotope, atom.radical_electrons), (isotope, radical));
+        }
+        imported.drawing()?;
+    }
     Ok(())
 }
 

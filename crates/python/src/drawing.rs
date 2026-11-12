@@ -93,7 +93,7 @@ fn detect(data: &[u8]) -> Result<&'static str, String> {
     Ok(text_format(text))
 }
 
-pub async fn read(data: Vec<u8>, format: &str) -> Result<Document, String> {
+pub async fn read(data: Vec<u8>, format: &str) -> Result<(Document, Vec<String>), String> {
     let mut format = format_name(format);
     if format == "auto" {
         format = detect(&data)?.into();
@@ -104,7 +104,8 @@ pub async fn read(data: Vec<u8>, format: &str) -> Result<Document, String> {
     if format == "sdf" {
         format = "mol".into();
     }
-    let mut document = formats::read_with_engine(data, &format, &LocalEngine::in_process()).await?;
+    let (mut document, warnings) =
+        formats::read_with_warnings(data, &format, &LocalEngine::in_process()).await?;
     // CDXML can carry a visible reaction without explicit participant roles.
     // Use the editor's inference so its existing reaction exporter can use it.
     if document.reactions.is_empty()
@@ -112,7 +113,7 @@ pub async fn read(data: Vec<u8>, format: &str) -> Result<Document, String> {
     {
         document.reactions.push(reaction);
     }
-    Ok(document)
+    Ok((document, warnings))
 }
 
 pub fn kind(document: &Document) -> &'static str {
@@ -155,7 +156,7 @@ pub async fn properties(data: &[u8]) -> Result<String, String> {
     serde_json::to_string(&analysis).map_err(|error| error.to_string())
 }
 
-pub async fn from_name(name: &str) -> Result<(Vec<u8>, String), String> {
+pub async fn from_name(name: &str) -> Result<(Vec<u8>, String, Vec<String>), String> {
     if name.trim().is_empty() {
         return Err("Enter a chemical name first".into());
     }
@@ -183,12 +184,14 @@ pub async fn from_name(name: &str) -> Result<(Vec<u8>, String), String> {
     let smiles = structure
         .semantic_cxsmiles()
         .map_err(|error| error.to_string())?;
-    serialize(read(smiles.into_bytes(), "smiles").await?)
+    let (document, warnings) = read(smiles.into_bytes(), "smiles").await?;
+    let (data, kind) = serialize(document)?;
+    Ok((data, kind, warnings))
 }
 
 /// Import an external database graph only if every stated chemical feature
 /// survives native preparation and layout. Use the app's shared identity rules.
-pub async fn parse_online_smiles(text: &str) -> Result<(Vec<u8>, String), String> {
+pub async fn parse_online_smiles(text: &str) -> Result<(Vec<u8>, String, Vec<String>), String> {
     use reshiki_model::{
         chemistry::{document, smiles},
         molecule_names::{MAX_NAMING_ATOMS, MAX_SMILES_BYTES, canonical_identity, is_tetrahedral},
@@ -233,7 +236,7 @@ pub async fn parse_online_smiles(text: &str) -> Result<(Vec<u8>, String), String
     }
     let expected = canonical_identity(&source.prepared.state)
         .map_err(|error| format!("PubChem returned unsupported chemical semantics: {error:?}"))?;
-    let imported = read(text.as_bytes().to_vec(), "smiles").await?;
+    let (imported, warnings) = read(text.as_bytes().to_vec(), "smiles").await?;
     let actual = document::prepare(&imported).map_err(|error| error.to_string())?;
     let actual = canonical_identity(&actual.state).map_err(|error| {
         format!("Native import could not retain PubChem chemical semantics: {error:?}")
@@ -244,5 +247,6 @@ pub async fn parse_online_smiles(text: &str) -> Result<(Vec<u8>, String), String
                 .into(),
         );
     }
-    serialize(imported)
+    let (data, kind) = serialize(imported)?;
+    Ok((data, kind, warnings))
 }

@@ -29,6 +29,7 @@ def register() -> None:
             values = render_many(self._series, format=format, **options)
             result = pd.Series(values, index=self._series.index, name=self._series.name)
             result.attrs["reshiki_errors"] = values.errors
+            result.attrs["reshiki_warnings"] = values.warnings
             return result
 
         def png(self, **options: Any) -> Any:

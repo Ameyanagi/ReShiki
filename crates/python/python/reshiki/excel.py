@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import warnings
 from io import BytesIO
 from os import PathLike
 from pathlib import Path
@@ -28,6 +29,8 @@ def add_structures(
     header and all nonempty cells from row 2 are rendered. Set ``header=False``
     to start at row 1, or ``start_row`` to choose an explicit first row. Blank
     and invalid rows receive no picture. ``out`` defaults to updating the source file.
+    Import warnings are issued as :class:`reshiki.StructureWarning`, prefixed
+    with the source cell.
     """
     try:
         openpyxl = importlib.import_module("openpyxl")
@@ -39,7 +42,7 @@ def add_structures(
             "Excel integration requires 'reshiki[excel]' (openpyxl and Pillow)"
         ) from error
 
-    from . import render_many
+    from . import StructureWarning, render_many
 
     if not isinstance(header, bool):
         raise ValueError("header must be a boolean")
@@ -63,6 +66,9 @@ def add_structures(
             rows.append(row)
             structures.append(value)
     images = render_many(structures, width=width, height=height, **options)
+    for index, message in images.warnings:
+        cell = f"{smiles.upper()}{rows[index]}"
+        warnings.warn(f"{cell}: {message}", StructureWarning, stacklevel=2)
     for row, png in zip(rows, images):
         if not isinstance(png, bytes):
             continue

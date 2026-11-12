@@ -11,6 +11,198 @@ fn ready() -> App {
     app
 }
 
+fn png() -> Vec<u8> {
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgba8(3, 2)
+        .write_to(&mut bytes, image::ImageFormat::Png)
+        .unwrap();
+    bytes.into_inner()
+}
+
+#[tokio::test]
+async fn png_drop_restores_editable_drawing_with_native_paste_colors() -> Result<(), String> {
+    use reshiki::palette::{Color, Hue, Row};
+    let mut drawing = Document {
+        canvas_theme: CanvasTheme::Dark,
+        ..Default::default()
+    };
+    let carbon = drawing.add_atom("C", Point::default());
+    let oxygen = drawing.add_atom("O", Point::new(42., 0.));
+    drawing.add_bond(carbon, oxygen, 1, "plain");
+    drawing.bonds[0].color = Color::Palette(Hue::Teal, Row::Strong);
+    let drawing = drawing.current();
+    let contents = reshiki::payload::embed("png", png(), &reshiki::payload::encode(&drawing)?)?;
+    let files = vec![Picked {
+        path: "editable.PNG".into(),
+        contents,
+    }];
+    let mut app = ready();
+    app.tab.doc.canvas_theme = CanvasTheme::Light;
+    let before = app.tab.doc.clone();
+    let ticket = app.import_ticket();
+    let _ = app.update(Message::Imports(Action::Read(ticket, Ok(files.clone()))));
+    assert!(app.tab.busy && !app.error);
+    let batch = load(
+        LocalEngine::in_process(),
+        files,
+        (&app.tab.doc.drawing_style).into(),
+        app.tab.doc.canvas_theme,
+    )
+    .await?;
+    assert_eq!(
+        batch.drawings,
+        vec![reshiki::canvas_theme::for_native_paste(
+            drawing,
+            CanvasTheme::Light
+        )]
+    );
+    let _ = app.update(Message::Imports(Action::Loaded(
+        ticket,
+        Box::new(Ok(batch)),
+    )));
+    assert!(!app.tab.busy && !app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.atoms.len(), 2);
+    assert!(app.tab.doc.graphics.is_empty());
+    assert_eq!(
+        app.tab.doc.bonds[0].color,
+        Color::Palette(Hue::Teal, Row::Strong)
+    );
+    assert!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .all(|atom| !atom.display.color_override)
+    );
+    assert!(
+        app.status
+            .contains("Restored the editable drawing from editable.PNG")
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    Ok(())
+}
+
+#[tokio::test]
+async fn png_drop_without_readable_payload_inserts_a_picture() -> Result<(), String> {
+    let ordinary = png();
+    let invalid = reshiki::payload::embed("png", ordinary.clone(), b"invalid payload")?;
+    for (contents, warning) in [(ordinary, false), (invalid, true)] {
+        let batch = load(
+            LocalEngine::in_process(),
+            vec![Picked {
+                path: "picture.png".into(),
+                contents,
+            }],
+            Default::default(),
+            Default::default(),
+        )
+        .await?;
+        assert_eq!(batch.drawings[0].graphics.len(), 1);
+        assert!(batch.drawings[0].atoms.is_empty());
+        assert_eq!(batch.warnings.is_empty(), !warning);
+        let mut app = ready();
+        app.insert_batch(batch);
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.graphics.len(), 1);
+        assert_eq!(
+            app.status
+                .contains("Inserted as a picture: its editable drawing could not be read ("),
+            warning
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn vector_drop_restores_the_drawing_and_inserts_it() -> Result<(), String> {
+    let mut drawing = Document {
+        canvas_theme: CanvasTheme::Dark,
+        ..Default::default()
+    };
+    drawing.add_atom("O", Point::default());
+    let drawing = drawing.current();
+    let envelope = reshiki::payload::encode(&drawing)?;
+    for format in ["svg", "pdf"] {
+        let contents =
+            reshiki::export::clipboard_figure_with_drawing(&drawing, format, Some(&envelope))?
+                .bytes;
+        let mut app = ready();
+        let before = app.tab.doc.clone();
+        let ticket = app.import_ticket();
+        let files = vec![Picked {
+            path: format!("editable.{format}").into(),
+            contents,
+        }];
+        let _ = app.update(Message::Imports(Action::Read(ticket, Ok(files.clone()))));
+        assert!(app.tab.busy && !app.error);
+        let batch = load(
+            LocalEngine::in_process(),
+            files,
+            Default::default(),
+            CanvasTheme::Light,
+        )
+        .await?;
+        assert_eq!(
+            batch.drawings,
+            [reshiki::canvas_theme::for_native_paste(
+                drawing.clone(),
+                CanvasTheme::Light
+            )]
+        );
+        let _ = app.update(Message::Imports(Action::Loaded(
+            ticket,
+            Box::new(Ok(batch)),
+        )));
+        assert!(!app.error && !app.tab.busy, "{}", app.status);
+        assert_eq!(app.tab.doc.atoms.len(), 1);
+        assert!(app.tab.doc.graphics.is_empty());
+        assert!(app.status.contains(&format!(
+            "Restored the editable drawing from editable.{format}"
+        )));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn vector_drop_requires_a_readable_drawing() -> Result<(), String> {
+    for format in ["svg", "pdf"] {
+        for envelope in [None, Some(b"invalid payload".as_slice())] {
+            let contents = reshiki::export::clipboard_figure_with_drawing(
+                &Document::default(),
+                format,
+                envelope,
+            )?
+            .bytes;
+            let reason = reshiki::payload::read(&contents).map(Result::unwrap_err);
+            let error = read(
+                &LocalEngine::in_process(),
+                Picked {
+                    path: format!("picture.{format}").into(),
+                    contents,
+                },
+                Default::default(),
+                Default::default(),
+            )
+            .await
+            .unwrap_err();
+            let format = format.to_ascii_uppercase();
+            assert_eq!(
+                error,
+                match reason {
+                    Some(reason) => format!(
+                        "This {format} carries a ReShiki drawing that could not be read: {reason}"
+                    ),
+                    None => format!("This {format} has no ReShiki drawing to import"),
+                }
+            );
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn structure_file_insert_uses_the_documents_depiction_options() -> Result<(), String> {
     let file = Picked {
@@ -24,6 +216,7 @@ async fn structure_file_insert_uses_the_documents_depiction_options() -> Result<
             two_wedge_stereocentres: true,
             ..Default::default()
         },
+        Default::default(),
     )
     .await?;
     assert_eq!(batch.drawings.len(), 1);
@@ -180,6 +373,10 @@ fn files_route_by_extension_and_label_the_drop() {
     );
     let pictures = paths(&["a.png", "b.JPG", "c.jpeg", "d.tif", "e.tiff", "f.webp"]);
     assert_eq!(plan(&pictures), Plan::Insert(pictures.clone()));
+    let drawings = paths(&["a.SVG", "b.pdf", "c.png", "d.mol"]);
+    assert_eq!(plan(&drawings), Plan::Insert(drawings.clone()));
+    assert_eq!(kind(&drawings[0]), Kind::Drawing);
+    assert_eq!(kind(&drawings[1]), Kind::Drawing);
     let metafile = paths(&["spectrum.EMF"]);
     if cfg!(windows) {
         assert_eq!(plan(&metafile), Plan::Insert(metafile.clone()));
@@ -393,7 +590,13 @@ async fn files_insert_side_by_side_at_the_pointer_as_one_undo_step() -> Result<(
         png,
     ];
     let files = super::super::files::read_paths(files, limit).await?;
-    let batch = load(LocalEngine::default(), files, Default::default()).await?;
+    let batch = load(
+        LocalEngine::default(),
+        files,
+        Default::default(),
+        Default::default(),
+    )
+    .await?;
     assert_eq!(batch.label, "3 files");
     assert_eq!(batch.drawings.len(), 3);
     assert_eq!(batch.drawings[0].atoms.len(), 3);
@@ -499,6 +702,7 @@ async fn browser_files_insert_and_open_from_their_contents() -> Result<(), Strin
         LocalEngine::default(),
         vec![mol.clone()],
         Default::default(),
+        Default::default(),
     )
     .await?;
     assert_eq!(
@@ -568,15 +772,22 @@ fn browser_drags_outline_the_canvas_until_the_files_leave() {
 #[tokio::test]
 async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), String> {
     let folder = tempfile::tempdir().map_err(|e| e.to_string())?;
-    let huge = folder.path().join("huge.png");
     let max = reshiki::pictures::MAX_BYTES;
-    std::fs::write(&huge, vec![0; max + 4096]).map_err(|e| e.to_string())?;
-    let files = super::super::files::read_paths(vec![huge], limit).await?;
-    assert_eq!(files[0].contents.len(), max + 1);
-    let error = load(LocalEngine::default(), files, Default::default())
+    for extension in ["png", "svg", "pdf"] {
+        let huge = folder.path().join(format!("huge.{extension}"));
+        std::fs::write(&huge, vec![0; max + 4096]).map_err(|e| e.to_string())?;
+        let files = super::super::files::read_paths(vec![huge], limit).await?;
+        assert_eq!(files[0].contents.len(), max + 1);
+        let error = load(
+            LocalEngine::default(),
+            files,
+            Default::default(),
+            Default::default(),
+        )
         .await
         .unwrap_err();
-    assert!(error.contains("exceeds 16 MB"), "{error}");
+        assert!(error.contains("exceeds 16 MB"), "{error}");
+    }
     Ok(())
 }
 

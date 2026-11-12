@@ -113,7 +113,8 @@ fn join_rejects_unsupported_metal_partners_without_sharing_or_recording_history(
         ("N", 1, 0, 0, "N, O, S or P donor"),
         ("N", 0, 1, 0, "radicals are unsupported"),
         ("N", 0, 0, 4, "no supported lone pair"),
-        ("Co", 0, 0, 0, "N, O, S or P donor"),
+        // Two metals share an atom instead; these charges differ.
+        ("Co", 0, 0, 0, "same element and charge"),
     ] {
         for selected in [[5, 1], [1, 5]] {
             let mut app = drawing();
@@ -136,8 +137,24 @@ fn join_rejects_unsupported_metal_partners_without_sharing_or_recording_history(
     }
 }
 
+/// The fixture as a native load leaves it, with refreshed CH2 labels.
+fn refreshed() -> App {
+    let mut app = drawing();
+    for atom in &mut app.tab.doc.atoms {
+        if atom.element == "C" {
+            atom.label_h = 2;
+        }
+    }
+    app
+}
+
+fn join_selection(app: &mut App, selected: &[u64]) {
+    app.tab.selected = selected.to_vec();
+    let _ = app.update(Message::Shortcut(Action::Join));
+}
+
 #[test]
-fn join_keeps_a_different_existing_metal_bond_and_rejects_a_whole_ligand_selection() {
+fn join_keeps_a_different_existing_metal_bond_and_coordinates_the_rest_of_a_ligand() {
     let mut app = drawing();
     app.tab.doc.add_bond(5, 1, 1, "plain");
     let original = app.tab.doc.clone();
@@ -147,13 +164,149 @@ fn join_keeps_a_different_existing_metal_bond_and_rejects_a_whole_ligand_selecti
     assert_eq!(app.tab.doc, original);
     assert!(!app.tab.history.can_undo());
 
-    let mut app = drawing();
-    let original = app.tab.doc.clone();
-    app.tab.selected = vec![1, 2, 3, 4, 5];
-    let _ = app.update(Message::Shortcut(Action::Join));
-    assert!(app.error);
+    // The whole ligand: N #2 gains its contact, N #5 keeps its covalent bond.
+    join_selection(&mut app, &[1, 2, 3, 4, 5]);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(
+        app.status,
+        "Coordinated N #2 → Co #1 · skipped N #5 (these atoms already have a different bond)"
+    );
+    for (atom, before) in app.tab.doc.atoms.iter().zip(&original.atoms) {
+        assert_eq!((atom.id, atom.position), (before.id, before.position));
+    }
+    assert_eq!(app.tab.doc.bonds.len(), original.bonds.len() + 1);
+    let contact = app.tab.doc.bonds.last().unwrap();
+    assert_eq!((contact.a, contact.b, contact.order), (2, 1, 5));
+    let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, original);
     assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn join_coordinates_a_whole_ligand_in_place() {
+    let mut app = refreshed();
+    let original = app.tab.doc.clone();
+    join_selection(&mut app, &[1, 2, 3, 4, 5]);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "Coordinated N #2, N #5 → Co #1");
+    assert_eq!(app.tab.selected, [2, 5, 1]);
+    assert_eq!(app.tab.doc.atoms, original.atoms, "nothing moves");
+    assert_eq!(app.tab.doc.bonds.len(), 11);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+}
+
+/// The #246 acceptance case: all 13 atoms of Co(en)3, one ⌘J.
+#[test]
+fn join_coordinates_all_thirteen_atoms_in_one_undo_step() {
+    let mut app = refreshed();
+    let original = app.tab.doc.clone();
+    let all: Vec<u64> = (1..=13).collect();
+    join_selection(&mut app, &all);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "Coordinated 6 donors → Co #1");
+    let six = app.tab.doc.clone();
+    assert_eq!(six.atoms, original.atoms, "ids, XYZ, NH2 and Co 3+");
+    assert_eq!(&six.bonds[..9], original.bonds.as_slice(), "three N–C–C–N");
+    let contacts: Vec<_> = six.bonds[9..].iter().map(|b| (b.a, b.b, b.order)).collect();
+    assert_eq!(contacts, [2, 5, 6, 9, 10, 13].map(|donor| (donor, 1, 5)));
+    six.validate().unwrap();
+
+    // Nothing left to add: no edit and no Undo frame.
+    join_selection(&mut app, &all);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "All selected contacts already exist");
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, six);
+}
+
+#[test]
+fn join_skips_a_far_donor_and_refuses_a_metal_without_donors() {
+    let mut app = drawing();
+    let far = app.tab.doc.add_atom("N", Point::new(400., 0.));
+    let original = app.tab.doc.clone();
+    join_selection(&mut app, &[1, 3, 4]);
+    assert!(app.error);
+    assert_eq!(
+        app.status,
+        "Select a donor (N, O, S or P) and a metal to coordinate; Join does not merge metals"
+    );
+    join_selection(&mut app, &[1, 3, far]);
+    assert!(app.error);
+    assert_eq!(
+        app.status,
+        format!("No contact added: N #{far} (too far from Co #1)")
+    );
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+
+    join_selection(&mut app, &[1, 2, 3, 4, 5, far]);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(
+        app.status,
+        format!("Coordinated N #2, N #5 → Co #1 · skipped N #{far} (too far from Co #1)")
+    );
+}
+
+/// An ignored atom, here an unrelated generic site, does not block the contacts.
+#[test]
+fn join_coordinates_past_an_ignored_generic_atom() {
+    let mut app = refreshed();
+    let site = app.tab.doc.add_atom("C", Point::new(300., 0.));
+    app.tab.doc =
+        reshiki::atom_text::apply(&app.tab.doc, site, "[C,N]", reshiki::atom_text::Mode::Auto)
+            .unwrap();
+    join_selection(&mut app, &[1, 2, 3, 4, 5, site]);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "Coordinated N #2, N #5 → Co #1");
+}
+
+#[test]
+fn join_shares_two_matching_metals_and_names_mismatched_elements() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("Co", Point::default());
+    let b = app.tab.doc.add_atom("Co", Point::new(80., 0.));
+    join(&mut app, [a, b]);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "Joined selected atoms or bonds");
+    assert_eq!(app.tab.doc.atoms.len(), 1);
+
+    // Sharing must not drop either metal's isotope.
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("Co", Point::default());
+    let b = app.tab.doc.add_atom("Co", Point::new(80., 0.));
+    app.tab.doc.atom_mut(a).unwrap().isotope = 60;
+    let original = app.tab.doc.clone();
+    join(&mut app, [a, b]);
+    assert!(app.error);
+    assert!(
+        app.status
+            .starts_with("Join cannot share atoms with an isotope")
+    );
+    assert_eq!(app.tab.doc, original);
+
+    for (first, second) in [("Co", "Ni"), ("N", "O")] {
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom(first, Point::default());
+        let b = app.tab.doc.add_atom(second, Point::new(80., 0.));
+        let original = app.tab.doc.clone();
+        join(&mut app, [a, b]);
+        assert!(app.error);
+        assert_eq!(
+            app.status,
+            format!(
+                "Join shares only atoms of the same element and charge; {first} and {second} differ"
+            )
+        );
+        assert_eq!(app.tab.doc, original);
+    }
 }
 
 #[test]

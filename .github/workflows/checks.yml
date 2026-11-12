@@ -438,11 +438,11 @@ jobs:
         run: cargo run --locked --no-default-features --example scifinder_handoff_qa -- "${{ runner.temp }}/reshiki-scifinder-handoff"
       - name: Warm the shared Rust cache
         if: github.ref == 'refs/heads/main' && matrix.partition == 1
-        shell: bash
         # Include lint and golden configurations for all three lanes' PR cache reads.
-        run: |
-          cargo clippy --workspace --all-targets --locked --no-default-features
-          cargo clippy --workspace --all-targets --locked --features rdkit-reference
+        # Keep the job's shell: Git Bash's /usr/bin/link shadows MSVC link.exe on Windows.
+        run: >-
+          cargo clippy --workspace --all-targets --locked --no-default-features &&
+          cargo clippy --workspace --all-targets --locked --features rdkit-reference &&
           cargo test --locked --features rdkit-reference --no-run --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --test native_aromatic
   # Lint and golden replay share one job per platform to spare macOS runners.
   rust-lint-goldens:

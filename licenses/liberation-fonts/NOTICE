@@ -1,5 +1,5 @@
-Liberation Sans fonts for browser and native fallback
-====================================================
+Liberation Sans: the bundled Arial fallback
+===========================================
 
 crates/model/fonts/LiberationSans-{Regular,Bold,Italic,BoldItalic}.ttf are the
 unmodified files from Liberation Fonts 2.1.5:
@@ -14,9 +14,12 @@ Copyright (c) 2012 Red Hat, Inc.
 Licensed under the SIL Open Font License, Version 1.1; see LICENSE in this
 directory.
 
-The browser build embeds them because a browser has no system fonts. Native
-builds include them as a final sans-serif fallback after installed fonts,
-including in headless Python environments. The browser's font database also
-lists these Arial-compatible faces under the family name Arial. Native builds
-retain the system's generic sans-serif preference. The font files themselves
-are not changed.
+Every build embeds the four files: the browser editor, the desktop app, the
+command line and the Python package. A build that finds no installed Arial
+(the browser, and Linux systems or containers without it) loads them and lists
+them under the family names Arial and Liberation Sans, and outside the browser
+also Helvetica when no Helvetica is installed. Liberation Sans has Arial's
+character widths, which match Helvetica's, so drawings lay out as on macOS and
+Windows. Where Arial is installed, the embedded files are not loaded. The font
+files themselves are not changed; only the font database ReShiki builds in
+memory gives them the extra names.

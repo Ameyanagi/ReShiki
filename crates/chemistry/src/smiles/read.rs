@@ -11,9 +11,43 @@ use crate::{
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
+/// Input identity survives hydrogen removal and reaction component splitting.
+#[derive(Clone, Copy, Debug)]
+pub struct InputAtom {
+    pub position: usize,
+    pub element: &'static str,
+}
+
+#[derive(Debug)]
+pub enum Configuration {
+    SquarePlanar,
+    TrigonalBipyramidal,
+    Octahedral,
+}
+
+#[derive(Debug)]
+pub enum Dropped {
+    Configuration {
+        atom: InputAtom,
+        class: Configuration,
+    },
+    Radical {
+        atom: InputAtom,
+        electrons: u8,
+        hydrogens: (u32, u32),
+    },
+    Allene(InputAtom),
+    Queries,
+    AnyBond(InputAtom, InputAtom),
+    ZeroBond(InputAtom, InputAtom),
+}
+
 #[derive(Debug, Serialize)]
 pub struct Imported {
     pub prepared: Prepared,
+    /// Features discarded only by the application’s partial import reader.
+    #[serde(skip)]
+    pub dropped: Vec<Dropped>,
     pub conformers: Vec<Conformer>,
     pub name: Option<String>,
     /// SMILES directions specified odd-cumulene E/Z that preparation discarded.
@@ -364,6 +398,14 @@ fn int_property(
     value
 }
 
+fn attachment_label_number(label: &[u8]) -> Option<u32> {
+    let suffix = label.strip_prefix(b"_AP")?;
+    if suffix.is_empty() || !suffix.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    std::str::from_utf8(suffix).ok()?.parse().ok()
+}
+
 fn relative_stereo(state: &mut State, relative: &HashSet<usize>) -> Result<bool> {
     let metadata = &state.metadata;
     // Explicit enhanced stereo labels take precedence over relative flags.
@@ -415,7 +457,24 @@ fn relative_stereo(state: &mut State, relative: &HashSet<usize>) -> Result<bool>
 /// Reactions apply CX annotations after bare parsing and keep explicit H.
 /// They sanitize without the default molecule import's stereo perception.
 /// Explicit enhanced stereo groups are refused before relative flags are normalized.
-pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
+pub fn reaction_part(parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
+    reaction_part_with(parsed, events, None)
+}
+
+/// Read one participant for partial application import, using global input positions.
+pub fn reaction_part_partial(
+    parsed: Parsed,
+    events: Vec<cx::Event>,
+    positions: &[usize],
+) -> Result<Imported> {
+    reaction_part_with(parsed, events, Some(positions))
+}
+
+fn reaction_part_with(
+    mut parsed: Parsed,
+    events: Vec<cx::Event>,
+    positions: Option<&[usize]>,
+) -> Result<Imported> {
     use crate::{
         sanitize,
         stereo::perception::{Properties, RingCache, RingKind},
@@ -425,6 +484,10 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         annotations.apply(&mut parsed, event)?;
     }
     annotations.numeric_props(&mut parsed)?;
+    let mut dropped = Vec::new();
+    if let Some(positions) = positions {
+        partial_graph(&mut parsed, &mut annotations, positions, &mut dropped)?;
+    }
     prepare::validate_allenes(&parsed)?;
     if annotations.queries.iter().any(|&q| q)
         || annotations.context.unsupported_bonds.iter().any(|&b| b)
@@ -440,17 +503,33 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         annotations.atropisomers(&mut parsed)?;
     }
     let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
-    if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
-        || clean.metadata.atoms.iter().enumerate().any(|(i, a)| {
-            !stereo::allene::supported(&clean.graph, i, a.chiral_tag, a.chiral_permutation)
+    let mut state = State {
+        properties: Properties::unspecified(&clean.graph),
+        graph: clean.graph,
+        metadata: clean.metadata,
+        directions: clean.directions,
+        valences: clean.valences,
+        conjugated: clean.conjugated,
+        hybridizations: clean.hybridizations,
+        rings: RingCache {
+            kind: RingKind::Symmetric,
+            atoms: clean.rings,
+        },
+    };
+    if let Some(positions) = positions {
+        partial_state(&mut state, positions, &mut dropped)?;
+    }
+    if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
+        || state.metadata.atoms.iter().enumerate().any(|(i, a)| {
+            !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
         })
-        || clean.metadata.bonds.iter().any(|b| b.stereo > 7)
+        || state.metadata.bonds.iter().any(|b| b.stereo > 7)
     {
         return Err(Error::Unsupported(
             "reaction stereochemistry or radical count",
         ));
     }
-    let mut properties = Properties::unspecified(&clean.graph);
+    let properties = &mut state.properties;
     properties.needs_detection = annotations.context.needs_bond_stereo.then_some(true);
     for (i, (props, atom)) in annotations
         .properties
@@ -489,7 +568,13 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
             entries
         })
         .collect();
+    let mut degree = vec![0usize; state.graph.atoms.len()];
+    for bond in &state.graph.bonds {
+        *degree.get_mut(bond.a).ok_or(Error::Limit)? += 1;
+        *degree.get_mut(bond.b).ok_or(Error::Limit)? += 1;
+    }
     let mut imported = Imported {
+        dropped,
         dropped_cumulene_ez: false,
         relative: !annotations.relative.is_empty(),
         relative_group: false,
@@ -497,29 +582,22 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
         reaction_attachments: annotations
             .properties
             .iter()
-            .zip(&clean.graph.atoms)
-            .map(|(props, atom)| {
-                props.contains_key(b"_fromAttachPoint".as_slice())
+            .zip(&state.graph.atoms)
+            .zip(degree)
+            .map(|((props, atom), degree)| {
+                // WedgeBonds tests the native property, not marked attachment
+                // identity. CleanupAfterParsing (#9454) adds it only for labels 1/2.
+                props.contains_key(b"_fromAttchpt".as_slice())
                     || atom.atomic_number == 0
+                        && degree == 1
                         && props
                             .get(b"atomLabel".as_slice())
-                            .is_some_and(|s| matches!(s.as_slice(), b"_AP1" | b"_AP2"))
+                            .and_then(|label| attachment_label_number(label))
+                            .is_some_and(|number| matches!(number, 1 | 2))
             })
             .collect(),
         prepared: Prepared {
-            state: State {
-                graph: clean.graph,
-                metadata: clean.metadata,
-                directions: clean.directions,
-                valences: clean.valences,
-                conjugated: clean.conjugated,
-                hybridizations: clean.hybridizations,
-                rings: RingCache {
-                    kind: RingKind::Symmetric,
-                    atoms: clean.rings,
-                },
-                properties,
-            },
+            state,
             dummy_labels: parsed.dummy_labels,
         },
         conformers: annotations.context.conformers,
@@ -535,6 +613,185 @@ pub fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Impor
             relative_stereo(&mut imported.prepared.state, &annotations.relative)?;
     }
     Ok(imported)
+}
+
+fn partial_state(
+    state: &mut State,
+    positions: &[usize],
+    dropped: &mut Vec<Dropped>,
+) -> Result<bool> {
+    let mut changed = false;
+    let bare_radicals = if state.graph.atoms.iter().any(|a| a.radical_electrons > 2) {
+        let mut graph = state.graph.clone();
+        for atom in &mut graph.atoms {
+            if atom.radical_electrons > 2 {
+                atom.no_implicit = true;
+                atom.explicit_hydrogens = 0;
+            }
+        }
+        crate::sanitize::sanitize(&graph, &state.metadata, &state.directions)?
+            .graph
+            .atoms
+            .into_iter()
+            .map(|atom| atom.radical_electrons)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let mut bonded_hydrogens = vec![0u32; state.graph.atoms.len()];
+    for bond in &state.graph.bonds {
+        for (atom, neighbour) in [(bond.a, bond.b), (bond.b, bond.a)] {
+            if at(&state.graph.atoms, neighbour)?.atomic_number == 1 {
+                *bonded_hydrogens.get_mut(atom).ok_or(Error::Limit)? += 1;
+            }
+        }
+    }
+    for (id, (atom, meta)) in state
+        .graph
+        .atoms
+        .iter_mut()
+        .zip(&mut state.metadata.atoms)
+        .enumerate()
+    {
+        let input = input_atom(atom, *at(positions, id)?)?;
+        let class = match meta.chiral_tag {
+            6 => Some(Configuration::SquarePlanar),
+            7 => Some(Configuration::TrigonalBipyramidal),
+            8 => Some(Configuration::Octahedral),
+            _ => None,
+        };
+        if let Some(class) = class {
+            dropped.push(Dropped::Configuration { atom: input, class });
+            meta.chiral_tag = 0;
+            meta.chiral_permutation = Some(0);
+            changed = true;
+        }
+        if atom.radical_electrons > 2 {
+            let r0 = *at(&bare_radicals, id)?;
+            if r0 < 2 {
+                continue;
+            }
+            let before =
+                u32::from(atom.explicit_hydrogens) + at(&state.valences, id)?.implicit_hydrogens;
+            let after = u32::from(r0 - 2);
+            dropped.push(Dropped::Radical {
+                atom: input,
+                electrons: atom.radical_electrons,
+                hydrogens: (
+                    before + at(&bonded_hydrogens, id)?,
+                    after + at(&bonded_hydrogens, id)?,
+                ),
+            });
+            // Store a valence-derived triplet that survives preparation and export.
+            atom.no_implicit = true;
+            atom.explicit_hydrogens = r0 - 2;
+            changed = true;
+        }
+    }
+    if changed {
+        let clean = crate::sanitize::sanitize(&state.graph, &state.metadata, &state.directions)?;
+        state.graph = clean.graph;
+        state.metadata = clean.metadata;
+        state.directions = clean.directions;
+        state.valences = clean.valences;
+        state.conjugated = clean.conjugated;
+        state.hybridizations = clean.hybridizations;
+        state.rings.atoms = clean.rings;
+    }
+    Ok(changed)
+}
+
+fn input_atom(atom: &crate::graph::Atom, position: usize) -> Result<InputAtom> {
+    Ok(InputAtom {
+        position,
+        element: at(crate::ELEMENTS, usize::from(atom.atomic_number))?.symbol,
+    })
+}
+
+fn retain_bonds<T>(items: &mut Vec<T>, mapping: &[Option<usize>]) {
+    let mut indices = mapping.iter();
+    items.retain(|_| indices.next().is_some_and(Option::is_some));
+}
+
+fn partial_graph(
+    parsed: &mut Parsed,
+    annotations: &mut Annotations,
+    positions: &[usize],
+    dropped: &mut Vec<Dropped>,
+) -> Result<()> {
+    if annotations.queries.iter().any(|&q| q) {
+        dropped.push(Dropped::Queries);
+        annotations.queries.fill(false);
+    }
+    let mut mapping = vec![None; parsed.graph.bonds.len()];
+    let mut kept = 0;
+    for (id, (bond, query)) in parsed
+        .graph
+        .bonds
+        .iter_mut()
+        .zip(&mut parsed.query_bonds)
+        .enumerate()
+    {
+        let zero = *at(&annotations.context.unsupported_bonds, id)?;
+        if zero || (*query && bond.order == 1) {
+            let atom = |id| input_atom(at(&parsed.graph.atoms, id)?, *at(positions, id)?);
+            let mut ends = [atom(bond.a)?, atom(bond.b)?];
+            ends.sort_by_key(|atom| atom.position);
+            if zero {
+                dropped.push(Dropped::ZeroBond(ends[0], ends[1]));
+            } else {
+                dropped.push(Dropped::AnyBond(ends[0], ends[1]));
+                bond.aromatic = false;
+            }
+        }
+        *query = false;
+        if !zero {
+            put(&mut mapping, id, Some(kept))?;
+            kept += 1;
+        }
+    }
+    if kept != mapping.len() {
+        retain_bonds(&mut parsed.graph.bonds, &mapping);
+        retain_bonds(&mut parsed.metadata.bonds, &mapping);
+        retain_bonds(&mut parsed.directions, &mapping);
+        retain_bonds(&mut parsed.bond_indices, &mapping);
+        retain_bonds(&mut parsed.ring_bonds, &mapping);
+        retain_bonds(&mut parsed.query_bonds, &mapping);
+        retain_bonds(&mut annotations.context.unsupported_bonds, &mapping);
+        for group in &mut parsed.metadata.groups {
+            group.bonds = group
+                .bonds
+                .iter()
+                .filter_map(|&id| mapping.get(id).copied().flatten())
+                .collect();
+        }
+    }
+    // A tag in an enhanced stereo group stays, so the import is refused as before.
+    let grouped: HashSet<usize> = parsed
+        .metadata
+        .groups
+        .iter()
+        .flat_map(|group| group.atoms.iter().copied())
+        .collect();
+    for (id, meta) in parsed.metadata.atoms.iter_mut().enumerate() {
+        if meta.chiral_tag == 5
+            && !grouped.contains(&id)
+            && !stereo::allene::supported(
+                &parsed.graph,
+                id,
+                meta.chiral_tag,
+                meta.chiral_permutation,
+            )
+        {
+            dropped.push(Dropped::Allene(input_atom(
+                at(&parsed.graph.atoms, id)?,
+                *at(positions, id)?,
+            )?));
+            meta.chiral_tag = 0;
+            meta.chiral_permutation = Some(0);
+        }
+    }
+    Ok(())
 }
 
 /// Keep stated E/Z under wU/wD on terminal H/C bonds to isolated C=C/C=N
@@ -598,16 +855,21 @@ fn keep_stated_alkene_directions(parsed: &mut Parsed, stated: &[(usize, Directio
 /// Read default SMILES/CXSMILES chemistry, retaining input conformers and name.
 /// Drawing layout and the application's editable-chemistry checks follow this.
 pub fn read(text: &str) -> Result<Imported> {
-    read_with(text, true)
+    read_with(text, true, false)
 }
 
 /// Read as RDKit does, letting wU/wD replace the E/Z direction on their bond.
 /// Reference comparisons use this reading where `read` keeps stated E/Z (#1042).
 pub fn read_dropping_flagged_ez(text: &str) -> Result<Imported> {
-    read_with(text, false)
+    read_with(text, false, false)
 }
 
-fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
+/// Import the representable structure and record discarded features for notices.
+pub fn read_partial(text: &str) -> Result<Imported> {
+    read_with(text, true, true)
+}
+
+fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
@@ -623,7 +885,11 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
     } else {
         (text, "")
     };
-    let mut parsed = parse_inner(body)?;
+    let mut parsed = if partial {
+        super::parse_for_import(body)?
+    } else {
+        parse_inner(body)?
+    };
     // Record directions before H removal: a bond to a removed H still specifies
     // a terminal ligand's orientation, including H opposite an imine lone pair.
     let mut directed = vec![false; parsed.graph.atoms.len()];
@@ -667,10 +933,15 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
     } else {
         suffix
     };
-    if annotations.queries.iter().any(|&q| q) {
+    if !partial && annotations.queries.iter().any(|&q| q) {
         return Err(Error::Unsupported("query atom"));
     }
     annotations.numeric_props(&mut parsed)?;
+    let mut dropped = Vec::new();
+    if partial {
+        let positions = (0..parsed.graph.atoms.len()).collect::<Vec<_>>();
+        partial_graph(&mut parsed, &mut annotations, &positions, &mut dropped)?;
+    }
     prepare::validate_allenes(&parsed)?;
     let conf = annotations.conformer();
     if let Some(conf) = conf {
@@ -704,6 +975,20 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
     }
     annotations.atropisomers(&mut parsed)?;
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
+    if partial
+        && prepared.state.metadata.groups.is_empty()
+        && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)?
+    {
+        prepared.state = stereo::perception::perceive(
+            &prepared.state,
+            stereo::perception::Options {
+                clean: true,
+                force: true,
+                flag_possible: true,
+            },
+        )
+        .map_err(Error::Stereo)?;
+    }
     let mut dropped_cumulene_ez = false;
     for chain in stereo::stereogenic_odd_cumulenes(&prepared.state).map_err(Error::Stereo)? {
         let [(a, _), (b, _)] = chain.ends;
@@ -742,6 +1027,7 @@ fn read_with(text: &str, keep_stated_ez: bool) -> Result<Imported> {
         })
         .collect::<Result<Vec<_>>>()?;
     Ok(Imported {
+        dropped,
         dropped_cumulene_ez,
         relative: !annotations.relative.is_empty(),
         relative_group,

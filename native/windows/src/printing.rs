@@ -442,11 +442,7 @@ pub(super) fn render(data: &[u8], dpi: f32) -> Result<Vec<u8>> {
 }
 
 pub(super) fn metafile(data: &[u8]) -> Result<Vec<u8>> {
-    record_metafile(data, false)
-}
-
-pub(super) fn file_metafile(data: &[u8]) -> Result<Vec<u8>> {
-    record_metafile(data, true)
+    record_metafile(data)
 }
 
 /// GDI+ plays both ordinary EMF and EMF+ into a bounded transparent preview.
@@ -518,9 +514,9 @@ pub(super) fn import_metafile(bytes: &[u8]) -> Result<Vec<u8>> {
 
 // One recording unit per 0.01 mm bounds Office's intrinsic-size rounding to
 // 0.02 mm, independently of the desktop DPI.
-const FILE_METAFILE_DPI: f32 = 2540.;
+const METAFILE_DPI: f32 = 2540.;
 
-fn record_metafile(data: &[u8], file: bool) -> Result<Vec<u8>> {
+fn record_metafile(data: &[u8]) -> Result<Vec<u8>> {
     let snapshot = parse(data)?;
     let _runtime = GdiPlus::new()?;
     let mut metafile = Metafile::default();
@@ -532,9 +528,9 @@ fn record_metafile(data: &[u8], file: bool) -> Result<Vec<u8>> {
         if reference.is_invalid() {
             return Err(windows::core::Error::from_win32().into());
         }
-        // EMF playback uses the reference device's physical dimensions, which
-        // need not match its logical desktop DPI (especially on remote displays).
-        // Record physical points explicitly so Office preserves publication size.
+        // Use a fixed resolution: the OLE server and editor can see different,
+        // possibly DPI-virtualized metrics. Office sizes EMF+ by frame pixels /
+        // LogicalDpi.
         let reference_dpi_x = GetDeviceCaps(reference, HORZRES) as f32 * 25.4
             / GetDeviceCaps(reference, HORZSIZE) as f32;
         let reference_dpi_y = GetDeviceCaps(reference, VERTRES) as f32 * 25.4
@@ -548,20 +544,13 @@ fn record_metafile(data: &[u8], file: bool) -> Result<Vec<u8>> {
                 "Invalid Office preview reference resolution"
             ));
         }
-        let (dpi_x, dpi_y) = if file {
-            (FILE_METAFILE_DPI, FILE_METAFILE_DPI)
-        } else {
-            (reference_dpi_x, reference_dpi_y)
-        };
         // The recorder still uses a real DC. Give it a frame covering our
         // chosen coordinates, then describe the virtual device in the file.
         let frame = gp::RectF {
             X: 0.,
             Y: 0.,
-            Width: snapshot.width_pt * 2540. / 72.
-                * if file { dpi_x / reference_dpi_x } else { 1. },
-            Height: snapshot.height_pt * 2540. / 72.
-                * if file { dpi_y / reference_dpi_y } else { 1. },
+            Width: snapshot.width_pt * 2540. / 72. * (METAFILE_DPI / reference_dpi_x),
+            Height: snapshot.height_pt * 2540. / 72. * (METAFILE_DPI / reference_dpi_y),
         };
         let status = gp::GdipRecordMetafile(
             reference,
@@ -582,8 +571,8 @@ fn record_metafile(data: &[u8], file: bool) -> Result<Vec<u8>> {
             check(gp::GdipSetPageUnit(graphics.0, gp::UnitPixel))?;
             check(gp::GdipScaleWorldTransform(
                 graphics.0,
-                dpi_x / 72.,
-                dpi_y / 72.,
+                METAFILE_DPI / 72.,
+                METAFILE_DPI / 72.,
                 gp::MatrixOrderPrepend,
             ))?;
             draw(&graphics, &snapshot, 0)?;
@@ -601,14 +590,12 @@ fn record_metafile(data: &[u8], file: bool) -> Result<Vec<u8>> {
         if copied != size {
             return Err(anyhow::anyhow!("Incomplete Office metafile"));
         }
-        if file {
-            set_file_metafile_resolution(&mut bytes, snapshot.width_pt, snapshot.height_pt)?;
-        }
+        set_metafile_resolution(&mut bytes, snapshot.width_pt, snapshot.height_pt)?;
         Ok(bytes)
     }
 }
 
-fn set_file_metafile_resolution(bytes: &mut [u8], width_pt: f32, height_pt: f32) -> Result<()> {
+fn set_metafile_resolution(bytes: &mut [u8], width_pt: f32, height_pt: f32) -> Result<()> {
     fn read(bytes: &[u8], offset: usize) -> Result<u32> {
         Ok(u32::from_le_bytes(
             bytes
@@ -654,8 +641,8 @@ fn set_file_metafile_resolution(bytes: &mut [u8], width_pt: f32, height_pt: f32)
             write(bytes, offset, 254000)?;
         }
     }
-    write(bytes, header_size + 36, FILE_METAFILE_DPI as u32)?;
-    write(bytes, header_size + 40, FILE_METAFILE_DPI as u32)?;
+    write(bytes, header_size + 36, METAFILE_DPI as u32)?;
+    write(bytes, header_size + 40, METAFILE_DPI as u32)?;
     Ok(())
 }
 

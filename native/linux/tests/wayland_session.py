@@ -572,9 +572,11 @@ class Session:
         assert graph(pasted)["atoms"] == ["C", "C", "C", "C", "O", "O"]
         self.app_key("ctrl+shift+c", "clipboard_written")
         picture = self.clipboard()
-        native_picture = json.loads(Path(picture[NATIVE]["file"]).read_text())
-        assert not native_picture["atoms"] and native_picture["graphics"]
+        # Copy Image carries the editable drawing, also inside its PNG (#462).
+        native_drawing = json.loads(Path(picture[NATIVE]["file"]).read_text())
+        assert native_drawing["atoms"]
         assert picture["image/png"]["dimensions"][0] > 0
+        assert b"dev.reshiki.drawing" in Path(picture["image/png"]["file"]).read_bytes()
 
         self.app_key("ctrl+a", "selected")
         self.app_key("ctrl+c", "clipboard_written")

@@ -119,6 +119,7 @@ fn routing_document() -> Document {
         kind: "forward".into(),
         control: Some(World::new(305., 160.)),
         cubic: None,
+        nodes: Vec::new(),
         style: None,
     });
     for (layer, origin, axis_y) in [
@@ -160,6 +161,7 @@ fn paper_document() -> (Document, Vec<u64>, [u64; 4]) {
         kind: "forward".into(),
         control: None,
         cubic: None,
+        nodes: Vec::new(),
         style: None,
     });
     doc.annotations.push(Annotation {
@@ -1047,6 +1049,8 @@ async fn paper_layers_match_captured_baseline() {
                 state.gesture = Some(Gesture::ArrowHandle {
                     id: arrow,
                     index: 1,
+                    free: false,
+                    grab: World::default(),
                 });
                 Some(at(430., 320.))
             }

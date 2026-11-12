@@ -61,7 +61,8 @@ for name, smiles, width in [
     ("aspirin", "CC(=O)Oc1ccccc1C(=O)O", 384),
 ]:
     molecule = reshiki.Molecule.from_smiles(smiles)
-    molecule.save(output / f"{name}.svg")
+    molecule.save(output / f"{name}.svg", text="live")
+    molecule.save(output / f"{name}-outlined.svg")
     molecule.save(output / f"{name}.png", width=width)
 """,
             str(tmp_path),
@@ -77,10 +78,12 @@ for name, smiles, width in [
         assert dark_pixels(oxygen) > 0
 
     svg = ET.parse(tmp_path / "aspirin.svg").getroot()
+    outlined_svg = ET.parse(tmp_path / "aspirin-outlined.svg").getroot()
+    assert not list(outlined_svg.iter("{http://www.w3.org/2000/svg}text"))
+    assert list(outlined_svg.iter("{http://www.w3.org/2000/svg}path"))
     labels = [node for node in svg.iter("{http://www.w3.org/2000/svg}text") if node.text == "O"]
     assert len(labels) == 4
-    if system_fonts == "generic-sans":
-        assert {node.attrib["font-family"] for node in labels} == {"ReShiki Font Export Fixture"}
+    assert {node.attrib["font-family"] for node in labels} == {"Arial"}
 
     left, top, width, _ = map(float, svg.attrib["viewBox"].split())
     with Image.open(tmp_path / "aspirin.png") as aspirin:

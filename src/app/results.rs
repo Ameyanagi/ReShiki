@@ -427,6 +427,7 @@ fn completion(message: &Message) -> Option<Completion> {
             match action {
                 Action::WorkerDone(..) => Some(Completion::Optimization),
                 Action::Begin
+                | Action::Mode(..)
                 | Action::Field(..)
                 | Action::Start
                 | Action::Stop

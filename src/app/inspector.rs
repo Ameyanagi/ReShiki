@@ -1962,6 +1962,27 @@ impl App {
             ),
         ]
         .spacing(9);
+        if matches!(
+            figure,
+            FigureFormat::Png | FigureFormat::Svg | FigureFormat::SvgOffice | FigureFormat::Pdf
+        ) {
+            figures = figures.push(
+                column![
+                    checkbox(self.appearance.export_editable_drawing)
+                        .label("Include editable drawing")
+                        .on_toggle(|enabled| Message::View(
+                            super::view_settings::Action::ExportEditableDrawing(enabled)
+                        ))
+                        .text_size(12),
+                    text(
+                        "ReShiki can reopen the file as this drawing. Anyone with the file can too."
+                    )
+                    .size(11)
+                    .style(muted_text),
+                ]
+                .spacing(4),
+            );
+        }
         if reshiki::clipboard::available() {
             figures = figures
                 .push(

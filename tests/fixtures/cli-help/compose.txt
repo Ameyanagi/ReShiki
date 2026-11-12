@@ -1,6 +1,6 @@
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
 Usage: reshiki --cli compose (PROPOSAL | -) [--to FORMAT] [-o OUTPUT|-] [--pages]
-                             [--force] [--receipt]
+                             [--svg-text MODE] [--force] [--receipt]
 
 Lays out a Proposal as ReShiki's assistant composes its drafts, in the
 default style, then writes the drawing as convert does.
@@ -17,6 +17,9 @@ Options:
                goes to stdout and needs --to; pdf and png are never written
                to a terminal.
   --pages      Export every publication page as one PDF (pdf only).
+  --svg-text MODE
+               Draw svg text as outlines (outline, the default), the same
+               in every viewer, or keep it as text (live).
   --force      Replace OUTPUT if it exists; otherwise that is an error.
   --receipt    With -o OUTPUT, print one receipt JSON line to stdout, as
                convert does.

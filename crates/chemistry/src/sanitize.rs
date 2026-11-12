@@ -1,4 +1,4 @@
-//! Default graph sanitization order from RDKit MolOps.cpp (2026.03.6).
+//! Default graph sanitization order from RDKit MolOps.cpp (2026.09.1).
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 //!
@@ -90,17 +90,24 @@ pub fn sanitize(
     let graph = at_stage(Cleanup, normalize::functional_groups(graph))?;
     let graph = at_stage(Metals, normalize::organometallics(&graph, metadata, None))?;
     let cache = at_stage(Properties, graph.valences())?;
-    let rings = rings::perceive(&graph, rings::Options::default())
-        .map_err(|error| Error {
-            stage: Rings,
-            cause: Cause::Rings(error),
-        })?
-        .atoms;
+    let perceived = rings::perceive(&graph, rings::Options::default()).map_err(|error| Error {
+        stage: Rings,
+        cause: Cause::Rings(error),
+    })?;
+    // RDKit #9427 kekulizes before symmetrization; #9208 normalizes the SSSR.
+    let mut basis = perceived
+        .atoms
+        .iter()
+        .take(perceived.basis_count)
+        .cloned()
+        .collect::<Vec<_>>();
+    basis.iter_mut().for_each(|ring| rings::normalize(ring));
+    basis.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
     let mut attempt = at_stage(
         Kekulize,
         kekulize::if_possible_cached(
             &graph,
-            &rings,
+            &basis,
             directions,
             kekulize::Options::default(),
             Some(&cache),
@@ -116,7 +123,7 @@ pub fn sanitize(
             Kekulize,
             ranking::rank_cached(
                 &attempt.assignment.graph,
-                &rings,
+                &basis,
                 metadata,
                 ranking::Options {
                     fragment: true,
@@ -129,7 +136,7 @@ pub fn sanitize(
             Kekulize,
             kekulize::assign_cached(
                 &attempt.assignment.graph,
-                &rings,
+                &basis,
                 &attempt.assignment.directions,
                 kekulize::Options {
                     ranks: Some(&ranks),
@@ -139,6 +146,7 @@ pub fn sanitize(
             ),
         )?;
     }
+    let rings = perceived.atoms;
     let mut graph = attempt.assignment.graph;
     let cache = attempt.cache;
     let radicals = at_stage(Radicals, graph.assign_radicals())?;

@@ -184,6 +184,7 @@ async fn figures_are_the_publication_export() {
             doc.clone(),
             format,
             false,
+            false,
             Budgets::default().export_png_pixels,
         )
         .await

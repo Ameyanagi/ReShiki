@@ -95,6 +95,45 @@ fn mechanism_attachment_92_target_moves_only_one_endpoint_and_adjacent_control()
     assert_eq!(d, once);
 }
 #[test]
+fn attached_multinode_arrow_keeps_interior_nodes_when_targets_move() {
+    let (mut d, a, b, _) = fixture();
+    d.arrows[0].nodes = vec![
+        crate::document::ArrowNode {
+            point: Point::new(30., -50.),
+            controls: [Point::new(15., -55.), Point::new(45., -45.)],
+            kind: crate::graphics::PathNodeType::Smooth,
+        },
+        crate::document::ArrowNode {
+            point: Point::new(70., -30.),
+            controls: [Point::new(60., -40.), Point::new(80., -20.)],
+            kind: crate::graphics::PathNodeType::Corner,
+        },
+    ];
+    for (atom, index, dx, dy) in [(a, 0, 12., -8.), (b, 1, -7., 18.)] {
+        let before = d.arrows[0].clone();
+        let target = d.atom_mut(atom).unwrap();
+        target.position = target.position.offset(dx, dy);
+        reconcile(&mut d);
+        let arrow = &d.arrows[0];
+        let old_endpoints = [before.start, before.end];
+        let endpoints = [arrow.start, arrow.end];
+        near(endpoints[index], old_endpoints[index].offset(dx, dy));
+        near(
+            arrow.cubic.unwrap()[index],
+            before.cubic.unwrap()[index].offset(dx, dy),
+        );
+        assert_eq!(endpoints[1 - index], old_endpoints[1 - index]);
+        assert_eq!(
+            arrow.cubic.unwrap()[1 - index],
+            before.cubic.unwrap()[1 - index]
+        );
+        assert_eq!(arrow.nodes, before.nodes);
+        let once = d.clone();
+        reconcile(&mut d);
+        assert_eq!(d, once);
+    }
+}
+#[test]
 fn mechanism_attachment_92_derived_target_resolves_after_final_member_transform() {
     let mut d = Document::default();
     let a = d.add_atom("C", Point::new(0., 0.));
