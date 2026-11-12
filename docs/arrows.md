@@ -50,6 +50,33 @@ Each drag is one Undo step; Escape cancels it. In **Properties**, **Reverse**
 changes the direction, **Flip bend** mirrors the curve and **Straighten**
 removes the bend. **Reset arrow style** restores the preset's look.
 
+### Add nodes to an arrow
+
+An arrow can follow a path with nodes in the middle, such as an S-shaped
+mechanism arrow from a lone pair to a distant carbonyl.
+
+1. Select one arrow and choose **Edit points** in **Properties** (or in the
+   canvas menu).
+2. Click the arrow's shaft to add a node there. The curve keeps its shape, and
+   the new node is selected.
+3. Drag a node to move it with its direction controls, or drag a square
+   control to change a direction. Nodes are **Corner** (diamond),
+   **Smooth** (circle) or **Symmetric** (circle with a dot), as on pen paths.
+   Double-click a node to cycle its type, or use **Corner**, **Smooth** and
+   **Symmetric** in the context row. Option/Alt-drag a direction control to
+   make its node a Corner.
+4. **Delete node** in **Properties** removes the selected node. Choose
+   **Done** in the context row, or press Escape, to finish.
+
+Each added node, drag, type change and deletion is one Undo step. The ends,
+arrowheads, kind and style stay the same, and attached ends stay attached when
+the molecules move: only the first and last segments follow them. Like a bend,
+a node releases condition text as ordinary text. A no-reaction mark and the
+shorter shaft of an unequal equilibrium are placed by length along the path. **Smooth** aligns gentle joints and removes redundant nodes;
+**Symmetrise** mirrors the arrow across the perpendicular bisector of its ends.
+**Straighten** removes every node, and **Flip bend** mirrors the nodes too.
+Bent / elbow arrows keep their single corner and do not take nodes.
+
 ### Optional target attachments
 
 1. Choose **Curved / electron pair** or **Single electron**. **Attach ends to
@@ -121,8 +148,10 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
 - **Check structure** adds informational hints for a resonance or equilibrium arrow with one complete molecule at each end: a resonance arrow between structures whose atoms or H differ suggests ⇌ for tautomers, and an equilibrium arrow between structures that differ only in π bonds or charge placement suggests ↔. Abbreviations, partial structures and multi-molecule sides are skipped.
 - Only `.rsk` files keep the links between an arrow and its targets. Other
   formats keep the arrow's shape.
-- Multi-segment arrow splines, circular or elliptical arcs, broad hollow arrow
-  bodies and automatic routing are not available.
+- Circular or elliptical arcs, broad hollow arrow bodies and automatic routing
+  are not available.
+- A multi-segment arrowed curve read from CDXML/CDX opens as a pen path with
+  arrowheads, not as an arrow.
 - Some arrow styles cannot be exported to CDXML and give an export error; see
   [CDXML exchange](#cdxml-exchange).
 - Only straight arrows without target attachments carry condition text.
@@ -191,7 +220,9 @@ and stable lone-pair IDs. An arrow keeps its endpoints, either an optional
 quadratic control or two independent cubic controls, and appearance. Existing
 free quadratic curves keep their exact saved and rendered shape until a
 direction control is edited. Older ReShiki builds report that an update is
-required instead of discarding the links. Legacy curved arrows materialize
+required instead of discarding the links. Interior arrow nodes are stored in
+format version 35 as a list of points, controls and node types; arrows without
+nodes save exactly as before, so their files keep their earlier version. Legacy curved arrows materialize
 their implicit bend before reflection, copying or transformation. Translation,
 rotation, resizing, grouping and template placement carry the controls with the
 endpoints. Stroke widths and head dimensions keep their publication point sizes
@@ -209,8 +240,9 @@ opening in the shaft instead of drawing through the hollow center.
 Supported exchange includes straight full/half-headed arrows, straight
 retrosynthesis arrows with editable heads and style, head shape/dimensions/notches,
 color, solid/dashed strokes, resonance, dipole/no-go marks, equal-length
-equilibrium with half heads, and single cubic or quadratic Bézier arrows with
-solid heads. Cubic arrows keep both independently editable
+equilibrium with half heads, single cubic or quadratic Bézier arrows with
+solid heads, and arrows with interior nodes, which are written as one
+multi-segment ChemDraw curve with the same heads. Cubic arrows keep both independently editable
 controls; quadratic arrows use their exact equivalent cubic control points.
 Mixed-object groups keep supported arrow children.
 
@@ -218,8 +250,8 @@ SVG/PDF/PNG and supported CDXML/CDX export the resolved attached curve and
 report that editing attachment links are omitted. `.rsk` files keep those links.
 This drawing metadata does not change molecular connectivity or electron counts.
 
-The importer rejects circular/elliptical arrow arcs, multi-segment arrow
-splines, unknown head/stroke types and unsupported decoration. The exporter
+The importer reads multi-segment arrowed splines as pen paths with arrowheads
+and rejects circular/elliptical arrow arcs, unknown head/stroke types and unsupported decoration. The exporter
 rejects dotted arrows, curved retrosynthesis arrows, bent/unequal equilibrium,
 equilibrium with full/absent heads, dipoles with a tail head, and curved arrows
 with hollow/angled heads or dipole/no-go decoration. Those combinations remain

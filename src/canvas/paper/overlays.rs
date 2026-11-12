@@ -10,7 +10,7 @@ use crate::canvas::{
 };
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
-use reshiki::arrows::ArrowHandle;
+use reshiki::arrows::{ArrowHandle, NodePart};
 use reshiki::document::{Atom, Bond, Document};
 use reshiki::graphics::{Graphic, GraphicKind, PathCommand, PathHandle, PathNodeType};
 use reshiki::scientific::{AtomMark, MarkKind};
@@ -340,7 +340,16 @@ impl MoleculeCanvas<'_> {
                         );
                     }
                 }
+                for node in &a.nodes {
+                    let anchor = self.camera.screen(node.point, bounds);
+                    for control in node.controls {
+                        draw_direction_line(frame, anchor, self.camera.screen(control, bounds));
+                    }
+                }
                 for (handle, p) in a.handles().typed() {
+                    if handle == ArrowHandle::Bend && !a.has_bend_handle() {
+                        continue;
+                    }
                     let p = self.camera.screen(p, bounds);
                     let shape = match handle {
                         ArrowHandle::Departure | ArrowHandle::Arrival => HandleShape::Square,
@@ -348,6 +357,26 @@ impl MoleculeCanvas<'_> {
                         ArrowHandle::Start | ArrowHandle::End => HandleShape::Circle(4.),
                     };
                     draw_handle(frame, p, shape, false);
+                }
+                // Interior nodes look like pen-path nodes of the same type.
+                for (index, p, part) in a.node_handles() {
+                    let point = self.camera.screen(p, bounds);
+                    let kind = (part == NodePart::Node)
+                        .then(|| a.node_type(index))
+                        .flatten();
+                    let shape = match (part, kind) {
+                        (NodePart::Node, Some(PathNodeType::Corner)) => HandleShape::Diamond,
+                        (NodePart::Node, _) => HandleShape::Circle(4.5),
+                        _ => HandleShape::Square,
+                    };
+                    let chosen = self.graphics.point == Some((a.id, index));
+                    draw_handle(frame, point, shape, chosen);
+                    if kind == Some(PathNodeType::Symmetric) {
+                        frame.fill(
+                            &Path::circle(point, 1.5),
+                            if chosen { Color::WHITE } else { ACCENT },
+                        );
+                    }
                 }
             }
         }

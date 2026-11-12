@@ -404,7 +404,7 @@ fn composed_stretch_tool_owns_a_coincident_cubic_handle_and_select_keeps_handle_
             assert!(matches!(state.gesture, Some(Gesture::StretchBond { .. })));
         } else {
             assert!(
-                matches!(state.gesture, Some(Gesture::ArrowHandle { id, index: 3 }) if id == arrow_id)
+                matches!(state.gesture, Some(Gesture::ArrowHandle { id, index: 3, .. }) if id == arrow_id)
             );
         }
     }
