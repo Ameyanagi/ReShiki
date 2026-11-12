@@ -1,6 +1,7 @@
 """#1006: compare distinct CX groups with an oracle free of RDKit's u32 key wrap."""
 
 import re
+from functools import cache
 
 GROUP = re.compile(r"(a|[o&][0-9]*):([0-9]+(?:,[0-9]+)*)")
 QUERY = re.compile(
@@ -60,6 +61,35 @@ def renumber(text):
     return match[1] + rewritten + match[3], {
         (kind, new): old for (kind, old), new in replacements.items()
     }
+
+
+@cache
+def native_keys_wrap():
+    """Whether this RDKit merges distinct groups whose u32 keys wrap together.
+
+    RDKit 2026.09.1 reads group ids with `res = std::atoi(num.c_str());` in
+    `read_int` (Code/GraphMol/SmilesParse/CXSmilesOps.cpp:127, rdkit#9273;
+    2026.03.6 used `boost::lexical_cast<unsigned int>`). Out of int range, glibc
+    and macOS truncate, so `o2147483649` stays 2147483649 as an unsigned id and
+    `10 * group_id + type` (line 1395) wraps onto o1's key. The MSVC runtime
+    saturates at INT_MAX: on Windows x64 every larger id reads as 2147483647 and
+    never collides, so there is nothing for the renumbering to change.
+    """
+    from rdkit import Chem
+
+    mol = Chem.MolFromSmiles("F[C@H](Cl)[C@@H](Br)I |o1:1,o2147483649:3|")
+    return len(mol.GetStereoGroups()) == 1
+
+
+def unwrapped_collision(text):
+    """A wrapping collision, in the text or its SMARTSQ data, that this RDKit reads unwrapped.
+
+    Expected difference, RDKit 2026.09.1 on Windows x64 only (see native_keys_wrap):
+    the case is compared without renumbering and counted.
+    """
+    return not native_keys_wrap() and any(
+        renumber(field) for field in (text, *(match[1] for match in QUERY.finditer(text)))
+    )
 
 
 def query_renumbering(text, native_success, read, rejection):

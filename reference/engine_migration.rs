@@ -1029,10 +1029,12 @@ async fn dense_ring_pruning_matches_complete_reference_responses() -> TestResult
             .map_err(anyhow::Error::msg)?;
         // RDKit 2026.09 takes a 21-ring SSSR basis from RingDecomposerLib
         // (rdkit#9105) and symmetrizes it to 34 rings; ReShiki keeps the
-        // 20-ring Figueras basis and its 32 rings. The rest must match.
+        // 20-ring Figueras basis, which symmetrizes to 33 rings now that its
+        // candidates are ranked with a stable sort (32 with the old libc++
+        // and libstdc++ tie order, 33 with MSVC's). The rest must match.
         if let Some(analysis) = &mut expected.analysis {
             assert_eq!(analysis.rings, 34);
-            analysis.rings = 32;
+            analysis.rings = 33;
         }
         assert_response_matches(
             local.execute(request).await.map_err(anyhow::Error::msg)?,
@@ -1080,7 +1082,7 @@ async fn dense_ring_pruning_matches_complete_reference_responses() -> TestResult
     // The same ring graph as above, so the same basis difference.
     if let Some(analysis) = &mut expected.analysis {
         assert_eq!(analysis.rings, 34);
-        analysis.rings = 32;
+        analysis.rings = 33;
     }
     assert_import_response_matches(
         local.execute(request).await.map_err(anyhow::Error::msg)?,

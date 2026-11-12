@@ -20,7 +20,7 @@ if TYPE_CHECKING or __package__:
     from .molfile_import_reference import cases, read
     from .molfile_restrictions_reference import generic_restriction
     from .perception_reference import snapshot
-    from .support.cx_stereo_groups import query_renumbering
+    from .support.cx_stereo_groups import query_renumbering, unwrapped_collision
 else:
     from molfile_generic_reference import (
         drawing_snapshot,
@@ -30,7 +30,7 @@ else:
     from molfile_import_reference import cases, read
     from molfile_restrictions_reference import generic_restriction
     from perception_reference import snapshot
-    from support.cx_stereo_groups import query_renumbering
+    from support.cx_stereo_groups import query_renumbering, unwrapped_collision
 
 # ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
 Chem.SetUseLegacyRingFinding(True)
@@ -95,6 +95,7 @@ def emit(name, text):
                     read,
                     "Outside the existing editable chemistry contract",
                 ),
+                unwrapped=unwrapped_collision(text),
             )
         )
     )
