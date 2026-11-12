@@ -182,30 +182,52 @@ controls if the panel is hidden or showing another tab.
    macOS or **Ctrl+Shift+D** on Windows/Linux, or choose **3D optimize…**.
    A partial selection still includes its entire connected molecule. With no
    selection, the drawing must contain exactly one molecular component.
-2. Wait for the initial conformer. Three mutually exclusive buttons choose
+2. **Chemistry checks** chooses **Strict** (the default) or **Relaxed**.
+   Strict validates valences and drawn chemistry as before. When Strict
+   refuses a molecule that Relaxed accepts, such as a metal complex or a crown
+   ether bonded to K⁺, the preview opens with the Strict error and waits;
+   **Generate 3D** stays unavailable until you choose **Relaxed**. Relaxed
+   mode skips valence checks with partial sanitization, takes bond counts as
+   drawn, adds no hydrogens beyond those the drawing implies, treats **Dative**
+   bonds as coordination bonds, and admits metals, radicals, quadruple bonds
+   and 1.5 partial bonds. Molecules with metals use UFF; the MMFF buttons are
+   unavailable. A metal complex starts from the drawn coordinates, lifted
+   slightly out of the plane, instead of a random embedding. Drawn
+   stereochemistry is still enforced when the drawing passes the ordinary
+   chemistry preparation; otherwise it is listed as not enforced.
+   The panel shows **Relaxed: chemistry not validated**, the force field, each
+   skipped check and each solver approximation, for example the UFF atom type
+   and its ideal geometry for each metal, a neighbor count that differs from
+   that geometry, or contacts to K⁺ that UFF treats as short bonds. UFF matches
+   RDKit 2026.03.6; like RDKit, its square-planar angle term can bend trans
+   ligands (cisplatin), and the panel says so. Switching modes discards the
+   conformer and pins and generates again. Haptic and multi-centre bonds,
+   query atoms and hydrogen-bond interactions remain unsupported; a per-metal
+   geometry override is planned.
+3. Wait for the initial conformer. Three mutually exclusive buttons choose
    **MMFF94**, **MMFF94s**, or **UFF**; the selected button is checked and the
    default is **MMFF94s**. If generation fails,
    choose another field to regenerate, or use **Generate 3D** to retry the current
    field. Missing parameters
    produce an error; ReShiki does not silently change the chosen field.
-3. Use **Start relaxation** to enable live local relaxation. Drag an unpinned atom to move
+4. Use **Start relaxation** to enable live local relaxation. Drag an unpinned atom to move
    it while the rest of the molecule relaxes around the target. Dragging retains
    that atom's current displayed depth. **Stop relaxation** stops calculation and keeps the
    preview. You can move targets while stopped, then press **Start relaxation** to relax
    from the latest target. A converged live session shows **Live relaxation
    ready** and waits for another edit.
-4. **Shift-click** atoms to add or remove them from the selection, then choose
+5. **Shift-click** atoms to add or remove them from the selection, then choose
    **Pin selected**. Pins hold exact physical XYZ positions during relaxation.
    Use **Unpin** before dragging a pinned atom, or **Clear pins** to
    release them all. A partial selection made before opening the preview is
    pinned at its newly generated positions; selecting the whole molecule starts
    with no pins.
-5. Rotate with the **3D tilt** tool by dragging an atom or inside a ring, or use
+6. Rotate with the **3D tilt** tool by dragging an atom or inside a ring, or use
    the preview controls **↶**, **↷**, **Tilt up**, **Tilt down**, and **Roll**.
    Switch back to Select for atom dragging and Shift-click selection. Rotation
    changes the viewing projection while retaining physical pins and energy.
    **Show original** lets you compare the untouched drawing.
-6. Choose **Apply** to validate and commit the displayed projection as one Undo
+7. Choose **Apply** to validate and commit the displayed projection as one Undo
    step. **Cmd/Ctrl+Z** restores the original drawing; Redo restores the applied
    result. **Cancel** discards the entire preview. Escape cancels an active atom
    drag first; with no active canvas gesture, it also cancels the preview.

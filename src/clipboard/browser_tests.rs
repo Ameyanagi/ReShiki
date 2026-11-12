@@ -123,7 +123,7 @@ async fn image_only_copy_has_no_chemical_text_and_retains_picture_formats() {
             .collect::<Vec<_>>(),
         expected
     );
-    let picture: Document = serde_json::from_slice(
+    let drawing: Document = serde_json::from_slice(
         &representations
             .iter()
             .find(|r| r.kind == NATIVE)
@@ -132,8 +132,8 @@ async fn image_only_copy_has_no_chemical_text_and_retains_picture_formats() {
             .unwrap(),
     )
     .unwrap();
-    assert!(picture.atoms.is_empty());
-    assert_eq!(picture.graphics.len(), 1);
+    assert_eq!(drawing.all_ids(), rings(false).all_ids());
+    assert!(drawing.graphics.is_empty());
 }
 
 #[tokio::test]
@@ -165,7 +165,7 @@ async fn a_browser_copy_has_the_drawing_pictures_and_smiles_but_no_pdf_or_cdx() 
         items.iter().map(|(mime, _)| *mime).collect::<Vec<_>>(),
         ["text/html", "image/png", "image/svg+xml", "text/plain"]
     );
-    // Copy image: the picture alone, which pastes back as a picture.
+    // Copy Image also restores the drawing when pasted back into ReShiki.
     let (_, representations) = prepare_copy_for(Default::default(), rings(false), true, true)
         .await
         .unwrap();
@@ -198,6 +198,39 @@ async fn a_browser_copy_says_when_its_smiles_drops_an_axis() {
                 .collect::<Vec<_>>()
         );
     }
+}
+
+#[tokio::test]
+async fn a_browser_svg_only_pick_restores_the_editable_drawing() {
+    let source = rings(false);
+    let (_, representations) =
+        prepare_copy_for(LocalEngine::in_process(), source.clone(), false, true)
+            .await
+            .unwrap();
+    let svg = representations
+        .iter()
+        .find(|item| item.kind == "public.svg-image")
+        .unwrap()
+        .bytes()
+        .unwrap();
+    let items = vec![("image/svg+xml".into(), svg)];
+    let formats: Vec<_> = priority::READABLE
+        .iter()
+        .map(|kind| (*kind).into())
+        .collect();
+    let item = browser::pick(&formats, &items).unwrap();
+    assert_eq!(item.kind, "public.svg-image");
+    let restored = paste_representation(LocalEngine::in_process(), item, false)
+        .await
+        .unwrap();
+    assert!(restored.native);
+    assert_eq!(restored.document.all_ids(), source.all_ids());
+    assert_eq!(restored.warnings, [RESTORED_DRAWING_NOTICE]);
+    let pictures: Vec<_> = priority::PICTURES
+        .iter()
+        .map(|kind| (*kind).into())
+        .collect();
+    assert!(browser::pick(&pictures, &items).is_none());
 }
 
 #[test]

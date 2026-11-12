@@ -600,6 +600,7 @@ fn optimized(prepared: &Prepared, parents: Vec<usize>) -> Optimized {
         iterations: 1,
         force_field: ForceField::Mmff94s,
         diagnostics: vec![],
+        approximations: vec![],
     }
 }
 
@@ -758,3 +759,5 @@ fn links_outside_the_molecule_do_not_stop_a_model() {
         Err(Error::Unsupported(_))
     ));
 }
+
+mod relaxed;

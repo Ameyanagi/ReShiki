@@ -39,6 +39,7 @@ fn appearance_preferences_survive_file_reload_independently() {
                 two_decimal_weight: true,
                 name_typography: false,
                 write_unknown_stereo: true,
+                export_editable_drawing: true,
                 drawing_style_unit: Unit::Millimetres,
             };
             settings.save_to(&path).unwrap();
@@ -50,6 +51,7 @@ fn appearance_preferences_survive_file_reload_independently() {
             assert!(loaded.two_decimal_weight);
             assert!(!loaded.name_typography);
             assert!(loaded.write_unknown_stereo);
+            assert!(loaded.export_editable_drawing);
             assert_eq!(loaded.drawing_style_unit, Unit::Millimetres);
         }
     }
@@ -74,6 +76,24 @@ fn molecular_weight_precision_defaults_to_three_decimals_and_survives_reload() {
         assert_eq!(loaded.two_decimal_weight, two_decimal_weight);
         assert!(!loaded.smart_guides);
         assert_eq!(loaded.mode, Mode::Dark);
+    }
+}
+
+#[test]
+fn editable_png_export_defaults_on_and_survives_reload() {
+    assert!(Settings::default().export_editable_drawing);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    std::fs::write(&path, r#"{"mode":"dark","smart_guides":false}"#).unwrap();
+    let mut settings = Settings::load_from(&path);
+    assert!(settings.export_editable_drawing);
+    for editable in [false, true] {
+        settings.export_editable_drawing = editable;
+        settings.save_to(&path).unwrap();
+        let loaded = Settings::load_from(&path);
+        assert_eq!(loaded.export_editable_drawing, editable);
+        assert_eq!(loaded.mode, Mode::Dark);
+        assert!(!loaded.smart_guides);
     }
 }
 

@@ -227,19 +227,20 @@ async fn named_residue_find_preserves_native_and_exchange_chemistry() {
     let reopened = Document::from_json(&saved).unwrap();
     assert_eq!(reopened.abbreviations, collapsed.abbreviations);
     assert_eq!(reopened.file_version(), 34);
-    for format in ["smiles", "mol"] {
-        let mut outputs = Vec::new();
-        for document in [&expanded, &collapsed] {
-            let mut request = Request::molecule("export", document.clone());
-            request.format = Some(format.into());
-            outputs.push(engine.request(request).await.unwrap().output.unwrap());
-        }
-        assert_eq!(outputs[0], outputs[1], "{format}");
+    let mut outputs = Vec::new();
+    for document in [&expanded, &collapsed] {
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("smiles".into());
+        outputs.push(engine.request(request).await.unwrap().output.unwrap());
     }
-    for format in ["cdxml", "cdx"] {
+    assert_eq!(outputs[0], outputs[1], "smiles");
+    for format in ["cdxml", "cdx", "mol"] {
         let mut request = Request::molecule("export", collapsed.clone());
         request.format = Some(format.into());
         let output = engine.request(request).await.unwrap().output.unwrap();
+        if format == "mol" {
+            assert!(output.contains(" SUP"));
+        }
         let imported = engine
             .request(Request::import(format, &output))
             .await

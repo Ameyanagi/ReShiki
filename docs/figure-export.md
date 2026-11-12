@@ -14,6 +14,19 @@ File exports in all formats include the document’s canvas colors and backgroun
 
 Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Export pages as PDF** uses an explicitly configured publication layout; ordinary figure export crops to the artwork. See [publication pages](publication-pages.md).
 
+## Keep the drawing editable inside a picture
+
+A PNG, SVG or single-figure PDF from ReShiki can carry the ReShiki drawing inside the file. Paste that picture into ReShiki, drop the file on the window, or open it with **File → Open**, and you get the editable drawing back instead of a picture. **Import → Paste picture** still inserts raster images instead of restoring their drawing. SVG and PDF without a ReShiki drawing cannot be imported.
+
+- **Copy**, **Copy image** and **Copy as → PNG / SVG / PDF** put the drawing in their PNG, SVG and PDF pictures when it fits the limit.
+- **File export** adds it when **Include editable drawing** is on, below the export button. It is on by default, and ReShiki remembers your choice. **Export pages as PDF** never includes it, because page edges can clip parts of the drawing. **EMF for Office** does not carry it yet.
+
+The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so turn **Include editable drawing** off for figures you send to a journal or publish.
+
+A drawing larger than 2 MB compressed, usually one with large embedded photos, is not put in pictures. The status bar says so, and the file or clipboard picture is still written. Normal **Copy** keeps the editable drawing for ReShiki either way.
+
+Apps that re-encode a picture remove the drawing. These include most web apps and Office's **Compress Pictures**. A PNG whose drawing comes from a newer ReShiki, or is damaged, comes in as a picture with a note that says why. An SVG or PDF with an unreadable drawing is refused with the reason.
+
 ## EMF pictures for Office on Windows
 
 Choose **EMF for Office**, export the file, then insert it as a picture in Word, PowerPoint or Excel. Bonds, shapes and outlined text retain vector quality and the figure's physical publication size. File dimensions do not depend on the recording display; intrinsic picture bounds can round outward by up to 0.02 mm. Existing raster pictures remain raster pictures. EMF+ readers preserve their transparency; older readers using only the GDI fallback can make raster transparency opaque. The file contains the whole drawing, cropped to its artwork, including the canvas background. It does not contain an editable ReShiki document; keep the `.rsk` original separately.

@@ -20,27 +20,40 @@ fn version() -> &'static str {
 }
 
 #[pyfunction(signature = (data, format="auto"))]
-fn parse(py: Python<'_>, data: Vec<u8>, format: &str) -> PyResult<(Py<PyBytes>, String)> {
-    let (data, kind) = py
-        .detach(|| drawing::run(async { drawing::serialize(drawing::read(data, format).await?) }))
+fn parse(
+    py: Python<'_>,
+    data: Vec<u8>,
+    format: &str,
+) -> PyResult<(Py<PyBytes>, String, Vec<String>)> {
+    let (data, kind, warnings) = py
+        .detach(|| {
+            drawing::run(async {
+                let (document, warnings) = drawing::read(data, format).await?;
+                let (data, kind) = drawing::serialize(document)?;
+                Ok((data, kind, warnings))
+            })
+        })
         .map_err(PyValueError::new_err)?;
-    Ok((bytes(py, data), kind))
+    Ok((bytes(py, data), kind, warnings))
 }
 
 #[pyfunction]
-fn from_name(py: Python<'_>, name: &str) -> PyResult<(Py<PyBytes>, String)> {
-    let (data, kind) = py
+fn from_name(py: Python<'_>, name: &str) -> PyResult<(Py<PyBytes>, String, Vec<String>)> {
+    let (data, kind, warnings) = py
         .detach(|| drawing::run(drawing::from_name(name)))
         .map_err(PyValueError::new_err)?;
-    Ok((bytes(py, data), kind))
+    Ok((bytes(py, data), kind, warnings))
 }
 
 #[pyfunction]
-fn parse_online_smiles(py: Python<'_>, smiles: &str) -> PyResult<(Py<PyBytes>, String)> {
-    let (data, kind) = py
+fn parse_online_smiles(
+    py: Python<'_>,
+    smiles: &str,
+) -> PyResult<(Py<PyBytes>, String, Vec<String>)> {
+    let (data, kind, warnings) = py
         .detach(|| drawing::run(drawing::parse_online_smiles(smiles)))
         .map_err(PyValueError::new_err)?;
-    Ok((bytes(py, data), kind))
+    Ok((bytes(py, data), kind, warnings))
 }
 
 #[pyfunction]
@@ -97,7 +110,11 @@ fn properties(py: Python<'_>, data: Vec<u8>) -> PyResult<String> {
         .map_err(PyValueError::new_err)
 }
 
-type BatchOutput = (Vec<Option<Py<PyBytes>>>, Vec<(usize, String)>);
+type BatchOutput = (
+    Vec<Option<Py<PyBytes>>>,
+    Vec<(usize, String)>,
+    Vec<(usize, String)>,
+);
 
 #[pyfunction(signature = (items, format="png", style_json=None, width=None, height=None, dpi=None))]
 fn render_many(
@@ -115,26 +132,33 @@ fn render_many(
         items
             .into_par_iter()
             .map(|(data, input_format)| {
-                drawing::run(async {
-                    render::document(drawing::read(data, &input_format).await?, format, &options)
-                        .await
-                })
+                let mut warnings = Vec::new();
+                let result = drawing::run(async {
+                    let (document, messages) = drawing::read(data, &input_format).await?;
+                    warnings = messages;
+                    render::document(document, format, &options).await
+                });
+                (result, warnings)
             })
             .collect()
     });
     let mut failures = Vec::new();
+    let mut warnings = Vec::new();
     let values = results
         .into_iter()
         .enumerate()
-        .map(|(index, result)| match result {
-            Ok(data) => Some(bytes(py, data)),
-            Err(error) => {
-                failures.push((index, error));
-                None
+        .map(|(index, (result, messages))| {
+            warnings.extend(messages.into_iter().map(|message| (index, message)));
+            match result {
+                Ok(data) => Some(bytes(py, data)),
+                Err(error) => {
+                    failures.push((index, error));
+                    None
+                }
             }
         })
         .collect();
-    Ok((values, failures))
+    Ok((values, failures, warnings))
 }
 
 #[pymodule]

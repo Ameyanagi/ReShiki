@@ -5,6 +5,10 @@ use crate::{
     typography::TextStyle,
 };
 
+const CE40: &str = include_str!(
+    "../../../../tests/fixtures/coordination/integration-review/co-en3-six-contacts-ce40.rsk"
+);
+
 fn chelate(two_contacts: bool) -> Document {
     serde_json::from_str(if two_contacts {
         include_str!(
@@ -36,7 +40,17 @@ fn assert_contacts_painted(doc: &Document, expected: usize) {
     let ink: Vec<_> = doc
         .atoms
         .iter()
-        .flat_map(|a| atom_label_ink_boxes(a, doc))
+        .flat_map(|a| {
+            atom_label(a, doc).into_iter().flat_map(move |run| {
+                let text = match &run {
+                    Primitive::Text { text, .. } => text.clone(),
+                    _ => String::new(),
+                };
+                label_ink_boxes(&[run])
+                    .into_iter()
+                    .map(move |ink| (a.id, text.clone(), ink))
+            })
+        })
         .collect();
     let rendered = primitives(doc);
     let heads: Vec<_> = rendered
@@ -55,40 +69,55 @@ fn assert_contacts_painted(doc: &Document, expected: usize) {
         let uy = (metal.y - donor.y) / length;
         let along = |p: Point| (p.x - donor.x) * ux + (p.y - donor.y) * uy;
         let across = |p: Point| (p.x - donor.x) * uy - (p.y - donor.y) * ux;
+        let base =
+            |h: &[Point]| along(Point::new((h[1].x + h[2].x) * 0.5, (h[1].y + h[2].y) * 0.5));
         let head = heads
             .iter()
             .find(|h| {
-                let base = Point::new((h[1].x + h[2].x) * 0.5, (h[1].y + h[2].y) * 0.5);
                 across(h[0]).abs() < 0.002
-                    && along(h[0]) > along(base) + 9.9
+                    && along(h[0]) > base(h) + 3.9
                     && (0. ..length).contains(&along(h[0]))
             })
             .unwrap_or_else(|| panic!("Missing donor {} → metal {} head", bond.a, bond.b));
+        // The shaft ends inside its head, so no round cap pokes past the tip.
         let (start, end, width) = rendered
             .iter()
             .find_map(|p| match p {
                 Primitive::Line(start, end, width)
-                    if end.distance(head[0]) < 0.002 && across(*start).abs() < 0.002 =>
+                    if across(*start).abs() < 0.002
+                        && across(*end).abs() < 0.002
+                        && (base(head)..along(head[0])).contains(&along(*end)) =>
                 {
                     Some((*start, *end, *width))
                 }
                 _ => None,
             })
-            .expect("Arrowhead must have its actual incident shaft");
+            .unwrap_or_else(|| {
+                panic!(
+                    "{} → {} head lacks its incident shaft ending inside it",
+                    bond.a, bond.b
+                )
+            });
         assert!(
             along(start) < along(end),
             "Shaft still points donor → metal"
         );
+        assert!(
+            along(head[0]) - along(start) >= 2. * (along(head[0]) - base(head)),
+            "{} → {} visible span collapsed under its head",
+            bond.a,
+            bond.b
+        );
         for step in 0..=100 {
             let t = step as f32 / 100.;
             let p = start.offset((end.x - start.x) * t, (end.y - start.y) * t);
-            for &(lo, hi) in &ink {
+            for (owner, text, (lo, hi)) in &ink {
                 assert!(
                     p.x + width / 2. <= lo.x
                         || p.x - width / 2. >= hi.x
                         || p.y + width / 2. <= lo.y
                         || p.y - width / 2. >= hi.y,
-                    "{} → {} shaft crosses glyph ink at {p:?}",
+                    "{} → {} shaft crosses {text:?} of atom {owner} at {p:?}",
                     bond.a,
                     bond.b
                 );
@@ -121,17 +150,20 @@ fn actual_two_contact_chelate_keeps_charge_and_all_directed_arrows() {
 }
 
 #[test]
-#[ignore = "TODO #246: Linux renders only five native Co(en)3 arrows"]
 fn native_six_contact_chelate_keeps_charge_and_all_directed_arrows() {
     assert_native_contact_fixture(false);
 }
 
 fn assert_contact_font_and_transform_cases(two: bool) {
+    assert_font_and_transform_cases(|| chelate(two), if two { 2 } else { 6 });
+}
+
+fn assert_font_and_transform_cases(fixture: impl Fn() -> Document, contacts: usize) {
     for size in [8., 10., 18.] {
         for bold in [false, true] {
             for reflected in [false, true] {
                 for degrees in (0..360).step_by(30) {
-                    let mut doc = chelate(two);
+                    let mut doc = fixture();
                     for atom in &mut doc.atoms {
                         if reflected {
                             atom.position.x = -atom.position.x;
@@ -154,7 +186,7 @@ fn assert_contact_font_and_transform_cases(two: bool) {
                             ..Default::default()
                         });
                     }
-                    assert_contacts_painted(&doc, if two { 2 } else { 6 });
+                    assert_contacts_painted(&doc, contacts);
                     charge_run(&doc, 1, "3+");
                 }
             }
@@ -168,9 +200,15 @@ fn two_contact_charge_placement_survives_rotation_reflection_and_font_styles() {
 }
 
 #[test]
-#[ignore = "TODO #246: Linux renders only five native Co(en)3 arrows"]
 fn native_six_contact_charge_placement_survives_rotation_reflection_and_font_styles() {
     assert_contact_font_and_transform_cases(false);
+}
+
+/// Charge and H-count scripts never trim a contact, so no font metric can
+/// collapse a span under its head (the Linux five-of-six heads).
+#[test]
+fn six_contact_span_never_collapses() {
+    assert_font_and_transform_cases(|| serde_json::from_str(CE40).unwrap(), 6);
 }
 
 #[test]
@@ -557,7 +595,7 @@ fn core_covered_neighbors_still_reserve_their_visible_manual_marks() {
 }
 
 #[test]
-fn jointly_covered_endpoint_cores_keep_charge_clear_without_forcing_an_arrow() {
+fn jointly_covered_endpoint_cores_keep_charge_clear_and_still_paint_both_heads() {
     let mut doc = chelate(true);
     let donor = doc.atom_mut(2).unwrap();
     donor.position.x *= 0.5;
@@ -607,8 +645,8 @@ fn jointly_covered_endpoint_cores_keep_charge_clear_without_forcing_an_arrow() {
             .iter()
             .filter(|p| matches!(p, Primitive::Polygon(points) if points.len() == 3))
             .count(),
-        1,
-        "Only the other, adequately separated contact should paint"
+        2,
+        "A covered contact still paints its head"
     );
 }
 
@@ -636,10 +674,17 @@ fn implicit_carbon_charge_stays_and_a_metal_charge_clears_a_covered_contact() {
             // Clear of the donor label that covers the contact.
             assert_charge_clears_labels(&doc, center, "3+");
         }
-        assert!(
+        assert_eq!(
             primitives(&doc)
                 .iter()
-                .all(|p| { !matches!(p, Primitive::Polygon(points) if points.len() == 3) })
+                .filter(|p| matches!(p, Primitive::Polygon(points) if points.len() == 3))
+                .count(),
+            1,
+            "A covered contact still paints its head"
+        );
+        assert!(
+            bond_segment(&doc, &doc.bonds[0], None).is_some(),
+            "and its head can be picked"
         );
     }
 }
@@ -676,10 +721,7 @@ fn metal_with_donors(degrees: &[f32]) -> Document {
 /// shaft and label.
 #[test]
 fn metal_charge_prefers_a_right_hand_gap_between_contacts() {
-    let ce40: Document = serde_json::from_str(include_str!(
-        "../../../../tests/fixtures/coordination/integration-review/co-en3-six-contacts-ce40.rsk"
-    ))
-    .unwrap();
+    let ce40: Document = serde_json::from_str(CE40).unwrap();
     // The widest gap (180°) opens left; the 120° gap on the right still fits.
     let right = metal_with_donors(&[30., 90., 270.]);
     for (name, doc) in [

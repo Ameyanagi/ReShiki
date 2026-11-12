@@ -8,9 +8,13 @@ impl App {
         match request {
             // Start the front tab over, dropping text drafts and previews
             // that belong to the drawing it replaces.
-            Request::Load(doc) => {
+            Request::Load(doc, warnings) => {
                 self.reset_tab();
                 self.show_opened(*doc, None);
+                for warning in warnings {
+                    self.status.push_str(" · ");
+                    self.status.push_str(&warning);
+                }
             }
             // Include a text draft still being typed, as Save and Export do,
             // without ending the edit.

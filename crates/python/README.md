@@ -90,6 +90,12 @@ stereospecific structure preserves molecular identity. Ambiguous names and
 unsupported structures raise `ValueError`; network failures raise a connection
 or timeout error. Each network request has a 15-second timeout.
 
+An input that imports with a change or an assumption, such as CXSMILES that
+marks its stereo as relative, issues a `reshiki.StructureWarning` through
+Python's `warnings` module with the app's message; the import still returns
+the drawing. `render_many` collects these as `(index, message)` pairs in
+`.warnings` instead.
+
 PNG dimensions follow the drawing style's physical bond length and `dpi` by
 default. `width` and `height` optionally fit the image into a pixel box without
 changing its aspect ratio. `reshiki.styles()` lists the app's drawing presets;
