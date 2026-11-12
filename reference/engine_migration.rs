@@ -37,6 +37,8 @@ mod molecule_reading;
 mod molfile_restrictions;
 #[path = "support/nci_2808_template_layout.rs"]
 mod nci_2808_template_layout;
+#[path = "support/parity_atropisomers.rs"]
+mod parity_atropisomers;
 #[path = "support/partial_import.rs"]
 mod partial_import;
 #[path = "support/reaction_presentation.rs"]
@@ -349,6 +351,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
     let (mut tag_wins, mut kept_ez, mut template_layouts) = (Vec::new(), Vec::new(), Vec::new());
     let mut partial_imports = Vec::new();
+    let mut parity_axes = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let actual = local.execute(Request::import(format, &case.text)).await;
@@ -601,6 +604,18 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 partial_imports.push(case.name.clone());
                 None
             }
+            // RDKit-parity mode loses these axes; atropisomer_normal_mode
+            // checks that the normal import keeps them (#1117).
+            (Ok(_), None)
+                if format == "smiles"
+                    && parity_atropisomers::parity_loses_axis(
+                        &case.name,
+                        case.failure.as_deref(),
+                    ) =>
+            {
+                parity_axes.push(case.name.clone());
+                None
+            }
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
@@ -623,6 +638,10 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     eprintln!("{format} E/Z kept under wedge flags (#1042): {kept_ez:?}");
     eprintln!(
         "{format} layouts redrawn by the import template retry (#538, #1114): {template_layouts:?}"
+    );
+    eprintln!(
+        "{format} atropisomer axes only RDKit-parity mode loses (#1117): {} {parity_axes:?}",
+        parity_axes.len()
     );
     eprintln!(
         "{format} partial imports replacing frozen rejections (#1138): {} {partial_imports:?}",

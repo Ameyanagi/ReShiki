@@ -374,6 +374,11 @@ path = "reference/atropisomer.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
+name = "atropisomer_normal_mode"
+path = "reference/atropisomer_normal_mode.rs"
+required-features = ["rdkit-reference"]
+
+[[test]]
 name = "bond_geometry"
 path = "reference/bond_geometry.rs"
 required-features = ["rdkit-reference"]
