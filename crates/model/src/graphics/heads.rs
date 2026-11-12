@@ -1,8 +1,9 @@
-use super::{Graphic, GraphicStyle, PathCommand};
+use super::{Graphic, GraphicStyle, PathCommand, PathNodeType};
 use crate::{
     arrows::{ArrowStyle, Head, HeadShape, Preset},
-    document::Arrow,
+    document::{Arrow, ArrowNode},
     scientific::Part,
+    style::DEFAULT,
 };
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +62,59 @@ impl Graphic {
         let [PathCommand::Move(start), segments @ ..] = shaft.commands.as_slice() else {
             return vec![shaft];
         };
+        if segments.len() >= 2 {
+            let mut previous = *start;
+            let mut cubics = Vec::with_capacity(segments.len());
+            for command in segments {
+                let (a, b, end) = match *command {
+                    PathCommand::Line(end) => (
+                        previous.lerp(end, 1. / 3.),
+                        previous.lerp(end, 2. / 3.),
+                        end,
+                    ),
+                    PathCommand::Cubic(a, b, end) => (a, b, end),
+                    _ => return vec![shaft],
+                };
+                cubics.push([previous, a, b, end]);
+                previous = end;
+            }
+            if let Some((&[start, departure, _, first_end], &[last_start, _, arrival, end])) =
+                cubics.first().zip(cubics.last())
+            {
+                let style = heads.style(&self.style);
+                let length = DEFAULT.world(style.head_length_pt);
+                if style.head != Head::None && length > last_start.distance(end) * 0.4
+                    || style.tail != Head::None && length > start.distance(first_end) * 0.4
+                {
+                    // Short terminal segments share the whole path's head-size cap.
+                    let mut arrow = Arrow::new(self.id, start, end, Preset::Forward, style);
+                    arrow.cubic = Some([departure, arrival]);
+                    arrow.nodes = cubics
+                        .iter()
+                        .zip(cubics.iter().skip(1))
+                        .map(
+                            |(&[_, _, incoming, point], &[_, outgoing, _, _])| ArrowNode {
+                                point,
+                                controls: [incoming, outgoing],
+                                kind: PathNodeType::Corner,
+                            },
+                        )
+                        .collect();
+                    let mut paths = arrow.paths().into_iter();
+                    let Some(body) = paths.next() else {
+                        return vec![shaft];
+                    };
+                    shaft.commands = body.commands;
+                    let mut parts = vec![shaft];
+                    parts.extend(paths.map(|p| Part {
+                        commands: p.commands,
+                        style: p.style,
+                        filled: p.filled,
+                    }));
+                    return parts;
+                }
+            }
+        }
         let mut previous = *start;
         let mut commands = vec![PathCommand::Move(previous)];
         let mut extra = vec![];

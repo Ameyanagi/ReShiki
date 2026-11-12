@@ -144,6 +144,8 @@ pub(super) fn charge_validation(doc: &Document, work: &mut Work) -> Result<(), S
     for arrow in &doc.arrows {
         let ends = usize::from(arrow.start_anchor.is_some())
             .saturating_add(usize::from(arrow.end_anchor.is_some()));
+        // Arrow::validate checks all three points in each interior node.
+        cost = cost.saturating_add(arrow.nodes.len().saturating_mul(16));
         cost = cost.saturating_add(
             ends.saturating_mul(
                 atoms
@@ -318,10 +320,11 @@ impl Presentation {
             }
         }
         for a in arrows {
-            work.charge(1)?;
+            work.charge(a.nodes.len().saturating_add(1))?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::document::Arrow>())
-                .saturating_add(a.kind.len());
+                .saturating_add(a.kind.len())
+                .saturating_add(records::<crate::document::ArrowNode>(a.nodes.len()));
             // Cubic controls and attachment targets/offsets/directions are inline.
             attached_ends = attached_ends
                 .saturating_add(usize::from(a.start_anchor.is_some()))
@@ -697,8 +700,10 @@ impl Presentation {
                 ),
             );
         // Tile remap, inverse snapshot, inherited-atom/bond comparisons, then
-        // accumulated native validation. The cumulative result is charged at
-        // every append; no fictitious constant-time or per-product reset.
+        // accumulated native validation. Owned ArrowNode buffers also pay the
+        // relative/shift/equality scans and restoration in certify_translation.
+        // The cumulative result is charged at every append; no fictitious
+        // constant-time or per-product reset.
         work.charge(
             tile.saturating_mul(6)
                 .saturating_add(owned.saturating_mul(2))
@@ -845,11 +850,13 @@ pub(super) fn charge_ink_work(doc: &Document, work: &mut Work) -> Result<(), Str
                 .saturating_mul(32),
         )?;
     }
-    // Current arrow emission has <=2 shafts, fixed 16-step parallel curves
-    // and fixed 32-step insets; no adaptive flattening. Target/label lookups
-    // for the two native-state passes are included in the n*size reservation.
-    // Pay the bounded command generation/control-hull pass before prepare.
-    reserve(doc.arrows.len().saturating_mul(8192))?;
+    // Current arrow emission has <=2 shafts, bounded parallel-curve commands
+    // and 32/64-step insets per segment; no adaptive flattening. Target/label
+    // lookups for the two native-state passes are in the n*size reservation.
+    // Pay command generation/control-hull passes for every segment before prepare.
+    for arrow in &doc.arrows {
+        reserve(arrow.nodes.len().saturating_add(1).saturating_mul(8192))?;
+    }
     Ok(())
 }
 

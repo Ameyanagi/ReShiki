@@ -5,6 +5,8 @@ mod axial_extension;
 mod empty_heads;
 #[path = "support/longest_lived_mass.rs"]
 mod longest_lived_mass;
+#[path = "support/partial_import.rs"]
+mod partial_import;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
 #[path = "support/reference_response.rs"]
@@ -12,6 +14,8 @@ mod reference_response;
 #[path = "support/smiles_extensions.rs"]
 #[allow(dead_code)]
 mod smiles_extensions;
+#[path = "support/superatoms.rs"]
+mod superatoms;
 #[path = "support/unspecified_ez.rs"]
 mod unspecified_ez;
 use anyhow::Context;
@@ -82,6 +86,7 @@ struct Case {
     generic: Option<Value>,
     generic_extension: Option<Value>,
     unspecified_ez: Option<unspecified_ez::UnspecifiedEz>,
+    superatoms: Option<Vec<superatoms::Group>>,
 }
 
 fn compare(actual: Response, expected: Response) -> anyhow::Result<()> {
@@ -203,6 +208,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
     let (mut accepted, mut rejected, mut restricted) = (0, 0, 0);
     let mut failures = Vec::new();
     let mut dative_extensions = 0;
+    let mut partial_imports = 0;
     let mut categories = std::collections::BTreeMap::<String, usize>::new();
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut folded, mut generic, mut extensions) = (0, 0, 0);
@@ -393,6 +399,39 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 accepted += 1;
                 None
             }
+            (Ok(Outcome::Complete(a)), None)
+                if partial_import::replaces_failure(
+                    format,
+                    case.failure.as_deref(),
+                    &a.warnings,
+                ) =>
+            {
+                accepted += 1;
+                partial_imports += 1;
+                None
+            }
+            // Partial import draws an atom whose invalid `@AL` tag the strict
+            // reader refuses (#892) and the frozen worker silently drops.
+            (Ok(Outcome::Complete(a)), Some(_))
+                if format == "smiles"
+                    && reshiki::chemistry::smiles::read(&case.text).is_err_and(|error| {
+                        smiles_extensions::refused_allene(&case.text, &error.to_string())
+                    })
+                    && partial_import::drops_allene_tag(&a.warnings) =>
+            {
+                accepted += 1;
+                partial_imports += 1;
+                let text = partial_import::without_allene_tags(&case.text);
+                let config = Some(Config::new(helper.clone()));
+                match native_import::execute(Request::import(format, &text), config).await {
+                    Ok(Outcome::Complete(plain)) => {
+                        partial_import::matches_without_allene_tags(&a, &plain)
+                            .err()
+                            .map(|e| e.to_string())
+                    }
+                    other => Some(format!("The input without @AL tags gave {other:?}")),
+                }
+            }
             (Ok(Outcome::Complete(a)), None) if format == "cdxml" => {
                 // Drawing interchange now retains unresolved chemical input.
                 // Strict molecular preparation must still reject the same
@@ -421,9 +460,15 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 if let Some(open) = &case.unspecified_ez {
                     unspecified_ez::adapt(open, &a, &mut b);
                 }
+                let superatoms = case
+                    .superatoms
+                    .as_deref()
+                    .map_or(Ok(()), |groups| superatoms::adapt(groups, &a, &mut b));
                 folded += usize::from(case.display.is_some());
                 generic += usize::from(case.generic.is_some());
-                let expected = if format == "mol" {
+                let expected = if let Err(error) = superatoms {
+                    Err(error)
+                } else if format == "mol" {
                     reference_mol::mol_source_xyz(b, &case.text)
                 } else {
                     Ok(b)
@@ -486,6 +531,9 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
     );
     if format == "cdxml" {
         println!("Projected-dative response extensions: {dative_extensions}");
+    }
+    if partial_imports != 0 {
+        println!("Partial imports replacing original refusals (#1138): {partial_imports}");
     }
     if matches!(format, "mol" | "rxn") {
         eprintln!("Native {format} mismatch categories: {categories:?}");

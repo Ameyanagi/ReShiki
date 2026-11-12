@@ -232,12 +232,15 @@ fn normalized(mut value: Value) -> Value {
 }
 
 #[test]
-fn convert_svg_is_the_same_over_cli_mcp_and_in_process() {
+fn convert_live_svg_is_the_same_over_cli_mcp_and_in_process() {
     let dir = folder();
     let mut mcp = Mcp::start();
     let mut local = Local::new();
     for input in &INPUTS {
-        let cli = cli_ok(dir.path(), &with(input, &["convert", "--to", "svg"]));
+        let cli = cli_ok(
+            dir.path(),
+            &with(input, &["convert", "--to", "svg", "--svg-text", "live"]),
+        );
         assert!(cli.starts_with(b"<svg"), "{}", text(&cli));
         let document = mcp.import(input);
         assert_eq!(cli, mcp.svg(&document), "{}: CLI and MCP", input.format);
@@ -277,12 +280,15 @@ fn analyze_json_is_the_same_over_cli_and_mcp() {
 }
 
 #[test]
-fn render_is_the_same_over_cli_and_mcp() {
+fn render_png_and_live_svg_are_the_same_over_cli_and_mcp() {
     let dir = folder();
     let mut mcp = Mcp::start();
     for input in &INPUTS {
         let cli_png = cli_ok(dir.path(), &with(input, &["render", "--to", "png"]));
-        let cli_svg = cli_ok(dir.path(), &with(input, &["render", "--to", "svg"]));
+        let cli_svg = cli_ok(
+            dir.path(),
+            &with(input, &["render", "--to", "svg", "--svg-text", "live"]),
+        );
         let document = mcp.import(input);
         let render = |format: &str| {
             json!({
@@ -309,9 +315,19 @@ fn render_is_the_same_over_cli_and_mcp() {
 }
 
 #[test]
-fn compose_svg_is_the_same_over_cli_and_mcp() {
+fn compose_live_svg_is_the_same_over_cli_and_mcp() {
     let dir = folder();
-    let cli = cli_ok(dir.path(), &["compose", "proposal.json", "--to", "svg"]);
+    let cli = cli_ok(
+        dir.path(),
+        &[
+            "compose",
+            "proposal.json",
+            "--to",
+            "svg",
+            "--svg-text",
+            "live",
+        ],
+    );
     assert!(cli.starts_with(b"<svg"), "{}", text(&cli));
     let mut mcp = Mcp::start();
     let composed = mcp.ok(
@@ -343,7 +359,17 @@ fn native_figures_match_the_library() {
                 budget,
             ))
             .expect("a publication figure");
-        let output = cli(dir.path(), &["convert", "ethanol.reshiki", "--to", format]);
+        let output = cli(
+            dir.path(),
+            &[
+                "convert",
+                "ethanol.reshiki",
+                "--to",
+                format,
+                "--svg-text",
+                "live",
+            ],
+        );
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
         // A PNG's size is its one detail, which the CLI reports as a warning.
         let warnings: String = library

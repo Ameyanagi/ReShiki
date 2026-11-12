@@ -265,8 +265,11 @@ fn formaldehyde_oxygen_p_orbital_keeps_complete_lobes_and_a_readable_label() {
         .unwrap();
 
     let render = |svg: String| {
-        let mut options = resvg::usvg::Options::default();
-        options.fontdb_mut().load_system_fonts();
+        // The fonts the label halo was measured with, as exports use them.
+        let options = resvg::usvg::Options {
+            fontdb: crate::style::fontdb(),
+            ..Default::default()
+        };
         let tree = resvg::usvg::Tree::from_str(&svg, &options).unwrap();
         let scale = 8.;
         let mut pixmap = resvg::tiny_skia::Pixmap::new(

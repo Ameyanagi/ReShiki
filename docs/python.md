@@ -59,6 +59,13 @@ bytes; chemical text and SVG return strings. `save(path, **options)` chooses the
 output format from the extension. EMF raises `NotImplementedError` pending a
 headless exporter.
 
+SVG output draws text as outlines, so every viewer shows the glyphs, positions
+and sizes that `png()` draws, whatever fonts it has. Pass `text="live"` to keep
+`<text>` elements that stay editable and searchable; a viewer without Arial then
+substitutes its own font, and labels can look narrower or wider than in the
+PNG. `svg()`, `render()`, `convert()`, `save()` and `render_many()` accept
+`text=`; other formats ignore it.
+
 ```python
 drawing = reshiki.Drawing.open("rutile.vasp")
 drawing.save("rutile.svg")
@@ -131,19 +138,23 @@ Saved styles include explicit default values, so applying a reset context also
 turns off settings already enabled on a drawing. Keyword-only updates to an
 individual drawing preserve its other settings.
 
-Labels use the requested font when available, then generic sans-serif. Native
-builds include a final sans-serif fallback, so installed Liberation Sans is not
-required. After installing system fonts, restart Python or the Jupyter kernel
-before rendering again.
+Labels use the requested font when available, then generic sans-serif. Where
+Arial is not installed, as on most Linux systems and containers, ReShiki draws
+Arial with its bundled Liberation Sans, which has Arial's character widths.
+Labels are then laid out as on macOS and Windows, even with no fonts installed
+at all. The same faces stand in for Helvetica when it is missing too. An
+installed Arial always takes precedence. After installing system fonts, restart Python or the Jupyter
+kernel before rendering again.
 
-The same aspirin drawing exported at 600 dpi illustrates the fallback behavior.
-The before images use PyPI 0.14.0; the after images use the corrected renderer.
-Each pair shares the same physical scale and white framing.
+Aspirin rendered with `png(width=640)` in a `python:3.12-slim` container shows
+the effect. The before images use PyPI 0.14.0. With the bundled faces, both
+containers lay the labels out as macOS does with its real Arial (on the right);
+only the letter shapes of Liberation Sans and Arial differ slightly.
 
-| Font environment      | Before                                                                                                     | After                                                                                                |
-| --------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| No discoverable fonts | ![Aspirin loses atom labels without system fonts](images/python-headless-fonts/no-fonts-before.png)        | ![Bundled sans fallback retains all aspirin labels](images/python-headless-fonts/no-fonts-after.png) |
-| Arial unavailable     | ![Aspirin uses a CJK fallback before the correction](images/python-headless-fonts/system-fonts-before.png) | ![Aspirin uses the generic sans-serif fallback](images/python-headless-fonts/system-fonts-after.png) |
+| Font environment   | 0.14.0                                                                                            | Bundled Arial fallback                                                                             | macOS, real Arial                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| No fonts installed | ![Aspirin loses its atom labels without fonts](images/python-headless-fonts/no-fonts-before.png)  | ![Aspirin keeps Arial-width labels without fonts](images/python-headless-fonts/no-fonts-after.png) | ![Aspirin with macOS Arial](images/python-headless-fonts/macos-arial.png) |
+| DejaVu Sans only   | ![Aspirin labels drawn wider in DejaVu Sans](images/python-headless-fonts/dejavu-only-before.png) | ![Aspirin labels at Arial widths](images/python-headless-fonts/dejavu-only-after.png)              | ![Aspirin with macOS Arial](images/python-headless-fonts/macos-arial.png) |
 
 PNG size follows the style's physical bond length and its default resolution.
 Use `dpi=` to set resolution, or `width=` and/or `height=` to fit a pixel box

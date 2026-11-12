@@ -1,6 +1,7 @@
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
 Usage: reshiki --cli render (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
-                            [-o OUTPUT|-] [--width N] [--height N] [--force]
+                            [-o OUTPUT|-] [--svg-text MODE] [--width N]
+                            [--height N] [--force]
 
 Renders the preview the assistant looks at: png on white, scaled to fit
 --width × --height, or svg with a transparent surround. For figures to
@@ -12,6 +13,9 @@ Options:
                Without --to, the extension of OUTPUT picks it.
   -o OUTPUT    Write the image to OUTPUT. Without -o, or with -o -, it goes
                to stdout and needs --to; png is never written to a terminal.
+  --svg-text MODE
+               Draw svg text as outlines (outline, the default), the same
+               in every viewer, or keep it as text (live).
   --width N    The widest a png may be, in pixels (default 1600).
   --height N   The tallest a png may be, in pixels (default 1000).
                Each is 1 to 8192, and a png has at most 16000000 pixels.

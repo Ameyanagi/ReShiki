@@ -397,6 +397,7 @@ impl Sketch {
                 kind: "forward".into(),
                 control: None,
                 cubic: None,
+                nodes: Vec::new(),
                 style: None,
             });
         }

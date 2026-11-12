@@ -138,6 +138,7 @@ fn only_selected_arrows_seed_atom_lone_pair_and_bond_anchor_components() {
                 kind: "forward".into(),
                 control: None,
                 cubic: None,
+                nodes: Vec::new(),
                 style: None,
             });
             assert!(!super::intersects(&doc, &[id]));
@@ -187,6 +188,7 @@ fn selected_bond_anchor_seeds_both_endpoints_without_a_target_bond() {
             kind: "forward".into(),
             control: None,
             cubic: None,
+            nodes: Vec::new(),
             style: None,
         });
         assert!(!super::component_intersects(&doc, &[2]));

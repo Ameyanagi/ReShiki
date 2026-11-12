@@ -52,6 +52,12 @@ fn office_svg(tree: &resvg::usvg::Tree) -> Result<Vec<u8>, String> {
     .into_bytes())
 }
 
+/// Outline SVG text with the same parsed-tree glyphs, positions, and sizes as
+/// PNG export, retaining physical dimensions in points.
+pub fn outlined_svg(svg: String) -> Result<Vec<u8>, String> {
+    office_svg(&parse_svg(svg)?)
+}
+
 /// A transparent outlined picture for the Windows clipboard.
 #[cfg(any(windows, test))]
 pub fn clipboard_svg(doc: &Document) -> Result<Vec<u8>, String> {

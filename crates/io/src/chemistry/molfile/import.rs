@@ -40,8 +40,17 @@ impl Imported {
         let mut count = 0;
         let mut labels = Vec::new();
         let mut reason = String::new();
-        for group in self.annotations.superatoms.iter().filter(|g| !g.expanded) {
+        // A group without drawn atoms has nothing to collapse or keep expanded.
+        for group in self
+            .annotations
+            .superatoms
+            .iter()
+            .filter(|g| !g.expanded && !g.members.is_empty())
+        {
+            let version = document.version;
             if let Err(error) = group.collapse(document) {
+                // Contraction may have raised the version before the SAPs failed.
+                document.version = version;
                 count += 1;
                 if count == 1 {
                     reason = error;

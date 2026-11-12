@@ -299,12 +299,18 @@ class Drawing:
         width: int | None = None,
         height: int | None = None,
         dpi: float | None = None,
+        text: Literal["outline", "live"] = "outline",
         **overrides: Any,
     ) -> bytes | str:
-        """Export this document; optional dimensions fit within a pixel box."""
+        """Export this document; optional dimensions fit within a pixel box.
+
+        SVG text is drawn as outlines; text='live' keeps <text> elements.
+        """
         name = _output_format(format)
         _size(width, height, dpi)
-        result = _native.render(self._data, name, _style_json(style, overrides), width, height, dpi)
+        result = _native.render(
+            self._data, name, _style_json(style, overrides), width, height, dpi, svg_text=text
+        )
         return result.decode("utf-8") if name in _TEXT_FORMATS else result
 
     def png(
@@ -328,11 +334,15 @@ class Drawing:
         width: int | None = None,
         height: int | None = None,
         dpi: float | None = None,
+        text: Literal["outline", "live"] = "outline",
         **overrides: Any,
     ) -> str:
+        """SVG text is drawn as outlines; text='live' keeps <text> elements."""
         return cast(
             str,
-            self.render("svg", style=style, width=width, height=height, dpi=dpi, **overrides),
+            self.render(
+                "svg", style=style, width=width, height=height, dpi=dpi, text=text, **overrides
+            ),
         )
 
     def pdf(
@@ -483,6 +493,7 @@ def render_many(
     width: int | None = None,
     height: int | None = None,
     dpi: float | None = None,
+    text: Literal["outline", "live"] = "outline",
     **overrides: Any,
 ) -> RenderResults:
     """Render rows in parallel; bad rows are ``None`` unless ``errors='raise'``.
@@ -490,6 +501,7 @@ def render_many(
     Error and warning indexes are zero based and retain the original input order.
     Import warnings are collected in the result instead of emitted individually.
     Configuration errors (such as invalid dimensions or styles) always raise.
+    SVG text is drawn as outlines; text='live' keeps <text> elements.
     """
     if errors not in {"none", "raise"}:
         raise ValueError("errors must be 'none' or 'raise'")
@@ -513,7 +525,9 @@ def render_many(
             early_errors.append((index, str(error)))
             # Keep indexes stable without parsing invalid Python inputs natively.
             items.append((b"", "auto"))
-    values, failures, messages = _native.render_many(items, name, style_json, width, height, dpi)
+    values, failures, messages = _native.render_many(
+        items, name, style_json, width, height, dpi, svg_text=text
+    )
     merged = dict(failures)
     merged.update(early_errors)
     failures = sorted(merged.items())

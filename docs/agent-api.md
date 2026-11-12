@@ -377,7 +377,7 @@ changes independently.
 | `app`             | 0.14.0 | The ReShiki build                                |
 | `operation_api`   | 1      | The operation tools and their results            |
 | `engine_protocol` | 1      | The internal chemistry engine's request protocol |
-| `document`        | 34     | The `.rsk` drawing format                        |
+| `document`        | 35     | The `.rsk` drawing format                        |
 
 Run the `info` tool or `reshiki --cli info` for the live values. CLI JSON lines
 carry `api.operation_api` and `api.stability`.

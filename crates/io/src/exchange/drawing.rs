@@ -447,6 +447,12 @@ impl<'a> Writer<'a> {
             if let Some(c) = a.control {
                 points.push(c.into());
             }
+            points.extend(
+                a.nodes
+                    .iter()
+                    .flat_map(|node| [node.point, node.controls[0], node.controls[1]])
+                    .map(P::from),
+            );
             if let Some([a, b]) = a.cubic {
                 points.extend([P::from(a), P::from(b)]);
             }
