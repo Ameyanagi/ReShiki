@@ -21,8 +21,10 @@ Each result is marked:
 - **Unknown**: not tested, and the behavior is not documented well enough to say.
 
 The test machines were macOS 27.0.1 arm64, Windows 11 x64 25H2 and Arch Linux
-x64. Dumps, scripts and screenshots are in the
-[evidence folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/35d36522504604bc275cfc51154da61f09b2a1b7/issues/1146).
+x64. Dumps, scripts and screenshots are in the [evidence
+folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/35d36522504604bc275cfc51154da61f09b2a1b7/issues/1146);
+the plain-text rows, Paint and the browser editor results are in
+[another](https://github.com/Ameyanagi/ReShiki-evidence/tree/5998c1d1eddc0640a912a1822e61195684aa8c33/pr-reviews/pr1157).
 
 ## Quick advice
 
@@ -39,8 +41,9 @@ x64. Dumps, scripts and screenshots are in the
   object, but it keeps ReShiki's PDF: copy the picture in Word, PowerPoint or
   Excel and paste it into ReShiki to get the editable drawing back.
 - **Text-only places** (plain-text boxes, TextEdit in plain-text mode, Notes in a
-  Google account): **Copy** and **Copy Image** put no text on the clipboard, so
-  use **Copy SMILES** (**Cmd/Ctrl+Alt+C**). [Why Copy has no text](#why-copy-has-no-text)
+  Google account): in the desktop app, **Copy** and **Copy Image** put no text on
+  the clipboard, so use **Copy SMILES** (**Cmd/Ctrl+Alt+C**). The browser
+  editor's **Copy** does include SMILES. [Why Copy has no text](#why-copy-has-no-text)
   explains why.
 - **Web apps:** the picture has 1200 dpi resolution metadata, which browsers
   ignore, so it pastes large. A 3 cm drawing appears about 35 cm wide. Resize it
@@ -78,7 +81,7 @@ Special → Picture (Enhanced Metafile)**, or **Copy Image** in ReShiki.
 | ----------------------------------------------- | ----------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Word, PowerPoint, Excel 16.115                  | Picture                                         | Picture                   | Tested; the pasted size (2.74 × 2.92 cm) matches the PDF, so probably vector                                                      |
 | TextEdit                                        | Picture attachment                              | Picture attachment        | Tested                                                                                                                            |
-| TextEdit in plain-text mode                     | No text: use **Copy SMILES** (**Cmd+Option+C**) | No text                   | Tested                                                                                                                            |
+| TextEdit in plain-text mode                     | No text: use **Copy SMILES** (**Cmd+Option+C**) | No text                   | Tested for Copy; Copy Image: docs/code                                                                                            |
 | Preview (**File → New from Clipboard**)         | Vector PDF                                      | Vector PDF                | Tested                                                                                                                            |
 | Notes, Google account folder                    | No text: use **Copy SMILES** (**Cmd+Option+C**) | No text                   | Tested; such folders hold text only, and ignored a SMILES text flavor next to the pictures. No iCloud account on the test machine |
 | Mail                                            | Picture                                         | Picture                   | Docs/code; Mail asked for a privacy setup choice before it would open a message                                                   |
@@ -109,7 +112,7 @@ docs/code only.
 
 | Paste into                             | Copy                                                   | Copy Image                                                | Status                          |
 | -------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------- | ------------------------------- |
-| Word, Excel (Microsoft 365 on Windows) | Bitmap (from the HTML flavor)                          | Bitmap                                                    | Tested with Edge 157            |
+| Word, Excel (Microsoft 365 on Windows) | Bitmap                                                 | Bitmap                                                    | Tested with Edge 157            |
 | Google Docs, mail                      | Bitmap (PNG, from the HTML or PNG flavor)              | Bitmap                                                    | Docs/code                       |
 | Another browser ReShiki                | Editable (the drawing travels inside the HTML picture) | Editable                                                  | Docs/code                       |
 | Desktop ReShiki                        | Editable molecule from the SMILES text, re-laid out    | Picture                                                   | Tested on Windows with Edge 157 |
@@ -278,11 +281,13 @@ them. ReShiki removed one from Copy in 0.12 after PowerPoint for Mac pasted a
 SMILES text box.
 
 On 2026-11-12 the Copy and Copy Image formats were re-published with SMILES
-added, to check whether some placement avoids that. On macOS the text went
-either into the same pasteboard item as the pictures or into a second item. On
-Windows it was `CF_UNICODETEXT`. On Linux it was `text/plain;charset=utf-8`,
-`text/plain` and `UTF8_STRING`, through ReShiki's X11 worker. For the browser,
-Edge wrote Copy Image's `ClipboardItem` with and without `text/plain`.
+added, to check whether some placement avoids that. On macOS the text was added
+to Copy, either in the same pasteboard item as the pictures or into a second
+item. On Windows it was `CF_UNICODETEXT`. On Linux it was
+`text/plain;charset=utf-8`, `text/plain` and `UTF8_STRING`, through ReShiki's
+X11 worker. For the browser, Edge wrote Copy Image's `ClipboardItem` with and
+without `text/plain`. Dumps, scripts and screenshots are in the [evidence
+folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/5998c1d1eddc0640a912a1822e61195684aa8c33/pr-reviews/pr1157).
 
 | App                                              | Without text | With text, same item / second item        |
 | ------------------------------------------------ | ------------ | ----------------------------------------- |
@@ -307,10 +312,11 @@ Edge wrote Copy Image's `ClipboardItem` with and without `text/plain`.
 | Browser Copy Image → desktop ReShiki (Windows)   | Picture      | **Molecule from the SMILES, re-laid out** |
 
 So a text flavor would break Excel on both systems and PowerPoint on macOS, and
-it would not even reach Notes. On Linux it changed nothing in the apps tested,
-but the web apps that read a paste themselves could not be tested there, and
-Copy stays the same on every platform. Browser Copy Image would hand desktop
-ReShiki a re-laid-out molecule instead of the picture that was asked for.
+it would not even reach Notes. On Linux, LibreOffice and a Chromium page kept
+the picture, and only text boxes changed, but the web apps that read a paste
+themselves could not be tested there, and Copy stays the same on every platform.
+Browser Copy Image would hand desktop ReShiki a re-laid-out molecule instead of
+the picture that was asked for.
 
 ### What ReShiki reads on Paste
 
@@ -357,6 +363,6 @@ Native names for these:
   testing on machines with accounts. Classic Outlook and OneNote are installed
   on the Windows test machine, but Outlook has no mail profile and OneNote asks
   to sign in.
-- Linux could offer a text flavor without changing LibreOffice or Chromium. Web
-  apps such as Slack or Google Docs, which read a paste themselves, may prefer
-  text over a picture file and need accounts to test.
+- Linux could offer a text flavor: LibreOffice and a Chromium page kept the
+  picture with it. Web apps such as Slack or Google Docs, which read a paste
+  themselves, may prefer text over a picture file and need accounts to test.
