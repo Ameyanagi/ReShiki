@@ -356,6 +356,87 @@ fn relaxed_metals_disable_mmff_and_offer_flat_drawing_coordinates_as_a_seed() {
 }
 
 #[test]
+fn relaxed_imported_cobalt_hexammine_generates_octahedral_geometry() {
+    let document = crate::chemistry::cdxml::import_cdxml(include_str!(
+        "../../../../../tests/fixtures/cobalt-hexammine.cdxml"
+    ))
+    .unwrap()
+    .document;
+    let request = Prepared::relaxed(&document, &[])
+        .unwrap()
+        .without_retained_depth()
+        .generation_request(ForceField::Uff, DEFAULT_SEED)
+        .unwrap();
+    let result = reshiki_geometry::solve(&request).unwrap();
+    let cobalt = request
+        .atoms
+        .iter()
+        .position(|atom| atom.atomic_number == 27)
+        .unwrap();
+    let nitrogens: Vec<_> = request
+        .atoms
+        .iter()
+        .enumerate()
+        .filter_map(|(index, atom)| (atom.atomic_number == 7).then_some(index))
+        .collect();
+    assert_eq!(nitrogens.len(), 6);
+    let distance = |a: usize, b: usize| {
+        result.coordinates[a]
+            .iter()
+            .zip(result.coordinates[b])
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            .sqrt()
+    };
+    for &nitrogen in &nitrogens {
+        let bond = distance(cobalt, nitrogen);
+        assert!((1.85..=2.10).contains(&bond), "Co–N: {bond}");
+    }
+    let mut trans = 0;
+    for (index, &a) in nitrogens.iter().enumerate() {
+        for &b in &nitrogens[index + 1..] {
+            let dot = (0..3)
+                .map(|axis| {
+                    (result.coordinates[a][axis] - result.coordinates[cobalt][axis])
+                        * (result.coordinates[b][axis] - result.coordinates[cobalt][axis])
+                })
+                .sum::<f64>();
+            let degrees = (dot / (distance(a, cobalt) * distance(b, cobalt)))
+                .clamp(-1., 1.)
+                .acos()
+                .to_degrees();
+            let expected = if degrees > 135. {
+                trans += 1;
+                180.
+            } else {
+                90.
+            };
+            assert!((degrees - expected).abs() <= 10., "N–Co–N: {degrees}");
+        }
+    }
+    assert_eq!(trans, 3);
+    assert!(
+        result
+            .approximations
+            .iter()
+            .any(|note| note == "UFF type Co6+3 (octahedral) for Co")
+    );
+    assert!(
+        result
+            .approximations
+            .iter()
+            .any(|note| note == "Started from the drawn coordinates")
+    );
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|note| note.contains("hydrogens pre-relaxed"))
+    );
+    assert!(!result.hydrogen_parents.contains(&cobalt));
+}
+
+#[test]
 fn relaxed_retains_bounds_structural_guards_and_machine_capacity() {
     for change in [
         |document: &mut Document| document.atoms[0].element = "Qq".into(),

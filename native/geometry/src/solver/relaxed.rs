@@ -416,6 +416,51 @@ pub(super) fn starting_coordinates(
     Ok(coordinates)
 }
 
+pub(super) fn relax_hydrogens(
+    mol: &Molecule,
+    coordinates: Vec<[f64; 3]>,
+    request: &Request,
+) -> Result<Vec<[f64; 3]>> {
+    // AddHs torsions can clash across crowded ligands and blow the complex
+    // apart in full minimization. First move only the appended hydrogens.
+    let original_count = request.atoms.len();
+    // Fixed atoms do not remove absolute XYZ from the optimizer's stopping
+    // test. Use the same original-atom center as minimize_seed.
+    let origin = std::array::from_fn(|axis| {
+        coordinates[..original_count]
+            .iter()
+            .map(|point| point[axis])
+            .sum::<f64>()
+            / original_count as f64
+    });
+    let centered: Vec<_> = coordinates
+        .iter()
+        .map(|&point| sub(point, origin))
+        .collect();
+    let positioned = mol
+        .with_only_3d_conformer(rows(&centered))
+        .map_err(|error| error.to_string())?;
+    let mut field = request_force_field(&positioned, request)?;
+    let fixed: Vec<_> = (0..original_count).map(AtomId::new).collect();
+    field
+        .set_fixed_atoms_(&fixed)
+        .map_err(|error| error.to_string())?;
+    field
+        .minimize_with_params_(&ForceFieldMinimizeParams::new(
+            request.max_iterations,
+            1e-4,
+            1e-6,
+        ))
+        .map_err(|error| error.to_string())?;
+    let mut result = field.positions();
+    // Preserve drawn atoms exactly instead of round-tripping their origin.
+    result[..original_count].copy_from_slice(&coordinates[..original_count]);
+    for point in &mut result[original_count..] {
+        *point = std::array::from_fn(|axis| point[axis] + origin[axis]);
+    }
+    Ok(result)
+}
+
 fn perturb_drawing(points: &mut [[f64; 3]], seed: i32) {
     for (index, point) in points.iter_mut().enumerate() {
         let phase = ((index as u64 + 1) * 2_654_435_761_u64 + seed as u64) % 65_521;

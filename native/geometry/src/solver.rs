@@ -747,7 +747,26 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
             )
         };
         if request.relaxed && relaxed::uses_drawing_seed(request) {
-            match relaxed::starting_coordinates(&original, &mol, request).and_then(minimize_seed) {
+            let mut retry_note = String::new();
+            let candidate = relaxed::starting_coordinates(&original, &mol, request)
+                .map_err(|error| error.chars().take(512).collect::<String>())
+                .and_then(|coordinates| {
+                    minimize_seed(coordinates.clone()).or_else(|error| {
+                        let error: String = error.chars().take(512).collect();
+                        retry_note = format!(
+                            "; hydrogens pre-relaxed with drawn atoms fixed after: {error}"
+                        );
+                        relaxed::relax_hydrogens(&mol, coordinates, request)
+                            .and_then(minimize_seed)
+                            .map_err(|retry| {
+                                format!(
+                                    "{error}; hydrogen pre-relaxation retry failed: {}",
+                                    retry.chars().take(512).collect::<String>()
+                                )
+                            })
+                    })
+                });
+            match candidate {
                 Ok(candidate) => {
                     response.coordinates = candidate.coordinates;
                     response.initial_energy = candidate.initial_energy;
@@ -757,15 +776,14 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
                         .approximations
                         .push("Started from the drawn coordinates".into());
                     response.diagnostics.push(format!(
-                        "initialization=relaxed-drawing; original drawing coordinates with deterministic out-of-plane perturbation; temporary hydrogens added with coordinate-aware AddHs; iteration_limit={}; converged={}",
+                        "initialization=relaxed-drawing; original drawing coordinates with deterministic out-of-plane perturbation; temporary hydrogens added with coordinate-aware AddHs; iteration_limit={}; converged={}{retry_note}",
                         request.max_iterations, response.converged
                     ));
                     return Ok(response);
                 }
-                Err(error) => response.diagnostics.push(format!(
-                    "relaxed drawing seed rejected: {}",
-                    error.chars().take(512).collect::<String>()
-                )),
+                Err(error) => response
+                    .diagnostics
+                    .push(format!("relaxed drawing seed rejected: {error}")),
             }
         }
         if !request.coordinates.is_empty() {
@@ -810,12 +828,20 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         let failures = embedding_failures(&embedded.params);
         let embedded_count = valid_conformer_ids(&embedded.conf_ids).count();
         let failed_embedding_ids = embedded.conf_ids.len() - embedded_count;
+        let generation_error = |error: String| {
+            if request.relaxed {
+                format!("{error}; {}", response.diagnostics.join("; "))
+            } else {
+                error
+            }
+        };
         require(
             embedded_count > 0,
             format!(
                 "{method} could not generate a conformer; embedding failure counters={failures}"
             ),
-        )?;
+        )
+        .map_err(generation_error)?;
         let mut best = f64::INFINITY;
         let mut valid = 0;
         let mut rejected = 0;
@@ -854,7 +880,8 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         require(
             valid > 0,
             format!("all generated conformers failed validation: {last_failure}"),
-        )?;
+        )
+        .map_err(generation_error)?;
         response.diagnostics.push(format!("{method}; requested={}; actual_count={}; embedded={embedded_count}; failed_embedding_ids={failed_embedding_ids}; valid={valid}; rejected={rejected}; seed={}; selection=lowest energy among valid generated conformers; iteration_limit={}; converged={}; embedding_failure_counters={failures}", request.conformers, embedded.requested_num_confs, request.seed, request.max_iterations, response.converged));
         if !last_failure.is_empty() {
             response

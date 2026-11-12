@@ -733,6 +733,49 @@ fn relaxed_cisplatin_matches_rdkit_uff_and_discloses_square_planar_distortion() 
 }
 
 #[test]
+fn relaxed_cobalt_hexammine_pre_relaxes_hydrogens_in_a_tight_planar_seed() {
+    let mut request = ammine(27, 3, 6);
+    request.coordinates[1..].copy_from_slice(&planar_ring(6, 1.5));
+    let result = solve(&request).unwrap();
+    for nitrogen in 1..=6 {
+        let bond = distance(&result.coordinates, 0, nitrogen);
+        assert!((1.85..=2.10).contains(&bond), "Co–N: {bond}");
+    }
+    let mut trans = 0;
+    for a in 1..=6 {
+        for b in a + 1..=6 {
+            let degrees = angle(&result.coordinates, a, 0, b);
+            if degrees > 135. {
+                close(degrees, 180., 10., 0.);
+                trans += 1;
+            } else {
+                close(degrees, 90., 10., 0.);
+            }
+        }
+    }
+    assert_eq!(trans, 3);
+    assert!(
+        result
+            .approximations
+            .iter()
+            .any(|note| note == "UFF type Co6+3 (octahedral) for Co")
+    );
+    assert!(
+        result
+            .approximations
+            .iter()
+            .any(|note| note == "Started from the drawn coordinates")
+    );
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|note| note.contains("hydrogens pre-relaxed"))
+    );
+    assert!(!result.hydrogen_parents.contains(&0));
+}
+
+#[test]
 fn relaxed_cobalt_ammine_and_chelates_are_octahedral() {
     let ammine = ammine(27, 3, 6);
     let mut chelate = ammine.clone();
