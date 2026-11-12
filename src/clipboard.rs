@@ -460,10 +460,12 @@ async fn prepare_copy_for(
         match result {
             Ok(mut image) => {
                 if format == "png" {
-                    let (bytes, notice) =
-                        editable_png(image.bytes()?, &envelope, payload::EMBED_LIMIT)?;
-                    outcome.notices.extend(notice.map(str::to_owned));
-                    image = Representation::new("public.png", &bytes);
+                    // A PNG over the clipboard limit keeps its own error.
+                    if let Ok(bytes) = image.bytes() {
+                        let (bytes, notice) = editable_png(bytes, &envelope, payload::EMBED_LIMIT)?;
+                        outcome.notices.extend(notice.map(str::to_owned));
+                        image = Representation::new("public.png", &bytes);
+                    }
                     let dpi = image
                         .bytes()
                         .ok()
