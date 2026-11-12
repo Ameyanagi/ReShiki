@@ -66,6 +66,12 @@ from commit `568513c2333a7f1402eef86fca8ba9efca7f9cea`, decompressed SHA256
 module later gained a partial-charge caption hook for the drawing-exchange oracle,
 which no captured aromaticity request uses.
 
+`aromatic-reactions-source.py.gz` retains `reference/engine/reactions.py` from
+commit `568513c2333a7f1402eef86fca8ba9efca7f9cea`, decompressed SHA256
+`43475958034388335d5eb457833167f10c68ac334e56f9887e0910cdbe268be5`. The live
+module later accepted RDKit's RXN wrapper when it only restates an atom's own
+charge, isotope or radical count (#1138), which no captured aromaticity request uses.
+
 These are the original recorded hashes in all three fixture headers. The current
 worker adds cubic controls only to CDXML export bounds; its aromaticity handler
 is unchanged. The current abbreviation module reads its presets from the catalog,
