@@ -92,11 +92,43 @@ async fn publication_matches_sequence() -> anyhow::Result<()> {
     let engine = LocalEngine::default();
     for (case, doc, format, pages) in publication_cases()? {
         let expected = sequence(&engine, doc.clone(), format, pages).await;
-        let actual = export::publication(&engine, doc, format, pages, export::FILE_PIXELS)
+        let actual = export::publication(&engine, doc, format, pages, false, export::FILE_PIXELS)
             .await
             .map(|publication| (publication.bytes, publication.details));
         // Compare without printing raster bytes on a mismatch.
         assert!(actual == expected, "{case}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn editable_option_leaves_vector_and_page_exports_unchanged() -> anyhow::Result<()> {
+    let doc = Document {
+        page_layout: Some(reshiki::pages::Layout::default()),
+        ..Default::default()
+    };
+    let engine = LocalEngine::default();
+    for (format, pages) in [("svg", false), ("pdf", false), ("pdf", true)] {
+        let exported = export::publication(
+            &engine,
+            doc.clone(),
+            format,
+            pages,
+            true,
+            export::FILE_PIXELS,
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        assert!(exported.details.is_empty(), "{format}, pages={pages}");
+        assert!(reshiki::payload::read(&exported.bytes).is_none());
+        if format == "svg" {
+            assert_eq!(
+                exported.bytes,
+                reshiki::scene::svg_with_background(&doc).as_bytes()
+            );
+        } else {
+            assert!(exported.bytes.starts_with(b"%PDF-"));
+        }
     }
     Ok(())
 }

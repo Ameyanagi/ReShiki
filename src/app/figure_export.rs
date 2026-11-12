@@ -114,7 +114,12 @@ impl App {
         export.save(name)
     }
 
-    pub(super) fn export_figure(&mut self, format: &'static str, pages: bool) -> Task<Message> {
+    pub(super) fn export_figure(
+        &mut self,
+        format: &'static str,
+        pages: bool,
+        editable: bool,
+    ) -> Task<Message> {
         if self.figure_exporting {
             return Task::none();
         }
@@ -132,6 +137,7 @@ impl App {
                     doc,
                     format,
                     pages,
+                    editable,
                     reshiki::export::FILE_PIXELS,
                 )
                 .await?;

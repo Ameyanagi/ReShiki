@@ -4,7 +4,7 @@ use crate::{
     document::Document,
     editing,
     engine::{LocalEngine, Request},
-    export,
+    export, payload,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
@@ -449,14 +449,35 @@ async fn prepare_copy_for(
                 .push(format!("Editable exchange unavailable: {error}")),
         }
     }
-    let images = crate::task::spawn_blocking(move || copy_images(&doc, image_only, browser))
-        .await
-        .map_err(|e| format!("Could not render clipboard images: {e}"))?;
+    let (images, envelope) = crate::task::spawn_blocking(move || {
+        let envelope = payload::encode(&doc)?;
+        Ok::<_, String>((copy_images(&doc, image_only, browser), envelope))
+    })
+    .await
+    .map_err(|e| format!("Could not render clipboard images: {e}"))??;
     let mut image_count = 0;
     for (format, result) in images {
         match result {
-            Ok(image) => {
+            Ok(mut image) => {
+                // Copy Image's own drawing keeps to the limit of the one in
+                // its pictures, so a huge drawing cannot overflow the clipboard.
+                if format == "native drawing" && envelope.len() > payload::EMBED_LIMIT {
+                    continue;
+                }
                 if format == "png" {
+                    // A PNG over the clipboard limit keeps its own error.
+                    if let Ok(bytes) = image.bytes() {
+                        let (bytes, notice) = editable_png(bytes, &envelope, payload::EMBED_LIMIT)?;
+                        outcome.notices.extend(notice.map(|notice| {
+                            if image_only {
+                                "Picture copied without the editable drawing (too large)"
+                            } else {
+                                notice
+                            }
+                            .to_owned()
+                        }));
+                        image = Representation::new("public.png", &bytes);
+                    }
                     let dpi = image
                         .bytes()
                         .ok()
@@ -497,7 +518,7 @@ async fn prepare_copy_for(
                     }
                 }
                 representations.push(image);
-                if format != "native picture" {
+                if format != "native drawing" {
                     image_count += 1;
                 }
             }
@@ -510,6 +531,23 @@ async fn prepare_copy_for(
         return Err(outcome.notices.join(" · "));
     }
     Ok((outcome, representations))
+}
+
+fn editable_png(
+    bytes: Vec<u8>,
+    envelope: &[u8],
+    limit: usize,
+) -> Result<(Vec<u8>, Option<&'static str>), String> {
+    if envelope.len() > limit {
+        Ok((
+            bytes,
+            Some(
+                "Pictures copied without the editable drawing (too large); pasting into ReShiki still keeps it",
+            ),
+        ))
+    } else {
+        payload::embed("png", bytes, envelope).map(|bytes| (bytes, None))
+    }
 }
 
 fn copy_images(
@@ -548,14 +586,11 @@ fn copy_images(
                 .map(|bytes| Representation::new("dev.reshiki.office-metafile", &bytes)),
         ));
     }
-    if image_only && let Some((_, Ok(png))) = images.iter().find(|(format, _)| *format == "png") {
-        // Honor the actual PNG resolution, including bounded Windows previews.
-        let native = png.bytes().and_then(|bytes| {
-            let doc = crate::pictures::clipboard_document(&bytes)?;
-            let bytes = serde_json::to_vec(&doc).map_err(|e| e.to_string())?;
-            Ok(Representation::new(NATIVE, &bytes))
-        });
-        images.push(("native picture", native));
+    if image_only {
+        let native = serde_json::to_vec(&payload::visible(doc))
+            .map(|bytes| Representation::new(NATIVE, &bytes))
+            .map_err(|e| e.to_string());
+        images.push(("native drawing", native));
     }
     images
 }
@@ -602,7 +637,7 @@ pub async fn paste_with_warnings(
     image_only: bool,
 ) -> Result<PasteOutcome, String> {
     read_candidates(image_only, read_packet, move |item| {
-        paste_representation(engine.clone(), item)
+        paste_representation(engine.clone(), item, image_only)
     })
     .await?
     .ok_or_else(|| {
@@ -793,7 +828,7 @@ async fn paste_packet_with_warnings(
                 generation: Some("test".into()),
             }))
         },
-        move |item| paste_representation(engine.clone(), item),
+        move |item| paste_representation(engine.clone(), item, image_only),
     )
     .await?
     .ok_or_else(|| {
@@ -809,8 +844,9 @@ async fn paste_packet_with_warnings(
 async fn paste_representation(
     engine: LocalEngine,
     item: Representation,
+    image_only: bool,
 ) -> Result<PasteOutcome, String> {
-    let outcome = import_representation(engine, item).await?;
+    let outcome = import_representation(engine, item, image_only).await?;
     if outcome.document.all_ids().is_empty() {
         return Err("The clipboard drawing is empty".into());
     }
@@ -820,6 +856,7 @@ async fn paste_representation(
 async fn import_representation(
     engine: LocalEngine,
     item: Representation,
+    image_only: bool,
 ) -> Result<PasteOutcome, String> {
     let data = item.bytes()?;
     if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
@@ -832,10 +869,26 @@ async fn import_representation(
         item.kind.as_str(),
         "public.png" | "public.tiff" | "public.jpeg" | "org.webmproject.webp" | "public.webp"
     ) {
-        return crate::task::spawn_blocking(move || crate::pictures::clipboard_document(&data))
-            .await
-            .map_err(|e| e.to_string())?
-            .map(PasteOutcome::from);
+        return crate::task::spawn_blocking(move || {
+            let warning = if item.kind == "public.png" && !image_only {
+                match payload::read(&data) {
+                    Some(Ok(document)) => return Ok(PasteOutcome {
+                        document,
+                        warnings: vec!["Restored the editable drawing from the picture · Paste picture inserts the image instead".into()],
+                        native: true,
+                    }),
+                    Some(Err(error)) => Some(format!("Pasted as a picture: its editable drawing could not be read ({error})")),
+                    None => None,
+                }
+            } else {
+                None
+            };
+            let mut outcome = PasteOutcome::from(crate::pictures::clipboard_document(&data)?);
+            outcome.warnings.extend(warning);
+            Ok(outcome)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
     }
     let request = if item.kind.contains("cdxml") {
         Request::import(

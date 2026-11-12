@@ -1,5 +1,158 @@
 use super::*;
 
+#[tokio::test]
+async fn editable_png_contains_the_prepared_drawing_and_preserves_pixels() -> anyhow::Result<()> {
+    use crate::{engine::LocalEngine, export};
+    use anyhow::Context;
+
+    let mut doc: Document = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/ui-drawn-ethanol.reshiki"
+    ))?;
+    for atom in &mut doc.atoms {
+        atom.label_h = 0;
+    }
+    let engine = LocalEngine::in_process();
+    let (prepared, notice) = export::figure_document(&engine, doc.clone())
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(notice, None);
+    assert_ne!(
+        prepared, doc,
+        "The prepared snapshot refreshes hydrogen labels"
+    );
+    let plain = export::publication(
+        &engine,
+        doc.clone(),
+        "png",
+        false,
+        false,
+        export::FILE_PIXELS,
+    )
+    .await
+    .map_err(anyhow::Error::msg)?;
+    assert!(crate::payload::read(&plain.bytes).is_none());
+    assert_eq!(plain.details.len(), 1);
+    let editable = export::publication(&engine, doc, "png", false, true, export::FILE_PIXELS)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let embedded = crate::payload::read(&editable.bytes)
+        .context("embedded drawing")?
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(embedded, crate::payload::visible(&prepared.current()));
+    assert_eq!(
+        editable.details,
+        [
+            plain.details[0].clone(),
+            "Includes the editable drawing".into()
+        ]
+    );
+    let mut decoded = Vec::new();
+    for bytes in [&plain.bytes, &editable.bytes] {
+        let mut reader = png::Decoder::new(std::io::Cursor::new(bytes)).read_info()?;
+        let mut pixels = vec![0; reader.output_buffer_size()];
+        let frame = reader.next_frame(&mut pixels)?;
+        pixels.truncate(frame.buffer_size());
+        decoded.push((frame.width, frame.height, pixels));
+    }
+    assert_eq!(decoded[0], decoded[1]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn editable_png_preserves_custom_colors_from_older_dark_snapshots() {
+    use crate::{
+        canvas_theme::CanvasTheme,
+        document::{Annotation, Point},
+        palette::Color,
+        typography::TextFormat,
+    };
+
+    for version in [15, 16] {
+        let mut doc = Document {
+            version,
+            canvas_theme: CanvasTheme::Dark,
+            ..Default::default()
+        };
+        let color = Color::Custom([49, 87, 123]);
+        let mut format = TextFormat::default();
+        format.style.color = color;
+        doc.annotations.push(Annotation {
+            id: 1,
+            position: Point::default(),
+            text: "O".into(),
+            format,
+        });
+        let snapshot = doc.current();
+        let exported = publication(
+            &Default::default(),
+            doc.clone(),
+            "png",
+            false,
+            true,
+            FILE_PIXELS,
+        )
+        .await
+        .unwrap();
+        let restored = crate::payload::read(&exported.bytes).unwrap().unwrap();
+        assert_eq!(restored, snapshot);
+        assert_eq!(restored.annotations[0].format.style.color, color);
+        assert_eq!(
+            crate::scene::svg_with_background(&restored),
+            crate::scene::svg_with_background(&snapshot)
+        );
+        assert_eq!(
+            crate::scene::svg_with_background(&snapshot),
+            crate::scene::svg_with_background(&doc)
+        );
+        assert_eq!(doc.version, version);
+    }
+}
+
+#[tokio::test]
+async fn editable_png_export_skips_a_drawing_over_the_embed_limit() {
+    let mut doc = Document::default();
+    // A detailed picture retains more editable data than its small printed size.
+    let mut state = 0x1234_5678_u32;
+    let pixels: Vec<u8> = (0..1024 * 1024 * 3)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as u8
+        })
+        .collect();
+    let mut source = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut source, 1024, 1024);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(&pixels)
+            .unwrap();
+    }
+    let picture = crate::pictures::Picture::import(&source).unwrap();
+    let mut graphic = picture.graphic(1, Default::default());
+    crate::pictures::resize(&mut graphic, 12., 12.).unwrap();
+    doc.graphics.push(graphic);
+    assert!(crate::payload::encode(&doc).unwrap().len() > crate::payload::EMBED_LIMIT);
+    let export = publication(&Default::default(), doc, "png", false, true, FILE_PIXELS)
+        .await
+        .unwrap();
+    assert!(export.bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+    assert!(crate::payload::read(&export.bytes).is_none());
+    assert_eq!(
+        export.details.last().map(String::as_str),
+        Some("Saved without the editable drawing: it is larger than 2 MB")
+    );
+    let mut reader = png::Decoder::new(std::io::Cursor::new(export.bytes))
+        .read_info()
+        .unwrap();
+    let mut pixels = vec![0; reader.output_buffer_size()];
+    reader.next_frame(&mut pixels).unwrap();
+}
+
 #[test]
 fn steroid_alpha_beta_figure_exports_share_the_canvas_labels() {
     use crate::document::Point;
