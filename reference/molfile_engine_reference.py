@@ -25,6 +25,22 @@ else:
     from molfile_restrictions_reference import generic_restriction
 
 
+def superatoms(text):
+    """SUP groups as RDKit reads them; ReShiki collapses them on import (#870)."""
+    mol = Chem.MolFromMolBlock(text, sanitize=False, removeHs=False)
+    groups = [
+        dict(
+            label=group.GetProp("LABEL") if group.HasProp("LABEL") else "",
+            atoms=[atom + 1 for atom in group.GetAtoms()],
+            attachments=[[point.aIdx + 1, point.id] for point in group.GetAttachPoints()],
+            expanded=group.HasProp("ESTATE") and group.GetProp("ESTATE") == "E",
+        )
+        for group in (Chem.GetMolSubstanceGroups(mol) if mol else ())
+        if group.GetProp("TYPE") == "SUP"
+    ]
+    return groups or None
+
+
 def emit(name, text):
     try:
         expected = handle(dict(protocol=1, operation="import", format="mol", text=text))
@@ -51,6 +67,7 @@ def emit(name, text):
                 display=display,
                 generic=generic,
                 generic_extension=extension,
+                superatoms=superatoms(text) if expected is not None else None,
             )
         )
     )
