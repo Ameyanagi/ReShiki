@@ -109,6 +109,7 @@ fn everything() -> (Document, Ids) {
         kind: "forward".into(),
         control: None,
         cubic: None,
+        nodes: Vec::new(),
         style: None,
     });
     let png: Picture = serde_json::from_value(json!(PNG_BASE64)).unwrap();

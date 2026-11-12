@@ -36,6 +36,7 @@ fn clicked_molecule_is_independent_of_multi_selection_and_logical_groups() {
         kind: "forward".into(),
         control: None,
         cubic: None,
+        nodes: Vec::new(),
         start_anchor: None,
         end_anchor: None,
         style: None,

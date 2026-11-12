@@ -259,6 +259,7 @@ fn reaction_copy(
         kind: "forward".into(),
         control: None,
         cubic: None,
+        nodes: Vec::new(),
         style: None,
     });
     let mut new_ids = copied.clone();
