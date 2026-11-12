@@ -1,6 +1,9 @@
 #[path = "support/cx_lenience.rs"]
 #[allow(dead_code)]
 mod cx_lenience;
+#[path = "support/cx_stereo_groups.rs"]
+#[allow(dead_code)]
+mod cx_stereo_groups;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -19,6 +22,9 @@ struct Case {
     expected: Option<usize>,
     atomic_number: Option<u32>,
     renumbered: Option<Box<Case>>,
+    /// Absent from the nested renumbered case.
+    #[serde(default)]
+    unwrapped: bool,
 }
 
 #[test]
@@ -45,12 +51,13 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected) = (0, 0);
-    let mut renumberings = 0;
+    let (mut renumberings, mut unwrapped) = (0, 0);
     let mut lenient = 0;
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let expected = case.renumbered.as_deref().unwrap_or(&case);
+        unwrapped += usize::from(case.unwrapped);
         if case.renumbered.is_some() {
             renumberings += 1;
             assert_ne!(
@@ -93,7 +100,7 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success());
     eprintln!(
-        "SMARTS: {accepted} accepted, {rejected} rejected ({lenient} only by RDKit's lenient CX numbers), {renumberings} stereo-group renumberings, {} mismatches",
+        "SMARTS: {accepted} accepted, {rejected} rejected ({lenient} only by RDKit's lenient CX numbers), {} mismatches",
         failures.len()
     );
     if !failures.is_empty() {
@@ -115,7 +122,7 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
     );
     assert!(accepted > 5000 && rejected > 1000);
     assert!(
-        renumberings > 0,
+        cx_stereo_groups::collision_coverage("SMARTS", renumberings, unwrapped),
         "Missing CX stereo-group collision coverage"
     );
     Ok(())

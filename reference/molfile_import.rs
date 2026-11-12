@@ -33,6 +33,7 @@ struct Case {
     restriction: Option<GenericRestriction>,
     extension: Option<MoleculeExtension>,
     renumbered: Option<String>,
+    unwrapped: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -143,6 +144,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     let mut fields = BTreeMap::<String, usize>::new();
     let mut extensions = 0;
     let (mut renumberings, mut lenient, mut other_basis) = (0, 0, 0);
+    let mut unwrapped = 0;
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let result = molfile::read(&case.text);
@@ -159,6 +161,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
             .as_ref()
             .map(|extension| &extension.expected)
             .or(case.expected.as_ref());
+        unwrapped += usize::from(case.unwrapped);
         let failure = if let Some(text) = &case.renumbered {
             renumberings += 1;
             cx_stereo_groups::query_rejection(
@@ -284,7 +287,6 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
         eprintln!("MOL import mismatch field: {count} {field}");
     }
     eprintln!("Substance groups: {groups_accepted} accepted, {groups_rejected} rejected");
-    eprintln!("MOL import: {renumberings} stereo-group renumberings");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         accepted > 1000 && rejected > 100,
@@ -295,7 +297,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
         "Insufficient substance-group coverage"
     );
     assert!(
-        renumberings > 0,
+        cx_stereo_groups::collision_coverage("MOL import", renumberings, unwrapped),
         "Missing CX stereo-group collision coverage"
     );
     Ok(())

@@ -36,6 +36,7 @@ struct Case {
     extension: Option<DrawingExtension>,
     generic: Option<GenericDrawingAddition>,
     renumbered: Option<String>,
+    unwrapped: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -129,6 +130,7 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     let mut fields = BTreeMap::<String, usize>::new();
     let (mut mismatches, mut extensions, mut generic_additions) = (0, 0, 0);
     let (mut renumberings, mut lenient, mut other_basis) = (0, 0, 0);
+    let mut unwrapped = 0;
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let imported = molfile::read(&case.text);
@@ -202,6 +204,7 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
             .map(|generic| serde_json::to_value(&generic.document))
             .transpose()?
             .unwrap_or(base_document);
+        unwrapped += usize::from(case.unwrapped);
         let failure = if let Some(text) = &case.renumbered {
             renumberings += 1;
             cx_stereo_groups::query_rejection(
@@ -378,14 +381,13 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     for (field, count) in fields {
         eprintln!("MOL drawing mismatch field: {count} {field}");
     }
-    eprintln!("MOL drawings: {renumberings} stereo-group renumberings");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         accepted > 1000 && rejected > 100 && spatial > 100 && wedges > 100,
         "Insufficient import drawing coverage"
     );
     assert!(
-        renumberings > 0,
+        cx_stereo_groups::collision_coverage("MOL drawings", renumberings, unwrapped),
         "Missing CX stereo-group collision coverage"
     );
     Ok(())

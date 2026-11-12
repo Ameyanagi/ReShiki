@@ -11,10 +11,10 @@ from rdkit import Chem, RDConfig, RDLogger, rdBase
 
 if TYPE_CHECKING or __package__:
     from .cxsmarts_reference import cases as cx_cases
-    from .support.cx_stereo_groups import renumber
+    from .support.cx_stereo_groups import renumber, unwrapped_collision
 else:
     from cxsmarts_reference import cases as cx_cases
-    from support.cx_stereo_groups import renumber
+    from support.cx_stereo_groups import renumber, unwrapped_collision
 
 # ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
 Chem.SetUseLegacyRingFinding(True)
@@ -289,7 +289,16 @@ def main():
             observed = observe(normalized[0])
             if observed != original:
                 alternate = dict(text=normalized[0], **observed)
-        print(json.dumps(dict(text=text, **original, renumbered=alternate)))
+        print(
+            json.dumps(
+                dict(
+                    text=text,
+                    **original,
+                    renumbered=alternate,
+                    unwrapped=unwrapped_collision(text),
+                )
+            )
+        )
 
 
 if __name__ == "__main__":
