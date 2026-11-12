@@ -26,6 +26,8 @@ mod atrop_tests;
 pub(super) mod chain_layout;
 #[cfg(test)]
 mod molfile_atrop_tests;
+#[cfg(test)]
+mod partial_tests;
 pub(super) mod template_retry;
 #[cfg(test)]
 mod tests;
@@ -98,6 +100,69 @@ pub enum Error {
 
 const CUMULENE_EZ_NOTICE: &str = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored";
 const RELATIVE_STEREO_NOTICE: &str = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
+
+fn dropped_notices(dropped: impl IntoIterator<Item = smiles::Dropped>) -> Vec<String> {
+    use smiles::{Configuration, Dropped};
+    let name = |atom: smiles::InputAtom| format!("{}{}", atom.element, atom.position + 1);
+    let mut queries = false;
+    let mut notices = Vec::new();
+    for item in dropped {
+        let notice = match item {
+            Dropped::Configuration { atom, class } => {
+                let class = match class {
+                    Configuration::SquarePlanar => "square-planar configuration (@SP)",
+                    Configuration::TrigonalBipyramidal => {
+                        "trigonal-bipyramidal configuration (@TB)"
+                    }
+                    Configuration::Octahedral => "octahedral configuration (@OH)",
+                };
+                format!(
+                    "ReShiki cannot draw the {class} at {}; it imported that atom without a configuration",
+                    name(atom)
+                )
+            }
+            Dropped::Radical {
+                atom,
+                electrons,
+                hydrogens: (before, after),
+            } => {
+                let mut notice = format!(
+                    "Atom {} had {electrons} radical electrons; ReShiki keeps at most 2 and drew it as a triplet",
+                    name(atom)
+                );
+                if before != after {
+                    notice.push_str(&format!(
+                        "; its hydrogen count changed from {before} to {after}"
+                    ));
+                }
+                notice
+            }
+            Dropped::Allene(atom) => format!(
+                "The allene stereo tag (@AL) at {} is invalid; ReShiki imported that atom without a configuration",
+                name(atom)
+            ),
+            Dropped::Queries => {
+                if queries {
+                    continue;
+                }
+                queries = true;
+                "The input's query constraints (such as CXSMILES u, rb or s) were ignored; ReShiki imported the plain structure".into()
+            }
+            Dropped::AnyBond(a, b) => format!(
+                "Bond {}–{} has any order (~); bond order assumed single",
+                name(a),
+                name(b)
+            ),
+            Dropped::ZeroBond(a, b) => format!(
+                "Bond {}–{} has zero order (CXSMILES Z); ReShiki imported the atoms without that bond",
+                name(a),
+                name(b)
+            ),
+        };
+        notices.push(notice);
+    }
+    notices
+}
 
 struct Prepared {
     molecule: molecular::Molecule,
@@ -230,7 +295,11 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             return Ok(Preparation::Drawing(Box::new(document), warnings));
         }
         "smiles" | "naming_smiles" => {
-            let mut imported = smiles::read(&text)?;
+            let mut imported = if format == "smiles" {
+                smiles::read_partial(&text)?
+            } else {
+                smiles::read(&text)?
+            };
             if format == "naming_smiles" {
                 imported.prepared.state =
                     crate::molecule_names::apply_axis_markers(&imported.prepared.state)
@@ -262,6 +331,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             if relative {
                 warnings.push(RELATIVE_STEREO_NOTICE.into());
             }
+            warnings.extend(dropped_notices(imported.dropped));
             let mut prepared = finish_molecule(
                 molecule,
                 &imported.prepared.dummy_labels,
@@ -354,7 +424,16 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         }
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
         "rsmi" => {
-            let mut reaction = reaction::read_smiles(&text)?;
+            let mut reaction = reaction::read_smiles_partial(&text)?;
+            reaction.drop_undrawable_wedges();
+            let dropped = dropped_notices(
+                reaction
+                    .reactants
+                    .iter_mut()
+                    .chain(&mut reaction.agents)
+                    .chain(&mut reaction.products)
+                    .flat_map(|part| std::mem::take(&mut part.dropped)),
+            );
             let relative = reaction
                 .reactants
                 .iter_mut()
@@ -380,6 +459,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             if relative {
                 prepared.warnings.push(RELATIVE_STEREO_NOTICE.into());
             }
+            prepared.warnings.extend(dropped);
             prepared
         }
         _ => return Err(Error::Format),

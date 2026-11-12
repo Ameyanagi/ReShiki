@@ -15,7 +15,10 @@ pub mod write;
 pub use prepare::{Prepared, prepare};
 mod read;
 pub use read::reaction_part;
-pub use read::{Imported, read, read_dropping_flagged_ez};
+pub use read::reaction_part_partial;
+pub use read::{
+    Configuration, Dropped, Imported, InputAtom, read, read_dropping_flagged_ez, read_partial,
+};
 
 #[cfg(test)]
 mod tests;
@@ -167,6 +170,7 @@ struct Reader<'a> {
     rings: BTreeMap<u32, Vec<RingEnd>>,
     pairs: HashSet<(usize, usize)>,
     bond_count: usize,
+    partial: bool,
 }
 
 /// Read a bare SMILES graph without modifying hydrogen or chemical state.
@@ -180,7 +184,16 @@ pub fn parse(text: &str) -> Result<Parsed> {
     Ok(parsed)
 }
 
+/// Parse for partial application import, retaining query markers for notices.
+pub fn parse_for_import(text: &str) -> Result<Parsed> {
+    parse_with(text, true)
+}
+
 fn parse_inner(text: &str) -> Result<Parsed> {
+    parse_with(text, false)
+}
+
+fn parse_with(text: &str, partial: bool) -> Result<Parsed> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
@@ -215,6 +228,7 @@ fn parse_inner(text: &str) -> Result<Parsed> {
         rings: BTreeMap::new(),
         pairs: HashSet::new(),
         bond_count: 0,
+        partial,
     };
     if reader.bytes.is_empty() {
         return if text.is_empty() {
@@ -491,8 +505,12 @@ impl Reader<'_> {
                 // token's type. An unspecified query token loses its predicate
                 // here, then receives the endpoints' default bond order.
                 if spec.query {
-                    spec.query = false;
-                    spec.order = None;
+                    if self.partial {
+                        spec.order = Some(1);
+                    } else {
+                        spec.query = false;
+                        spec.order = None;
+                    }
                 }
                 // A direction copied from the opposite end changes orientation.
                 if spec.direction == Direction::None {
@@ -565,13 +583,17 @@ impl Reader<'_> {
                 self.chiral_bond_order(terminals[0])?,
                 self.chiral_bond_order(terminals[1])?,
             ];
-            let permutation = chirality::allene_permutation(
+            let permutation = match chirality::allene_permutation(
                 &self.parsed.graph,
                 id,
                 value,
                 [&orders[0], &orders[1]],
                 terminals.map(|a| self.starts.get(a).copied().unwrap_or(false)),
-            )?;
+            ) {
+                Ok(value) => value,
+                Err(Error::Unsupported(_)) if self.partial && meta.chiral_tag == 5 => 0,
+                Err(error) => return Err(error),
+            };
             let meta = self.parsed.metadata.atoms.get_mut(id).ok_or(Error::Limit)?;
             meta.chiral_tag = 5;
             meta.chiral_permutation = Some(permutation);

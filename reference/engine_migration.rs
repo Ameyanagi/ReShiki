@@ -75,17 +75,26 @@ async fn reaction_coordinate_free_wedge_exceptions_require_changed_responses() -
         ("(c1(-c2ccccc2)ccccc1.CC)>>O |wU:1.1,w:12.13|", false),
         ("(c1(-c2ccccc2)ccccc1.CC)>>O |wD:1.1,w:12.13|", false),
         ("(c1ccccc1-c1ccccc1.CC)>>O |wU:5.4,w:12.13|", true),
+        ("CO>N->[Cu]<-N>CC |wD:3.1|", true),
+        ("C/C=C/C>N>CC |wD:2.1|", true),
+        ("N->[Cu]<-N>N>CC |wD:1.0,SgD:0:name:data::::,SgH:0:0|", true),
     ] {
         let request = Request::import("rsmi", text);
         let actual = local
             .execute(request.clone())
             .await
             .map_err(anyhow::Error::msg)?;
-        let expected = reference
-            .execute(request)
-            .await
-            .map_err(anyhow::Error::msg)?;
-        let comparison = assert_import_response_matches(actual, expected, "rsmi");
+        let comparison = match reference.execute(request).await {
+            Ok(expected) => assert_import_response_matches(actual, expected, "rsmi"),
+            Err(error) if coordinate_free_wedges::cleared_undrawable("rsmi", text) => {
+                assert!(
+                    error.contains("Unsupported bond appearance for this order"),
+                    "{text}: {error}"
+                );
+                Err(anyhow::anyhow!(error))
+            }
+            Err(error) => return Err(anyhow::Error::msg(error)),
+        };
         // Matching inputs stay under strict comparison, including symmetric axes (#1048).
         assert_eq!(comparison.is_err(), changed, "{text}: {comparison:?}");
         assert_eq!(
@@ -478,6 +487,16 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 accepted += 1;
                 None
             }
+            (Ok(_), None)
+                if coordinate_free_wedges::cleared_undrawable(format, &case.text)
+                    && case.failure.as_deref().is_none_or(|error| {
+                        error.contains("Unsupported bond appearance for this order")
+                    }) =>
+            {
+                accepted += 1;
+                tag_wins.push(case.name.clone());
+                None
+            }
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
@@ -495,7 +514,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     }
     assert!(child.wait()?.success(), "Import reference failed");
     eprintln!(
-        "{format} coordinate-free wedge flags following the tag (#1044, #1048): {tag_wins:?}"
+        "{format} wedge flags following the tag or cleared for unsupported orders (#1044, #1048): {tag_wins:?}"
     );
     eprintln!("{format} E/Z kept under wedge flags (#1042): {kept_ez:?}");
     eprintln!(
