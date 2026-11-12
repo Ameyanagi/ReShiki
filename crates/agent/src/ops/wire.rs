@@ -368,6 +368,20 @@ impl From<&IdRemap> for IdRemapJson {
     }
 }
 
+/// Whether SVG output turns text into paths or keeps live text elements.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SvgText {
+    #[default]
+    Outline,
+    Live,
+}
+
+/// The required-nullable SVG text mode; `null` uses outlined text.
+pub(crate) fn svg_text_schema() -> Value {
+    nullable(json!({"type": "string", "enum": ["outline", "live"]}))
+}
+
 /// An [`ExportReceipt`] on the wire: `{format, byte_len, detail}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ExportReceiptJson {

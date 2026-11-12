@@ -176,6 +176,7 @@ impl Client {
             "format": null,
             "overwrite": overwrite,
             "pages": null,
+            "svg_text": null,
         });
         self.call("file_save", arguments)
     }
@@ -272,6 +273,7 @@ fn read_and_write_grants_are_separate_and_only_out_changes() {
         String::from_utf8_lossy(&svg)
     );
     assert_eq!(receipt["byte_len"], svg.len());
+    assert!(!String::from_utf8_lossy(&svg).contains("<text"));
 
     let refused = client.save(&document, &tree.text("in/e.svg"), false);
     assert_eq!(refused["isError"], true, "{refused}");

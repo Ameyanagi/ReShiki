@@ -198,6 +198,18 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             false,
         ),
         (
+            Message::View(view_settings::Action::ExportEditableDrawing(false)),
+            true,
+            true,
+            false,
+        ),
+        (
+            Message::View(view_settings::Action::ExportSvgLiveText(true)),
+            true,
+            true,
+            false,
+        ),
+        (
             Message::View(view_settings::Action::Rulers(true)),
             true,
             true,

@@ -166,6 +166,8 @@ SVG text is drawn as outlines by default: the glyphs, positions and sizes of
 the PNG, whatever fonts the viewer has. `--svg-text live` keeps `<text>`
 elements, which stay editable and searchable, but a viewer without the
 drawing's font (usually Arial) substitutes its own and labels can shift.
+The CLI passes the mode to the `export` and `render` tools as their `svg_text`
+argument. MCP clients set it the same way, and also for `file_save`.
 
 For PNG, the size is printed to stderr as a warning, such as
 `reshiki: warning: PNG: 737 × 352 pixels at 1200 dpi`. A warning does not mean

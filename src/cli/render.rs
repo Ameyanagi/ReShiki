@@ -2,7 +2,7 @@
 //! tools.
 use super::{
     args::Render,
-    convert::{emit, refuse_binary, svg_text_as},
+    convert::{emit, refuse_binary},
     host::{CliError, Session},
 };
 use serde_json::json;
@@ -33,6 +33,7 @@ pub(crate) async fn run(
     let arguments = json!({
         "document": document,
         "format": format,
+        "svg_text": svg_text,
         "max_width": width,
         "max_height": height,
         "ids": null,
@@ -48,5 +49,5 @@ pub(crate) async fn run(
             "internal error: render returned no image".into(),
         ));
     };
-    emit(&svg_text_as(&format, svg_text, bytes)?, &output, force, out)
+    emit(&bytes, &output, force, out)
 }

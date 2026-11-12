@@ -298,6 +298,7 @@ fn the_tools_work_end_to_end(era: Era) {
             "max_width": null,
             "max_height": null,
             "ids": null,
+            "svg_text": null,
         })
     };
     let rendered = client.ok("render", render(&document));
@@ -320,7 +321,7 @@ fn the_tools_work_end_to_end(era: Era) {
     };
     assert!(png == image.bytes, "the transport altered the PNG");
 
-    let export = |document: &str| json!({"document": document, "format": "svg", "pages": null});
+    let export = |document: &str| json!({"document": document, "format": "svg", "pages": null, "svg_text": null});
     let exported = client.ok("export", export(&document));
     let content = exported["content"].as_array().expect("content");
     assert_eq!(content.len(), 2, "{content:?}");
@@ -328,6 +329,12 @@ fn the_tools_work_end_to_end(era: Era) {
     assert_eq!(content[1]["type"], "resource");
     assert_eq!(resource["uri"], "reshiki:result/drawing.svg");
     assert_eq!(resource["mimeType"], "image/svg+xml");
+    assert!(
+        !resource["text"]
+            .as_str()
+            .expect("SVG text")
+            .contains("<text")
+    );
     let local_export = local.ok("export", export(&local_document));
     let [file] = local_export.files.as_slice() else {
         panic!("one file: {:?}", local_export.value)
@@ -408,6 +415,53 @@ fn the_tools_work_end_to_end_modern() {
 #[test]
 fn the_tools_work_end_to_end_legacy() {
     the_tools_work_end_to_end(Era::Legacy);
+}
+
+#[test]
+fn svg_export_and_render_outline_by_default_and_support_live_text() {
+    for era in [Era::Modern, Era::Legacy] {
+        let mut client = Client::start(era);
+        let imported = client.ok("import", json!({"format": "smiles", "text": "CCO"}));
+        let document = handle(&imported["structuredContent"]["value"]);
+        for tool in ["export", "render"] {
+            for mode in [Value::Null, json!("outline"), json!("live")] {
+                let live = mode == "live";
+                let arguments = if tool == "export" {
+                    json!({
+                        "document": document,
+                        "format": "svg",
+                        "pages": null,
+                        "svg_text": mode,
+                    })
+                } else {
+                    json!({
+                        "document": document,
+                        "format": "svg",
+                        "max_width": null,
+                        "max_height": null,
+                        "ids": null,
+                        "svg_text": mode,
+                    })
+                };
+                let result = client.ok(tool, arguments);
+                let svg = result["content"][1]["resource"]["text"]
+                    .as_str()
+                    .expect("SVG text");
+                assert_eq!(svg.contains("<text"), live, "{era:?}: {tool}: {svg}");
+                if !live {
+                    assert!(svg.contains("<path"), "{era:?}: {tool}: {svg}");
+                }
+                let value = &result["structuredContent"]["value"];
+                let byte_len = if tool == "export" {
+                    &value["receipt"]["byte_len"]
+                } else {
+                    &value["byte_len"]
+                };
+                assert_eq!(*byte_len, json!(svg.len()), "{era:?}: {tool}");
+            }
+        }
+        client.finish();
+    }
 }
 
 /// `message` reduced to what every machine sends, on top of

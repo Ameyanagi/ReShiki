@@ -1,39 +1,48 @@
 {
   "rules": [
+    {"id": "export.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-383; crates/agent/src/ops/export.rs:48,50,111-112"},
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:60,77-88; crates/agent/src/ops/export.rs:112-113"
+      "cite": "crates/agent/src/ops/catalog.rs:263-271; crates/agent/src/ops/export.rs:43,118"
     },
     {
       "id": "export.document_required",
-      "cite": "crates/agent/src/ops/export.rs:43,47,104"
+      "cite": "crates/agent/src/ops/export.rs:45,50,107"
     },
     {
       "id": "export.document_handle",
-      "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,182-185"
+      "cite": "crates/agent/src/ops/wire.rs:85-90,164-170,183-186"
     },
     {
       "id": "export.format_enum",
-      "cite": "crates/agent/src/ops/documents.rs:26-28; crates/agent/src/ops/export.rs:44,47,52-64,105"
+      "cite": "crates/agent/src/ops/documents.rs:26-28; crates/agent/src/ops/export.rs:46,50,57-67,108"
     },
     {
       "id": "export.pages_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/export.rs:45,47,106-107"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,194-196; crates/agent/src/ops/export.rs:47,50,109-110"
     },
     {
       "id": "export.pages_pdf_only",
-      "cite": "crates/agent/src/ops/export.rs:110-121"
+      "cite": "crates/agent/src/ops/export.rs:117-125"
     },
     {
       "id": "export.no_unknown_fields",
-      "cite": "crates/agent/src/ops/export.rs:101-102"
+      "cite": "crates/agent/src/ops/export.rs:104-105"
     }
   ],
   "bases": {
-    "svg": {"tool": "export", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "svg", "pages": null}},
-    "pages": {"tool": "export", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "pdf", "pages": true}}
+    "svg": {"tool": "export", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "svg", "pages": null, "svg_text": null}},
+    "pages": {"tool": "export", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "pdf", "pages": true, "svg_text": null}}
   },
   "cases": [
+    {"name": "svg_text_null", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": null}], "expect": "both_accept"},
+    {"name": "svg_text_outline", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "outline"}], "expect": "both_accept"},
+    {"name": "svg_text_live", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
+    {"name": "svg_text_invalid", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "editable"}], "expect": "both_reject"},
+    {"name": "svg_text_number", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": 1}], "expect": "both_reject"},
+    {"name": "svg_text_omitted", "rule": "export.svg_text_nullable_enum_required", "base": "svg", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "both_reject", "message": "missing field `svg_text`"},
+    {"name": "svg_text_live_non_svg", "rule": "export.svg_text_nullable_enum_required", "base": "pages", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
+
     {"name": "arguments_object", "rule": "arguments.object", "base": "svg", "expect": "both_accept"},
     {"name": "arguments_array", "rule": "arguments.object", "base": "svg", "patch": [{"op": "replace", "path": "/arguments", "value": ["doc_1", "svg", null]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
     {"name": "arguments_null", "rule": "arguments.object", "base": "svg", "patch": [{"op": "replace", "path": "/arguments", "value": null}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
@@ -74,7 +83,7 @@
     {"name": "pages_with_molecular_format", "rule": "export.pages_pdf_only", "base": "pages", "patch": [{"op": "replace", "path": "/arguments/format", "value": "mol"}], "expect": "decoder_rejects_only", "message": "pages is valid only with format pdf"},
 
     {"name": "known_fields_only", "rule": "export.no_unknown_fields", "base": "pages", "expect": "both_accept"},
-    {"name": "unknown_null_field", "rule": "export.no_unknown_fields", "base": "svg", "patch": [{"op": "add", "path": "/arguments/path", "value": null}], "expect": "both_reject", "message": "unknown field `path`, expected one of `document`, `format`, `pages`"},
+    {"name": "unknown_null_field", "rule": "export.no_unknown_fields", "base": "svg", "patch": [{"op": "add", "path": "/arguments/path", "value": null}], "expect": "both_reject", "message": "unknown field `path`, expected one of `document`, `format`, `pages`, `svg_text`"},
     {"name": "unknown_field", "rule": "export.no_unknown_fields", "base": "svg", "patch": [{"op": "add", "path": "/arguments/dpi", "value": 300}], "expect": "both_reject"}
   ]
 }

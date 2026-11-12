@@ -129,6 +129,7 @@ class Session:
                 format=format,
                 overwrite=False,
                 pages=None,
+                svg_text=None,
             ),
         )
 

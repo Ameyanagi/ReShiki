@@ -12,6 +12,8 @@ pub enum Action {
     NameTypography(bool),
     /// Put the drawing inside exported PNG files.
     ExportEditableDrawing(bool),
+    /// Keep text editable in plain SVG exports.
+    ExportSvgLiveText(bool),
     Rulers(bool),
     Crosshair(bool),
     RulerUnit(crate::canvas::guides::Unit),
@@ -35,6 +37,13 @@ impl App {
             }
             Action::ExportEditableDrawing(enabled) => {
                 self.appearance.export_editable_drawing = enabled;
+                if let Err(error) = self.appearance.save() {
+                    self.status = format!("Could not save the export preference: {error}");
+                    self.error = true;
+                }
+            }
+            Action::ExportSvgLiveText(enabled) => {
+                self.appearance.export_svg_live_text = enabled;
                 if let Err(error) = self.appearance.save() {
                     self.status = format!("Could not save the export preference: {error}");
                     self.error = true;

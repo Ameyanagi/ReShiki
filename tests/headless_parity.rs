@@ -129,10 +129,10 @@ impl Mcp {
     }
 
     /// The SVG text an export of `document` returns.
-    fn svg(&mut self, document: &Value) -> Vec<u8> {
+    fn svg(&mut self, document: &Value, svg_text: Option<&str>) -> Vec<u8> {
         let exported = self.ok(
             "export",
-            json!({"document": document, "format": "svg", "pages": null}),
+            json!({"document": document, "format": "svg", "pages": null, "svg_text": svg_text}),
         );
         let resource = &exported["content"][1]["resource"];
         assert_eq!(resource["mimeType"], "image/svg+xml");
@@ -232,31 +232,50 @@ fn normalized(mut value: Value) -> Value {
 }
 
 #[test]
-fn convert_live_svg_is_the_same_over_cli_mcp_and_in_process() {
+fn convert_svg_modes_are_the_same_over_cli_mcp_and_in_process() {
     let dir = folder();
     let mut mcp = Mcp::start();
     let mut local = Local::new();
     for input in &INPUTS {
-        let cli = cli_ok(
-            dir.path(),
-            &with(input, &["convert", "--to", "svg", "--svg-text", "live"]),
-        );
-        assert!(cli.starts_with(b"<svg"), "{}", text(&cli));
         let document = mcp.import(input);
-        assert_eq!(cli, mcp.svg(&document), "{}: CLI and MCP", input.format);
         let imported = local.ok(
             "import",
             json!({"format": input.format, "text": input.text}),
         );
-        let document = &imported.value["value"]["document"];
-        let exported = local.ok(
-            "export",
-            json!({"document": document, "format": "svg", "pages": null}),
-        );
-        let [file] = exported.files.as_slice() else {
-            panic!("one file: {:?}", exported.value)
-        };
-        assert_eq!(cli, file.bytes, "{}: CLI and in-process", input.format);
+        let local_document = &imported.value["value"]["document"];
+        for live in [false, true] {
+            let mut args = vec!["convert", "--to", "svg"];
+            if live {
+                args.extend(["--svg-text", "live"]);
+            }
+            let cli = cli_ok(dir.path(), &with(input, &args));
+            assert!(cli.starts_with(b"<svg"), "{}", text(&cli));
+            assert_eq!(text(&cli).contains("<text"), live);
+            let svg_text = live.then_some("live");
+            assert_eq!(
+                cli,
+                mcp.svg(&document, svg_text),
+                "{}: CLI and MCP, live={live}",
+                input.format
+            );
+            let exported = local.ok(
+                "export",
+                json!({
+                    "document": local_document,
+                    "format": "svg",
+                    "pages": null,
+                    "svg_text": svg_text,
+                }),
+            );
+            let [file] = exported.files.as_slice() else {
+                panic!("one file: {:?}", exported.value)
+            };
+            assert_eq!(
+                cli, file.bytes,
+                "{}: CLI and in-process, live={live}",
+                input.format
+            );
+        }
     }
 }
 
@@ -280,65 +299,67 @@ fn analyze_json_is_the_same_over_cli_and_mcp() {
 }
 
 #[test]
-fn render_png_and_live_svg_are_the_same_over_cli_and_mcp() {
+fn render_png_and_svg_modes_are_the_same_over_cli_and_mcp() {
     let dir = folder();
     let mut mcp = Mcp::start();
     for input in &INPUTS {
         let cli_png = cli_ok(dir.path(), &with(input, &["render", "--to", "png"]));
-        let cli_svg = cli_ok(
-            dir.path(),
-            &with(input, &["render", "--to", "svg", "--svg-text", "live"]),
-        );
         let document = mcp.import(input);
-        let render = |format: &str| {
+        let render = |format: &str, svg_text: Option<&str>| {
             json!({
                 "document": document,
                 "format": format,
                 "max_width": null,
                 "max_height": null,
                 "ids": null,
+                "svg_text": svg_text,
             })
         };
-        let rendered = mcp.ok("render", render("png"));
+        let rendered = mcp.ok("render", render("png", None));
         let image = &rendered["content"][1];
         assert_eq!(image["mimeType"], "image/png");
         let png = STANDARD
             .decode(image["data"].as_str().expect("image data"))
             .expect("base64 image data");
         assert_same_pixels(&cli_png, &png, input.format);
-        let rendered = mcp.ok("render", render("svg"));
-        let svg = rendered["content"][1]["resource"]["text"]
-            .as_str()
-            .expect("SVG text");
-        assert_eq!(text(&cli_svg), svg, "{}", input.format);
+        for live in [false, true] {
+            let mut args = vec!["render", "--to", "svg"];
+            if live {
+                args.extend(["--svg-text", "live"]);
+            }
+            let cli_svg = cli_ok(dir.path(), &with(input, &args));
+            let rendered = mcp.ok("render", render("svg", live.then_some("live")));
+            let svg = rendered["content"][1]["resource"]["text"]
+                .as_str()
+                .expect("SVG text");
+            assert_eq!(svg.contains("<text"), live);
+            assert_eq!(text(&cli_svg), svg, "{}: live={live}", input.format);
+        }
     }
 }
 
 #[test]
-fn compose_live_svg_is_the_same_over_cli_and_mcp() {
+fn compose_svg_modes_are_the_same_over_cli_and_mcp() {
     let dir = folder();
-    let cli = cli_ok(
-        dir.path(),
-        &[
-            "compose",
-            "proposal.json",
-            "--to",
-            "svg",
-            "--svg-text",
-            "live",
-        ],
-    );
-    assert!(cli.starts_with(b"<svg"), "{}", text(&cli));
     let mut mcp = Mcp::start();
     let composed = mcp.ok(
         "compose",
         json!({"proposal": headless::esterification(), "style_document": null}),
     );
     let document = composed["structuredContent"]["value"]["document"].clone();
-    assert!(
-        text(&cli) == text(&mcp.svg(&document)),
-        "CLI and MCP differ"
-    );
+    for live in [false, true] {
+        let mut args = vec!["compose", "proposal.json", "--to", "svg"];
+        if live {
+            args.extend(["--svg-text", "live"]);
+        }
+        let cli = cli_ok(dir.path(), &args);
+        assert!(cli.starts_with(b"<svg"), "{}", text(&cli));
+        assert_eq!(text(&cli).contains("<text"), live);
+        assert!(
+            cli == mcp.svg(&document, live.then_some("live")),
+            "CLI and MCP differ: live={live}"
+        );
+    }
 }
 
 #[test]
