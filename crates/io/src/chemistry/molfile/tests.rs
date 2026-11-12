@@ -505,7 +505,9 @@ fn haworth_drawing_export_keeps_existing_2d_bytes_and_stereo() -> anyhow::Result
         Sugar::Fructose,
     ] {
         for anomer in [Anomer::Alpha, Anomer::Beta] {
-            let doc = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+            let mut doc = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+            // Compare coordinates only; superatom_tests covers the CH2OH label's SUP records.
+            doc.abbreviations.clear();
             assert!(doc.atoms.iter().any(|atom| atom.depth.abs() > 0.028));
             let molecule = document::prepare(&doc)?;
             let expected_smiles =
@@ -579,6 +581,8 @@ fn haworth_export_only_excludes_drawings_with_recognized_exported_atoms() -> any
         haworth::{Anomer, Sugar, sugar_document},
     };
     let mut doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
+    // Compare coordinates only; superatom_tests covers the CH2OH label's SUP records.
+    doc.abbreviations.clear();
     // Even when only the unrelated component has depth, the exported Haworth
     // atoms require the same 2D depiction of the whole molecule as before.
     for atom in &mut doc.atoms {
