@@ -370,6 +370,22 @@ fn explicitly_expanded_superatoms_stay_expanded_without_a_notice() -> anyhow::Re
 }
 
 #[test]
+fn empty_superatoms_import_without_a_notice() -> anyhow::Result<()> {
+    let atoms = [("C", 0., 0.), ("O", 1.5, 0.), ("C", 3., 0.)];
+    let bonds = [(1, 2), (2, 3)];
+    for source in [
+        v2000(&atoms, &bonds, "M  STY  1   1 SUP\nM  SMT   1 OMe"),
+        v3000(&atoms, &bonds, "M  V30 1 SUP 0 LABEL=OMe", 1),
+    ] {
+        let (document, _, notices) = read(&source)?.display_document()?;
+        assert!(document.abbreviations.is_empty());
+        assert!(notices.is_empty(), "{notices:?}");
+        assert_eq!(identity(&document)?, "COC");
+    }
+    Ok(())
+}
+
+#[test]
 fn ordinary_member_hydrogen_folds_before_superatom_restoration() -> anyhow::Result<()> {
     let atoms = [("C", 0., 0.), ("H", 3., 1.), ("O", 1.5, 0.), ("C", 3., 0.)];
     let bonds = [(1, 3), (3, 4), (4, 2)];
@@ -570,6 +586,10 @@ fn saps_that_do_not_match_the_crossing_bonds_keep_the_group_expanded() -> anyhow
         assert!(
             notices[0].contains("attachment points do not match"),
             "{notices:?}"
+        );
+        assert!(
+            document.version < crate::document::RESIDUE_GROUPS,
+            "A group left expanded must not raise the document version"
         );
     }
     Ok(())
