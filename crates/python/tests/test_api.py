@@ -118,6 +118,11 @@ def test_offline_name_resolution() -> None:
     [
         (reshiki.Molecule.from_smiles, RELATIVE_SMILES, RELATIVE_WARNING),
         (reshiki.parse, "C/C=C=C=C/C", CUMULENE_WARNING),
+        (
+            reshiki.Molecule.from_smiles,
+            "C~C",
+            "Bond C1–C2 has any order (~); bond order assumed single",
+        ),
     ],
 )
 def test_structure_import_warnings(
@@ -282,6 +287,36 @@ def test_binary_and_text_outputs_and_save(tmp_path: Path) -> None:
         molecule.emf()
 
 
+@pytest.mark.parametrize("width", [None, 180])
+def test_svg_outlines_labels_by_default_and_preserves_live_text(width: int | None) -> None:
+    molecule = reshiki.Molecule.from_smiles("O")
+    outlined = ET.fromstring(molecule.svg(width=width))
+    assert not list(outlined.iter("{http://www.w3.org/2000/svg}text"))
+    assert list(outlined.iter("{http://www.w3.org/2000/svg}path"))
+
+    live = ET.fromstring(molecule.svg(width=width, text="live"))
+    assert list(live.iter("{http://www.w3.org/2000/svg}text"))
+
+
+def test_svg_text_option_passes_through_render_and_convert() -> None:
+    molecule = reshiki.Molecule.from_smiles("O")
+    for output in (
+        molecule.render("svg", text="live"),
+        reshiki.render("O", "svg", text="live"),
+        reshiki.convert("O", to="svg", text="live"),
+    ):
+        assert isinstance(output, str)
+        assert list(ET.fromstring(output).iter("{http://www.w3.org/2000/svg}text"))
+
+
+def test_invalid_svg_text_option_raises() -> None:
+    molecule = reshiki.Molecule.from_smiles("O")
+    with pytest.raises(ValueError, match="text must be 'outline' or 'live'"):
+        molecule.svg(text="invalid")
+    with pytest.raises(ValueError, match="text must be 'outline' or 'live'"):
+        reshiki.render_many([], "svg", text="invalid")
+
+
 def test_size_fit_and_dpi() -> None:
     molecule = reshiki.Molecule.from_smiles(ASPIRIN)
     low = png_size(molecule.png(dpi=72))
@@ -375,6 +410,18 @@ def test_batch_errors_and_order() -> None:
     assert reshiki.render_many([], format="svg").errors == []
     assert reshiki.render_many([], format="svg").warnings == []
     assert all(isinstance(item, str) for item in reshiki.render_many(["CCO", "O"], "svg"))
+
+
+@pytest.mark.parametrize("text", ["outline", "live"])
+def test_batch_svg_text_mode(text: str) -> None:
+    results = reshiki.render_many(["O", "N"], "svg", text=text)
+    assert not results.errors
+    for output in results:
+        assert isinstance(output, str)
+        svg = ET.fromstring(output)
+        assert bool(list(svg.iter("{http://www.w3.org/2000/svg}text"))) == (text == "live")
+        if text == "outline":
+            assert list(svg.iter("{http://www.w3.org/2000/svg}path"))
 
 
 def test_batch_collects_structure_warnings_without_emitting() -> None:

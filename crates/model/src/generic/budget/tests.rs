@@ -15,6 +15,58 @@ use crate::{
 use std::collections::HashSet;
 
 #[test]
+fn arrow_node_storage_validation_and_ink_work_grow_proportionally() {
+    let mut source = Document::default();
+    let mut arrow = crate::document::Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        crate::arrows::Preset::Curved,
+        crate::arrows::ArrowStyle::preset(crate::arrows::Preset::Curved),
+    );
+    arrow.cubic = Some([Point::new(10., -20.), Point::new(110., -20.)]);
+    source.arrows.push(arrow);
+    let costs = |doc: &Document| {
+        doc.validate().unwrap();
+        let mut inspect = Work::new(usize::MAX);
+        let presentation = Presentation::inspect(doc, &mut inspect).unwrap();
+        let mut validation = Work::new(usize::MAX);
+        charge_validation(doc, &mut validation).unwrap();
+        let mut ink = Work::new(usize::MAX);
+        charge_ink_work(doc, &mut ink).unwrap();
+        [
+            presentation.copy,
+            usize::MAX - inspect.remaining,
+            usize::MAX - validation.remaining,
+            usize::MAX - ink.remaining,
+        ]
+    };
+    let empty = costs(&source);
+    let node = crate::document::ArrowNode {
+        point: Point::new(60., -30.),
+        controls: [Point::new(40., -40.), Point::new(80., -20.)],
+        kind: crate::graphics::PathNodeType::Corner,
+    };
+    source.arrows[0].nodes.push(node);
+    let one = costs(&source);
+    assert_eq!(one[0] - empty[0], std::mem::size_of_val(&node));
+    let mut short = Work::new(empty[1]);
+    assert!(
+        Presentation::inspect(&source, &mut short)
+            .err()
+            .unwrap()
+            .contains("work limit")
+    );
+    source.arrows[0].nodes = vec![node; 4];
+    let four = costs(&source);
+    for i in 0..one.len() {
+        let per_node = one[i] - empty[i];
+        assert!(per_node > 0, "uncharged arrow-node cost {i}");
+        assert_eq!(four[i] - empty[i], per_node * 4);
+    }
+}
+
+#[test]
 fn stereo_descriptors_ink_precharge_pays_for_displayed_text_lengths() {
     let mut source = chain(&["C", "C"]);
     source.atom_labels.stereo = true;

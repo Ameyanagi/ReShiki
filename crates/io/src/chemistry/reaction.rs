@@ -13,6 +13,7 @@ mod drawing;
 pub use drawing::Drawing;
 mod layout;
 mod smiles;
+pub(crate) use smiles::read_partial as read_smiles_partial;
 pub use smiles::{ReadError as SmilesError, SmilesReaction, read as read_smiles};
 
 /// Parsed participants in file order; drawing placement is a separate operation.

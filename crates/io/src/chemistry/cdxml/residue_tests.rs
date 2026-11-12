@@ -262,7 +262,7 @@ async fn boc_ala_ome_keeps_both_attachments_and_chemistry_across_formats() {
     collapsed.require_version(crate::document::RESIDUE_GROUPS);
     assert_residue_boundaries(&collapsed);
 
-    for format in ["smiles", "mol", "inchi"] {
+    for format in ["smiles", "inchi"] {
         let expected = crate::formats::write_with_engine(expanded.clone(), format, &engine)
             .await
             .unwrap();
@@ -278,17 +278,20 @@ async fn boc_ala_ome_keeps_both_attachments_and_chemistry_across_formats() {
         .analysis
         .unwrap();
     assert_eq!(expected.formula, "C9H17NO4");
-    for format in ["rsk", "cdxml", "cdx"] {
+    for format in ["rsk", "cdxml", "cdx", "mol"] {
         let bytes = crate::formats::write_with_engine(collapsed.clone(), format, &engine)
             .await
             .unwrap();
-        if format != "rsk" {
+        if matches!(format, "cdxml" | "cdx") {
             let xml = if format == "cdx" {
                 crate::exchange::from_cdx(&bytes).unwrap()
             } else {
                 String::from_utf8(bytes.clone()).unwrap()
             };
             assert_exported_attachment_order(&xml);
+        }
+        if format == "mol" {
+            assert!(String::from_utf8_lossy(&bytes).contains(" SUP"));
         }
         let reopened = crate::formats::read_with_engine(bytes, format, &engine)
             .await

@@ -43,7 +43,10 @@ impl App {
             Edit::PointerHover(offset) => Edit::Hover(offset.map(|p| self.tab.camera.pointer(p))),
             edit => edit,
         };
-        if !matches!(edit, Edit::PathNodeClick(..) | Edit::Hover(_)) {
+        if !matches!(
+            edit,
+            Edit::PathNodeClick(..) | Edit::ArrowNodeClick(..) | Edit::Hover(_)
+        ) {
             self.path_click = None;
         }
         match edit {
@@ -218,7 +221,38 @@ impl App {
                 }
             }
             Edit::ArrowHandle(id, index, p) => {
+                if reshiki::arrows::node_handle(index).is_some() {
+                    self.tab.path_point = Some((id, index));
+                }
                 reshiki::arrow_anchors::edit_handle(&mut self.tab.doc, id, index, p);
+            }
+            Edit::ArrowControlFree(id, index, p) => {
+                self.tab.path_point = Some((id, index));
+                if let Some(a) = self.tab.doc.arrows.iter_mut().find(|a| a.id == id) {
+                    a.edit_handle_free(index, p);
+                }
+            }
+            Edit::ArrowNodeInsert(id, p) => {
+                let Some(a) = self.tab.doc.arrows.iter_mut().find(|a| a.id == id) else {
+                    return;
+                };
+                match a.insert_node(p) {
+                    Ok(index) => {
+                        self.tab.path_point = Some((id, index));
+                        self.error = false;
+                        self.status =
+                            "Node added · Drag it, or double-click to change its type".into();
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
+            }
+            Edit::ArrowNodeClick(id, index) => {
+                self.arrow_node_click(id, index, iced::time::Instant::now());
+                return;
             }
             Edit::GraphicPoint(id, index, p) => {
                 self.tab.path_point = Some((id, index));

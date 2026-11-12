@@ -283,9 +283,104 @@ fn damaged_present_payload_is_an_error() {
 
 #[test]
 fn embed_rejects_other_formats_and_invalid_png_headers() {
-    assert!(embed("svg", png(), &[]).is_err());
+    assert!(embed("pdf", png(), &[]).is_err());
     assert!(embed("png", vec![], &[]).is_err());
     assert!(embed("png", png()[..32].to_vec(), &[]).is_err());
+    assert!(embed("svg", png(), &[]).is_err());
+    assert!(embed("svg", b"<html/>".to_vec(), &[]).is_err());
+}
+
+#[test]
+fn svg_metadata_has_the_exact_namespace_and_preserves_rendered_pixels() {
+    let doc = drawing();
+    let envelope = encode(&doc).unwrap();
+    let source = r##"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="24"><rect x="3" y="5" width="12" height="8" fill="#123456"/></svg>"##;
+    let render = |svg: &str| {
+        let tree = crate::export::parse_svg(svg.to_owned()).unwrap();
+        let mut pixels = resvg::tiny_skia::Pixmap::new(32, 24).unwrap();
+        resvg::render(&tree, Default::default(), &mut pixels.as_mut());
+        (tree.size(), pixels.take())
+    };
+    for format in ["svg", "svg-office"] {
+        let bytes = embed(format, source.as_bytes().to_vec(), &envelope).unwrap();
+        let svg = std::str::from_utf8(&bytes).unwrap();
+        let metadata = format!(
+            "<metadata>{OPEN}{}{CLOSE}</metadata>",
+            STANDARD.encode(&envelope)
+        );
+        let root_end = source.find('>').unwrap() + 1;
+        assert_eq!(
+            svg,
+            format!("{}{metadata}{}", &source[..root_end], &source[root_end..])
+        );
+        let xml = roxmltree::Document::parse(svg).unwrap();
+        let metadata = xml.root_element().first_element_child().unwrap();
+        assert_eq!(metadata.tag_name().name(), "metadata");
+        let payload = metadata.first_element_child().unwrap();
+        assert_eq!(payload.tag_name().name(), "drawing");
+        assert_eq!(
+            payload.tag_name().namespace(),
+            Some("https://reshiki.dev/ns/drawing/1/")
+        );
+        assert_eq!(render(source), render(svg));
+        assert_eq!(read(&bytes).unwrap().unwrap(), doc);
+    }
+}
+
+#[test]
+fn svg_and_pdf_readers_accept_whitespace_attributes_and_only_the_first_payload() {
+    let doc = drawing();
+    let encoded = STANDARD.encode(encode(&doc).unwrap());
+    let wrapped = encoded
+        .as_bytes()
+        .chunks(17)
+        .map(|chunk| std::str::from_utf8(chunk).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n \t\r");
+    let element = format!("{OPEN}\n{wrapped}\n{CLOSE}");
+    for prefix in [
+        "<svg>",
+        "\u{feff} \r\n\t<svg>",
+        "<?xml version=\"1.0\"?><svg>",
+        "<!-- comment --><?processing test?><svg>",
+        "%PDF-1.7\nstream\n",
+    ] {
+        // A bare element, as page text or a font name might hold, is skipped.
+        let bytes = format!(
+            "{prefix}<reshiki:drawing>broken</reshiki:drawing>{element}{OPEN}broken{CLOSE}"
+        );
+        assert_eq!(read(bytes.as_bytes()).unwrap().unwrap(), doc, "{prefix:?}");
+    }
+    let first_bad = format!("<svg>{OPEN}broken{CLOSE}{element}");
+    assert!(read(first_bad.as_bytes()).unwrap().is_err());
+}
+
+#[test]
+fn svg_and_pdf_without_payload_are_absent_and_damaged_payloads_are_errors() {
+    for bytes in [
+        b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>".as_slice(),
+        b"<?xml version=\"1.0\"?><svg/>",
+        b"%PDF-1.7\nno embedded drawing",
+        b"plain text <reshiki:drawing>broken</reshiki:drawing>",
+        b" %PDF-1.7\n<reshiki:drawing>broken</reshiki:drawing>",
+    ] {
+        assert!(read(bytes).is_none(), "{bytes:?}");
+    }
+    for body in [
+        OPEN.to_owned(),
+        format!("{OPEN}!{CLOSE}"),
+        format!("{OPEN}{CLOSE}"),
+        format!("{OPEN}YnJva2Vu{CLOSE}"),
+    ] {
+        for prefix in ["<svg>", "%PDF-1.7\n"] {
+            assert!(read(format!("{prefix}{body}").as_bytes()).unwrap().is_err());
+        }
+    }
+    let bytes = format!("{}<svg>{OPEN}!{CLOSE}", "x".repeat(1024));
+    assert!(
+        read(bytes.as_bytes()).is_none(),
+        "SVG sniff is bounded to 1 KiB"
+    );
 }
 
 #[test]

@@ -137,6 +137,7 @@ pub(super) fn drag_event(event: &iced::window::Event) -> Option<Message> {
 enum Kind {
     Structure(&'static str),
     Picture,
+    Drawing,
     Document,
     Unsupported,
 }
@@ -162,6 +163,8 @@ fn kind(path: &Path) -> Kind {
         Kind::Structure(format)
     } else if PICTURES.contains(&extension.as_str()) {
         Kind::Picture
+    } else if matches!(extension.as_str(), "svg" | "pdf") {
+        Kind::Drawing
     } else if reshiki::compatibility::is_native_extension(&extension) {
         Kind::Document
     } else {
@@ -238,9 +241,14 @@ async fn read(
     canvas_theme: CanvasTheme,
 ) -> Result<(Document, Vec<String>), String> {
     match kind(&file.path) {
-        Kind::Picture => {
+        Kind::Picture | Kind::Drawing => {
+            let extension = extension(&file.path);
+            let vector = matches!(extension.as_str(), "svg" | "pdf");
+            if vector && file.contents.len() > reshiki::pictures::MAX_BYTES {
+                return Err("File exceeds 16 MB".into());
+            }
             let mut warnings = vec![];
-            let file = if extension(&file.path) == "png" {
+            let file = if vector || extension == "png" {
                 let (file, payload) = reshiki::task::spawn_blocking(move || {
                     let payload = reshiki::payload::read(&file.contents);
                     (file, payload)
@@ -256,9 +264,21 @@ async fn read(
                             vec![warning],
                         ));
                     }
+                    Some(Err(error)) if vector => {
+                        return Err(format!(
+                            "This {} carries a ReShiki drawing that could not be read: {error}",
+                            extension.to_ascii_uppercase()
+                        ));
+                    }
                     Some(Err(error)) => warnings.push(format!(
                         "Inserted as a picture: its editable drawing could not be read ({error})"
                     )),
+                    None if vector => {
+                        return Err(format!(
+                            "This {} has no ReShiki drawing to import",
+                            extension.to_ascii_uppercase()
+                        ));
+                    }
                     None => {}
                 }
                 file
@@ -308,9 +328,9 @@ async fn load(
     }
     Ok(batch)
 }
-/// Pictures are read to one byte past their size limit; structure files whole.
+/// Picture carriers are bounded; structure files are read whole.
 pub(super) fn limit(path: &Path) -> u64 {
-    if kind(path) == Kind::Picture {
+    if matches!(kind(path), Kind::Picture | Kind::Drawing) {
         reshiki::pictures::MAX_BYTES as u64
     } else {
         u64::MAX

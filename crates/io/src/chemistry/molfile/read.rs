@@ -44,6 +44,15 @@ pub struct Imported {
     pub annotations: FileAnnotations,
 }
 
+/// A file superatom, with references resolved to the imported molecule's IDs.
+#[derive(Clone, Debug)]
+pub struct Superatom {
+    pub label: String,
+    pub members: Vec<u64>,
+    pub attachments: Vec<(u64, String)>,
+    pub expanded: bool,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct FileAnnotations {
     #[serde(skip_serializing_if = "crate::generic::Generic::is_empty")]
@@ -56,6 +65,9 @@ pub struct FileAnnotations {
     /// radical electron count. Excluded from RDKit-compatible snapshots.
     #[serde(skip)]
     pub singlets: Vec<bool>,
+    /// Presentation metadata excluded from RDKit-compatible parser snapshots.
+    #[serde(skip)]
+    pub superatoms: Vec<Superatom>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<crate::attachments::Attachment>,
     pub is_3d: bool,
@@ -543,26 +555,19 @@ impl Parsed {
                 "radical count or stereochemistry class",
             ));
         }
-        // Reaction parsing wraps ordinary reactant/product atoms as queries.
-        // Existing explicit number queries replace that generated wrapper.
-        if matches!(context, Context::Reaction { agent: false, .. })
-            && state.graph.atoms.iter().zip(&self.atoms).any(|(a, props)| {
-                matches!(props.query, FileQuery::None)
-                    && (a.isotope != 0 || a.charge != 0 || a.radical_electrons != 0)
-            })
-        {
-            return Err(ReadError::Unsupported("query reaction atom"));
-        }
+        let molecule = Molecule {
+            rdkit_version: RDKIT_VERSION,
+            ids: (1..=state.graph.atoms.len() as u64).collect(),
+            positions: conformer.positions,
+            state,
+        };
+        let superatoms = groups.superatoms(&molecule.ids)?;
         Ok(Imported {
-            molecule: Molecule {
-                rdkit_version: RDKIT_VERSION,
-                ids: (1..=state.graph.atoms.len() as u64).collect(),
-                positions: conformer.positions,
-                state,
-            },
+            molecule,
             annotations: FileAnnotations {
                 generic: self.generic,
                 chemdraw_directions,
+                superatoms,
                 attachments: self
                     .bonds
                     .iter()

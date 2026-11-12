@@ -49,7 +49,7 @@ pub struct Settings {
     pub name_typography: bool,
     /// Write IUPAC Ξ/ξ descriptors for explicitly unknown configuration.
     pub write_unknown_stereo: bool,
-    /// Include an editable drawing in exported PNG files (on by default).
+    /// Include an editable drawing in exported PNG, SVG and figure PDF files (on by default).
     pub export_editable_drawing: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,

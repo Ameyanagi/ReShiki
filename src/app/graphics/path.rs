@@ -70,11 +70,33 @@ impl App {
         let ordinal = summary.nodes().position(|node| node.index == index)?;
         Some((id, index, *graphic.path_node_types()?.get(ordinal)?))
     }
+    /// The one selected arrow when it can take interior nodes.
+    pub(in crate::app) fn selected_node_arrow(&self) -> Option<&reshiki::document::Arrow> {
+        let [id] = self.tab.selected.as_slice() else {
+            return None;
+        };
+        self.tab
+            .doc
+            .arrows
+            .iter()
+            .find(|a| a.id == *id && a.kind != "bent")
+    }
+    /// The selected arrow's chosen interior node handle and its node's type.
+    pub(in crate::app) fn selected_arrow_node(&self) -> Option<(u64, usize, PathNodeType)> {
+        let arrow = self.selected_node_arrow()?;
+        let (_, index) = self.tab.path_point.filter(|(id, _)| *id == arrow.id)?;
+        Some((arrow.id, index, arrow.node_type(index)?))
+    }
     pub(in crate::app) fn edit_points_node_options(&self) -> Vec<Element<'_, Message>> {
-        if self.selected_path().is_none() {
+        let arrow = self.selected_path().is_none();
+        if arrow && self.selected_node_arrow().is_none() {
             return vec![];
         }
-        let selected = self.edit_points_node();
+        let selected = if arrow {
+            self.selected_arrow_node()
+        } else {
+            self.edit_points_node()
+        };
         [
             (
                 "edit-points-corner",
@@ -99,11 +121,13 @@ impl App {
         .map(|(id, label, kind, hint)| {
             hover_hint(
                 accessible_command(id, label, label)
-                    .on_press_maybe(
-                        selected.map(|_| {
+                    .on_press_maybe(selected.map(|_| {
+                        if arrow {
+                            Message::ArrowAction(crate::app::arrows::Action::NodeType(kind))
+                        } else {
                             Message::Graphics(super::Action::Path(Action::NodeType(kind)))
-                        }),
-                    )
+                        }
+                    }))
                     .style(control(
                         selected.is_some_and(|(_, _, current)| current == kind),
                     )),
@@ -132,6 +156,32 @@ impl App {
         self.path_click = (!double).then_some((now, target));
         if double {
             self.path_action(Action::NodeType(match kind {
+                PathNodeType::Corner => PathNodeType::Smooth,
+                PathNodeType::Smooth => PathNodeType::Symmetric,
+                PathNodeType::Symmetric => PathNodeType::Corner,
+            }));
+        }
+    }
+    /// Selects an arrow node or control; a double-click on a node cycles its type.
+    pub(in crate::app) fn arrow_node_click(
+        &mut self,
+        id: u64,
+        index: usize,
+        now: iced::time::Instant,
+    ) {
+        self.tab.path_point = Some((id, index));
+        let Some((id, index, kind)) = self.selected_arrow_node() else {
+            return;
+        };
+        let target = (self.tab.id, id, index);
+        let double = self.path_click.is_some_and(|(time, last)| {
+            last == target && now.duration_since(time) < std::time::Duration::from_millis(450)
+        });
+        self.path_click = (!double).then_some((now, target));
+        let node = reshiki::arrows::node_handle(index)
+            .is_some_and(|(_, part)| part == reshiki::arrows::NodePart::Node);
+        if double && node {
+            self.arrow_action(crate::app::arrows::Action::NodeType(match kind {
                 PathNodeType::Corner => PathNodeType::Smooth,
                 PathNodeType::Smooth => PathNodeType::Symmetric,
                 PathNodeType::Symmetric => PathNodeType::Corner,

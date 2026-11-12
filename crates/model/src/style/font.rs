@@ -50,14 +50,25 @@ pub(super) fn keep_resident(db: &mut resvg::usvg::fontdb::Database, families: &[
 /// An alias hidden from font pickers distinguishes the bundled glyph fallback.
 pub(super) const BUNDLED_FAMILY: &str = ".ReShiki Bundled Sans";
 
-/// Guarantee a Latin sans-serif fallback. The browser also aliases the faces to
-/// Arial; native builds retain the system's generic sans-serif preference.
+/// Supply Arial-compatible Latin faces only when the database lacks Arial.
+/// Keep an existing generic sans-serif preference, choosing a visible installed
+/// family when it does not resolve, or Arial when the database is empty.
 /// Source and license: licenses/liberation-fonts.
 pub(super) fn load_bundled(db: &mut resvg::usvg::fontdb::Database) {
-    use resvg::usvg::fontdb::{Language, Source};
-    #[cfg(not(target_arch = "wasm32"))]
+    use resvg::usvg::fontdb::{Family, Language, Query, Source, Stretch, Style};
+    if db
+        .faces()
+        .any(|face| face.families.iter().any(|(name, _)| name == "Arial"))
+    {
+        return;
+    }
+    // A browser page can add its own Helvetica after these faces, and the
+    // first of equally good matches wins, so only native builds alias it.
+    let helvetica = cfg!(not(target_arch = "wasm32"))
+        && !db
+            .faces()
+            .any(|face| face.families.iter().any(|(name, _)| name == "Helvetica"));
     let sans = {
-        use resvg::usvg::fontdb::{Family, Query, Stretch, Style};
         db.query(&Query {
             families: &[Family::SansSerif],
             ..Default::default()
@@ -80,7 +91,7 @@ pub(super) fn load_bundled(db: &mut resvg::usvg::fontdb::Database) {
                     )
                 })
                 .and_then(|face| face.families.first().map(|(name, _)| name.clone()))
-                .unwrap_or_else(|| "Liberation Sans".into())
+                .unwrap_or_else(|| "Arial".into())
         })
     };
     const FACES: [&[u8]; 4] = [
@@ -93,17 +104,18 @@ pub(super) fn load_bundled(db: &mut resvg::usvg::fontdb::Database) {
         for id in db.load_font_source(Source::Binary(std::sync::Arc::new(bytes))) {
             if let Some(mut face) = db.face(id).cloned() {
                 db.remove_face(id);
-                #[cfg(target_arch = "wasm32")]
+                if helvetica {
+                    face.families
+                        .insert(0, ("Helvetica".into(), Language::English_UnitedStates));
+                }
                 face.families
                     .insert(0, ("Arial".into(), Language::English_UnitedStates));
-                #[cfg(not(target_arch = "wasm32"))]
                 face.families
                     .push((BUNDLED_FAMILY.into(), Language::English_UnitedStates));
                 db.push_face_info(face);
             }
         }
     }
-    #[cfg(not(target_arch = "wasm32"))]
     if let Some(sans) = sans {
         db.set_sans_serif_family(sans);
     }

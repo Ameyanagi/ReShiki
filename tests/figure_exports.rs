@@ -102,32 +102,49 @@ async fn publication_matches_sequence() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn editable_option_leaves_vector_and_page_exports_unchanged() -> anyhow::Result<()> {
+async fn editable_option_embeds_vector_drawings_but_never_pages() -> anyhow::Result<()> {
     let doc = Document {
         page_layout: Some(reshiki::pages::Layout::default()),
         ..Default::default()
     };
     let engine = LocalEngine::default();
-    for (format, pages) in [("svg", false), ("pdf", false), ("pdf", true)] {
-        let exported = export::publication(
-            &engine,
-            doc.clone(),
-            format,
-            pages,
-            true,
-            export::FILE_PIXELS,
-        )
-        .await
-        .map_err(anyhow::Error::msg)?;
-        assert!(exported.details.is_empty(), "{format}, pages={pages}");
-        assert!(reshiki::payload::read(&exported.bytes).is_none());
-        if format == "svg" {
-            assert_eq!(
-                exported.bytes,
-                reshiki::scene::svg_with_background(&doc).as_bytes()
-            );
-        } else {
-            assert!(exported.bytes.starts_with(b"%PDF-"));
+    for (format, pages) in [
+        ("svg", false),
+        ("svg-office", false),
+        ("pdf", false),
+        ("pdf", true),
+    ] {
+        for editable in [false, true] {
+            let exported = export::publication(
+                &engine,
+                doc.clone(),
+                format,
+                pages,
+                editable,
+                export::FILE_PIXELS,
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            if editable && !pages {
+                assert_eq!(exported.details, ["Includes the editable drawing"]);
+                assert_eq!(
+                    reshiki::payload::read(&exported.bytes)
+                        .unwrap()
+                        .map_err(anyhow::Error::msg)?,
+                    reshiki::payload::visible(&doc.current())
+                );
+            } else {
+                assert!(exported.details.is_empty(), "{format}, pages={pages}");
+                assert!(reshiki::payload::read(&exported.bytes).is_none());
+            }
+            if format == "svg" && !editable {
+                assert_eq!(
+                    exported.bytes,
+                    reshiki::scene::svg_with_background(&doc).as_bytes()
+                );
+            } else if format == "pdf" {
+                assert!(exported.bytes.starts_with(b"%PDF-"));
+            }
         }
     }
     Ok(())

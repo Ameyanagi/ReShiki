@@ -9,6 +9,78 @@ use crate::{
 };
 
 #[test]
+fn prepared_multinode_arrow_preserves_and_certifies_every_node_coordinate_and_kind() {
+    let mut source = Document::default();
+    let mut arrow = crate::document::Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        crate::arrows::Preset::Curved,
+        crate::arrows::ArrowStyle::preset(crate::arrows::Preset::Curved),
+    );
+    arrow.cubic = Some([Point::new(10., -20.), Point::new(110., -20.)]);
+    arrow.nodes = vec![
+        crate::document::ArrowNode {
+            point: Point::new(40., -30.),
+            controls: [Point::new(30., -40.), Point::new(50., -20.)],
+            kind: crate::graphics::PathNodeType::Smooth,
+        },
+        crate::document::ArrowNode {
+            point: Point::new(80., -30.),
+            controls: [Point::new(70., -20.), Point::new(90., -40.)],
+            kind: crate::graphics::PathNodeType::Corner,
+        },
+    ];
+    source.arrows.push(arrow);
+    let target = Document::default();
+    let shift = Point::new(120., 80.);
+    let (part, map, _) = crate::editing::preserved_append_part(&target, &source, shift).unwrap();
+    for (old, new) in source.arrows[0].nodes.iter().zip(&part.arrows[0].nodes) {
+        assert_eq!(new.point, old.point.offset(shift.x, shift.y));
+        assert_eq!(
+            new.controls,
+            old.controls.map(|p| p.offset(shift.x, shift.y))
+        );
+        assert_eq!(new.kind, old.kind);
+    }
+    certify_translation(&source, &part, &map, shift).unwrap();
+    for case in 0..9 {
+        let mut tampered = part.clone();
+        let nodes = &mut tampered.arrows[0].nodes;
+        match case {
+            0 => nodes[0].point.x += 1.,
+            1 => nodes[0].controls[0].y += 1.,
+            2 => nodes[0].controls[1].x += 1.,
+            3 => nodes[0].kind = crate::graphics::PathNodeType::Symmetric,
+            4 => {
+                nodes.pop();
+            }
+            5 => nodes.push(nodes[0]),
+            6 => nodes[1].point.y = f32::NAN,
+            7 => nodes[1].controls[0].x = f32::INFINITY,
+            _ => nodes[1].controls[1].y = f32::NEG_INFINITY,
+        }
+        assert!(
+            certify_translation(&source, &tampered, &map, shift).is_err(),
+            "accepted node tampering case {case}"
+        );
+    }
+    // Endpoints and outer controls have no x extent, so only the interior
+    // points expose precision loss after the same exact f32 translation.
+    let arrow = &mut source.arrows[0];
+    arrow.end = Point::new(0., 120.);
+    arrow.cubic = Some([Point::new(0., 10.), Point::new(0., 110.)]);
+    let huge = Point::new(1e30, 0.);
+    let (collapsed, map, _) =
+        crate::editing::preserved_append_part(&target, &source, huge).unwrap();
+    assert!(
+        certify_translation(&source, &collapsed, &map, huge)
+            .unwrap_err()
+            .contains("local geometry")
+    );
+}
+
+#[test]
 fn generated_union_keeps_fixed_maps_captions_cubic_arrows_and_rear_metadata() {
     let source = union_source();
     let before = source.clone();

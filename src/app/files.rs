@@ -320,15 +320,22 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
         .and_then(|e| e.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
-    if extension == "png"
+    if matches!(extension.as_str(), "png" | "svg" | "pdf")
         && let Some(payload) = reshiki::payload::read(&contents)
     {
         Ok(match payload {
             Ok(drawing) => Prepared::Picture(Box::new(drawing), None),
-            Err(error) => Prepared::Picture(
+            Err(error) if extension == "png" => Prepared::Picture(
                 Box::new(reshiki::pictures::clipboard_document(&contents)?),
                 Some(format!("its editable drawing could not be read ({error})")),
             ),
+            // ReShiki has no SVG or PDF picture to fall back to.
+            Err(error) => {
+                return Err(format!(
+                    "This {} carries a ReShiki drawing that could not be read: {error}",
+                    extension.to_ascii_uppercase()
+                ));
+            }
         })
     } else if reshiki::compatibility::is_native_extension(&extension) {
         let doc = reshiki::document::Document::from_native_file(&contents)
@@ -369,7 +376,7 @@ pub(super) fn open_dialog(
     // Accept supported extensions without relying on macOS type
     // registration; the worker validates the content.
     Task::future(pick(
-        "Open a ReShiki, editable PNG, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
+        "Open a ReShiki, editable PNG/SVG/PDF, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
         None,
         false,
         unlimited,

@@ -2411,20 +2411,122 @@ async fn coordinate_bearing_reaction_wedges_keep_main_results() -> anyhow::Resul
 }
 
 #[tokio::test]
-async fn coordinate_free_reaction_hashes_on_nonsingle_bonds_are_rejected() {
+async fn reaction_wedges_on_nonsingle_bonds_match_silent_molecule_imports() -> anyhow::Result<()> {
+    use crate::reactions::Role;
     let engine = crate::engine::LocalEngine::in_process();
-    for text in [
-        "CO>N->[Cu]<-N>CC |wD:3.1|",
-        "C/C=C/C>N>CC |wD:2.1|",
-        "N->[Cu]<-N>N>CC |wD:1.0,SgD:0:name:data::::,SgH:0:0|",
+    for (
+        reaction,
+        molecule,
+        role,
+        reaction_flag,
+        molecule_flag,
+        extra,
+        reaction_atoms,
+        molecule_atoms,
+    ) in [
+        (
+            "CO>N->[Cu]<-N>CC",
+            "N->[Cu]<-N",
+            Role::Agent,
+            "3.1",
+            "1.0",
+            "",
+            7,
+            3,
+        ),
+        (
+            "C/C=C/C>N>CC",
+            "C/C=C/C",
+            Role::Reactant,
+            "2.1",
+            "2.1",
+            "",
+            7,
+            4,
+        ),
+        (
+            "N->[Cu]<-N>N>CC",
+            "N->[Cu]<-N",
+            Role::Reactant,
+            "1.0",
+            "1.0",
+            ",SgD:0:name:data::::,SgH:0:0",
+            6,
+            3,
+        ),
+        ("CC>N>C#N", "C#N", Role::Product, "4.1", "1.0", "", 5, 2),
     ] {
-        let error = engine
-            .request(Request::import("rsmi", text))
-            .await
-            .unwrap_err();
-        assert!(
-            error.contains("Unsupported bond appearance for this order"),
-            "{text}: {error}"
-        );
+        // Molecular import clears the same paint with no notice, including
+        // retained CX conformers. Reaction import must do so for every role.
+        for dimension in [None, Some(false), Some(true)] {
+            let coordinates = |count| match dimension {
+                None => String::new(),
+                Some(is_3d) => format!(
+                    "({}),",
+                    (0..count)
+                        .map(|i| format!("{},{},{}", i, i % 2, if is_3d { "1" } else { "" }))
+                        .collect::<Vec<_>>()
+                        .join(";")
+                ),
+            };
+            for flag in ["wU", "wD"] {
+                let reaction_text = format!(
+                    "{reaction} |{}{flag}:{reaction_flag}{extra}|",
+                    coordinates(reaction_atoms)
+                );
+                let molecule_text = format!(
+                    "{molecule} |{}{flag}:{molecule_flag}{extra}|",
+                    coordinates(molecule_atoms)
+                );
+                let expected = engine
+                    .request(Request::import("smiles", &molecule_text))
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                assert!(
+                    expected.warnings.is_empty(),
+                    "{molecule_text}: {:?}",
+                    expected.warnings
+                );
+                let actual = engine
+                    .request(Request::import("rsmi", &reaction_text))
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                assert!(
+                    actual.warnings.is_empty(),
+                    "{reaction_text}: {:?}",
+                    actual.warnings
+                );
+                assert!(actual.analysis.is_some(), "{reaction_text}");
+                let document = actual.document.unwrap();
+                let ids = &document.reactions[0].participants(role)[0].atoms;
+                let participant = Document {
+                    atoms: document
+                        .atoms
+                        .iter()
+                        .filter(|a| ids.contains(&a.id))
+                        .cloned()
+                        .collect(),
+                    bonds: document
+                        .bonds
+                        .iter()
+                        .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
+                        .cloned()
+                        .collect(),
+                    ..Document::default()
+                };
+                assert!(
+                    participant.bonds.iter().all(|b| b.display == "plain"),
+                    "{reaction_text}"
+                );
+                let expected = molecular::prepare(&expected.document.unwrap())?;
+                let actual = molecular::prepare(&participant)?;
+                assert_eq!(
+                    smiles::write::write(&actual.state, Default::default())?.text,
+                    smiles::write::write(&expected.state, Default::default())?.text,
+                    "{reaction_text}: {molecule_text}"
+                );
+            }
+        }
     }
+    Ok(())
 }

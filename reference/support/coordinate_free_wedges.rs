@@ -3,11 +3,38 @@
 //! worker reads CX wedge flags on its own depiction. Live comparisons check
 //! acceptance and unchanged responses; native_import tests check the tag result.
 //! Wavy bonds inhibit paint clearing (#1049), but not remote axial perception.
+//! Undrawable wedge/hash paint on other orders is cleared for every conformer.
 use reshiki::chemistry::{kekulize::Direction, reaction, smiles};
 
 /// Retained axes can leave symmetric drawings unchanged; compare first (#1048).
 pub fn changed(format: &str, text: &str, comparison: &anyhow::Result<()>) -> bool {
     comparison.is_err() && flagged(format, text)
+}
+
+/// The frozen worker may return invalid paint for these otherwise valid
+/// reactions. Native drawing import clears it as molecule import already does.
+pub fn cleared_undrawable(format: &str, text: &str) -> bool {
+    format == "rsmi"
+        && reaction::read_smiles(text).is_ok_and(|imported| {
+            imported
+                .reactants
+                .iter()
+                .chain(&imported.agents)
+                .chain(&imported.products)
+                .any(undrawable)
+        })
+}
+
+fn undrawable(participant: &smiles::Imported) -> bool {
+    let state = &participant.prepared.state;
+    state
+        .graph
+        .bonds
+        .iter()
+        .zip(&state.directions)
+        .any(|(bond, direction)| {
+            !matches!(bond.order, 1 | 4) && matches!(direction, Direction::Wedge | Direction::Hash)
+        })
 }
 
 /// Eligible paint or retained axes, not necessarily an observable change.
@@ -29,19 +56,23 @@ fn flagged(format: &str, text: &str) -> bool {
                 .chain(&imported.products)
                 .any(|participant| {
                     let state = &participant.prepared.state;
-                    participant.conformers.is_empty()
-                        && ((!state.directions.contains(&Direction::Unknown)
-                            && state.graph.bonds.iter().zip(&state.directions).any(
-                                |(bond, direction)| {
-                                    matches!(bond.order, 1 | 4)
-                                        && matches!(direction, Direction::Wedge | Direction::Hash)
-                                },
-                            ))
-                            || state
-                                .metadata
-                                .bonds
-                                .iter()
-                                .any(|b| matches!(b.stereo, 6 | 7)))
+                    undrawable(participant)
+                        || participant.conformers.is_empty()
+                            && ((!state.directions.contains(&Direction::Unknown)
+                                && state.graph.bonds.iter().zip(&state.directions).any(
+                                    |(bond, direction)| {
+                                        matches!(bond.order, 1 | 4)
+                                            && matches!(
+                                                direction,
+                                                Direction::Wedge | Direction::Hash
+                                            )
+                                    },
+                                ))
+                                || state
+                                    .metadata
+                                    .bonds
+                                    .iter()
+                                    .any(|b| matches!(b.stereo, 6 | 7)))
                 })
         }),
         _ => false,
@@ -143,6 +174,22 @@ mod tests {
     }
 
     #[test]
+    fn reaction_undrawable_wedges_are_classified_with_or_without_coordinates() {
+        for text in [
+            "CO>N->[Cu]<-N>CC |wD:3.1|",
+            "C/C=C/C>N>CC |wD:2.1|",
+            "N->[Cu]<-N>N>CC |wD:1.0,SgD:0:name:data::::,SgH:0:0|",
+            "CC>N>C#N |wU:4.1|",
+            "C/C=C/C>N>CC |(0,0,;1,1,;2,0,;3,1,;4,0,;5,1,;6,0,),wD:2.1|",
+            "CO>N->[Cu]<-N>CC |(0,0,1;1,1,1;2,0,1;3,1,1;4,0,1;5,1,1;6,0,1),wU:3.1|",
+            "C/C=C/C>N>CC |wD:2.1,w:0.0|",
+        ] {
+            assert!(cleared_undrawable("rsmi", text), "{text}");
+            assert!(flagged("rsmi", text), "{text}");
+        }
+    }
+
+    #[test]
     fn unflagged_coordinated_or_invalid_inputs_keep_response_comparison() {
         for (format, text) in [
             ("rsmi", "C[C@H](N)C(=O)O>>O"),
@@ -150,12 +197,8 @@ mod tests {
             ("rsmi", "C[C@H](N)C(=O)O>>O |(1,2,),wU:1.0|"),
             ("rsmi", "C[C@H](N)C(=O)O>>O |(1,2,3),wU:1.0|"),
             ("rsmi", "invalid |wU:1.0|"),
-            ("rsmi", "CO>N->[Cu]<-N>CC |wD:3.1|"),
-            ("rsmi", "C/C=C/C>N>CC |wD:2.1|"),
-            (
-                "rsmi",
-                "N->[Cu]<-N>N>CC |wD:1.0,SgD:0:name:data::::,SgH:0:0|",
-            ),
+            ("rsmi", "CO>N->[Cu]<-N>CC |w:3.1|"),
+            ("rsmi", "C/C=C/C>N>CC |w:2.1|"),
             ("mol", "C[C@H](N)C(=O)O |wU:1.0|"),
             ("smiles", "C[C@H](N)C(=O)O |w:0.0,wD:1.1|"),
         ] {
