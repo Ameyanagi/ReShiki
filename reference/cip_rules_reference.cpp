@@ -1,5 +1,6 @@
 // Development-only calls to the pinned native comparison/sort APIs.
 #include "cip_graph_observation.h"
+#include "cip_standalone_budget.h"
 #include <GraphMol/CIPLabeler/rules/Rules.h>
 #include <GraphMol/CIPLabeler/rules/Rule1a.h>
 #include <GraphMol/CIPLabeler/rules/Rule1b.h>
@@ -34,11 +35,8 @@ std::unique_ptr<SequenceRule> rule(unsigned id) {
     case 16: return std::make_unique<Rule5New>(Descriptor::S);
     case 17: return std::make_unique<Rule4b>(Descriptor::UNKNOWN);
     case 18: return std::make_unique<Rule5New>(Descriptor::UNKNOWN);
-    default: {
-      auto combined=std::make_unique<Rules>(std::initializer_list<SequenceRule*>{});
-      for(unsigned i=0;i<(id==8?3:8);++i) combined->add(rule(i).release());
-      return combined;
-    }
+    case 8: return std::make_unique<Rules>(std::initializer_list<SequenceRule*>{new Rule1a(),new Rule1b(),new Rule2()});
+    default: return std::make_unique<Rules>(std::initializer_list<SequenceRule*>{new Rule1a(),new Rule1b(),new Rule2(),new Rule3(),new Rule4a(),new Rule4c(),new Rule5(),new Rule6()});
   }
 }
 int main() {
@@ -72,9 +70,7 @@ int main() {
       if(seed%2) std::reverse(edges.begin(),edges.end());
       if(!edges.empty()) std::rotate(edges.begin(),edges.begin()+seed%edges.size(),edges.end());
       auto comparator=rule(scheme);
-      // Public native entry point resets the thread-local recursive budget.
-      RDKit::RWMol empty;
-      assignCIPLabels(empty,budget);
+      CIPOracle::setComparisonBudget(budget);
       std::ostringstream result;
       if(operation==0) {
         if(edges.empty()) result<<"null";

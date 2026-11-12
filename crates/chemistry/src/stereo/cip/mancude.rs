@@ -16,7 +16,7 @@ pub(super) fn calculate(mol: &mut Molecule<'_>) -> Result<Vec<Fraction>, Error> 
         .graph
         .atoms
         .iter()
-        .map(|a| Fraction(u32::from(a.atomic_number), 1))
+        .map(|a| Fraction::integer(u32::from(a.atomic_number)))
         .collect::<Vec<_>>();
     let mut kinds = vec![Kind::Other; n];
     let mut resonant = false;
@@ -58,12 +58,19 @@ pub(super) fn calculate(mol: &mut Molecule<'_>) -> Result<Vec<Fraction>, Error> 
     }
     let mut counts = vec![0_i32; n];
     let mut queue = VecDeque::new();
-    for (i, neighbors) in mol.adjacent.iter().enumerate() {
-        let count = neighbors.iter().try_fold(0, |n, &(a, _)| {
-            Ok::<_, Error>(n + i32::from(*at(&kinds, a)? != Kind::Other))
-        })?;
+    for i in 0..n {
+        if *at(&kinds, i)? == Kind::Other {
+            continue;
+        }
+        let mut count = 0;
+        for j in 0..at(&mol.adjacent, i)?.len() {
+            let (a, edge) = *at(at(&mol.adjacent, i)?, j)?;
+            if mol.is_in_ring(edge)? && *at(&kinds, a)? != Kind::Other {
+                count += 1;
+            }
+        }
         *at_mut(&mut counts, i)? = count;
-        if count == 1 {
+        if count < 2 {
             queue.push_back(i);
         }
     }
@@ -72,7 +79,11 @@ pub(super) fn calculate(mol: &mut Molecule<'_>) -> Result<Vec<Fraction>, Error> 
             continue;
         }
         *at_mut(&mut kinds, i)? = Kind::Other;
-        for &(a, _) in at(&mol.adjacent, i)? {
+        for j in 0..at(&mol.adjacent, i)?.len() {
+            let (a, edge) = *at(at(&mol.adjacent, i)?, j)?;
+            if !mol.is_in_ring(edge)? || *at(&kinds, a)? == Kind::Other {
+                continue;
+            }
             let count = at_mut(&mut counts, a)?;
             *count -= 1;
             if *count == 1 {

@@ -14,14 +14,15 @@ impl Configuration {
             .iter()
             .map(|&(a, _)| Some(a))
             .collect();
-        if carriers.len() < 4 {
-            carriers.push(Some(focus));
-        }
-        if carriers.len() < 4 {
-            carriers.push(None);
-        }
-        if carriers.len() != 4 {
-            return Err(invalid("Expected four tetrahedral carriers"));
+        if !(2..=4).contains(&carriers.len()) {
+            carriers.clear();
+        } else {
+            if carriers.len() < 4 {
+                carriers.push(Some(focus));
+            }
+            if carriers.len() < 4 {
+                carriers.push(None);
+            }
         }
         Ok(Self {
             kind: Kind::Tetrahedral,
@@ -41,7 +42,7 @@ impl Configuration {
         iterations: &mut Iterations,
     ) -> Result<Descriptor, Error> {
         let edges = graph.edges(mol, node)?.to_vec();
-        if edges.len() < 3 {
+        if self.carriers.len() != 4 || edges.len() < 3 {
             return Ok(Descriptor::Other);
         }
         let mut priority = sort(mol, graph, iterations, rules, node, &edges)?;

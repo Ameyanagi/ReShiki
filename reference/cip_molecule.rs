@@ -41,7 +41,7 @@ fn prepare(state: &State, order: &str) -> anyhow::Result<Value> {
         .map(|i| mol.bond_order(i))
         .collect::<Result<Vec<_>, _>>()?;
     let fractions = (0..state.graph.atoms.len())
-        .map(|i| mol.fraction(i))
+        .map(|i| mol.fraction(i).map(|f| json!([f.0, f.1, f.is_averaged()])))
         .collect::<Result<Vec<_>, _>>()?;
     let ring_bonds = (0..state.graph.bonds.len())
         .map(|i| mol.is_in_ring(i))
