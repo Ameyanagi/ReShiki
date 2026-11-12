@@ -133,7 +133,7 @@ Chemical naming comes from the external [nazuchem repository](https://github.com
 | `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
 | `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents save as JSON format version 30, version 31 when they contain a custom arrow-label gap, version 32 for ORTEP settings, version 33 for linked-model state, explicit file-geometry provenance or atom labels, or version 34 for collapsed groups with two attachment atoms, and accept versions 1–34 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents save as JSON format version 30, version 31 when they contain a custom arrow-label gap, version 32 for ORTEP settings, version 33 for linked-model state, explicit file-geometry provenance or atom labels, version 34 for collapsed groups with two attachment atoms, or version 35 for enhanced stereo groups, and accept versions 1–35 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 
@@ -141,8 +141,8 @@ Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map nu
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build
 reads. Its doc comment holds the table below; update both together.
-`Document::file_version` selects version 34 when a collapsed group has two
-attachment atoms, version 33 when a model retains linked-conformer source state,
+`Document::file_version` selects version 35 when an atom has an enhanced stereo
+group, version 34 when a collapsed group has two attachment atoms, version 33 when a model retains linked-conformer source state,
 a generation seed, explicit file-geometry provenance or atom labels, version 32 for thermal ellipsoids or nondefault ORTEP controls,
 version 31 for a custom arrow-label gap, otherwise version 30. Newly generated linked models carry source state;
 an unlabeled imported model identified by its cell or file atom sites does not
@@ -186,6 +186,7 @@ whose model was already discarded cannot recover that missing source context.
 | 32      | Thermal ellipsoids and molecule-only crystal display (#417).                    |
 | 33      | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
 | 34      | Collapsed groups with two attachment atoms (#870).                              |
+| 35      | Enhanced stereo groups (#766).                                                  |
 
 ## Chemistry requests
 
