@@ -46,6 +46,10 @@ Copy Image provides PNG, SVG, PDF and a standard bitmap. PNG preserves
 transparency and resolution; the standard bitmap uses a white background.
 PNG file export also uses a white background.
 Imported external formats remain subject to the [clipboard limits](clipboard.md).
+See [clipboard compatibility](clipboard-compatibility.md) for what each app
+receives. New Outlook, Teams and other web-based apps receive nothing from
+normal Copy; use Copy Image for them
+([#1146](https://github.com/Ameyanagi/ReShiki/issues/1146)).
 
 To copy an embedded ChemDraw structure from PowerPoint, select the whole object
 on the slide and press **Ctrl+C**, then press **Ctrl+V** in ReShiki. Objects
