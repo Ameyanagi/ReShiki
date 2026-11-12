@@ -27,6 +27,8 @@ mod coordinate_free_wedges;
 mod coordinate_wedges;
 #[path = "support/flagged_ez.rs"]
 mod flagged_ez;
+#[path = "support/import_template_retry.rs"]
+mod import_template_retry;
 #[path = "support/longest_lived_mass.rs"]
 mod longest_lived_mass;
 #[path = "support/molecule_reading.rs"]
@@ -340,7 +342,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let mut categories = std::collections::BTreeMap::<String, usize>::new();
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
-    let (mut tag_wins, mut kept_ez) = (Vec::new(), Vec::new());
+    let (mut tag_wins, mut kept_ez, mut template_layouts) = (Vec::new(), Vec::new(), Vec::new());
     let mut partial_imports = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -499,12 +501,18 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                         )
                     })
                     .and_then(|expected| {
+                        let drawings = actual.document.clone().zip(expected.document.clone());
                         let comparison = assert_import_response_matches(actual, expected, format);
                         if coordinate_free_wedges::changed(format, &case.text, &comparison) {
                             tag_wins.push(case.name.clone());
                             Ok(())
                         } else if comparison.is_err() && other_basis {
                             basis_layouts += 1;
+                            Ok(())
+                        } else if let (Err(error), Some((ours, theirs))) = (&comparison, &drawings)
+                            && import_template_retry::redrawn(ours, theirs, &error.to_string())
+                        {
+                            template_layouts.push(case.name.clone());
                             Ok(())
                         } else {
                             comparison
@@ -599,6 +607,9 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         "{format} wedge flags following the tag or cleared for unsupported orders (#1044, #1048): {tag_wins:?}"
     );
     eprintln!("{format} E/Z kept under wedge flags (#1042): {kept_ez:?}");
+    eprintln!(
+        "{format} layouts redrawn by the import template retry (#538, #1114): {template_layouts:?}"
+    );
     eprintln!(
         "{format} partial imports replacing frozen rejections (#1138): {} {partial_imports:?}",
         partial_imports.len()
