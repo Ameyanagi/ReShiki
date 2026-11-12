@@ -375,9 +375,10 @@ pub(super) fn copy(mut formats: BTreeMap<u32, Vec<u8>>) -> Result<()> {
     std::thread::spawn(move || -> Result<()> {
         let _apartment = Apartment::new()?;
         register()?;
-        // Word prefers standalone images to Embed Source, irrespective of
-        // enumeration order. Pictures are available through Copy Image;
-        // regular Copy carries an OLE preview inside the editable object.
+        // Word prefers standalone PNG or SVG pictures to Embed Source,
+        // irrespective of enumeration order, but not CF_DIB. The bitmap stays
+        // for apps that read only pictures; the PNG/EMF preview travels inside
+        // the editable object.
         formats.remove(&clipboard::format("image/svg+xml")?);
         let document = formats
             .get(&clipboard::format("dev.reshiki.drawing")?)
@@ -392,7 +393,6 @@ pub(super) fn copy(mut formats: BTreeMap<u32, Vec<u8>>) -> Result<()> {
             .context("Missing Office vector preview")?;
         let drawing = Drawing::new(document, png, Some(metafile))?;
         formats.remove(&clipboard::format("PNG")?);
-        formats.remove(&8); // CF_DIB
         let data: IDataObject = object::ClipboardObject { drawing, formats }.into();
         unsafe {
             OleSetClipboard(&data)?;
