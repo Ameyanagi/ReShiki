@@ -374,6 +374,7 @@ def _main_session(binary, root, environment, clients):
         "max_width": None,
         "max_height": None,
         "ids": None,
+        "svg_text": None,
     }
     rendered = client.tool("render", render, AGENT_CALL)
     _value(rendered, "render")
@@ -390,6 +391,7 @@ def _main_session(binary, root, environment, clients):
             "format": None,
             "overwrite": False,
             "pages": None,
+            "svg_text": None,
         }
         return client.tool("file_save", arguments, AGENT_CALL)
 

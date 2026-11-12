@@ -137,7 +137,9 @@ impl FigureFormat {
     fn description(self) -> &'static str {
         match self {
             Self::Pdf => "Vector figure at its physical publication size.",
-            Self::Svg => "Editable vector artwork for layout and illustration.",
+            Self::Svg => {
+                "Vector artwork for layout and illustration. Text becomes outlines unless you keep it editable."
+            }
             Self::SvgOffice => "Physical-size picture for Microsoft Office. Text becomes outlines.",
             Self::Png => {
                 "Up to 1200 dpi. Large drawings use a lower resolution; physical size is preserved."
@@ -1962,6 +1964,24 @@ impl App {
             ),
         ]
         .spacing(9);
+        if figure == FigureFormat::Svg {
+            figures = figures.push(
+                column![
+                    checkbox(self.appearance.export_svg_live_text)
+                        .label("Keep text editable")
+                        .on_toggle(|enabled| Message::View(
+                            super::view_settings::Action::ExportSvgLiveText(enabled)
+                        ))
+                        .text_size(12),
+                    text(
+                        "Off: text becomes outlines and looks the same in every app. On: text stays text and each app substitutes its own fonts."
+                    )
+                    .size(11)
+                    .style(muted_text),
+                ]
+                .spacing(4),
+            );
+        }
         if matches!(
             figure,
             FigureFormat::Png | FigureFormat::Svg | FigureFormat::SvgOffice | FigureFormat::Pdf

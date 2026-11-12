@@ -69,13 +69,9 @@ pub(crate) enum Output {
     File(PathBuf),
 }
 
-/// How SVG labels are written; other output formats ignore this option.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SvgText {
-    Live,
-    #[default]
-    Outline,
-}
+/// How SVG labels are written, passed to the tools as `svg_text`; other
+/// output formats ignore it.
+pub(crate) use reshiki_agent::ops::wire::SvgText;
 
 /// The file convert and compose write: `format` is one of the ops export
 /// formats.

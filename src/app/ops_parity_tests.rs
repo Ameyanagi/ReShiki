@@ -130,12 +130,23 @@ async fn ops_export_details_match_the_app_figure_export() {
         .unwrap();
     assert!(!imported.is_error, "{:?}", imported.value);
     let handle = imported.value["value"]["document"].clone();
-    for (id, format) in [(2, "png"), (3, "svg")] {
+    // Outlined SVG (the default) is the app's SVG export with Keep text
+    // editable off, which renders as SVG for Office.
+    for (id, format, svg_text, app_format) in [
+        (2, "png", None, "png"),
+        (3, "svg", Some("live"), "svg"),
+        (4, "svg", None, "svg-office"),
+    ] {
         let exported = host
             .call(call(
                 id,
                 "export",
-                serde_json::json!({"document": handle, "format": format, "pages": null}),
+                serde_json::json!({
+                    "document": handle,
+                    "format": format,
+                    "pages": null,
+                    "svg_text": svg_text,
+                }),
             ))
             .await
             .unwrap();
@@ -150,16 +161,16 @@ async fn ops_export_details_match_the_app_figure_export() {
         let app = reshiki::export::publication(
             &LocalEngine::default(),
             Document::from_native_file(native.as_bytes()).unwrap(),
-            format,
+            app_format,
             false,
             false,
             reshiki::export::FILE_PIXELS,
         )
         .await
         .unwrap();
-        assert_eq!(warnings, app.details, "{format}");
+        assert_eq!(warnings, app.details, "{app_format}");
         assert_eq!(warnings.len(), if format == "png" { 2 } else { 1 });
-        assert!(exported.files[0].bytes == app.bytes, "{format}");
+        assert!(exported.files[0].bytes == app.bytes, "{app_format}");
     }
 }
 

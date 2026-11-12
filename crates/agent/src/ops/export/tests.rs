@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    document::Point,
+    document::{Annotation, Point},
     editing,
     ops::{
         headless::HeadlessHost,
@@ -45,7 +45,7 @@ async fn export_call(
 ) -> ToolResult {
     host.call(call(
         "export",
-        json!({"document": handle.as_str(), "format": format, "pages": pages}),
+        json!({"document": handle.as_str(), "format": format, "pages": pages, "svg_text": null}),
     ))
     .await
     .unwrap()
@@ -107,7 +107,8 @@ fn formats_are_exactly_the_published_export_formats() {
 #[test]
 fn pages_is_valid_only_with_pdf() {
     let decoded = |format: &str, pages: Value| {
-        decode(json!({"document": "doc_1", "format": format, "pages": pages})).map(drop)
+        decode(json!({"document": "doc_1", "format": format, "pages": pages, "svg_text": null}))
+            .map(drop)
     };
     for name in EXPORT_FORMATS {
         assert_eq!(decoded(name, Value::Null), Ok(()), "{name}");
@@ -126,8 +127,154 @@ fn pages_is_valid_only_with_pdf() {
             );
         }
     }
-    let omitted = decode(json!({"document": "doc_1", "format": "pdf"})).unwrap_err();
+    let omitted =
+        decode(json!({"document": "doc_1", "format": "pdf", "svg_text": null})).unwrap_err();
     assert_eq!(omitted.message, "missing field `pages`");
+}
+
+#[test]
+fn svg_text_is_required_nullable_and_accepts_only_the_published_modes() {
+    for format in EXPORT_FORMATS {
+        for (value, expected) in [
+            (Value::Null, SvgText::Outline),
+            (json!("outline"), SvgText::Outline),
+            (json!("live"), SvgText::Live),
+        ] {
+            let export = decode(json!({
+                "document": "doc_1", "format": format, "pages": null, "svg_text": value,
+            }))
+            .unwrap();
+            assert_eq!(export.svg_text.unwrap_or_default(), expected, "{format}");
+        }
+    }
+    for value in [json!("invalid"), json!("Outline"), json!(true), json!(0)] {
+        let error = decode(json!({
+            "document": "doc_1", "format": "svg", "pages": null, "svg_text": value,
+        }))
+        .unwrap_err();
+        assert_eq!(error.kind, ErrorKind::InvalidArguments);
+    }
+    let omitted = decode(json!({"document": "doc_1", "format": "svg", "pages": null})).unwrap_err();
+    assert_eq!(omitted.message, "missing field `svg_text`");
+    assert_eq!(schema()["properties"]["svg_text"], svg_text_schema());
+    assert!(
+        schema()["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("svg_text"))
+    );
+}
+
+fn caption() -> Document {
+    let mut doc = Document::default();
+    doc.annotations.push(Annotation {
+        id: 1,
+        position: Point::default(),
+        text: "Outlined SVG".into(),
+        format: Default::default(),
+    });
+    doc
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn svg_exports_default_to_outlines_and_allow_live_text() {
+    let doc = caption();
+    let (host, handle) = hosting(doc.clone());
+    let live = scene::svg_with_background(&doc).into_bytes();
+    let outlined = crate::export::outlined_svg(scene::svg_with_background(&doc)).unwrap();
+    assert!(String::from_utf8_lossy(&live).contains("<text"));
+    assert!(!String::from_utf8_lossy(&outlined).contains("<text"));
+    assert!(String::from_utf8_lossy(&outlined).contains("<path"));
+    for (mode, expected) in [
+        (Value::Null, &outlined),
+        (json!("outline"), &outlined),
+        (json!("live"), &live),
+    ] {
+        let result = host
+            .call(call(
+                "export",
+                json!({
+                    "document": handle.as_str(), "format": "svg", "pages": null, "svg_text": mode,
+                }),
+            ))
+            .await
+            .unwrap();
+        assert!(!result.is_error, "{:?}", result.value);
+        let [file] = result.files.as_slice() else {
+            panic!("one SVG file")
+        };
+        assert_eq!(file.bytes, *expected);
+        assert_eq!(
+            (file.mime, file.name.as_str()),
+            ("image/svg+xml", "drawing.svg")
+        );
+        assert_eq!(
+            result.value["value"]["receipt"],
+            json!({
+                "format": "svg", "byte_len": expected.len(), "detail": null,
+            })
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn svg_export_budget_counts_the_outlined_bytes() {
+    let doc = caption();
+    let live = scene::svg_with_background(&doc).into_bytes();
+    let outlined = crate::export::outlined_svg(scene::svg_with_background(&doc)).unwrap();
+    assert!(outlined.len() > live.len());
+    let (host, handle) = hosting_with(
+        doc,
+        Budgets {
+            max_output_bytes: live.len(),
+            ..Budgets::default()
+        },
+    );
+    let result = export_call(&host, &handle, "svg", Value::Null).await;
+    let (code, message) = error(&result);
+    assert_eq!(code, "budget");
+    assert!(
+        message.starts_with(&format!("The svg file is {} bytes;", outlined.len())),
+        "{message}"
+    );
+    let live = host
+        .call(call(
+            "export",
+            json!({
+                "document": handle.as_str(), "format": "svg", "pages": null, "svg_text": "live",
+            }),
+        ))
+        .await
+        .unwrap();
+    assert!(!live.is_error, "{:?}", live.value);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn non_svg_exports_ignore_the_svg_text_mode() {
+    let (host, handle) = hosting(caption());
+    let mut expected = None;
+    for mode in [Value::Null, json!("outline"), json!("live")] {
+        let result = host
+            .call(call(
+                "export",
+                json!({
+                    "document": handle.as_str(), "format": "png", "pages": null, "svg_text": mode,
+                }),
+            ))
+            .await
+            .unwrap();
+        assert!(!result.is_error, "{:?}", result.value);
+        let file = &result.files[0];
+        assert_eq!(
+            result.value["value"]["receipt"]["byte_len"],
+            file.bytes.len()
+        );
+        if let Some(expected) = &expected {
+            assert_eq!(&file.bytes, expected);
+        } else {
+            expected = Some(file.bytes.clone());
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -182,7 +329,11 @@ async fn figures_are_the_publication_export() {
         let expected = crate::export::publication(
             &engine,
             doc.clone(),
-            format,
+            if format == "svg" {
+                "svg-office"
+            } else {
+                format
+            },
             false,
             false,
             Budgets::default().export_png_pixels,
@@ -211,7 +362,7 @@ async fn figures_are_the_publication_export() {
     let svg = export_ok(&host, &handle, "svg").await;
     assert_eq!(
         svg.files[0].bytes,
-        scene::svg_with_background(&doc).into_bytes()
+        crate::export::outlined_svg(scene::svg_with_background(&doc)).unwrap()
     );
     assert_ne!(svg.files[0].bytes, scene::svg(&doc).into_bytes());
 }

@@ -1,30 +1,39 @@
 {
   "rules": [
-    {"id": "arguments.object", "cite": "crates/agent/src/ops/catalog.rs:91-92,111-120; crates/agent/src/ops/files.rs:239,253-259"},
-    {"id": "file_open.path_required", "cite": "crates/agent/src/ops/files.rs:78,81,103-107"},
+    {"id": "file_save.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-383; crates/agent/src/ops/files.rs:95,97,188-189"},
+    {"id": "arguments.object", "cite": "crates/agent/src/ops/catalog.rs:263-271; crates/agent/src/ops/files.rs:76,88,239,260"},
+    {"id": "file_open.path_required", "cite": "crates/agent/src/ops/files.rs:78,81,106"},
     {"id": "file_open.path_length", "cite": "crates/agent/src/ops/files.rs:37,70-72,78,203-211,240"},
-    {"id": "file_open.format_enum", "cite": "crates/agent/src/ops/documents.rs:26-28; crates/agent/src/ops/import.rs:51-63; crates/agent/src/ops/files.rs:79,81,106"},
-    {"id": "file_open.format_matches_extension", "cite": "crates/agent/src/ops/files.rs:213-234,241-247; crates/agent/src/access/extensions.rs:35-50,71-77"},
-    {"id": "file_open.extension_readable", "cite": "crates/agent/src/ops/files.rs:223-226,242; crates/agent/src/access/extensions.rs:52-54,71-77,80-85"},
-    {"id": "file_open.no_unknown_fields", "cite": "crates/agent/src/ops/files.rs:82,103"},
-    {"id": "file_save.document_required", "cite": "crates/agent/src/ops/files.rs:90,96,180"},
-    {"id": "file_save.document_handle", "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,183-185"},
-    {"id": "file_save.path_required", "cite": "crates/agent/src/ops/files.rs:91,96,181"},
-    {"id": "file_save.path_length", "cite": "crates/agent/src/ops/files.rs:37,70-72,91,203-211,260"},
-    {"id": "file_save.format_nullable_enum", "cite": "crates/agent/src/ops/wire.rs:3-10,193-195; crates/agent/src/ops/files.rs:66-68,92,96,128-140,182-183"},
-    {"id": "file_save.format_matches_extension", "cite": "crates/agent/src/ops/files.rs:213-234,261-266; crates/agent/src/access/extensions.rs:35-50,71-77"},
-    {"id": "file_save.extension_writable", "cite": "crates/agent/src/ops/files.rs:223-226,262; crates/agent/src/access/extensions.rs:56-58,71-77,80-85"},
-    {"id": "file_save.overwrite_required_boolean", "cite": "crates/agent/src/ops/files.rs:93,96,184"},
-    {"id": "file_save.pages_nullable_required", "cite": "crates/agent/src/ops/wire.rs:3-10,193-195; crates/agent/src/ops/files.rs:94,96,185-186"},
-    {"id": "file_save.pages_pdf_only", "cite": "crates/agent/src/ops/files.rs:267-270"},
-    {"id": "file_save.no_unknown_fields", "cite": "crates/agent/src/ops/files.rs:97,178"}
+    {"id": "file_open.format_enum", "cite": "crates/agent/src/ops/documents.rs:26-28; crates/agent/src/ops/import.rs:51-63; crates/agent/src/ops/files.rs:79,81,107"},
+    {"id": "file_open.format_matches_extension", "cite": "crates/agent/src/ops/files.rs:213-234,241-247; crates/agent/src/access/extensions.rs:35-48,70-75"},
+    {"id": "file_open.extension_readable", "cite": "crates/agent/src/ops/files.rs:223-226,242; crates/agent/src/access/extensions.rs:52-54,70-75,79-84"},
+    {"id": "file_open.no_unknown_fields", "cite": "crates/agent/src/ops/files.rs:82,103-104"},
+    {"id": "file_save.document_required", "cite": "crates/agent/src/ops/files.rs:90,97,181"},
+    {"id": "file_save.document_handle", "cite": "crates/agent/src/ops/wire.rs:85-90,164-170,183-186"},
+    {"id": "file_save.path_required", "cite": "crates/agent/src/ops/files.rs:91,97,182"},
+    {"id": "file_save.path_length", "cite": "crates/agent/src/ops/files.rs:37,70-72,91,203-211,261"},
+    {"id": "file_save.format_nullable_enum", "cite": "crates/agent/src/ops/wire.rs:3-10,194-196; crates/agent/src/ops/files.rs:66-68,92,97,128-140,183-184"},
+    {"id": "file_save.format_matches_extension", "cite": "crates/agent/src/ops/files.rs:213-234,262-267; crates/agent/src/access/extensions.rs:35-48,70-75"},
+    {"id": "file_save.extension_writable", "cite": "crates/agent/src/ops/files.rs:223-226,263; crates/agent/src/access/extensions.rs:56-58,70-75,79-84"},
+    {"id": "file_save.overwrite_required_boolean", "cite": "crates/agent/src/ops/files.rs:93,97,185"},
+    {"id": "file_save.pages_nullable_required", "cite": "crates/agent/src/ops/wire.rs:3-10,194-196; crates/agent/src/ops/files.rs:94,97,186-187"},
+    {"id": "file_save.pages_pdf_only", "cite": "crates/agent/src/ops/files.rs:268-271"},
+    {"id": "file_save.no_unknown_fields", "cite": "crates/agent/src/ops/files.rs:98,178-179"}
   ],
   "bases": {
     "open": {"tool": "file_open", "arguments": {"path": "/data/ethanol.mol", "format": "auto"}},
-    "save": {"tool": "file_save", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "path": "/data/ethanol.svg", "format": null, "overwrite": false, "pages": null}},
-    "save_pages": {"tool": "file_save", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "path": "/data/scheme.pdf", "format": "pdf", "overwrite": true, "pages": true}}
+    "save": {"tool": "file_save", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "path": "/data/ethanol.svg", "format": null, "overwrite": false, "pages": null, "svg_text": null}},
+    "save_pages": {"tool": "file_save", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "path": "/data/scheme.pdf", "format": "pdf", "overwrite": true, "pages": true, "svg_text": null}}
   },
   "cases": [
+    {"name": "save_svg_text_null", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": null}], "expect": "both_accept"},
+    {"name": "save_svg_text_outline", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "outline"}], "expect": "both_accept"},
+    {"name": "save_svg_text_live", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
+    {"name": "save_svg_text_invalid", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "editable"}], "expect": "both_reject"},
+    {"name": "save_svg_text_number", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": 1}], "expect": "both_reject"},
+    {"name": "save_svg_text_omitted", "rule": "file_save.svg_text_nullable_enum_required", "base": "save", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "both_reject", "message": "missing field `svg_text`"},
+    {"name": "save_svg_text_live_non_svg", "rule": "file_save.svg_text_nullable_enum_required", "base": "save_pages", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
+
     {"name": "open_arguments_object", "rule": "arguments.object", "base": "open", "expect": "both_accept"},
     {"name": "save_arguments_object", "rule": "arguments.object", "base": "save", "expect": "both_accept"},
     {"name": "open_arguments_array", "rule": "arguments.object", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": ["/data/ethanol.mol", "auto"]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
@@ -130,7 +139,7 @@
     {"name": "save_pages_with_native", "rule": "file_save.pages_pdf_only", "base": "save_pages", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/scheme.rsk"}, {"op": "replace", "path": "/arguments/format", "value": "reshiki"}], "expect": "decoder_rejects_only", "message": "pages is valid only with format pdf"},
 
     {"name": "save_known_fields_only", "rule": "file_save.no_unknown_fields", "base": "save_pages", "expect": "both_accept"},
-    {"name": "save_unknown_field", "rule": "file_save.no_unknown_fields", "base": "save", "patch": [{"op": "add", "path": "/arguments/text", "value": "CCO"}], "expect": "both_reject", "message": "unknown field `text`, expected one of `document`, `path`, `format`, `overwrite`, `pages`"},
+    {"name": "save_unknown_field", "rule": "file_save.no_unknown_fields", "base": "save", "patch": [{"op": "add", "path": "/arguments/text", "value": "CCO"}], "expect": "both_reject", "message": "unknown field `text`, expected one of `document`, `path`, `format`, `overwrite`, `pages`, `svg_text`"},
     {"name": "save_unknown_null_field", "rule": "file_save.no_unknown_fields", "base": "save", "patch": [{"op": "add", "path": "/arguments/dpi", "value": null}], "expect": "both_reject"}
   ]
 }

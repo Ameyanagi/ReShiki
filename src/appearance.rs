@@ -51,6 +51,8 @@ pub struct Settings {
     pub write_unknown_stereo: bool,
     /// Include an editable drawing in exported PNG, SVG and figure PDF files (on by default).
     pub export_editable_drawing: bool,
+    /// Keep text as `<text>` in exported SVG files instead of outlines (off by default).
+    pub export_svg_live_text: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
 }
@@ -66,6 +68,7 @@ impl Default for Settings {
             name_typography: true,
             write_unknown_stereo: false,
             export_editable_drawing: true,
+            export_svg_live_text: false,
             drawing_style_unit: Default::default(),
         }
     }

@@ -1,63 +1,72 @@
 {
   "rules": [
+    {"id": "render.svg_text_nullable_enum_required", "cite": "crates/agent/src/ops/wire.rs:372-383; crates/agent/src/ops/render.rs:53,55,89-90"},
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:59,77-88; crates/agent/src/ops/render.rs:99-106"
+      "cite": "crates/agent/src/ops/catalog.rs:263-271; crates/agent/src/ops/render.rs:46,121"
     },
     {
       "id": "render.document_required",
-      "cite": "crates/agent/src/ops/render.rs:42,48,70"
+      "cite": "crates/agent/src/ops/render.rs:48,55,81"
     },
     {
       "id": "render.document_handle",
-      "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,182-185"
+      "cite": "crates/agent/src/ops/wire.rs:85-90,164-170,183-186"
     },
     {
       "id": "render.format_enum",
-      "cite": "crates/agent/src/ops/render.rs:43,48,58-64,71"
+      "cite": "crates/agent/src/ops/render.rs:49,55,70-75,82"
     },
     {
       "id": "render.max_width_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/render.rs:44,48,72-73"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,194-196; crates/agent/src/ops/render.rs:50,55,83-84"
     },
     {
       "id": "render.max_height_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/render.rs:45,48,74-75"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,194-196; crates/agent/src/ops/render.rs:51,55,85-86"
     },
     {
       "id": "render.side_range",
-      "cite": "crates/agent/src/ops/render.rs:53-56,110-126; crates/agent/src/ops/budget.rs:67-70,92-93"
+      "cite": "crates/agent/src/ops/render.rs:61-67,125-141; crates/agent/src/ops/budget.rs:70-73,82-83"
     },
     {
       "id": "render.side_integer",
-      "cite": "crates/agent/src/ops/render.rs:55,73,75"
+      "cite": "crates/agent/src/ops/render.rs:63,84,86"
     },
     {
       "id": "render.pixel_budget",
-      "cite": "crates/agent/src/ops/render.rs:127-136; crates/agent/src/ops/budget.rs:71-72,94"
+      "cite": "crates/agent/src/ops/render.rs:142-151; crates/agent/src/ops/budget.rs:74-75,84"
     },
     {
       "id": "render.ids_nullable_required",
-      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/render.rs:46,48,76-77"
+      "cite": "crates/agent/src/ops/wire.rs:3-10,194-196; crates/agent/src/ops/render.rs:52,55,87-88"
     },
     {
       "id": "render.ids_items",
-      "cite": "crates/agent/src/ops/wire.rs:59-70,145-152,172-175"
+      "cite": "crates/agent/src/ops/wire.rs:60-71,146-153,173-176"
     },
     {
       "id": "render.ids_count",
-      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/render.rs:107-109; crates/agent/src/ops/wire.rs:187-190; crates/agent/src/ops/budget.rs:26-27,84"
+      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/render.rs:122-124; crates/agent/src/ops/wire.rs:188-191; crates/agent/src/ops/budget.rs:29-30,97"
     },
     {
       "id": "render.no_unknown_fields",
-      "cite": "crates/agent/src/ops/render.rs:67-69"
+      "cite": "crates/agent/src/ops/render.rs:78-79"
     }
   ],
   "bases": {
-    "default": {"tool": "render", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "png", "max_width": null, "max_height": null, "ids": null}},
-    "sized": {"tool": "render", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "svg", "max_width": 800, "max_height": 600, "ids": ["1", "12"]}}
+    "default": {"tool": "render", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "png", "max_width": null, "max_height": null, "ids": null, "svg_text": null}},
+    "sized": {"tool": "render", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "svg", "max_width": 800, "max_height": 600, "ids": ["1", "12"], "svg_text": null}}
   },
   "cases": [
+    {"name": "svg_text_null", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": null}], "expect": "both_accept"},
+    {"name": "svg_text_outline", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "outline"}], "expect": "both_accept"},
+    {"name": "svg_text_live", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
+    {"name": "svg_text_invalid", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "editable"}], "expect": "both_reject"},
+    {"name": "svg_text_number", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": 1}], "expect": "both_reject"},
+    {"name": "svg_text_omitted", "rule": "render.svg_text_nullable_enum_required", "base": "sized", "patch": [{"op": "remove", "path": "/arguments/svg_text"}], "expect": "both_reject", "message": "missing field `svg_text`"},
+    {"name": "svg_text_live_non_svg", "rule": "render.svg_text_nullable_enum_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/svg_text", "value": "live"}], "expect": "both_accept"},
+
     {"name": "arguments_object", "rule": "arguments.object", "base": "default", "expect": "both_accept"},
     {"name": "arguments_array", "rule": "arguments.object", "base": "default", "patch": [{"op": "replace", "path": "/arguments", "value": ["doc_1", "png", null, null, null]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
     {"name": "arguments_string", "rule": "arguments.object", "base": "default", "patch": [{"op": "replace", "path": "/arguments", "value": "{}"}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
@@ -122,7 +131,7 @@
     {"name": "ids_over_max_ids", "rule": "render.ids_count", "base": "default", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"$repeat": "7", "count": 5001}}], "expect": "both_reject", "message": "5001 object IDs were given; at most 5000 are allowed per request"},
 
     {"name": "known_fields_only", "rule": "render.no_unknown_fields", "base": "sized", "expect": "both_accept"},
-    {"name": "unknown_null_field", "rule": "render.no_unknown_fields", "base": "default", "patch": [{"op": "add", "path": "/arguments/dpi", "value": null}], "expect": "both_reject", "message": "unknown field `dpi`, expected one of `document`, `format`, `max_width`, `max_height`, `ids`"},
+    {"name": "unknown_null_field", "rule": "render.no_unknown_fields", "base": "default", "patch": [{"op": "add", "path": "/arguments/dpi", "value": null}], "expect": "both_reject", "message": "unknown field `dpi`, expected one of `document`, `format`, `max_width`, `max_height`, `ids`, `svg_text`"},
     {"name": "unknown_field", "rule": "render.no_unknown_fields", "base": "default", "patch": [{"op": "add", "path": "/arguments/background", "value": "white"}], "expect": "both_reject"}
   ]
 }
