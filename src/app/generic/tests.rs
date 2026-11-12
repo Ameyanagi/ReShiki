@@ -108,6 +108,7 @@ fn open_optimization_preview(app: &mut App) {
         iterations: 20,
         force_field: ForceField::Mmff94s,
         diagnostics: vec![],
+        approximations: vec![],
     };
     let _ = app.update(Message::Optimization(optimization::Action::WorkerDone(
         key,

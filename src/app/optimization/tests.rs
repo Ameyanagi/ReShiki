@@ -36,6 +36,7 @@ fn result(session: &Session) -> Optimized {
         iterations: 20,
         force_field: session.field,
         diagnostics: vec![],
+        approximations: vec![],
     }
 }
 
@@ -92,6 +93,102 @@ fn initialization_context_survives_relaxation_without_an_error_or_source_edit() 
     }
 }
 
+/// A potassium ion bound to an ether oxygen, as in the crown-ether report:
+/// the oxygen's third bond fails Strict valence checks.
+fn potassium_ether() -> (App, Document) {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let c1 = app.tab.doc.add_atom("C", Point::default());
+    let o = app.tab.doc.add_atom("O", Point::new(42., 0.));
+    let c2 = app.tab.doc.add_atom("C", Point::new(84., 0.));
+    let k = app.tab.doc.add_atom("K", Point::new(42., 42.));
+    app.tab.doc.add_bond(c1, o, 1, "plain");
+    app.tab.doc.add_bond(o, c2, 1, "plain");
+    app.tab.doc.add_bond(o, k, 1, "plain");
+    app.tab.saved = app.tab.doc.clone();
+    let original = app.tab.doc.clone();
+    (app, original)
+}
+
+#[test]
+fn strict_failure_waits_for_relaxed_and_relaxed_results_are_labeled() {
+    let (mut app, original) = potassium_ether();
+    let _ = app.optimization_action(Action::Begin);
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert!(session.blocked() && session.flight.is_none());
+    assert_eq!(session.phase, Phase::Failed);
+    assert!(app.status.contains("Strict checks failed"));
+    assert!(!app.error);
+    let _ = app.optimization_action(Action::Start);
+    let _ = app.optimization_action(Action::Field(ForceField::Uff));
+    assert!(app.tab.optimization.as_ref().unwrap().flight.is_none());
+
+    let _ = app.optimization_action(Action::Mode(Mode::Relaxed));
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.mode, Mode::Relaxed);
+    assert_eq!(session.field, ForceField::Uff);
+    assert!(!session.prepared.mmff_available());
+    assert!(
+        session
+            .prepared
+            .skipped_checks()
+            .iter()
+            .any(|check| check == "Valence not checked")
+    );
+    let key = session.flight.as_ref().unwrap().key;
+    let mut computed = result(session);
+    computed.conformer = Conformer {
+        positions: (0..4)
+            .map(|i| Point3 {
+                x: f64::from(i),
+                y: f64::from(i % 2),
+                z: 0.3 * f64::from(i),
+            })
+            .collect(),
+        original_atom_count: 4,
+        hydrogen_parents: vec![],
+    };
+    computed.approximations = vec!["Started from the drawn coordinates".into()];
+    let _ = app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(computed))));
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(
+        session.approximations,
+        vec!["Started from the drawn coordinates".to_owned()]
+    );
+    assert!(
+        app.status
+            .starts_with("Relaxed 3D preview · Chemistry not validated")
+    );
+
+    // Strict stays unavailable for this molecule; Relaxed reuses its preparation.
+    let _ = app.optimization_action(Action::Mode(Mode::Strict));
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert!(session.blocked() && session.conformer.is_none() && session.flight.is_none());
+    let _ = app.optimization_action(Action::Cancel);
+    assert_eq!(app.tab.doc, original);
+}
+
+#[test]
+fn switching_modes_regenerates_and_keeps_mmff_for_organic_molecules() {
+    let (mut app, _, _, original) = prepared_preview();
+    let _ = app.optimization_action(Action::Mode(Mode::Relaxed));
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.prepared.mode(), Mode::Relaxed);
+    assert_eq!(session.field, ForceField::Mmff94s);
+    assert!(session.conformer.is_none() && session.pins.is_empty());
+    assert_eq!(session.flight.as_ref().unwrap().work, Work::Generate);
+    finish(&mut app);
+    let _ = app.optimization_action(Action::Mode(Mode::Strict));
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.prepared.mode(), Mode::Strict);
+    assert!(session.strict_error.is_none() && session.flight.is_some());
+    finish(&mut app);
+    // The partial selection is pinned again at the regenerated positions.
+    assert_eq!(app.tab.optimization.as_ref().unwrap().pins.len(), 1);
+    let _ = app.optimization_action(Action::Cancel);
+    assert_eq!(app.tab.doc, original);
+}
+
 fn complete_live(app: &mut App, energy: f64, converged: bool) -> Task<Message> {
     let session = app.tab.optimization.as_ref().unwrap();
     let flight = session.flight.as_ref().unwrap();
@@ -113,8 +210,10 @@ fn stall_live(app: &mut App) {
     assert!(session.flight.is_none());
 }
 
-fn preview_controls(running: bool) -> [(&'static str, Action); 17] {
+fn preview_controls(running: bool) -> [(&'static str, Action); 19] {
     [
+        ("optimization.mode.strict", Action::Mode(Mode::Strict)),
+        ("optimization.mode.relaxed", Action::Mode(Mode::Relaxed)),
         (
             "optimization.field.mmff94",
             Action::Field(ForceField::Mmff94),
@@ -1052,8 +1151,10 @@ async fn preview_controls_publish_native_actions_and_tab_enter_dispatches_the_sa
             .iter()
             .filter(|node| node.id.starts_with("optimization."))
             .collect();
-        assert_eq!(controls.len(), 17);
+        assert_eq!(controls.len(), 19);
         for (id, checked) in [
+            ("optimization.mode.strict", true),
+            ("optimization.mode.relaxed", false),
             ("optimization.field.mmff94", false),
             ("optimization.field.mmff94s", true),
             ("optimization.field.uff", false),
@@ -1068,7 +1169,7 @@ async fn preview_controls_publish_native_actions_and_tab_enter_dispatches_the_sa
         let tree = native
             .update(&snapshot, "ReShiki", Rectangle::with_size(size), 2.)
             .unwrap();
-        ui.focus(&app, "optimization.field.mmff94");
+        ui.focus(&app, "optimization.mode.strict");
         for (index, (id, expected)) in preview_controls(false).into_iter().enumerate() {
             if index > 0 {
                 let (status, messages) = ui.event(
@@ -1209,7 +1310,7 @@ async fn properties_preview_controls_fit_scroll_and_keep_canvas_toolbar_height()
             .iter()
             .filter(|node| node.id.starts_with("optimization."))
             .collect();
-        assert_eq!(controls.len(), 17);
+        assert_eq!(controls.len(), 19);
         for control in controls {
             assert!(
                 control.bounds.x >= size.width - 300. - 0.5

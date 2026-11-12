@@ -9,6 +9,8 @@ use cosmolkit::{
     MoleculeBuilder, PropertyValue, StructureTagParams, UffForceFieldParams,
 };
 
+mod relaxed;
+
 type Result<T> = std::result::Result<T, String>;
 const ORIGINAL_INDEX: &str = "_reshikiGeometryOriginalIndex";
 
@@ -25,14 +27,15 @@ fn molecule(request: &Request) -> Result<Molecule> {
     let mut ids = Vec::with_capacity(request.atoms.len());
     for (index, atom) in request.atoms.iter().enumerate() {
         require(
-            matches!(
-                atom.atomic_number,
-                1 | 5 | 6 | 7 | 8 | 9 | 14 | 15 | 16 | 17 | 33 | 34 | 35 | 53
-            ),
+            request.relaxed
+                || matches!(
+                    atom.atomic_number,
+                    1 | 5 | 6 | 7 | 8 | 9 | 14 | 15 | 16 | 17 | 33 | 34 | 35 | 53
+                ),
             format!("atom {index}: query, metal, or unsupported element"),
         )?;
         require(
-            atom.radical == 0,
+            request.relaxed || atom.radical == 0,
             format!("atom {index}: radicals are unsupported"),
         )?;
         require(
@@ -50,6 +53,7 @@ fn molecule(request: &Request) -> Result<Molecule> {
         let mut spec = AtomSpec::new(element)
             .with_formal_charge(atom.charge as i8)
             .with_explicit_hydrogens(atom.explicit_h as u8)
+            .with_radical_electrons(atom.radical as u8)
             .with_no_implicit(atom.no_implicit)
             .with_aromatic(atom.aromatic)
             .with_chiral_tag(tag)
@@ -66,7 +70,10 @@ fn molecule(request: &Request) -> Result<Molecule> {
             1 => BondOrder::Single,
             2 => BondOrder::Double,
             3 => BondOrder::Triple,
+            4 if request.relaxed => BondOrder::Quadruple,
+            7 if request.relaxed => BondOrder::OneAndHalf,
             12 => BondOrder::Aromatic,
+            17 if request.relaxed => BondOrder::Dative,
             _ => {
                 return Err(format!(
                     "bond {index}: query or coordination bond is unsupported"
@@ -107,13 +114,14 @@ fn molecule(request: &Request) -> Result<Molecule> {
         reached.iter().all(|value| *value),
         "geometry requests must contain one connected covalent component",
     )?;
-    let mol = builder
-        .build()
-        .map_err(|error| error.to_string())?
-        .sanitize()
-        .map_err(|error| error.to_string())?;
+    let built = builder.build().map_err(|error| error.to_string())?;
+    let mol = if request.relaxed {
+        relaxed::prepare(&built)?
+    } else {
+        built.sanitize().map_err(|error| error.to_string())?
+    };
     require(
-        mol.atoms().iter().all(|atom| atom.radical_electrons() == 0),
+        request.relaxed || mol.atoms().iter().all(|atom| atom.radical_electrons() == 0),
         "sanitization produced an unsupported radical",
     )?;
     Ok(mol)
@@ -222,6 +230,18 @@ fn force_field(mol: &Molecule, field: ForceField) -> Result<MolecularForceField>
             true,
         ))
         .map_err(|error| format!("MMFF force field is unavailable for this molecule: {error}"))
+    }
+}
+
+fn request_force_field(mol: &Molecule, request: &Request) -> Result<MolecularForceField> {
+    if request.relaxed && request.field == ForceField::UFF {
+        // Requests already contain one connected component. Keeping all pairs
+        // therefore changes no physical interactions, and avoids UFF's optional
+        // getMolFrags path which would strictly sanitize a detached copy again.
+        mol.uff_force_field_with_params(&UffForceFieldParams::new(None, f64::INFINITY, false))
+            .map_err(|error| format!("UFF force field is unavailable for this molecule: {error}"))
+    } else {
+        force_field(mol, request.field)
     }
 }
 
@@ -608,7 +628,7 @@ fn minimized(
     let positioned = mol
         .with_only_3d_conformer(rows(coordinates))
         .map_err(|error| error.to_string())?;
-    let mut field = force_field(&positioned, request.field)?;
+    let mut field = request_force_field(&positioned, request)?;
     let fixed: Vec<_> = request
         .fixed_atoms
         .iter()
@@ -682,7 +702,11 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
     let original = molecule(request)?;
     let mol = with_hydrogens(&original, request.atoms.len(), false)?;
     let expected = StereoExpectation::new(&mol)?;
-    check_field_parameters(&mol, request.field)?;
+    if request.relaxed {
+        relaxed::check_field(&mol, request.field)?;
+    } else {
+        check_field_parameters(&mol, request.field)?;
+    }
     let cage = Cage::from_molecule(&mol);
     validate_original_order(&mol, request.atoms.len())?;
     let parents = hydrogen_parents(&mol, request.atoms.len())?;
@@ -696,31 +720,58 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         converged: false,
         field: request.field,
         diagnostics: Vec::new(),
+        approximations: if request.relaxed {
+            relaxed::approximations(&mol)?
+        } else {
+            Vec::new()
+        },
     };
     if request.operation == Operation::Generate {
+        let minimize_seed = |coordinates: Vec<[f64; 3]>| {
+            // The optimizer scales its stopping test by absolute XYZ. Center
+            // these unpinned seeds, then restore the drawing's location.
+            let origin = std::array::from_fn(|axis| {
+                coordinates[..request.atoms.len()]
+                    .iter()
+                    .map(|point| point[axis])
+                    .sum::<f64>()
+                    / request.atoms.len() as f64
+            });
+            minimized(
+                &mol,
+                &coordinates,
+                &expected,
+                cage.as_ref(),
+                request,
+                Some(origin),
+            )
+        };
+        if request.relaxed && relaxed::uses_drawing_seed(request) {
+            match relaxed::starting_coordinates(&original, &mol, request).and_then(minimize_seed) {
+                Ok(candidate) => {
+                    response.coordinates = candidate.coordinates;
+                    response.initial_energy = candidate.initial_energy;
+                    response.energy = candidate.energy;
+                    response.converged = candidate.converged;
+                    response
+                        .approximations
+                        .push("Started from the drawn coordinates".into());
+                    response.diagnostics.push(format!(
+                        "initialization=relaxed-drawing; original drawing coordinates with deterministic out-of-plane perturbation; temporary hydrogens added with coordinate-aware AddHs; iteration_limit={}; converged={}",
+                        request.max_iterations, response.converged
+                    ));
+                    return Ok(response);
+                }
+                Err(error) => response.diagnostics.push(format!(
+                    "relaxed drawing seed rejected: {}",
+                    error.chars().take(512).collect::<String>()
+                )),
+            }
+        }
         if !request.coordinates.is_empty() {
-            match existing_coordinates(&original, &mol, &expected, cage.as_ref(), request).and_then(
-                |coordinates| {
-                    // The upstream optimizer scales its stopping test by
-                    // absolute XYZ. Center only this new unpinned seed path,
-                    // then restore the drawing's location before validation.
-                    let origin = std::array::from_fn(|axis| {
-                        coordinates[..request.atoms.len()]
-                            .iter()
-                            .map(|point| point[axis])
-                            .sum::<f64>()
-                            / request.atoms.len() as f64
-                    });
-                    minimized(
-                        &mol,
-                        &coordinates,
-                        &expected,
-                        cage.as_ref(),
-                        request,
-                        Some(origin),
-                    )
-                },
-            ) {
+            match existing_coordinates(&original, &mol, &expected, cage.as_ref(), request)
+                .and_then(minimize_seed)
+            {
                 Ok(candidate) => {
                     response.coordinates = candidate.coordinates;
                     response.initial_energy = candidate.initial_energy;
@@ -738,7 +789,24 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
                 )),
             }
         }
-        let (embedded, method) = embed(&mol, request, cage.as_ref(), &mut response.diagnostics)?;
+        if request.relaxed && !request.coordinates.is_empty() {
+            response.approximations.push(
+                if !expected.atoms.is_empty() || !expected.bonds.is_empty() {
+                    "Started from generated coordinates to preserve drawn stereochemistry"
+                } else {
+                    "Started from generated coordinates after the drawing could not be used"
+                }
+                .into(),
+            );
+        }
+        let (embedded, method) = embed(&mol, request, cage.as_ref(), &mut response.diagnostics)
+            .map_err(|error| {
+                if request.relaxed {
+                    format!("{error}; {}", response.diagnostics.join("; "))
+                } else {
+                    error
+                }
+            })?;
         let failures = embedding_failures(&embedded.params);
         let embedded_count = valid_conformer_ids(&embedded.conf_ids).count();
         let failed_embedding_ids = embedded.conf_ids.len() - embedded_count;
@@ -824,7 +892,7 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         let positioned = mol
             .with_only_3d_conformer(rows(&request.coordinates))
             .map_err(|error| error.to_string())?;
-        let field = force_field(&positioned, request.field)?;
+        let field = request_force_field(&positioned, request)?;
         response.energy = energy(&field)?;
         response.initial_energy = response.energy;
         response.coordinates = field.positions();

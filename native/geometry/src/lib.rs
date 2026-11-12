@@ -16,6 +16,13 @@ pub const MAX_BONDS: usize = 4096;
 pub const MAX_CONFORMERS: u32 = 32;
 pub const MAX_ITERATIONS: u32 = 10_000;
 
+/// Periodic-table metals used by relaxed geometry and coordination admission.
+/// Keep this shared with callers so alkali ions such as crown-bound K are
+/// treated consistently with transition-metal coordination centres.
+pub fn is_metal_atomic_number(number: u32) -> bool {
+    matches!(number, 3 | 4 | 11..=13 | 19..=31 | 37..=50 | 55..=84 | 87..=116)
+}
+
 /// Original atom capacity used by the default admission envelope.
 const LEGACY_MAX_ATOMS: usize = 512;
 /// Original bond capacity used by the default admission envelope.
@@ -112,8 +119,8 @@ pub struct AtomInput {
 }
 
 /// `order` and `stereo` use RDKit enum values. The solver supports 1 single,
-/// 2 double, 3 triple, and 12 aromatic. The wire recognizes 17 dative so the
-/// solver can report that coordination bonds are unsupported.
+/// 2 double, 3 triple, and 12 aromatic in strict mode. Relaxed mode also accepts
+/// 4 quadruple, 7 one-and-a-half, and 17 dative (a is donor, b is acceptor).
 /// Stereo is 0 none, 1 unspecified, 2 Z, 3 E, 4 cis, or 5 trans. Its two
 /// reference atom indices refer to neighbors of a and b, respectively.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -130,6 +137,9 @@ pub struct BondInput {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
+    /// Opt in to permissive valence handling and approximate coordination UFF.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub relaxed: bool,
     pub atoms: Vec<AtomInput>,
     pub bonds: Vec<BondInput>,
     pub field: ForceField,
@@ -156,10 +166,17 @@ pub struct Response {
     pub converged: bool,
     pub field: ForceField,
     pub diagnostics: Vec<String>,
+    /// Disclosed force-field and preparation approximations in relaxed mode.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub approximations: Vec<String>,
 }
 
 fn valid_coordinate(p: &[f64; 3]) -> bool {
     p.iter().all(|x| x.is_finite() && x.abs() <= 1_000_000.0)
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl Request {
@@ -202,7 +219,8 @@ impl Request {
             if b.a >= n
                 || b.b >= n
                 || b.a == b.b
-                || !matches!(b.order, 1 | 2 | 3 | 12 | 17)
+                || !(matches!(b.order, 1 | 2 | 3 | 12 | 17)
+                    || (self.relaxed && matches!(b.order, 4 | 7)))
                 || b.stereo > 5
                 || !edges.insert((b.a.min(b.b), b.a.max(b.b)))
             {
