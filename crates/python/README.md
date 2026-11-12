@@ -20,10 +20,15 @@ Transforms return new objects. The original molecule keeps its geometry and
 style. In Jupyter, displaying an object shows its SVG drawing.
 
 Labels use the requested font when available, then the system's default sans-serif
-font. An included sans-serif font keeps PNG and PDF labels visible even without
-installed fonts; installing Liberation Sans is not required. To choose a specific
-installed family, use, for example, `aspirin.with_style(font_family="DejaVu Sans")`.
-After installing fonts, restart Python or the Jupyter kernel before rendering again.
+font. Where Arial is not installed, as in most Linux containers, the bundled
+Liberation Sans, which has Arial's character widths, stands in for it, so labels are laid out as on macOS and Windows even without installed
+fonts. To choose a specific installed family, use, for example,
+`aspirin.with_style(font_family="DejaVu Sans")`. After installing fonts, restart
+Python or the Jupyter kernel before rendering again.
+
+SVG output draws text as outlines, so it looks the same in every viewer. Pass
+`text="live"`, as in `aspirin.svg(text="live")`, to keep editable `<text>`
+elements instead.
 
 ## Reuse a style
 

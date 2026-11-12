@@ -1,6 +1,5 @@
 //! Fonts added at runtime, as the browser build does with a page's fonts.
 
-#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn generic_sans_fallback_precedes_cjk_without_replacing_requested_families() {
     use resvg::usvg::fontdb::{Database, Language};
@@ -20,8 +19,11 @@ fn generic_sans_fallback_precedes_cjk_without_replacing_requested_families() {
         db: std::sync::Arc::new(db),
         added: vec![],
     };
-    let style = crate::typography::TextStyle::default();
-    assert_eq!(super::font_name_in("Arial", &fonts), "Local Sans");
+    let style = crate::typography::TextStyle {
+        family: "Missing Font".into(),
+        ..Default::default()
+    };
+    assert_eq!(super::font_name_in(&style.family, &fonts), "Local Sans");
     for c in "CHO".chars() {
         assert_eq!(super::glyph_metrics_in(c, &style, &fonts).0, "Local Sans");
     }
@@ -35,7 +37,6 @@ fn generic_sans_fallback_precedes_cjk_without_replacing_requested_families() {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn missing_generic_family_uses_an_installed_sans_before_the_bundle() {
     use resvg::usvg::fontdb::{Database, Family, Language, Query};
@@ -60,7 +61,7 @@ fn missing_generic_family_uses_an_installed_sans_before_the_bundle() {
             families: &[Family::Name("Arial")],
             ..Default::default()
         })
-        .is_none()
+        .is_some()
     );
     let fonts = super::Fonts {
         names: super::family_names(&db),
@@ -68,12 +69,19 @@ fn missing_generic_family_uses_an_installed_sans_before_the_bundle() {
         added: vec![],
     };
     assert_eq!(
-        super::glyph_metrics_in('O', &crate::typography::TextStyle::default(), &fonts).0,
+        super::glyph_metrics_in(
+            'O',
+            &crate::typography::TextStyle {
+                family: "Missing Font".into(),
+                ..Default::default()
+            },
+            &fonts
+        )
+        .0,
         "Local Sans"
     );
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn bundled_sans_supplies_glyphs_missing_from_installed_faces() {
     use resvg::usvg::fontdb::Database;
@@ -90,12 +98,12 @@ fn bundled_sans_supplies_glyphs_missing_from_installed_faces() {
         db: std::sync::Arc::new(db),
         added: vec![],
     };
-    let style = crate::typography::TextStyle::default();
+    let style = crate::typography::TextStyle {
+        family: family.clone(),
+        ..Default::default()
+    };
     assert_eq!(super::glyph_metrics_in('N', &style, &fonts).0, family);
-    assert_eq!(
-        super::glyph_metrics_in('C', &style, &fonts).0,
-        "Liberation Sans"
-    );
+    assert_eq!(super::glyph_metrics_in('C', &style, &fonts).0, "Arial");
 }
 
 #[test]

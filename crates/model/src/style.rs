@@ -211,15 +211,22 @@ pub fn fontdb() -> Arc<resvg::usvg::fontdb::Database> {
 /// Fonts a page added at runtime, after the system's or the bundled ones.
 static ADDED: Mutex<Vec<resvg::usvg::fontdb::Source>> = Mutex::new(Vec::new());
 
-/// Load the fonts that text is measured and drawn with: the system's on the
-/// desktop, bundled sans-serif fallbacks, then any added at runtime.
+/// Load fonts for text measurement and drawing: system fonts on the desktop,
+/// bundled Arial when absent, then any fonts added at runtime.
 pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
     #[cfg(not(target_arch = "wasm32"))]
     db.load_system_fonts();
-    font::load_bundled(db);
+    load_bundled_fonts(db);
     for source in added_fonts(0) {
         db.load_font_source(source);
     }
+}
+
+/// Register the bundled Arial-compatible faces when the database lacks Arial.
+/// Native builds also supply Helvetica when absent, while retaining an existing
+/// generic sans-serif preference and leaving installed Arial faces untouched.
+pub fn load_bundled_fonts(db: &mut resvg::usvg::fontdb::Database) {
+    font::load_bundled(db);
 }
 
 /// Add a TrueType or OpenType font (or collection) for measuring, drawing and

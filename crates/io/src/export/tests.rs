@@ -215,7 +215,7 @@ fn missing_named_family_keeps_text_in_svg_tree_and_raster_export() {
         db.load_font_data(bytes.to_vec());
     }
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-        <text x="8" y="48" font-family="Arial" font-size="40">N</text>
+        <text x="8" y="48" font-family="Arial" font-size="40">O</text>
     </svg>"#;
     let db = std::sync::Arc::new(db);
     let default_tree = resvg::usvg::Tree::from_str(
@@ -237,6 +237,10 @@ fn missing_named_family_keeps_text_in_svg_tree_and_raster_export() {
             .iter()
             .any(|node| matches!(node, resvg::usvg::Node::Text(_)))
     );
+    let outlined = String::from_utf8(office_svg(&tree).unwrap()).unwrap();
+    let outlined = roxmltree::Document::parse(&outlined).unwrap();
+    assert!(!outlined.descendants().any(|node| node.has_tag_name("text")));
+    assert!(outlined.descendants().any(|node| node.has_tag_name("path")));
     let mut pixmap = resvg::tiny_skia::Pixmap::new(64, 64).unwrap();
     pixmap.fill(resvg::tiny_skia::Color::WHITE);
     resvg::render(
@@ -250,6 +254,23 @@ fn missing_named_family_keeps_text_in_svg_tree_and_raster_export() {
             .iter()
             .any(|p| p.red() < 128 && p.alpha() > 0)
     );
+}
+
+#[test]
+fn bundled_only_font_database_outlines_arial_labels() {
+    let mut db = resvg::usvg::fontdb::Database::new();
+    crate::style::load_bundled_fonts(&mut db);
+    let tree = parse_svg_with_fontdb(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+            <text x="8" y="48" font-family="Arial" font-size="40">O</text>
+        </svg>"#,
+        std::sync::Arc::new(db),
+    )
+    .unwrap();
+    let outlined = String::from_utf8(office_svg(&tree).unwrap()).unwrap();
+    let xml = roxmltree::Document::parse(&outlined).unwrap();
+    assert!(!xml.descendants().any(|node| node.has_tag_name("text")));
+    assert!(xml.descendants().any(|node| node.has_tag_name("path")));
 }
 
 #[test]
@@ -351,7 +372,7 @@ fn clipboard_is_transparent_and_files_keep_canvas_background() {
     }
 }
 #[test]
-fn office_svg_files_and_clipboard_outline_text_without_moving_or_resizing_it() {
+fn outlined_svg_and_office_exports_preserve_text_geometry_and_physical_size() {
     let doc: Document = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/ui-drawn-ethanol.reshiki"
     ))
@@ -374,6 +395,7 @@ fn office_svg_files_and_clipboard_outline_text_without_moving_or_resizing_it() {
             } else {
                 drawing(&doc, "svg-office").unwrap()
             };
+            assert_eq!(outlined_svg(source.clone()).unwrap(), bytes);
             let svg = String::from_utf8(bytes).unwrap();
             let xml = roxmltree::Document::parse(&svg).unwrap();
             assert!(
@@ -383,9 +405,8 @@ fn office_svg_files_and_clipboard_outline_text_without_moving_or_resizing_it() {
                     .ends_with("pt")
             );
             assert!(!xml.descendants().any(|node| node.has_tag_name("text")));
-            let mut options = resvg::usvg::Options::default();
-            options.fontdb_mut().load_system_fonts();
-            let original = resvg::usvg::Tree::from_str(&source, &options).unwrap();
+            assert!(xml.descendants().any(|node| node.has_tag_name("path")));
+            let original = parse_svg(source).unwrap();
             // The receiving computer need not have the original fonts installed.
             let restored = resvg::usvg::Tree::from_str(&svg, &Default::default()).unwrap();
             assert!((original.size().width() - restored.size().width()).abs() < 0.001);
