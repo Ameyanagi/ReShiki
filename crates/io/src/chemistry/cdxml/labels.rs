@@ -251,10 +251,14 @@ where
             carbons: carbons(&attrs)?,
             hydrogens: !yes(&attrs, "HideImplicitHydrogens")?,
             stereo: NativeStereo::new(yes(&attrs, "ShowAtomStereo")?),
+            // Only a value that differs from the drawing's setting is an
+            // override; ChemDraw repeats the document value on every atom.
             stereo_group: attrs
                 .get("ShowAtomEnhancedStereo")
-                .map(|_| yes(&attrs, "ShowAtomEnhancedStereo").map(NativeStereo::new))
-                .transpose()?,
+                .map(|_| yes(&attrs, "ShowAtomEnhancedStereo"))
+                .transpose()?
+                .filter(|&show| show != output.atom_labels.stereo_groups)
+                .map(NativeStereo::new),
             hydrogen_position: HydrogenPosition::Auto,
             number: None,
         };
