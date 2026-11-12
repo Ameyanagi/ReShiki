@@ -510,6 +510,8 @@ pub fn compatible(a: &Atom, b: &Atom) -> bool {
         && !b.no_implicit
         && a.stereo.is_none()
         && b.stereo.is_none()
+        && a.stereo_group.is_none()
+        && b.stereo_group.is_none()
         && a.map_num == 0
         && b.map_num == 0
 }

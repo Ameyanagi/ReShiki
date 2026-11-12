@@ -440,3 +440,30 @@ fn cdxml_object_groups_keep_a_shared_stereo_group_in_one_fragment() -> anyhow::R
     assert!(error.to_string().contains("stereo group"), "{error}");
     Ok(())
 }
+
+/// RXN gives each participant its own groups, so one group across two
+/// participants can't be written; reaction SMILES keeps it as one field.
+#[test]
+fn rxn_refuses_a_group_spanning_participants() -> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    let source = molfile::read(DISCONNECTED_V3000)?;
+    let imported = reaction::Imported {
+        reactants: vec![source.clone()],
+        products: vec![source],
+        agents: Vec::new(),
+    };
+    let draft = imported.drawing()?;
+    let labels = draft.labels()?;
+    let mut doc = draft.finish(labels)?;
+    for group in doc
+        .atoms
+        .iter_mut()
+        .filter_map(|atom| atom.stereo_group.as_mut())
+    {
+        group.number = 1;
+    }
+    let error = reaction::write_rxn(&doc, None).unwrap_err();
+    assert!(error.to_string().contains("stereo group"), "{error}");
+    assert!(reaction::write_smiles(&doc, None)?.contains("&1:"));
+    Ok(())
+}

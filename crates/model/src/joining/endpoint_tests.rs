@@ -679,3 +679,32 @@ fn first_coordination_bridge_stretches_but_second_contact_closes_a_cycle_with_li
     one_frame_and_reopen(&chelate, &rotated);
     one_frame_and_reopen(&rotated, &copied);
 }
+
+/// Sharing or merging would keep only one atom's group, so grouped atoms
+/// are not shared and atoms in different groups are not merged.
+#[test]
+fn grouped_atoms_are_not_shared_or_merged_across_groups() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    assert!(crate::templates::compatible(
+        doc.atom(a).unwrap(),
+        doc.atom(b).unwrap()
+    ));
+    doc.atom_mut(a).unwrap().stereo_group = Some(StereoGroup {
+        kind: Kind::And,
+        number: 1,
+    });
+    assert!(!crate::templates::compatible(
+        doc.atom(a).unwrap(),
+        doc.atom(b).unwrap()
+    ));
+    assert!(!crate::templates::compatible(
+        doc.atom(b).unwrap(),
+        doc.atom(a).unwrap()
+    ));
+    let c = doc.add_atom("C", Point::new(21., 36.));
+    let error = merge_atoms(&doc, &[a, b, c]).unwrap_err();
+    assert!(error.contains("stereo groups"), "{error}");
+}

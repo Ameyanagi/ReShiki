@@ -179,7 +179,24 @@ pub(crate) fn write_rxn_with_fallback(
     selected: Option<&[u64]>,
 ) -> Result<(String, bool), Error> {
     let mut fallback = false;
+    let mut written = HashSet::new();
     let rows = prepare_output(doc, selected, |molecule| {
+        // Each RXN CTAB has its own groups, so a drawing group seen in an
+        // earlier participant would be split into independent groups.
+        let groups: HashSet<_> = molecule
+            .state
+            .metadata
+            .groups
+            .iter()
+            .filter(|group| group.kind != 0)
+            .map(|group| (group.kind, group.read_id))
+            .collect();
+        if !written.is_disjoint(&groups) {
+            return Err(invalid(
+                "A stereo group spans reaction participants, which RXN can't keep; export reaction SMILES or save the native drawing",
+            ));
+        }
+        written.extend(groups);
         let (output, part_fallback) = molfile::reaction_ctab_drawing(molecule, doc)?;
         fallback |= part_fallback;
         Ok(output)

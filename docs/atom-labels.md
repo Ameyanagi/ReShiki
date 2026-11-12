@@ -182,7 +182,8 @@ ChemDraw keeps a group within one CDXML/CDX fragment. On import, fragments that
 reuse a number get separate groups; on export, molecules that share a group
 stay in one fragment, and a drawing whose object groups separate a stereo
 group's members can't be exported until they're grouped together. RXN files
-keep each participant's groups separate.
+keep each participant's groups separate, so a group that spans participants
+can't be written to RXN; reaction SMILES keeps it.
 
 Group labels are shown by default as plain 7.5 pt text beside the centre:
 `and1` and `or1` on grouped centres, and `abs` on the other stereocentres of a
