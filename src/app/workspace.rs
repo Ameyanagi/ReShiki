@@ -816,7 +816,9 @@ impl App {
                 let label = text_width(super::graphics::SNAP_ORBITALS_LABEL, 11.);
                 lead + chooser + 12. + 15. + CONTEXT_GAP + 22. + label
             }
-            Tool::EditPoints if self.selected_path().is_some() => {
+            Tool::EditPoints
+                if self.selected_path().is_some() || self.selected_node_arrow().is_some() =>
+            {
                 lead + ["Corner", "Smooth", "Symmetric", "Done"]
                     .map(|label| text_width(label, 12.) + 18.)
                     .into_iter()

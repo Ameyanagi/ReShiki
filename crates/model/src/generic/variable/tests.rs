@@ -230,6 +230,7 @@ fn variable_pose_is_local_rigid_and_preserves_unrelated_native_associations() {
         kind: "forward".into(),
         control: None,
         cubic: Some([Point::new(-300., 10.), Point::new(-350., 150.)]),
+        nodes: Vec::new(),
         style: None,
     });
     source.validate().unwrap();

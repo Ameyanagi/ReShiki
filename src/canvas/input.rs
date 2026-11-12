@@ -260,12 +260,21 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
                 .any(|a| {
-                    a.handles()
-                        .iter()
-                        .any(|q| q.distance(p) < self.camera.world_len(HANDLE_PICK_PX))
+                    a.handle_at(p, self.camera.world_len(HANDLE_PICK_PX))
+                        .is_some()
                 })
             {
                 return mouse::Interaction::Grab;
+            }
+            // Edit points adds a node where the shaft is clicked.
+            if self.tool == Tool::EditPoints
+                && self.doc.arrows.iter().any(|a| {
+                    self.selected.contains(&a.id)
+                        && a.kind != "bent"
+                        && a.nearest_shaft_point(p).2 < self.camera.world_len(PICK_RADIUS_PX)
+                })
+            {
+                return mouse::Interaction::Crosshair;
             }
         }
         if cursor.is_over(bounds) {
