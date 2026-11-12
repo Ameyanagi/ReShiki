@@ -526,9 +526,7 @@ fn read_data_object(
 }
 
 pub(super) fn run(render: Render) -> Result<()> {
-    // The editor records original previews with winit's per-monitor awareness.
-    // Match it so edited previews avoid virtualized display metrics above 100%
-    // scaling (#1123).
+    // Keep the server's display metrics unvirtualized, like the editor's.
     unsafe {
         if SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).is_err() {
             let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
