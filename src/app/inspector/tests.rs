@@ -1127,9 +1127,6 @@ fn stereo_groups_assign_selected_centres_with_undo() {
     let plain = doc.add_atom("C", reshiki::document::Point::new(42., 0.));
     let other = doc.add_atom("C", reshiki::document::Point::new(300., 0.));
     doc.add_bond(centre, plain, 1, "plain");
-    for id in [centre, other] {
-        doc.atom_mut(id).unwrap().cip_label = Some("R".into());
-    }
     let and = |number| StereoGroup {
         kind: Kind::And,
         number,
@@ -1137,6 +1134,14 @@ fn stereo_groups_assign_selected_centres_with_undo() {
     doc.atom_mut(other).unwrap().stereo_group = Some(and(3));
     let groups =
         |app: &App| [centre, plain, other].map(|id| app.tab.doc.atom(id).unwrap().stereo_group);
+    // These bare carbons are no real stereocentres, so each edit's label
+    // refresh clears their descriptors; give them back before the next one.
+    let centres = |app: &mut App| {
+        for id in [centre, other] {
+            app.tab.doc.atom_mut(id).unwrap().cip_label = Some("R".into());
+        }
+    };
+    centres(&mut app);
     app.tab.selected = vec![centre, plain];
     // The other molecule's and3 does not take this molecule's first number.
     let new = GroupChoice::New(reshiki::stereo_groups::next(
@@ -1147,6 +1152,7 @@ fn stereo_groups_assign_selected_centres_with_undo() {
     assert_eq!(new, GroupChoice::New(and(1)));
     let _ = app.update(Message::InspectorAction(Action::StereoGroup(new)));
     assert_eq!(groups(&app), [Some(and(1)), None, Some(and(3))]);
+    centres(&mut app);
     let _ = app.update(Message::InspectorAction(Action::StereoGroup(
         GroupChoice::Absolute,
     )));
