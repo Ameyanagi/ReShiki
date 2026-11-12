@@ -49,6 +49,8 @@ pub struct Settings {
     pub name_typography: bool,
     /// Write IUPAC Ξ/ξ descriptors for explicitly unknown configuration.
     pub write_unknown_stereo: bool,
+    /// Include an editable drawing in exported PNG files.
+    pub export_editable_drawing: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
 }
@@ -63,6 +65,7 @@ impl Default for Settings {
             two_decimal_weight: false,
             name_typography: true,
             write_unknown_stereo: false,
+            export_editable_drawing: false,
             drawing_style_unit: Default::default(),
         }
     }

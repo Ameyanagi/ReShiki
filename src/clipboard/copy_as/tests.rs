@@ -12,6 +12,32 @@ fn molecule() -> Document {
     doc
 }
 
+#[tokio::test]
+async fn copy_as_png_contains_the_editable_drawing() {
+    let mut source = molecule();
+    source.version = 15;
+    source.canvas_theme = crate::canvas_theme::CanvasTheme::Dark;
+    source.bonds[0].color = crate::palette::Color::Custom([180, 50, 55]);
+    let engine = LocalEngine::in_process();
+    let (snapshot, _) = export::figure_document(&engine, source.clone())
+        .await
+        .unwrap();
+    let copy = prepare_as(engine, source.clone(), CopyFormat::Png)
+        .await
+        .unwrap();
+    let bytes = copy
+        .representations
+        .iter()
+        .find(|item| item.kind == "public.png")
+        .unwrap()
+        .bytes()
+        .unwrap();
+    let restored = payload::read(&bytes).unwrap().unwrap();
+    assert_eq!(restored.all_ids(), source.all_ids());
+    assert_eq!(restored.bonds, source.bonds);
+    assert_eq!(crate::scene::svg(&restored), crate::scene::svg(&snapshot));
+}
+
 #[test]
 fn name_follows_inchi_in_copy_formats_and_uses_the_name_code() {
     let index = CopyFormat::ALL

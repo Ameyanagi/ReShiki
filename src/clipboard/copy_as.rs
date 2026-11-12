@@ -1,7 +1,7 @@
 //! Format-specific copy. Conversion is side-effect free; the application checks
 //! the originating document before publishing the prepared representations.
 use super::{CDX_TYPES, LIMIT, Representation};
-use crate::{document::Document, engine::LocalEngine, export};
+use crate::{document::Document, engine::LocalEngine, export, payload};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::borrow::Cow;
 mod chemdoodle;
@@ -325,20 +325,37 @@ pub async fn prepare_as(
         (output.as_bytes().to_vec(), Some(output))
     } else if matches!(format, CopyFormat::Png | CopyFormat::Svg | CopyFormat::Pdf) {
         let (doc, notice) = export::figure_document(&engine, original).await?;
+        let doc = doc.current();
         notices.extend(notice);
-        let figure = crate::task::spawn_blocking(move || {
+        let (figure, notice) = crate::task::spawn_blocking(move || {
             #[cfg(windows)]
             if format == CopyFormat::Svg {
-                return export::clipboard_svg(&doc).map(|bytes| export::Figure {
-                    bytes,
-                    detail: None,
+                return export::clipboard_svg(&doc).map(|bytes| {
+                    (
+                        export::Figure {
+                            bytes,
+                            detail: None,
+                        },
+                        None,
+                    )
                 });
             }
-            export::clipboard_figure(&doc, format.code())
+            let mut figure = export::clipboard_figure(&doc, format.code())?;
+            let notice = if format == CopyFormat::Png {
+                let envelope = payload::encode(&doc)?;
+                let (bytes, notice) =
+                    super::editable_png(figure.bytes, &envelope, payload::EMBED_LIMIT)?;
+                figure.bytes = bytes;
+                notice.map(|_| "Picture copied without the editable drawing (too large)")
+            } else {
+                None
+            };
+            Ok::<_, String>((figure, notice))
         })
         .await
         .map_err(|error| format!("Could not render clipboard figure: {error}"))??;
         notices.extend(figure.detail);
+        notices.extend(notice.map(str::to_owned));
         let bytes = figure.bytes;
         let text = (format == CopyFormat::Svg)
             .then(|| String::from_utf8(bytes.clone()).map_err(|error| error.to_string()))

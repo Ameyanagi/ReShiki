@@ -113,26 +113,41 @@ pub struct Publication {
 /// Prepare a figure snapshot and render it off the async executor, as the
 /// app's figure export does. `pages` exports every publication page as a PDF;
 /// otherwise PNG exports stay within `max_pixels` (at most [`FILE_PIXELS`]).
+/// `editable` includes the prepared drawing in PNG files when it fits the limit.
 pub async fn publication(
     engine: &crate::engine::LocalEngine,
     doc: Document,
     format: &'static str,
     pages: bool,
+    editable: bool,
     max_pixels: u64,
 ) -> Result<Publication, String> {
     let (doc, notice) = figure_document(engine, doc).await?;
+    let doc = doc.current();
     let attachment_notice = pages
         .then(|| crate::arrow_anchors::export_notice(&doc))
         .flatten();
-    let figure = crate::task::spawn_blocking(move || {
-        if pages {
+    let (figure, editable_detail) = crate::task::spawn_blocking(move || {
+        let mut figure = if pages {
             pages_pdf(&doc).map(|bytes| Figure {
                 bytes,
                 detail: None,
             })
         } else {
             figure_with_budget(&doc, format, max_pixels)
-        }
+        }?;
+        let detail = if editable && !pages && format == "png" {
+            let envelope = crate::payload::encode(&doc)?;
+            Some(if envelope.len() <= crate::payload::EMBED_LIMIT {
+                figure.bytes = crate::payload::embed("png", figure.bytes, &envelope)?;
+                "Includes the editable drawing".to_owned()
+            } else {
+                "Saved without the editable drawing: it is larger than 2 MB".to_owned()
+            })
+        } else {
+            None
+        };
+        Ok::<_, String>((figure, detail))
     })
     .await
     .map_err(|error| error.to_string())??;
@@ -141,6 +156,7 @@ pub async fn publication(
         .into_iter()
         .chain(notice)
         .chain(attachment_notice)
+        .chain(editable_detail)
         .collect();
     Ok(Publication {
         bytes: figure.bytes,
@@ -334,7 +350,7 @@ impl RasterBudget {
     fn clipboard(windows: bool) -> Self {
         if windows {
             // RGBA Office previews and CF_DIB must fit the native 64 MiB
-            // limit. Also keep Copy Image pasteable as a native picture.
+            // limit. Picture-only paste uses the same pixel budget.
             Self {
                 adaptive: true,
                 pixels: crate::pictures::MAX_PIXELS,

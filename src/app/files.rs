@@ -273,6 +273,7 @@ pub(super) struct State {
 #[derive(Debug, Clone)]
 pub enum Prepared {
     Native(Box<reshiki::document::Document>),
+    Picture(Box<reshiki::document::Document>),
     Import {
         format: &'static str,
         contents: String,
@@ -317,7 +318,13 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
         .and_then(|e| e.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
-    if reshiki::compatibility::is_native_extension(&extension) {
+    if extension == "png"
+        && let Some(payload) = reshiki::payload::read(&contents)
+    {
+        payload
+            .map(|drawing| Prepared::Picture(Box::new(drawing)))
+            .map_err(|e| format!("This picture's editable drawing could not be read: {e}"))
+    } else if reshiki::compatibility::is_native_extension(&extension) {
         let doc = reshiki::document::Document::from_native_file(&contents)
             .map_err(|e| format!("Could not open document: {e}"))?;
         Ok(Prepared::Native(Box::new(doc)))
@@ -356,7 +363,7 @@ pub(super) fn open_dialog(
     // Accept supported extensions without relying on macOS type
     // registration; the worker validates the content.
     Task::future(pick(
-        "Open a ReShiki, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
+        "Open a ReShiki, editable PNG, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
         None,
         false,
         unlimited,
@@ -387,7 +394,9 @@ pub(super) fn open_picked(
                     let (path, result) = prepare_contents(file.path, Ok(file.contents)).await?;
                     #[cfg(target_arch = "wasm32")]
                     let result = match (file.handle, result) {
-                        (Some(handle), Ok(prepared)) => {
+                        (Some(handle), Ok(prepared))
+                            if !matches!(&prepared, Prepared::Picture(_)) =>
+                        {
                             let mut duplicate = None;
                             for (id, other) in handles {
                                 if crate::web::same_entry(&handle, &other).await {
@@ -607,6 +616,20 @@ impl super::App {
                 if self.open_target(Some(&path)) {
                     self.show_opened(*doc, Some(path));
                 }
+            }
+            Ok(Prepared::Picture(doc)) => {
+                self.open_target(None);
+                self.show_opened(*doc, None);
+                self.tab.untitled_name = path
+                    .file_stem()
+                    .map(|name| name.to_string_lossy().into_owned());
+                self.tab.mark_saved(reshiki::document::Document::default());
+                self.status = format!(
+                    "Opened the editable drawing from {}",
+                    path.file_name()
+                        .unwrap_or(path.as_os_str())
+                        .to_string_lossy()
+                );
             }
         }
         iced::Task::none()
@@ -866,7 +889,7 @@ impl super::App {
     pub(super) fn export_drawing(&mut self, format: &'static str) -> Task<Message> {
         if ["svg", "svg-office", "pdf", "png"].contains(&format) || cfg!(windows) && format == "emf"
         {
-            return self.export_figure(format, false);
+            return self.export_figure(format, false, self.appearance.export_editable_drawing);
         }
         let mut request = Request::molecule("export", self.tab.doc.clone());
         request.format = Some(format.into());
