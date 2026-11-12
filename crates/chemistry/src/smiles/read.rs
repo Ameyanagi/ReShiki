@@ -91,6 +91,9 @@ struct Annotations {
     context: prepare::Context,
     properties: Vec<HashMap<Vec<u8>, Vec<u8>>>,
     queries: Vec<bool>,
+    // CX makes bare stars null queries for strict RDKit parity, without a
+    // constraint for partial import to discard.
+    implicit_queries: Vec<bool>,
     groups: HashMap<(u8, u32), usize>,
     labels_processed: bool,
     atom_stereo: bool,
@@ -103,6 +106,7 @@ impl Annotations {
             context: prepare::Context::new(parsed),
             properties: vec![HashMap::new(); parsed.graph.atoms.len()],
             queries: vec![false; parsed.graph.atoms.len()],
+            implicit_queries: vec![false; parsed.graph.atoms.len()],
             groups: HashMap::new(),
             labels_processed: false,
             atom_stereo: false,
@@ -178,7 +182,7 @@ impl Annotations {
                     })
                     .is_none_or(|symbol| symbol == b"*")
             {
-                put(&mut self.queries, id, true)?;
+                put(&mut self.implicit_queries, id, true)?;
             }
         }
         Ok(())
@@ -489,7 +493,11 @@ fn reaction_part_with(
         partial_graph(&mut parsed, &mut annotations, positions, &mut dropped)?;
     }
     prepare::validate_allenes(&parsed)?;
-    if annotations.queries.iter().any(|&q| q)
+    if annotations
+        .queries
+        .iter()
+        .chain(&annotations.implicit_queries)
+        .any(|&q| q)
         || annotations.context.unsupported_bonds.iter().any(|&b| b)
         || parsed.query_bonds.iter().any(|&b| b)
     {
@@ -723,6 +731,7 @@ fn partial_graph(
         dropped.push(Dropped::Queries);
         annotations.queries.fill(false);
     }
+    annotations.implicit_queries.fill(false);
     let mut mapping = vec![None; parsed.graph.bonds.len()];
     let mut kept = 0;
     for (id, (bond, query)) in parsed
@@ -933,7 +942,13 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     } else {
         suffix
     };
-    if !partial && annotations.queries.iter().any(|&q| q) {
+    if !partial
+        && annotations
+            .queries
+            .iter()
+            .chain(&annotations.implicit_queries)
+            .any(|&q| q)
+    {
         return Err(Error::Unsupported("query atom"));
     }
     annotations.numeric_props(&mut parsed)?;
