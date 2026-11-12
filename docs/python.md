@@ -188,7 +188,7 @@ reshiki.excel.add_structures(
 Install `reshiki[excel]` for this helper. The header defaults to row 1; use
 `header=False` to render from row 1, or `start_row=` to choose the first row.
 Import warnings are issued as `StructureWarning`s that start with the source
-cell, such as `A3: The input marks a molecule's stereo configuration as relative …`.
+cell, such as `A3: Bond C1–C2 has any order (~); bond order assumed single`.
 
 Install `reshiki[pandas]` and explicitly import `reshiki.pandas` to register
 the pandas Series accessor:
