@@ -548,16 +548,6 @@ impl Parsed {
                 "radical count or stereochemistry class",
             ));
         }
-        // Reaction parsing wraps ordinary reactant/product atoms as queries.
-        // Existing explicit number queries replace that generated wrapper.
-        if matches!(context, Context::Reaction { agent: false, .. })
-            && state.graph.atoms.iter().zip(&self.atoms).any(|(a, props)| {
-                matches!(props.query, FileQuery::None)
-                    && (a.isotope != 0 || a.charge != 0 || a.radical_electrons != 0)
-            })
-        {
-            return Err(ReadError::Unsupported("query reaction atom"));
-        }
         Ok(Imported {
             molecule: Molecule {
                 rdkit_version: RDKIT_VERSION,

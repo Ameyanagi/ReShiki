@@ -700,6 +700,57 @@ fn attachment_document_export_keeps_3d_coordinates() -> anyhow::Result<()> {
 }
 
 #[test]
+fn rxn_v2000_preserves_reactant_charge() -> anyhow::Result<()> {
+    let methoxide = format!(
+        "\n     RDKit          2D\n\n  2  1  0  0  0  0  0  0  0  0999 V2000\n\
+         {}\n{}\n  1  2  1  0\nM  CHG  1   2  -1\nM  END\n",
+        v2000_atom(-0.75, 0., "C"),
+        v2000_atom(0.75, 0., "O"),
+    );
+    let iodomethane = methoxide
+        .replace(" O ", " I ")
+        .replace("M  CHG  1   2  -1\n", "");
+    let ether = format!(
+        "\n     RDKit          2D\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n\
+         {}\n{}\n{}\n  1  2  1  0\n  2  3  1  0\nM  END\n",
+        v2000_atom(-1.299, -0.25, "C"),
+        v2000_atom(0., 0.5, "O"),
+        v2000_atom(1.299, -0.25, "C"),
+    );
+    let text =
+        format!("$RXN\n\n      RDKit\n\n  2  1\n$MOL\n{methoxide}$MOL\n{iodomethane}$MOL\n{ether}");
+    let imported = crate::chemistry::reaction::read_rxn(&text)?;
+    assert_eq!(
+        imported.reactants[0].molecule.state.graph.atoms[1].charge,
+        -1
+    );
+    imported.drawing()?;
+    Ok(())
+}
+
+#[test]
+fn rxn_v2000_preserves_participant_isotope_and_radical() -> anyhow::Result<()> {
+    let methanol = format!(
+        "\n     RDKit          2D\n\n  2  1  0  0  0  0  0  0  0  0999 V2000\n\
+         {}\n{}\n  1  2  1  0\nM  END\n",
+        v2000_atom(-0.75, 0., "C"),
+        v2000_atom(0.75, 0., "O"),
+    );
+    for (property, isotope, radical) in [("ISO  1   1  13", 13, 0), ("RAD  1   1   2", 0, 1)] {
+        let reactant = methanol.replace("M  END", &format!("M  {property}\nM  END"));
+        let product = reactant.replace(" O ", " Cl");
+        let text = format!("$RXN\n\n      RDKit\n\n  1  1\n$MOL\n{reactant}$MOL\n{product}");
+        let imported = crate::chemistry::reaction::read_rxn(&text)?;
+        for participant in imported.reactants.iter().chain(&imported.products) {
+            let atom = &participant.molecule.state.graph.atoms[0];
+            assert_eq!((atom.isotope, atom.radical_electrons), (isotope, radical));
+        }
+        imported.drawing()?;
+    }
+    Ok(())
+}
+
+#[test]
 fn reaction_export_keeps_3d_participant_depth_and_2d_bytes() -> anyhow::Result<()> {
     use crate::{
         chemistry::reaction,
