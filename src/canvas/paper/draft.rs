@@ -196,9 +196,15 @@ impl MoleculeCanvas<'_> {
                     *mark = placed;
                 }
             }
-            if let Some(Gesture::ArrowHandle { id, index }) = &state.gesture
+            if let Some(Gesture::ArrowHandle {
+                id,
+                index,
+                free,
+                grab,
+            }) = &state.gesture
                 && let Some(arrow) = self.doc.arrows.iter().find(|a| a.id == *id)
             {
+                let end = end.offset(grab.x, grab.y);
                 let end = if ArrowHandle::from_index(*index).is_some_and(ArrowHandle::is_endpoint) {
                     let (end, guides) = self.arrow_end(state, arrow, *index, end, bounds);
                     *smart = guides;
@@ -206,7 +212,13 @@ impl MoleculeCanvas<'_> {
                 } else {
                     end
                 };
-                reshiki::arrow_anchors::edit_handle(preview.to_mut(), *id, *index, end);
+                if *free {
+                    if let Some(a) = preview.to_mut().arrows.iter_mut().find(|a| a.id == *id) {
+                        a.edit_handle_free(*index, end);
+                    }
+                } else {
+                    reshiki::arrow_anchors::edit_handle(preview.to_mut(), *id, *index, end);
+                }
             }
             if let Some(Gesture::Draw { start, .. }) = &state.gesture
                 && self.tool == Tool::Arrow

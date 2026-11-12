@@ -7,6 +7,9 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+mod nodes;
+pub use nodes::{FIRST_NODE_HANDLE, NodePart, node_handle};
+
 macro_rules! choices {
     ($name:ident { $first:ident => $label:literal $(, $variant:ident => $text:literal)* $(,)? }) => {
         #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -341,6 +344,7 @@ impl Arrow {
             kind: preset.kind().into(),
             control: None,
             cubic: None,
+            nodes: Vec::new(),
             style: Some(style),
         }
     }
@@ -378,6 +382,10 @@ impl Arrow {
         })
     }
     pub fn point(&self, t: f32) -> Point {
+        if !self.nodes.is_empty() {
+            let (segment, t) = self.node_segment_at(t, false);
+            return segment.point(t);
+        }
         if let Some([a, b]) = self.cubic {
             let ab = a.lerp(b, t);
             let left = self.start.lerp(a, t).lerp(ab, t);
@@ -397,6 +405,12 @@ impl Arrow {
         }
     }
     fn velocity(&self, t: f32) -> Point {
+        if !self.nodes.is_empty() {
+            let (segment, t) = self.node_segment_at(t, false);
+            let v = segment.velocity(t);
+            let n = (self.nodes.len() + 1) as f32;
+            return Point::new(v.x * n, v.y * n);
+        }
         if let Some([a, b]) = self.cubic {
             let u = 1. - t;
             return Point::new(
@@ -426,6 +440,10 @@ impl Arrow {
         }
     }
     fn offset_point(&self, t: f32, offset: f32) -> Point {
+        if !self.nodes.is_empty() {
+            let (segment, t) = self.node_segment_at(t, false);
+            return segment.offset_point(t, offset);
+        }
         let v = self.velocity(t);
         let speed = v.distance(Point::default());
         let direction = if speed > 0.0001 {
@@ -439,6 +457,12 @@ impl Arrow {
             .offset(-direction.y * offset, direction.x * offset)
     }
     fn offset_velocity(&self, t: f32, offset: f32) -> Point {
+        if !self.nodes.is_empty() {
+            let (segment, t) = self.node_segment_at(t, false);
+            let v = segment.offset_velocity(t, offset);
+            let n = (self.nodes.len() + 1) as f32;
+            return Point::new(v.x * n, v.y * n);
+        }
         let v = self.velocity(t);
         if self.cubic.is_some() && v.distance(Point::default()) < 0.0001 {
             if offset == 0. {
@@ -496,13 +520,23 @@ impl Arrow {
     pub fn handle_at(&self, p: Point, radius: f32) -> Option<usize> {
         self.handles()
             .typed()
-            .map(|(handle, point)| (handle, point.distance(p)))
+            .filter(|(handle, _)| *handle != ArrowHandle::Bend || self.has_bend_handle())
+            .map(|(handle, point)| (handle.index(), point.distance(p)))
+            .chain(
+                self.node_handles()
+                    .into_iter()
+                    .map(|(index, point, _)| (index, point.distance(p))),
+            )
             .filter(|(_, distance)| *distance < radius)
             .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(handle, _)| handle.index())
+            .map(|(index, _)| index)
     }
     pub fn edit_handle(&mut self, index: usize, p: Point) {
         if !p.is_finite() {
+            return;
+        }
+        if node_handle(index).is_some() {
+            self.edit_node_handle(index, p, false);
             return;
         }
         let control = self.control_point();
@@ -524,6 +558,9 @@ impl Arrow {
                 self.control = control;
             }
             Some(ArrowHandle::Bend) => {
+                if !self.has_bend_handle() {
+                    return;
+                }
                 if let Some([a, b]) = self.cubic {
                     let middle = self.point(0.5);
                     let dx = (p.x - middle.x) * 4. / 3.;
@@ -555,12 +592,20 @@ impl Arrow {
         // Materialize the legacy default bend before reflecting or transforming it.
         self.control = self.control_point().map(&mut f);
         self.cubic = self.cubic.map(|[a, b]| [f(a), f(b)]);
+        for node in &mut self.nodes {
+            node.point = f(node.point);
+            node.controls = node.controls.map(&mut f);
+        }
         self.start = f(self.start);
         self.end = f(self.end);
     }
     pub fn reverse(&mut self) {
         self.control = self.control_point();
         self.cubic = self.cubic.map(|[a, b]| [b, a]);
+        self.nodes.reverse();
+        for node in &mut self.nodes {
+            node.controls.swap(0, 1);
+        }
         std::mem::swap(&mut self.start, &mut self.end);
         std::mem::swap(&mut self.start_anchor, &mut self.end_anchor);
     }
@@ -592,11 +637,13 @@ impl Arrow {
         {
             self.control = None;
             self.cubic = None;
+            self.nodes.clear();
         }
         self.kind = preset.kind().into();
         self.style = Some(style.clone());
     }
     pub fn straighten(&mut self) {
+        self.nodes.clear();
         if self.is_attached() {
             self.cubic = Some([
                 self.start.lerp(self.end, 1. / 3.),
@@ -618,6 +665,10 @@ impl Arrow {
         };
         if let Some([a, b]) = self.cubic {
             self.cubic = Some([reflect(a), reflect(b)]);
+            for node in &mut self.nodes {
+                node.point = reflect(node.point);
+                node.controls = node.controls.map(reflect);
+            }
             return;
         }
         if let Some(c) = self.control_point() {
@@ -627,6 +678,9 @@ impl Arrow {
     /// Even out a bow's tangent angles and lengths when its directions differ
     /// by less than 20 degrees. More deliberate shapes are left untouched.
     pub fn smooth_bow(&mut self) -> Result<bool, String> {
+        if !self.nodes.is_empty() {
+            return self.smooth_nodes();
+        }
         let Some(bow) = Bow::read(self) else {
             return Ok(false);
         };
@@ -645,6 +699,9 @@ impl Arrow {
     /// Mirror a modestly lopsided bow across the endpoints' perpendicular
     /// bisector, preserving both endpoints and their attachments.
     pub fn symmetrise(&mut self) -> Result<bool, String> {
+        if !self.nodes.is_empty() {
+            return self.symmetrise_nodes();
+        }
         let Some(bow) = Bow::read(self) else {
             return Ok(false);
         };
@@ -668,10 +725,22 @@ impl Arrow {
                 "Cubic arrow controls cannot be combined with a quadratic or elbow bend".into(),
             );
         }
+        if !self.nodes.is_empty()
+            && (self.cubic.is_none() || self.control.is_some() || self.kind == "bent")
+        {
+            return Err(
+                "Arrow nodes require cubic controls without a quadratic or elbow bend".into(),
+            );
+        }
         if [Some(self.start), Some(self.end), self.control]
             .into_iter()
             .flatten()
             .chain(self.cubic.into_iter().flatten())
+            .chain(
+                self.nodes
+                    .iter()
+                    .flat_map(|node| [node.point, node.controls[0], node.controls[1]]),
+            )
             .any(|p| !p.is_finite())
         {
             return Err("Non-finite arrow position".into());
@@ -765,7 +834,11 @@ impl Arrow {
         }
         let length = DEFAULT
             .world(s.head_length_pt)
-            .min(self.start.distance(self.end) * 0.4);
+            .min(if self.nodes.is_empty() {
+                self.start.distance(self.end) * 0.4
+            } else {
+                self.node_span() * 0.4
+            });
         let width = DEFAULT.world(s.head_width_pt);
         let base = tip.offset(-direction.x * length, -direction.y * length);
         let left = base.offset(direction.y * width, -direction.x * width);
@@ -800,6 +873,9 @@ impl Arrow {
     }
     // A trimmed cubic exactly reproduces either the cubic or legacy quadratic.
     fn shaft_body(&self, n: Point, from: f32, to: f32, offset: f32) -> Vec<PathCommand> {
+        if !self.nodes.is_empty() {
+            return self.node_shaft_body(from, to, offset);
+        }
         use PathCommand::{Cubic, Line, Move};
         let shift = |p: Point| p.offset(n.x * offset, n.y * offset);
         let start = self.point(from);
@@ -850,6 +926,15 @@ impl Arrow {
         }
     }
     fn shaft_tangent(&self, t: f32, reverse: bool) -> Point {
+        if !self.nodes.is_empty() {
+            let (segment, t) = self.node_segment_at(t, !reverse);
+            let direction = segment.tangent(t);
+            return if reverse {
+                Point::new(-direction.x, -direction.y)
+            } else {
+                direction
+            };
+        }
         if let Some([a, b]) = self.cubic {
             let velocity = self.velocity(t);
             let mut direction = unit(Point::default(), velocity);
@@ -889,12 +974,12 @@ impl Arrow {
     /// can vanish when a tangent handle is placed directly on its endpoint.
     fn cubic_inset(&self, at: f32, toward: f32, length: f32, limit: f32, offset: f32) -> f32 {
         let end = at + (toward - at) * limit;
-        let steps = 32;
-        let mut previous = self.offset_point(at, offset);
+        let steps = 32 * (self.nodes.len() + 1);
+        let mut previous = self.offset_point_side(at, offset, toward < at);
         let mut distance = 0.;
         for i in 1..=steps {
             let t = at + (end - at) * i as f32 / steps as f32;
-            let point = self.offset_point(t, offset);
+            let point = self.offset_point_side(t, offset, toward < at);
             let step = previous.distance(point);
             if distance + step >= length && step > 0. {
                 let fraction = (length - distance) / step;
@@ -909,14 +994,15 @@ impl Arrow {
     /// A radial distance puts a straight head's notch on the curved shaft;
     /// walking that distance along the curve would leave the notch beside it.
     fn cubic_radial_inset(&self, at: f32, toward: f32, length: f32, offset: f32) -> f32 {
-        let tip = self.offset_point(at, offset);
+        let tip = self.offset_point_side(at, offset, toward < at);
         let mut near = at;
-        for i in 1..=64 {
-            let mut far = at + (toward - at) * i as f32 / 64.;
-            if tip.distance(self.offset_point(far, offset)) >= length {
+        let steps = 64 * (self.nodes.len() + 1);
+        for i in 1..=steps {
+            let mut far = at + (toward - at) * i as f32 / steps as f32;
+            if tip.distance(self.offset_point_side(far, offset, toward < at)) >= length {
                 for _ in 0..20 {
                     let mid = (near + far) * 0.5;
-                    if tip.distance(self.offset_point(mid, offset)) < length {
+                    if tip.distance(self.offset_point_side(mid, offset, toward < at)) < length {
                         near = mid;
                     } else {
                         far = mid;
@@ -945,10 +1031,14 @@ impl Arrow {
         }
         let length = DEFAULT
             .world(s.head_length_pt)
-            .min(self.start.distance(self.end) * 0.4);
+            .min(if self.nodes.is_empty() {
+                self.start.distance(self.end) * 0.4
+            } else {
+                self.node_span() * 0.4
+            });
         let neck = self.cubic_radial_inset(to, from, length * (1. - s.head_notch), offset);
-        let tip = self.offset_point(to, offset);
-        let direction = unit(self.offset_point(neck, offset), tip);
+        let tip = self.offset_point_side(to, offset, to > from);
+        let direction = unit(self.offset_point_side(neck, offset, to > from), tip);
         let mut commands = Vec::new();
         self.head_path(s, tip, direction, kind, &mut |p, _, _| commands = p);
         let radius = DEFAULT.world(s.width_pt) * 0.5;
@@ -973,7 +1063,11 @@ impl Arrow {
         let radius = DEFAULT.world(s.width_pt) * 0.5;
         let length = DEFAULT
             .world(s.head_length_pt)
-            .min(self.point(from).distance(self.point(to)) * 0.4);
+            .min(if self.nodes.is_empty() {
+                self.point(from).distance(self.point(to)) * 0.4
+            } else {
+                self.node_span() * 0.4
+            });
         let speed = self
             .offset_velocity(to, offset)
             .distance(Point::default())
@@ -985,8 +1079,8 @@ impl Arrow {
         };
         let direction = if self.cubic.is_some() {
             unit(
-                self.offset_point(neck, offset),
-                self.offset_point(to, offset),
+                self.offset_point_side(neck, offset, to > from),
+                self.offset_point_side(to, offset, to > from),
             )
         } else {
             self.shaft_tangent(to, sign < 0.)
@@ -995,7 +1089,7 @@ impl Arrow {
         let outer = offset - side * sign * radius;
         // Continue the shaft's unbarbed edge all the way to the tip. Closing
         // a triangle on the shaft centerline leaves its round cap exposed.
-        let tip = self.offset_point(to, inner);
+        let tip = self.offset_point_side(to, inner, to > from);
         let wing = tip.offset(
             -direction.x * length + direction.y * side * (width + radius),
             -direction.y * length - direction.x * side * (width + radius),
@@ -1003,8 +1097,8 @@ impl Arrow {
         let mut commands = vec![
             Move(tip),
             Line(wing),
-            Line(self.offset_point(neck, outer)),
-            Line(self.offset_point(neck, inner)),
+            Line(self.offset_point_side(neck, outer, to > from)),
+            Line(self.offset_point_side(neck, inner, to > from)),
         ];
         if self.kind == "bent" || self.control_point().is_none() && self.cubic.is_none() {
             commands.push(Line(tip));
@@ -1027,7 +1121,11 @@ impl Arrow {
         }
         let length = DEFAULT
             .world(s.head_length_pt)
-            .min(self.start.distance(self.end) * 0.4);
+            .min(if self.nodes.is_empty() {
+                self.start.distance(self.end) * 0.4
+            } else {
+                self.node_span() * 0.4
+            });
         let inset = if s.shape == HeadShape::Hollow && kind == Head::Full {
             length * (1. - s.head_notch)
         } else {
@@ -1066,7 +1164,7 @@ impl Arrow {
             } else {
                 self.head_path(
                     s,
-                    self.offset_point(to, offset),
+                    self.offset_point_side(to, offset, to > from),
                     self.shaft_tangent(to, sign < 0.),
                     head_kind,
                     &mut *path,
@@ -1077,7 +1175,7 @@ impl Arrow {
             } else {
                 self.head_path(
                     s,
-                    self.offset_point(from, offset),
+                    self.offset_point_side(from, offset, from > to),
                     self.shaft_tangent(from, sign > 0.),
                     tail_kind,
                     &mut *path,
@@ -1087,10 +1185,21 @@ impl Arrow {
         if self.kind == "equilibrium" {
             shaft(0., 1., -gap, s.head, Head::None);
             let inset = (1. - s.equilibrium_ratio) / 2.;
-            shaft(1. - inset, inset, gap, s.tail, Head::None);
+            shaft(
+                self.length_parameter(1. - inset),
+                self.length_parameter(inset),
+                gap,
+                s.tail,
+                Head::None,
+            );
         } else if self.kind == "retro" {
             // Keep the double shaft inside the angled arrowhead.
-            let length = self.start.distance(self.end).max(0.001);
+            let length = if self.nodes.is_empty() {
+                self.start.distance(self.end)
+            } else {
+                self.node_span()
+            }
+            .max(0.001);
             let head_length = DEFAULT.world(s.head_length_pt).min(length * 0.4);
             let head_width = DEFAULT.world(s.head_width_pt).max(0.001);
             let inset = (head_length * gap / head_width / length).min(0.4);
@@ -1130,8 +1239,9 @@ impl Arrow {
     }
     fn no_go_mark(&self, s: &ArrowStyle, path: &mut impl FnMut(Vec<PathCommand>, bool, bool)) {
         use PathCommand::{Line, Move};
-        let p = self.point(0.5);
-        let d = self.shaft_tangent(0.5, false);
+        let middle = self.length_parameter(0.5);
+        let p = self.point(middle);
+        let d = self.shaft_tangent(middle, false);
         let w = DEFAULT.world(2.);
         let q = |x: f32, y: f32| p.offset((d.x * x - d.y * y) * w, (d.y * x + d.x * y) * w);
         if s.no_go == NoGo::Hash {
@@ -1181,6 +1291,8 @@ impl Arrow {
 mod cleanup_tests;
 #[cfg(test)]
 mod curve_tests;
+#[cfg(test)]
+mod node_tests;
 #[cfg(test)]
 mod paths_parity_tests;
 #[cfg(test)]

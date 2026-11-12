@@ -157,6 +157,7 @@ fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
         kind: "forward".into(),
         control: None,
         cubic: None,
+        nodes: Vec::new(),
         style: None,
     });
     doc.graphics.push(crate::graphics::Graphic::dragged(

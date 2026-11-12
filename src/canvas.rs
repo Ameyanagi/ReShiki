@@ -180,6 +180,12 @@ pub enum Edit {
     /// Move the repeat label beside a bracket by this much.
     RepeatLabelMove(u64, World),
     ArrowHandle(u64, usize, World),
+    /// Move an arrow node's direction control alone, making the node a Corner.
+    ArrowControlFree(u64, usize, World),
+    /// Split the arrow's shaft at this point with a new node.
+    ArrowNodeInsert(u64, World),
+    /// The app counts consecutive clicks on an arrow node like path nodes.
+    ArrowNodeClick(u64, usize),
     ArrowClick(u64),
     ArrowTarget(World, bool),
     CancelArrowSource,
@@ -464,6 +470,11 @@ enum Gesture {
     ArrowHandle {
         id: u64,
         index: usize,
+        /// Option/Alt on a node's direction control frees it from the node.
+        free: bool,
+        /// An interior node handle keeps its offset from the pointer, so a
+        /// click inside it selects rather than moves it.
+        grab: World,
     },
     Transform(Box<TransformDrag>),
     Tilt(tilt::TiltDrag),

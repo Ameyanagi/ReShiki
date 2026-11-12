@@ -106,6 +106,12 @@ pub(super) fn certify_translation(
                 relative(old.start, a, new.start, b)?;
             }
         }
+        for (a, b) in old.nodes.iter().zip(&new.nodes) {
+            relative(old.start, a.point, new.start, b.point)?;
+            for (a, b) in a.controls.into_iter().zip(b.controls) {
+                relative(old.start, a, new.start, b)?;
+            }
+        }
     }
     for name in &source.molecule_names {
         let atom = *name.atoms.first().ok_or("Empty named shape")?;
@@ -196,10 +202,22 @@ pub(super) fn certify_translation(
                 check_shift(a, b)?;
             }
         }
+        for (a, b) in old.nodes.iter().zip(&actual.nodes) {
+            check_shift(a.point, b.point)?;
+            for (a, b) in a.controls.into_iter().zip(b.controls) {
+                check_shift(a, b)?;
+            }
+        }
         if actual.start != old.start.offset(shift.x, shift.y)
             || actual.end != old.end.offset(shift.x, shift.y)
             || actual.control != old.control.map(|p| p.offset(shift.x, shift.y))
             || actual.cubic != old.cubic.map(|v| v.map(|p| p.offset(shift.x, shift.y)))
+            || actual.nodes.len() != old.nodes.len()
+            || actual.nodes.iter().zip(&old.nodes).any(|(new, old)| {
+                new.point != old.point.offset(shift.x, shift.y)
+                    || new.controls != old.controls.map(|p| p.offset(shift.x, shift.y))
+                    || new.kind != old.kind
+            })
         {
             return Err(
                 "Prepared arrow changed its explicit controls or common translation".into(),
@@ -235,6 +253,7 @@ pub(super) fn certify_translation(
         actual.end = old.end;
         actual.control = old.control;
         actual.cubic = old.cubic;
+        actual.nodes = old.nodes.clone();
     }
     for (actual, old) in graphics.iter_mut().zip(&source.graphics) {
         check_shift(old.origin, actual.origin)?;

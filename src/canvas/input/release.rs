@@ -62,8 +62,17 @@ impl MoleculeCanvas<'_> {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
             },
-            Gesture::ArrowHandle { id, index } => {
+            Gesture::ArrowHandle {
+                id,
+                index,
+                free,
+                grab,
+            } => {
+                let p = p.offset(grab.x, grab.y);
                 match self.release_arrow_handle(state, id, index, p, bounds, inside) {
+                    ControlFlow::Continue(Edit::ArrowHandle(id, index, p)) if free => {
+                        Edit::ArrowControlFree(id, index, p)
+                    }
                     ControlFlow::Continue(edit) => edit,
                     ControlFlow::Break(action) => return Some(action),
                 }
@@ -243,15 +252,20 @@ impl MoleculeCanvas<'_> {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
         let handle = ArrowHandle::from_index(index);
-        if (self.tool == Tool::Arrow || handle.is_some_and(ArrowHandle::is_direction))
-            && self
-                .doc
-                .arrows
-                .iter()
-                .find(|a| a.id == id)
-                .and_then(|a| a.handles().get(index).copied())
-                .is_some_and(|handle| handle.distance(p) < self.camera.world_len(DRAG_SLOP_PX))
-        {
+        let node = reshiki::arrows::node_handle(index);
+        let clicked = self
+            .doc
+            .arrows
+            .iter()
+            .find(|a| a.id == id)
+            .and_then(|a| a.handle_point(index))
+            .is_some_and(|handle| handle.distance(p) < self.camera.world_len(DRAG_SLOP_PX));
+        if clicked && node.is_some() {
+            return ControlFlow::Break(
+                Action::publish(Edit::ArrowNodeClick(id, index)).and_capture(),
+            );
+        }
+        if clicked && (self.tool == Tool::Arrow || handle.is_some_and(ArrowHandle::is_direction)) {
             if handle.is_some_and(ArrowHandle::is_direction) {
                 return ControlFlow::Break(Action::request_redraw().and_capture());
             }

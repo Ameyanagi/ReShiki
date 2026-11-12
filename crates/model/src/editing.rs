@@ -504,6 +504,10 @@ fn mapped_append_part(
             a.end = a.end.offset(offset.x, offset.y);
             a.control = a.control.map(|p| p.offset(offset.x, offset.y));
             a.cubic = a.cubic.map(|v| v.map(|p| p.offset(offset.x, offset.y)));
+            for node in &mut a.nodes {
+                node.point = node.point.offset(offset.x, offset.y);
+                node.controls = node.controls.map(|p| p.offset(offset.x, offset.y));
+            }
         }
     }
     for g in &mut part.graphics {

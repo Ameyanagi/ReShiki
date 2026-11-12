@@ -558,6 +558,7 @@ fn union_publication_source() -> Document {
         kind: "equilibrium".into(),
         control: None,
         cubic: Some([Point::new(-470., -160.), Point::new(-470., 280.)]),
+        nodes: Vec::new(),
         style: None,
     });
     source.validate().unwrap();

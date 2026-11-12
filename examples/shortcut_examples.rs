@@ -268,6 +268,7 @@ fn sections() -> anyhow::Result<Vec<Section>> {
         kind: "forward".into(),
         control: None,
         cubic: None,
+        nodes: Vec::new(),
         style: None,
     });
     tools.push(sample("a / e · Reaction arrow tool", arrow));
