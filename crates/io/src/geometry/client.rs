@@ -101,7 +101,8 @@ impl Client {
     /// requested force field. The same molecule and seed remain reproducible.
     /// Seeds must be at most [`super::GENERATION_SEED_MAX`].
     /// Clear retained drawing depth with [`Prepared::without_retained_depth`]
-    /// when sampling should always start from a new embedding.
+    /// for fresh ordinary embeddings. Relaxed metal coordination can still use
+    /// the planar drawing as an approximate seed.
     pub async fn generate_seeded(
         &self,
         prepared: &Prepared,
@@ -234,6 +235,8 @@ impl Client {
             || !response.initial_energy.is_finite()
             || response.diagnostics.len() > 100
             || response.diagnostics.iter().any(|s| s.len() > 8192)
+            || response.approximations.len() > reshiki_geometry::MAX_ATOMS * 3 + 4
+            || response.approximations.iter().any(|s| s.len() > 8192)
         {
             return Err(Error::Protocol(
                 "Invalid force field, energy or diagnostics in response".into(),
@@ -303,6 +306,7 @@ impl Client {
             iterations,
             force_field: ForceField::from_native(response.field),
             diagnostics: response.diagnostics,
+            approximations: response.approximations,
         })
     }
 }
