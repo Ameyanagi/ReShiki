@@ -609,6 +609,55 @@ fn native_path_paste_keeps_explicit_node_types() {
 }
 
 #[test]
+fn native_arrow_paste_keeps_interior_nodes() {
+    use reshiki::arrows::{ArrowStyle, Preset};
+    let (mut app, _) = App::new();
+    let mut arrow = reshiki::document::Arrow::new(
+        1,
+        Point::default(),
+        Point::new(160., 0.),
+        Preset::Curved,
+        ArrowStyle::default(),
+    );
+    arrow.insert_node(Point::new(80., 80.)).unwrap();
+    app.tab.doc.arrows.push(arrow);
+    let part = editing::selection(&app.tab.doc, &[1]);
+    let part = Document::from_native_file(&part.file_json().unwrap()).unwrap();
+    let before = app.tab.doc.clone();
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(part)),
+    );
+    let [original, pasted] = app.tab.doc.arrows.as_slice() else {
+        panic!("One pasted arrow");
+    };
+    let shift = |p: Point| Point::new(p.x - original.start.x, p.y - original.start.y);
+    let relative = |a: &reshiki::document::Arrow| {
+        let offset = a.start;
+        a.nodes
+            .iter()
+            .map(|n| {
+                (
+                    n.kind,
+                    Point::new(n.point.x - offset.x, n.point.y - offset.y),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(relative(pasted).len(), 1);
+    assert_eq!(relative(pasted)[0].0, relative(original)[0].0);
+    assert!(
+        relative(pasted)[0]
+            .1
+            .distance(shift(original.nodes[0].point))
+            < 0.001
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn reshiki_pastes_keep_palette_colors_and_other_sources_stay_exact() {
     use reshiki::palette::{Color, Hue, Row};
     let (mut app, _) = App::new();
