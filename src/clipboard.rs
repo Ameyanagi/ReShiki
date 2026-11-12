@@ -459,11 +459,23 @@ async fn prepare_copy_for(
     for (format, result) in images {
         match result {
             Ok(mut image) => {
+                // Copy Image's own drawing keeps to the limit of the one in
+                // its pictures, so a huge drawing cannot overflow the clipboard.
+                if format == "native drawing" && envelope.len() > payload::EMBED_LIMIT {
+                    continue;
+                }
                 if format == "png" {
                     // A PNG over the clipboard limit keeps its own error.
                     if let Ok(bytes) = image.bytes() {
                         let (bytes, notice) = editable_png(bytes, &envelope, payload::EMBED_LIMIT)?;
-                        outcome.notices.extend(notice.map(str::to_owned));
+                        outcome.notices.extend(notice.map(|notice| {
+                            if image_only {
+                                "Picture copied without the editable drawing (too large)"
+                            } else {
+                                notice
+                            }
+                            .to_owned()
+                        }));
                         image = Representation::new("public.png", &bytes);
                     }
                     let dpi = image
