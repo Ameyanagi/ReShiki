@@ -14,12 +14,23 @@ moving anything.
 2. Choose **Join** in the context row, or right-click and choose **Join
    selected atoms or bonds** (Ctrl+J, ⌘J on macOS).
 
-| Selection                                      | Result                                             |
-| ---------------------------------------------- | -------------------------------------------------- |
-| One atom in each of two fragments              | The fragments share that atom.                     |
-| Both ends of one bond in each of two fragments | The fragments fuse along the bond.                 |
-| Three or more atoms                            | The atoms merge into one. Nothing else moves.      |
-| A donor atom and a metal                       | A donor → metal bond is added. Neither atom moves. |
+| Selection                                      | Result                                                    |
+| ---------------------------------------------- | --------------------------------------------------------- |
+| One atom in each of two fragments              | The fragments share that atom.                            |
+| Both ends of one bond in each of two fragments | The fragments fuse along the bond.                        |
+| Three or more atoms                            | The atoms merge into one. Nothing else moves.             |
+| A donor atom and a metal                       | A donor → metal bond is added. Neither atom moves.        |
+| Ligands and one or more metals                 | Each N, O, S or P donor gets a bond to its nearest metal. |
+
+If the selection contains a metal, Join adds donor → metal bonds and never
+merges or moves atoms. Every selected N, O, S or P atom is joined to the
+nearest selected metal within two bond lengths; carbons and other atoms in the
+selection are ignored. Select a whole ligand and the metal, or a whole complex,
+and press Join once: all the bonds are one Undo step. The status bar names the
+donors that were joined and any that were skipped, such as a donor that is too
+far away or already has a different bond to the metal. With exactly one donor
+and one metal selected, Join adds that bond whatever the distance. Two atoms of
+the same metal, element and charge are shared like any other pair.
 
 Join merges three or more atoms into the first atom you selected. The merged
 atom sits at the center of the selected atom labels and keeps the first atom's
@@ -58,14 +69,14 @@ one Undo step.
 3. Repeat for each donor of a chelate, even when both donors are already in the
    same molecule.
 
-You can also select exactly the donor atom and the metal and press **Ctrl+J**
-(**⌘J** on macOS). Select the two atoms, not the whole ligand. In keyboard
+You can also select the donor and the metal, or whole ligands with the metal,
+and press **Ctrl+J** (**⌘J** on macOS). In keyboard
 drawing, mark the donor with **[**, move to the metal, then choose
 **Coordinate }** or press **}** (Shift+] on a US keyboard). See
 [keyboard drawing](3d-keyboard-drawing.md).
 
-Each new contact is one Undo step, and adding a contact that already exists does
-nothing. Donor hydrogens and the metal's charge stay as you drew them.
+Each contact you add, or each Join, is one Undo step, and adding a contact that
+already exists does nothing. Donor hydrogens and the metal's charge stay as you drew them.
 
 To show the contact as a wedge or hash, choose a style such as **Solid wedge**
 or **Hashed wedge** in the bond **Style** control. **Reverse projection tip** in
@@ -82,8 +93,8 @@ dative bond again with the **Dative** tool swaps donor and metal, the same as
 - A merge is rejected when the atoms have different charge, isotope, fixed
   hydrogens, radical, aromatic, map or mark states, or when it would merge
   stereocenters or bonds with stereo.
-- Join placement and selection still need work for some cases
-  ([issue #246](https://github.com/Ameyanagi/ReShiki/issues/246)).
+- Join shares only two atoms of the same element and charge. It does not yet
+  let you choose which of two different atoms survives.
 - Coordinate in place works for neutral or −1 N, O, S and P donors and the
   transition metals Sc–Zn, Y–Cd and Hf–Hg, with up to 12 contacts per metal.
   It does not predict stability, geometry, oxidation state or Δ/Λ stereo.

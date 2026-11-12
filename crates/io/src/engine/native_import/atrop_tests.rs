@@ -91,6 +91,27 @@ const LINUX: [(f32, f32); 20] = [
     (-98.76, -43.04),
 ];
 
+/// Full CIP codes distinguish configuration from neighbour/bond ordering.
+fn tetrahedral_codes(
+    molecule: &molecular::Molecule,
+) -> anyhow::Result<std::collections::BTreeMap<u64, String>> {
+    let mut state = molecule.state.clone();
+    for atom in &mut state.properties.atoms {
+        atom.cip_code = None;
+    }
+    state.properties.bond_codes.fill(None);
+    let labeled = chemistry::stereo::cip::label::assign(&state, &Default::default())
+        .map_err(molecular::Error::from)?;
+    Ok(molecule
+        .ids
+        .iter()
+        .zip(&state.metadata.atoms)
+        .zip(labeled.state.properties.atoms)
+        .filter(|((_, metadata), _)| matches!(metadata.chiral_tag, 1 | 2))
+        .filter_map(|((&id, _), atom)| atom.cip_code.map(|code| (id, code)))
+        .collect())
+}
+
 fn centers(molecule: &molecular::Molecule) -> Vec<(u64, u8)> {
     let mut centers: Vec<_> = molecule
         .ids
@@ -341,7 +362,7 @@ fn an_input_wedge_towards_an_axis_end_is_never_moved() -> anyhow::Result<()> {
         (10, 8, raw.directions[bond])
     );
     // This fixed wedge leaves no acceptable drawing. Preserve the complete
-    // reference result so the import's readback can refuse it.
+    // reference result so the import can warn about the missing axis.
     let drawn = chemistry::stereo::from_directions(
         &reference.graph,
         &Metadata::unspecified(&reference.graph),
@@ -630,28 +651,168 @@ fn axis_repair_preserves_an_independent_spiro_ring_convention() -> anyhow::Resul
 }
 
 #[test]
-fn an_axis_with_coincident_ends_is_still_refused() -> anyhow::Result<()> {
+fn an_axis_with_coincident_ends_imports_with_a_warning() -> anyhow::Result<()> {
     let mut fresh = molecule(MACOS)?;
-    assert_eq!(axes(&fresh)?.len(), 1);
+    assert_eq!(axes(&fresh)?, [(8, 9, 7)]);
     fresh.state.directions.fill(Direction::None);
     // No wedge assignment can define an axis with no drawing direction.
     fresh.positions[8] = fresh.positions[7];
     let labels = vec![None; fresh.ids.len()];
-    let error = finish_molecule(fresh, &labels, Default::default(), &ComponentRow::default())
-        .err()
-        .ok_or_else(|| anyhow::anyhow!("Undrawable axis accepted"))?;
-    assert!(
-        matches!(
-            &error,
-            Error::Molecular(molecular::Error::WedgeAssignment(_))
-        ),
-        "{error}"
+    let prepared = finish_molecule(
+        fresh.clone(),
+        &labels,
+        Default::default(),
+        &ComponentRow::default(),
+    )?;
+    assert_eq!(
+        prepared.warnings,
+        [
+            "The wedges in this layout cannot show the atropisomer axis N8–C9; ReShiki drew the structure without that axis"
+        ]
     );
-    assert!(error.to_string().contains("atropisomer axis"), "{error}");
+    let read = read_wedges(&prepared.document)?;
+    assert!(axes(&read)?.is_empty());
+    assert_eq!(centers(&read), centers(&fresh));
+    assert_eq!(centers(&read).len(), 4);
+    assert!(axes(&prepared.molecule)?.is_empty());
+    assert_eq!(
+        tetrahedral_codes(&prepared.molecule)?,
+        tetrahedral_codes(&read)?
+    );
+    assert_stable_stereo(&prepared.document)?;
     Ok(())
 }
 
-async fn import_smiles_document(text: &str) -> anyhow::Result<Document> {
+#[test]
+fn a_failed_repair_cannot_import_a_reversed_axis() -> anyhow::Result<()> {
+    // The first component cannot be repaired. The shared-end component's
+    // reference wedges reverse its second axis, so a failed search returns it.
+    let text = format!(
+        "{}.CN(C(=C)C)C(=C)C",
+        ATROP_MANY_CHIRALS.split_whitespace().next().unwrap()
+    );
+    let mut source = super::molecule(smiles::prepare(&text)?.state)?;
+    source.positions[..20].copy_from_slice(&molecule(MACOS)?.positions);
+    source.positions[8] = source.positions[7];
+    for (point, (x, y)) in source.positions[20..].iter_mut().zip([
+        (-1.0, 0.0),
+        (0.0, 0.0),
+        (0.5, 1.0),
+        (1.5, 1.0),
+        (0.0, 2.0),
+        (0.5, -1.0),
+        (1.5, -1.0),
+        (0.0, -2.0),
+    ]) {
+        *point = Point3 {
+            x: x + 20.0,
+            y,
+            z: 0.0,
+        };
+    }
+    for (bond, metadata) in source
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&mut source.state.metadata.bonds)
+    {
+        let pair = (bond.a.min(bond.b), bond.a.max(bond.b));
+        metadata.stereo = match pair {
+            (7, 8) => 7,
+            (21, 22) | (21, 25) => 6,
+            _ => metadata.stereo,
+        };
+    }
+    source.state.directions.fill(Direction::None);
+    let labels = vec![None; source.ids.len()];
+    let drawing = molecular::for_generated(&source, &labels, Default::default())?;
+    let codes = drawing.labels()?;
+    let before = read_wedges(&drawing.finish(codes)?)?;
+    assert_eq!(axes(&before)?, [(22, 23, 6), (22, 26, 7)]);
+    let prepared = finish_molecule(
+        source.clone(),
+        &labels,
+        Default::default(),
+        &ComponentRow::default(),
+    )?;
+    let after = read_wedges(&prepared.document)?;
+    for axis in axes(&after)? {
+        assert!(
+            axes(&source)?.contains(&axis),
+            "Reversed axis survived: {axis:?}"
+        );
+    }
+    assert!(!axes(&after)?.contains(&(22, 26, 7)));
+    assert_eq!(centers(&after), centers(&source));
+    assert_eq!(tetrahedral_codes(&after)?, tetrahedral_codes(&source)?);
+    assert!(prepared.warnings.contains(&"The wedges in this layout cannot show the atropisomer axis N22–C26; ReShiki drew the structure without that axis".into()));
+    assert_stable_stereo(&prepared.document)?;
+    Ok(())
+}
+
+#[test]
+fn a_lost_centre_is_warned_and_has_no_stored_winding_or_label() -> anyhow::Result<()> {
+    let mut fresh = molecule(MACOS)?;
+    fresh.state.directions.fill(Direction::None);
+    fresh.positions[8] = fresh.positions[7];
+    // C12 has only one nonzero neighbour direction, so no wedge defines it.
+    fresh.positions[12] = fresh.positions[11];
+    fresh.positions[13] = fresh.positions[11];
+    let labels = vec![None; fresh.ids.len()];
+    let prepared = finish_molecule(fresh, &labels, Default::default(), &ComponentRow::default())?;
+    assert_eq!(
+        prepared.warnings,
+        [
+            "The wedges in this layout cannot show the atropisomer axis N8–C9; ReShiki drew the structure without that axis",
+            "The wedges in this layout cannot show the stereocentre C12; ReShiki drew the structure without it",
+        ]
+    );
+    let center = prepared
+        .document
+        .atoms
+        .iter()
+        .find(|atom| atom.id == 12)
+        .unwrap();
+    assert!(center.stereo.is_none());
+    assert!(center.cip_label.is_none());
+    assert!(!tetrahedral_codes(&prepared.molecule)?.contains_key(&12));
+    assert_stable_stereo(&prepared.document)?;
+    Ok(())
+}
+
+fn assert_stable_stereo(document: &Document) -> anyhow::Result<()> {
+    let visible = read_wedges(document)?;
+    let expected_axes = axes(&visible)?;
+    let expected_centers = tetrahedral_codes(&visible)?;
+    let saved = serde_json::to_string(document)?;
+    let reopened: Document = serde_json::from_str(&saved)?;
+    for document in [document, &reopened] {
+        let prepared = molecular::prepare(document)?;
+        assert_eq!(axes(&prepared)?, expected_axes);
+        assert_eq!(tetrahedral_codes(&prepared)?, expected_centers);
+        let drawing = molecular::for_drawing(&prepared, document)?;
+        let labels = drawing.labels()?;
+        let refreshed = drawing.finish_preserving(labels, document)?;
+        assert_eq!(refreshed, *document, "Labels changed on re-preparation");
+    }
+    let exported = molfile::write_document(document)?;
+    let reimported = molfile::read(&exported)?.molecule;
+    assert_eq!(axes(&reimported)?, expected_axes);
+    // The drawing reads an axis wedge at a ring amide N as a centre and MOL
+    // does not, as on main. Every other centre must survive MOL.
+    let mut carbon_centers = expected_centers;
+    carbon_centers.retain(|id, _| {
+        document
+            .atoms
+            .iter()
+            .any(|atom| atom.id == *id && atom.element != "N")
+    });
+    assert_eq!(tetrahedral_codes(&reimported)?, carbon_centers);
+    Ok(())
+}
+
+async fn import_smiles_response(text: &str) -> anyhow::Result<Response> {
     let config = if std::env::var_os("RESHIKI_INCHI_HELPER").is_some() {
         native_response::Config::new(helper::discover()?)
     } else {
@@ -662,7 +823,12 @@ async fn import_smiles_document(text: &str) -> anyhow::Result<Document> {
     let Outcome::Complete(response) = outcome else {
         panic!("Import unexpectedly deferred");
     };
-    response
+    Ok(*response)
+}
+
+async fn import_smiles_document(text: &str) -> anyhow::Result<Document> {
+    import_smiles_response(text)
+        .await?
         .document
         .ok_or_else(|| anyhow::anyhow!("Missing imported drawing"))
 }
@@ -711,5 +877,88 @@ async fn an_axis_beside_a_named_dummy_atom_still_imports() -> anyhow::Result<()>
         panic!("Import unexpectedly deferred");
     };
     assert!(response.document.is_some());
+    Ok(())
+}
+
+const ATROP_MANY_CHIRALS: &str = r"O=C1C=CNC(=O)N1C(=C)[C@]([C@H](C)Br)([C@@H](F)C)[C@H](Cl)C |(1.6038,0.5917,;1.2842,-0.2899,;1.9435,-0.5613,;2.0181,-1.3829,;1.344,-1.8584,;0.5951,-1.5123,;0.0595,-2.2018,;0.5204,-0.6907,;-0.3117,-0.3431,;-0.861,-1.0085,;-0.5013,0.5405,;-0.4918,1.4387,;-0.0783,2.2018,;-1.0961,2.0398,;0.3347,0.736,;0.6313,-0.0436,;1.118,1.0786,;-1.3746,0.4021,;-2.0181,0.9732,;-1.9327,-0.2608,),wU:7.7,11.13,10.14,17.18wD:14.15|";
+
+const COUPLED_AXES: &str = r"C=C([C@H](C)C(C(=C)n1c(=O)[nH]cc(C)c1=O)(C(=C)N1C(=O)CCNC1=O)C(=C)N1C(=O)CCNC1=O)n1c(=O)[nH]cc(C)c1=O |(2.03213,-3.51413,;1.549,-2.09406,;0.0776293,-1.80242,;-0.584758,-3.14824,;-0.756696,-0.555863,;-2.00325,-1.39019,;-1.90398,-2.8869,;-3.50292,-1.35888,;-3.66457,-2.85015,;-2.45391,-3.73577,;-5.03686,-3.4558,;-6.24751,-2.57018,;-6.08587,-1.07891,;-7.29653,-0.193295,;-4.71358,-0.473265,;-5.07192,0.983302,;0.325974,0.482322,;0.425206,1.57131,;1.82267,0.581891,;2.70853,1.79237,;2.12726,3.17517,;4.19976,1.63043,;4.80513,0.25801,;3.91927,-0.952465,;2.42804,-0.790525,;1.65109,-2.07363,;-1.36179,0.816675,;-2.30672,1.367,;-1.33049,2.31635,;-0.0840978,3.15092,;1.40196,3.35493,;-0.183667,4.64762,;-1.52963,5.30973,;-2.77601,4.47516,;-2.67644,2.97846,;-4.09642,2.49506,;2.71826,-1.15446,;2.75017,0.345201,;1.79048,1.49803,;4.06487,1.0674,;5.34766,0.289934,;5.31575,-1.20973,;6.59854,-1.98719,;4.00105,-1.93192,;3.60721,-3.3793,),wD:2.2,wU:18.25,28.30|";
+
+#[tokio::test]
+async fn atrop_many_chirals_import_keeps_its_axis_and_four_centres_without_warning()
+-> anyhow::Result<()> {
+    let source = super::molecule(smiles::read(ATROP_MANY_CHIRALS)?.prepared.state)?;
+    let response = import_smiles_response(ATROP_MANY_CHIRALS).await?;
+    assert!(response.warnings.is_empty(), "{:?}", response.warnings);
+    let document = response.document.unwrap();
+    let read = read_wedges(&document)?;
+    assert_eq!(axes(&read)?, axes(&source)?);
+    assert_eq!(centers(&read), centers(&source));
+    assert_eq!(centers(&read).len(), 4);
+    assert_stable_stereo(&document)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn coupled_axes_import_warns_exactly_for_missing_stereo() -> anyhow::Result<()> {
+    let source = super::molecule(smiles::read(COUPLED_AXES)?.prepared.state)?;
+    let expected_axes = axes(&source)?;
+    let source_centers = centers(&source);
+    let response = import_smiles_response(COUPLED_AXES).await?;
+    let document = response.document.unwrap();
+    let read = read_wedges(&document)?;
+    let actual_axes = axes(&read)?;
+    let actual_centers = centers(&read);
+    for axis in &actual_axes {
+        assert!(
+            expected_axes.contains(axis),
+            "Invented or reversed axis {axis:?}"
+        );
+    }
+    for (id, tag) in &source_centers {
+        assert!(
+            actual_centers
+                .iter()
+                .all(|(actual, actual_tag)| actual != id || actual_tag == tag),
+            "Reversed centre {id}"
+        );
+    }
+    let mut expected_warnings = Vec::new();
+    for &(a, b, stereo) in &expected_axes {
+        if !actual_axes.contains(&(a, b, stereo)) {
+            let a = chemistry::stereo_lint::atom_name(&document, a);
+            let b = chemistry::stereo_lint::atom_name(&document, b);
+            expected_warnings.push(format!("The wedges in this layout cannot show the atropisomer axis {a}–{b}; ReShiki drew the structure without that axis"));
+        }
+    }
+    for (id, _) in &source_centers {
+        if !actual_centers.iter().any(|(actual, _)| actual == id) {
+            let atom = chemistry::stereo_lint::atom_name(&document, *id);
+            expected_warnings.push(format!("The wedges in this layout cannot show the stereocentre {atom}; ReShiki drew the structure without it"));
+        }
+    }
+    assert_eq!(response.warnings, expected_warnings);
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    assert!(!response.warnings.is_empty());
+    assert_stable_stereo(&document)?;
+    // Initial analysis, subsequent analysis and export use the same stereo.
+    let analysis = response.analysis.unwrap();
+    let engine = if std::env::var_os("RESHIKI_INCHI_HELPER").is_some() {
+        crate::engine::LocalEngine::default()
+    } else {
+        crate::engine::LocalEngine::in_process()
+    };
+    for operation in ["analyze", "export"] {
+        let mut request = Request::molecule(operation, document.clone());
+        if operation == "export" {
+            request.format = Some("mol".into());
+        }
+        let subsequent = engine.request(request).await.map_err(anyhow::Error::msg)?;
+        let actual = subsequent.analysis.unwrap();
+        assert_eq!(actual.smiles, analysis.smiles);
+        assert_eq!(actual.smiles_notice, analysis.smiles_notice);
+        assert_eq!(actual.inchi, analysis.inchi);
+        assert_eq!(actual.inchikey, analysis.inchikey);
+    }
     Ok(())
 }

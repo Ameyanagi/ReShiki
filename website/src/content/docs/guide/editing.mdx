@@ -43,6 +43,8 @@ To fade the bonds behind the front face of a 3D molecule such as C60, open **Pro
 
 **3D optimize…** (**⌘/Ctrl+Shift+D**) builds a 3D shape for one molecule and shows a preview before you apply it. The largest molecule it accepts depends on free memory, from about 128 to 640 atoms.
 
+The preview's **Chemistry checks** start at **Strict**, which checks valences and the drawn chemistry first. Metal complexes and atoms with unusual bond counts, such as a crown ether holding K⁺, fail those checks. The preview then shows why and waits. Choose **Relaxed** to optimize the molecule as drawn: bond counts are taken as drawn, no hydrogens are added beyond those the drawing shows, and bonds drawn with the **Dative** tool become coordination bonds. Molecules with metals use **UFF**, because MMFF has no metal parameters. A relaxed preview is labeled **Relaxed: chemistry not validated** and lists each check it skipped and each approximation, such as the UFF atom type chosen for each metal. Treat the shape as a starting point: like RDKit's UFF, it can bend the trans ligands of a square-planar complex such as cisplatin, and it makes K⁺–O contacts short. Haptic bonds, such as ferrocene's cyclopentadienyl rings, and query atoms are not supported yet.
+
 ### Show a molecule as a 3D model
 
 Select a whole molecule and right-click it and choose **Show as**, or open **Properties → Structure**, below **Molecular properties** and **Labels & chemistry**:

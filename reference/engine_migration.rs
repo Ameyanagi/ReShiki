@@ -31,12 +31,16 @@ mod molecule_reading;
 mod molfile_restrictions;
 #[path = "support/nci_2808_template_layout.rs"]
 mod nci_2808_template_layout;
+#[path = "support/partial_import.rs"]
+mod partial_import;
 #[path = "support/reaction_presentation.rs"]
 mod reaction_presentation;
 #[path = "support/reference_mol.rs"]
 mod reference_mol;
 #[path = "support/reference_presentation.rs"]
 mod reference_presentation;
+#[path = "support/superatoms.rs"]
+mod superatoms;
 
 #[tokio::test]
 async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
@@ -75,17 +79,26 @@ async fn reaction_coordinate_free_wedge_exceptions_require_changed_responses() -
         ("(c1(-c2ccccc2)ccccc1.CC)>>O |wU:1.1,w:12.13|", false),
         ("(c1(-c2ccccc2)ccccc1.CC)>>O |wD:1.1,w:12.13|", false),
         ("(c1ccccc1-c1ccccc1.CC)>>O |wU:5.4,w:12.13|", true),
+        ("CO>N->[Cu]<-N>CC |wD:3.1|", true),
+        ("C/C=C/C>N>CC |wD:2.1|", true),
+        ("N->[Cu]<-N>N>CC |wD:1.0,SgD:0:name:data::::,SgH:0:0|", true),
     ] {
         let request = Request::import("rsmi", text);
         let actual = local
             .execute(request.clone())
             .await
             .map_err(anyhow::Error::msg)?;
-        let expected = reference
-            .execute(request)
-            .await
-            .map_err(anyhow::Error::msg)?;
-        let comparison = assert_import_response_matches(actual, expected, "rsmi");
+        let comparison = match reference.execute(request).await {
+            Ok(expected) => assert_import_response_matches(actual, expected, "rsmi"),
+            Err(error) if coordinate_free_wedges::cleared_undrawable("rsmi", text) => {
+                assert!(
+                    error.contains("Unsupported bond appearance for this order"),
+                    "{text}: {error}"
+                );
+                Err(anyhow::anyhow!(error))
+            }
+            Err(error) => return Err(anyhow::Error::msg(error)),
+        };
         // Matching inputs stay under strict comparison, including symmetric axes (#1048).
         assert_eq!(comparison.is_err(), changed, "{text}: {comparison:?}");
         assert_eq!(
@@ -289,6 +302,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         coordinate_wedges: Option<coordinate_wedges::CoordinateWedges>,
         #[serde(default)]
         molecule_reading: Option<molecule_reading::MoleculeReading>,
+        superatoms: Option<Vec<superatoms::Group>>,
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
@@ -314,6 +328,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
     let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
     let (mut tag_wins, mut kept_ez) = (Vec::new(), Vec::new());
+    let mut partial_imports = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let actual = local.execute(Request::import(format, &case.text)).await;
@@ -410,7 +425,39 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             kept_ez.push(case.name);
             continue;
         }
+        // A `~` bond that CX redefines needs no assumption; it must import
+        // exactly as the same text without `~` does.
+        let plain = if matches!(format, "smiles" | "rsmi") && case.text.contains('~') {
+            let plain = local
+                .execute(Request::import(format, &case.text.replace('~', "")))
+                .await;
+            plain
+                .ok()
+                .and_then(|plain| serde_json::to_value(plain).ok())
+        } else {
+            None
+        };
         let failure = match (actual, expected) {
+            // Partial import draws an atom whose invalid `@AL` tag the strict
+            // reader refuses (#892) and the frozen worker silently drops.
+            (Ok(actual), Some(_))
+                if matches!(format, "smiles" | "rsmi")
+                    && strict_error(format, &case.text).is_some_and(|error| {
+                        smiles_extensions::refused_allene(&case.text, &error)
+                    })
+                    && partial_import::drops_allene_tag(&actual.warnings) =>
+            {
+                accepted += 1;
+                partial_imports.push(case.name.clone());
+                let text = partial_import::without_allene_tags(&case.text);
+                local
+                    .execute(Request::import(format, &text))
+                    .await
+                    .map_err(anyhow::Error::msg)
+                    .and_then(|plain| partial_import::matches_without_allene_tags(&actual, &plain))
+                    .err()
+                    .map(|e| e.to_string())
+            }
             (Ok(actual), Some(mut expected)) => {
                 accepted += 1;
                 if let Some(open) = &case.unspecified_ez {
@@ -422,7 +469,12 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 if let Some(reading) = &case.molecule_reading {
                     molecule_reading::adapt(reading, &actual, &mut expected);
                 }
-                let expected = if format == "mol" {
+                let superatoms = case.superatoms.as_deref().map_or(Ok(()), |groups| {
+                    superatoms::adapt(groups, &actual, &mut expected)
+                });
+                let expected = if let Err(error) = superatoms {
+                    Err(error)
+                } else if format == "mol" {
                     let before = serde_json::to_value(&expected)?;
                     reference_mol::mol_source_xyz(expected, &case.text).inspect(|response| {
                         if serde_json::to_value(response).ok().as_ref() != Some(&before) {
@@ -478,6 +530,34 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 accepted += 1;
                 None
             }
+            (Ok(_), None)
+                if coordinate_free_wedges::cleared_undrawable(format, &case.text)
+                    && case.failure.as_deref().is_none_or(|error| {
+                        error.contains("Unsupported bond appearance for this order")
+                    }) =>
+            {
+                accepted += 1;
+                tag_wins.push(case.name.clone());
+                None
+            }
+            (Ok(actual), None)
+                if partial_import::replaces_failure(
+                    format,
+                    case.failure.as_deref(),
+                    &actual.warnings,
+                ) =>
+            {
+                accepted += 1;
+                partial_imports.push(case.name.clone());
+                None
+            }
+            (Ok(actual), None)
+                if plain.is_some() && serde_json::to_value(&actual).ok() == plain =>
+            {
+                accepted += 1;
+                partial_imports.push(case.name.clone());
+                None
+            }
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
@@ -495,9 +575,13 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     }
     assert!(child.wait()?.success(), "Import reference failed");
     eprintln!(
-        "{format} coordinate-free wedge flags following the tag (#1044, #1048): {tag_wins:?}"
+        "{format} wedge flags following the tag or cleared for unsupported orders (#1044, #1048): {tag_wins:?}"
     );
     eprintln!("{format} E/Z kept under wedge flags (#1042): {kept_ez:?}");
+    eprintln!(
+        "{format} partial imports replacing frozen rejections (#1138): {} {partial_imports:?}",
+        partial_imports.len()
+    );
     eprintln!(
         "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
@@ -519,6 +603,59 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         "Insufficient import response coverage"
     );
     Ok(())
+}
+
+fn strict_error(format: &str, text: &str) -> Option<String> {
+    use reshiki::chemistry::{reaction, smiles};
+    if format == "smiles" {
+        smiles::read(text).err().map(|e| e.to_string())
+    } else {
+        reaction::read_smiles(text).err().map(|e| e.to_string())
+    }
+}
+
+#[test]
+fn partial_import_exception_requires_replaced_failure_format_and_warning() {
+    let warnings = vec!["Bond C1–C2 has any order (~); bond order assumed single".into()];
+    let bond_failure = Some("This bond type is not supported yet.");
+    for (format, failure, accepted) in [
+        ("smiles", bond_failure, true),
+        (
+            "rsmi",
+            Some("Query reaction atoms are not supported yet"),
+            true,
+        ),
+        ("rsmi", Some("bad any cast"), true),
+        ("rsmi", Some("bad any_cast"), true),
+        ("rsmi", Some("Bad any_cast"), true),
+        ("smiles", Some("bad any cast"), false),
+        ("smiles", Some("bad any_cast"), false),
+        ("rsmi", Some("bad cast"), false),
+        ("mol", bond_failure, false),
+        ("rsmi", None, false),
+        (
+            "rsmi",
+            Some("This bond type is not supported yet. Extra failure"),
+            false,
+        ),
+        (
+            "rsmi",
+            Some("Enhanced stereo groups are not supported yet; import was cancelled."),
+            false,
+        ),
+    ] {
+        assert_eq!(
+            partial_import::replaces_failure(format, failure, &warnings),
+            accepted,
+            "{format}: {failure:?}"
+        );
+    }
+    assert!(!partial_import::replaces_failure("rsmi", bond_failure, &[]));
+    assert!(!partial_import::replaces_failure(
+        "rsmi",
+        bond_failure,
+        &["Extended double-bond stereochemistry (e.g. C=C=C=C) ignored".into()],
+    ));
 }
 
 fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
@@ -1374,15 +1511,60 @@ async fn rust_smiles_export_preserves_analysis_and_complete_drawing() -> TestRes
         "[P@TB5](F)(Cl)(Br)(I)N",
         "[Co@OH23](F)(Cl)(Br)(I)(N)O",
     ] {
-        let imported = match reference.execute(Request::import_smiles(text)).await {
-            Ok(response) => response,
-            Err(_) => {
-                let actual = local.execute(Request::import_smiles(text)).await;
-                assert!(
-                    actual.is_err(),
-                    "Unsupported native drawing was accepted: {text}"
-                );
-                continue;
+        let partial_configuration = match text {
+            "[Pt@SP1](Cl)(F)(Br)I" => Some((
+                "Pt",
+                "ReShiki cannot draw the square-planar configuration (@SP) at Pt1; it imported that atom without a configuration",
+            )),
+            "[P@TB5](F)(Cl)(Br)(I)N" => Some((
+                "P",
+                "ReShiki cannot draw the trigonal-bipyramidal configuration (@TB) at P1; it imported that atom without a configuration",
+            )),
+            "[Co@OH23](F)(Cl)(Br)(I)(N)O" => Some((
+                "Co",
+                "ReShiki cannot draw the octahedral configuration (@OH) at Co1; it imported that atom without a configuration",
+            )),
+            _ => None,
+        };
+        let imported = if let Some((element, warning)) = partial_configuration {
+            let failure = reference
+                .execute(Request::import_smiles(text))
+                .await
+                .expect_err("Frozen worker accepted unsupported coordination stereo");
+            assert_eq!(
+                failure, "This stereochemistry class is not supported yet.",
+                "{text}"
+            );
+            let actual = local
+                .execute(Request::import_smiles(text))
+                .await
+                .map_err(anyhow::Error::msg)?;
+            assert_eq!(actual.warnings, [warning], "{text}");
+            let center = actual
+                .document
+                .as_ref()
+                .context("Missing partial-import drawing")?
+                .atoms
+                .iter()
+                .find(|atom| atom.element == element)
+                .context("Missing coordination center")?;
+            assert!(center.stereo.is_none(), "{text}: configuration retained");
+            assert!(
+                center.cip_label.is_none(),
+                "{text}: configuration label retained"
+            );
+            actual
+        } else {
+            match reference.execute(Request::import_smiles(text)).await {
+                Ok(response) => response,
+                Err(_) => {
+                    let actual = local.execute(Request::import_smiles(text)).await;
+                    assert!(
+                        actual.is_err(),
+                        "Unsupported native drawing was accepted: {text}"
+                    );
+                    continue;
+                }
             }
         };
         let document = imported.document.context("Missing drawing")?;

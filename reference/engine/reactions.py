@@ -9,6 +9,26 @@ from rdkit.Chem import rdChemReactions, rdDepictor
 ROLES = ("reactants", "products", "agents")
 
 
+def is_ordinary_atom_query(atom):
+    atomic_number = f"AtomAtomicNum {atom.GetAtomicNum()} = val"
+    query = atom.DescribeQuery().strip()
+    if query == atomic_number:
+        return True
+    # An explicit file query (e.g. SMARTSQ [#7;+1]) is real query chemistry.
+    if atom.HasProp("_MolFileAtomQuery"):
+        return False
+    expected = {atomic_number}
+    for name, value in (
+        ("AtomFormalCharge", atom.GetFormalCharge()),
+        ("AtomIsotope", atom.GetIsotope()),
+        ("AtomNumRadicalElectrons", atom.GetNumRadicalElectrons()),
+    ):
+        if value:
+            expected.add(f"{name} {value} = val")
+    lines = [line.strip() for line in query.splitlines()]
+    return lines[0] == "AtomAnd" and set(lines[1:]) - {"AtomAnd"} == expected
+
+
 def validate(doc):
     atoms = {a["id"] for a in doc["atoms"]}
     arrows = {a["id"] for a in doc.get("arrows", [])}
@@ -129,11 +149,11 @@ def import_reaction(text, format, to_document, check_supported):
         nonlocal next_id
         for index, original in enumerate(parts):
             molecule = Chem.RWMol(original)
-            # RXN parsing wraps even ordinary elements in atomic-number queries.
-            # Strip only this exact wrapper; never flatten real query chemistry.
+            # RXN parsing wraps ordinary atoms and their properties in queries.
+            # Strip only matching wrappers; never flatten real query chemistry.
             for atom in molecule.GetAtoms():
                 if atom.HasQuery():
-                    if atom.DescribeQuery().strip() != f"AtomAtomicNum {atom.GetAtomicNum()} = val":
+                    if not is_ordinary_atom_query(atom):
                         raise ValueError("Query reaction atoms are not supported yet")
                     molecule.ReplaceAtom(atom.GetIdx(), Chem.Atom(atom), preserveProps=True)
             Chem.SanitizeMol(molecule)

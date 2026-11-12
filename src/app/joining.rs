@@ -44,7 +44,7 @@ const JOIN_HINT: &str = "Drag to orient · Shift/Ctrl snaps · Escape cancels";
 
 /// What Join (⌘J) does, in the row and menu tooltip and in Help.
 pub(super) const JOIN_COMMAND_HINT: &str =
-    "Join two fragments, merge three or more atoms, or connect a donor to a metal";
+    "Join two fragments, merge three or more atoms, or connect selected donors to a metal";
 
 /// The wording shared by the inspector panel and the canvas bar.
 struct JoinModeTexts {

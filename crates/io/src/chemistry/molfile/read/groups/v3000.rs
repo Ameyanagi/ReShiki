@@ -221,7 +221,7 @@ fn property(
                 return Err(r.invalid("Missing attachment parenthesis"));
             }
             f.integer(r)?; // Native parses, but does not constrain, this count.
-            b.atom(r, f.integer(r)?)?;
+            let atom = b.atom(r, f.integer(r)?)?;
             let leaving = f.word(r)?;
             if !leaving.eq_ignore_ascii_case("AIDX") {
                 let n = r.integer(leaving)?;
@@ -229,9 +229,11 @@ fn property(
                     b.atom(r, n)?;
                 }
             }
-            if !f.word(r)?.ends_with(')') {
-                return Err(r.invalid("Missing attachment label or closing parenthesis"));
-            }
+            let label = f.word(r)?;
+            let label = label
+                .strip_suffix(')')
+                .ok_or_else(|| r.invalid("Missing attachment label or closing parenthesis"))?;
+            g.attachments.push((atom, label.to_owned()));
         }
         "PARENT" => {
             if !matches!(g.kind.as_str(), "SUP" | "DAT") {
@@ -301,6 +303,7 @@ fn property(
                     g.data.push(value);
                 }
                 "LABEL" => g.label = Some(value),
+                "ESTATE" => g.expanded = value == "E",
                 "CONNECT" => g.connection = Some(value),
                 "SUBTYPE" => g.subtype = Some(value),
                 "MULT" => {
@@ -342,6 +345,7 @@ pub(in crate::chemistry::molfile::read) fn read(
     };
     let bindings = Bindings { atoms, bonds };
     let mut entries = BTreeMap::new();
+    let mut order = Vec::new();
     let mut work = 0usize;
     for _ in 0..count {
         work = work
@@ -377,11 +381,13 @@ pub(in crate::chemistry::molfile::read) fn read(
         if entries.insert(id, group).is_some() {
             return Err(r.invalid("Duplicate substance-group ID"));
         }
+        order.push(id);
         text = r.v3()?;
     }
     if !text.to_ascii_uppercase().starts_with("END SGROUP") {
         return Err(r.invalid("Missing END SGROUP"));
     }
     p.groups.entries = entries;
+    p.groups.order = order;
     Ok(())
 }

@@ -19,7 +19,12 @@ class PythonWheelNoticeTests(unittest.TestCase):
         self.licenses.mkdir()
         self.files = {
             "LICENSE": b"Project terms\r\n",
-            "THIRD-PARTY-NOTICES.txt": b"Dependency terms\n",
+            "THIRD-PARTY-NOTICES.txt": (
+                b"SOURCE ATTRIBUTIONS\n-------------------\n"
+                b"  licenses/liberation-fonts/LICENSE\n"
+                b"  licenses/liberation-fonts/NOTICE\n"
+                b"Dependency terms\n"
+            ),
         }
         for name, content in self.files.items():
             (self.licenses / name).write_bytes(content)
@@ -43,6 +48,22 @@ class PythonWheelNoticeTests(unittest.TestCase):
         (self.licenses / "THIRD-PARTY-NOTICES.txt").unlink()
         with self.assertRaisesRegex(ValueError, "No generated notices"):
             verify_wheel(self.wheel(files={}, declarations={}), self.licenses)
+
+    def test_missing_bundled_font_attribution_is_rejected(self):
+        name = "THIRD-PARTY-NOTICES.txt"
+        for attribution in (
+            "licenses/liberation-fonts/LICENSE",
+            "licenses/liberation-fonts/NOTICE",
+        ):
+            content = self.files[name].replace(
+                f"  {attribution}\n".encode(), f"Mentioned elsewhere: {attribution}\n".encode()
+            )
+            (self.licenses / name).write_bytes(content)
+            with (
+                self.subTest(attribution=attribution),
+                self.assertRaisesRegex(ValueError, f"Missing source attribution: {attribution}"),
+            ):
+                verify_wheel(self.wheel(files={**self.files, name: content}), self.licenses)
 
     def test_missing_or_extra_file_is_rejected(self):
         for name in self.files:

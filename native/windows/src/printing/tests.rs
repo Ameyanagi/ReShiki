@@ -5,6 +5,39 @@ use super::*;
 // not overlap across independent test threads.
 static METAFILE_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+fn office_size_mm(emf: &[u8]) -> [f64; 2] {
+    let int = |i| u32::from_le_bytes(emf[i..i + 4].try_into().unwrap());
+    let header_size = int(4) as usize;
+    [0, 4].map(|axis| {
+        let frame_mm = (int(32 + axis) as i32 - int(24 + axis) as i32) as f64 / 100.;
+        let pixels_per_mm = int(72 + axis) as f64 / int(80 + axis) as f64;
+        frame_mm * pixels_per_mm / (int(header_size + 36 + axis) as f64 / 25.4)
+    })
+}
+
+#[test]
+fn office_sizes_the_reported_previews_like_powerpoint() {
+    // Previews PowerPoint stored on a 150% display in #1123 before and after
+    // an unchanged edit/save.
+    let pasted = &include_bytes!("../../../../tests/fixtures/office-preview-1123/pasted.emf")[..];
+    let edited = &include_bytes!("../../../../tests/fixtures/office-preview-1123/edited.emf")[..];
+    for (bytes, expected) in [(pasted, [591424., 737235.]), (edited, [887136., 1105852.])] {
+        for (mm, emu) in office_size_mm(bytes).into_iter().zip(expected) {
+            assert!(
+                (mm * 36000. - emu).abs() <= 2.,
+                "Office size differs from PowerPoint: {} EMU, expected {emu} EMU",
+                mm * 36000.
+            );
+        }
+    }
+    // Inclusive right/bottom ink coordinates shrink to 2/3 after editing.
+    for offset in [16, 20] {
+        let pasted_ink = i32::from_le_bytes(pasted[offset..offset + 4].try_into().unwrap()) + 1;
+        let edited_ink = i32::from_le_bytes(edited[offset..offset + 4].try_into().unwrap()) + 1;
+        assert!((edited_ink as f64 - pasted_ink as f64 * 2. / 3.).abs() <= 1.);
+    }
+}
+
 fn spectrum_bounds(image: &image::RgbaImage) -> [u32; 4] {
     image
         .enumerate_pixels()
@@ -74,7 +107,7 @@ fn assert_imported_spectrum(source: &[u8]) {
             "width": dimensions.width_pt * 4. / 3., "height": dimensions.height_pt * 4. / 3.,
             "data": STANDARD.encode(source)}]
     });
-    let exported = file_metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+    let exported = metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
     let size = reshiki_metafile::validate(&exported).unwrap();
     assert!((size.width_pt - dimensions.width_pt).abs() < 0.03);
     assert!((size.height_pt - dimensions.height_pt).abs() < 0.03);
@@ -156,7 +189,7 @@ fn assert_imported_spectrum(source: &[u8]) {
             transformed["width_pt"] = serde_json::json!(dimensions.height_pt);
             transformed["height_pt"] = serde_json::json!(dimensions.width_pt);
         }
-        let bytes = file_metafile(&serde_json::to_vec(&transformed).unwrap()).unwrap();
+        let bytes = metafile(&serde_json::to_vec(&transformed).unwrap()).unwrap();
         let preview = import_metafile(&bytes).unwrap();
         let preview = image::load_from_memory(&preview).unwrap().to_rgba8();
         assert_eq!(
@@ -185,7 +218,7 @@ fn file_metafile_keeps_vector_background_and_physical_size() {
 }
 
 #[test]
-fn file_metafile_intrinsic_size_matches_physical_points() {
+fn metafile_intrinsic_size_matches_physical_points() {
     let _guard = METAFILE_TEST.lock().unwrap();
     for (width, height) in [(75.3, 39.7), (0.75, 0.75), (720., 1080.)] {
         let (right, bottom) = (width * 4. / 3., height * 4. / 3.);
@@ -196,14 +229,18 @@ fn file_metafile_intrinsic_size_matches_physical_points() {
                 "commands": [[0., 0., 0.], [1., right, 0.], [1., right, bottom], [1., 0., bottom], [4.]],
                 "fill": [255, 255, 255, 255]}]
         });
-        let bytes = file_metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
-        let int = |i| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
-        let plus_header = int(4) as usize;
-        assert_eq!(int(plus_header + 36), FILE_METAFILE_DPI as u32);
-        assert_eq!(int(plus_header + 40), FILE_METAFILE_DPI as u32);
+        let bytes = metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        for (actual, expected) in office_size_mm(&bytes)
+            .into_iter()
+            .zip([width as f64 * 25.4 / 72., height as f64 * 25.4 / 72.])
+        {
+            assert!(
+                (actual - expected).abs() <= 0.021,
+                "Office size differs from physical size: {actual} mm, expected {expected} mm"
+            );
+        }
         let _runtime = GdiPlus::new().unwrap();
-        // Read the file through GDI+, rather than only checking rclFrame:
-        // Office sizes EMF+ pictures using intrinsic bounds / logical DPI.
+        // Read the file through GDI+ as well as checking Office's header-based size.
         unsafe {
             let handle = SetEnhMetaFileBits(&bytes);
             assert!(!handle.is_invalid());
@@ -225,14 +262,70 @@ fn file_metafile_intrinsic_size_matches_physical_points() {
             for (pixels, dpi, points) in
                 [(pixel_width, dpi_x, width), (pixel_height, dpi_y, height)]
             {
-                assert!((dpi - FILE_METAFILE_DPI).abs() < 0.01);
+                assert!((dpi - METAFILE_DPI).abs() < 0.01);
                 assert!(
                     (pixels as f32 * 25.4 / dpi - points * 25.4 / 72.).abs() <= 0.021,
                     "intrinsic extent differs from physical size: {pixels}px at {dpi}dpi, expected {points}pt"
                 );
             }
         }
+        let int = |i| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
+        let plus_header = int(4) as usize;
+        assert_eq!(int(plus_header + 36), METAFILE_DPI as u32);
+        assert_eq!(int(plus_header + 40), METAFILE_DPI as u32);
+        for axis in [0, 4] {
+            let bounds = (int(16 + axis) as i32 - int(8 + axis) as i32 + 1) as f64;
+            let frame_mm = (int(32 + axis) as i32 - int(24 + axis) as i32) as f64 / 100.;
+            let frame = frame_mm * int(72 + axis) as f64 / int(80 + axis) as f64;
+            assert!(
+                (bounds - frame).abs() <= 2.,
+                "GDI ink does not fill the frame: {bounds} units, expected {frame} units"
+            );
+        }
     }
+}
+
+#[test]
+fn metafile_ignores_the_recording_thread_dpi_awareness() {
+    use windows::Win32::UI::HiDpi::{
+        DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        DPI_AWARENESS_CONTEXT_UNAWARE, SetThreadDpiAwarenessContext,
+    };
+
+    let _guard = METAFILE_TEST.lock().unwrap();
+    struct ThreadDpiAwareness(DPI_AWARENESS_CONTEXT);
+    impl Drop for ThreadDpiAwareness {
+        fn drop(&mut self) {
+            unsafe {
+                SetThreadDpiAwarenessContext(self.0);
+            }
+        }
+    }
+
+    let snapshot = serde_json::to_vec(&serde_json::json!({
+        "version": 1, "width_pt": 75., "height_pt": 150., "pages": [[0., 0.]],
+        "primitives": [{"kind": "path", "transform": [1., 0., 0., 1., 0., 0.],
+            "commands": [[0., 0., 0.], [1., 100., 0.], [1., 100., 200.], [1., 0., 200.], [4.]],
+            "fill": [255, 255, 255, 255]}]
+    }))
+    .unwrap();
+    let record = |context| {
+        let previous = unsafe { SetThreadDpiAwarenessContext(context) };
+        assert!(!previous.0.is_null(), "could not set thread DPI awareness");
+        let _restore = ThreadDpiAwareness(previous);
+        metafile(&snapshot).unwrap()
+    };
+    // Model the per-monitor-aware editor versus a DPI-unaware OLE server. They
+    // only see different metrics above 100% scaling, so this regression test
+    // can only fail on a scaled display.
+    let unaware = record(DPI_AWARENESS_CONTEXT_UNAWARE);
+    let aware = record(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    assert_eq!(office_size_mm(&unaware), office_size_mm(&aware));
+    assert_eq!(
+        &unaware[8..24],
+        &aware[8..24],
+        "GDI bounds depend on DPI awareness"
+    );
 }
 
 fn assert_metafile_background(opaque: bool) {
@@ -253,12 +346,7 @@ fn assert_metafile_background(opaque: bool) {
         );
     }
     let snapshot = serde_json::to_vec(&snapshot).unwrap();
-    let bytes = if opaque {
-        file_metafile(&snapshot)
-    } else {
-        metafile(&snapshot)
-    }
-    .unwrap();
+    let bytes = metafile(&snapshot).unwrap();
     let int = |i| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
     assert!(
         (int(32) as i32 - 2646).abs() <= 1,
@@ -334,7 +422,7 @@ fn file_metafile_replays_raster_alpha_on_canvas_background() {
                  "width": 60., "height": 30., "data": STANDARD.encode(&png)}
             ]
         });
-        let bytes = file_metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        let bytes = metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
         let result = replay_metafile(&bytes, 800, 400);
         let at = |x: usize, y: usize| &result[(y * 800 + x) * 4..(y * 800 + x) * 4 + 3];
         assert_eq!(at(40, 40), [background[2], background[1], background[0]]);

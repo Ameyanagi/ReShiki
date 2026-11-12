@@ -1,6 +1,114 @@
 //! In-place donor-to-metal contacts preserve both endpoint atoms.
 use crate::document::{Atom, Document};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Skip {
+    TooFar,
+    Rejected(String),
+}
+
+/// Directed (donor, metal) pairs and contacts excluded by the reach rule.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoordinationPlan {
+    pub pairs: Vec<(u64, u64)>,
+    pub skipped: Vec<(u64, u64, Skip)>,
+}
+
+/// Plan an explicit metal/non-metal pair, or nearby donors in a larger selection.
+pub fn coordination_plan(doc: &Document, selected: &[u64]) -> Option<CoordinationPlan> {
+    let metals: Vec<_> = selected
+        .iter()
+        .filter_map(|id| doc.atom(*id))
+        .filter(|atom| coordination_metal(atom))
+        .collect();
+    if let [first, second] = selected {
+        let [metal] = metals.as_slice() else {
+            return None;
+        };
+        let donor = if metal.id == *first { *second } else { *first };
+        return Some(CoordinationPlan {
+            pairs: vec![(donor, metal.id)],
+            skipped: vec![],
+        });
+    }
+    if selected.len() < 3 || metals.is_empty() {
+        return None;
+    }
+    let mut plan = CoordinationPlan {
+        pairs: vec![],
+        skipped: vec![],
+    };
+    for donor in selected
+        .iter()
+        .filter_map(|id| doc.atom(*id))
+        .filter(|atom| coordination_donor(atom) && !coordination_metal(atom))
+    {
+        let (metal, distance) = metals
+            .iter()
+            .map(|metal| (*metal, donor.position.distance(metal.position)))
+            .min_by(|(a, da), (b, db)| da.total_cmp(db).then_with(|| a.id.cmp(&b.id)))?;
+        if distance <= 2. * doc.drawing_style.bond_length_world {
+            plan.pairs.push((donor.id, metal.id));
+        } else {
+            plan.skipped.push((donor.id, metal.id, Skip::TooFar));
+        }
+    }
+    plan.pairs
+        .sort_unstable_by_key(|&(donor, metal)| (metal, donor));
+    plan.skipped
+        .sort_unstable_by_key(|&(donor, metal, _)| (metal, donor));
+    Some(plan)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ManyOutcome {
+    pub document: Document,
+    pub added: Vec<(u64, u64)>,
+    pub present: Vec<(u64, u64)>,
+    pub skipped: Vec<(u64, u64, Skip)>,
+}
+
+/// A failed batch retains donor and metal IDs for caller-provided status text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManyError {
+    pub message: String,
+    pub skipped: Vec<(u64, u64, Skip)>,
+}
+
+/// Apply contacts to one working document, retaining each pair's result.
+pub fn coordinate_many(doc: &Document, plan: &CoordinationPlan) -> Result<ManyOutcome, ManyError> {
+    let mut outcome = ManyOutcome {
+        document: doc.clone(),
+        added: vec![],
+        present: vec![],
+        skipped: plan.skipped.clone(),
+    };
+    for &(donor, metal) in &plan.pairs {
+        match coordinate_atoms(&outcome.document, donor, metal) {
+            Ok(Coordination::Added(document)) => {
+                outcome.document = document;
+                outcome.added.push((donor, metal));
+            }
+            Ok(Coordination::AlreadyPresent) => outcome.present.push((donor, metal)),
+            Err(message) => outcome
+                .skipped
+                .push((donor, metal, Skip::Rejected(message))),
+        }
+    }
+    if !outcome.added.is_empty() || (!outcome.present.is_empty() && outcome.skipped.is_empty()) {
+        return Ok(outcome);
+    }
+    let message = match outcome.skipped.first() {
+        Some((_, _, Skip::TooFar)) => "Donor is too far from the metal.".into(),
+        Some((_, _, Skip::Rejected(message))) => message.clone(),
+        None => "No coordination donors.".into(),
+    };
+    Err(ManyError {
+        message,
+        skipped: outcome.skipped,
+    })
+}
+
 /// Whether an explicit donor-to-metal contact changed the drawing.
 #[derive(Debug, Clone, PartialEq)]
 // Keep the owned document inline so returning a contact adds no boxing allocation.
@@ -161,5 +269,7 @@ pub fn coordination_metal_element(element: &str) -> bool {
     )
 }
 
+#[cfg(test)]
+mod planning_tests;
 #[cfg(test)]
 mod tests;

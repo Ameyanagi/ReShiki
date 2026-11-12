@@ -5,7 +5,9 @@ import math
 import os
 import struct
 import subprocess
+import warnings
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import FrozenInstanceError, asdict
 from pathlib import Path
 from threading import Event, Thread
@@ -15,6 +17,12 @@ import reshiki
 
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
 ETHANOL_INCHI = "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3"
+RELATIVE_SMILES = "C[C@H](O)C(=O)O |r|"
+RELATIVE_WARNING = (
+    "The input marks a molecule's stereo configuration as relative (CXSMILES r); "
+    "ReShiki drew it as the stated enantiomer"
+)
+CUMULENE_WARNING = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored"
 
 
 def png_size(data: bytes) -> tuple[int, int]:
@@ -103,6 +111,69 @@ def test_explicit_and_automatic_molecular_constructors(fixtures: Path) -> None:
 
 def test_offline_name_resolution() -> None:
     assert reshiki.Molecule.from_name("ethanol").properties().formula == "C2H6O"
+
+
+@pytest.mark.parametrize(
+    ("load", "smiles", "message"),
+    [
+        (reshiki.Molecule.from_smiles, RELATIVE_SMILES, RELATIVE_WARNING),
+        (reshiki.parse, "C/C=C=C=C/C", CUMULENE_WARNING),
+        (
+            reshiki.Molecule.from_smiles,
+            "C~C",
+            "Bond C1–C2 has any order (~); bond order assumed single",
+        ),
+    ],
+)
+def test_structure_import_warnings(
+    load: Callable[[str], reshiki.Drawing], smiles: str, message: str
+) -> None:
+    with pytest.warns(reshiki.StructureWarning) as captured:
+        molecule = load(smiles)
+    assert isinstance(molecule, reshiki.Molecule)
+    assert len(captured) == 1
+    assert str(captured[0].message) == message
+    assert Path(captured[0].filename).resolve() == Path(__file__).resolve()
+
+
+def test_ordinary_structure_import_has_no_warning() -> None:
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        molecule = reshiki.Molecule.from_smiles("CCO")
+    assert isinstance(molecule, reshiki.Molecule)
+    assert not captured
+
+
+@pytest.mark.parametrize(
+    "entrypoint",
+    ["parse", "render", "convert", "properties", "context_parse", "context_constructor", "open"],
+)
+def test_structure_warning_points_to_callers(entrypoint: str, tmp_path: Path) -> None:
+    source = tmp_path / "relative.smi"
+    source.write_text(RELATIVE_SMILES)
+    context = reshiki.with_style(font_size=12)
+    actions = {
+        "parse": lambda: reshiki.parse(RELATIVE_SMILES),
+        "render": lambda: reshiki.render(RELATIVE_SMILES, "svg"),
+        "convert": lambda: reshiki.convert(RELATIVE_SMILES, to="svg"),
+        "properties": lambda: reshiki.properties(RELATIVE_SMILES),
+        "context_parse": lambda: context.parse(RELATIVE_SMILES),
+        "context_constructor": lambda: context.Molecule.from_smiles(RELATIVE_SMILES),
+        "open": lambda: reshiki.Drawing.open(source),
+    }
+    with pytest.warns(reshiki.StructureWarning) as captured:
+        actions[entrypoint]()
+    assert len(captured) == 1
+    assert str(captured[0].message) == RELATIVE_WARNING
+    assert Path(captured[0].filename).resolve() == Path(__file__).resolve()
+
+
+def test_structure_warning_can_be_promoted_to_error() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", reshiki.StructureWarning)
+        with pytest.raises(reshiki.StructureWarning) as raised:
+            reshiki.Molecule.from_smiles(RELATIVE_SMILES)
+    assert str(raised.value) == RELATIVE_WARNING
 
 
 def test_reaction_smiles_and_rxn(fixtures: Path) -> None:
@@ -216,6 +287,36 @@ def test_binary_and_text_outputs_and_save(tmp_path: Path) -> None:
         molecule.emf()
 
 
+@pytest.mark.parametrize("width", [None, 180])
+def test_svg_outlines_labels_by_default_and_preserves_live_text(width: int | None) -> None:
+    molecule = reshiki.Molecule.from_smiles("O")
+    outlined = ET.fromstring(molecule.svg(width=width))
+    assert not list(outlined.iter("{http://www.w3.org/2000/svg}text"))
+    assert list(outlined.iter("{http://www.w3.org/2000/svg}path"))
+
+    live = ET.fromstring(molecule.svg(width=width, text="live"))
+    assert list(live.iter("{http://www.w3.org/2000/svg}text"))
+
+
+def test_svg_text_option_passes_through_render_and_convert() -> None:
+    molecule = reshiki.Molecule.from_smiles("O")
+    for output in (
+        molecule.render("svg", text="live"),
+        reshiki.render("O", "svg", text="live"),
+        reshiki.convert("O", to="svg", text="live"),
+    ):
+        assert isinstance(output, str)
+        assert list(ET.fromstring(output).iter("{http://www.w3.org/2000/svg}text"))
+
+
+def test_invalid_svg_text_option_raises() -> None:
+    molecule = reshiki.Molecule.from_smiles("O")
+    with pytest.raises(ValueError, match="text must be 'outline' or 'live'"):
+        molecule.svg(text="invalid")
+    with pytest.raises(ValueError, match="text must be 'outline' or 'live'"):
+        reshiki.render_many([], "svg", text="invalid")
+
+
 def test_size_fit_and_dpi() -> None:
     molecule = reshiki.Molecule.from_smiles(ASPIRIN)
     low = png_size(molecule.png(dpi=72))
@@ -307,7 +408,46 @@ def test_batch_errors_and_order() -> None:
         reshiki.render_many(["CCO"], errors="ignore")
     assert reshiki.render_many([]) == []
     assert reshiki.render_many([], format="svg").errors == []
+    assert reshiki.render_many([], format="svg").warnings == []
     assert all(isinstance(item, str) for item in reshiki.render_many(["CCO", "O"], "svg"))
+
+
+@pytest.mark.parametrize("text", ["outline", "live"])
+def test_batch_svg_text_mode(text: str) -> None:
+    results = reshiki.render_many(["O", "N"], "svg", text=text)
+    assert not results.errors
+    for output in results:
+        assert isinstance(output, str)
+        svg = ET.fromstring(output)
+        assert bool(list(svg.iter("{http://www.w3.org/2000/svg}text"))) == (text == "live")
+        if text == "outline":
+            assert list(svg.iter("{http://www.w3.org/2000/svg}path"))
+
+
+def test_batch_collects_structure_warnings_without_emitting() -> None:
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        results = reshiki.render_many([RELATIVE_SMILES, "CCO"], "svg")
+    assert all(isinstance(value, str) for value in results)
+    assert results.errors == []
+    assert results.warnings == [(0, RELATIVE_WARNING)]
+    assert not captured
+
+
+def test_batch_path_warnings_retain_input_order(tmp_path: Path) -> None:
+    source = tmp_path / "relative.smi"
+    source.write_text(RELATIVE_SMILES)
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("error", reshiki.StructureWarning)
+        results = reshiki.render_many([RELATIVE_SMILES, source, "C/C=C=C=C/C", "CCO"], "svg")
+    assert all(isinstance(value, str) for value in results)
+    assert results.errors == []
+    assert results.warnings == [
+        (0, RELATIVE_WARNING),
+        (1, RELATIVE_WARNING),
+        (2, CUMULENE_WARNING),
+    ]
+    assert not captured
 
 
 def test_batch_allows_other_python_threads_to_run() -> None:

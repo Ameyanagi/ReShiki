@@ -219,9 +219,17 @@ fn native_highlight_padding_follows_bond_spacing_independently_of_label_size() {
         let rx = (side.x - top.x) * doc.drawing_style.points_per_world();
         let ry = (side.y - top.y) * doc.drawing_style.points_per_world();
         assert!((rx * 2. - ry).abs() < 0.002);
-        // Exact native text dimensions apply when its Arial face is installed.
-        // Fallback fonts retain their own ink metrics and the same bond padding.
-        if reshiki::style::glyph_metrics('O', &doc.drawing_style.text_style()).0 == "Arial" {
+        // Exact native text dimensions apply when an installed Arial draws it.
+        // Fallback fonts, including the bundled Arial-metric Liberation Sans,
+        // retain their own ink metrics and the same bond padding.
+        let bundled = reshiki::style::fontdb().faces().any(|face| {
+            face.families
+                .iter()
+                .any(|(name, _)| name == ".ReShiki Bundled Sans")
+        });
+        if !bundled
+            && reshiki::style::glyph_metrics('O', &doc.drawing_style.text_style()).0 == "Arial"
+        {
             assert!(
                 (rx - expected_rx).abs() < 0.002,
                 "native label rx {expected_rx}pt vs {rx}pt"

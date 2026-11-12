@@ -1574,6 +1574,7 @@ impl App {
             iterations: 1,
             force_field: job.force_field,
             diagnostics: vec![],
+            approximations: vec![],
         };
         let key = job.key;
         self.update(Message::Models3d(Action::Generated(

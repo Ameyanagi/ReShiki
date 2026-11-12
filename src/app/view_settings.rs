@@ -10,6 +10,8 @@ pub enum Action {
     SmartGuides(bool),
     TwoDecimalWeight(bool),
     NameTypography(bool),
+    /// Put the drawing inside exported PNG files.
+    ExportEditableDrawing(bool),
     Rulers(bool),
     Crosshair(bool),
     RulerUnit(crate::canvas::guides::Unit),
@@ -28,6 +30,13 @@ impl App {
                 if let Err(error) = self.appearance.save() {
                     self.status =
                         format!("Could not save chemical name typography preference: {error}");
+                    self.error = true;
+                }
+            }
+            Action::ExportEditableDrawing(enabled) => {
+                self.appearance.export_editable_drawing = enabled;
+                if let Err(error) = self.appearance.save() {
+                    self.status = format!("Could not save the export preference: {error}");
                     self.error = true;
                 }
             }

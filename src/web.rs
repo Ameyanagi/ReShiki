@@ -13,7 +13,7 @@ use iced::futures::{
     stream,
 };
 use iced::{Subscription, Task};
-use reshiki::{document::Document, formats};
+use reshiki::{document::Document, engine::LocalEngine, formats};
 use std::{cell::RefCell, collections::HashMap, path::Path};
 use wasm_bindgen::{JsCast, prelude::*};
 
@@ -44,7 +44,7 @@ pub(crate) async fn refresh_recovery_owners() -> Result<(), String> {
 #[derive(Debug, Clone)]
 pub(crate) enum Request {
     /// Replace the drawing in front.
-    Load(Box<Document>),
+    Load(Box<Document>, Vec<String>),
     /// Hand the drawing in front to the waiting reply with this number.
     Snapshot(u64),
     /// Stop the editor.
@@ -172,9 +172,13 @@ pub async fn mount(
     // to mount again.
     let opened = match data {
         Some(data) => Some(
-            formats::read(data, format.as_deref().unwrap_or("auto"))
-                .await
-                .map_err(js)?,
+            formats::read_with_warnings(
+                data,
+                format.as_deref().unwrap_or("auto"),
+                &LocalEngine::default(),
+            )
+            .await
+            .map_err(js)?,
         ),
         None => None,
     };
@@ -201,8 +205,8 @@ pub async fn mount(
         ));
     }
     let (sender, receiver) = mpsc::unbounded();
-    if let Some(doc) = opened {
-        let _ = sender.unbounded_send(Request::Load(Box::new(doc)));
+    if let Some((doc, warnings)) = opened {
+        let _ = sender.unbounded_send(Request::Load(Box::new(doc), warnings));
     }
     HOST.with_borrow_mut(|host| {
         *host = Host {
@@ -937,9 +941,18 @@ fn send(request: Request) -> Result<(), JsError> {
 /// Replace the drawing in front with `data` read as `format`: `rsk`, `mol`,
 /// `smiles`, `inchi`, `cdxml`, `cdx`, `rxn`, `rsmi` or `auto`.
 #[wasm_bindgen]
-pub async fn load(data: Vec<u8>, format: String) -> Result<(), JsError> {
-    let doc = formats::read(data, &format).await.map_err(js)?;
-    send(Request::Load(Box::new(doc)))
+pub async fn load(data: Vec<u8>, format: String) -> Result<LoadResult, JsError> {
+    let (doc, warnings) = formats::read_with_warnings(data, &format, &LocalEngine::default())
+        .await
+        .map_err(js)?;
+    send(Request::Load(Box::new(doc), warnings.clone()))?;
+    Ok(LoadResult { warnings })
+}
+
+/// Warnings also displayed in the editor's status line after a load.
+#[wasm_bindgen(getter_with_clone)]
+pub struct LoadResult {
+    pub warnings: Vec<String>,
 }
 
 /// The drawing in front as `format`: `rsk`, `mol`, `smiles`, `inchi`, `cdxml`,

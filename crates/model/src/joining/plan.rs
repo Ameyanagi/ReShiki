@@ -1,12 +1,12 @@
 //! Route classification shared by Join admission and shortcut execution.
-use super::{coordination_metal, source_intersects_generic};
+use super::{CoordinationPlan, coordination_plan, source_intersects_generic};
 use crate::{document::Document, generic};
 
 /// The operation selected by the Join shortcut, in its existing route precedence.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JoinPlan {
-    /// Add an in-place donor-to-metal contact without sharing either atom.
-    Coordinate { donor: u64, metal: u64 },
+    /// Add in-place donor-to-metal contacts without sharing atoms.
+    Coordinate(CoordinationPlan),
     /// Move the source fragment so its atom shares the target atom.
     ShareAtom { source: u64, target: u64 },
     /// Move the first selected bond onto the second, in document bond order.
@@ -21,21 +21,13 @@ pub enum JoinPlan {
 /// Classify Join without validating whether the selected IDs are atoms or unique.
 /// Callers retain their own admission rules and execution error precedence.
 pub fn join_plan(doc: &Document, selected: &[u64]) -> Option<JoinPlan> {
+    if let Some(plan) = coordination_plan(doc, selected) {
+        return Some(JoinPlan::Coordinate(plan));
+    }
     if let [source, target] = selected {
-        let source_metal = doc.atom(*source).is_some_and(coordination_metal);
-        let target_metal = doc.atom(*target).is_some_and(coordination_metal);
-        return Some(if source_metal || target_metal {
-            let (donor, metal) = if source_metal {
-                (*target, *source)
-            } else {
-                (*source, *target)
-            };
-            JoinPlan::Coordinate { donor, metal }
-        } else {
-            JoinPlan::ShareAtom {
-                source: *source,
-                target: *target,
-            }
+        return Some(JoinPlan::ShareAtom {
+            source: *source,
+            target: *target,
         });
     }
     if selected.len() == 4 {
@@ -63,10 +55,13 @@ impl JoinPlan {
     /// Check the generic dependencies touched by this route. Merge uses the
     /// caller's selection because its plan does not carry individual atom IDs.
     pub fn generic_blocked(&self, doc: &Document, selected: &[u64]) -> bool {
-        match *self {
-            Self::Coordinate { donor, metal } => generic::touches(doc, &[donor, metal]),
+        match self {
+            Self::Coordinate(plan) => plan
+                .pairs
+                .iter()
+                .any(|&(donor, metal)| generic::touches(doc, &[donor, metal])),
             Self::ShareAtom { source, target } => {
-                source_intersects_generic(doc, &[source]) || generic::touches(doc, &[target])
+                source_intersects_generic(doc, &[*source]) || generic::touches(doc, &[*target])
             }
             Self::FuseBond { source, target } => {
                 source_intersects_generic(doc, &[source.0, source.1])

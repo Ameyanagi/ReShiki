@@ -10,6 +10,7 @@ from rdkit import Chem, RDLogger, rdBase
 from rdkit.Chem import rdChemReactions
 
 if TYPE_CHECKING or __package__:
+    from .engine.reactions import is_ordinary_atom_query
     from .molfile_groups_reference import v3 as grouped_molecule
     from .molfile_import_reference import cases as molecular_cases
     from .molfile_import_reference import native_molecules
@@ -25,6 +26,8 @@ else:
     from perception_reference import snapshot
     from support.cx_stereo_groups import query_renumbering
     from valence_reference import ORDERS
+
+    from engine.reactions import is_ordinary_atom_query
 
 
 def read(text):
@@ -45,7 +48,7 @@ def read(text):
             mol = Chem.RWMol(original)
             for atom in mol.GetAtoms():
                 if atom.HasQuery():
-                    if atom.DescribeQuery().strip() != f"AtomAtomicNum {atom.GetAtomicNum()} = val":
+                    if not is_ordinary_atom_query(atom):
                         raise ValueError("Query reaction atom")
                     mol.ReplaceAtom(atom.GetIdx(), Chem.Atom(atom), preserveProps=True)
             Chem.SanitizeMol(mol)

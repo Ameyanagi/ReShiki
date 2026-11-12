@@ -6,10 +6,15 @@ mod printing;
 #[cfg(target_os = "macos")]
 mod check {
     use super::printing::{Request, load_snapshot, print_operation};
-    use objc2::{AnyThread, rc::Retained};
+    use objc2::{
+        AnyThread, msg_send,
+        rc::{Allocated, Retained},
+        runtime::AnyClass,
+        sel,
+    };
     use objc2_app_kit::{
-        NSApplication, NSApplicationActivationPolicy, NSPrintAllPages, NSPrintFirstPage,
-        NSPrintJobSavingURL, NSPrintLastPage, NSPrintSaveJob,
+        NSApplication, NSApplicationActivationPolicy, NSGraphicsContext, NSPrintAllPages,
+        NSPrintFirstPage, NSPrintJobSavingURL, NSPrintLastPage, NSPrintOperation, NSPrintSaveJob,
     };
     use objc2_core_graphics::{CGBitmapContextCreate, CGColorSpace, CGContext, CGImageAlphaInfo};
     use objc2_foundation::{MainThreadMarker, NSNumber, NSPoint, NSRect, NSSize, NSString, NSURL};
@@ -109,6 +114,52 @@ mod check {
         ))
     }
 
+    fn preview_context_draws(operation: &NSPrintOperation) -> Result {
+        // macOS 27's private preview proxy; skip where it differs or is absent.
+        let Some(class) = AnyClass::get(c"NSPrintPreviewGraphicsContext").filter(|class| {
+            class
+                .instance_method(sel!(initWithPreviousContext:))
+                .is_some()
+        }) else {
+            println!("Skipping print-preview proxy regression: class is unavailable");
+            return Ok(());
+        };
+        let view = operation.view().ok_or("Missing print view")?;
+        let mut bytes = vec![255_u8; 128 * 128 * 4];
+        let space = CGColorSpace::new_device_rgb().ok_or("No RGB color space")?;
+        // SAFETY: The buffer outlives the bitmap context and all wrappers below.
+        let context = unsafe {
+            CGBitmapContextCreate(
+                bytes.as_mut_ptr().cast(),
+                128,
+                128,
+                8,
+                128 * 4,
+                Some(&space),
+                CGImageAlphaInfo::PremultipliedLast.0,
+            )
+        }
+        .ok_or("No bitmap context")?;
+        let graphics = NSGraphicsContext::graphicsContextWithCGContext_flipped(&context, false);
+        // SAFETY: The runtime preview class implements this initializer; the
+        // wrapped context and bitmap buffer stay alive throughout drawing.
+        let proxy: Retained<NSGraphicsContext> = unsafe {
+            let allocated: Allocated<NSGraphicsContext> = msg_send![class, alloc];
+            msg_send![allocated, initWithPreviousContext: &*graphics]
+        };
+        let previous = NSGraphicsContext::currentContext();
+        NSGraphicsContext::setCurrentContext(Some(&proxy));
+        view.drawRect(view.bounds());
+        NSGraphicsContext::setCurrentContext(previous.as_deref());
+        drop((proxy, graphics, context));
+        assert!(
+            bytes.iter().step_by(4).any(|&red| red < 128),
+            "Preview is blank"
+        );
+        println!("Print-preview proxy drew bitmap ink");
+        Ok(())
+    }
+
     pub fn run() -> Result {
         let main = MainThreadMarker::new().ok_or("Print tests must run on the main thread")?;
         let app = NSApplication::sharedApplication(main);
@@ -152,6 +203,9 @@ mod check {
                         main,
                     )?;
                     let operation = print_operation(snapshot, "Print regression", main);
+                    if scale == 1. && !range_only {
+                        preview_context_draws(&operation)?;
+                    }
                     let info = operation.printInfo();
                     assert_eq!(info.scalingFactor(), 1.);
                     operation.setShowsPrintPanel(false);

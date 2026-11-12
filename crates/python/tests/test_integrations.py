@@ -112,6 +112,25 @@ def test_excel_roundtrip(tmp_path: Path) -> None:
     original.close()
 
 
+def test_excel_reports_import_warnings_by_cell(tmp_path: Path) -> None:
+    openpyxl = pytest.importorskip("openpyxl")
+    pytest.importorskip("PIL.Image")
+    source = tmp_path / "relative.xlsx"
+    workbook = openpyxl.Workbook()
+    workbook.active.append(["SMILES"])
+    workbook.active.append(["CCO"])
+    workbook.active.append(["C[C@H](O)C(=O)O |r|"])
+    workbook.save(source)
+    workbook.close()
+    with pytest.warns(reshiki.StructureWarning) as captured:
+        reshiki.excel.add_structures(source, width=120)
+    assert [str(warning.message) for warning in captured] == [
+        "A3: The input marks a molecule's stereo configuration as relative (CXSMILES r); "
+        "ReShiki drew it as the stated enantiomer"
+    ]
+    assert Path(captured[0].filename).resolve() == Path(__file__).resolve()
+
+
 @pytest.mark.parametrize(
     ("options", "expected_rows"),
     [({"header": False}, [0, 1]), ({"header": False, "start_row": 2}, [1])],
@@ -142,6 +161,7 @@ def test_pandas_accessor() -> None:
     assert pngs.name == "SMILES"
     assert isinstance(pngs.iloc[0], bytes) and pngs.iloc[1] is None
     assert pngs.attrs["reshiki_errors"][0][0] == 1
+    assert pngs.attrs["reshiki_warnings"] == []
     assert "<svg" in series.reshiki.svg(width=140).iloc[0]
     values = series.reshiki.properties()
     assert list(values.index) == list(series.index)

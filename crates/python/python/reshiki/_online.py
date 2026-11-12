@@ -100,7 +100,7 @@ def _get_json(url: str) -> dict[str, Any]:
     return result
 
 
-def from_name(name: str) -> tuple[bytes, str]:
+def from_name(name: str) -> tuple[bytes, str, list[str]]:
     """Return one complete PubChem graph through the native identity-checked importer.
 
     The name is sent only to PubChem. Each network operation has a 15-second
