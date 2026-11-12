@@ -67,6 +67,39 @@ mol = reshiki.convert("CCO", to="mol")
 analysis = reshiki.properties("CCO")
 ```
 
+## Import warnings
+
+Some inputs import with a change or an assumption: CXSMILES that marks a
+configuration as relative is drawn as the stated enantiomer, and stereo on an
+extended double bond (C=C=C=C) is dropped. The app shows such a warning in its
+status bar and `reshiki --cli` prints it as `reshiki: warning:`. The Python
+package issues it as a `reshiki.StructureWarning`, a `UserWarning`, through
+Python's `warnings` module, attributed to your line of code:
+
+```python
+molecule = reshiki.Molecule.from_smiles("C[C@H](O)C(=O)O |r|")
+# demo.py:3: StructureWarning: The input marks a molecule's stereo configuration
+# as relative (CXSMILES r); ReShiki drew it as the stated enantiomer
+```
+
+The import still returns the drawing. Python's default filter shows a warning
+once per line of code. The standard `warnings` filters collect warnings, hide
+them, or turn them into errors:
+
+```python
+import warnings
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always", reshiki.StructureWarning)
+    molecule = reshiki.Molecule.from_smiles(text)
+messages = [str(warning.message) for warning in caught]
+
+warnings.simplefilter("error", reshiki.StructureWarning)  # refuse such inputs
+```
+
+Batches report warnings with the results; see
+[Batches and integrations](#batches-and-integrations).
+
 ## Styles and image dimensions
 
 `reshiki.styles()` lists the editor's [document styles](drawing-styles.md).
@@ -121,11 +154,13 @@ while preserving the aspect ratio.
 `render_many(items, format="png", errors="none", **options)` renders in parallel
 while releasing Python's GIL. It returns a list with `None` for failed rows and
 an `.errors` list of `(index, message)` pairs. Use `errors="raise"` to raise on
-a failed row.
+a failed row. Import warnings are not issued as Python warnings here: the
+result's `.warnings` lists them as `(index, message)` pairs, in row order.
 
 ```python
-pngs = reshiki.render_many(["CCO", "C1CC"], width=300)
-print(pngs.errors)
+pngs = reshiki.render_many(["CCO", "C1CC", "C[C@H](O)C(=O)O |r|"], width=300)
+print(pngs.errors)    # [(1, '...')]
+print(pngs.warnings)  # [(2, "The input marks a molecule's stereo configuration as relative ...")]
 ```
 
 The Excel extra uses openpyxl and embeds PNG images:
@@ -141,6 +176,8 @@ reshiki.excel.add_structures(
 
 Install `reshiki[excel]` for this helper. The header defaults to row 1; use
 `header=False` to render from row 1, or `start_row=` to choose the first row.
+Import warnings are issued as `StructureWarning`s that start with the source
+cell, such as `A3: The input marks a molecule's stereo configuration as relative …`.
 
 Install `reshiki[pandas]` and explicitly import `reshiki.pandas` to register
 the pandas Series accessor:
@@ -154,7 +191,10 @@ images = series.reshiki.png(width=300)
 descriptors = series.reshiki.properties()
 ```
 
-The accessor provides `.png()`, `.svg()` and `.properties()`. Optional
+The accessor provides `.png()`, `.svg()` and `.properties()`. `.png()` and
+`.svg()` keep the batch's errors and import warnings in the result's
+`attrs["reshiki_errors"]` and `attrs["reshiki_warnings"]`; `.properties()`
+reads each row on its own and issues `StructureWarning`s. Optional
 dependencies load when their integration is used. RDKit interoperability uses
 `Molecule.from_rdkit(mol)` and `molecule.to_rdkit()` through MOL blocks when
 RDKit is installed.

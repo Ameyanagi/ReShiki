@@ -44,7 +44,10 @@ export async function mount(element, options = {}) {
   const emit = (event) => (value) => listeners[event].forEach((listener) => listener(value));
   const editor = {
     async load(data, format = "auto") {
-      await wasm.load(bytes(data), format);
+      const result = await wasm.load(bytes(data), format);
+      const output = { warnings: [...result.warnings] };
+      result.free();
+      return output;
     },
     async save(format = "rsk") {
       const output = await wasm.save(format);

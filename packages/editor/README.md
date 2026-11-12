@@ -80,6 +80,17 @@ editor starts. Mount on an element in the page's body: the editor cannot
 start inside a shadow root. `save` and `exportImage` return what the
 headless library's `convert` would for the drawing in front.
 
+Some inputs import with a change or an assumption. For these, `load` resolves
+to `{ warnings }` with the app's messages, and the editor's status bar shows
+them after the drawing opens, as the desktop does. The status bar also shows
+the warnings for `mount`'s `data`.
+
+```js
+const { warnings } = await editor.load("C[C@H](O)C(=O)O |r|", "smiles");
+// ["The input marks a molecule's stereo configuration as relative (CXSMILES r);
+//   ReShiki drew it as the stated enantiomer"]
+```
+
 A page runs one editor: the editor and the page share one thread and one
 WebAssembly instance, and a second `mount`, or one after `destroy`, rejects.
 For several editors, or to keep the page's styles away from the editor, put
@@ -351,6 +362,7 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 
 | Function                                           | Result                                                                        |
 | -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `read(data, format)`                               | `{ drawing, warnings }`: the native drawing (`rsk`) and the import warnings.  |
 | `convert(data, from, to)`                          | The structure or drawing in another format.                                   |
 | `renderSvg(data, format)`                          | The editor's SVG preview, with a transparent surround.                        |
 | `renderPng(data, format, { maxWidth, maxHeight })` | The editor's PNG preview on white, scaled to fit (1600 × 1000 by default).    |
@@ -369,6 +381,20 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
   are figures as the desktop's Export makes them.
 
 Failures reject with an `Error` that carries the app's message.
+
+Some inputs import with a change or an assumption, such as CXSMILES that marks
+its stereo as relative, which is drawn as the stated enantiomer. The app shows
+a warning for these; `convert`, `renderSvg`, `renderPng`, `smiles` and `inchi`
+return only their result. To see the warnings, `read` the input first and
+continue from its drawing:
+
+```js
+import { convert, read } from "@ameyanagi/reshiki";
+
+const { drawing, warnings } = await read("C[C@H](O)C(=O)O |r|", "smiles");
+for (const warning of warnings) console.warn(warning);
+const mol = await convert(drawing, "rsk", "mol");
+```
 
 ## How the library differs from the desktop
 
