@@ -1110,6 +1110,8 @@ impl Attachment<'_> {
             {
                 source.stereo.is_none()
                     && target.stereo.is_none()
+                    && source.stereo_group.is_none()
+                    && target.stereo_group.is_none()
                     && part.abbreviation(source.id).is_none()
                     && doc.abbreviation(id).is_none()
             } else {
