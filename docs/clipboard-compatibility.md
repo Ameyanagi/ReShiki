@@ -14,14 +14,17 @@ explains the commands themselves.
 
 Each result is marked:
 
-- **Tested**: checked on 2026-11-12 with ReShiki 0.14.0 (main at `11df00d5`).
+- **Tested**: checked on 2026-11-12 with ReShiki 0.14.0 (main at `11df00d5`,
+  or `fb508e23` for the plain-text rows, Paint and the browser editor).
 - **Docs/code**: taken from ReShiki's code or the other app's documented
   behavior, not tested.
 - **Unknown**: not tested, and the behavior is not documented well enough to say.
 
 The test machines were macOS 27.0.1 arm64, Windows 11 x64 25H2 and Arch Linux
-x64. Dumps, scripts and screenshots are in the
-[evidence folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/35d36522504604bc275cfc51154da61f09b2a1b7/issues/1146).
+x64. Dumps, scripts and screenshots are in the [evidence
+folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/35d36522504604bc275cfc51154da61f09b2a1b7/issues/1146);
+the plain-text rows, Paint and the browser editor results are in
+[another](https://github.com/Ameyanagi/ReShiki-evidence/tree/5998c1d1eddc0640a912a1822e61195684aa8c33/pr-reviews/pr1157).
 
 ## Quick advice
 
@@ -37,6 +40,11 @@ x64. Dumps, scripts and screenshots are in the
   and ReShiki read the editable drawing. Mac Office has no editable ReShiki
   object, but it keeps ReShiki's PDF: copy the picture in Word, PowerPoint or
   Excel and paste it into ReShiki to get the editable drawing back.
+- **Text-only places** (plain-text boxes, TextEdit in plain-text mode, Notes in a
+  Google account): in the desktop app, **Copy** and **Copy Image** put no text on
+  the clipboard, so use **Copy SMILES** (**Cmd/Ctrl+Alt+C**). The browser
+  editor's **Copy** does include SMILES. [Why Copy has no text](#why-copy-has-no-text)
+  explains why.
 - **Web apps:** the picture has 1200 dpi resolution metadata, which browsers
   ignore, so it pastes large. A 3 cm drawing appears about 35 cm wide. Resize it
   after pasting.
@@ -53,12 +61,13 @@ its picture, and a double-click opens the drawing in ReShiki. "Vector" and
 | App                                                             | Copy                                                        | Copy Image               | Status                                                                                                  |
 | --------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------- |
 | Word, PowerPoint, Excel (Microsoft 365)                         | Object; double-click edits in ReShiki                       | Vector (SVG graphic)     | Tested                                                                                                  |
-| Classic Outlook (Win32, Word editor)                            | Probably an object, like Word; the recipient gets a picture | Vector or bitmap picture | Unknown: no mail profile on the test machine                                                            |
+| Classic Outlook (Win32, Word editor)                            | Probably an object, like Word; the recipient gets a picture | Vector or bitmap picture | Unknown: installed on the test machine, but it has no mail profile                                      |
 | New Outlook for Windows (WebView2)                              | Bitmap (since #1148)                                        | Bitmap (PNG)             | Tested in Edge 157, the same engine as the test machine's WebView2 157; the app itself needs an account |
 | Outlook on the web, Gmail, Google Docs/Slides in Edge or Chrome | Bitmap (since #1148)                                        | Bitmap (PNG)             | Tested in Edge; the sites need accounts                                                                 |
 | Teams, Slack, Notion desktop apps (Chromium-based)              | Bitmap (since #1148)                                        | Bitmap (PNG)             | Docs/code: same clipboard reader as Edge                                                                |
-| OneNote desktop                                                 | Probably an object or picture                               | Picture                  | Unknown                                                                                                 |
-| Paint                                                           | Nothing or metafile                                         | Bitmap                   | Unknown; Paint reads bitmaps                                                                            |
+| OneNote desktop                                                 | Probably an object or picture                               | Picture                  | Unknown: OneNote 16 asks to sign in when it starts                                                      |
+| Paint                                                           | Bitmap (since #1148)                                        | Bitmap                   | Tested with Paint 11.2609                                                                               |
+| Plain-text boxes                                                | No text: use **Copy SMILES** (**Ctrl+Alt+C**)               | No text                  | Tested in an Edge 157 text box                                                                          |
 | LibreOffice                                                     | Unknown                                                     | Picture                  | Unknown: not installed on the test machine                                                              |
 | ChemDraw                                                        | Editable (CDX)                                              | Picture                  | Docs/code                                                                                               |
 | ReShiki                                                         | Editable                                                    | Editable                 | Tested                                                                                                  |
@@ -68,30 +77,32 @@ Special → Picture (Enhanced Metafile)**, or **Copy Image** in ReShiki.
 
 ### macOS
 
-| App                                             | Copy                      | Copy Image                | Status                                                                       |
-| ----------------------------------------------- | ------------------------- | ------------------------- | ---------------------------------------------------------------------------- |
-| Word, PowerPoint, Excel 16.115                  | Picture                   | Picture                   | Tested; the pasted size (2.74 × 2.92 cm) matches the PDF, so probably vector |
-| TextEdit                                        | Picture attachment        | Picture attachment        | Tested                                                                       |
-| Preview (**File → New from Clipboard**)         | Vector PDF                | Vector PDF                | Tested                                                                       |
-| Notes, Google account folder                    | **Nothing**               | Not tested                | Tested; such folders hold text only. iCloud notes: unknown                   |
-| Mail                                            | Picture                   | Picture                   | Docs/code; Mail wanted a setup choice first                                  |
-| Outlook for Mac, OneNote                        | Unknown                   | Unknown                   | Unknown: both need an account                                                |
-| Pages, Keynote, Numbers                         | Picture                   | Picture                   | Docs/code; not installed on the test machine                                 |
-| Chrome (Gmail, Google Docs, Outlook on the web) | Bitmap (PNG)              | Bitmap (PNG)              | Tested with a Chrome 156 paste event; the sites need accounts                |
-| Safari                                          | Bitmap (PNG)              | Bitmap (PNG)              | Docs/code                                                                    |
-| ChemDraw 26.1                                   | **Editable**              | Picture                   | Tested                                                                       |
-| ReShiki                                         | **Editable**              | **Editable**              | Tested                                                                       |
-| Illustrator                                     | Vector paths from the PDF | Vector paths from the PDF | Docs/code                                                                    |
+| App                                             | Copy                                            | Copy Image                | Status                                                                                                                            |
+| ----------------------------------------------- | ----------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Word, PowerPoint, Excel 16.115                  | Picture                                         | Picture                   | Tested; the pasted size (2.74 × 2.92 cm) matches the PDF, so probably vector                                                      |
+| TextEdit                                        | Picture attachment                              | Picture attachment        | Tested                                                                                                                            |
+| TextEdit in plain-text mode                     | No text: use **Copy SMILES** (**Cmd+Option+C**) | No text                   | Tested for Copy; Copy Image: docs/code                                                                                            |
+| Preview (**File → New from Clipboard**)         | Vector PDF                                      | Vector PDF                | Tested                                                                                                                            |
+| Notes, Google account folder                    | No text: use **Copy SMILES** (**Cmd+Option+C**) | No text                   | Tested; such folders hold text only, and ignored a SMILES text flavor next to the pictures. No iCloud account on the test machine |
+| Mail                                            | Picture                                         | Picture                   | Docs/code; Mail asked for a privacy setup choice before it would open a message                                                   |
+| Outlook for Mac, OneNote                        | Unknown                                         | Unknown                   | Unknown: both need an account                                                                                                     |
+| Pages, Keynote, Numbers                         | Picture                                         | Picture                   | Docs/code; not installed on the test machine                                                                                      |
+| Chrome (Gmail, Google Docs, Outlook on the web) | Bitmap (PNG)                                    | Bitmap (PNG)              | Tested with a Chrome 156 paste event; the sites need accounts                                                                     |
+| Safari                                          | Bitmap (PNG)                                    | Bitmap (PNG)              | Docs/code                                                                                                                         |
+| ChemDraw 26.1                                   | **Editable**                                    | Picture                   | Tested                                                                                                                            |
+| ReShiki                                         | **Editable**                                    | **Editable**              | Tested                                                                                                                            |
+| Illustrator                                     | Vector paths from the PDF                       | Vector paths from the PDF | Docs/code                                                                                                                         |
 
 ### Linux
 
-| App                                                             | Copy                      | Copy Image                | Status                                        |
-| --------------------------------------------------------------- | ------------------------- | ------------------------- | --------------------------------------------- |
-| LibreOffice 25.8 Writer and Impress                             | Vector (PDF graphic)      | Vector (PDF graphic)      | Tested on X11                                 |
-| Chromium and Chrome-based apps (web apps, Slack, Teams, Notion) | Bitmap (PNG)              | Bitmap (PNG)              | Tested with a Chromium 149 paste event on X11 |
-| Inkscape                                                        | Vector paths from the SVG | Vector paths from the SVG | Docs/code                                     |
-| GIMP                                                            | Bitmap (PNG)              | Bitmap (PNG)              | Docs/code                                     |
-| ReShiki                                                         | Editable                  | Editable                  | Docs/code                                     |
+| App                                                             | Copy                                          | Copy Image                | Status                                        |
+| --------------------------------------------------------------- | --------------------------------------------- | ------------------------- | --------------------------------------------- |
+| LibreOffice 25.8 Writer and Impress                             | Vector (PDF graphic)                          | Vector (PDF graphic)      | Tested on X11                                 |
+| Chromium and Chrome-based apps (web apps, Slack, Teams, Notion) | Bitmap (PNG)                                  | Bitmap (PNG)              | Tested with a Chromium 149 paste event on X11 |
+| Inkscape                                                        | Vector paths from the SVG                     | Vector paths from the SVG | Docs/code                                     |
+| GIMP                                                            | Bitmap (PNG)                                  | Bitmap (PNG)              | Docs/code                                     |
+| Plain-text boxes                                                | No text: use **Copy SMILES** (**Ctrl+Alt+C**) | No text                   | Tested in a Chromium 149 text box on X11      |
+| ReShiki                                                         | Editable                                      | Editable                  | Docs/code                                     |
 
 The Linux tests published the Copy and Copy Image bytes through ReShiki's own X11
 clipboard worker under Xvfb. Wayland offers the same MIME types; it is
@@ -99,12 +110,13 @@ docs/code only.
 
 ### The browser editor
 
-| Paste into              | Copy                                                   | Copy Image | Status    |
-| ----------------------- | ------------------------------------------------------ | ---------- | --------- |
-| Word, Google Docs, mail | Bitmap (PNG, from the HTML or PNG flavor)              | Bitmap     | Docs/code |
-| Another browser ReShiki | Editable (the drawing travels inside the HTML picture) | Editable   | Docs/code |
-| Desktop ReShiki         | Editable molecule from the SMILES text, re-laid out    | Picture    | Docs/code |
-| Text fields             | SMILES                                                 | Nothing    | Docs/code |
+| Paste into                             | Copy                                                   | Copy Image                                                | Status                          |
+| -------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------- | ------------------------------- |
+| Word, Excel (Microsoft 365 on Windows) | Bitmap                                                 | Bitmap                                                    | Tested with Edge 157            |
+| Google Docs, mail                      | Bitmap (PNG, from the HTML or PNG flavor)              | Bitmap                                                    | Docs/code                       |
+| Another browser ReShiki                | Editable (the drawing travels inside the HTML picture) | Editable                                                  | Docs/code                       |
+| Desktop ReShiki                        | Editable molecule from the SMILES text, re-laid out    | Picture                                                   | Tested on Windows with Edge 157 |
+| Text fields                            | SMILES                                                 | No text: **Copy Image** is pictures only, so use **Copy** | Tested in an Edge 157 text box  |
 
 ## Does the editable drawing survive?
 
@@ -259,6 +271,53 @@ The browser editor writes one `ClipboardItem`:
 - **Copy Image:** the same without `text/plain`. Its `data-reshiki` holds the
   drawing too.
 
+### Why Copy has no text
+
+Copy and Copy Image carry no plain-text flavor on the desktop, and the browser's
+Copy Image has none either. Text-only places get nothing from them; **Copy
+SMILES** (**Cmd/Ctrl+Alt+C**) is the command for those. Many apps prefer text
+over pictures, so a SMILES text flavor would replace the picture or object in
+them. ReShiki removed one from Copy in 0.12 after PowerPoint for Mac pasted a
+SMILES text box.
+
+On 2026-11-12 the Copy and Copy Image formats were re-published with SMILES
+added, to check whether some placement avoids that. On macOS the text was added
+to Copy, either in the same pasteboard item as the pictures or into a second
+item. On Windows it was `CF_UNICODETEXT`. On Linux it was
+`text/plain;charset=utf-8`, `text/plain` and `UTF8_STRING`, through ReShiki's
+X11 worker. For the browser, Edge wrote Copy Image's `ClipboardItem` with and
+without `text/plain`. Dumps, scripts and screenshots are in the [evidence
+folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/5998c1d1eddc0640a912a1822e61195684aa8c33/pr-reviews/pr1157).
+
+| App                                              | Without text | With text, same item / second item        |
+| ------------------------------------------------ | ------------ | ----------------------------------------- |
+| macOS Word 16.115                                | Picture      | Picture / picture                         |
+| macOS PowerPoint 16.115                          | Picture      | **Text box** / **nothing**                |
+| macOS Excel 16.115                               | Picture      | **Text in a cell** / **text in a cell**   |
+| macOS TextEdit, rich text                        | Picture      | Picture / picture                         |
+| macOS TextEdit, plain text                       | Nothing      | SMILES / SMILES                           |
+| macOS Notes, Google folder                       | Nothing      | Nothing / nothing                         |
+| macOS Chrome 157 page                            | Picture      | Picture (same item)                       |
+| macOS ChemDraw 26.1, ReShiki                     | Editable     | Editable / editable                       |
+| Windows Word (Copy)                              | Object       | Object                                    |
+| Windows Excel (Copy)                             | Object       | **Text in a cell**                        |
+| Windows Word (Copy Image)                        | SVG graphic  | SVG graphic                               |
+| Windows Excel (Copy Image)                       | SVG graphic  | **Text in a cell**                        |
+| Windows Edge 157 page                            | Bitmap       | Bitmap                                    |
+| Windows Edge 157 text box                        | Nothing      | SMILES                                    |
+| Linux LibreOffice 25.8 Writer, Impress           | PDF picture  | PDF picture                               |
+| Linux Chromium 149 page                          | Picture      | Picture                                   |
+| Linux Chromium 149 text box                      | Nothing      | SMILES                                    |
+| Browser Copy Image → Word, Excel, Edge (Windows) | Picture      | Picture                                   |
+| Browser Copy Image → desktop ReShiki (Windows)   | Picture      | **Molecule from the SMILES, re-laid out** |
+
+So a text flavor would break Excel on both systems and PowerPoint on macOS, and
+it would not even reach Notes. On Linux, LibreOffice and a Chromium page kept
+the picture, and only text boxes changed, but the web apps that read a paste
+themselves could not be tested there, and Copy stays the same on every platform.
+Browser Copy Image would hand desktop ReShiki a re-laid-out molecule instead of
+the picture that was asked for.
+
 ### What ReShiki reads on Paste
 
 Paste tries these portable formats in order and stops at the first one that
@@ -301,4 +360,9 @@ Native names for these:
   `width`/`height` would fix it, but on Windows it makes Office paste a picture
   instead of the object.
 - Classic Outlook, Outlook for Mac, OneNote, Pages/Keynote and iCloud Notes need
-  testing on machines with accounts.
+  testing on machines with accounts. Classic Outlook and OneNote are installed
+  on the Windows test machine, but Outlook has no mail profile and OneNote asks
+  to sign in.
+- Linux could offer a text flavor: LibreOffice and a Chromium page kept the
+  picture with it. Web apps such as Slack or Google Docs, which read a paste
+  themselves, may prefer text over a picture file and need accounts to test.
