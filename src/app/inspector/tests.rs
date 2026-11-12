@@ -1116,8 +1116,8 @@ fn abbreviation_member_selection_analyzes_the_whole_abbreviation_without_labels(
     assert_eq!(app.tab.doc, before);
 }
 
-/// #766: the Stereo groups section assigns only the selected stereocentres.
-/// Numbers belong to each molecule, and each change is one Undo step.
+/// #766: the Stereo groups section assigns only the selected stereocentres,
+/// reserves new numbers across the drawing, and records one Undo step per change.
 #[test]
 fn stereo_groups_assign_selected_centres_with_undo() {
     use reshiki::stereo_groups::{Kind, StereoGroup};
@@ -1131,7 +1131,7 @@ fn stereo_groups_assign_selected_centres_with_undo() {
         kind: Kind::And,
         number,
     };
-    doc.atom_mut(other).unwrap().stereo_group = Some(and(3));
+    doc.atom_mut(other).unwrap().stereo_group = Some(and(1));
     let groups =
         |app: &App| [centre, plain, other].map(|id| app.tab.doc.atom(id).unwrap().stereo_group);
     // These bare carbons are no real stereocentres, so each edit's label
@@ -1143,25 +1143,84 @@ fn stereo_groups_assign_selected_centres_with_undo() {
     };
     centres(&mut app);
     app.tab.selected = vec![centre, plain];
-    // The other molecule's and3 does not take this molecule's first number.
-    let new = GroupChoice::New(reshiki::stereo_groups::next(
-        &app.tab.doc,
-        &[centre],
-        Kind::And,
-    ));
-    assert_eq!(new, GroupChoice::New(and(1)));
+    let new = GroupChoice::New(reshiki::stereo_groups::next(&app.tab.doc, Kind::And));
+    assert_eq!(new, GroupChoice::New(and(2)));
     let _ = app.update(Message::InspectorAction(Action::StereoGroup(new)));
-    assert_eq!(groups(&app), [Some(and(1)), None, Some(and(3))]);
+    assert_eq!(groups(&app), [Some(and(2)), None, Some(and(1))]);
     centres(&mut app);
     let _ = app.update(Message::InspectorAction(Action::StereoGroup(
         GroupChoice::Absolute,
     )));
-    assert_eq!(groups(&app), [None, None, Some(and(3))]);
+    assert_eq!(groups(&app), [None, None, Some(and(1))]);
     let _ = app.update(Message::Undo);
-    assert_eq!(groups(&app), [Some(and(1)), None, Some(and(3))]);
+    assert_eq!(groups(&app), [Some(and(2)), None, Some(and(1))]);
+    centres(&mut app);
+    app.tab.selected = vec![other];
+    let _ = app.update(Message::InspectorAction(Action::StereoGroup(
+        GroupChoice::Absolute,
+    )));
     let _ = app.update(Message::InspectorAction(Action::RenumberStereoGroups));
-    assert_eq!(groups(&app), [Some(and(1)), None, Some(and(1))]);
+    assert_eq!(groups(&app), [Some(and(1)), None, None]);
     let _ = app.update(Message::Undo);
-    assert_eq!(groups(&app), [Some(and(1)), None, Some(and(3))]);
+    assert_eq!(groups(&app), [Some(and(2)), None, None]);
+    app.tab.doc.validate().unwrap();
+}
+
+#[test]
+fn stereo_group_renumber_preserves_shared_groups_across_molecules() {
+    use reshiki::stereo_groups::{Kind, StereoGroup};
+    let (mut app, _) = App::new();
+    let groups = [
+        StereoGroup {
+            kind: Kind::And,
+            number: 4,
+        },
+        StereoGroup {
+            kind: Kind::And,
+            number: 4,
+        },
+        StereoGroup {
+            kind: Kind::And,
+            number: 8,
+        },
+        StereoGroup {
+            kind: Kind::Or,
+            number: 4,
+        },
+    ];
+    let ids = groups.map(|group| {
+        let id = app.tab.doc.add_atom("C", Default::default());
+        app.tab.doc.atom_mut(id).unwrap().stereo_group = Some(group);
+        id
+    });
+    app.tab.selected = vec![ids[0]];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::InspectorAction(Action::RenumberStereoGroups));
+    assert_eq!(
+        ids.map(|id| app.tab.doc.atom(id).unwrap().stereo_group),
+        [
+            Some(StereoGroup {
+                kind: Kind::And,
+                number: 1
+            }),
+            Some(StereoGroup {
+                kind: Kind::And,
+                number: 1
+            }),
+            Some(StereoGroup {
+                kind: Kind::And,
+                number: 2
+            }),
+            Some(StereoGroup {
+                kind: Kind::Or,
+                number: 1
+            }),
+        ],
+    );
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
     app.tab.doc.validate().unwrap();
 }

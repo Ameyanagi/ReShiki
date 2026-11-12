@@ -133,7 +133,8 @@ impl Layout {
         if coordinates.next().is_some() {
             return Err(invalid("Unexpected reaction layout"));
         }
-        source.drawing_with_attachments(Some(&attachments))
+        // CX group numbers are global across all reaction participants.
+        source.drawing_with_attachments(Some(&attachments), false)
     }
 }
 

@@ -159,24 +159,30 @@ wedges:
 | `and1` | AND 1 (rac) | A 1:1 mixture of the drawn form and its mirror image at these centres, for example racemic alanine. |
 | `or1`  | OR 1 (rel)  | One of the two forms, not known which; the centres keep their relation to each other.               |
 
-Centres of one molecule with the same label flip together; different groups
-vary independently. A group belongs to its molecule (connected structure), as
-in a MOL file: `and1` on two separate molecules are two independent racemates.
-A stereocentre without a group is absolute, so existing
+Centres with the same label flip together anywhere in the drawing, also on
+separate molecules: `and1` on two disconnected molecules is one group, as in a
+MOL file or CXSMILES. Different labels vary independently; AND 1 and OR 1 are
+different groups. A stereocentre without a group is absolute, so existing
 drawings and new ones keep their meaning.
 
 Select stereocentres (or whole molecules) and open **Stereo groups** in the
-inspector. Choose **abs**, an existing group, **New AND group** or **New OR
-group**; only atoms with an assigned R/S descriptor change. Each change is one
-Undo step. **Renumber groups** appears when the numbers have gaps and numbers
-each molecule's AND and OR groups 1, 2, 3… in order.
+inspector. Choose **abs**, a group of the selected molecules, **New AND group**
+or **New OR group**; only atoms with an assigned R/S descriptor change. A new
+group takes the lowest number of its kind that the drawing doesn't use. Each
+change is one Undo step. **Renumber groups** appears when the numbers have gaps
+and numbers the drawing's AND and OR groups 1, 2, 3… in order.
 
-Copy and paste, Undo/Redo, Clean up and flipping keep the groups; flipping a
-racemate or a relative structure leaves it racemic or relative. Bonding two
-molecules that use the same label joins those groups. When several molecules
-are written to one MOL or SMILES record, a molecule whose label another
-molecule already uses is written with the next free number, so the groups stay
-independent.
+Pasting, inserting or duplicating a structure gives its groups numbers the
+drawing doesn't use yet, so a pasted racemate never joins an existing group.
+Moving, bonding and separating molecules, Undo/Redo, Clean up and flipping keep
+the groups; flipping a racemate or a relative structure leaves it racemic or
+relative.
+
+ChemDraw keeps a group within one CDXML/CDX fragment. On import, fragments that
+reuse a number get separate groups; on export, molecules that share a group
+stay in one fragment, and a drawing whose object groups separate a stereo
+group's members can't be exported until they're grouped together. RXN files
+keep each participant's groups separate.
 
 Group labels are shown by default as plain 7.5 pt text beside the centre:
 `and1` and `or1` on grouped centres, and `abs` on the other stereocentres of a

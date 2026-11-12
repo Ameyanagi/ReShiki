@@ -38,6 +38,7 @@ pub struct Drawing {
     separators: Vec<(u64, Position)>,
     reaction: Reaction,
     arrow: Arrow,
+    independent_stereo_groups: bool,
 }
 impl Drawing {
     /// Participants follow canvas order: reactants, agents, then products.
@@ -94,6 +95,9 @@ impl Drawing {
                 && atom.label_h == 2
             {
                 atom.display.hydrogen_position = HydrogenPosition::Left;
+            }
+            if self.independent_stereo_groups {
+                crate::stereo_groups::renumber_incoming(&doc, &mut drawing.atoms);
             }
             doc.atoms.extend(drawing.atoms);
             doc.bonds.extend(drawing.bonds);
@@ -340,12 +344,13 @@ fn height(parts: &[Part]) -> f64 {
 
 impl Imported {
     pub fn drawing(&self) -> Result<Drawing, Error> {
-        self.drawing_with_attachments(None)
+        self.drawing_with_attachments(None, true)
     }
 
     pub(super) fn drawing_with_attachments(
         &self,
         attachments: Option<&[Vec<bool>]>,
+        independent_stereo_groups: bool,
     ) -> Result<Drawing, Error> {
         if attachments.is_some_and(|items| {
             items.len() != self.reactants.len() + self.agents.len() + self.products.len()
@@ -420,6 +425,7 @@ impl Imported {
             separators: builder.separators,
             reaction,
             arrow,
+            independent_stereo_groups,
         })
     }
 }

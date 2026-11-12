@@ -275,8 +275,7 @@ pub(crate) fn write_smiles_with_axial_loss(
                 *indices.get_mut(atom).ok_or(Error::Limit)? = offset + position;
             }
             for group in &source.groups {
-                // One field per label: readers split it by participant again,
-                // and each molecule's label is its own group.
+                // One field per drawing label, with each participant's written members.
                 let members = groups.entry((group.kind, group.read_id)).or_default();
                 for &atom in &group.atoms {
                     members.push(*indices.get(atom).ok_or(Error::Limit)?);

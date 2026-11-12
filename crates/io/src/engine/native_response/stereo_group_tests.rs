@@ -1,5 +1,12 @@
 use super::*;
 use crate::chemistry::{cdxml, depict};
+use crate::stereo_groups::{Kind, StereoGroup};
+
+const DISCONNECTED_V3000: &str =
+    include_str!("../../../../../tests/fixtures/stereo-groups/disconnected-and.mol");
+
+const TWO_FRAGMENT_CDXML: &str =
+    include_str!("../../../../../tests/fixtures/stereo-groups/two-fragments-and.cdxml");
 
 fn drawing(text: &str) -> anyhow::Result<Document> {
     let input = smiles::read(text)?;
@@ -24,6 +31,269 @@ fn drawing(text: &str) -> anyhow::Result<Document> {
 
 fn groups(doc: &Document) -> Vec<Option<crate::stereo_groups::StereoGroup>> {
     doc.atoms.iter().map(|atom| atom.stereo_group).collect()
+}
+
+async fn disconnected_roundtrips(
+    doc: &Document,
+    expected: &[(StereoGroup, Vec<usize>)],
+) -> anyhow::Result<()> {
+    let molecule = molecular::prepare(doc)?;
+    let collections: Vec<_> = molecule
+        .state
+        .metadata
+        .groups
+        .iter()
+        .map(|group| (group.kind, group.read_id, group.atoms.clone()))
+        .collect();
+    let expected_collections: Vec<_> = expected
+        .iter()
+        .map(|(group, atoms)| {
+            (
+                match group.kind {
+                    Kind::And => 2,
+                    Kind::Or => 1,
+                },
+                group.number,
+                atoms.clone(),
+            )
+        })
+        .collect();
+    assert_eq!(collections, expected_collections);
+    let identifiers = prepare_identifiers(&molecule, false)?.0;
+    let atom_order = smiles::write::write(&molecule.state, Default::default())?.atom_order;
+    for format in ["smiles", "mol", "cdxml", "cdx"] {
+        let mut request = Request::molecule("export", doc.clone());
+        request.format = Some(format.into());
+        let response = execute(request).await?;
+        assert!(response.warnings.is_empty(), "{format}");
+        let output = response.output.unwrap();
+        let restored = match format {
+            "smiles" => {
+                let fields = expected
+                    .iter()
+                    .map(|(group, atoms)| {
+                        let mut indices = atoms
+                            .iter()
+                            .map(|atom| atom_order.iter().position(|index| index == atom).unwrap())
+                            .collect::<Vec<_>>();
+                        indices.sort_unstable();
+                        let indices = indices
+                            .into_iter()
+                            .map(|index| index.to_string())
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        let kind = if group.kind == Kind::And { "&" } else { "o" };
+                        format!("{kind}{}:{indices}", group.number)
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    output.split_once(" |").unwrap().1,
+                    format!("{}|", fields.join(","))
+                );
+                drawing(&output)?
+            }
+            "mol" => {
+                assert!(output.contains("V3000"));
+                assert_eq!(output.matches("MDLV30/STER").count(), expected.len());
+                for (group, atoms) in expected {
+                    let kind = if group.kind == Kind::And {
+                        "RAC"
+                    } else {
+                        "REL"
+                    };
+                    let members = atoms
+                        .iter()
+                        .map(|index| (index + 1).to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let record = format!(
+                        "M  V30 MDLV30/STE{kind}{} ATOMS=({} {members})\n",
+                        group.number,
+                        atoms.len()
+                    );
+                    assert_eq!(output.matches(record.as_str()).count(), 1, "{record}");
+                }
+                molfile::read(&output)?.display_document()?.0
+            }
+            _ => {
+                let xml = if format == "cdx" {
+                    exchange::from_cdx(&STANDARD.decode(output)?).map_err(anyhow::Error::msg)?
+                } else {
+                    output
+                };
+                let parsed = roxmltree::Document::parse(&xml)?;
+                for (group, atoms) in expected {
+                    let kind = if group.kind == Kind::And { "And" } else { "Or" };
+                    let number = group.number.to_string();
+                    let members = parsed
+                        .descendants()
+                        .filter(|node| {
+                            node.has_tag_name("n")
+                                && node.attribute("EnhancedStereoType") == Some(kind)
+                                && node.attribute("EnhancedStereoGroupNum") == Some(number.as_str())
+                        })
+                        .map(|node| node.attribute("id").unwrap().parse::<usize>())
+                        .collect::<Result<Vec<_>, _>>()?;
+                    assert_eq!(
+                        members,
+                        atoms.iter().map(|index| index + 3).collect::<Vec<_>>(),
+                        "{format}"
+                    );
+                }
+                let imported = cdxml::import_cdxml(&xml)?;
+                assert!(imported.notices.is_empty());
+                imported.document
+            }
+        };
+        let prepared = molecular::prepare(&restored)?;
+        assert_eq!(
+            prepared.state.metadata.groups.len(),
+            expected.len(),
+            "{format}"
+        );
+        assert_eq!(
+            prepared
+                .state
+                .metadata
+                .groups
+                .iter()
+                .map(|group| group.atoms.len())
+                .sum::<usize>(),
+            2,
+            "{format}"
+        );
+        if format != "smiles" {
+            assert_eq!(groups(&restored), groups(doc), "{format}");
+        }
+        assert_eq!(
+            prepare_identifiers(&prepared, false)?.0,
+            identifiers,
+            "{format}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn disconnected_cx_groups_preserve_correlation_and_independence() -> anyhow::Result<()> {
+    for (text, kind, members) in [
+        (
+            include_str!("../../../../../tests/fixtures/stereo-groups/shared-and.cxsmiles"),
+            Kind::And,
+            vec![vec![1, 5]],
+        ),
+        (
+            include_str!("../../../../../tests/fixtures/stereo-groups/shared-or.cxsmiles"),
+            Kind::Or,
+            vec![vec![1, 5]],
+        ),
+        (
+            include_str!("../../../../../tests/fixtures/stereo-groups/independent-and.cxsmiles"),
+            Kind::And,
+            vec![vec![1], vec![5]],
+        ),
+    ] {
+        let doc = drawing(text)?;
+        let expected: Vec<_> = members
+            .into_iter()
+            .enumerate()
+            .map(|(index, atoms)| {
+                (
+                    StereoGroup {
+                        kind,
+                        number: index as u32 + 1,
+                    },
+                    atoms,
+                )
+            })
+            .collect();
+        disconnected_roundtrips(&doc, &expected).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn disconnected_v3000_collections_keep_all_members_together() -> anyhow::Result<()> {
+    for (text, kind) in [
+        (DISCONNECTED_V3000, Kind::And),
+        (
+            include_str!("../../../../../tests/fixtures/stereo-groups/disconnected-or.mol"),
+            Kind::Or,
+        ),
+    ] {
+        let (doc, _, notices) = molfile::read(text)?.display_document()?;
+        assert!(notices.is_empty());
+        disconnected_roundtrips(&doc, &[(StereoGroup { kind, number: 1 }, vec![1, 5])]).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn cdxml_fragment_group_numbers_remain_independent() -> anyhow::Result<()> {
+    for xml in [
+        TWO_FRAGMENT_CDXML.to_string(),
+        exchange::from_cdx(&exchange::to_cdx(TWO_FRAGMENT_CDXML).map_err(anyhow::Error::msg)?)
+            .map_err(anyhow::Error::msg)?,
+    ] {
+        let prepared = cdxml::prepare_cdxml(&xml)?;
+        let unchecked = cdxml::assemble_cdxml(&prepared)?.into_unchecked_drawing()?;
+        let imported = cdxml::assemble_cdxml(&prepared)?.into_document()?;
+        assert!(imported.notices.is_empty());
+        assert_eq!(groups(&unchecked), groups(&imported.document));
+        disconnected_roundtrips(
+            &imported.document,
+            &[
+                (
+                    StereoGroup {
+                        kind: Kind::And,
+                        number: 1,
+                    },
+                    vec![1],
+                ),
+                (
+                    StereoGroup {
+                        kind: Kind::And,
+                        number: 2,
+                    },
+                    vec![5],
+                ),
+            ],
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[test]
+fn rxn_participant_groups_remain_independent_and_keep_disconnected_members() -> anyhow::Result<()> {
+    use crate::chemistry::reaction;
+    let source = molfile::read(DISCONNECTED_V3000)?;
+    let imported = reaction::Imported {
+        reactants: vec![source.clone()],
+        products: vec![source],
+        agents: Vec::new(),
+    };
+    let draft = imported.drawing()?;
+    let labels = draft.labels()?;
+    let doc = draft.finish(labels)?;
+    let output = reaction::write_rxn(&doc, None)?;
+    assert_eq!(output.matches("MDLV30/STERAC").count(), 2);
+    let restored = reaction::read_rxn(&output)?.drawing()?;
+    let labels = restored.labels()?;
+    let restored = restored.finish(labels)?;
+    assert_eq!(groups(&restored), groups(&doc));
+    let prepared = molecular::prepare(&restored)?;
+    assert_eq!(
+        prepared
+            .state
+            .metadata
+            .groups
+            .iter()
+            .map(|group| (group.kind, group.read_id, group.atoms.clone()))
+            .collect::<Vec<_>>(),
+        vec![(2, 1, vec![1, 5]), (2, 2, vec![9, 13])]
+    );
+    Ok(())
 }
 
 #[tokio::test]
@@ -138,5 +408,35 @@ fn stereo_groups_abs_only_identifiers_and_cdxml_stay_plain() -> anyhow::Result<(
         smiles::write::write(&molecule.state, Default::default())?.text
     );
     assert!(!exchange::drawing::write(&doc, Default::default())?.contains("EnhancedStereo"));
+    Ok(())
+}
+
+/// Any object group makes the CDXML writer put each molecule in its own
+/// fragment; ChemDraw scopes stereo groups to a fragment, so two molecules
+/// sharing a group stay in one. A group split by object grouping is refused.
+#[test]
+fn cdxml_object_groups_keep_a_shared_stereo_group_in_one_fragment() -> anyhow::Result<()> {
+    let mut doc = drawing("C[C@H](O)F.C[C@H](O)Cl.CCO |&1:1,5|")?;
+    let id = doc.next_id();
+    doc.groups.push(crate::grouping::Group {
+        id,
+        members: vec![9, 10, 11],
+        integral: true,
+    });
+    let xml = exchange::drawing::write(&doc, Default::default())?;
+    let imported = cdxml::import_cdxml(&xml)?.document;
+    let and1 = StereoGroup {
+        kind: Kind::And,
+        number: 1,
+    };
+    let centres: Vec<_> = imported
+        .atoms
+        .iter()
+        .filter_map(|a| a.stereo_group)
+        .collect();
+    assert_eq!(centres, [and1; 2]);
+    doc.groups[0].members = vec![1, 2, 3, 4];
+    let error = exchange::drawing::write(&doc, Default::default()).unwrap_err();
+    assert!(error.to_string().contains("stereo group"), "{error}");
     Ok(())
 }

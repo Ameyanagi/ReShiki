@@ -137,6 +137,8 @@ Document coordinates use screen-style positive-down Y, with 28 world units per R
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 
+Enhanced stereo groups are identified by `(kind, number)` across the whole drawing, including disconnected components, as in MOL V3000 and CXSMILES. Inserting a copy gives its groups unused numbers; moving existing atoms keeps their membership. CDXML/CDX numbers are local to a fragment: import renumbers collisions between fragments, and export keeps a group's members in one fragment.
+
 ## Document format versions
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build

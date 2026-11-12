@@ -11,7 +11,7 @@ use reshiki::{
 };
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
 };
 
 #[derive(Default)]
@@ -1651,8 +1651,9 @@ impl App {
             });
         let ids: Vec<_> = centres.iter().map(|a| a.id).collect();
         let used = stereo_groups::used(doc, &ids);
+        let groups: BTreeSet<_> = doc.atoms.iter().filter_map(|a| a.stereo_group).collect();
         let mut counts = HashMap::new();
-        let gaps = used.iter().any(|group| {
+        let gaps = groups.iter().any(|group| {
             let count = counts.entry(group.kind).or_insert(0);
             *count += 1;
             group.number != *count
@@ -1660,8 +1661,7 @@ impl App {
         let choices: Vec<_> = std::iter::once(GroupChoice::Absolute)
             .chain(used.into_iter().map(GroupChoice::Group))
             .chain(
-                [Kind::And, Kind::Or]
-                    .map(|kind| GroupChoice::New(stereo_groups::next(doc, &ids, kind))),
+                [Kind::And, Kind::Or].map(|kind| GroupChoice::New(stereo_groups::next(doc, kind))),
             )
             .collect();
         let summary = match current {
@@ -1695,7 +1695,7 @@ impl App {
                     Message::InspectorAction(Action::RenumberStereoGroups),
                 )
                 .width(Length::Fill),
-                "Number each molecule's AND and OR groups 1, 2, 3… in order",
+                "Number the AND and the OR groups of the whole drawing 1, 2, 3… in order",
                 tooltip::Position::Top,
             ));
         }

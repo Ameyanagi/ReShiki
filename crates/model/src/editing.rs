@@ -424,6 +424,9 @@ fn mapped_append_part(
         .collect();
     let mapping = mapping?;
     let mut part = source.clone();
+    if matches!(mode, AppendMode::Ordinary) {
+        crate::stereo_groups::renumber_incoming(doc, &mut part.atoms);
+    }
     part.generic.remap(&mapping)?;
     for name in &mut part.molecule_names {
         let mapped = mapping.get(&name.annotation).copied()?;
