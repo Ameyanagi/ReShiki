@@ -1,5 +1,8 @@
 use super::{
-    args::{Compose, Convert, Export, Input, Name, Output, Render, Schema, Skill, Source, parse},
+    args::{
+        Compose, Convert, Export, Input, Name, Output, Render, Schema, Skill, Source, SvgText,
+        parse,
+    },
     *,
 };
 use reshiki_agent::ops::{
@@ -33,6 +36,7 @@ fn parsed(tokens: &[&str]) -> Result<Command, String> {
 fn export(to: &str, output: Output) -> Export {
     Export {
         format: to.into(),
+        svg_text: SvgText::Outline,
         output,
         pages: false,
         force: false,
@@ -1102,6 +1106,7 @@ fn render_command_lines_parse() {
             format: from.into(),
         },
         format: to.into(),
+        svg_text: SvgText::Outline,
         output,
         width: None,
         height: None,
@@ -1148,6 +1153,72 @@ fn render_command_lines_parse() {
         ),
     ] {
         assert_eq!(parsed(tokens), Ok(Command::Render(expected)), "{tokens:?}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn svg_text_defaults_to_outlines_and_live_keeps_labels() {
+    let directory = tempfile::tempdir().unwrap();
+    let proposal = directory.path().join("proposal.json");
+    std::fs::write(&proposal, include_str!("skill/esterification.json")).unwrap();
+    for command in ["convert", "render", "compose"] {
+        let input = if command == "compose" {
+            vec![proposal.clone().into_os_string()]
+        } else {
+            vec!["--smiles".into(), "CCO".into()]
+        };
+        for live in [false, true] {
+            let mut tokens = vec![command.into()];
+            tokens.extend(input.clone());
+            tokens.extend(["--to".into(), "svg".into()]);
+            if live {
+                tokens.extend(["--svg-text".into(), "live".into()]);
+            }
+            let (code, svg, err) = call_os(tokens).await;
+            assert_eq!(code, SUCCESS, "{command}, live={live}: {err}");
+            assert_eq!(svg.contains("<text"), live, "{command}: {svg}");
+            if !live {
+                assert!(svg.contains("<path"), "{command}: {svg}");
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlined_svg_receipt_counts_the_written_bytes() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("drawing.svg");
+    let (code, out, err) = call_os(vec![
+        "convert".into(),
+        "--smiles".into(),
+        "CCO".into(),
+        "-o".into(),
+        path.clone().into_os_string(),
+        "--receipt".into(),
+    ])
+    .await;
+    assert_eq!(code, SUCCESS, "{err}");
+    let bytes = std::fs::read(path).unwrap();
+    let receipt: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(receipt["receipt"]["byte_len"], json!(bytes.len()));
+    assert!(!String::from_utf8(bytes).unwrap().contains("<text"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn invalid_svg_text_is_a_usage_error_for_every_svg_command() {
+    for command in ["convert", "render", "compose"] {
+        let (code, out, err) = call(&[
+            command,
+            "missing.file",
+            "--to",
+            "svg",
+            "--svg-text",
+            "invalid",
+        ])
+        .await;
+        assert_eq!(code, USAGE, "{command}");
+        assert!(out.is_empty(), "{command}: {out}");
+        assert_eq!(err, "reshiki: --svg-text must be live or outline\n");
     }
 }
 
@@ -1235,6 +1306,8 @@ async fn steroid_alpha_beta_survives_cleanup_exchange_and_cli_render() {
         path.into_os_string(),
         "--to".into(),
         "svg".into(),
+        "--svg-text".into(),
+        "live".into(),
     ])
     .await;
     assert_eq!(code, SUCCESS, "{err}");
@@ -1282,6 +1355,8 @@ async fn undefined_xi_survives_native_reload_and_figure_exports() {
             path.clone().into_os_string(),
             "--to".into(),
             "svg".into(),
+            "--svg-text".into(),
+            "live".into(),
         ])
         .await;
         assert_eq!(code, SUCCESS, "{err}");

@@ -2696,9 +2696,11 @@ fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
         Message::View(view_settings::Action::Grid),
         Message::View(view_settings::Action::SmartGuides(false)),
         Message::View(view_settings::Action::TwoDecimalWeight(true)),
+        Message::View(view_settings::Action::ExportEditableDrawing(false)),
     ] {
         let _ = app.update(message);
     }
+    assert!(!app.appearance.export_editable_drawing);
     // Smart guides are on by default, also for settings saved before them.
     assert!(!app.appearance.smart_guides);
     assert!(app.appearance.two_decimal_weight);

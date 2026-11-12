@@ -412,6 +412,7 @@ impl Imported {
             kind: "forward".into(),
             control: None,
             cubic: None,
+            nodes: Vec::new(),
             style: None,
         };
         builder.row(

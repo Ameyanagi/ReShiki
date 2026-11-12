@@ -126,6 +126,7 @@ MCP server's `file_save` or the app.
 | `--to FORMAT`       | convert, render, compose       | Set the output format: `svg`, `pdf`, `png`, `cdxml`, `mol`, `smiles`, `inchi`; `png` or `svg` for render |
 | `-o OUTPUT`         | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                                          |
 | `--pages`           | convert, compose               | Export every publication page as one PDF; PDF output only                                                |
+| `--svg-text MODE`   | convert, render, compose       | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it                     |
 | `--width N`         | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                                            |
 | `--height N`        | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                                           |
 | `--force`           | convert, render, compose       | Replace OUTPUT if it exists                                                                              |
@@ -147,7 +148,8 @@ in `reshiki: error: max_width must be from 1 to 8192 pixels`.
 
 ```text
 reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
-                      [-o OUTPUT|-] [--pages] [--force] [--receipt]
+                      [-o OUTPUT|-] [--svg-text MODE] [--pages]
+                      [--force] [--receipt]
 ```
 
 `reshiki --cli help convert` prints the [full help](agent-reference.md#reshiki---cli-convert).
@@ -159,6 +161,11 @@ reshiki --cli convert --smiles 'CCO' -o ethanol.mol
 reshiki --cli convert scheme.rsk -o figure.pdf
 reshiki --cli convert reaction.cdxml --to smiles
 ```
+
+SVG text is drawn as outlines by default: the glyphs, positions and sizes of
+the PNG, whatever fonts the viewer has. `--svg-text live` keeps `<text>`
+elements, which stay editable and searchable, but a viewer without the
+drawing's font (usually Arial) substitutes its own and labels can shift.
 
 For PNG, the size is printed to stderr as a warning, such as
 `reshiki: warning: PNG: 737 × 352 pixels at 1200 dpi`. A warning does not mean
@@ -189,7 +196,8 @@ several lines:
 
 ```text
 reshiki --cli render (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
-                     [-o OUTPUT|-] [--width N] [--height N] [--force]
+                     [-o OUTPUT|-] [--svg-text MODE] [--width N]
+                     [--height N] [--force]
 ```
 
 `reshiki --cli help render` prints the [full help](agent-reference.md#reshiki---cli-render).
@@ -207,7 +215,7 @@ reshiki --cli render --smiles 'c1ccccc1O' -o phenol.png --width 800 --height 600
 
 ```text
 reshiki --cli compose (PROPOSAL | -) [--to FORMAT] [-o OUTPUT|-] [--pages]
-                      [--force] [--receipt]
+                      [--svg-text MODE] [--force] [--receipt]
 ```
 
 `reshiki --cli help compose` prints the [full help](agent-reference.md#reshiki---cli-compose).
@@ -313,7 +321,7 @@ to 9 decimal places to remove floating-point noise. This is
   },
   "versions": {
     "app": "0.14.0",
-    "document": 35,
+    "document": 36,
     "engine_protocol": 1,
     "operation_api": 1
   },
@@ -467,7 +475,7 @@ window.
   "stability": "experimental",
   "versions": {
     "app": "0.14.0",
-    "document": 35,
+    "document": 36,
     "engine_protocol": 1,
     "operation_api": 1
   }

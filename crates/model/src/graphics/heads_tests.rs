@@ -419,6 +419,44 @@ fn multiple_segments_keep_one_shaft_and_only_trim_terminal_segments() {
 }
 
 #[test]
+fn short_terminal_segments_share_the_whole_path_head_size() {
+    for (tail, x) in [(false, 90.), (true, 10.)] {
+        let start = Point::default();
+        let point = Point::new(x, 0.);
+        let end = Point::new(100., 0.);
+        let outgoing = point.lerp(end, 1. / 3.);
+        let arrival = point.lerp(end, 2. / 3.);
+        let last = PathCommand::Cubic(outgoing, arrival, end);
+        let mut graphic = path(vec![
+            PathCommand::Move(start),
+            PathCommand::Line(point),
+            last.clone(),
+        ]);
+        let heads = PathHeads {
+            head: if tail { Head::None } else { Head::Full },
+            tail: if tail { Head::Full } else { Head::None },
+            ..Default::default()
+        };
+        graphic.heads = Some(heads);
+        let mut native = arrow(start, &last, heads, &graphic.style);
+        native.cubic = Some([start.lerp(point, 1. / 3.), arrival]);
+        native.nodes = vec![crate::document::ArrowNode {
+            point,
+            controls: [start.lerp(point, 2. / 3.), outgoing],
+            kind: super::PathNodeType::Corner,
+        }];
+        let expected = native.paths();
+        let actual = graphic.parts();
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(&expected) {
+            assert_eq!(actual.commands, expected.commands);
+            assert_eq!(actual.style, expected.style);
+            assert_eq!(actual.filled, expected.filled);
+        }
+    }
+}
+
+#[test]
 fn closed_and_compound_paths_keep_heads_without_rendering_them() {
     for commands in [
         vec![

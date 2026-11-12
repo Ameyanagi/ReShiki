@@ -176,6 +176,15 @@ impl Annotation {
         (layout.width, layout.height)
     }
 }
+/// An interior node of a multi-segment arrow.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ArrowNode {
+    pub point: Point,
+    /// Arriving and leaving direction controls.
+    pub controls: [Point; 2],
+    pub kind: crate::graphics::PathNodeType,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Arrow {
     pub id: u64,
@@ -193,6 +202,10 @@ pub struct Arrow {
     /// quadratic arrows; these controls take precedence over the implicit bend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cubic: Option<[Point; 2]>,
+    /// Interior nodes, start to end. Each splits the cubic shaft; `cubic` then
+    /// holds the first segment's departure and the last segment's arrival.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nodes: Vec<ArrowNode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style: Option<crate::arrows::ArrowStyle>,
 }
@@ -232,13 +245,16 @@ pub const ORTEP: u32 = 32;
 pub const MODEL_POLISH: u32 = 33;
 /// Collapsed residue groups with two attachment atoms.
 pub const RESIDUE_GROUPS: u32 = 34;
+/// Arrows with interior nodes.
+pub const MULTI_NODE_ARROWS: u32 = 35;
 /// Enhanced stereo groups (ABS / AND / OR) on atoms.
-pub const STEREO_GROUPS: u32 = 35;
+pub const STEREO_GROUPS: u32 = 36;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32, model polish requires version 33 or two-sided groups
-/// require version 34, or stereo groups require version 35.
+/// require version 34, arrows with interior nodes require version 35, or
+/// stereo groups require version 36.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -271,8 +287,9 @@ pub const STEREO_GROUPS: u32 = 35;
 /// | 32 | Thermal ellipsoids and molecule-only crystal display (#417). |
 /// | 33 | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
 /// | 34 | Collapsed groups with two attachment atoms (#870). |
-/// | 35 | Enhanced stereo groups (#766). |
-pub const VERSION: u32 = 35;
+/// | 35 | Arrows with interior nodes (#761). |
+/// | 36 | Enhanced stereo groups (#766). |
+pub const VERSION: u32 = 36;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -441,6 +458,8 @@ impl Document {
     pub fn file_version(&self) -> u32 {
         if self.atoms.iter().any(|a| a.stereo_group.is_some()) {
             STEREO_GROUPS
+        } else if self.arrows.iter().any(|arrow| !arrow.nodes.is_empty()) {
+            MULTI_NODE_ARROWS
         } else if self.abbreviations.iter().any(|group| group.exit.is_some()) {
             RESIDUE_GROUPS
         } else if self.models.iter().any(|model| model.needs_polish_version()) {
@@ -947,6 +966,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + doc.abbreviations.len();
     let text: usize = doc.annotations.iter().map(|a| a.text.len()).sum();
     let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
+    let nodes: usize = doc.arrows.iter().map(|a| bytes(&a.nodes[..])).sum();
     let models: usize = doc
         .models
         .iter()
@@ -979,6 +999,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + objects * OWNED
         + text
         + paths
+        + nodes
         + models
 }
 impl History {

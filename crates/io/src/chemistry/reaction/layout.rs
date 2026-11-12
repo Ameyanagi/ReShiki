@@ -33,6 +33,27 @@ impl<'a> Request<'a> {
 }
 
 impl SmilesReaction {
+    /// Match molecular import's fresh drawing when CX paint cannot describe
+    /// this bond order. Keep this opt-in so strict reaction reading and its
+    /// existing layout callers retain the original directions.
+    pub(crate) fn drop_undrawable_wedges(&mut self) {
+        for part in self
+            .reactants
+            .iter_mut()
+            .chain(&mut self.agents)
+            .chain(&mut self.products)
+        {
+            let state = &mut part.prepared.state;
+            for (bond, direction) in state.graph.bonds.iter().zip(&mut state.directions) {
+                if !matches!(bond.order, 1 | 4)
+                    && matches!(direction, Direction::Wedge | Direction::Hash)
+                {
+                    *direction = Direction::None;
+                }
+            }
+        }
+    }
+
     pub(crate) fn layout(self) -> Result<Layout, Error> {
         let mut parts = Vec::new();
         let mut next_id = 1u64;
@@ -73,6 +94,7 @@ impl SmilesReaction {
                     },
                     annotations: molfile::FileAnnotations {
                         generic: Default::default(),
+                        superatoms: Vec::new(),
                         chemdraw_directions: Vec::new(),
                         singlets: vec![false; n],
                         attachments: Vec::new(),

@@ -538,6 +538,13 @@ impl App {
                 Message::ArrowAction(super::arrows::Action::Straighten),
                 true,
             ));
+            if self.selected_node_arrow().is_some() {
+                entries.push(command(
+                    "Edit arrow points",
+                    Message::Tool(Tool::EditPoints),
+                    true,
+                ));
+            }
         }
         if self.has_cleanup_selection() {
             entries.push(command(

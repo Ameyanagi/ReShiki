@@ -223,6 +223,8 @@ fn label_reach_bounds_label_ink_so_far_label_ends_still_hit() -> Result<(), Stri
     ))
     .map_err(|e| e.to_string())?;
     for doc in [&long, &shortcuts] {
+        // A variable face in the fallback chain, such as Noto Sans JP on
+        // Japanese Windows 11, leaves the reach unbounded by design.
         let reach = LabelReach::new(doc);
         for atom in &doc.atoms {
             for (lo, hi) in atom_label_ink_boxes(atom, doc)
@@ -233,7 +235,7 @@ fn label_reach_bounds_label_ink_so_far_label_ends_still_hit() -> Result<(), Stri
                     assert!(
                         reach
                             .of(atom)
-                            .is_some_and(|r| atom.position.distance(corner) < r),
+                            .is_none_or(|r| atom.position.distance(corner) < r),
                         "Atom {} label ink beyond its reach",
                         atom.id
                     );

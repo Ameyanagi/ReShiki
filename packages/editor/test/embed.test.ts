@@ -1,20 +1,62 @@
-// embed() with just enough of a page to create its frame: the frame never
-// starts, so these check teardown and not the editor itself.
+// embed() with just enough of a page to create its frame and exchange
+// messages, without starting the editor itself.
 import { expect, test } from "bun:test";
 
-const listeners = new Set<unknown>();
-let frame: { src?: string } = {};
+interface FrameCall {
+  id: number;
+  method: string;
+  args: unknown[];
+}
+interface FrameEvent {
+  source: unknown;
+  origin: string;
+  data: unknown;
+}
+const listeners = new Set<(event: FrameEvent) => void>();
+const makeFrame = () => ({
+  src: "",
+  style: {},
+  remove() {},
+  contentWindow: { postMessage(_message: FrameCall, _origin: string) {} },
+});
+let frame = makeFrame();
 Object.assign(globalThis, {
   location: { href: "https://example.test/app/" },
   document: {
-    createElement: () =>
-      (frame = { style: {}, remove() {}, contentWindow: {} } as { src?: string }),
+    createElement: () => (frame = makeFrame()),
   },
-  addEventListener: (_: string, listener: unknown) => listeners.add(listener),
-  removeEventListener: (_: string, listener: unknown) => listeners.delete(listener),
+  addEventListener: (_: string, listener: (event: FrameEvent) => void) => listeners.add(listener),
+  removeEventListener: (_: string, listener: (event: FrameEvent) => void) =>
+    listeners.delete(listener),
 });
 const { embed } = await import("../src/embed.js");
 const host = { append() {} } as unknown as HTMLElement;
+const receive = (data: unknown) => {
+  const event = {
+    source: frame.contentWindow,
+    origin: new URL(frame.src).origin,
+    data,
+  };
+  listeners.forEach((listener) => listener(event));
+};
+
+test("load forwards import warnings from the frame", async () => {
+  const editor = embed(host);
+  const result = { warnings: ["First import warning", "Second import warning"] };
+  frame.contentWindow.postMessage = (message, origin) => {
+    expect(origin).toBe(new URL(frame.src).origin);
+    expect(message.method).toBe("load");
+    expect(message.args).toEqual(["CCO", "smiles"]);
+    receive({ id: message.id, result });
+  };
+  receive({ event: "ready" });
+  try {
+    expect(await editor.load("CCO", "smiles")).toEqual(result);
+  } finally {
+    editor.destroy();
+  }
+  expect(listeners.size).toBe(0);
+});
 
 test("destroy before the frame starts settles waiting calls", async () => {
   const editor = embed(host);

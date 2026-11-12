@@ -13,6 +13,13 @@ export type OutputFormat = BinaryFormat | TextFormat;
 /** Text is read as UTF-8; `cdx` input must be bytes. */
 export type Input = string | Uint8Array;
 
+export interface ReadResult {
+  /** The native ReShiki drawing (rsk), for convert(drawing, "rsk", to). */
+  drawing: string;
+  /** Import warnings, in order; empty when nothing was changed or assumed. */
+  warnings: string[];
+}
+
 export interface PngOptions {
   /** Default 1600; 1 to 8192. */
   maxWidth?: number;
@@ -26,6 +33,10 @@ export interface PngOptions {
 export function init(
   module?: string | URL | Request | Response | BufferSource | WebAssembly.Module,
 ): Promise<void>;
+
+/** Read a drawing or structure, returning its native drawing and any import
+ * warnings. Rejects with an Error carrying the app's message when unreadable. */
+export function read(data: Input, format: InputFormat): Promise<ReadResult>;
 
 /** Convert between formats. svg, png and pdf are figures as the desktop's
  * Export makes them. Rejects with an Error carrying the app's message. */

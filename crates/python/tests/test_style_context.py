@@ -205,9 +205,9 @@ def test_online_name_resolution_is_forwarded_by_bound_constructors(
     data = reshiki.Molecule.from_smiles(ASPIRIN)._data
     online = ModuleType("reshiki._online")
 
-    def from_name(name: str) -> tuple[bytes, str]:
+    def from_name(name: str) -> tuple[bytes, str, list[str]]:
         calls.append(name)
-        return data, "molecule"
+        return data, "molecule", []
 
     monkeypatch.setattr(online, "from_name", from_name, raising=False)
     monkeypatch.setitem(sys.modules, "reshiki._online", online)

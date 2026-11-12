@@ -1594,7 +1594,7 @@ fn tools() -> Vec<Command> {
         .keys(keys(Modifiers::SHIFT, "J")),
         tool("Text tool", "caption annotation label write", Tool::Text).keys("t"),
         tool("Eraser", "erase delete rubber", Tool::Erase),
-        tool("Edit points", "path nodes bezier", Tool::EditPoints),
+        tool("Edit points", "path arrow nodes bezier", Tool::EditPoints),
     ];
     for (preset, synonyms) in [
         (

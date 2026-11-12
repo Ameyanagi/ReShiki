@@ -369,6 +369,27 @@ pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Poin
     label_ink_boxes(&atom_label(a, doc))
 }
 
+/// Full-size label glyphs only (element and H), without the smaller charge,
+/// H-count or isotope scripts. A dative too short for a full head trims
+/// against these: script metrics vary by platform font and must not shrink
+/// or erase a contact.
+fn dative_trim_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
+    fn size(run: &Primitive) -> f32 {
+        match run {
+            Primitive::Text { size, .. } => *size,
+            Primitive::Opacity { primitive, .. } => size(primitive),
+            _ => 0.,
+        }
+    }
+    let full = runs.iter().map(size).fold(0., f32::max);
+    let core: Vec<_> = runs
+        .iter()
+        .filter(|run| size(run) > full * 0.9)
+        .cloned()
+        .collect();
+    label_ink_boxes(&core)
+}
+
 /// Each label glyph's ink box with the corner radius its outline leaves free.
 pub(crate) fn atom_label_ink_shapes(a: &Atom, doc: &Document) -> Vec<((Point, Point), f32)> {
     label_ink_shapes(&atom_label(a, doc))
@@ -1542,7 +1563,23 @@ pub(crate) fn bond_segment_with_faces(
     let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
     let a_boxes = boxes(a);
     let b_boxes = boxes(b);
-    let span = trimmed_span(a.position, b.position, &a_boxes, &b_boxes, margin)?;
+    let mut span = trimmed_span(a.position, b.position, &a_boxes, &b_boxes, margin)?;
+    if dative_needs_core(bond, &span) {
+        let core = |atom: &Atom, boxes: &[_]| {
+            if boxes.is_empty() {
+                vec![]
+            } else {
+                dative_trim_boxes(&atom_label(atom, doc))
+            }
+        };
+        span = trimmed_span(
+            a.position,
+            b.position,
+            &core(a, &a_boxes),
+            &core(b, &b_boxes),
+            margin,
+        )?;
+    }
     let span = if span.along <= 0.1 && rounded_connector(bond) {
         let shapes = |atom: &Atom, boxes: &[_]| {
             if boxes.is_empty() {
@@ -1564,8 +1601,16 @@ pub(crate) fn bond_segment_with_faces(
     } else {
         span
     };
-    // Keep bond_frame's existence gate, including picking's NaN rejection.
-    if span.along <= 0.1 || span.along.is_nan() {
+    if span.along.is_nan() {
+        return None;
+    }
+    // A collapsed plain dative still paints, and picks, its head.
+    if span.along <= 0.1 && dative_needs_core(bond, &span) {
+        let head = dative_head_length(span.along);
+        return Some((span.end.offset(-span.ux * head, -span.uy * head), span.end));
+    }
+    // Keep bond_frame's existence gate.
+    if span.along <= 0.1 {
         return None;
     }
     if bond.order == 2 && !bond.projection && crate::bond_joins::centered_plain_double(faces, bond)
@@ -2628,6 +2673,10 @@ struct BondFrame<'a> {
     nx: f32,
     ny: f32,
     rounded: bool,
+    /// Trimmed against full-size glyphs only (see `dative_needs_core`).
+    core: bool,
+    /// A plain dative's arrowhead length; its tip is `end`.
+    head: Option<f32>,
 }
 fn connector_shapes(scene: BondScene<'_, '_>, id: u64) -> Vec<((Point, Point), f32)> {
     if scene.label_bounds.get(&id).is_none_or(Vec::is_empty) {
@@ -2640,29 +2689,49 @@ fn connector_shapes(scene: BondScene<'_, '_>, id: u64) -> Vec<((Point, Point), f
         .unwrap_or_default()
 }
 
+/// The label ink that trims a bond at atom `id`: all of it, or only the
+/// full-size glyphs for a `core` dative.
+fn trim_boxes<'a>(
+    scene: BondScene<'a, '_>,
+    id: u64,
+    core: bool,
+) -> std::borrow::Cow<'a, [(Point, Point)]> {
+    let bounds = scene
+        .label_bounds
+        .get(&id)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    match scene.label_runs.get(&id) {
+        Some(runs) if core && !bounds.is_empty() => dative_trim_boxes(runs).into(),
+        _ => bounds.into(),
+    }
+}
+
+/// A plain dative whose label-trimmed span cannot hold a full head ignores
+/// the endpoint scripts instead, so its arrow never shrinks or vanishes (#246).
+fn dative_needs_core(b: &Bond, span: &TrimmedSpan) -> bool {
+    b.is_dative() && b.display == "plain" && span.along < DATIVE_HEAD_LENGTH
+}
+
 fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
-    let BondScene {
-        faces,
-        style,
-        label_bounds,
-        ..
-    } = scene;
+    let BondScene { faces, style, .. } = scene;
     let (Some(a), Some(z)) = (faces.atom(b.a), faces.atom(b.b)) else {
         return None;
     };
-    let span = trimmed_span(
-        a.position,
-        z.position,
-        label_bounds
-            .get(&a.id)
-            .map(Vec::as_slice)
-            .unwrap_or_default(),
-        label_bounds
-            .get(&z.id)
-            .map(Vec::as_slice)
-            .unwrap_or_default(),
-        style.world(style.margin_width_pt),
-    )?;
+    let span_with = |core| {
+        trimmed_span(
+            a.position,
+            z.position,
+            &trim_boxes(scene, a.id, core),
+            &trim_boxes(scene, z.id, core),
+            style.world(style.margin_width_pt),
+        )
+    };
+    let mut span = span_with(false)?;
+    let core = dative_needs_core(b, &span);
+    if core {
+        span = span_with(true)?;
+    }
     let (span, rounded) = if span.along <= 0.1 && rounded_connector(b) {
         recover_rounded_span(
             span,
@@ -2676,8 +2745,10 @@ fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
     } else {
         (span, false)
     };
+    // A plain dative always keeps at least its head.
+    let head = (b.is_dative() && b.display == "plain").then(|| dative_head_length(span.along));
     // Unlike bond_segment, rendering retains a NaN visible span.
-    if span.along <= 0.1 {
+    if span.along <= 0.1 && head.is_none() {
         return None;
     }
     let TrimmedSpan {
@@ -2695,6 +2766,8 @@ fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
         nx,
         ny,
         rounded,
+        core,
+        head,
     })
 }
 
@@ -2727,9 +2800,18 @@ fn push_bond(
     ink_sources: Option<&mut Vec<(DepthField, Vec<Primitive>)>>,
 ) {
     let BondScene { style, joins, .. } = scene;
-    let Some(frame) = bond_frame(scene, b) else {
+    let Some(mut frame) = bond_frame(scene, b) else {
         return;
     };
+    let tip = frame.end;
+    // A dative's rail ends inside its head, so the round cap never pokes
+    // past the tip; a span shorter than that paints the head alone.
+    let mut rail = true;
+    if let Some(head) = frame.head {
+        let inside = head * 0.6;
+        frame.end = tip.offset(-frame.ux * inside, -frame.uy * inside);
+        rail = (tip.x - frame.start.x) * frame.ux + (tip.y - frame.start.y) * frame.uy > inside;
+    }
     let BondFrame {
         start,
         end,
@@ -2742,43 +2824,45 @@ fn push_bond(
     let bond_start = out.len();
     let depth = ink_sources.is_some() || scene.opacity.has_visibility();
     let mut pieces = Vec::new();
-    match b.display.as_str() {
-        "plain" | "bold" | "wedge" if !matches!(b.order, 2 | 7) && joins.needed(b) => {
-            pieces.push(BondPiece::plain(Primitive::Polygon(
-                joins.polygon(b, start, end),
-            )));
-        }
-        "hollow_wedge" => push_hollow_wedge(scene, &mut pieces, b, start, end),
-        "hash" | "hashed" => push_hashed_wedge(scene, &mut pieces, b, frame),
-        "wavy" if b.order == 2 => {
-            let half = style.bond_length_world * style.bond_spacing_ratio / 2.0;
-            for sign in [-1.0, 1.0] {
-                pieces.push(BondPiece::plain(Primitive::Line(
-                    start.offset(nx * half * sign, ny * half * sign),
-                    end.offset(-nx * half * sign, -ny * half * sign),
-                    style.line_width(),
+    if rail {
+        match b.display.as_str() {
+            "plain" | "bold" | "wedge" if !matches!(b.order, 2 | 7) && joins.needed(b) => {
+                pieces.push(BondPiece::plain(Primitive::Polygon(
+                    joins.polygon(b, start, end),
                 )));
             }
+            "hollow_wedge" => push_hollow_wedge(scene, &mut pieces, b, start, end),
+            "hash" | "hashed" => push_hashed_wedge(scene, &mut pieces, b, frame),
+            "wavy" if b.order == 2 => {
+                let half = style.bond_length_world * style.bond_spacing_ratio / 2.0;
+                for sign in [-1.0, 1.0] {
+                    pieces.push(BondPiece::plain(Primitive::Line(
+                        start.offset(nx * half * sign, ny * half * sign),
+                        end.offset(-nx * half * sign, -ny * half * sign),
+                        style.line_width(),
+                    )));
+                }
+            }
+            "wavy" => {
+                pieces.push(BondPiece::plain(Primitive::Path {
+                    commands: crate::bonds::wavy_path(
+                        start,
+                        end,
+                        style.bond_length_world / 4.,
+                        style.line_width() * 1.25,
+                    ),
+                    style: crate::graphics::GraphicStyle {
+                        width_pt: style.line_width_pt,
+                        ..Default::default()
+                    },
+                    filled: false,
+                }));
+            }
+            _ => push_bond_rails(scene, &mut pieces, b, frame, depth),
         }
-        "wavy" => {
-            pieces.push(BondPiece::plain(Primitive::Path {
-                commands: crate::bonds::wavy_path(
-                    start,
-                    end,
-                    style.bond_length_world / 4.,
-                    style.line_width() * 1.25,
-                ),
-                style: crate::graphics::GraphicStyle {
-                    width_pt: style.line_width_pt,
-                    ..Default::default()
-                },
-                filled: false,
-            }));
-        }
-        _ => push_bond_rails(scene, &mut pieces, b, frame, depth),
     }
-    if b.order == 5 && b.display == "plain" {
-        head(&mut pieces, end, uy.atan2(ux), false, style.line_width());
+    if let Some(length) = frame.head {
+        head(&mut pieces, tip, ux, uy, length);
     }
     finish_bond_paint(scene, out, b, bond_index, bond_start, pieces, ink_sources);
     collect_joined_outlines(scene, out, joined, bond_start, b);
@@ -2909,7 +2993,6 @@ fn push_bond_rails(
         style,
         arcs,
         circles,
-        label_bounds,
         joins,
         faces,
         ..
@@ -2924,6 +3007,8 @@ fn push_bond_rails(
         nx,
         ny,
         rounded,
+        core,
+        ..
     } = frame;
     // Centered doubles meet upright labels on two distinct rays. Starting
     // from the clipped backbone would retain its empty box-corner gap even
@@ -3018,10 +3103,7 @@ fn push_bond_rails(
                 first,
                 ux,
                 uy,
-                label_bounds
-                    .get(&a.id)
-                    .map(Vec::as_slice)
-                    .unwrap_or_default(),
+                &trim_boxes(scene, a.id, core),
                 available,
                 style.world(style.margin_width_pt),
             )
@@ -3042,10 +3124,7 @@ fn push_bond_rails(
                 last,
                 -ux,
                 -uy,
-                label_bounds
-                    .get(&z.id)
-                    .map(Vec::as_slice)
-                    .unwrap_or_default(),
+                &trim_boxes(scene, z.id, core),
                 available,
                 style.world(style.margin_width_pt),
             )
@@ -3230,25 +3309,25 @@ fn take_opacity(primitive: Primitive) -> (f32, Primitive) {
         primitive => (1., primitive),
     }
 }
-/// Dative arrowhead extents in world units: length along the bond and half
-/// width across it. Generic ink bounds reserve the same wings.
+/// Full dative arrowhead extents in world units: length along the bond and
+/// half width across it. Generic ink bounds reserve the same wings.
 pub(crate) const DATIVE_HEAD_LENGTH: f32 = 10.;
 pub(crate) const DATIVE_HEAD_HALF_WIDTH: f32 = 3.5;
 
-fn head(pieces: &mut Vec<BondPiece>, end: Point, angle: f32, half: bool, width: f32) {
-    let a = end.offset(
-        -angle.cos() * DATIVE_HEAD_LENGTH - angle.sin() * DATIVE_HEAD_HALF_WIDTH,
-        -angle.sin() * DATIVE_HEAD_LENGTH + angle.cos() * DATIVE_HEAD_HALF_WIDTH,
-    );
-    if half {
-        pieces.push(BondPiece::plain(Primitive::Line(end, a, width)));
-    } else {
-        let b = end.offset(
-            -angle.cos() * DATIVE_HEAD_LENGTH + angle.sin() * DATIVE_HEAD_HALF_WIDTH,
-            -angle.sin() * DATIVE_HEAD_LENGTH - angle.cos() * DATIVE_HEAD_HALF_WIDTH,
-        );
-        pieces.push(BondPiece::plain(Primitive::Polygon(vec![end, a, b])));
-    }
+/// A dative head never exceeds 0.45 of the visible span, so a short contact
+/// keeps a readable shaft; a collapsed span still gets a visible head.
+pub(crate) fn dative_head_length(span: f32) -> f32 {
+    (span * 0.45).clamp(DATIVE_HEAD_LENGTH * 0.4, DATIVE_HEAD_LENGTH)
+}
+
+fn head(pieces: &mut Vec<BondPiece>, tip: Point, ux: f32, uy: f32, length: f32) {
+    let half = length * DATIVE_HEAD_HALF_WIDTH / DATIVE_HEAD_LENGTH;
+    let base = tip.offset(-ux * length, -uy * length);
+    pieces.push(BondPiece::plain(Primitive::Polygon(vec![
+        tip,
+        base.offset(-uy * half, ux * half),
+        base.offset(uy * half, -ux * half),
+    ])));
 }
 pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
     let mut points = vec![];

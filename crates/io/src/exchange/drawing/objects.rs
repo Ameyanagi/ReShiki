@@ -79,7 +79,7 @@ impl Writer<'_> {
                         y: (start.y + end.y + end.x - start.x) / 2.,
                     })
                 });
-            let curved = control.is_some() || cubic.is_some();
+            let curved = !a.nodes.is_empty() || control.is_some() || cubic.is_some();
             if s.pattern == LinePattern::Dotted {
                 return Err(invalid("Dotted arrows require native or image export"));
             }
@@ -167,7 +167,21 @@ impl Writer<'_> {
                     .set(n, "ArrowShaftSpacing", integer(style_real(s.gap_pt) * 100.))?;
             }
             if curved {
-                let points = if let Some([a, b]) = cubic {
+                let points = if !a.nodes.is_empty() {
+                    let [departure, arrival] =
+                        cubic.ok_or_else(|| invalid("Missing curved arrow controls"))?;
+                    let mut points = Vec::with_capacity(3 * (a.nodes.len() + 2));
+                    points.extend([start, start, departure]);
+                    for node in &a.nodes {
+                        points.extend([
+                            P::from(node.controls[0]),
+                            P::from(node.point),
+                            P::from(node.controls[1]),
+                        ]);
+                    }
+                    points.extend([arrival, end, end]);
+                    points
+                } else if let Some([a, b]) = cubic {
                     vec![start, start, a, b, end, end]
                 } else if let Some(c) = control {
                     if a.kind == "bent" {

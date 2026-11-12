@@ -136,6 +136,8 @@ struct Part {
     labels: Vec<Option<String>>,
     indices: Vec<usize>,
     rings: Vec<bool>,
+    queries: Vec<bool>,
+    positions: Vec<usize>,
 }
 struct Finished {
     imported: molecule::Imported,
@@ -213,8 +215,13 @@ fn stereo_groups(parts: &mut [&mut Finished]) -> Result<()> {
 }
 
 impl Part {
-    fn read(text: &str, count: &mut usize) -> Result<Self> {
-        let parsed = molecule::parse(text)?;
+    fn read(text: &str, count: &mut usize, partial: bool) -> Result<Self> {
+        let parsed = if partial {
+            molecule::parse_for_import(text)?
+        } else {
+            molecule::parse(text)?
+        };
+        let start = *count;
         if parsed.graph.atoms.is_empty() {
             return Err(invalid("Empty participant"));
         }
@@ -231,6 +238,8 @@ impl Part {
             labels: parsed.dummy_labels,
             indices: parsed.bond_indices,
             rings: parsed.ring_bonds,
+            queries: parsed.query_bonds,
+            positions: (start..*count).collect(),
         })
     }
     fn finish(
@@ -239,6 +248,7 @@ impl Part {
         atoms: &mut usize,
         bonds: &mut usize,
         fragments: &mut usize,
+        partial: bool,
     ) -> Result<Finished> {
         let topology = cx::Topology {
             atoms: self.graph.atoms.len(),
@@ -270,7 +280,7 @@ impl Part {
             .checked_add(topology.bonds.len())
             .ok_or(ReadError::Limit)?;
         let parsed = molecule::Parsed {
-            query_bonds: vec![false; self.graph.bonds.len()],
+            query_bonds: self.queries,
             graph: self.graph,
             metadata: self.metadata,
             directions: self.directions,
@@ -286,7 +296,12 @@ impl Part {
             })
             .collect::<HashSet<_>>()
             .len();
-        let imported = molecule::reaction_part(parsed, events).map_err(|error| match error {
+        let imported = if partial {
+            molecule::reaction_part_partial(parsed, events, &self.positions)
+        } else {
+            molecule::reaction_part(parsed, events)
+        };
+        let imported = imported.map_err(|error| match error {
             molecule::Error::Sanitization(error) => ReadError::Sanitization(error),
             error => ReadError::Molecule(error),
         })?;
@@ -336,6 +351,8 @@ impl Part {
                 labels: Vec::new(),
                 indices: Vec::new(),
                 rings: Vec::new(),
+                queries: Vec::new(),
+                positions: Vec::new(),
             });
         }
         let mut indices = vec![0; n];
@@ -348,6 +365,7 @@ impl Part {
                 .atoms
                 .push(at(&self.metadata.atoms, i)?.clone());
             part.labels.push(at(&self.labels, i)?.clone());
+            part.positions.push(*at(&self.positions, i)?);
         }
         for (i, mut bond) in self.graph.bonds.into_iter().enumerate() {
             let id = at(&groups, bond.a)?.ok_or_else(|| invalid("Missing agent component"))?;
@@ -368,6 +386,7 @@ impl Part {
             part.directions.push(*at(&self.directions, i)?);
             part.indices.push(*at(&self.indices, i)?);
             part.rings.push(*at(&self.rings, i)?);
+            part.queries.push(*at(&self.queries, i)?);
         }
         Ok(parts)
     }
@@ -376,6 +395,14 @@ impl Part {
 /// Read reaction SMILES participants, including global CX annotations.
 /// Drawing layout and application import integration remain separate.
 pub fn read(text: &str) -> Result<SmilesReaction> {
+    read_with(text, false)
+}
+
+pub(crate) fn read_partial(text: &str) -> Result<SmilesReaction> {
+    read_with(text, true)
+}
+
+fn read_with(text: &str, partial: bool) -> Result<SmilesReaction> {
     if text.len() > 16 * 1024 * 1024 {
         return Err(ReadError::Limit);
     }
@@ -417,19 +444,28 @@ pub fn read(text: &str) -> Result<SmilesReaction> {
         return Err(invalid("A reaction needs reactants and products"));
     }
     let mut count = 0;
-    let mut row = |parts: Vec<&str>| -> Result<Vec<Part>> {
+    let row = |parts: Vec<&str>, count: &mut usize| -> Result<Vec<Part>> {
         parts
             .into_iter()
-            .map(|p| Part::read(p, &mut count))
+            .map(|p| Part::read(p, count, partial))
             .collect()
     };
-    let reactants = row(reactants)?;
-    let products = row(products)?;
+    let reactants = row(reactants, &mut count)?;
     let agents = text.get(left + 1..right).ok_or(ReadError::Limit)?;
-    let agents = if agents.is_empty() {
-        Vec::new()
+    let agent_row = |count: &mut usize| -> Result<Vec<Part>> {
+        if agents.is_empty() {
+            Ok(Vec::new())
+        } else {
+            Part::read(agents, count, partial)?.fragments()
+        }
+    };
+    // Partial notices use textual atom positions; retain strict parse/error order.
+    let (products, agents) = if partial {
+        let agents = agent_row(&mut count)?;
+        (row(products, &mut count)?, agents)
     } else {
-        Part::read(agents, &mut count)?.fragments()?
+        let products = row(products, &mut count)?;
+        (products, agent_row(&mut count)?)
     };
     // Native CX indices traverse reactants, then agents, then products.
     // Bound repeated syntax scans when many tiny participants share a suffix.
@@ -444,7 +480,7 @@ pub fn read(text: &str) -> Result<SmilesReaction> {
     let mut finish = |parts: Vec<Part>| -> Result<Vec<Finished>> {
         parts
             .into_iter()
-            .map(|p| p.finish(suffix, &mut atoms, &mut bonds, &mut fragments))
+            .map(|p| p.finish(suffix, &mut atoms, &mut bonds, &mut fragments, partial))
             .collect()
     };
     let mut reactants = finish(reactants)?;

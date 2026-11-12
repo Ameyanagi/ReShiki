@@ -303,6 +303,8 @@ fn attached_gap_measure_follows_the_reconciled_arrow_preview_not_the_raw_cursor(
         gesture: Some(Gesture::ArrowHandle {
             id: 1,
             index: reshiki::arrows::ArrowHandle::End.index(),
+            free: false,
+            grab: World::default(),
         }),
         cursor: Some(canvas.camera.screen(requested, bounds) + Vector::new(bounds.x, bounds.y)),
         ..Default::default()
