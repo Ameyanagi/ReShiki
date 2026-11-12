@@ -952,10 +952,7 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     }
     annotations.atropisomers(&mut parsed)?;
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
-    if partial
-        && prepared.state.metadata.groups.is_empty()
-        && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)?
-    {
+    if partial && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)? {
         prepared.state = stereo::perception::perceive(
             &prepared.state,
             stereo::perception::Options {
