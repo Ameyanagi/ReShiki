@@ -80,14 +80,14 @@ fn molecular_weight_precision_defaults_to_three_decimals_and_survives_reload() {
 }
 
 #[test]
-fn editable_png_export_defaults_off_and_survives_reload() {
-    assert!(!Settings::default().export_editable_drawing);
+fn editable_png_export_defaults_on_and_survives_reload() {
+    assert!(Settings::default().export_editable_drawing);
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("appearance.json");
     std::fs::write(&path, r#"{"mode":"dark","smart_guides":false}"#).unwrap();
     let mut settings = Settings::load_from(&path);
-    assert!(!settings.export_editable_drawing);
-    for editable in [true, false] {
+    assert!(settings.export_editable_drawing);
+    for editable in [false, true] {
         settings.export_editable_drawing = editable;
         settings.save_to(&path).unwrap();
         let loaded = Settings::load_from(&path);

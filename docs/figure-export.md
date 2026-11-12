@@ -19,9 +19,9 @@ Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Exp
 A PNG picture from ReShiki can carry the ReShiki drawing inside the file. Paste that picture into ReShiki, drop the file on the window, or open it with **File → Open**, and you get the editable drawing back instead of a picture. **Import → Paste picture** still inserts the image.
 
 - **Copy** and **Copy image** always put the drawing in their PNG picture.
-- **File export** adds it only when **Include editable drawing** is on, below the export button. It is off by default, and ReShiki remembers your choice.
+- **File export** adds it when **Include editable drawing** is on, below the export button. It is on by default, and ReShiki remembers your choice.
 
-The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so leave **Include editable drawing** off for figures you send to a journal or publish.
+The drawing inside a picture holds exactly what the picture shows: the selected objects for a copy of a selection, and the whole drawing for a file export. It has no file paths, user names, recent colors, import notes, page setup, recovery data or Undo history. Anyone who gets the picture can open that drawing in ReShiki, so turn **Include editable drawing** off for figures you send to a journal or publish.
 
 A drawing larger than 2 MB compressed, usually one with large embedded photos, is not put in pictures. The status bar says so, and the file or clipboard picture is still written. Normal **Copy** keeps the editable drawing for ReShiki either way.
 
