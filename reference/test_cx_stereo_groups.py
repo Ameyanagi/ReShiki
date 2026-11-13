@@ -4,6 +4,9 @@ import sys
 import unittest
 
 from rdkit import Chem
+from rdkit.Chem import rdChemReactions, rdDepictor
+from reaction_drawing_reference import expected as reaction_drawing
+from reaction_drawing_reference import stereo_group_labels
 from smiles_read_reference import cases, prepared_snapshot, restored_snapshot
 from support.cx_stereo_groups import native_keys_wrap, query_renumbering, renumber
 
@@ -114,6 +117,34 @@ class SmilesReadStereoGroups(unittest.TestCase):
         expected = prepared_snapshot(mol)
         expected["metadata"]["groups"][1]["read_id"] = 2147483649
         self.assertEqual(restored_snapshot(mol, text), expected)
+
+
+class ReactionDrawingStereoGroups(unittest.TestCase):
+    """The drawing oracle labels the groups the frozen converter refused (#766)."""
+
+    def test_labels_follow_read_ids_then_the_lowest_free_numbers(self):
+        mol = Chem.MolFromSmiles("F[C@H](Cl)[C@@H](Br)[C@H](N)O |a:1,o3:3,o:5|")
+        taken = {("or", 1)}
+        self.assertEqual(stereo_group_labels(mol, taken), {3: ("or", 3), 5: ("or", 2)})
+        self.assertEqual(taken, {("or", 1), ("or", 2), ("or", 3)})
+
+    def test_participants_take_independent_labels(self):
+        mol = Chem.MolFromSmiles("F[C@H](Cl)[C@@H](Br)I |&1:1,3|")
+        rdDepictor.Compute2DCoords(mol)
+        reaction = rdChemReactions.ChemicalReaction()
+        reaction.AddReactantTemplate(mol)
+        reaction.AddProductTemplate(mol)
+        drawing = reaction_drawing(rdChemReactions.ReactionToV3KRxnBlock(reaction))
+        and1, and2 = dict(kind="and", number=1), dict(kind="and", number=2)
+        self.assertEqual(
+            [atom.get("stereo_group") for atom in drawing["document"]["atoms"]],
+            [None, and1, None, and1, None, None, None, and2, None, and2, None, None],
+        )
+        for participant in drawing["participants"]:
+            groups = participant["molecule"]["state"]["metadata"]["groups"]
+            self.assertEqual(
+                [(g["kind"], g["read_id"], g["atoms"]) for g in groups], [(2, 1, [1, 3])]
+            )
 
 
 if __name__ == "__main__":

@@ -572,3 +572,14 @@ fn three_or_four_radical_electrons_raise_the_saved_version() {
         "Invalid atom radical count or mark position"
     );
 }
+
+#[test]
+fn custom_crossing_clearance_raises_the_saved_version() {
+    let mut doc = Document::default();
+    assert_eq!(doc.file_version(), DISTANCE_BONDS);
+    doc.drawing_style.crossing_clearance_pt = 0.4;
+    assert_eq!(doc.file_version(), crate::document::MULTI_NODE_ARROWS);
+    let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.version, crate::document::MULTI_NODE_ARROWS);
+    assert_eq!(reopened.drawing_style.crossing_clearance_pt, 0.4);
+}

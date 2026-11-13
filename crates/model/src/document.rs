@@ -247,7 +247,8 @@ pub const ORTEP: u32 = 32;
 pub const MODEL_POLISH: u32 = 33;
 /// Collapsed residue groups with two attachment atoms.
 pub const RESIDUE_GROUPS: u32 = 34;
-/// Arrows with interior nodes.
+/// Arrows with interior nodes, or a custom bond-crossing clearance (which
+/// shipped in the same release, so older readers ask for an update).
 pub const MULTI_NODE_ARROWS: u32 = 35;
 /// Enhanced stereo groups (ABS / AND / OR) on atoms.
 pub const STEREO_GROUPS: u32 = 36;
@@ -257,9 +258,9 @@ pub const RADICAL_ELECTRONS: u32 = 37;
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32, model polish requires version 33 or two-sided groups
-/// require version 34, arrows with interior nodes require version 35, stereo
-/// groups require version 36, or atoms with three or four radical electrons
-/// require version 37.
+/// require version 34, arrows with interior nodes or a custom crossing
+/// clearance require version 35, stereo groups require version 36, or atoms
+/// with three or four radical electrons require version 37.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -292,7 +293,7 @@ pub const RADICAL_ELECTRONS: u32 = 37;
 /// | 32 | Thermal ellipsoids and molecule-only crystal display (#417). |
 /// | 33 | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
 /// | 34 | Collapsed groups with two attachment atoms (#870). |
-/// | 35 | Arrows with interior nodes (#761). |
+/// | 35 | Arrows with interior nodes (#761); also used for a custom crossing clearance (#1111). |
 /// | 36 | Enhanced stereo groups (#766). |
 /// | 37 | Three or four radical electrons on an atom. |
 pub const VERSION: u32 = 37;
@@ -466,7 +467,11 @@ impl Document {
             RADICAL_ELECTRONS
         } else if self.atoms.iter().any(|a| a.stereo_group.is_some()) {
             STEREO_GROUPS
-        } else if self.arrows.iter().any(|arrow| !arrow.nodes.is_empty()) {
+        } else if self.arrows.iter().any(|arrow| !arrow.nodes.is_empty())
+            || !crate::style::is_default_crossing_clearance(
+                &self.drawing_style.crossing_clearance_pt,
+            )
+        {
             MULTI_NODE_ARROWS
         } else if self.abbreviations.iter().any(|group| group.exit.is_some()) {
             RESIDUE_GROUPS

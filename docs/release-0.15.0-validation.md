@@ -13,25 +13,28 @@ follows) and `Cargo.lock`, moves the unreleased changes into the
 `.github/release-notes/v0.15.0.md` and updates the install guide's file
 compatibility section. The npm package takes its version from `Cargo.toml`
 when the tag publishes it, so `packages/editor/package.json` is unchanged.
-The source is `main` at `d400b928`, the merge of
-[PR #1168](https://github.com/Ameyanagi/ReShiki/pull/1168).
+The source is `main` at `3c59cd4a`, the merge of
+[PR #1173](https://github.com/Ameyanagi/ReShiki/pull/1173).
 
 `VERSION` is 37 in `crates/model/src/document.rs`. `Document::file_version`
 saves each drawing at the version of the newest feature it uses: 37 for an
 atom with more than two radical electrons, 36 for an atom in a stereo group,
-35 for an arrow with interior nodes, 34 for a two-sided residue group, 33 for
+35 for an arrow with interior nodes or a drawing style whose crossing
+clearance is not 1.1 pt, 34 for a two-sided residue group, 33 for
 a generated 3D model, model atom labels or a plain XYZ model, 32 for ORTEP
 settings and 31 for a custom reaction-label gap. Any other drawing is saved as
 version 30. ReShiki 0.14.0 reads up to version 34, and 0.13.1 up to 30.
 
-A drawing style with a crossing clearance other than 1.1 pt adds
-`crossing_clearance_pt` without raising the version. ReShiki 0.14.0's
-`DrawingStyle` refuses unknown fields, so 0.14.0 cannot open such a drawing or
-`.reshiki-style` file; see [Compatibility](#compatibility).
+Before [PR #1171](https://github.com/Ameyanagi/ReShiki/pull/1171), a custom
+crossing clearance was saved as version 30, which 0.14.0 refused with an
+unknown-field error. It now saves as version 35, so 0.13.1 and 0.14.0 ask for
+an update. `.reshiki-style` files have no document version: 0.14.0's
+`DrawingStyle` refuses unknown fields, so 0.14.0 cannot load a style file with
+a custom crossing clearance; see [Compatibility](#compatibility).
 
 ## Automated checks
 
-These ran locally on the release preparation branch, on macOS arm64, with
+These ran locally on the release preparation branch after merging `3c59cd4a`, on macOS arm64, with
 `RESHIKI_INCHI_HELPER` and `RESHIKI_NAMING_HELPER` set to the debug build,
 `RESHIKI_REQUIRE_INCHI_HELPER=1` and `RESHIKI_DATA_DIR` set to an empty
 temporary folder:
@@ -49,7 +52,7 @@ temporary folder:
 | Release Python modules     | `python -m unittest tests.test_release tests.test_prepare_nightly tests.test_release_downloads` | 28 passed                                                                     |
 | JavaScript format and lint | `bun run format:check`, `bun run lint:js`                                                       | Passed                                                                        |
 | Documentation              | `bun run docs:check`                                                                            | 0 errors, 0 warnings, 0 hints                                                 |
-| Website and links          | `bun run docs:build`                                                                            | 15,102 local links/assets, llms.txt, agent-api.txt and 1,360 colours verified |
+| Website and links          | `bun run docs:build`                                                                            | 15,129 local links/assets, llms.txt, agent-api.txt and 1,360 colours verified |
 
 The pull request's Checks workflow runs the native, browser (wasm32),
 Python and documentation jobs again; its results are on the pull request.
@@ -98,53 +101,33 @@ The maintainer runs these on a manual **Release builds** run of the merged
 ## Release build
 
 Manual **Release builds**
-[run 43372643607](https://github.com/Ameyanagi/ReShiki/actions/runs/43372643607)
-at `d400b928`.
+[run 43400458472](https://github.com/Ameyanagi/ReShiki/actions/runs/43400458472)
+at `3c59cd4a`: **pending**.
 
-**Failed.** Five of the six platform packages built and passed their checks:
-macOS arm64, Windows x64, Windows ARM64, Linux x64 and Linux arm64. The macOS
-x64 job failed in **Test native chemistry on Intel macOS**: `reshiki-io` had
-634 passed and 2 failed, both only on Intel macOS:
-
-- `engine::native_import::atrop_tests::coupled_axes_import_warns_exactly_for_missing_stereo`:
-  "Labels changed on re-preparation".
-- `engine::native_import::template_retry::tests::a_template_that_increases_collisions_is_not_published`:
-  4 collisions where the test expects 2.
-
-These need a fix on `main` and a new **Release builds** run before the tag.
+An earlier run at `d400b928`,
+[run 43372643607](https://github.com/Ameyanagi/ReShiki/actions/runs/43372643607),
+failed only on macOS x64: two `reshiki-io` native-import tests failed on Intel
+macOS. [PR #1173](https://github.com/Ameyanagi/ReShiki/pull/1173) fixed them.
 
 ## Live RDKit reference suite
 
 The complete live reference tests gate publication in `release.yml`.
 **Checks** with `live_reference=true`
-[run 43372640285](https://github.com/Ameyanagi/ReShiki/actions/runs/43372640285)
-at `d400b928` runs them on macOS arm64, Linux x64 and Windows x64.
+[run 43400453350](https://github.com/Ameyanagi/ReShiki/actions/runs/43400453350)
+at `3c59cd4a` runs them on macOS arm64, Linux x64 and Windows x64: **pending**.
 
-**Not passed; still running when this record was written.** Two shards had
-already failed:
-
-- **Linux x64, shard 2:** `reaction_drawing` failed in
-  `reaction_drawings_match_native_scene_assembly`. Two RXN fixtures with
-  enhanced stereo groups, `molecule/0/source/two_centers_and.mol` and
-  `molecule/1/source/two_centers_or.mol`, now import, while the frozen
-  reference still refuses them ("Enhanced stereo groups are not supported yet;
-  import was cancelled."). This is the intended change from
-  [PR #1141](https://github.com/Ameyanagi/ReShiki/pull/1141); the reference
-  needs to accept it.
-- **Windows x64, shard 3:** `reaction_smiles` failed in
-  `cx_reaction_smiles_preserves_global_annotation_targets` with 60 mismatches.
-  For large CXSMILES stereo-group numbers (`cx/syntax/10218`, `10219`, `10225`
-  and others) the group `read_id` is 2147483649 or 4294967295 in ReShiki and
-  2147483647 in RDKit on Windows.
-
-The other Linux x64 shards passed. The macOS arm64 and the remaining Windows
-x64 shards were still running.
+An earlier run at `d400b928`,
+[run 43372640285](https://github.com/Ameyanagi/ReShiki/actions/runs/43372640285),
+failed in the reference harness: RXN files with stereo groups, which now
+import, and Windows CXSMILES stereo-group numbers above the 32-bit range.
+[PR #1172](https://github.com/Ameyanagi/ReShiki/pull/1172) fixed both. One
+macOS shard also failed when its artifact upload hit a runner network error.
 
 ## Focus after closing reviews
 
 Checked on 13 November 2026 on macOS arm64 with a release build
-(`cargo build --release --locked --bin reshiki`) of `main` at `d400b928`, the
-same code as the release branch apart from the version bump. The binary's
+(`cargo build --release --locked --bin reshiki`) of `main` at `d400b928`. The
+release fixes merged after it (#1171–#1173) do not touch focus handling. The binary's
 SHA-256 is `9b4a87c6ac88585947a69a0996c05e7013deb6c4498ebe5c10efad987ce7287c`.
 It ran in an app bundle whose `RESHIKI_DATA_DIR` pointed at an empty folder.
 Each case started with part of the drawing selected. After the panel closed,
@@ -186,8 +169,12 @@ the published 0.14.0 macOS arm64 download:
 | Drawing                                            | 0.15.0 | 0.14.0                                                                                          |
 | -------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------- |
 | Version 30, default style                          | Opens  | Opens                                                                                           |
-| Version 30, style with `crossing_clearance_pt` 0.5 | Opens  | Refused: "Could not open document: unknown field `crossing_clearance_pt`, expected one of …"    |
+| Version 35, style with `crossing_clearance_pt` 0.5 | Opens  | Refused: "This drawing was made with a newer version of ReShiki (document version 35). Update…" |
 | Version 36 header                                  | Opens  | Refused: "This drawing was made with a newer version of ReShiki (document version 36). Update…" |
 
-The style-file reader in 0.14.0 (`document_styles::load_bytes`) parses the same
-`DrawingStyle`, so a `.reshiki-style` file with the field is refused there too.
+The version 35 row is the version that `file_version` gives such a drawing
+since #1171. The 0.14.0 CLI cannot load `.reshiki-style` files, so the
+style-file case was not run. From the code: 0.14.0's
+`document_styles::load_bytes`, used by **Load drawing style**, parses the same
+`DrawingStyle` with `deny_unknown_fields`, so it reports "Invalid drawing
+style: unknown field `crossing_clearance_pt`, …".

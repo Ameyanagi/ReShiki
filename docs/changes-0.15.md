@@ -21,27 +21,23 @@ the version of the newest feature in the table that the drawing uses, or
 use version 30 and open in ReShiki 0.13.1 and 0.14.0. The newest version is
 **37**.
 
-| Version | Feature in the drawing                                                                          | Opens in |
-| ------- | ----------------------------------------------------------------------------------------------- | -------- |
-| 31      | A reaction label with a custom gap to its arrow                                                 | 0.14.0   |
-| 32      | ORTEP thermal ellipsoids or molecule-only display on a crystal model                            | 0.14.0   |
-| 33      | A 3D model generated from a structure in 0.14.0 or later, 3D atom labels, or a plain XYZ model  | 0.14.0   |
-| 34      | An amino-acid residue collapsed with two attachment points, such as `-Ala-` between Boc and OMe | 0.14.0   |
-| 35      | An arrow with nodes in the middle                                                               | 0.15.0   |
-| 36      | A stereocentre in an AND or OR stereo group                                                     | 0.15.0   |
-| 37      | An atom with three or four unpaired electrons, such as `[C]` or `[CH]` from SMILES              | 0.15.0   |
+| Version | Feature in the drawing                                                                                | Opens in |
+| ------- | ----------------------------------------------------------------------------------------------------- | -------- |
+| 31      | A reaction label with a custom gap to its arrow                                                       | 0.14.0   |
+| 32      | ORTEP thermal ellipsoids or molecule-only display on a crystal model                                  | 0.14.0   |
+| 33      | A 3D model generated from a structure in 0.14.0 or later, 3D atom labels, or a plain XYZ model        | 0.14.0   |
+| 34      | An amino-acid residue collapsed with two attachment points, such as `-Ala-` between Boc and OMe       | 0.14.0   |
+| 35      | An arrow with nodes in the middle, or a drawing style with a **Crossing clearance** other than 1.1 pt | 0.15.0   |
+| 36      | A stereocentre in an AND or OR stereo group                                                           | 0.15.0   |
+| 37      | An atom with three or four unpaired electrons, such as `[C]` or `[CH]` from SMILES                    | 0.15.0   |
 
 ReShiki 0.14.0 and earlier say that a version 35–37 drawing was made with a
 newer version and ask you to update. Older drawings still open in 0.15.0.
 
-Two new settings are saved without raising the version:
-
-- A **Crossing clearance** other than the default 1.1 pt is stored in the
-  drawing's style. ReShiki 0.14.0 and earlier cannot open such a drawing or
-  `.reshiki-style` file: they report an unknown field `crossing_clearance_pt`
-  instead of asking you to update. Set the clearance back to 1.1 pt before
-  you save a copy for an older version.
-- A moved polymer repeat label opens in 0.14.0 at its automatic position.
+A `.reshiki-style` file has no document version. One with a **Crossing
+clearance** other than 1.1 pt cannot be loaded by ReShiki 0.14.0 or earlier,
+which report an unknown field `crossing_clearance_pt`. A moved polymer repeat
+label does not raise the version; it opens in 0.14.0 at its automatic position.
 
 If you share files with someone on an older version, keep a copy saved by
 that version.
@@ -142,6 +138,11 @@ this release are by @Ameyanagi.
     `Properties` now say that the axial configuration was dropped
     ([#1089](https://github.com/Ameyanagi/ReShiki/pull/1089); fixes
     [issue #1007](https://github.com/Ameyanagi/ReShiki/issues/1007)).
+- Importing an atropisomer whose axis wedge sits on a ring amide nitrogen
+  gives that nitrogen the same R/S label at import that **Analyze**, export and
+  reopening the drawing compute from the wedges. Before, the label appeared
+  only after the next analysis
+  ([#1173](https://github.com/Ameyanagi/ReShiki/pull/1173)).
 - An allene no longer keeps a false configuration when another component of
   the drawing makes CIP labelling fail
   ([#1085](https://github.com/Ameyanagi/ReShiki/pull/1085); fixes
@@ -259,8 +260,9 @@ this release are by @Ameyanagi.
 - **Crossing clearance.** **Properties → Drawing style → Edit drawing style… →
   Advanced stroke settings → Crossing clearance** sets the gap where a rear
   bond passes behind a front one, from 0 to 12 pt. The default, 1.1 pt, draws
-  as before. The Python package takes `crossing_clearance`; binary CDX reopens
-  at 1.1 pt. See [File compatibility](#file-compatibility).
+  as before. A drawing with another clearance saves as document version 35.
+  The Python package takes `crossing_clearance`; binary CDX reopens at 1.1 pt.
+  See [File compatibility](#file-compatibility).
   [Drawing styles](drawing-styles.md) ·
   [PR #1111](https://github.com/Ameyanagi/ReShiki/pull/1111); fixes
   [issue #1070](https://github.com/Ameyanagi/ReShiki/issues/1070).

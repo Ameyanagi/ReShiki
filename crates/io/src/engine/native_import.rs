@@ -646,7 +646,7 @@ fn finish_molecule(
                 }
             }
             let read_centres = centres(&read);
-            for id in source_centres {
+            for &id in &source_centres {
                 if !read_centres.contains(&id) {
                     let atom = chemistry::stereo_lint::atom_name(&visible, id);
                     warnings.push(format!(
@@ -656,8 +656,10 @@ fn finish_molecule(
             }
             // Labels and the first analysis must describe the same wedges as
             // later preparation/export. Preserve the finished drawing's paint.
-            // A drawing that shows every source element stays as finished.
-            if changed || !warnings.is_empty() {
+            // A drawing that shows exactly the source elements stays as
+            // finished. An axis wedge at a ring amide N reads back as a centre
+            // the source lacks, so its label must come from the readback too.
+            if changed || !warnings.is_empty() || read_centres != source_centres {
                 let drawing = molecular::for_drawing(&read, &visible)?;
                 let labels = drawing.labels()?;
                 document = drawing.finish_preserving(labels, &visible)?;

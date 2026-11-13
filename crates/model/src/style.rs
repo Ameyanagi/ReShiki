@@ -85,7 +85,7 @@ pub const CROSSING_CLEARANCE_PT: f32 = 1.1;
 fn default_crossing_clearance() -> f32 {
     CROSSING_CLEARANCE_PT
 }
-fn is_default_crossing_clearance(value: &f32) -> bool {
+pub(crate) fn is_default_crossing_clearance(value: &f32) -> bool {
     value.to_bits() == CROSSING_CLEARANCE_PT.to_bits()
 }
 impl Default for DrawingStyle {
