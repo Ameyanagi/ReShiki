@@ -16,7 +16,7 @@ if TYPE_CHECKING or __package__:
     from .molfile_import_reference import native_molecules
     from .molfile_restrictions_reference import generic_restriction
     from .perception_reference import snapshot
-    from .support.cx_stereo_groups import query_renumbering
+    from .support.cx_stereo_groups import query_renumbering, unwrapped_collision
     from .valence_reference import ORDERS
 else:
     from molfile_groups_reference import v3 as grouped_molecule
@@ -24,10 +24,13 @@ else:
     from molfile_import_reference import native_molecules
     from molfile_restrictions_reference import generic_restriction
     from perception_reference import snapshot
-    from support.cx_stereo_groups import query_renumbering
+    from support.cx_stereo_groups import query_renumbering, unwrapped_collision
     from valence_reference import ORDERS
 
     from engine.reactions import is_ordinary_atom_query
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 
 def read(text):
@@ -113,6 +116,7 @@ def emit(name, text):
                 renumbered=query_renumbering(
                     text, expected is not None, read, "Query reaction atom"
                 ),
+                unwrapped=unwrapped_collision(text),
             )
         )
     )

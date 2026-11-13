@@ -1,8 +1,16 @@
 //! Exact complete-layout comparisons against the original public native API.
+#[path = "support/ring_basis.rs"]
+#[allow(dead_code)]
+mod ring_basis;
+
 use anyhow::Context;
 use reshiki::chemistry::{
     depict::{self, attachment::AtomData, geometry::Coordinates},
-    stereo::{perception::State, wedging::Conformer},
+    rings,
+    stereo::{
+        perception::{RingKind, State},
+        wedging::Conformer,
+    },
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -106,6 +114,20 @@ fn equal_conformer(actual: &Conformer, expected: &NativeConformer) -> anyhow::Re
     }
     Ok(count)
 }
+/// ReShiki keeps its Figueras basis; a layout may then differ from RDKit's
+/// (reference/README.md, "Deliberate differences").
+fn other_sssr_basis(state: &State) -> anyhow::Result<bool> {
+    // Some inputs deliberately omit the original ring cache.
+    if state.rings.kind != RingKind::Symmetric || state.rings.atoms.is_empty() {
+        return Ok(false);
+    }
+    let options = rings::Options {
+        include_dative: true,
+        include_hydrogen: false,
+    };
+    let ours = rings::perceive(&state.graph, options)?;
+    Ok(ring_basis::basis(&ours.atoms) != ring_basis::basis(&state.rings.atoms))
+}
 fn compare(case: &Case) -> anyhow::Result<(bool, usize)> {
     let options = &case.options;
     anyhow::ensure!(
@@ -125,10 +147,12 @@ fn compare(case: &Case) -> anyhow::Result<(bool, usize)> {
     let before = serde_json::to_value(&case.state)?;
     let native_defaults =
         options.bond_length.is_none() && options.canon_orient && !options.use_ring_templates;
-    // The path angle expansion stage postdates the captured RDKit 2026.03.6.
+    // RDKit 2026.09.1 runs path angle expansion with one 5° batch per trial;
+    // ReShiki's #632 extra trial is not part of the native reference.
     let solver_options = if native_defaults {
         depict::Options {
-            path_angle_expansion: false,
+            path_angle_expansion: true,
+            path_angle_expansion_extra_trials: false,
             preserve_spiro_rings: false,
             ..Default::default()
         }
@@ -142,7 +166,8 @@ fn compare(case: &Case) -> anyhow::Result<(bool, usize)> {
                 .unwrap_or(1.5),
             canonical_orientation: options.canon_orient,
             use_ring_templates: options.use_ring_templates,
-            path_angle_expansion: false,
+            path_angle_expansion: true,
+            path_angle_expansion_extra_trials: false,
             preserve_spiro_rings: false,
             ..Default::default()
         }
@@ -232,7 +257,7 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
         "Native version"
     );
     anyhow::ensure!(
-        provenance["commit"] == "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        provenance["commit"] == "fece8caa860bdf6c9c82bdb9253f22a0cf87150c",
         "Native source revision changed"
     );
     let observer = std::fs::read(root.join("reference/depict_pipeline_reference.py"))?;
@@ -279,6 +304,7 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
     }
     let (mut successes, mut rejections, mut scalars) = (0, 0, 0);
     let mut failures = Vec::new();
+    let mut other_basis = Vec::new();
     let mut coordination = Vec::new();
     let mut cases = 0;
     for line in lines {
@@ -290,6 +316,7 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
                 scalars += count;
             }
             Ok((false, _)) => rejections += 1,
+            Err(_) if other_sssr_basis(&case.state)? => other_basis.push(case.name.clone()),
             Err(error) => failures.push(format!("{}: {error:#}", case.name)),
         }
         if case
@@ -318,6 +345,10 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
     for failure in failures.iter().take(40) {
         eprintln!("{failure}");
     }
+    eprintln!(
+        "Layouts on a different SSSR basis: {} {other_basis:?}",
+        other_basis.len()
+    );
     anyhow::ensure!(cases == 2854, "Incomplete public reference corpus");
     anyhow::ensure!(
         failures.is_empty(),

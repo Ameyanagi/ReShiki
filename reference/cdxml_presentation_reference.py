@@ -10,10 +10,13 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from rdkit import rdBase
+from rdkit import Chem, rdBase
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine import drawing_styles, worker
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 
 def xml(attrs=None, runs=None, text_attrs=None, fonts=(), colors=None):

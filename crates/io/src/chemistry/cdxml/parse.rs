@@ -194,10 +194,10 @@ fn atom(node: Node<'_, '_>) -> Result<Atom> {
         }
         "GenericNickname" => {
             let label = node.attribute("GenericNickname").unwrap_or("");
-            if label.starts_with('R') || matches!(label, "A" | "Q" | "M" | "MH" | "X") {
+            if label.starts_with('R') || matches!(label, "A" | "a" | "Q" | "M" | "MH" | "X") {
                 return Err(Error::Unsupported("query atom"));
             }
-            if label.starts_with(['A', 'Q', 'X', 'M']) {
+            if label == "*" || label.starts_with(['A', 'Q', 'X', 'M']) {
                 number = 0;
             }
         }

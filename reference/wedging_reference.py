@@ -21,6 +21,9 @@ else:
     from ranking_reference import metadata
     from valence_reference import graph
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def snapshot(mol, kind):
     return dict(

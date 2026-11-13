@@ -45,8 +45,11 @@ int main() {
       result << "],\"fractions\":[";
       for (unsigned i=0; i<cip.getNumAtoms(); ++i) {
         if (i) result << ',';
-        const auto fraction = cip.getFractionalAtomicNum(cip.getAtom(i));
-        result << '[' << fraction.numerator() << ',' << fraction.denominator() << ']';
+        const auto &fraction = cip.getFractionalAtomicNum(cip.getAtom(i));
+        // Compare the numeric value and averaging metadata independently.
+        const auto value = fraction.value();
+        result << '[' << value.numerator() << ',' << value.denominator() << ','
+               << (fraction.isAveraged() ? "true" : "false") << ']';
       }
       result << "],\"ring_bonds\":[";
       for (unsigned i=0; i<cip.getNumBonds(); ++i) {

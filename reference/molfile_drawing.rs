@@ -1,7 +1,11 @@
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/cx_lenience.rs"]
+mod cx_lenience;
 #[path = "support/cx_stereo_groups.rs"]
 mod cx_stereo_groups;
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, document::Labels, molfile},
@@ -32,6 +36,7 @@ struct Case {
     extension: Option<DrawingExtension>,
     generic: Option<GenericDrawingAddition>,
     renumbered: Option<String>,
+    unwrapped: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -124,7 +129,8 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     let mut restrictions = BTreeMap::<String, usize>::new();
     let mut fields = BTreeMap::<String, usize>::new();
     let (mut mismatches, mut extensions, mut generic_additions) = (0, 0, 0);
-    let mut renumberings = 0;
+    let (mut renumberings, mut lenient, mut other_basis) = (0, 0, 0);
+    let mut unwrapped = 0;
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let imported = molfile::read(&case.text);
@@ -198,6 +204,7 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
             .map(|generic| serde_json::to_value(&generic.document))
             .transpose()?
             .unwrap_or(base_document);
+        unwrapped += usize::from(case.unwrapped);
         let failure = if let Some(text) = &case.renumbered {
             renumberings += 1;
             cx_stereo_groups::query_rejection(
@@ -225,11 +232,9 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
             match (result, expected) {
                 (Ok(drawing), Some(expected)) => {
                     accepted += usize::from(case.extension.is_none() && case.generic.is_none());
-                    let state = difference(
-                        &serde_json::to_value(&drawing.molecule().state)?,
-                        expected,
-                        "state",
-                    );
+                    let mut state = serde_json::to_value(&drawing.molecule().state)?;
+                    other_basis += ring_basis::adopt_rdkit_basis(&mut state, expected);
+                    let state = difference(&state, expected, "state");
                     let labels = drawing.labels()?;
                     let labeling = difference(
                         &serde_json::to_value(&labels)?,
@@ -302,6 +307,10 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
                         .then(|| "Accepted axial drawing changed an axis or its label".into()),
                     }
                 }
+                (Ok(_), None) if cx_lenience::lenient_query(&case.text) => {
+                    lenient += 1;
+                    None
+                }
                 (Ok(_), None) => Some(format!("Accepted invalid drawing: {:?}", case.failure)),
             }
         };
@@ -351,7 +360,7 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     assert!(child.wait()?.success(), "Drawing reference failed");
     let restricted = restrictions.values().sum::<usize>();
     eprintln!(
-        "MOL drawings: {accepted} accepted, {rejected} rejected, {restricted} restricted, {spatial} spatial, {attachments} attachments, {wedges} wedges, {mismatches} mismatches"
+        "MOL drawings: {accepted} accepted, {rejected} rejected, {restricted} restricted, {spatial} spatial, {attachments} attachments, {wedges} wedges, {lenient} accepted where RDKit applies a leniently read SMARTSQ, {other_basis} RDKit SSSR basis differences, {mismatches} mismatches"
     );
     if !failures.is_empty() {
         std::fs::write(
@@ -372,14 +381,13 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     for (field, count) in fields {
         eprintln!("MOL drawing mismatch field: {count} {field}");
     }
-    eprintln!("MOL drawings: {renumberings} stereo-group renumberings");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         accepted > 1000 && rejected > 100 && spatial > 100 && wedges > 100,
         "Insufficient import drawing coverage"
     );
     assert!(
-        renumberings > 0,
+        cx_stereo_groups::collision_coverage("MOL drawings", renumberings, unwrapped),
         "Missing CX stereo-group collision coverage"
     );
     Ok(())

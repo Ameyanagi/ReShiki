@@ -685,6 +685,7 @@ fn drawing_molecule(document: &Document, graph: crate::chemistry::graph::Graph) 
             graph,
             metadata,
             directions,
+            conformer: None,
             // No chemical caches are claimed for this structurally checked
             // drawing. Geometry uses only its graph and stereo metadata.
             valences: Vec::new(),

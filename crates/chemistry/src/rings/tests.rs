@@ -59,6 +59,45 @@ fn normalization_preserves_ring_edges() {
 }
 
 #[test]
+fn fused_rings_use_normalized_size_order_and_matching_bond_traversal() -> TestResult {
+    // RDKit #9208, 2026.09.1 Wrap/rough_test.py: C1CC2C1C2.
+    let graph = graph(5, &[(0, 1), (1, 2), (2, 3), (3, 4), (3, 0), (4, 2)]);
+    let rings = perceive(&graph, Options::default())?;
+    assert_eq!(rings.basis_count, 2);
+    assert_eq!(rings.atoms, [vec![2, 3, 4], vec![0, 1, 2, 3]]);
+    assert_eq!(rings.bonds, [vec![2, 3, 5], vec![0, 1, 2, 4]]);
+    assert_cycles(&graph, &rings);
+    Ok(())
+}
+
+#[test]
+fn symmetric_extras_follow_the_sorted_basis_in_global_candidate_order() -> TestResult {
+    // Two tetrahedra, interleaved so fragment order differs from extra order.
+    let edges = [[0, 5, 6, 7], [1, 2, 3, 4]]
+        .into_iter()
+        .flat_map(|group| (0..4).flat_map(move |a| ((a + 1)..4).map(move |b| (group[a], group[b]))))
+        .collect::<Vec<_>>();
+    let graph = graph(8, &edges);
+    let rings = perceive(&graph, Options::default())?;
+    assert_eq!(rings.basis_count, 6);
+    assert_eq!(
+        rings.atoms,
+        [
+            vec![0, 5, 6],
+            vec![0, 5, 7],
+            vec![0, 6, 7],
+            vec![1, 2, 3],
+            vec![1, 2, 4],
+            vec![1, 3, 4],
+            vec![2, 3, 4],
+            vec![5, 6, 7],
+        ]
+    );
+    assert_cycles(&graph, &rings);
+    Ok(())
+}
+
+#[test]
 fn cubane_has_six_symmetric_rings_and_five_basis_rings() -> TestResult {
     let edges = (0usize..8)
         .flat_map(|a| {
@@ -159,9 +198,33 @@ fn dense_degree_four_graph_uses_iterative_reference_fallback() -> TestResult {
         .flat_map(|a| ((a + 1)..5).map(move |b| (a, b)))
         .collect::<Vec<_>>();
     let graph = graph(5, &edges);
+    let fast = fast(&graph).map_err(anyhow::Error::msg)?;
+    assert_eq!(
+        fast.atoms,
+        [
+            vec![2, 1, 0],
+            vec![3, 2, 1, 0],
+            vec![3, 2, 1],
+            vec![4, 3, 2, 1, 0],
+            vec![4, 3, 2, 1],
+            vec![4, 3, 2],
+        ]
+    );
+    assert_cycles(&graph, &fast);
     let rings = perceive(&graph, Options::default())?;
     assert!(rings.approximate);
     assert_eq!(rings.basis_count, 6);
+    assert_eq!(
+        rings.atoms,
+        [
+            vec![0, 1, 2],
+            vec![1, 2, 3],
+            vec![2, 3, 4],
+            vec![0, 1, 2, 3],
+            vec![1, 2, 3, 4],
+            vec![0, 1, 2, 3, 4],
+        ]
+    );
     assert_cycles(&graph, &rings);
     Ok(())
 }
@@ -172,6 +235,9 @@ fn dense_ordering_is_local_and_search_is_budgeted() -> TestResult {
         "../../../../tests/fixtures/ring-order-dependent.json"
     ))?;
     let rings = perceive(&graph, Options::default())?;
+    // RDKit 2026.03.6's std::sort tie order made this 20-ring basis
+    // symmetrize to 32 rings with libc++ and libstdc++ but 33 with MSVC.
+    assert_eq!((rings.basis_count, rings.atoms.len()), (20, 33));
     assert_cycles(&graph, &rings);
     let mut budget = Budget { work: 0, stored: 0 };
     let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
@@ -199,5 +265,45 @@ fn malformed_graphs_fail_without_mutation() -> TestResult {
         assert!(fast(&bad).is_err());
         assert_eq!(serde_json::to_value(&bad)?, before);
     }
+    Ok(())
+}
+
+#[test]
+fn equal_size_candidates_keep_their_order_on_every_platform() -> TestResult {
+    // RDKit 2026.03.6 sorted candidates with std::sort, which reorders equal
+    // sizes from 17 (libstdc++), 24 (libc++) or 33 (MSVC) rings upwards.
+    // 2026.09.1 ranks basis candidates with a stable sort instead.
+    let rings = (0..40)
+        .map(|i| {
+            let size = if i % 2 == 0 { 4 } else { 3 };
+            (i * 4..i * 4 + size).collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let edges = rings
+        .iter()
+        .flat_map(|ring| {
+            ring.iter()
+                .zip(ring.iter().cycle().skip(1))
+                .map(|(&a, &b)| (a, b))
+        })
+        .collect::<Vec<_>>();
+    let graph = graph(160, &edges);
+    let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
+    let mut state = State {
+        active: vec![true; edges.len()],
+        degrees: Vec::new(),
+        ring_atoms: Vec::new(),
+        ring_bonds: Vec::new(),
+        seen: BTreeSet::new(),
+        extras: Vec::new(),
+        budget: Budget::default(),
+    };
+    let mut sorted = rings.clone();
+    state
+        .remove_extra(&top, &mut sorted)
+        .map_err(anyhow::Error::msg)?;
+    let (triangles, squares): (Vec<_>, Vec<_>) = rings.into_iter().partition(|r| r.len() == 3);
+    assert_eq!(sorted, [triangles, squares].concat());
+    assert!(state.extras.is_empty());
     Ok(())
 }

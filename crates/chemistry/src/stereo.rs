@@ -37,6 +37,9 @@ mod tests;
 pub(crate) const CIP_WORK_LIMIT_MESSAGE: &str =
     "This structure has too much stereochemistry to process · Try a shorter chain or a fragment";
 
+// RDKit 2026.09.2 #9682 shares this cutoff with atropisomer cleanup.
+const MIN_RING_SIZE_FOR_DOUBLE_BOND_STEREO: usize = 8;
+
 fn at<T>(items: &[T], id: usize) -> Result<&T, String> {
     items
         .get(id)
@@ -301,7 +304,7 @@ fn atropisomers_with_work(
         if matches!(meta.stereo, 6 | 7)
             && (*at(hybridizations, bond.a)? != Hybridization::Sp2
                 || *at(hybridizations, bond.b)? != Hybridization::Sp2
-                || *at(&minimum_ring, id)? < 8)
+                || *at(&minimum_ring, id)? < MIN_RING_SIZE_FOR_DOUBLE_BOND_STEREO)
         {
             meta.stereo = 0;
             clean_groups = true;

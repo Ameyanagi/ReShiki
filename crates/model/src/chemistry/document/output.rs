@@ -359,7 +359,7 @@ impl Molecule {
             crate::chemistry::depict::compute(&self.state, &ranks, None, Default::default())
                 .map_err(|error| invalid(format!("Projected label depiction: {error}")))?;
         let mut detached = self.clone();
-        detached.positions = conformer.positions;
+        detached.set_conformer(conformer);
         for_drawing(&detached, base)
     }
 }
@@ -449,7 +449,10 @@ pub fn for_generated(
             dummy_labels.push(None);
         }
         molecule.state = expanded.state;
-        molecule.positions = expanded.positions;
+        molecule.set_conformer(wedging::Conformer {
+            positions: expanded.positions,
+            is_3d: false,
+        });
         if !expanded.parents.is_empty() {
             fusion_hydrogens::place(&mut molecule, &expanded.parents, &dummy_labels, options)?;
         }
@@ -531,6 +534,10 @@ pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
     if molecule.rdkit_version != RDKIT_VERSION
         || molecule.ids.len() != n
         || molecule.positions.len() != n
+        || state
+            .conformer
+            .as_ref()
+            .is_some_and(|conformer| conformer.positions.len() != n)
         || molecule.ids.iter().collect::<HashSet<_>>().len() != n
         || state.hybridizations.len() != n
         || state.conjugated.len() != e

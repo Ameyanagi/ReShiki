@@ -7,6 +7,199 @@ use std::{collections::HashSet, hint::black_box, time::Instant};
 
 const CPP7: &str = include_str!("../../../../../tests/fixtures/mol/cpp7.mol");
 const CPP7_TRIMMED: &str = include_str!("../../../../../tests/fixtures/mol/cpp7-trimmed.mol");
+// RDKit Release_2026_09_1, Code/GraphMol/FileParsers/test_data/atropisomers;
+// used by the upstream #8108 regression in catch_chirality.cpp.
+const BMS_986142_3D: &str = include_str!("../../../../../tests/fixtures/mol/BMS-986142_3d.sdf");
+
+#[test]
+fn bms_986142_3d_atropisomer_reassignment_retains_file_geometry() -> anyhow::Result<()> {
+    use crate::chemistry::stereo::perception;
+
+    let imported = read(BMS_986142_3D)?;
+    let raw_atoms = imported.molecule.ids.len();
+    let folded = imported.clone().for_display()?;
+    assert!(folded.molecule.ids.len() < raw_atoms);
+    for imported in [imported, folded] {
+        let state = &imported.molecule.state;
+        let conformer = state.conformer.as_ref().unwrap();
+        assert!(conformer.is_3d);
+        assert_eq!(conformer.positions, imported.molecule.positions);
+        assert_eq!(conformer.positions.len(), state.graph.atoms.len());
+        let axis = state
+            .graph
+            .bonds
+            .iter()
+            .position(|bond| (bond.a == 7 && bond.b == 29) || (bond.a == 29 && bond.b == 7))
+            .unwrap();
+        let correct = state.metadata.bonds[axis].stereo;
+        assert!(matches!(correct, 6 | 7));
+        let wrong = if correct == 6 { 7 } else { 6 };
+        let mut changed = state.clone();
+        changed.metadata.bonds[axis].stereo = wrong;
+        for (clean, expected) in [(false, wrong), (true, correct)] {
+            let assigned = perception::perceive(
+                &changed,
+                perception::Options {
+                    clean,
+                    force: true,
+                    flag_possible: true,
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            assert_eq!(
+                assigned.metadata.bonds[axis].stereo, expected,
+                "clean={clean}"
+            );
+        }
+        changed.metadata.bonds[axis].stereo = 0;
+        let assigned = perception::perceive(
+            &changed,
+            perception::Options {
+                clean: false,
+                force: true,
+                flag_possible: true,
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        // Cleared wedge flags cannot nominate a missing axis. The 3D pass
+        // revisits existing axes only when replacement is requested above.
+        assert_eq!(assigned.metadata.bonds[axis].stereo, 0);
+    }
+    Ok(())
+}
+
+#[test]
+fn bms_986142_3d_assignment_honors_replacement() -> anyhow::Result<()> {
+    use crate::chemistry::stereo::{self, SpatialAnnotations, SpatialOptions};
+
+    let imported = read(BMS_986142_3D)?;
+    let state = &imported.molecule.state;
+    let axis = state
+        .graph
+        .bonds
+        .iter()
+        .position(|bond| (bond.a == 7 && bond.b == 29) || (bond.a == 29 && bond.b == 7))
+        .unwrap();
+    let correct = state.metadata.bonds[axis].stereo;
+    assert!(matches!(correct, 6 | 7));
+    let wrong = if correct == 6 { 7 } else { 6 };
+    let mut metadata = state.metadata.clone();
+    metadata.bonds[axis].stereo = wrong;
+    for (replace_existing, expected) in [(false, wrong), (true, correct)] {
+        let assigned = stereo::from_3d(
+            &state.graph,
+            &metadata,
+            &state.directions,
+            state.conformer.as_ref(),
+            &SpatialAnnotations {
+                non_explicit: vec![None; state.graph.atoms.len()],
+                done: None,
+            },
+            SpatialOptions {
+                replace_existing,
+                ..Default::default()
+            },
+        )?;
+        assert_eq!(
+            assigned.metadata.bonds[axis].stereo, expected,
+            "replace_existing={replace_existing}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn molblock_atropisomer_ring_cutoff_is_eight_for_wedge_and_hash() -> anyhow::Result<()> {
+    use crate::chemistry::{depict, smiles, stereo::perception};
+
+    // Upstream #9682's seven/eight/nine-membered axis-containing ring series.
+    for ring_size in [7, 8, 9] {
+        let input = format!("Cc1ccc2c(c1){}c1ccc(F)cc1-2", "C".repeat(ring_size - 4));
+        let state = smiles::prepare(&input)?.state;
+        let axis = state.graph.bonds.len() - 1;
+        let marker = state.graph.bonds.len() - 2;
+        let bond = &state.graph.bonds[axis];
+        assert_eq!(
+            state
+                .rings
+                .atoms
+                .iter()
+                .filter(|ring| {
+                    ring.iter()
+                        .zip(ring.iter().cycle().skip(1))
+                        .any(|(&a, &b)| {
+                            (a == bond.a && b == bond.b) || (a == bond.b && b == bond.a)
+                        })
+                })
+                .map(Vec::len)
+                .min(),
+            Some(ring_size)
+        );
+        let ranks = state
+            .properties
+            .atoms
+            .iter()
+            .map(|atom| atom.cip_rank)
+            .collect::<Vec<_>>();
+        let conformer = depict::compute(&state, &ranks, None, Default::default())?;
+        let molecule = Molecule {
+            rdkit_version: RDKIT_VERSION,
+            ids: (1..=state.graph.atoms.len() as u64).collect(),
+            positions: conformer.positions,
+            state,
+        };
+        let block = write(&molecule, Options { force_v3000: true })?;
+        let mut retained = Vec::new();
+        for cfg in [1, 3] {
+            let mut in_bonds = false;
+            let block = block
+                .lines()
+                .map(|line| {
+                    if line == "M  V30 BEGIN BOND" {
+                        in_bonds = true;
+                    } else if line == "M  V30 END BOND" {
+                        in_bonds = false;
+                    }
+                    if in_bonds && line.starts_with(&format!("M  V30 {} ", marker + 1)) {
+                        format!("{line} CFG={cfg}")
+                    } else {
+                        line.to_owned()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let imported = read(&block)?;
+            let stereo = imported.molecule.state.metadata.bonds[axis].stereo;
+            if ring_size < 8 {
+                assert_eq!(stereo, 0, "ring={ring_size}, CFG={cfg}");
+            } else {
+                assert!(matches!(stereo, 6 | 7), "ring={ring_size}, CFG={cfg}");
+                retained.push(stereo);
+            }
+            for imported in [imported.clone(), imported.for_display()?] {
+                for clean in [false, true] {
+                    let assigned = perception::perceive(
+                        &imported.molecule.state,
+                        perception::Options {
+                            clean,
+                            force: true,
+                            flag_possible: true,
+                        },
+                    )
+                    .map_err(anyhow::Error::msg)?;
+                    assert_eq!(
+                        assigned.metadata.bonds[axis].stereo, stereo,
+                        "ring={ring_size}, CFG={cfg}, clean={clean}"
+                    );
+                }
+            }
+        }
+        if ring_size >= 8 {
+            assert_ne!(retained[0], retained[1]);
+        }
+    }
+    Ok(())
+}
 
 fn assert_same_import(standard: &Imported, text: &str, case: &str) -> anyhow::Result<Imported> {
     let imported = read(text)?;

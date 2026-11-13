@@ -48,10 +48,11 @@ constructor. Every supplied atom starts fixed, with default normals/angles and
 metadata. `setupNewNeighs` fills pending neighbors and attachment points. Attachment
 geometry then considers zero, one, two or at least three already embedded
 neighbors. One neighbor gives a normalized perpendicular; two give an angle;
-three or more sort all angle/neighbor pairs, prefer a largest gap whose neighbors
-belong to at most one ring, then select the smallest-angle anchor pair touching
-the winning pair. Source adjacency order, angle ties, ring counts and rotation
-sign are preserved. Coordinates are never realigned.
+three or more follow RDKit 2026.09.1 #9650: sort bond directions by `atan2`, then
+prefer the largest consecutive free gap whose neighbors belong to at most one
+ring. Gaps over 180° are retained, and the selected gap fixes the rotation
+direction. Coordinates are never realigned. The native captures below retain
+the original 2026.03.6 behavior pending multi-platform recapture.
 
 Ring information is read only by the three-or-more-neighbor branch. An
 uninitialized cache remains usable for branches that do not read ring counts;
@@ -71,8 +72,8 @@ Every operation returns a new fragment. Invalid indices, property sizes,
 nonadjacent controls, nonfinite inputs and missing required ring-cache state are
 typed errors. Normalization failure is separate `Geometry(Numeric)`. Limits
 include the shared 100,000-atom/300,000-bond graph bounds, 100,000 cached rings,
-one million stored ring-atom entries and one million pairwise attachment angles.
-Pair storage and sorting work are checked before allocation. Neighbor setup and
+one million stored ring-atom entries and one million attachment gaps.
+Gap storage and sorting work are checked before allocation. Neighbor setup and
 seed geometry have independent 50-million-unit work bounds, reducible with
 `with_work_limit`. Inputs remain unchanged on success, failure and repeated calls.
 

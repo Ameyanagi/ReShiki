@@ -1,4 +1,4 @@
-//! Conjugation and hybridization passes from RDKit ConjugHybrid.cpp (2026.03.6).
+//! Conjugation and hybridization passes from RDKit ConjugHybrid.cpp (2026.09.1).
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 use super::{

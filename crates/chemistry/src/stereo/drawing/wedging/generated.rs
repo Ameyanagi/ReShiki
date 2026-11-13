@@ -524,6 +524,10 @@ pub fn add_fusion_hydrogens(
         result.parents.push(atom);
     }
     if !result.parents.is_empty() {
+        result.state.conformer = Some(Conformer {
+            positions: result.positions.clone(),
+            is_3d: false,
+        });
         result.state.valences = result.state.graph.provisional_valences()?;
         result.state.conjugated =
             electronic::conjugation_cached(&result.state.graph, Some(&result.state.valences))?;

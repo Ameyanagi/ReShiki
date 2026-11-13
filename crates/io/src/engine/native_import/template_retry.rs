@@ -110,7 +110,7 @@ fn templated(
         depict::Options {
             bond_length,
             use_ring_templates: true,
-            path_angle_expansion: crate::chemistry::document::refine(),
+            path_angle_expansion_extra_trials: crate::chemistry::document::refine(),
             preserve_spiro_rings: crate::chemistry::document::refine(),
             ..Default::default()
         },

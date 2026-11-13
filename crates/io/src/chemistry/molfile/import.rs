@@ -4,7 +4,7 @@ use crate::{
     chemistry::{
         document::{self, Molecule, WORLD_PER_DEPICT_UNIT},
         hydrogens, sanitize,
-        stereo::{cip::label, perception},
+        stereo::{cip::label, perception, wedging::Conformer},
     },
     document::Document,
     engine::native_import::Error,
@@ -215,11 +215,22 @@ impl Imported {
         for (property, &unknown) in properties.atoms.iter_mut().zip(&removed.unknown_atoms) {
             property.unknown = unknown;
         }
+        let conformer = state
+            .conformer
+            .as_ref()
+            .map(|conformer| {
+                Ok::<_, ReadError>(Conformer {
+                    positions: select(&conformer.positions, &removed.kept_atoms)?,
+                    is_3d: conformer.is_3d,
+                })
+            })
+            .transpose()?;
         let folded = perception::perceive(
             &perception::State {
                 graph: sanitized.graph,
                 metadata: sanitized.metadata,
                 directions: sanitized.directions,
+                conformer,
                 valences: sanitized.valences,
                 conjugated: sanitized.conjugated,
                 hybridizations: sanitized.hybridizations,

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from rdkit import Chem, RDLogger, rdBase
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from engine.worker import handle
+from engine.worker import from_document, handle
 
 if TYPE_CHECKING or __package__:
     from .smiles_read_reference import cases
@@ -16,6 +16,9 @@ if TYPE_CHECKING or __package__:
 else:
     from smiles_read_reference import cases
     from valence_reference import ORDERS
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 
 def main():
@@ -40,6 +43,7 @@ def main():
                     text=text,
                     expected=expected,
                     failure=failure,
+                    sssr=sssr(expected),
                     unspecified_ez=unspecified_ez(text) if expected else None,
                     coordinate_wedges=coordinate_wedges(text) if expected else None,
                 )
@@ -118,6 +122,19 @@ def wedge_flags(text):
     smiles, *cx = text.strip().split(maxsplit=1)
     cx = cx[0] if cx else ""
     return any(flag in cx for flag in ("wU:", "wD:", "w:")) and any(c in smiles for c in "/\\")
+
+
+def sssr(expected):
+    """RDKit 2026.09's SSSR basis for the drawing, in document atom order
+    (rdkit#9105); engine_migration compares it with ReShiki's basis."""
+    if not expected or not expected.get("document"):
+        return None
+    try:
+        mol = from_document(expected["document"])
+    except (ValueError, RuntimeError):  # The worker cannot read every drawing it returns.
+        return None
+    # Layout rings include dative bonds, as RingInfo does.
+    return sorted(sorted(ring) for ring in Chem.GetSSSR(mol, includeDativeBonds=True))
 
 
 if __name__ == "__main__":

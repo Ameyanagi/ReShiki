@@ -49,6 +49,13 @@ pub(super) fn split(input: &State) -> Result<Vec<Fragment>, Error> {
     let mut result = (0..count)
         .map(|_| Fragment {
             state: State {
+                conformer: input
+                    .conformer
+                    .as_ref()
+                    .map(|c| crate::stereo::wedging::Conformer {
+                        positions: Vec::new(),
+                        is_3d: c.is_3d,
+                    }),
                 graph: Graph {
                     atoms: Vec::new(),
                     bonds: Vec::new(),
@@ -71,6 +78,9 @@ pub(super) fn split(input: &State) -> Result<Vec<Fragment>, Error> {
         let part = put(&mut result, group(a)?)?;
         *put(&mut indices, a)? = part.atoms.len();
         part.atoms.push(a);
+        if let (Some(source), Some(target)) = (&input.conformer, &mut part.state.conformer) {
+            target.positions.push(*at(&source.positions, a)?);
+        }
         part.state.graph.atoms.push(atom.clone());
         let mut meta = at(&input.metadata.atoms, a)?.clone();
         meta.ring_stereo = false;

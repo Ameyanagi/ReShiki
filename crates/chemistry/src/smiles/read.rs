@@ -121,16 +121,6 @@ impl Annotations {
             .find(|c| !c.is_3d)
             .or_else(|| self.context.conformers.first())
     }
-    fn atropisomers(&self, parsed: &mut Parsed) -> Result<()> {
-        parsed.metadata = stereo::detect_atropisomers_with_bounds(
-            &parsed.graph,
-            &parsed.metadata,
-            &parsed.directions,
-            self.conformer(),
-            stereo::CoordinateBounds::NativeImport,
-        )?;
-        Ok(())
-    }
     fn labels(&mut self, parsed: &mut Parsed) -> Result<()> {
         if self.labels_processed {
             return Ok(());
@@ -500,10 +490,20 @@ fn reaction_part_with(
     }
     // Read axial flags before kekulization and small-ring axis cleanup (#1048).
     if annotations.context.conformers.is_empty() {
-        annotations.atropisomers(&mut parsed)?;
+        parsed.metadata = stereo::from_directions_with_bounds(
+            &parsed.graph,
+            &parsed.metadata,
+            &parsed.directions,
+            None,
+            true,
+            stereo::CoordinateBounds::NativeImport,
+        )
+        .map_err(Error::Stereo)?
+        .metadata;
     }
     let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
     let mut state = State {
+        conformer: annotations.context.conformers.first().cloned(),
         properties: Properties::unspecified(&clean.graph),
         graph: clean.graph,
         metadata: clean.metadata,
@@ -944,36 +944,34 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     }
     prepare::validate_allenes(&parsed)?;
     let conf = annotations.conformer();
-    if let Some(conf) = conf {
-        if conf.is_3d {
-            parsed.metadata = stereo::from_3d_with_bounds(
-                &parsed.graph,
-                &parsed.metadata,
-                &parsed.directions,
-                Some(conf),
-                &stereo::SpatialAnnotations {
-                    non_explicit: vec![None; parsed.graph.atoms.len()],
-                    done: None,
-                },
-                stereo::SpatialOptions::default(),
-                stereo::CoordinateBounds::NativeImport,
-            )?
-            .metadata;
-        } else if annotations.atom_stereo {
-            let drawn = stereo::from_directions_with_bounds(
-                &parsed.graph,
-                &parsed.metadata,
-                &parsed.directions,
-                Some(&conf.positions),
-                true,
-                stereo::CoordinateBounds::NativeImport,
-            )
-            .map_err(Error::Stereo)?;
-            parsed.graph = drawn.graph;
-            parsed.metadata = drawn.metadata;
-        }
+    if annotations.atom_stereo {
+        let drawn = stereo::from_directions_with_bounds(
+            &parsed.graph,
+            &parsed.metadata,
+            &parsed.directions,
+            conf,
+            true,
+            stereo::CoordinateBounds::NativeImport,
+        )
+        .map_err(Error::Stereo)?;
+        parsed.graph = drawn.graph;
+        parsed.metadata = drawn.metadata;
     }
-    annotations.atropisomers(&mut parsed)?;
+    if let Some(conf) = conf.filter(|c| c.is_3d) {
+        parsed.metadata = stereo::from_3d_with_bounds(
+            &parsed.graph,
+            &parsed.metadata,
+            &parsed.directions,
+            Some(conf),
+            &stereo::SpatialAnnotations {
+                non_explicit: vec![None; parsed.graph.atoms.len()],
+                done: None,
+            },
+            stereo::SpatialOptions::default(),
+            stereo::CoordinateBounds::NativeImport,
+        )?
+        .metadata;
+    }
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
     if partial
         && prepared.state.metadata.groups.is_empty()

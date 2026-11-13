@@ -26,6 +26,9 @@ from valence_reference import graph
 
 from engine import worker
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def prefix():
     source = inspect.getsource(worker.import_cdxml)

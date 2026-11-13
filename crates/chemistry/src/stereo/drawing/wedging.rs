@@ -1,4 +1,4 @@
-//! Bond wedging adapted from RDKit WedgeBonds.cpp (2026.03.6).
+//! Bond wedging adapted from RDKit WedgeBonds.cpp (2026.09.1).
 //! Copyright (C) 2023 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod allene;

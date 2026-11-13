@@ -37,9 +37,9 @@ fn every_preset_can_replace_an_isolated_or_attached_atom() {
     }
 }
 
-/// The 62 groups bundled before the catalog were laid out by RDKit 2026.03.6
-/// and captured per platform. Those frozen captures now guard the catalog's
-/// own depiction against layout changes in existing documents. Only the
+/// The 62 groups bundled before the catalog were laid out by the pinned RDKit
+/// and captured per platform (see reference/abbreviation_geometry.md). Those
+/// captures guard the catalog's own depiction against layout changes. Only the
 /// matching host's file applies: Intel macOS compares with the Apple capture
 /// it used before, so it is held to a tolerance rather than to the bit.
 #[test]

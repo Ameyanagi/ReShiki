@@ -24,6 +24,7 @@ from setup_linux_depict_reference import (
     checked_source,
     digest,
     extract_headers,
+    ring_decomposer_header,
 )
 from setup_linux_depict_reference import (
     source_checkout as shared_source_checkout,
@@ -221,8 +222,8 @@ def main():
     import rdkit
     from rdkit import rdBase
 
-    if (rdBase.rdkitVersion, rdBase.boostVersion) != ("2026.03.6", "1_85"):
-        raise ValueError("Install the pinned RDKit 2026.03.6 wheel with Boost 1_85 first")
+    if (rdBase.rdkitVersion, rdBase.boostVersion) != ("2026.09.1", "1_85"):
+        raise ValueError("Install the pinned RDKit 2026.09.1 wheel with Boost 1_85 first")
     if shutil.which("cl") is None or os.environ.get("VSCMD_ARG_TGT_ARCH") != "x64":
         raise ValueError("Initialize the x64 MSVC developer environment for the reference wheel")
     directory = ROOT / "artifacts/depict-live-windows"
@@ -233,6 +234,7 @@ def main():
         else source_checkout(directory / "rdkit")
     )
     archive = boost_archive(args.cache_dir.resolve())
+    ring_decomposer_header(source, args.cache_dir.resolve())
     libraries = Path(rdkit.__file__).resolve().parent.parent / "rdkit.libs"
     if not libraries.is_dir():
         raise ValueError("Missing pinned wheel libraries")

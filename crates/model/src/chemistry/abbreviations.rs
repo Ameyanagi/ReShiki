@@ -1,5 +1,5 @@
 //! Abbreviation validation and fixed-preset detection without changing chemistry.
-//! Query adjustment, matching order and overlap rules follow RDKit 2026.03.6
+//! Query adjustment, matching order and overlap rules follow RDKit 2026.09.1
 //! AbbreviationsUtils.cpp, Abbreviations.cpp and Substruct/vf2.hpp.
 //! Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH; RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.

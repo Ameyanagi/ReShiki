@@ -15,8 +15,11 @@ import rdkit
 from rdkit import Chem, RDLogger, rdBase
 from rdkit.Chem import rdinchi
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 INCHI_VERSION = "1.07.3"
-RDKIT_VERSION = "2026.03.6"
+RDKIT_VERSION = "2026.09.1"
 HARD_SET_SHA256 = "603b0a620db6aa664c399f616b162a75ecd91cc56994099aab0c8bbaee2d4a28"
 
 

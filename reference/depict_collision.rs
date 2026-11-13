@@ -225,7 +225,7 @@ fn corpus() -> anyhow::Result<Vec<Case>> {
     let provenance: serde_json::Value =
         serde_json::from_str(lines.next().context("Missing provenance")?)?;
     anyhow::ensure!(
-        provenance["provenance"]["commit"] == "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        provenance["provenance"]["commit"] == "fece8caa860bdf6c9c82bdb9253f22a0cf87150c",
         "Wrong pinned source"
     );
     lines.map(|line| Ok(serde_json::from_str(line)?)).collect()
@@ -237,7 +237,8 @@ fn independent_native_collision_stages() -> anyhow::Result<()> {
     for case in &cases {
         let original = restore(&case.fragment)?;
         let before = serde_json::to_value((&case.state, &original))?;
-        let input = Input::new(&case.state.graph, &case.state.metadata, &case.state.rings)?;
+        let input = Input::new(&case.state.graph, &case.state.metadata, &case.state.rings)?
+            .with_path_angle_expansion_extra_trials(false);
         scalars += same(
             &original,
             &case.expected.initial,

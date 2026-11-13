@@ -1,6 +1,8 @@
 #[path = "support/hydrogen_isotopes.rs"]
 #[allow(dead_code)]
 mod hydrogen_isotopes;
+#[path = "support/query_nicknames.rs"]
+mod query_nicknames;
 use anyhow::Context;
 use reshiki::{
     document::{Annotation, Document, Point},
@@ -719,6 +721,11 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         }
         let text = std::fs::read_to_string(&path)?;
         let result = oracle.request(&Request::import("cdxml", &text))?;
+        // The original worker cannot draw the queries RDKit 2026.09 reads
+        // from exact A/a/Q nicknames (rdkit#9567), so it has no drawing here.
+        if result.get("error").is_some() && query_nicknames::present(&text) {
+            continue;
+        }
         anyhow::ensure!(
             result.get("error").is_none(),
             "Fixture {}: {result}",

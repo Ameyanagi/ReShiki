@@ -8,8 +8,8 @@ from pathlib import Path
 
 from rdkit import Chem, rdBase
 
-VERSION = "2026.03.6"
-COMMIT = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+VERSION = "2026.09.1"
+COMMIT = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 SOURCE_SHA256 = "7f9cee6e430b60d303a0a7fa9e33c45e5c529ee204f86afeab6a20f68b6b0631"
 ROOT = Path(__file__).resolve().parents[1]
 

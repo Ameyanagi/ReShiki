@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from rdkit import RDLogger, rdBase
+from rdkit import Chem, RDLogger, rdBase
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine.worker import handle
@@ -16,6 +16,9 @@ if TYPE_CHECKING or __package__:
 else:
     from molfile_restrictions_reference import generic_restriction
     from reaction_drawing_reference import cases
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 
 def emit(name, text):

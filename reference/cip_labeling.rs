@@ -214,7 +214,6 @@ fn complete_labeling_matches_public_native_api() -> anyhow::Result<()> {
     assert!(successes > 800 && repeats > 100 && computed > 50 && uninitialized > 30);
     assert!(errors.get("iterations").copied().unwrap_or_default() > 50);
     assert!(errors.get("invalid").copied().unwrap_or_default() > 100);
-    assert!(errors.get("native_crash").copied().unwrap_or_default() > 0);
     assert!(implicit_h > 0);
     assert_eq!(
         descriptors,

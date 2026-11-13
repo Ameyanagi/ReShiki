@@ -1,4 +1,4 @@
-//! RXN framing adapted from RDKit MDLParser.cpp (2026.03.6).
+//! RXN framing adapted from RDKit MDLParser.cpp (2026.09.1).
 //! Copyright (C) 2007-2026 Novartis Institutes for BioMedical Research Inc.
 //! and other RDKit contributors. BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 use super::*;

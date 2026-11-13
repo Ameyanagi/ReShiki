@@ -33,23 +33,37 @@ pub enum Rule {
 /// unlimited meaning; graph, storage and machine-work limits still apply.
 pub struct Iterations {
     remaining: u32,
+    limited: bool,
+    preliminary: Option<u32>,
 }
 impl Iterations {
     pub fn new(limit: u32) -> Self {
         Self {
             remaining: if limit == 0 { u32::MAX } else { limit },
+            limited: limit != 0,
+            preliminary: None,
         }
     }
     pub fn remaining(&self) -> u32 {
         self.remaining
     }
+    pub(super) fn begin_preliminary(&mut self) {
+        self.preliminary = Some(2000);
+    }
+    pub(super) fn end_preliminary(&mut self) {
+        self.preliminary = None;
+    }
     fn consume(&mut self) -> Result<(), Error> {
-        self.remaining = self.remaining.saturating_sub(1);
-        if self.remaining == 0 {
-            Err(Error::Iterations)
-        } else {
-            Ok(())
+        if self.preliminary == Some(0) || self.limited && self.remaining == 0 {
+            return Err(Error::Iterations);
         }
+        if let Some(remaining) = &mut self.preliminary {
+            *remaining -= 1;
+        }
+        if self.limited {
+            self.remaining -= 1;
+        }
+        Ok(())
     }
 }
 

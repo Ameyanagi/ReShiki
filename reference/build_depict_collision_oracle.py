@@ -19,14 +19,14 @@ from pathlib import Path
 import rdkit
 from rdkit import rdBase
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 SOURCE_SHA256 = {
-    "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
-    "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
-    "Code/GraphMol/Depictor/DepictUtils.cpp": "ba3868f339635889b1533fc6a706a5a1d8f6739846e1e25e66e7efa0617eddd5",
-    "Code/GraphMol/Depictor/DepictUtils.h": "0e29dd5bcb355ef24c0d2b442ab4af0fc78b435cca1acdde795352bf4273ec45",
+    "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a522803423899fa91e986f21db0d45b423b3d8ff85bdb2fb5fcb8ce614f1fa2b",
+    "Code/GraphMol/Depictor/EmbeddedFrag.h": "aa9531e31c0353abac3ad7fb637f179046326b03f09b2e96ca64ab58c8c8541a",
+    "Code/GraphMol/Depictor/DepictUtils.cpp": "31543385ae45049a153b67c3f26d6e37696e9d9c22669e78a647773e6bb45689",
+    "Code/GraphMol/Depictor/DepictUtils.h": "d322579e2c65bf8a51e08f69941e9e9125aa6e51beaf99da70039c7362973634",
     "Code/GraphMol/Matrices.cpp": "fd69c704c084f7e9fd8c2279024f94e9421338bcf556ca45a55aba63937bb8ed",
-    "Code/Geometry/point.h": "aa985364528748f3c94b0e0f969fe63cbeb2b830e93df26c5b22f8cee8bfb393",
+    "Code/Geometry/point.h": "730244c9f054011af88e802d0fd486a9ddd0e6c385dfbde534aab4e97088f085",
     "Code/Geometry/Transform2D.cpp": "c8cf18d72544c276836d74a17312b7d425ed2cbeed67409ca09fe9b5c80d1a4f",
 }
 
@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--rdkit-source", type=Path, required=True)
     parser.add_argument("--boost-include", type=Path, default=Path("/usr/include"))
     args = parser.parse_args()
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     version = re.search(
         r"#define BOOST_VERSION\s+(\d+)", (args.boost_include / "boost/version.hpp").read_text()
     )
@@ -122,6 +122,11 @@ def main():
             "/I" + str(source),
             "/I" + str(source / "GraphMol/Depictor"),
             "/I" + str(args.boost_include.resolve()),
+            "/I"
+            + str(
+                args.rdkit_source.resolve()
+                / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib"
+            ),
             str(root / "reference/depict_collision_reference.cpp"),
             str(root / "reference/depict_windows_runtime.cpp"),
             *links,
@@ -170,6 +175,11 @@ def main():
             "-I" + str(source),
             "-I" + str(source / "GraphMol/Depictor"),
             "-I" + str(args.boost_include),
+            "-I"
+            + str(
+                args.rdkit_source.resolve()
+                / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib"
+            ),
             str(root / "reference/depict_collision_reference.cpp"),
             *libraries,
             "-o",

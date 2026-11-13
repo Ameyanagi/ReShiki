@@ -160,6 +160,7 @@ fn methane() -> kernel::Molecule {
         bonds: vec![],
     };
     let state = State {
+        conformer: None,
         valences: graph.valences().unwrap(),
         metadata: Metadata::unspecified(&graph),
         directions: vec![],

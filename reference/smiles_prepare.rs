@@ -1,3 +1,5 @@
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 #[path = "support/smiles_extensions.rs"]
 #[allow(dead_code)]
 mod smiles_extensions;
@@ -70,7 +72,7 @@ fn smiles_chemistry_matches_native_import() -> anyhow::Result<()> {
     let version: Value =
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
-    let (mut accepted, mut rejected, mut mismatches) = (0, 0, 0);
+    let (mut accepted, mut rejected, mut mismatches, mut other_basis) = (0, 0, 0, 0);
     let mut failures = Vec::new();
     let mut all_failures = Vec::new();
     for line in lines {
@@ -81,6 +83,7 @@ fn smiles_chemistry_matches_native_import() -> anyhow::Result<()> {
                 accepted += 1;
                 let mut actual = serde_json::to_value(actual)?;
                 smiles_extensions::phantom_hydrogen_ez(&mut actual["state"], &expected["state"]);
+                other_basis += ring_basis::adopt_rdkit_basis(&mut actual, expected);
                 difference(&actual, expected, "molecule")
             }
             (Err(_), None) => {
@@ -125,7 +128,7 @@ fn smiles_chemistry_matches_native_import() -> anyhow::Result<()> {
         )?;
     }
     eprintln!(
-        "SMILES preparation: {accepted} accepted, {rejected} rejected, {mismatches} mismatches"
+        "SMILES preparation: {accepted} accepted, {rejected} rejected, {other_basis} RDKit SSSR basis differences, {mismatches} mismatches"
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(

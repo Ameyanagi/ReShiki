@@ -2,7 +2,8 @@
 
 Run only after installing the pinned reference wheel. Never cache observer
 binaries: their native answers belong to this CPU, libc and installed wheel.
-The downloaded Boost archive is reusable only after its SHA-256 is verified.
+Downloaded Boost and RingDecomposerLib archives are reusable only after their
+hashes are verified.
 """
 
 import argparse
@@ -23,9 +24,13 @@ from pathlib import Path
 
 from download_tls import verified_context
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 BOOST_SHA256 = "7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617"
 BOOST_URL = "https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.bz2"
+# RDKit's External/RingFamilies CMake pins this archive by MD5; RingInfo.h includes its header.
+RDL_MD5 = "e9a0bcdda8b921a35e812b9888a9a874"
+RDL_URL = "https://github.com/rareylab/RingDecomposerLib/archive/v1.1.3_rdkit.tar.gz"
+RDL_HEADER = "RingDecomposerLib-1.1.3_rdkit/src/RingDecomposerLib/RingDecomposerLib.h"
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS = (
     "geometry",
@@ -39,9 +44,9 @@ COMPONENTS = (
 )
 
 
-def digest(path):
+def digest(path, algorithm="sha256"):
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        return hashlib.file_digest(stream, algorithm).hexdigest()
 
 
 def checked_source(path):
@@ -92,29 +97,49 @@ def source_checkout(path, *, initialize=None):
     return checked_source(path)
 
 
-def boost_archive(cache):
+def cached_download(cache, url, name, algorithm, expected):
     cache.mkdir(parents=True, exist_ok=True)
-    archive = cache / f"boost-1.85.0-{BOOST_SHA256}.tar.bz2"
+    archive = cache / name
     if archive.exists():
-        if digest(archive) != BOOST_SHA256:
-            raise ValueError(f"Cached Boost archive hash differs: {archive}")
+        if digest(archive, algorithm) != expected:
+            raise ValueError(f"Cached archive hash differs: {archive}")
         return archive
-    with tempfile.TemporaryDirectory(prefix="boost-download-", dir=cache) as temporary:
-        download = Path(temporary) / "source.tar.bz2"
+    with tempfile.TemporaryDirectory(prefix="download-", dir=cache) as temporary:
+        download = Path(temporary) / "archive"
         size = 0
         with (
-            urllib.request.urlopen(BOOST_URL, timeout=60, context=verified_context()) as response,
+            urllib.request.urlopen(url, timeout=60, context=verified_context()) as response,
             download.open("wb") as output,
         ):
             while chunk := response.read(1024 * 1024):
                 size += len(chunk)
                 if size > 256 * 1024 * 1024:
-                    raise ValueError("Boost archive exceeds the download bound")
+                    raise ValueError(f"{name} exceeds the download bound")
                 output.write(chunk)
-        if digest(download) != BOOST_SHA256:
-            raise ValueError("Downloaded Boost archive hash differs")
+        if digest(download, algorithm) != expected:
+            raise ValueError(f"Downloaded {name} hash differs")
         download.rename(archive)
     return archive
+
+
+def boost_archive(cache):
+    name = f"boost-1.85.0-{BOOST_SHA256}.tar.bz2"
+    return cached_download(cache, BOOST_URL, name, "sha256", BOOST_SHA256)
+
+
+def ring_decomposer_header(source, cache):
+    """Place RDKit's RingDecomposerLib header where its CMake build extracts it."""
+    target = source / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib"
+    if not (target / "RingDecomposerLib.h").is_file():
+        name = f"ringdecomposerlib-1.1.3_rdkit-{RDL_MD5}.tar.gz"
+        archive = cached_download(cache, RDL_URL, name, "md5", RDL_MD5)
+        target.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive, "r:gz") as source_archive:
+            stream = source_archive.extractfile(RDL_HEADER)
+            if stream is None:
+                raise ValueError("Missing RingDecomposerLib header")
+            with stream, (target / "RingDecomposerLib.h").open("wb") as output:
+                shutil.copyfileobj(stream, output)
 
 
 def extract_headers(archive, destination):
@@ -210,8 +235,8 @@ def main():
     import rdkit
     from rdkit import rdBase
 
-    if (rdBase.rdkitVersion, rdBase.boostVersion) != ("2026.03.6", "1_85"):
-        raise ValueError("Install the pinned RDKit 2026.03.6 wheel with Boost 1_85 first")
+    if (rdBase.rdkitVersion, rdBase.boostVersion) != ("2026.09.1", "1_85"):
+        raise ValueError("Install the pinned RDKit 2026.09.1 wheel with Boost 1_85 first")
     compiler = shutil.which(os.environ.get("CXX", "c++"))
     if compiler is None:
         raise ValueError("A C++20 compiler executable is required")
@@ -223,6 +248,7 @@ def main():
         else source_checkout(directory / "rdkit")
     )
     archive = boost_archive(args.cache_dir.resolve())
+    ring_decomposer_header(source, args.cache_dir.resolve())
     libraries = Path(rdkit.__file__).resolve().parent.parent / "rdkit.libs"
     python_library = Path(sysconfig.get_config_var("LIBDIR")) / sysconfig.get_config_var(
         "LDLIBRARY"

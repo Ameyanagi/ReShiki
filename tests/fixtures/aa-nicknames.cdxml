@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Derived from ui-drawn-ethanol.cdxml; A/a are bonded to its carbon atoms. -->
+<CDXML BondLength="42" LabelSize="11" CaptionSize="12">
+  <fonttable><font id="3" charset="utf-8" name="Arial" /></fonttable>
+  <page id="1" BoundingBox="0 0 612 792">
+    <fragment id="2">
+      <n id="3" p="70.0000 70.0000" Element="6" />
+      <n id="4" p="112.0000 70.0000" Element="6" />
+      <n id="5" p="148.3731 91.0000" Element="8" />
+      <n id="8" p="33.6269 91.0000" NodeType="GenericNickname" GenericNickname="A">
+        <t><s font="3" size="11">A</s></t>
+      </n>
+      <n id="9" p="133.0000 33.6269" NodeType="GenericNickname" GenericNickname="a">
+        <t><s font="3" size="11">a</s></t>
+      </n>
+      <b id="6" B="3" E="4" Order="1" />
+      <b id="7" B="4" E="5" Order="1" />
+      <b id="10" B="3" E="8" Order="1" />
+      <b id="11" B="4" E="9" Order="1" />
+    </fragment>
+  </page>
+</CDXML>

@@ -66,6 +66,7 @@ fn literal_rank_properties_follow_native_lazy_reads() -> anyhow::Result<()> {
             None,
             depict::Options {
                 use_ring_templates: case.templates,
+                path_angle_expansion_extra_trials: false,
                 ..depict::Options::default()
             },
         );

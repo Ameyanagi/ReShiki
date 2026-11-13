@@ -127,6 +127,10 @@ fn write_drawing_part(
                         .ok_or_else(|| invalid("Missing MOL drawing atom"))?,
                 ) / document::WORLD_PER_DEPICT_UNIT;
             }
+            spatial.state.conformer = Some(wedging::Conformer {
+                positions: spatial.positions.clone(),
+                is_3d: true,
+            });
             let output = write_part(
                 &spatial,
                 options,
@@ -229,7 +233,7 @@ fn interchange_depiction(molecule: &Molecule) -> Result<Molecule, Error> {
         .collect::<Vec<_>>();
     let conformer = super::depict::compute(&molecule.state, &ranks, None, Default::default())?;
     let mut detached = molecule.clone();
-    detached.positions = conformer.positions;
+    detached.set_conformer(conformer);
     Ok(detached)
 }
 

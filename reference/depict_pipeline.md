@@ -1,5 +1,26 @@
 # Public 2D layout reference contract
 
+The solver now includes RDKit 2026.09.1 #9650 attachment placement, #9378
+collision detection/path angle expansion, and #9208 normalized ring traversal.
+Ring perception retains ReShiki's Figueras basis and symmetrization; the RDL
+basis/relevant cycles from #9105 are deliberately outside this port. Comparisons
+with 2026.09.1 use `RDK_USE_LEGACY_RING_FINDING=1` and still account for basis
+selection differences.
+
+`Options::path_angle_expansion_extra_trials` defaults to `true`, preserving
+ReShiki #632: after one 5° batch increases clashes, try a second whole-path batch
+before reverting. This deliberate refinement helps SPhos/XPhos. Set it to `false`
+for RDKit's single-batch acceptance rule, with `path_angle_expansion: true` for
+2026.09.1. Reference/parity callers disable the extra batch. Both modes retain
+ReShiki's existing resource limits and fallback; `preserve_spiro_rings` remains
+an independent ReShiki option.
+
+The capture provenance and exact-match counts below describe the original
+2026.03.6 checkpoint. Native captures are unchanged pending multi-platform
+recapture and the separate version-pin PR; they do not establish parity for
+these new algorithms. The 2026.09.2 Depictor delta only changes the const
+argument types of `reducedToFullMatches`, outside the ported code.
+
 `depict_pipeline_reference.py` calls the original public `Compute2DCoords` API.
 It never calls the application engine or the Rust solver. The checked fixture
 contains inputs only; expected output is produced live on the tested host.

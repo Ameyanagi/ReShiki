@@ -14,6 +14,9 @@ else:
     from kekulize_reference import directions
     from valence_reference import graph
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def metadata(mol):
     return dict(

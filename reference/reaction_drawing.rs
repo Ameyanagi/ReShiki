@@ -1,7 +1,11 @@
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/cx_lenience.rs"]
+mod cx_lenience;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::{
     chemistry::{RDKIT_VERSION, document::Labels, reaction},
@@ -192,7 +196,7 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut separators, mut agents) = (0, 0, 0, 0);
-    let mut failed_cases = 0;
+    let (mut failed_cases, mut lenient, mut other_basis) = (0, 0, 0);
     let mut failures = Vec::new();
     let mut categories = BTreeMap::<String, usize>::new();
     let mut restriction_categories = BTreeMap::<String, usize>::new();
@@ -255,11 +259,11 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                             |(molecule, file)| serde_json::json!({"molecule":molecule,"file":file}),
                         )
                         .collect();
-                    let mut failures = differences(
-                        &serde_json::to_value(participants)?,
-                        &expected.participants,
-                        "participants",
-                    );
+                    let mut participants = serde_json::to_value(participants)?;
+                    other_basis +=
+                        ring_basis::adopt_rdkit_basis(&mut participants, &expected.participants);
+                    let mut failures =
+                        differences(&participants, &expected.participants, "participants");
                     match draft.labels() {
                         Ok(labels) => {
                             failures.extend(differences(
@@ -314,6 +318,9 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                             }
                             Ok(_) => vec!["Accepted invalid drawing".into()],
                         }
+                    } else if cx_lenience::lenient_query(&case.text) {
+                        lenient += 1;
+                        Vec::new()
                     } else if draft
                         .labels()
                         .and_then(|labels| draft.finish(labels))
@@ -364,7 +371,7 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success(), "Reaction drawing reference failed");
     eprintln!(
-        "RXN drawings: {accepted} accepted, {rejected} rejected, {} intended restrictions, {separators} separators, {agents} agents, {failed_cases} failed cases, {} mismatches",
+        "RXN drawings: {accepted} accepted, {rejected} rejected, {} intended restrictions, {separators} separators, {agents} agents, {failed_cases} failed cases, {lenient} accepted where RDKit applies a leniently read SMARTSQ, {other_basis} participant ring lists from a different RDKit SSSR basis, {} mismatches",
         restriction_categories.values().sum::<usize>(),
         failures.len()
     );

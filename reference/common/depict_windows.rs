@@ -34,7 +34,7 @@ pub fn fixture(stage: &str) -> anyhow::Result<Option<String>> {
         String::from_utf8_lossy(&output.stderr)
     );
     let result: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-    anyhow::ensure!(result["reference_version"] == "2026.03.6");
+    anyhow::ensure!(result["reference_version"] == "2026.09.1");
     anyhow::ensure!(result["python_platform"] == "win-amd64");
     let profile = result["profile"].as_str().context("Missing CRT profile")?;
     anyhow::ensure!(matches!(profile, "fma3" | "no-fma3" | "server2022"));

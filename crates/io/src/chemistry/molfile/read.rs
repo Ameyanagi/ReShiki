@@ -436,12 +436,6 @@ impl Parsed {
             self.graph = drawn.graph;
             self.metadata = drawn.metadata;
         }
-        self.metadata = stereo::detect_atropisomers(
-            &self.graph,
-            &self.metadata,
-            &self.directions,
-            Some(&conformer),
-        )?;
         // Keep terminal stereobonds even when ambiguous allene drawings have
         // no assigned configuration, so the drawing's stereo lint can see them.
         let allene_terminals = (0..self.graph.atoms.len())
@@ -513,6 +507,7 @@ impl Parsed {
             graph: cleaned.graph,
             metadata: geometry.metadata,
             directions: geometry.directions,
+            conformer: Some(conformer.clone()),
             valences: cleaned.valences,
             conjugated: cleaned.conjugated,
             hybridizations: cleaned.hybridizations,
