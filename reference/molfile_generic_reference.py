@@ -5,6 +5,7 @@ import re
 import struct
 from typing import TYPE_CHECKING
 
+import support.frozen_radicals  # noqa: F401  (before check_supported is imported)
 from rdkit import Chem, rdBase
 from rdkit.Chem import rdCIPLabeler
 

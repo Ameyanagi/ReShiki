@@ -9,6 +9,7 @@ import json
 import sys
 import xml.etree.ElementTree as ET
 
+import support.frozen_radicals  # noqa: F401  (before check_supported is imported)
 from cdxml_preparation_reference import PREFIX_HASH, PREPARE, capture
 from cdxml_scene_reference import CAPTURE
 from perception_reference import snapshot
