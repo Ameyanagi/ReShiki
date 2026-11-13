@@ -61,8 +61,8 @@ pub fn implicit_dummy_query(
     let text = with_uranium_atoms(text);
     match format {
         // Strict reading also accepts features that partial import drops with
-        // a notice (SP/TB/OH tags, more than two radical electrons, `~`/`Z`
-        // bonds to a removed H), so those must not be dropped either.
+        // a notice (SP/TB/OH tags, `~`/`Z` bonds to a removed H), so those
+        // must not be dropped either.
         "smiles" => {
             reshiki::chemistry::smiles::read(&text).is_ok()
                 && reshiki::chemistry::smiles::read_partial(&text)
@@ -197,7 +197,6 @@ mod tests {
             "* |$star_e$|",
             "CC* |rb:2:2|",
             "*~[H] |(0,0,;1,0,)|",
-            "*.[CH] |(0,0,;1,0,)|",
             "*.F[Pt@SP1](Cl)(Br)I |(0,0,;1,0,;2,0,;3,0,;4,0,;5,0,)|",
         ] {
             assert!(
