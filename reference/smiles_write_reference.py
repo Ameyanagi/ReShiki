@@ -16,6 +16,9 @@ else:
     from smiles_traversal_reference import molecules
     from valence_reference import ORDERS
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def emit(name, original, **options):
     mol = Chem.Mol(original)

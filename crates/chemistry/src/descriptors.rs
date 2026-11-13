@@ -1,5 +1,5 @@
 //! Local molecular descriptors from a sanitized graph and its ring membership.
-//! RDKit 2026.03.6 rules; see licenses/rdkit/NOTICE for source attribution.
+//! RDKit 2026.09.1 rules; see licenses/rdkit/NOTICE for source attribution.
 //! Copyright (C) 2004-2013 Greg Landrum and Rational Discovery LLC.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE.
 mod matcher;

@@ -54,7 +54,19 @@ async fn copied_pictures_restore_the_visible_snapshot_on_desktop_and_browser() {
                     .collect();
                 assert_eq!(pictures.len(), if browser { 2 } else { 3 });
                 for picture in pictures {
-                    let restored = payload::read(&picture.bytes().unwrap()).unwrap().unwrap();
+                    let bytes = picture.bytes().unwrap();
+                    if picture.kind == "public.svg-image" {
+                        let svg = std::str::from_utf8(&bytes).unwrap();
+                        let xml = roxmltree::Document::parse(svg).unwrap();
+                        assert!(!xml.descendants().any(|node| node.has_tag_name("text")));
+                        assert!(xml.descendants().any(|node| node.has_tag_name("path")));
+                        let root = xml.root_element();
+                        for dimension in ["width", "height"] {
+                            assert!(root.attribute(dimension).unwrap().ends_with("pt"));
+                        }
+                        assert!(root.attribute("viewBox").is_some());
+                    }
+                    let restored = payload::read(&bytes).unwrap().unwrap();
                     assert_eq!(restored.all_ids(), snapshot.all_ids(), "{}", picture.kind);
                     assert_eq!(restored.atom(unselected).is_none(), selection);
                     assert!(restored.recent_colors.is_empty());
@@ -620,10 +632,19 @@ async fn both_canvas_modes_copy_visible_ink_without_background_objects() {
             .await
             .unwrap();
         assert!(outcome.external_editable, "{:?}", outcome.notices);
-        assert!(representations.iter().all(|item| !matches!(
-            item.kind.as_str(),
-            "public.utf8-plain-text" | "org.opensmiles.smiles"
-        )));
+        let text = representations
+            .iter()
+            .find(|item| item.kind == "public.utf8-plain-text");
+        if cfg!(target_os = "linux") {
+            assert_eq!(text.unwrap().bytes().unwrap(), b"C=O");
+        } else {
+            assert!(text.is_none());
+        }
+        assert!(
+            representations
+                .iter()
+                .all(|item| item.kind != "org.opensmiles.smiles")
+        );
         let native = representations.iter().find(|r| r.kind == NATIVE).unwrap();
         let original: Document = serde_json::from_slice(&native.bytes().unwrap()).unwrap();
         assert_eq!(original.canvas_theme, theme);
@@ -1250,25 +1271,22 @@ async fn copy_image_retains_the_drawing_and_raster_paste_keeps_the_picture() {
     .unwrap();
     let envelope = payload::encode(&doc).unwrap();
     let images = copy_images_with_drawing(&doc, true, false, Some(&envelope));
-    #[cfg(windows)]
-    {
-        let svg = images
-            .iter()
-            .find(|(format, _)| *format == "svg")
-            .unwrap()
-            .1
-            .as_ref()
-            .unwrap()
-            .bytes()
-            .unwrap();
-        let text = std::str::from_utf8(&svg).unwrap();
-        assert!(!text.contains("<text"), "Office needs outlined labels");
-        assert!(text.contains("<path"));
-        assert_eq!(
-            payload::read(&svg).unwrap().unwrap().all_ids(),
-            doc.all_ids()
-        );
-    }
+    let svg = images
+        .iter()
+        .find(|(format, _)| *format == "svg")
+        .unwrap()
+        .1
+        .as_ref()
+        .unwrap()
+        .bytes()
+        .unwrap();
+    let text = std::str::from_utf8(&svg).unwrap();
+    assert!(!text.contains("<text"), "pasting apps need outlined labels");
+    assert!(text.contains("<path"));
+    assert_eq!(
+        payload::read(&svg).unwrap().unwrap().all_ids(),
+        doc.all_ids()
+    );
     let native = images
         .iter()
         .find(|(format, _)| *format == "native drawing")

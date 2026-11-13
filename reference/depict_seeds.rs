@@ -227,7 +227,7 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     let header: serde_json::Value =
         serde_json::from_str(lines.next().context("Missing provenance")?)?;
     anyhow::ensure!(
-        header["provenance"]["commit"] == "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        header["provenance"]["commit"] == "fece8caa860bdf6c9c82bdb9253f22a0cf87150c",
         "Wrong native source"
     );
     // Same-platform fixtures and direct native replay always require every
@@ -351,7 +351,7 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     }
     anyhow::ensure!(audit.cases == 991, "Coverage changed");
     anyhow::ensure!(
-        errors == 75 && queries == 9478,
+        errors == 60 && queries == 9478,
         "Native error/query coverage changed"
     );
     eprintln!(
@@ -513,13 +513,14 @@ fn seed_bounds_indices_and_finite_inputs() -> anyhow::Result<()> {
 }
 
 #[test]
-fn quadratic_angle_storage_is_bounded_before_allocation() -> anyhow::Result<()> {
+fn consecutive_neighbor_angles_use_linear_storage() -> anyhow::Result<()> {
     let (graph, metadata, data, rings) = star(1416, 0, None);
     let input = Input::new(&graph, &metadata, &data, &rings)?;
     let mut coordinates: Coordinates = (1..1416).map(|id| (id, Point { x: 1.0, y: 0.0 })).collect();
     coordinates.insert(0, Point::default());
     let before = serde_json::to_value(&coordinates)?;
-    assert_eq!(input.from_coordinates(&coordinates), Err(Error::Limit));
+    // RDKit #9650 stores one gap per neighbor instead of every pair.
+    assert!(input.from_coordinates(&coordinates).is_ok());
     assert_eq!(serde_json::to_value(&coordinates)?, before);
     Ok(())
 }

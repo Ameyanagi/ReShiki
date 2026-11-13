@@ -98,6 +98,9 @@ pub struct Atom {
     pub aromatic: bool,
     #[serde(default)]
     pub stereo: Option<AtomStereo>,
+    /// Enhanced stereo group; `None` is absolute (#766).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stereo_group: Option<crate::stereo_groups::StereoGroup>,
     #[serde(default)]
     pub map_num: u32,
     #[serde(default)]
@@ -246,15 +249,17 @@ pub const MODEL_POLISH: u32 = 33;
 pub const RESIDUE_GROUPS: u32 = 34;
 /// Arrows with interior nodes.
 pub const MULTI_NODE_ARROWS: u32 = 35;
-/// Atoms with three or four radical (nonbonding) electrons. Version 36 is
-/// enhanced stereo groups (#766).
+/// Enhanced stereo groups (ABS / AND / OR) on atoms.
+pub const STEREO_GROUPS: u32 = 36;
+/// Atoms with three or four radical (nonbonding) electrons.
 pub const RADICAL_ELECTRONS: u32 = 37;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32, model polish requires version 33 or two-sided groups
-/// require version 34, arrows with interior nodes require version 35, or atoms
-/// with three or four radical electrons require version 37.
+/// require version 34, arrows with interior nodes require version 35, stereo
+/// groups require version 36, or atoms with three or four radical electrons
+/// require version 37.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -459,6 +464,8 @@ impl Document {
     pub fn file_version(&self) -> u32 {
         if self.atoms.iter().any(|a| a.radical_electrons > 2) {
             RADICAL_ELECTRONS
+        } else if self.atoms.iter().any(|a| a.stereo_group.is_some()) {
+            STEREO_GROUPS
         } else if self.arrows.iter().any(|arrow| !arrow.nodes.is_empty()) {
             MULTI_NODE_ARROWS
         } else if self.abbreviations.iter().any(|group| group.exit.is_some()) {
@@ -494,6 +501,7 @@ impl Document {
             steroid_label: None,
             undefined_stereo: false,
             undefined_pseudoasymmetric: false,
+            stereo_group: None,
             id,
             element: element.into(),
             position,
@@ -820,6 +828,7 @@ impl Document {
         let empty_neighbors = HashSet::new();
         for a in &self.atoms {
             a.display.validate()?;
+            crate::stereo_groups::validate(a)?;
             if a.element != "*" && !a.display.label_scripts.is_empty() {
                 return Err("Atom label scripts require wildcard atoms".into());
             }

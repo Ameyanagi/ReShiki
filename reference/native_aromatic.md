@@ -36,8 +36,14 @@ from `engine.worker.handle`. Fixtures therefore keep these as distinct fields:
 
 The request-serialization step never calls `native_aromatic::execute` and never
 produces a molecular worker response. Expected worker results come exclusively
-from `engine.worker.handle` with pinned RDKit 2026.03.6, upstream source commit
-`0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`.
+from `engine.worker.handle` with pinned RDKit 2026.09.1, upstream source commit
+`fece8caa860bdf6c9c82bdb9253f22a0cf87150c`.
+
+The requests were serialized under RDKit 2026.03.6 and are kept as fixed inputs;
+each output header keeps their source header in `request_source`. For the
+2026.09.1 pin, each platform's responses were recaptured from the same requests
+with the historical capture sources below restored. On every platform the
+responses equal the 2026.03.6 captures except `engine_version`.
 
 Every fixture header records platform/Python/native build identities, hashes of
 native libraries, the NCI input data, Python sources and serializer sources, and

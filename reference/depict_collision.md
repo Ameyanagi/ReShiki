@@ -1,5 +1,21 @@
 # Deterministic depiction collision repair
 
+RDKit 2026.09.1 #9378 updates the shared detector for every repair stage: complete
+segment intersection with bounding boxes and collinear overlap, exclusion of
+bonds sharing an atom, and the farthest topological endpoint pair. Path angle
+expansion excludes bonded pairs only from proximity clashes, retaining crossing
+representatives.
+
+`Input::with_path_angle_expansion_extra_trials(false)` selects upstream
+single-batch path expansion. The default `true` preserves ReShiki #632, trying a
+second 5° batch across eligible path centers after a temporary clash increase.
+The per-center rotation cap, 20 iterations, work/storage limits and fallback are
+unchanged. Full-pipeline callers use the corresponding
+`Options::path_angle_expansion_extra_trials`; parity callers disable it.
+
+The native captures and counts below record the original 2026.03.6 checkpoint
+and await multi-platform recapture.
+
 `depict::collision` ports the three repair stages in RDKit 2026.03.6
 (commit `0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`). It is a detached library
 stage; application cleanup routing is integrated separately.

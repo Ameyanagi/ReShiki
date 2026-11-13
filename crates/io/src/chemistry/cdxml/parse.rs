@@ -194,10 +194,10 @@ fn atom(node: Node<'_, '_>) -> Result<Atom> {
         }
         "GenericNickname" => {
             let label = node.attribute("GenericNickname").unwrap_or("");
-            if label.starts_with('R') || matches!(label, "A" | "Q" | "M" | "MH" | "X") {
+            if label.starts_with('R') || matches!(label, "A" | "a" | "Q" | "M" | "MH" | "X") {
                 return Err(Error::Unsupported("query atom"));
             }
-            if label.starts_with(['A', 'Q', 'X', 'M']) {
+            if label == "*" || label.starts_with(['A', 'Q', 'X', 'M']) {
                 number = 0;
             }
         }
@@ -298,7 +298,7 @@ fn fragment(node: Node<'_, '_>, bond_length: f64) -> Result<Fragment> {
         atom_cip_ranks: Vec::new(),
     };
     let mut indices = HashMap::new();
-    let mut groups: BTreeMap<(i8, u8), Vec<usize>> = BTreeMap::new();
+    let mut groups: BTreeMap<(i64, u8), Vec<usize>> = BTreeMap::new();
     for child in node.children().filter(|n| n.has_tag_name("n")) {
         let identity = id(child)?;
         let index = result.graph.atoms.len();
@@ -324,12 +324,16 @@ fn fragment(node: Node<'_, '_>, bond_length: f64) -> Result<Fragment> {
             Some("Absolute") => Some(0),
             Some("Or") => Some(1),
             Some("And") => Some(2),
-            None | Some("Unspecified") => None,
+            None | Some("Unspecified" | "None") => None,
             Some(_) => return Err(invalid("Unknown enhanced stereo type")),
         };
         if let Some(kind) = kind {
-            let number = i8::try_from(integer(child, "EnhancedStereoGroupNum", 0)?)
-                .map_err(|_| invalid("Enhanced stereo group number exceeds signed 8-bit range"))?;
+            // ChemDraw writes UINT16 numbers; RDKit also reads small negative
+            // ones, which name a group without a number.
+            let number = integer(child, "EnhancedStereoGroupNum", 0)?;
+            if !(i64::from(i8::MIN)..=i64::from(u16::MAX)).contains(&number) {
+                return Err(invalid("Enhanced stereo group number is out of range"));
+            }
             groups.entry((number, kind)).or_default().push(index);
         }
     }

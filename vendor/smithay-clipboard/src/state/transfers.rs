@@ -38,7 +38,7 @@ struct Transfer {
 
 enum Body {
     Read { bytes: Vec<u8>, memory: Counter, reply: ReadReply },
-    Write { _offer: Arc<StoredOffer>, bytes: Arc<[u8]>, written: usize },
+    Write { _offer: Arc<StoredOffer>, bytes: Arc<[u8]>, written: usize, source: ObjectId },
 }
 
 pub(super) enum ReadReply {
@@ -206,9 +206,17 @@ impl State {
         }
     }
 
-    pub(super) fn send_pipe(&mut self, pipe: WritePipe, offer: Arc<StoredOffer>, bytes: Arc<[u8]>) {
+    pub(super) fn send_pipe(
+        &mut self,
+        pipe: WritePipe,
+        offer: Arc<StoredOffer>,
+        bytes: Arc<[u8]>,
+        source: ObjectId,
+    ) {
         // An empty private receipt representation completes by closing its fd.
         if bytes.is_empty() {
+            drop(pipe);
+            self.exit_transfer_finished(&source);
             return;
         }
         let Ok(id) = self.transfers.next_id() else {
@@ -223,7 +231,7 @@ impl State {
                 token: None,
                 deadline: Instant::now() + TIMEOUT,
                 control: None,
-                body: Body::Write { _offer: offer, bytes, written: 0 },
+                body: Body::Write { _offer: offer, bytes, written: 0, source },
             },
         );
         match self
@@ -275,6 +283,16 @@ impl State {
         };
         if let Some(result) = result {
             if let Some(transfer) = self.transfers.active.remove(&id) {
+                if result.is_ok()
+                    && let Body::Write { source, .. } = &transfer.body
+                    && self.exit_handoff.as_ref().is_some_and(|handoff| &handoff.source == source)
+                {
+                    let source = source.clone();
+                    // Run after PostAction::Remove has dropped the pipe and closed its fd.
+                    self.loop_handle.insert_idle(move |state| {
+                        state.exit_transfer_finished(&source);
+                    });
+                }
                 transfer.finish(result);
             }
             PostAction::Remove

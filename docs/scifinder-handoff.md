@@ -16,8 +16,9 @@ and running the search. ReShiki has no automatic SciFinder search integration.
 ## Ordinary Copy and receiving fields
 
 **Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
-It supplies no chemical plain text. To paste a structure into a text field
-such as SciFinder's, select it and use **Cmd/Ctrl+Alt+C**. The same shortcuts
+It supplies no chemical plain text, except SMILES on Linux. To paste a
+structure into a text field such as SciFinder's, select it and use
+**Cmd/Ctrl+Alt+C**. The same shortcuts
 apply on Windows, macOS and Linux.
 
 With no selected reaction arrow, **Cmd/Ctrl+Alt+C** copies molecular SMILES.

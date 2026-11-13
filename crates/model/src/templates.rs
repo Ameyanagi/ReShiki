@@ -510,6 +510,8 @@ pub fn compatible(a: &Atom, b: &Atom) -> bool {
         && !b.no_implicit
         && a.stereo.is_none()
         && b.stereo.is_none()
+        && a.stereo_group.is_none()
+        && b.stereo_group.is_none()
         && a.map_num == 0
         && b.map_num == 0
 }
@@ -1108,6 +1110,8 @@ impl Attachment<'_> {
             {
                 source.stereo.is_none()
                     && target.stereo.is_none()
+                    && source.stereo_group.is_none()
+                    && target.stereo_group.is_none()
                     && part.abbreviation(source.id).is_none()
                     && doc.abbreviation(id).is_none()
             } else {

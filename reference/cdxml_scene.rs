@@ -206,12 +206,13 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     reference_diagnostics::report("CDXML scene", &failures)?;
     // #792 (9e5ef83b) added tests/fixtures/chemdraw-acs1996-chain-alkenes.cdxml;
     // every top-level fixture runs twice, adding two native and two document accepts.
-    // Main already counted (2649, 286, 2357, 578) on macOS arm64 and Linux x64.
+    // tests/fixtures/aa-nicknames.cdxml (A and a generic nicknames) and #371
+    // (519e91c6) tests/fixtures/cobalt-hexammine.cdxml add two more each.
     // #1168 keeps three or four radical electrons, so 46 drawings whose atoms
     // have them now become documents instead of being rejected.
     assert_eq!(
         (accepted, rejected, converted, bounds),
-        (2649, 286, 2403, 532)
+        (2651, 286, 2405, 532)
     );
     // Nine original raw Documents failed the projection requirement. The
     // independently adapted paint now passes the same validation boundary.

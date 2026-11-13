@@ -157,6 +157,7 @@ pub fn topology(output: &Output) -> Result<Assembly, Error> {
         return Err(Error::NativeCacheBoundary);
     }
     result.state = Some(State {
+        conformer: None,
         metadata: Metadata::unspecified(&graph),
         properties: Properties::unspecified(&graph),
         conjugated: vec![false; graph.bonds.len()],

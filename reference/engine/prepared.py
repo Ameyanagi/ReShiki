@@ -36,7 +36,7 @@ def _ring_annotations(mol, members):
 
     This is RDKit's pinned binary format, not Python pickle. Only locally built
     molecules and bounded, validated integer lists enter the serializer.
-    Layout: RDKit 2026.03.6 MolPickler.cpp and RDGeneral/StreamOps.h (BSD-3-Clause).
+    Layout: RDKit 2026.09.1 MolPickler.cpp (pickle 16.4) and RDGeneral/StreamOps.h (BSD-3-Clause).
     """
     n = mol.GetNumAtoms()
     if len(members) != n or sum(len(v) for v in members if v is not None) > 10_000_000:
@@ -62,7 +62,7 @@ def _ring_annotations(mol, members):
     )
     if (
         len(raw) < 21
-        or struct.unpack_from("<IIiii", raw) != (0xDEADBEEF, 0, 16, 3, 0)
+        or struct.unpack_from("<IIiii", raw) != (0xDEADBEEF, 0, 16, 4, 0)
         or raw[-1] != 22
     ):
         raise ValueError("Prepared molecule binary version mismatch")

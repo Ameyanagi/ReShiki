@@ -20,6 +20,18 @@
 		<token value="iminylium">iminylium</token>
 		<token value="one" additionalValue="one">quinone|quinon</token><!--special cased to be the same as dione-->
 		<token value="ol">ol</token>
+		<token value="peroxol_SO">so-thioperoxol</token>
+		<token value="peroxol_SeO">seo-selenoperoxol</token>
+		<token value="peroxol_TeO">teo-telluroperoxol</token>
+		<token value="peroxol_OS">os-thioperoxol</token>
+		<token value="peroxol_OSe">ose-selenoperoxol</token>
+		<token value="peroxol_OTe">ote-telluroperoxol</token>
+		<token value="peroxol_SeS">ses-selenothioperoxol</token>
+		<token value="peroxol_TeS">tes-tellurothioperoxol</token>
+		<token value="peroxol_SSe">sse-selenothioperoxol</token>
+		<token value="peroxol_STe">ste-tellurothioperoxol</token>
+		<token value="peroxol_TeSe">tese-selenotelluroperoxol</token>
+		<token value="peroxol_SeTe">sete-selenotelluroperoxol</token>
 		<token value="olate">olate|olat</token>
 		<token value="one">one|on</token>
 		<token value="selone">selone|selon</token>
@@ -60,6 +72,7 @@
 al is allowed on standardGroup/aminoAcids but not on acidStems c.f. acetal != acetaldehyde-->
 	<tokenList tagname="suffix" type="root" subType="terminal" symbol="s">
 		<token value="al">al</token>
+		<token value="tellanal">tellanal</token>
 	</tokenList>
 	<tokenList tagname="suffix" type="root" subType="terminal" symbol="ü">
 		<token value="ic" additionalValue="aldehyde">aldehydic|aldehydicacid|aldehydic acid</token>
@@ -97,6 +110,42 @@ al is allowed on standardGroup/aminoAcids but not on acidStems c.f. acetal != ac
 		<token value="ic_Se_acid">ic se-acid</token>
 		<token value="ic_Te_acid">ic te-acid</token>
 		<token value="ic_acid_locants">ic o,o-acid|ic o,s-acid|ic o,se-acid|ic o,te-acid|ic s,s-acid|ic s,se-acid|ic s,te-acid|ic se,se-acid|ic se,te-acid|ic te,te-acid|ic o,o,o-acid|ic o,o,s-acid|ic o,o,se-acid|ic o,o,te-acid|ic o,s,s-acid|ic o,s,se-acid|ic o,s,te-acid|ic o,se,se-acid|ic o,se,te-acid|ic o,te,te-acid|ic s,s,s-acid|ic s,s,se-acid|ic s,s,te-acid|ic s,se,se-acid|ic s,se,te-acid|ic s,te,te-acid|ic se,se,se-acid|ic se,se,te-acid|ic se,te,te-acid|ic te,te,te-acid</token>
+		<token value="peroxoic_SO_acid">(thioperoxoic) so-acid|(thioperoxoic) so,so-acid|(thioperoxoic) so,so,so-acid|(thioperoxoic) so,so,so,so-acid|(thioperoxoic) so,so,so,so,so-acid|(thioperoxoic) so,so,so,so,so,so-acid</token>
+		<token value="peroxoic_SeO_acid">(selenoperoxoic) seo-acid|(selenoperoxoic) seo,seo-acid|(selenoperoxoic) seo,seo,seo-acid|(selenoperoxoic) seo,seo,seo,seo-acid|(selenoperoxoic) seo,seo,seo,seo,seo-acid|(selenoperoxoic) seo,seo,seo,seo,seo,seo-acid</token>
+		<token value="peroxoic_TeO_acid">(telluroperoxoic) teo-acid|(telluroperoxoic) teo,teo-acid|(telluroperoxoic) teo,teo,teo-acid|(telluroperoxoic) teo,teo,teo,teo-acid|(telluroperoxoic) teo,teo,teo,teo,teo-acid|(telluroperoxoic) teo,teo,teo,teo,teo,teo-acid</token>
+		<token value="peroxoic_OS_acid">(thioperoxoic) os-acid|(thioperoxoic) os,os-acid|(thioperoxoic) os,os,os-acid|(thioperoxoic) os,os,os,os-acid|(thioperoxoic) os,os,os,os,os-acid|(thioperoxoic) os,os,os,os,os,os-acid</token>
+		<token value="peroxoic_OSe_acid">(selenoperoxoic) ose-acid|(selenoperoxoic) ose,ose-acid|(selenoperoxoic) ose,ose,ose-acid|(selenoperoxoic) ose,ose,ose,ose-acid|(selenoperoxoic) ose,ose,ose,ose,ose-acid|(selenoperoxoic) ose,ose,ose,ose,ose,ose-acid</token>
+		<token value="peroxoic_OTe_acid">(telluroperoxoic) ote-acid|(telluroperoxoic) ote,ote-acid|(telluroperoxoic) ote,ote,ote-acid|(telluroperoxoic) ote,ote,ote,ote-acid|(telluroperoxoic) ote,ote,ote,ote,ote-acid|(telluroperoxoic) ote,ote,ote,ote,ote,ote-acid</token>
+		<token value="peroxoic_SeS_acid">(selenothioperoxoic) ses-acid|(selenothioperoxoic) ses,ses-acid|(selenothioperoxoic) ses,ses,ses-acid|(selenothioperoxoic) ses,ses,ses,ses-acid|(selenothioperoxoic) ses,ses,ses,ses,ses-acid|(selenothioperoxoic) ses,ses,ses,ses,ses,ses-acid</token>
+		<token value="peroxoic_TeS_acid">(tellurothioperoxoic) tes-acid|(tellurothioperoxoic) tes,tes-acid|(tellurothioperoxoic) tes,tes,tes-acid|(tellurothioperoxoic) tes,tes,tes,tes-acid|(tellurothioperoxoic) tes,tes,tes,tes,tes-acid|(tellurothioperoxoic) tes,tes,tes,tes,tes,tes-acid</token>
+		<token value="peroxoic_SSe_acid">(selenothioperoxoic) sse-acid|(selenothioperoxoic) sse,sse-acid|(selenothioperoxoic) sse,sse,sse-acid|(selenothioperoxoic) sse,sse,sse,sse-acid|(selenothioperoxoic) sse,sse,sse,sse,sse-acid|(selenothioperoxoic) sse,sse,sse,sse,sse,sse-acid</token>
+		<token value="peroxoic_STe_acid">(tellurothioperoxoic) ste-acid|(tellurothioperoxoic) ste,ste-acid|(tellurothioperoxoic) ste,ste,ste-acid|(tellurothioperoxoic) ste,ste,ste,ste-acid|(tellurothioperoxoic) ste,ste,ste,ste,ste-acid|(tellurothioperoxoic) ste,ste,ste,ste,ste,ste-acid</token>
+		<token value="peroxoic_TeSe_acid">(selenotelluroperoxoic) tese-acid|(selenotelluroperoxoic) tese,tese-acid|(selenotelluroperoxoic) tese,tese,tese-acid|(selenotelluroperoxoic) tese,tese,tese,tese-acid|(selenotelluroperoxoic) tese,tese,tese,tese,tese-acid|(selenotelluroperoxoic) tese,tese,tese,tese,tese,tese-acid</token>
+		<token value="peroxoic_SeTe_acid">(selenotelluroperoxoic) sete-acid|(selenotelluroperoxoic) sete,sete-acid|(selenotelluroperoxoic) sete,sete,sete-acid|(selenotelluroperoxoic) sete,sete,sete,sete-acid|(selenotelluroperoxoic) sete,sete,sete,sete,sete-acid|(selenotelluroperoxoic) sete,sete,sete,sete,sete,sete-acid</token>
+		<token value="peroxoic_SS_acid">(dithioperoxoic) acid</token>
+		<token value="peroxoic_SeSe_acid">(diselenoperoxoic) acid</token>
+		<token value="peroxoic_TeTe_acid">(ditelluroperoxoic) acid</token>
+		<token value="thioperoxoate">(thioperoxoate)</token>
+		<token value="selenoperoxoate">(selenoperoxoate)</token>
+		<token value="telluroperoxoate">(telluroperoxoate)</token>
+		<token value="selenothioperoxoate">(selenothioperoxoate)</token>
+		<token value="tellurothioperoxoate">(tellurothioperoxoate)</token>
+		<token value="selenotelluroperoxoate">(selenotelluroperoxoate)</token>
+		<token value="SO_thioperoxoate">(so-thioperoxoate)</token>
+		<token value="OS_thioperoxoate">(os-thioperoxoate)</token>
+		<token value="SeO_selenoperoxoate">(seo-selenoperoxoate)</token>
+		<token value="OSe_selenoperoxoate">(ose-selenoperoxoate)</token>
+		<token value="TeO_telluroperoxoate">(teo-telluroperoxoate)</token>
+		<token value="OTe_telluroperoxoate">(ote-telluroperoxoate)</token>
+		<token value="SeS_selenothioperoxoate">(ses-selenothioperoxoate)</token>
+		<token value="SSe_selenothioperoxoate">(sse-selenothioperoxoate)</token>
+		<token value="TeS_tellurothioperoxoate">(tes-tellurothioperoxoate)</token>
+		<token value="STe_tellurothioperoxoate">(ste-tellurothioperoxoate)</token>
+		<token value="TeSe_selenotelluroperoxoate">(tese-selenotelluroperoxoate)</token>
+		<token value="SeTe_selenotelluroperoxoate">(sete-selenotelluroperoxoate)</token>
+		<token value="dithioperoxoate">(dithioperoxoate)</token>
+		<token value="diselenoperoxoate">(diselenoperoxoate)</token>
+		<token value="ditelluroperoxoate">(ditelluroperoxoate)</token>
 		<token value="ous_acid_locants">ous o-acid|ous s-acid|ous se-acid|ous te-acid|ous o,o-acid|ous o,s-acid|ous o,se-acid|ous o,te-acid|ous s,s-acid|ous s,se-acid|ous s,te-acid|ous se,se-acid|ous se,te-acid|ous te,te-acid|ous o,o,o-acid|ous o,o,s-acid|ous o,o,se-acid|ous o,o,te-acid|ous o,s,s-acid|ous o,s,se-acid|ous o,s,te-acid|ous o,se,se-acid|ous o,se,te-acid|ous o,te,te-acid|ous s,s,s-acid|ous s,s,se-acid|ous s,s,te-acid|ous s,se,se-acid|ous s,se,te-acid|ous s,te,te-acid|ous se,se,se-acid|ous se,se,te-acid|ous se,te,te-acid|ous te,te,te-acid</token>
 		<token value="nitrile">nitrile|nitril</token>
 		<token value="nitrilium">nitrilium</token>

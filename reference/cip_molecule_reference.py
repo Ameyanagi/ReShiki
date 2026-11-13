@@ -130,12 +130,14 @@ def molecules():
 
 
 def main():
+    # ReShiki ports RDKit's legacy ring symmetrisation (#1117).
+    Chem.SetUseLegacyRingFinding(True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--oracle", type=Path)
     parser.add_argument("--write-fixture", action="store_true")
     args = parser.parse_args()
     RDLogger.DisableLog("rdApp.*")
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     if args.write_fixture and not args.oracle:
         parser.error("--write-fixture requires --oracle")
     records = {} if args.write_fixture else json.loads(gzip.decompress(FIXTURE.read_bytes()))

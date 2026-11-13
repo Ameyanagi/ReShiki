@@ -21,6 +21,9 @@ from rdkit import Chem, RDLogger, rdBase
 from engine import bonds_exchange
 from engine.worker import chemistry_xml, handle
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def canonical(node):
     return dict(

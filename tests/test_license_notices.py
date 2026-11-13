@@ -168,7 +168,6 @@ class LicenseNoticeTests(unittest.TestCase):
                 for component, names in (
                     ("rdkit", ("LICENSE", "NOTICE")),
                     ("centres", ("LICENSE", "NOTICE")),
-                    ("stdlib", ("llvm-LICENSE", "msvc-LICENSE", "NOTICE")),
                 )
                 for name in names
             }
@@ -205,13 +204,13 @@ class LicenseNoticeTests(unittest.TestCase):
                         expected_labels.add(label)
                         self.assertIn(label.encode(), result)
                         self.assertIn((sources[name] / relative).read_bytes(), result)
-            # All 26 crate-local license/notice files and four Cargo manifests
+            # All 23 crate-local license/notice files and four Cargo manifests
             # must be indexed directly from the four production dependencies.
             index = result.split(b"\nCOMPLETE TEXTS\n", 1)[0].decode()
             actual_labels = {
                 line.strip() for line in index.splitlines() if line.startswith("  nazuchem")
             }
-            self.assertEqual(len(expected_labels), 30)
+            self.assertEqual(len(expected_labels), 27)
             self.assertEqual(actual_labels, expected_labels)
             self.assertIn(f"source: {json.dumps(git_source)}".encode(), result)
             self.assertNotIn(b"Original workspace crate:", result)

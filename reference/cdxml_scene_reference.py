@@ -24,6 +24,9 @@ from reference_annotations import molecular_extension
 
 from engine import worker
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def capture_function():
     tree = ast.parse(inspect.getsource(worker.import_cdxml))

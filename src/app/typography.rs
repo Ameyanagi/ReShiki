@@ -677,6 +677,7 @@ impl App {
                         .get_or_insert_with(|| self.tab.doc.drawing_style.text_style())
                         .color = color;
                     atom.display.stereo.style.color = color;
+                    atom.display.stereo_group.style.color = color;
                     if let Some(number) = &mut atom.display.number {
                         number.style.color = color;
                     }

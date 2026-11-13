@@ -495,6 +495,7 @@ fn collection_stereo_groups() {
     check(
         r#"
         MDLV30/STEABS ATOMS=(1 1) | MDLV30/STEREL2 ATOMS=(2 3 2) => [StereoGroup { kind: 0, atoms: [0], bonds: [], read_id: 0, write_id: 0 }, StereoGroup { kind: 1, atoms: [2, 1], bonds: [], read_id: 2, write_id: 0 }]
+        MDLV30/STERAC7 ATOMS=(2 1 3) => [StereoGroup { kind: 2, atoms: [0, 2], bonds: [], read_id: 7, write_id: 0 }]
         // Only the first record is uppercased; later lowercase records are ignored.
         mdlv30/steabs atoms=(1 1) | mdlv30/sterel1 atoms=(1 2) => [StereoGroup { kind: 0, atoms: [0], bonds: [], read_id: 0, write_id: 0 }]
         MDLV30/STEABS ATOMS=(1 1) | MDLV30/STEABS ATOMS=(1 2) => Invalid MOL input at line 10: Multiple absolute stereo groups
@@ -502,9 +503,39 @@ fn collection_stereo_groups() {
         MDLV30/STEREL1 ATOMS=(2 1) => Invalid MOL input at line 9: Missing stereo group members
         MDLV30/STEREL1 ATOMS=(2 1 1) => Invalid MOL input at line 9: Duplicate stereo group member
         MDLV30/STEREL1 ATOMS=(1 4) => Invalid MOL input at line 9: Missing atom or bond reference
+        MDLV30/STERAC1 ATOMS=(1 2) BONDS=(1 1) => Invalid MOL input at line 9: Missing atom or bond reference
         "#,
         stereo_groups,
     );
+}
+
+#[test]
+fn collection_stereo_group_atom_and_bond_members() -> anyhow::Result<()> {
+    let parsed = after_atoms(
+        "COUNTS 5 1",
+        &[
+            "BEGIN BOND",
+            "1 1 2 3",
+            "END BOND",
+            "BEGIN COLLECTION",
+            "MDLV30/STERAC7 ATOMS=(2 2 3) BONDS=(1 1)",
+            "MDLV30/STEREL9 BONDS=(1 1)",
+            "END COLLECTION",
+            "END CTAB",
+        ],
+    )?;
+    assert_eq!(parsed.metadata.groups.len(), 2);
+    let group = &parsed.metadata.groups[0];
+    assert_eq!(group.kind, 2);
+    assert_eq!(group.atoms, [1, 2]);
+    assert_eq!(group.bonds, [0]);
+    assert_eq!(group.read_id, 7);
+    let group = &parsed.metadata.groups[1];
+    assert_eq!(group.kind, 1);
+    assert!(group.atoms.is_empty());
+    assert_eq!(group.bonds, [0]);
+    assert_eq!(group.read_id, 9);
+    Ok(())
 }
 
 #[test]

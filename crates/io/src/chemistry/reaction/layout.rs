@@ -142,7 +142,12 @@ impl Layout {
                 if positions.len() != part.source.molecule.ids.len() {
                     return Err(invalid("Reaction layout atom count changed"));
                 }
-                part.source.molecule.positions = positions;
+                part.source
+                    .molecule
+                    .set_conformer(crate::chemistry::stereo::wedging::Conformer {
+                        positions,
+                        is_3d: false,
+                    });
             }
             let row = match part.role {
                 Role::Reactant => &mut source.reactants,
@@ -155,7 +160,8 @@ impl Layout {
         if coordinates.next().is_some() {
             return Err(invalid("Unexpected reaction layout"));
         }
-        source.drawing_with_attachments(Some(&attachments))
+        // CX group numbers are global across all reaction participants.
+        source.drawing_with_attachments(Some(&attachments), false)
     }
 }
 

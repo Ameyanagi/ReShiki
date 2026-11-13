@@ -268,6 +268,7 @@ impl Toolkit {
         let mut state = match (&self.state, graph) {
             (Some(state), graph) if state.graph == graph => state.clone(),
             (_, graph) => State {
+                conformer: None,
                 metadata: Metadata::unspecified(&graph),
                 directions: vec![],
                 valences: vec![],

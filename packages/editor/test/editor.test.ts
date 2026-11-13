@@ -32,15 +32,11 @@ await expect(init(new Uint8Array([0]))).rejects.toThrow();
 await init(readFileSync(new URL("../dist/wasm/reshiki_web_bg.wasm", import.meta.url)));
 
 describe("headless library", () => {
-  test("read returns relative stereo warnings and a usable native drawing", async () => {
-    const result = await read("C[C@H](O)C(=O)O |r|", "smiles");
-    expect(result.warnings).toEqual([
-      "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer",
-    ]);
+  test("read returns any-bond warnings and a usable native drawing", async () => {
+    const result = await read("C~C", "smiles");
+    expect(result.warnings).toEqual(["Bond C1–C2 has any order (~); bond order assumed single"]);
     expect(Array.isArray(result.warnings)).toBeTrue();
-    expect(await convert(result.drawing, "rsk", "smiles")).toBe(
-      await smiles("C[C@H](O)C(=O)O", "smiles"),
-    );
+    expect(await convert(result.drawing, "rsk", "smiles")).toBe(await smiles("CC", "smiles"));
   });
 
   test("read returns extended double-bond stereo warnings from bytes", async () => {

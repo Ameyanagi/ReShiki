@@ -778,7 +778,7 @@ async fn an_escaped_pipe_holder_cannot_extend_the_completion_deadline() {
 fn measured_resource_breaches_cannot_enter_the_exit_race_grace_path() {
     // The production check classifies the error before inspecting exit status.
     // A measured RSS breach is Error::other, never one of the two missing-PID
-    // errors that may race an exit and receive four retries.
+    // errors that may race an exit and wait for it.
     assert!(!transient_measurement_error(&std::io::Error::other(
         "Local naming worker exceeded its resident-memory limit"
     )));

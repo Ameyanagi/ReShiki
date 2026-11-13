@@ -144,7 +144,7 @@ fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
     let header: serde_json::Value =
         serde_json::from_str(lines.next().context("Missing provenance")?)?;
     anyhow::ensure!(
-        header["provenance"]["commit"] == "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        header["provenance"]["commit"] == "fece8caa860bdf6c9c82bdb9253f22a0cf87150c",
         "Wrong native source"
     );
     if fixture == "depict-geometry-windows-no-fma3-native.json.gz" {

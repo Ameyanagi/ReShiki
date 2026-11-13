@@ -23,6 +23,8 @@ use std::sync::Arc;
 mod allene_tests;
 #[cfg(test)]
 mod atrop_tests;
+#[cfg(test)]
+mod cdxml_tests;
 pub(super) mod chain_layout;
 #[cfg(test)]
 mod molfile_atrop_tests;
@@ -101,7 +103,6 @@ pub enum Error {
 }
 
 const CUMULENE_EZ_NOTICE: &str = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored";
-const RELATIVE_STEREO_NOTICE: &str = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
 const CONFIGURATION_NOTICE_END: &str = "; it imported that atom without a configuration";
 const ALLENE_NOTICE_END: &str = " is invalid; ReShiki imported that atom without a configuration";
 const QUERY_NOTICE: &str = "The input's query constraints (such as CXSMILES u, rb or s) were ignored; ReShiki imported the plain structure";
@@ -337,13 +338,13 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))? {
                 warnings.push(cdxml::schemes::NOTICE.into());
             }
-            if !variables.0.is_empty() {
+            if !variables.is_empty() {
                 let prepared = cdxml::prepare_drawing(&xml)?;
                 let mut document = cdxml::assemble_cdxml(&prepared)?.into_unchecked_drawing()?;
                 variables
                     .restore(&prepared, &mut document)
                     .map_err(|e| Error::Binary(e.to_string()))?;
-                warnings.push("Drawing imported with variable labels as uninterpreted atom text; query semantics and molecular properties are unavailable".into());
+                warnings.push(variables.notice().into());
                 return Ok(Preparation::Drawing(Box::new(document), warnings));
             }
             let prepared = match cdxml::prepare_cdxml(&xml) {
@@ -422,15 +423,11 @@ fn prepare_smiles(
             }
         }
     }
-    let relative = imported.draw_relative_as_stated();
     let mut molecule = molecule(imported.prepared.state)?;
     let (mut warnings, row) = layout(&mut molecule, &imported.reaction_properties)?;
     // Import perception does not keep cumulene E/Z; say so.
     if imported.dropped_cumulene_ez {
         warnings.push(CUMULENE_EZ_NOTICE.into());
-    }
-    if relative {
-        warnings.push(RELATIVE_STEREO_NOTICE.into());
     }
     warnings.extend(dropped_notices(imported.dropped));
     let mut prepared = finish_molecule(
@@ -460,14 +457,6 @@ fn prepare_reaction_smiles(text: &str, partial: bool) -> Result<Prepared, Error>
             .chain(&mut reaction.products)
             .flat_map(|part| std::mem::take(&mut part.dropped)),
     );
-    let relative = reaction
-        .reactants
-        .iter_mut()
-        .chain(&mut reaction.agents)
-        .chain(&mut reaction.products)
-        .fold(false, |relative, part| {
-            relative | part.draw_relative_as_stated()
-        });
     let layout = reaction.layout()?;
     let layouts = layout
         .requests()
@@ -482,9 +471,6 @@ fn prepare_reaction_smiles(text: &str, partial: bool) -> Result<Prepared, Error>
         .unzip();
     let mut prepared = finish_reaction(layout.finish(positions)?)?;
     prepared.warnings.extend(warnings.into_iter().flatten());
-    if relative {
-        prepared.warnings.push(RELATIVE_STEREO_NOTICE.into());
-    }
     prepared.warnings.extend(dropped);
     Ok(prepared)
 }
@@ -554,8 +540,8 @@ fn coordinates(state: &State, properties: &[Vec<(Vec<u8>, Vec<u8>)>]) -> Result<
             // Native public Compute2DCoords defaults. Cleanup explicitly opts in
             // to templates, while original import calls supply no such option.
             use_ring_templates: false,
-            // RDKit 2026.09.1's path angle expansion (#735) is a refinement.
-            path_angle_expansion: molecular::refine(),
+            // RDKit 2026.09.1 runs path angle expansion; the #632 extra trial is ReShiki's.
+            path_angle_expansion_extra_trials: molecular::refine(),
             preserve_spiro_rings: molecular::refine(),
             ..depict::Options::default()
         },
@@ -590,7 +576,10 @@ fn layout(
 ) -> Result<(Vec<String>, ComponentRow), Error> {
     molecular::validate_molecule(molecule)?;
     let layout = coordinates(&molecule.state, properties)?;
-    molecule.positions = layout.positions;
+    molecule.set_conformer(chemistry::stereo::wedging::Conformer {
+        positions: layout.positions,
+        is_3d: false,
+    });
     Ok((layout.warnings, layout.row))
 }
 
@@ -677,6 +666,15 @@ fn finish_molecule(
         }
     }
     warnings.extend(chemistry::drop_added_axis_wedges(&mut document, &molecule));
+    if molecule
+        .state
+        .metadata
+        .groups
+        .iter()
+        .any(|group| !group.bonds.is_empty())
+    {
+        warnings.push(chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+    }
     if let Some(read) = readback {
         molecule = read;
     }

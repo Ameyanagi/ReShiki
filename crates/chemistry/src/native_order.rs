@@ -1,5 +1,6 @@
 //! Checked copies of the pinned platform's C++ comparison-sort policies.
-//! Used where equal keys affect chemical output, including traversal and rings.
+//! Used where pinned RDKit still sorts equal keys with std::sort: SMILES
+//! traversal (Canon.cpp) and ranked depiction neighbours (RDDepictor.cpp).
 // The browser follows the macOS policy, so its output matches that desktop.
 #[cfg(any(target_os = "macos", target_arch = "wasm32"))]
 mod apple_sort;

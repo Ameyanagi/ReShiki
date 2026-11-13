@@ -15,6 +15,9 @@ import support.frozen_radicals  # noqa: F401  (before check_supported is importe
 
 from engine.worker import handle
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def parsed(case):
     if case["format"] == "smiles":

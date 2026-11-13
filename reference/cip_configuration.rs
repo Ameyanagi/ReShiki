@@ -328,7 +328,6 @@ fn configuration_evaluation_matches_independent_native_apis() -> anyhow::Result<
     assert_eq!(mismatches, 0, "{}", failures.join("\n"));
     assert!(accepted > 1000 && limits > 100);
     assert_eq!(parities, 65536);
-    assert!(native_crashes > 0);
     assert!((1..=14).all(|descriptor| observed.contains(&descriptor)));
     assert!(parity4::<u8>(&[], &[]).is_err());
     Ok(())

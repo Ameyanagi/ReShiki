@@ -235,6 +235,9 @@ fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
     // Use the shared fragment path so abbreviations and unresolved semantic
     // metadata cannot disappear before chemical validation.
     let part = crate::editing::analysis_document(doc, atoms);
+    if part.atoms.iter().any(|atom| atom.stereo_group.is_some()) {
+        return Err("Generated names do not yet support enhanced stereo groups".into());
+    }
     let state = chemistry::document::prepare(&part)
         .map_err(|error| error.to_string())?
         .state;
@@ -242,6 +245,9 @@ fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
     // message for every rejection; keep its document pre-checks above separate.
     canonical_identity(&state).map_err(|error| match error {
         IdentityRejection::Write(message) => message,
+        IdentityRejection::EnhancedStereo => {
+            "Generated names do not yet support enhanced stereo groups".into()
+        }
         IdentityRejection::UnsupportedAtomsOrBonds | IdentityRejection::NonclassicalStereo => {
             "Unsupported chemical semantics invalidate a generated name".into()
         }

@@ -1,5 +1,5 @@
 //! RXN and reaction SMILES interchange with explicit participant roles.
-//! Component arrangement follows RDKit ReactionWriter.cpp (2026.03.6).
+//! Component arrangement follows RDKit ReactionWriter.cpp (2026.09.1).
 //! Copyright (C) 2010-2024 Novartis Institutes for BioMedical Research Inc.
 //! and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
@@ -51,17 +51,17 @@ fn invalid(message: impl Into<String>) -> Error {
 
 pub const EXPORT_WARNING: &str = "Reaction files preserve participants, atom maps and stereo. Save .rsk to retain captions, arrow appearance and drawing layout.";
 
-struct OutputRow {
+struct OutputRow<T> {
     label: &'static str,
-    parts: Vec<(String, usize)>,
+    parts: Vec<(T, usize)>,
     count: usize,
 }
 
-fn prepare_output(
+fn prepare_output<T>(
     doc: &Document,
     selected: Option<&[u64]>,
-    mut render: impl FnMut(&document::Molecule) -> Result<String, Error>,
-) -> Result<Vec<OutputRow>, Error> {
+    mut render: impl FnMut(&document::Molecule) -> Result<T, Error>,
+) -> Result<Vec<OutputRow<T>>, Error> {
     doc.validate().map_err(invalid)?;
     let selected: HashSet<_> = selected.unwrap_or_default().iter().copied().collect();
     let mut reactions = doc
@@ -180,7 +180,24 @@ pub(crate) fn write_rxn_with_fallback(
     selected: Option<&[u64]>,
 ) -> Result<(String, bool), Error> {
     let mut fallback = false;
+    let mut written = HashSet::new();
     let rows = prepare_output(doc, selected, |molecule| {
+        // Each RXN CTAB has its own groups, so a drawing group seen in an
+        // earlier participant would be split into independent groups.
+        let groups: HashSet<_> = molecule
+            .state
+            .metadata
+            .groups
+            .iter()
+            .filter(|group| group.kind != 0)
+            .map(|group| (group.kind, group.read_id))
+            .collect();
+        if !written.is_disjoint(&groups) {
+            return Err(invalid(
+                "A stereo group spans reaction participants, which RXN can't keep; export reaction SMILES or save the native drawing",
+            ));
+        }
+        written.extend(groups);
         let (output, part_fallback) = molfile::reaction_ctab_drawing(molecule, doc)?;
         fallback |= part_fallback;
         Ok(output)
@@ -223,7 +240,7 @@ pub(crate) fn write_smiles_with_axial_loss(
     use super::smiles::write;
     let mut axial_loss = false;
     let rows = prepare_output(doc, selected, |molecule| {
-        let text = write::write(&molecule.state, write::Options::default())?.text;
+        let output = write::write(&molecule.state, write::Options::default())?;
         axial_loss |= molecule
             .state
             .metadata
@@ -232,13 +249,16 @@ pub(crate) fn write_smiles_with_axial_loss(
             .any(|bond| matches!(bond.stereo, 6 | 7));
         // Default molecular output has no custom symbols: a dot identifies a
         // disconnected participant, which reaction SMILES groups in parentheses.
-        Ok(if text.contains('.') {
-            format!("({text})")
+        let text = if output.text.contains('.') {
+            format!("({})", output.text)
         } else {
-            text
-        })
+            output.text
+        };
+        Ok((text, output.atom_order, molecule.state.metadata.clone()))
     })?;
     let mut output = String::new();
+    let mut metadata = super::ranking::Metadata::default();
+    let mut groups = std::collections::BTreeMap::<(u8, u32), Vec<usize>>::new();
     // RXN records products before agents; reaction SMILES puts agents between.
     for (position, id) in [0, 2, 1].into_iter().enumerate() {
         if position > 0 {
@@ -248,13 +268,13 @@ pub(crate) fn write_smiles_with_axial_loss(
         let mut parts = row
             .parts
             .iter()
-            .flat_map(|(text, count)| std::iter::repeat_n(text.as_str(), *count))
+            .flat_map(|(part, count)| std::iter::repeat_n(part, *count))
             .collect::<Vec<_>>();
-        parts.sort_unstable();
-        for (i, part) in parts.into_iter().enumerate() {
+        parts.sort_by(|a, b| a.0.cmp(&b.0));
+        for (i, (text, atom_order, source)) in parts.into_iter().enumerate() {
             let length = output
                 .len()
-                .checked_add(part.len())
+                .checked_add(text.len())
                 .and_then(|s| s.checked_add(3))
                 .ok_or(Error::Limit)?;
             if length > 16 * 1024 * 1024 {
@@ -263,8 +283,35 @@ pub(crate) fn write_smiles_with_axial_loss(
             if i > 0 {
                 output.push('.');
             }
-            output.push_str(part);
+            output.push_str(text);
+            let offset = metadata.atoms.len();
+            let mut indices = vec![0; source.atoms.len()];
+            for (position, &atom) in atom_order.iter().enumerate() {
+                metadata
+                    .atoms
+                    .push(source.atoms.get(atom).ok_or(Error::Limit)?.clone());
+                *indices.get_mut(atom).ok_or(Error::Limit)? = offset + position;
+            }
+            for group in &source.groups {
+                // One field per drawing label, with each participant's written members.
+                let members = groups.entry((group.kind, group.read_id)).or_default();
+                for &atom in &group.atoms {
+                    members.push(*indices.get(atom).ok_or(Error::Limit)?);
+                }
+            }
         }
     }
+    metadata.groups = groups
+        .into_iter()
+        .map(|((kind, number), atoms)| super::ranking::StereoGroup {
+            kind,
+            atoms,
+            bonds: Vec::new(),
+            read_id: number,
+            write_id: number,
+        })
+        .collect();
+    let atom_order = (0..metadata.atoms.len()).collect::<Vec<_>>();
+    output.push_str(&write::cx_groups(&metadata, &atom_order)?);
     Ok((output, axial_loss))
 }

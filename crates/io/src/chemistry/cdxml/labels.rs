@@ -49,6 +49,8 @@ pub struct NativeAtomDisplay {
     pub carbons: Carbons,
     pub hydrogens: bool,
     pub stereo: NativeStereo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stereo_group: Option<NativeStereo>,
     pub hydrogen_position: HydrogenPosition,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number: Option<NativeNumber>,
@@ -199,6 +201,9 @@ where
             carbons: carbons(&root_attrs)?,
             hydrogens: !yes(&root_attrs, "HideImplicitHydrogens")?,
             stereo: yes(&root_attrs, "ShowAtomStereo")?,
+            stereo_groups: root_attrs
+                .get("ShowAtomEnhancedStereo")
+                .is_none_or(|value| value != "no"),
             ..Default::default()
         },
         atoms: Vec::new(),
@@ -246,6 +251,14 @@ where
             carbons: carbons(&attrs)?,
             hydrogens: !yes(&attrs, "HideImplicitHydrogens")?,
             stereo: NativeStereo::new(yes(&attrs, "ShowAtomStereo")?),
+            // Only a value that differs from the drawing's setting is an
+            // override; ChemDraw repeats the document value on every atom.
+            stereo_group: attrs
+                .get("ShowAtomEnhancedStereo")
+                .map(|_| yes(&attrs, "ShowAtomEnhancedStereo"))
+                .transpose()?
+                .filter(|&show| show != output.atom_labels.stereo_groups)
+                .map(NativeStereo::new),
             hydrogen_position: HydrogenPosition::Auto,
             number: None,
         };

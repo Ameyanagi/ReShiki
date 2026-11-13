@@ -15,6 +15,9 @@ if TYPE_CHECKING or __package__:
 else:
     import stereo_reference
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def supported_allene(mol, center):
     """crates/chemistry/src/stereo/allene.rs `supported` for tag 5: a winding

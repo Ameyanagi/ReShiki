@@ -4,7 +4,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from scripts.ci_scope import changed_paths, needs_geometry, needs_native
+from scripts.ci_scope import changed_paths, matrices, needs_geometry, needs_macos, needs_native
 
 
 class CheckScopeTests(unittest.TestCase):
@@ -73,6 +73,27 @@ class CheckScopeTests(unittest.TestCase):
             side_effect=subprocess.CalledProcessError(1, "git"),
         ):
             self.assertIsNone(changed_paths("push", {"before": "b" * 40}))
+
+    def test_macos_runs_on_stacked_labelled_and_non_pr_events(self):
+        def pull(ref, *labels):
+            return {"pull_request": {"head": {"ref": ref}, "labels": [{"name": n} for n in labels]}}
+
+        self.assertFalse(needs_macos("pull_request", pull("feat/766-stereo-groups", "bug")))
+        self.assertFalse(needs_macos("pull_request", pull("fix/merge/x")))
+        self.assertTrue(needs_macos("pull_request", pull("merge/round2")))
+        self.assertTrue(needs_macos("pull_request", pull("feat/x", "full-ci")))
+        for event_name in ("push", "schedule", "workflow_dispatch"):
+            self.assertTrue(needs_macos(event_name, {}))
+
+    def test_matrices_leave_out_only_macos_rows(self):
+        full, reduced = matrices(True), matrices(False)
+        for job, rows in full.items():
+            with self.subTest(job=job):
+                self.assertTrue(any(row["os"].startswith("macos") for row in rows))
+                self.assertEqual(
+                    reduced[job], [row for row in rows if not row["os"].startswith("macos")]
+                )
+                self.assertTrue(reduced[job])
 
 
 if __name__ == "__main__":

@@ -43,18 +43,30 @@ fn at_mut<T>(values: &mut [T], index: usize) -> Result<&mut T, Error> {
         .ok_or_else(|| invalid("Missing molecule index"))
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub struct Fraction(pub u32, pub u32);
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct Fraction(pub u32, pub u32, #[serde(skip)] bool);
+impl PartialEq for Fraction {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
+impl Eq for Fraction {}
 impl Fraction {
-    fn new(numerator: u32, denominator: u32) -> Self {
+    pub const fn integer(number: u32) -> Self {
+        Self(number, 1, false)
+    }
+    pub fn new(numerator: u32, denominator: u32) -> Self {
         if denominator == 0 {
-            return Self(0, 1);
+            return Self::integer(0);
         }
         let (mut a, mut b) = (numerator, denominator);
         while b != 0 {
             (a, b) = (b, a % b);
         }
-        Self(numerator / a, denominator / a)
+        Self(numerator / a, denominator / a, denominator > 1)
+    }
+    pub fn is_averaged(&self) -> bool {
+        self.2
     }
 }
 

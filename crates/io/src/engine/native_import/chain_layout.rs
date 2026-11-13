@@ -146,12 +146,16 @@ fn seed(path: &[usize], wave: bool) -> depict::geometry::Coordinates {
 }
 
 fn label_document(state: &State, positions: &[Point3]) -> Option<Document> {
-    let molecule = molecular::Molecule {
+    let mut molecule = molecular::Molecule {
         rdkit_version: crate::chemistry::RDKIT_VERSION,
         ids: (1..=state.graph.atoms.len() as u64).collect(),
         positions: positions.to_vec(),
         state: state.clone(),
     };
+    molecule.set_conformer(crate::chemistry::stereo::wedging::Conformer {
+        positions: positions.to_vec(),
+        is_3d: false,
+    });
     let drawing = molecular::for_import(&molecule, false, &vec![None; positions.len()]).ok()?;
     // Default import does not display CIP annotations. Defer their expensive
     // calculation to the normal publishing pipeline; H/isotope/charge ink and
@@ -262,7 +266,7 @@ fn improve_with_limit(
                 Some(&coordinates),
                 depict::Options {
                     work_limit,
-                    path_angle_expansion: crate::chemistry::document::refine(),
+                    path_angle_expansion_extra_trials: crate::chemistry::document::refine(),
                     preserve_spiro_rings: crate::chemistry::document::refine(),
                     ..Default::default()
                 },

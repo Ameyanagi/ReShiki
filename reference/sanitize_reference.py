@@ -20,6 +20,9 @@ else:
     from stereo_reference import group, state
     from valence_reference import ORDERS, atom_molecule, graph
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def n_oxide(mol):
     """#883: ReShiki charge-separates a neutral, trivalent N->O dative arrow to

@@ -54,7 +54,7 @@ def main():
         raise SystemExit("Use the pinned x64 Windows reference interpreter")
     from rdkit import rdBase
 
-    if rdBase.rdkitVersion != "2026.03.6":
+    if rdBase.rdkitVersion != "2026.09.1":
         raise SystemExit("Wrong native reference version")
     runtime = ctypes.CDLL("ucrtbase.dll")
     if args.fma3 is not None:

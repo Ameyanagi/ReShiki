@@ -14,6 +14,9 @@ from rdkit import Chem, rdBase
 
 from engine.marks_exchange import read_marks
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def emit(name, text, atoms=None, positions=None, scale=1, restriction=None):
     atoms = atoms if atoms is not None else [(6, 1, 0)]

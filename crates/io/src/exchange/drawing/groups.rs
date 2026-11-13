@@ -161,9 +161,30 @@ impl Writer<'_> {
                 ));
             }
         }
+        // ChemDraw scopes a stereo group to its fragment, so the members of a
+        // drawing-wide group must share one.
+        let mut stereo: HashMap<_, Vec<u64>> = HashMap::new();
+        for a in &doc.atoms {
+            if let Some(group) = a.stereo_group {
+                stereo.entry(group).or_default().push(a.id);
+            }
+        }
+        let stereo_edges: Vec<_> = stereo
+            .values()
+            .flat_map(|ids| ids.iter().copied().zip(ids.iter().copied().skip(1)))
+            .collect();
+        if sets.iter().any(|set| {
+            stereo_edges
+                .iter()
+                .any(|(a, b)| set.contains(a) != set.contains(b))
+        }) {
+            return Err(invalid(
+                "A stereo group spans molecules that are grouped apart; group them together before editable export",
+            ));
+        }
         let mut remaining: BTreeSet<_> = doc.atoms.iter().map(|a| a.id).collect();
         let mut neighbors: HashMap<u64, Vec<u64>> = HashMap::new();
-        for (a, b) in crate::attachments::edges(doc) {
+        for (a, b) in crate::attachments::edges(doc).chain(stereo_edges) {
             neighbors.entry(a).or_default().push(b);
             neighbors.entry(b).or_default().push(a);
         }

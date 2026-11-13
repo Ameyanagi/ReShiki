@@ -31,8 +31,14 @@ a full setup clears and rebuilds the list. The no-angle attachment helper leaves
 The angle helper sets the new aid normally. These are internal depiction states,
 not atom identity changes in the chemical graph.
 
-Attachment preserves the source angle branches, rotation direction, anchor
-updates, collision-count mirror choice and normal normalization. The no-angle
+RDKit 2026.09.1 #9650 permits crowding-based reversal only when the rotation
+direction was unassigned on entry and the remaining sector is a half-plane. The
+chosen reversal is stored for later attachments. An already selected free sector
+keeps its direction. Native captures below still record the original 2026.03.6
+checkpoint pending multi-platform recapture.
+
+Attachment preserves the source angle branches, anchor updates and normal
+normalization. The no-angle
 branch reads hybridization and degree, and reverses normal/clockwise sense when
 adding the alternate cis/trans substituent. Rotation about a point composes two
 complete 3×3 matrix products, including zero-initialized accumulation. Replacing

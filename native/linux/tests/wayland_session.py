@@ -76,14 +76,16 @@ def verify_publication(result, expected):
         )
 
 
-def verify_drawing_copy(result):
-    """Ordinary Copy offers editable drawing and images without plain text."""
+def verify_drawing_copy(result, smiles="CCO"):
+    """Ordinary Copy offers editable drawing, images, and SMILES plain text."""
     assert "dev.reshiki.drawing" in result["formats"], result
     for mime in DRAWING_MIMES:
         assert mime in result["formats"], result
         assert "error" not in result[mime] and result[mime]["mime"] == mime, result
     for mime in TEXT_ALIASES:
-        assert mime not in result["formats"] and "error" in result[mime], result
+        assert mime in result["formats"], result
+        assert "error" not in result[mime] and result[mime]["mime"] == mime, result
+        assert Path(result[mime]["file"]).read_text() == smiles, result
 
 
 def wait_for(check, description, timeout=30):
@@ -565,7 +567,15 @@ class Session:
         assert self.app_key("ctrl+z", "undo")["atoms"] == 3
         assert graph(self.save("undo.rsk")) == graph(original)
 
-        self.publish({NATIVE: copied[NATIVE]["file"], "image/png": copied["image/png"]["file"]})
+        other_molecule = self.out / "other-molecule.txt"
+        other_molecule.write_text("C")
+        self.publish(
+            {
+                NATIVE: copied[NATIVE]["file"],
+                "image/png": copied["image/png"]["file"],
+                TEXT: str(other_molecule),
+            }
+        )
         assert self.app_key("ctrl+v", "clipboard_read")["atoms"] == 6
         pasted = self.save("pasted.rsk")
         assert len(pasted["bonds"]) == 4
@@ -581,7 +591,7 @@ class Session:
         self.app_key("ctrl+a", "selected")
         self.app_key("ctrl+c", "clipboard_written")
         final_copy = self.clipboard()
-        verify_drawing_copy(final_copy)
+        verify_drawing_copy(final_copy, "CCO.CCO")
         self.save("before-exit.rsk")
         if self.args.compositor == "sway":
             self.run(["swaymsg", f"[pid={self.app.pid}] kill"])
@@ -616,10 +626,9 @@ class Session:
         if self.args.compositor == "sway":
             assert not after_exit["formats"], after_exit
         else:
-            preserved = [mime for mime in DRAWING_MIMES[1:] if "error" not in after_exit[mime]]
-            assert preserved, after_exit
-            for mime in preserved:
-                assert after_exit[mime]["sha256"] == final_copy[mime]["sha256"]
+            # The exit handoff lets Mutter's clipboard manager retain only the SVG picture.
+            assert after_exit["formats"] == ["image/svg+xml"], after_exit
+            assert after_exit["image/svg+xml"]["sha256"] == final_copy["image/svg+xml"]["sha256"]
 
         protocol = (self.out / "app.log").read_text()
         assert "wl_keyboard" in protocol and "set_selection" in protocol
@@ -676,7 +685,7 @@ class Session:
             "publication_serials": serials,
             "checks": [
                 "real_keyboard_copy",
-                "drawing_copy_without_plain_text",
+                "drawing_copy_with_smiles_plain_text",
                 "chemical_text_copy_smiles",
                 "foreign_owner_replacement",
                 "focus_loss_cut_preserved",

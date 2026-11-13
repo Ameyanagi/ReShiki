@@ -1,12 +1,18 @@
 //! Complete import responses against the unchanged worker and pinned chemistry.
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/cx_lenience.rs"]
+mod cx_lenience;
+#[path = "support/drawing_basis.rs"]
+mod drawing_basis;
 #[path = "support/empty_heads.rs"]
 mod empty_heads;
 #[path = "support/longest_lived_mass.rs"]
 mod longest_lived_mass;
 #[path = "support/partial_import.rs"]
 mod partial_import;
+#[path = "support/query_nicknames.rs"]
+mod query_nicknames;
 #[path = "support/rdkit_parity.rs"]
 mod rdkit_parity;
 #[path = "support/reference_response.rs"]
@@ -86,6 +92,8 @@ struct Case {
     generic: Option<Value>,
     generic_extension: Option<Value>,
     unspecified_ez: Option<unspecified_ez::UnspecifiedEz>,
+    #[serde(default)]
+    sssr: Option<Vec<Vec<usize>>>,
     superatoms: Option<Vec<superatoms::Group>>,
 }
 
@@ -205,7 +213,8 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
         .stdout(Stdio::piped())
         .spawn()?;
     let lines = BufReader::new(process.stdout.take().context("Missing reference output")?).lines();
-    let (mut accepted, mut rejected, mut restricted) = (0, 0, 0);
+    let (mut accepted, mut rejected, mut restricted, mut lenient, mut basis_layouts) =
+        (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     let mut dative_extensions = 0;
     let mut partial_imports = 0;
@@ -399,9 +408,28 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 accepted += 1;
                 None
             }
+            // RDKit 2026.09 applies a leniently read SMARTSQ (rdkit#9273).
+            (Ok(Outcome::Complete(_)), None)
+                if matches!(format, "mol" | "rxn") && cx_lenience::lenient_query(&case.text) =>
+            {
+                lenient += 1;
+                None
+            }
             (Ok(Outcome::Complete(a)), None)
                 if partial_import::replaces_failure(
                     format,
+                    case.failure.as_deref(),
+                    &a.warnings,
+                ) =>
+            {
+                accepted += 1;
+                partial_imports += 1;
+                None
+            }
+            (Ok(Outcome::Complete(a)), None)
+                if partial_import::implicit_dummy_query(
+                    format,
+                    &case.text,
                     case.failure.as_deref(),
                     &a.warnings,
                 ) =>
@@ -440,14 +468,22 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     let strict = reshiki::chemistry::cdxml::prepare_cdxml(&case.text)
                         .err()
                         .context("Unexpected relaxation of drawing validation")?;
-                    anyhow::ensure!(matches!(
-                        strict.cause,
-                        reshiki::chemistry::cdxml::PreparationCause::Sanitization(_)
-                    ));
+                    // Exact A/a/Q nicknames are queries in RDKit 2026.09
+                    // (rdkit#9567); ReShiki has no query atoms and imports them
+                    // as labelled dummy atoms.
+                    let query = query_nicknames::present(&case.text)
+                        && strict.cause.to_string().ends_with("query atom");
+                    anyhow::ensure!(
+                        query
+                            || matches!(
+                                strict.cause,
+                                reshiki::chemistry::cdxml::PreparationCause::Sanitization(_)
+                            )
+                    );
                     anyhow::ensure!(a.analysis.is_none() && !a.warnings.is_empty());
                     let doc = a.document.context("Missing retained drawing")?;
                     doc.validate().map_err(anyhow::Error::msg)?;
-                    anyhow::ensure!(reshiki::chemistry::document::prepare(&doc).is_err());
+                    anyhow::ensure!(query || reshiki::chemistry::document::prepare(&doc).is_err());
                     Ok(())
                 })();
                 accepted += 1;
@@ -457,6 +493,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             }
             (Ok(Outcome::Complete(a)), Some(mut b)) => {
                 accepted += 1;
+                let other_basis = drawing_basis::differs(case.sssr.as_ref(), a.document.as_ref());
                 if let Some(open) = &case.unspecified_ez {
                     unspecified_ez::adapt(open, &a, &mut b);
                 }
@@ -478,6 +515,9 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                         let comparison = compare_response(*a, b, Some(format));
                         if coordinate_free_wedges::changed(format, &case.text, &comparison) {
                             Ok(())
+                        } else if comparison.is_err() && other_basis {
+                            basis_layouts += 1;
+                            Ok(())
                         } else {
                             comparison
                         }
@@ -496,8 +536,23 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 rejected += 1;
                 None
             }
+            // RDKit 2026.09 reads CX numbers leniently (rdkit#9273).
+            (Err(_), Some(_)) if format == "smiles" && cx_lenience::lenient_number(&case.text) => {
+                lenient += 1;
+                None
+            }
             (Err(error), Some(_)) if matches!(format, "mol" | "rxn") => {
                 Some(format!("Unexpected rejection: {error}"))
+            }
+            // Enhanced stereo groups import since #766.
+            (Ok(Outcome::Complete(_)), None)
+                if case.failure.as_deref()
+                    == Some(
+                        "Enhanced stereo groups are not supported yet; import was cancelled.",
+                    ) =>
+            {
+                accepted += 1;
+                None
             }
             (a, b) => Some(format!(
                 "Outcome changed: {a:?} != {b:?}; native error {:?}",
@@ -527,7 +582,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
         )?;
     }
     println!(
-        "Native {format} import: {accepted} complete responses, {rejected} matching failures, {restricted} explicit bounds"
+        "Native {format} import: {accepted} complete responses, {rejected} matching failures, {restricted} explicit bounds, {lenient} accepted where RDKit applies a leniently read SMARTSQ, {basis_layouts} responses from a different RDKit SSSR basis"
     );
     if format == "cdxml" {
         println!("Projected-dative response extensions: {dative_extensions}");

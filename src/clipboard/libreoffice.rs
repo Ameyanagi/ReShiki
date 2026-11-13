@@ -16,7 +16,7 @@ pub async fn read() -> Result<Vec<u8>, String> {
 pub async fn write(bytes: &[u8]) -> Result<(), String> {
     let doc = Document::from_json(bytes)?;
     let png = crate::export::clipboard_png(&doc)?;
-    let svg = crate::export::clipboard_drawing(&doc, "svg")?;
+    let svg = crate::export::clipboard_drawing(&doc, "svg-office")?;
     let items = [
         Representation::new(NATIVE, bytes),
         Representation::new("public.png", &png),

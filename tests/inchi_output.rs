@@ -1,6 +1,8 @@
 //! Independent captures from the exact pinned native import adapter.
 #[path = "common/fixture.rs"]
 mod fixture;
+#[path = "../reference/support/ring_basis.rs"]
+mod ring_basis;
 
 use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, inchi::output};
@@ -25,6 +27,16 @@ struct Case {
     #[serde(default)]
     remove: bool,
     cleanup_rules: Vec<String>,
+}
+
+/// RDKit 2026.09.1 labels rings after legacy symmetrization as an SSSR basis
+/// (rdkit#9753, fixed in 2026.09.2), and its basis may differ from ReShiki's.
+fn rdkit_rings(mut actual: Value, expected: &Value) -> Value {
+    if actual["rings"]["kind"] == "symmetric" && expected["rings"]["kind"] == "basis" {
+        actual["rings"]["kind"] = "basis".into();
+    }
+    ring_basis::adopt_rdkit_basis(&mut actual, expected);
+    actual
 }
 
 #[test]
@@ -176,7 +188,7 @@ fn native_import_assembly() -> anyhow::Result<()> {
         {
             let cleaned = output::clean_up(&output::assemble(&raw)?)?;
             let result = output::prepare(&cleaned, options).with_context(|| case.name.clone())?;
-            let value = serde_json::to_value(result.state)?;
+            let value = rdkit_rings(serde_json::to_value(result.state)?, expected);
             anyhow::ensure!(
                 value == *expected,
                 "{} preparation\nactual: {value}\nexpected: {expected}",
@@ -187,7 +199,7 @@ fn native_import_assembly() -> anyhow::Result<()> {
             (Some(expected), Err(output::Error::NativeCacheBoundary))
                 if expected["native_cache_boundary"] == true => {}
             (Some(expected), Ok(actual)) => {
-                let value = serde_json::to_value(actual.state)?;
+                let value = rdkit_rings(serde_json::to_value(actual.state)?, expected);
                 anyhow::ensure!(
                     value == *expected,
                     "{} final\nactual: {value}\nexpected: {expected}",

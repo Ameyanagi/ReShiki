@@ -1,3 +1,5 @@
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION, graph::Graph, kekulize::Direction, ranking::Metadata, sanitize,
@@ -37,7 +39,7 @@ fn complete_pipeline_matches_independent_rdkit() -> anyhow::Result<()> {
     let header: serde_json::Value =
         serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
-    let (mut count, mut rejected, mut changed, mut retried) = (0, 0, 0, 0);
+    let (mut count, mut rejected, mut changed, mut retried, mut other_basis) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -50,7 +52,9 @@ fn complete_pipeline_matches_independent_rdkit() -> anyhow::Result<()> {
                 retried += usize::from(actual.canonical_retry);
                 changed += usize::from(serde_json::to_value(&actual.graph)? != before[0]);
                 // The oracle clears tag 5 on non-allene atoms first (#892).
-                serde_json::to_value(actual)? == *expected
+                let mut actual = serde_json::to_value(actual)?;
+                other_basis += ring_basis::adopt_rdkit_basis(&mut actual, expected);
+                actual == *expected
             }
             (Err(_), None) => true,
             _ => false,
@@ -74,7 +78,7 @@ fn complete_pipeline_matches_independent_rdkit() -> anyhow::Result<()> {
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     eprintln!(
-        "Verified {count} complete sanitization cases: {rejected} rejected, {changed} changed, {retried} canonical retries"
+        "Verified {count} complete sanitization cases: {rejected} rejected, {changed} changed, {retried} canonical retries, {other_basis} RDKit SSSR basis differences"
     );
     Ok(())
 }

@@ -160,6 +160,7 @@ impl ColorTheme {
             atom.display.hydrogen_color = None;
             atom.display.stereo.style.color = Color::Ink;
             atom.display.mapping.style.color = Color::Ink;
+            atom.display.stereo_group.style.color = Color::Ink;
             if let Some(number) = &mut atom.display.number {
                 number.style.color = Color::Ink;
             }

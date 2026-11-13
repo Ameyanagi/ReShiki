@@ -72,8 +72,7 @@ struct View {
       unsigned flags=0;
       for (int bit : {1,2,4,8}) if (n->isSet(bit)) flags |= bit;
       out << '[' << (n->getAtom() ? int(n->getAtom()->getIdx()) : -1) << ','
-          // Native visit distances are C char bytes; signedness is platform ABI.
-          << (n->isDuplicate() ? int(static_cast<unsigned char>(n->getDistance())) : n->getDistance()) << ','
+          << n->getDistance() << ','
           << f.numerator() << ',' << f.denominator() << ',' << n->getAtomicNum() << ','
           << n->getMassNum() << ',' << std::bit_cast<std::uint64_t>(n->getAtomicMass()) << ','
           << flags << ',' << (n->isTerminal() ? "true" : "false") << ',' << int(n->getAux()) << ',';

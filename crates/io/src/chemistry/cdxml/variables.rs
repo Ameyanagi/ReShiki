@@ -13,7 +13,10 @@ pub(crate) struct Variable {
     scripts: Vec<ScriptRun>,
     attachment: crate::atom_labels::LabelAttachment,
 }
-pub(crate) struct Variables(pub HashMap<u32, Variable>);
+pub(crate) struct Variables {
+    labels: HashMap<u32, Variable>,
+    any_atom: bool,
+}
 
 fn scripts(node: roxmltree::Node<'_, '_>, reader: &TextReader<'_, '_>) -> Result<Vec<ScriptRun>> {
     let defaults: Attributes = node
@@ -72,6 +75,7 @@ pub(crate) fn drawing_variables(xml: &str) -> Result<(String, Variables)> {
     let mut tree = Tree::parse_import(xml)?;
     let mut labels = HashMap::new();
     let mut unspecified = false;
+    let mut any_atom = false;
     for index in tree.descendants(0)? {
         let node = tree.node(index)?;
         if node.tag != "n" {
@@ -131,16 +135,19 @@ pub(crate) fn drawing_variables(xml: &str) -> Result<(String, Variables)> {
             continue;
         }
         let label = node.attr("GenericNickname").unwrap_or("");
-        if !matches!(label, "R" | "X")
-            || ["Element", "Charge", "Isotope", "NumHydrogens"]
-                .iter()
-                .any(|key| node.attr(key).is_some_and(|v| v != "0"))
+        let is_any_atom = matches!(label, "A" | "a");
+        if !is_any_atom
+            && (!matches!(label, "R" | "X")
+                || ["Element", "Charge", "Isotope", "NumHydrogens"]
+                    .iter()
+                    .any(|key| node.attr(key).is_some_and(|v| v != "0")))
         {
             continue;
         }
         let Some(id) = node.attr("id").and_then(|s| s.parse::<u32>().ok()) else {
             continue;
         };
+        any_atom |= is_any_atom;
         let label = label.to_owned();
         let node = tree.node_mut(index)?;
         node.set("NodeType", "Unspecified".into());
@@ -183,11 +190,23 @@ pub(crate) fn drawing_variables(xml: &str) -> Result<(String, Variables)> {
         } else {
             tree.serialize()?
         },
-        Variables(labels),
+        Variables { labels, any_atom },
     ))
 }
 
 impl Variables {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.labels.is_empty()
+    }
+
+    pub(crate) fn notice(&self) -> &'static str {
+        if self.any_atom {
+            "Drawing imported with A/a as labelled dummy atoms; only the labels are kept, not their any-atom (non-hydrogen) query meaning. Molecular properties are unavailable"
+        } else {
+            "Drawing imported with variable labels as uninterpreted atom text; query semantics and molecular properties are unavailable"
+        }
+    }
+
     pub(crate) fn restore(
         &self,
         prepared: &PreparedCdxml,
@@ -195,7 +214,7 @@ impl Variables {
     ) -> Result<()> {
         let sources = prepared.fragments.iter().flat_map(|f| &f.atom_ids);
         for (&source, &id) in sources.zip(&prepared.molecule.ids) {
-            if let Some(label) = self.0.get(&source) {
+            if let Some(label) = self.labels.get(&source) {
                 let atom = document.atom_mut(id).ok_or(super::Error::Limit)?;
                 atom.display.set_variable(Some(label.text.clone()));
                 atom.display.label_scripts = label.scripts.clone();

@@ -1,13 +1,13 @@
 {
   "header": {
-    "python": "3.12.13 (main, Aug  7 2026, 02:26:41) [MSC v.1944 64 bit (AMD64)]",
+    "python": "3.12.15 (main, Oct 21 2026, 17:48:33) [MSC v.1944 64 bit (AMD64)]",
     "platform": "Windows-11-10.0.26200-SP0",
-    "rdkit": "2026.03.6",
+    "rdkit": "2026.09.1",
     "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192",
     "sources": {
-      "engine/cleanup.py": "409651d999583092d04bae7a01513922057affea732f709928d7db82c92ee20c",
-      "engine/worker.py": "19f51fe978624fd1adfc09bc8ff19fc9858cf15f8dd39ee9fb7034ce863de39d",
-      "tests/cleanup_reference.py": "e929c240f3d33b40bb7cd3bf54b7320f14622f6ff5f1414908b9d477955f013e"
+      "reference/engine/cleanup.py": "409651d999583092d04bae7a01513922057affea732f709928d7db82c92ee20c",
+      "reference/engine/worker.py": "f5cfea6cac59421200f30cc77aee495d6a5c24d6bb6b5c9a0831a783d302d935",
+      "reference/cleanup_reference.py": "862e1c6db6e0b00b89a625d2dbb5827698d71273b78ad5e3bc6df6d382269284"
     }
   },
   "name": "F[C@](Cl)(Br)I/0.81/selected_atoms/[2, 3, 4, 5]/True",

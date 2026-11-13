@@ -23,7 +23,7 @@ use crate::{
 pub use finish::import_cdxml;
 use roxmltree::Node;
 use serde::Serialize;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SceneError {
@@ -940,11 +940,35 @@ fn scene_result(
         &prepared.fragments,
         &objects.entries,
     )?;
+    let mut molecule = prepared.molecule.clone();
+    // Each fragment contributes distinct collections, even when their local
+    // numbers collide. Assign drawing-wide numbers only on this scene copy,
+    // keeping every disconnected member of a collection together.
+    let numbered: HashSet<_> = molecule
+        .state
+        .metadata
+        .groups
+        .iter()
+        .filter(|group| group.kind != 0 && group.read_id != 0)
+        .map(|group| (group.kind, group.read_id))
+        .collect();
+    let mut taken = HashSet::new();
+    let mut next = HashMap::new();
+    for group in &mut molecule.state.metadata.groups {
+        if group.kind != 0 && (group.read_id == 0 || !taken.insert((group.kind, group.read_id))) {
+            let number = next.entry(group.kind).or_insert(1u32);
+            while numbered.contains(&(group.kind, *number)) || !taken.insert((group.kind, *number))
+            {
+                *number = number.checked_add(1).ok_or(SceneError::Limit)?;
+            }
+            group.read_id = *number;
+        }
+    }
     Ok(CdxmlScene {
         generic,
         generic_labels,
         attachments: prepared.attachments.clone(),
-        molecule: prepared.molecule.clone(),
+        molecule,
         singlets: prepared
             .fragments
             .iter()

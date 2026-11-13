@@ -11,6 +11,9 @@ import sys
 from rdkit import Chem, RDLogger
 from rdkit.Chem import rdChemReactions, rdCIPLabeler
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def molecules(fmt, text):
     if fmt == "mol":

@@ -16,7 +16,7 @@ required-version = ">=0.12.3"
 # RDKit's optional bitmap drawing helpers use Pillow; ReShiki uses Rust instead.
 # Scope this to the tested release. Pillow remains in dev for the image oracle.
 exclude-dependencies = [
-  { package = { name = "rdkit", version = "2026.3.6" }, dependencies = ["pillow"] },
+  { package = { name = "rdkit", version = "2026.9.1" }, dependencies = ["pillow"] },
 ]
 required-environments = [
   "sys_platform == 'darwin' and platform_machine == 'arm64'",

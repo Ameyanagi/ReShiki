@@ -7,6 +7,8 @@ mod hydrogen_isotopes;
 mod rdkit_parity;
 #[path = "support/reference_response.rs"]
 mod reference_response;
+#[path = "support/superatom_export.rs"]
+mod superatom_export;
 use anyhow::Context;
 use reshiki::{
     arrows::ArrowStyle,
@@ -112,10 +114,18 @@ async fn reference_smiles_notice_is_derived_from_expected_drawing() -> anyhow::R
         ("(c1(-c2ccccc2)ccccc1.CC)>>O", false),
         ("C[C@H](O)Cl>>O", false),
     ] {
-        let expected = reference
-            .execute(Request::import("rsmi", text))
-            .await
-            .map_err(anyhow::Error::msg)?;
+        let expected = reference.execute(Request::import("rsmi", text)).await;
+        // RDKit 2026.09 perceives the wedged biaryl axis (rdkit#9190), which the
+        // original worker refuses; axial_extension checks ReShiki's import.
+        if axial {
+            assert_eq!(
+                expected.as_ref().err().map(String::as_str),
+                Some("This bond stereochemistry is not supported yet."),
+                "{text}"
+            );
+            continue;
+        }
+        let expected = expected.map_err(anyhow::Error::msg)?;
         let analysis = expected.analysis.as_ref().context("Missing analysis")?;
         assert!(analysis.smiles_notice.is_none());
         assert!(!analysis.smiles.is_empty());
@@ -201,6 +211,13 @@ async fn compare(
     );
     match (actual, expected) {
         (Ok(mut a), Ok(e)) => {
+            // #870: the MOL export writes collapsed abbreviations as SUP groups.
+            if request.format.as_deref() == Some("mol")
+                && let (Some(document), Some(prepared), Some(output)) =
+                    (&request.document, &prepared, a.output.as_mut())
+            {
+                superatom_export::adapt(document, &prepared.molecule.ids, output)?;
+            }
             match format.as_deref() {
                 Some("cdxml") => {
                     a.output = a.output.map(|xml| hydrogen_isotopes::as_mass_numbers(&xml));

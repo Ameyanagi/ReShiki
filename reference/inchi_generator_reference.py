@@ -13,6 +13,9 @@ else:
     from inchi_input_reference import corpus
     from perception_reference import snapshot
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def generation_corpus():
     yield from corpus()
@@ -44,7 +47,7 @@ def generation_corpus():
 
 def main():
     RDLogger.DisableLog("rdApp.*")
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)), flush=True)
     for name, mol, rings in generation_corpus():
         if any(

@@ -18,6 +18,9 @@ from engine import abbreviations_exchange, cdx_exchange
 from engine.abbreviations import PRESETS
 from engine.worker import chemistry_xml, handle
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def record(anchor="a", members=None, label="OMe", reverse="MeO"):
     return dict(

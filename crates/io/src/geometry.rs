@@ -245,6 +245,9 @@ impl Prepared {
         part.abbreviations
             .retain(|a| a.members.iter().all(|id| selected.contains(id)));
         for atom in &part.atoms {
+            if atom.stereo_group.is_some() {
+                return Err(Error::Unsupported("enhanced stereo groups"));
+            }
             if !atom.centroid.is_empty() || atom.attachment.is_some() {
                 return Err(Error::Unsupported("multi-centre or variable attachments"));
             }
@@ -685,6 +688,7 @@ fn drawing_molecule(document: &Document, graph: crate::chemistry::graph::Graph) 
             graph,
             metadata,
             directions,
+            conformer: None,
             // No chemical caches are claimed for this structurally checked
             // drawing. Geometry uses only its graph and stereo metadata.
             valences: Vec::new(),

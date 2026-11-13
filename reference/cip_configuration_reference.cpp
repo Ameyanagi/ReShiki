@@ -1,5 +1,6 @@
 // Development-only direct calls to pinned native Configuration APIs.
 #include "cip_graph_observation.h"
+#include "cip_standalone_budget.h"
 #include <GraphMol/CIPLabeler/configs/Tetrahedral.h>
 #include <GraphMol/CIPLabeler/configs/Sp2Bond.h>
 #include <GraphMol/CIPLabeler/configs/AtropisomerBond.h>
@@ -72,9 +73,10 @@ int main() {
         }
         if(repeat) graph.changeRoot(view.nodes.at(seed%view.nodes.size()));
       }
-      Rules rules({new Rule1a(),new Rule1b(),new Rule2()});
-      if(full) { rules.add(new Rule3());rules.add(new Rule4a());rules.add(new Rule4b());rules.add(new Rule4c());rules.add(new Rule5New());rules.add(new Rule6()); }
-      RDKit::RWMol empty; assignCIPLabels(empty,budget);
+      Rules rules(full
+        ? std::initializer_list<SequenceRule*>{new Rule1a(),new Rule1b(),new Rule2(),new Rule3(),new Rule4a(),new Rule4b(),new Rule4c(),new Rule5New(),new Rule6()}
+        : std::initializer_list<SequenceRule*>{new Rule1a(),new Rule1b(),new Rule2()});
+      CIPOracle::setComparisonBudget(budget);
       std::ostringstream out; out<<"{\"foci\":[";
       for(std::size_t i=0;i<config->getFoci().size();++i) { if(i)out<<',';out<<config->getFoci()[i]->getIdx(); }
       out<<"],\"carriers\":[";
@@ -85,12 +87,15 @@ int main() {
         auto desc=origin>=0 || nodeAtom>=0 ? config->label(node,graph,rules) : config->label(rules);
         auto chosen=write>=0?Descriptor(write):(kind==0?Descriptor::R:kind==1?Descriptor::E:Descriptor::M);
         auto hasBefore=config->hasPrimaryLabel();
+        // Sp2 primary writes index both carriers, including for forced labels.
+        if(kind==1 && config->getCarriers().size()!=2)
+          throw std::runtime_error("Missing double-bond carriers for primary label");
         config->setPrimaryLabel(chosen);
         std::vector<unsigned> ranks; std::string code;
         const RDKit::RDProps& props=kind==0?static_cast<const RDKit::RDProps&>(*atom):static_cast<const RDKit::RDProps&>(*bond);
         props.getProp(RDKit::common_properties::_CIPNeighborOrder,ranks);
         props.getProp(RDKit::common_properties::_CIPCode,code);
-        auto hasSet=config->hasPrimaryLabel(); config->resetPrimaryLabel();
+        auto hasSet=config->hasPrimaryLabel(); props.clearProp(RDKit::common_properties::_CIPCode);
         out<<"{\"descriptor\":"<<int(desc)<<",\"code\":\""<<code<<"\",\"neighbor_order\":[";
         for(std::size_t i=0;i<ranks.size();++i) { if(i)out<<',';out<<(ranks[i]==IMPLICITH?-1:static_cast<long long>(ranks[i])); }
         out<<"],\"has\":["<<(hasBefore?"true":"false")<<','<<(hasSet?"true":"false")<<','<<(config->hasPrimaryLabel()?"true":"false")<<"],\"stereo\":";

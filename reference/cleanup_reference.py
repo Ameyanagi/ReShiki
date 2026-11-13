@@ -7,7 +7,7 @@ import struct
 import sys
 from pathlib import Path
 
-from rdkit import RDLogger
+from rdkit import Chem, RDLogger
 from rdkit.Chem import rdDepictor
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -15,6 +15,9 @@ import support.frozen_radicals  # noqa: F401  (before check_supported is importe
 from abbreviation_replacement_reference import decorated
 
 from engine import worker
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 
 def f32(value):

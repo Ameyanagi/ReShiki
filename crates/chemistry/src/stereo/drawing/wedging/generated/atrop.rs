@@ -5,7 +5,7 @@ use crate::{
     electronic::Hybridization,
     kekulize::Direction,
     ranking::Metadata,
-    stereo::{allene, atropisomers, drawing::detect_atropisomers},
+    stereo::{allene, atropisomers},
 };
 
 #[cfg(test)]
@@ -85,18 +85,11 @@ fn read_stereo(
         Some(&conformer.positions),
         true,
     )?;
-    let seen = detect_atropisomers(
-        &drawn.graph,
-        &drawn.metadata,
-        &state.directions,
-        Some(conformer),
-    )
-    .map_err(|error| error.to_string())?;
     // Match drawing preparation: provisional axes in small rings are not
     // atropisomers. Recompute hybridizations from the cleared readback too.
     atropisomers(
         &drawn.graph,
-        &seen,
+        &drawn.metadata,
         &vec![Hybridization::Unspecified; drawn.graph.atoms.len()],
         &state.rings.atoms,
     )

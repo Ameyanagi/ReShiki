@@ -24,6 +24,20 @@ fn pivalate() -> (Document, u64, Vec<u64>) {
 }
 
 #[test]
+fn defining_an_abbreviation_cannot_discard_stereo_group_membership() {
+    let (mut doc, _, members) = pivalate();
+    doc.atom_mut(members[0]).unwrap().stereo_group = Some(crate::stereo_groups::StereoGroup {
+        kind: crate::stereo_groups::Kind::Or,
+        number: 3,
+    });
+    assert!(
+        from_selection(&doc, &members, "OPv", "PvO")
+            .unwrap_err()
+            .contains("Enhanced stereo groups")
+    );
+}
+
+#[test]
 fn a_fragment_with_one_outside_bond_becomes_an_entry() {
     let (doc, _, members) = pivalate();
     let defined = from_selection(&doc, &members, " OPv ", "PvO").unwrap();

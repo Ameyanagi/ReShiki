@@ -7,6 +7,7 @@ type TestResult = anyhow::Result<()>;
 
 fn state(graph: Graph) -> Result<State, String> {
     Ok(State {
+        conformer: None,
         metadata: Metadata::unspecified(&graph),
         directions: vec![Direction::None; graph.bonds.len()],
         valences: graph.provisional_valences()?,

@@ -1,3 +1,5 @@
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -62,6 +64,7 @@ fn legacy_stereo_perception_matches_independent_rdkit() -> anyhow::Result<()> {
     let version: Value = serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut labelled, mut ring_stereo, mut bond_stereo, mut rejected) = (0, 0, 0, 0, 0);
+    let mut other_basis = 0;
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -85,11 +88,10 @@ fn legacy_stereo_perception_matches_independent_rdkit() -> anyhow::Result<()> {
                         .iter()
                         .any(|b| matches!(b.stereo, 2..=5)),
                 );
-                difference(
-                    &serde_json::to_value(actual)?,
-                    &serde_json::to_value(expected)?,
-                    "state",
-                )
+                let mut actual = serde_json::to_value(actual)?;
+                let expected = serde_json::to_value(expected)?;
+                other_basis += ring_basis::adopt_rdkit_basis(&mut actual, &expected);
+                difference(&actual, &expected, "state")
             }
             (Err(_), None) => {
                 rejected += 1;
@@ -107,7 +109,7 @@ fn legacy_stereo_perception_matches_independent_rdkit() -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success(), "Oracle failed");
     eprintln!(
-        "Verified {count} stereo cases: {labelled} atom labels, {ring_stereo} ring relationships, {bond_stereo} bond stereo, {rejected} rejected"
+        "Verified {count} stereo cases: {labelled} atom labels, {ring_stereo} ring relationships, {bond_stereo} bond stereo, {rejected} rejected, {other_basis} RDKit SSSR basis differences"
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(

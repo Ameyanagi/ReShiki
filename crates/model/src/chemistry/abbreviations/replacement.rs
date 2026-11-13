@@ -98,6 +98,11 @@ fn native_hypot(x: f64, y: f64) -> f64 {
 /// Also returns whether the attachment atom received a temporary hydrogen.
 fn fragment(preset: &Preset) -> Result<(perception::State, bool)> {
     let prepared = smiles::prepare(&preset.smiles)?;
+    if !prepared.state.metadata.groups.is_empty() {
+        return Err(Error::Definition(
+            "Enhanced stereo groups cannot be retained in abbreviation templates".into(),
+        ));
+    }
     if at(&prepared.state.graph.atoms, 0)?.atomic_number != 0
         || prepared
             .state
@@ -123,7 +128,6 @@ fn fragment(preset: &Preset) -> Result<(perception::State, bool)> {
             .bond_codes
             .iter()
             .any(Option::is_some)
-        || !prepared.state.metadata.groups.is_empty()
     {
         return Err(Error::Definition(
             "Template contains unexpected stereo or map annotations".into(),
@@ -164,6 +168,7 @@ fn fragment(preset: &Preset) -> Result<(perception::State, bool)> {
         graph: sanitized.graph,
         metadata: sanitized.metadata,
         directions: sanitized.directions,
+        conformer: None,
         valences: sanitized.valences,
         conjugated: sanitized.conjugated,
         hybridizations: sanitized.hybridizations,
@@ -235,6 +240,15 @@ fn replace_preset(
         return Err(Error::Selection);
     }
     let remove: HashSet<_> = selection.iter().copied().collect();
+    if document
+        .atoms
+        .iter()
+        .any(|atom| remove.contains(&atom.id) && atom.stereo_group.is_some())
+    {
+        return Err(Error::Definition(
+            "Replacing these atoms would remove enhanced stereo group membership".into(),
+        ));
+    }
     let old = document
         .abbreviations
         .iter()
@@ -389,12 +403,16 @@ fn build_replacement_part(
     anchor: &crate::document::Atom,
 ) -> Result<Document> {
     let (state, added_hydrogen) = fragment(preset)?;
-    let molecule = Molecule {
+    let mut molecule = Molecule {
         rdkit_version: RDKIT_VERSION,
         ids,
         positions,
         state,
     };
+    molecule.set_conformer(crate::chemistry::stereo::wedging::Conformer {
+        positions: molecule.positions.clone(),
+        is_3d: false,
+    });
     let drawing = document::for_import(&molecule, false, &vec![None; molecule.ids.len()])?;
     let state = &drawing.molecule().state;
     if state.metadata.atoms.iter().any(|a| a.chiral_tag != 0)

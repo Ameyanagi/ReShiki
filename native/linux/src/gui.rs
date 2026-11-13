@@ -76,7 +76,9 @@ pub async fn gui_clipboard_request(input: &[u8]) -> Result<Option<Vec<u8>>, Stri
     };
     let request = protocol::parse_request(input)?;
     let response = if request.operation == "write" {
-        let write = client.write(protocol::prepare_offer(&request.representations)?);
+        let offer = protocol::prepare_offer(&request.representations)?;
+        let exit_filter = protocol::exit_text_filter(&offer);
+        let write = client.write_with_exit_filter(offer, exit_filter);
         drop(request);
         #[cfg(feature = "wayland-qa")]
         let result = crate::wayland_qa::write(write).await;

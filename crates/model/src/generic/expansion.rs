@@ -216,6 +216,11 @@ fn admit_structure(
         + source.generic.repeats.len()
         + source.atoms.iter().map(|a| a.centroid.len()).sum::<usize>();
     work.charge(source_size.saturating_mul(definitions.saturating_add(10)))?;
+    if source.atoms.iter().any(|atom| atom.stereo_group.is_some()) {
+        return Err(
+            "Generic expansion does not yet compare enhanced stereo group identities".into(),
+        );
+    }
     if let Mode::Drawing(_) = mode {
         references::protect_references(source, work)?;
     }

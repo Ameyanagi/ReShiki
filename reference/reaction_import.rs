@@ -1,7 +1,11 @@
 #[path = "support/axial_extension.rs"]
 mod axial_extension;
+#[path = "support/cx_lenience.rs"]
+mod cx_lenience;
 #[path = "support/cx_stereo_groups.rs"]
 mod cx_stereo_groups;
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, reaction};
 use serde::{Deserialize, Serialize};
@@ -25,6 +29,7 @@ struct Case {
     failure: Option<String>,
     restriction: Option<GenericRestriction>,
     renumbered: Option<String>,
+    unwrapped: bool,
 }
 fn difference(a: &Value, e: &Value, path: &str) -> Option<String> {
     fn collect(a: &Value, e: &Value, path: &str, failures: &mut Vec<String>) {
@@ -110,7 +115,8 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut mismatches) = (0, 0, 0);
-    let mut renumberings = 0;
+    let (mut renumberings, mut lenient, mut other_basis) = (0, 0, 0);
+    let mut unwrapped = 0;
 
     let mut failures = Vec::new();
     let mut categories = BTreeMap::<String, usize>::new();
@@ -120,6 +126,7 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
         let case: Case = serde_json::from_str(&line?)?;
         let result = reaction::read_rxn(&case.text);
 
+        unwrapped += usize::from(case.unwrapped);
         let failure = if let Some(text) = &case.renumbered {
             renumberings += 1;
             cx_stereo_groups::query_rejection(
@@ -144,8 +151,9 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
             match (&result, &case.expected) {
                 (Ok(actual), Some(expected)) => {
                     accepted += 1;
-
-                    difference(&serde_json::to_value(actual)?, expected, "molecule")
+                    let mut actual = serde_json::to_value(actual)?;
+                    other_basis += ring_basis::adopt_rdkit_basis(&mut actual, expected);
+                    difference(&actual, expected, "molecule")
                 }
                 (Err(_), None) => {
                     rejected += 1;
@@ -162,6 +170,10 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
                         axial_extension::Checked::Reaction(&serde_json::to_value(actual)?),
                     ) =>
                 {
+                    None
+                }
+                (Ok(_), None) if cx_lenience::lenient_query(&case.text) => {
+                    lenient += 1;
                     None
                 }
                 (Ok(_), None) => Some(format!("Accepted invalid input: {:?}", case.failure)),
@@ -209,7 +221,7 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
     }
     let restricted = restrictions.values().sum::<usize>();
     eprintln!(
-        "RXN participants (queries={queries}): {accepted} accepted, {rejected} rejected, {restricted} restricted, {mismatches} mismatches"
+        "RXN participants (queries={queries}): {accepted} accepted, {rejected} rejected, {restricted} restricted, {lenient} accepted where RDKit applies a leniently read SMARTSQ, {other_basis} RDKit SSSR basis differences, {mismatches} mismatches"
     );
     for (category, count) in categories {
         eprintln!("RXN import mismatch category: {count} {category}");
@@ -218,7 +230,6 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
         eprintln!("RXN import restriction category: {count} {category}");
     }
     eprintln!("RXN import: {} mismatch diagnostics", failures.len());
-    eprintln!("RXN import: {renumberings} stereo-group renumberings");
     for (field, count) in fields {
         eprintln!("RXN import mismatch field: {count} {field}");
     }
@@ -228,7 +239,7 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
         "Insufficient RXN coverage"
     );
     assert!(
-        queries || renumberings > 0,
+        cx_stereo_groups::collision_coverage("RXN import", renumberings, unwrapped) || queries,
         "Missing CX stereo-group collision coverage"
     );
     Ok(())

@@ -17,11 +17,8 @@ import reshiki
 
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
 ETHANOL_INCHI = "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3"
-RELATIVE_SMILES = "C[C@H](O)C(=O)O |r|"
-RELATIVE_WARNING = (
-    "The input marks a molecule's stereo configuration as relative (CXSMILES r); "
-    "ReShiki drew it as the stated enantiomer"
-)
+ANY_BOND_SMILES = "C~C"
+ANY_BOND_WARNING = "Bond C1–C2 has any order (~); bond order assumed single"
 CUMULENE_WARNING = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored"
 
 
@@ -140,13 +137,8 @@ def test_offline_name_resolution() -> None:
 @pytest.mark.parametrize(
     ("load", "smiles", "message"),
     [
-        (reshiki.Molecule.from_smiles, RELATIVE_SMILES, RELATIVE_WARNING),
+        (reshiki.Molecule.from_smiles, ANY_BOND_SMILES, ANY_BOND_WARNING),
         (reshiki.parse, "C/C=C=C=C/C", CUMULENE_WARNING),
-        (
-            reshiki.Molecule.from_smiles,
-            "C~C",
-            "Bond C1–C2 has any order (~); bond order assumed single",
-        ),
     ],
 )
 def test_structure_import_warnings(
@@ -173,22 +165,22 @@ def test_ordinary_structure_import_has_no_warning() -> None:
     ["parse", "render", "convert", "properties", "context_parse", "context_constructor", "open"],
 )
 def test_structure_warning_points_to_callers(entrypoint: str, tmp_path: Path) -> None:
-    source = tmp_path / "relative.smi"
-    source.write_text(RELATIVE_SMILES)
+    source = tmp_path / "any-bond.smi"
+    source.write_text(ANY_BOND_SMILES)
     context = reshiki.with_style(font_size=12)
     actions = {
-        "parse": lambda: reshiki.parse(RELATIVE_SMILES),
-        "render": lambda: reshiki.render(RELATIVE_SMILES, "svg"),
-        "convert": lambda: reshiki.convert(RELATIVE_SMILES, to="svg"),
-        "properties": lambda: reshiki.properties(RELATIVE_SMILES),
-        "context_parse": lambda: context.parse(RELATIVE_SMILES),
-        "context_constructor": lambda: context.Molecule.from_smiles(RELATIVE_SMILES),
+        "parse": lambda: reshiki.parse(ANY_BOND_SMILES),
+        "render": lambda: reshiki.render(ANY_BOND_SMILES, "svg"),
+        "convert": lambda: reshiki.convert(ANY_BOND_SMILES, to="svg"),
+        "properties": lambda: reshiki.properties(ANY_BOND_SMILES),
+        "context_parse": lambda: context.parse(ANY_BOND_SMILES),
+        "context_constructor": lambda: context.Molecule.from_smiles(ANY_BOND_SMILES),
         "open": lambda: reshiki.Drawing.open(source),
     }
     with pytest.warns(reshiki.StructureWarning) as captured:
         actions[entrypoint]()
     assert len(captured) == 1
-    assert str(captured[0].message) == RELATIVE_WARNING
+    assert str(captured[0].message) == ANY_BOND_WARNING
     assert Path(captured[0].filename).resolve() == Path(__file__).resolve()
 
 
@@ -196,8 +188,8 @@ def test_structure_warning_can_be_promoted_to_error() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", reshiki.StructureWarning)
         with pytest.raises(reshiki.StructureWarning) as raised:
-            reshiki.Molecule.from_smiles(RELATIVE_SMILES)
-    assert str(raised.value) == RELATIVE_WARNING
+            reshiki.Molecule.from_smiles(ANY_BOND_SMILES)
+    assert str(raised.value) == ANY_BOND_WARNING
 
 
 def test_reaction_smiles_and_rxn(fixtures: Path) -> None:
@@ -451,24 +443,24 @@ def test_batch_svg_text_mode(text: str) -> None:
 def test_batch_collects_structure_warnings_without_emitting() -> None:
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
-        results = reshiki.render_many([RELATIVE_SMILES, "CCO"], "svg")
+        results = reshiki.render_many([ANY_BOND_SMILES, "CCO"], "svg")
     assert all(isinstance(value, str) for value in results)
     assert results.errors == []
-    assert results.warnings == [(0, RELATIVE_WARNING)]
+    assert results.warnings == [(0, ANY_BOND_WARNING)]
     assert not captured
 
 
 def test_batch_path_warnings_retain_input_order(tmp_path: Path) -> None:
-    source = tmp_path / "relative.smi"
-    source.write_text(RELATIVE_SMILES)
+    source = tmp_path / "any-bond.smi"
+    source.write_text(ANY_BOND_SMILES)
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("error", reshiki.StructureWarning)
-        results = reshiki.render_many([RELATIVE_SMILES, source, "C/C=C=C=C/C", "CCO"], "svg")
+        results = reshiki.render_many([ANY_BOND_SMILES, source, "C/C=C=C=C/C", "CCO"], "svg")
     assert all(isinstance(value, str) for value in results)
     assert results.errors == []
     assert results.warnings == [
-        (0, RELATIVE_WARNING),
-        (1, RELATIVE_WARNING),
+        (0, ANY_BOND_WARNING),
+        (1, ANY_BOND_WARNING),
         (2, CUMULENE_WARNING),
     ]
     assert not captured

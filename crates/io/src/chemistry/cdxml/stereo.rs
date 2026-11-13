@@ -63,13 +63,6 @@ pub(super) fn finish(part: &mut Fragment) -> Result<()> {
         part.graph = result.graph;
         part.metadata = result.metadata;
     }
-    part.metadata = stereo::detect_atropisomers(
-        &part.graph,
-        &part.metadata,
-        &part.directions,
-        Some(&conformer),
-    )
-    .map_err(|e| Error::Stereo(e.to_string()))?;
     for ((bond, meta), direction) in part
         .graph
         .bonds

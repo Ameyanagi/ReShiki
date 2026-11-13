@@ -186,6 +186,8 @@ impl Drawing {
             atom.cip_code = None;
         }
         state.properties.bond_codes.fill(None);
+        // Group membership describes the sample, not an atom's CIP descriptor.
+        state.metadata.groups.clear();
         let state = label::assign(&state, &Default::default())?.state;
         Ok(Labels {
             rdkit_version: RDKIT_VERSION.into(),
@@ -359,7 +361,7 @@ impl Molecule {
             crate::chemistry::depict::compute(&self.state, &ranks, None, Default::default())
                 .map_err(|error| invalid(format!("Projected label depiction: {error}")))?;
         let mut detached = self.clone();
-        detached.positions = conformer.positions;
+        detached.set_conformer(conformer);
         for_drawing(&detached, base)
     }
 }
@@ -449,7 +451,10 @@ pub fn for_generated(
             dummy_labels.push(None);
         }
         molecule.state = expanded.state;
-        molecule.positions = expanded.positions;
+        molecule.set_conformer(wedging::Conformer {
+            positions: expanded.positions,
+            is_3d: false,
+        });
         if !expanded.parents.is_empty() {
             fusion_hydrogens::place(&mut molecule, &expanded.parents, &dummy_labels, options)?;
         }
@@ -531,6 +536,10 @@ pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
     if molecule.rdkit_version != RDKIT_VERSION
         || molecule.ids.len() != n
         || molecule.positions.len() != n
+        || state
+            .conformer
+            .as_ref()
+            .is_some_and(|conformer| conformer.positions.len() != n)
         || molecule.ids.iter().collect::<HashSet<_>>().len() != n
         || state.hybridizations.len() != n
         || state.conjugated.len() != e
@@ -548,7 +557,6 @@ pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
             .enumerate()
             .any(|(i, a)| !allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation))
         || state.metadata.bonds.iter().any(|b| b.stereo > 7)
-        || !state.metadata.groups.is_empty()
     {
         return Err(invalid(
             "Unsupported drawing stereochemistry or radical count",
@@ -668,6 +676,11 @@ fn reconstruct(
         .filter(|b| b.order == 4)
         .flat_map(|b| [b.a, b.b])
         .collect();
+    let groups = if base.is_some() {
+        Vec::new()
+    } else {
+        atom_stereo_groups(molecule)?
+    };
     let atoms = reconstruct_atoms(
         &work,
         molecule,
@@ -675,6 +688,7 @@ fn reconstruct(
         dummy_labels,
         &circular,
         &adjacent,
+        &groups,
     )?;
     let ordered = ordered_bonds(base, &bonds_by_pair, e)?;
     let (mut bonds, bond_indices) = reconstruct_bonds(&work, molecule, ordered, e)?;
@@ -694,6 +708,13 @@ fn reconstruct(
     // Kept 3D models still need the version that validates them.
     crate::models3d::require_version(&mut document);
     if document
+        .atoms
+        .iter()
+        .any(|atom| atom.stereo_group.is_some())
+    {
+        document.require_version(crate::document::STEREO_GROUPS);
+    }
+    if document
         .abbreviations
         .iter()
         .any(|group| group.exit.is_some())
@@ -705,6 +726,60 @@ fn reconstruct(
         document,
         bond_indices,
     })
+}
+
+/// The drawing keeps atom members; import callers report bond members, which
+/// it cannot represent. A group keeps its file number; a group without one
+/// gets a number no group of the molecule uses.
+pub fn atom_stereo_groups(
+    molecule: &Molecule,
+) -> Result<Vec<Option<crate::stereo_groups::StereoGroup>>, Error> {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let groups: Vec<_> = molecule
+        .state
+        .metadata
+        .groups
+        .iter()
+        .filter_map(|group| {
+            let kind = match group.kind {
+                1 => Kind::Or,
+                2 => Kind::And,
+                _ => return None,
+            };
+            let number = if group.read_id != 0 {
+                group.read_id
+            } else {
+                group.write_id
+            };
+            Some((StereoGroup { kind, number }, &group.atoms))
+        })
+        .collect();
+    let mut taken: HashSet<_> = groups.iter().map(|(label, _)| *label).collect();
+    let mut atoms = vec![None; molecule.ids.len()];
+    for (mut label, members) in groups {
+        if label.number == 0 {
+            label.number = (1..)
+                .find(|&number| {
+                    taken.insert(StereoGroup {
+                        kind: label.kind,
+                        number,
+                    })
+                })
+                .ok_or_else(|| invalid("Stereo group number overflow"))?;
+        }
+        for &index in members {
+            let atom = atoms
+                .get_mut(index)
+                .ok_or_else(|| invalid("Missing stereo group atom"))?;
+            if atom.is_some() {
+                return Err(invalid(
+                    "Overlapping enhanced stereo atom groups cannot be represented in a drawing",
+                ));
+            }
+            *atom = Some(label);
+        }
+    }
+    Ok(atoms)
 }
 
 /// Neighbor IDs per atom and the bond index of each unordered ID pair.
@@ -742,6 +817,7 @@ fn reconstruct_atoms(
     dummy_labels: Option<&[Option<String>]>,
     circular: &HashSet<u64>,
     adjacent: &[Vec<u64>],
+    groups: &[Option<crate::stereo_groups::StereoGroup>],
 ) -> Result<Vec<Atom>, Error> {
     let state = &molecule.state;
     work.state
@@ -754,6 +830,11 @@ fn reconstruct_atoms(
             let metadata = at(&work.state.metadata.atoms, i)?;
             let p = at(&work.positions, i)?;
             let old = previous.get(&id).copied();
+            // Existing drawing membership survives perception pruning.
+            let stereo_group = match old {
+                Some(atom) => atom.stereo_group,
+                None => *at(groups, i)?,
+            };
             let element = if a.atomic_number == 0 {
                 dummy_labels
                     .and_then(|labels| labels.get(i))
@@ -787,6 +868,7 @@ fn reconstruct_atoms(
                 steroid_label: None,
                 undefined_stereo: false,
                 undefined_pseudoasymmetric: false,
+                stereo_group,
                 display: old.map(|a| a.display.clone()).unwrap_or_default(),
                 marks: old.map(|a| a.marks.clone()).unwrap_or_default(),
                 mark_serial: old.map_or(0, |a| a.mark_serial),

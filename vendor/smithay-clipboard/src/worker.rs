@@ -111,7 +111,7 @@ fn worker_impl(
                     }
                     Command::Rich(operation) => state.request(&command_connection, operation),
                     Command::Wake => {}
-                    Command::Exit => state.exit = true,
+                    Command::Exit => state.exit_requested = true,
                 }
             } else {
                 state.exit = true;
@@ -136,8 +136,13 @@ fn worker_impl(
         // from continuously feeding wake messages into that dispatch.
         client.wake_pending.store(false, Ordering::Release);
         state.maintain();
-        if event_loop.dispatch(state.timeout(), &mut state).is_err() || state.exit {
+        if state.exit || event_loop.dispatch(state.timeout(), &mut state).is_err() {
             break;
+        }
+        // Process any focus/selection events in this dispatch before deciding
+        // whether we still own a selection that can be handed off.
+        if std::mem::take(&mut state.exit_requested) {
+            state.begin_exit();
         }
     }
 }

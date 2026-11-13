@@ -19,8 +19,9 @@ Assistant-generated schemes already contain reactant and product roles, includin
 ## Copy a drawn reaction
 
 **Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
-It supplies no chemical plain text. To paste a structure into a text field such
-as SciFinder's, select it and use **Cmd/Ctrl+Alt+C**. With no selected arrow,
+It supplies no chemical plain text, except SMILES on Linux, and none for a
+reaction. To paste a structure into a text field such as SciFinder's, select it
+and use **Cmd/Ctrl+Alt+C**. With no selected arrow,
 this copies molecular SMILES and retains all selected disconnected molecular
 components. Inspect the
 receiving editor's interpretation of a mixture or salt; copying all components

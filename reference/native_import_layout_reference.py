@@ -8,6 +8,9 @@ import native_import_reference as reference
 from rdkit import Chem, RDLogger, rdBase
 from smiles_read_reference import cases
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def main():
     import json

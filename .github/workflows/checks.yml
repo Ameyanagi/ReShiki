@@ -36,6 +36,11 @@ jobs:
       native: ${{ steps.scope.outputs.native }}
       live: ${{ steps.scope.outputs.live }}
       geometry: ${{ steps.scope.outputs.geometry }}
+      # macOS legs run only on stacked merge/* PRs, full-ci-labelled PRs, main,
+      # nightly, release and manual runs; `matrix` (scripts/ci_scope.py) leaves
+      # their rows out otherwise, so no macOS runner is taken.
+      macos: ${{ steps.scope.outputs.macos }}
+      matrix: ${{ steps.scope.outputs.matrix }}
     steps:
       - &actions_runtime
         name: Patch the Actions Node runtime when needed
@@ -152,13 +157,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-15
-            python: "3.12.15"
-          - os: windows-2022
-            python: cpython-3.12.15-windows-x86_64-none
-          - os: ubuntu-22.04
-            python: "3.12.15"
+        include: ${{ fromJSON(needs.scope.outputs.matrix).python }}
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python }}
@@ -268,17 +267,7 @@ jobs:
       fail-fast: false
       matrix:
         partition: [1, 2]
-        platform:
-          - os: macos-15
-            target: aarch64-apple-darwin
-            python: "3.12.15"
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-            msvc_arch: x64
-            python: cpython-3.12.15-windows-x86_64-none
-          - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            python: "3.12.15"
+        platform: ${{ fromJSON(needs.scope.outputs.matrix).rust }}
     runs-on: ${{ matrix.platform.os }}
     permissions:
       contents: read
@@ -453,17 +442,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-15
-            target: aarch64-apple-darwin
-            python: "3.12.15"
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-            msvc_arch: x64
-            python: cpython-3.12.15-windows-x86_64-none
-          - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            python: "3.12.15"
+        include: ${{ fromJSON(needs.scope.outputs.matrix).rust }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -574,21 +553,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-15
-            target: aarch64-apple-darwin
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-            msvc_arch: x64
-          - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
-            msvc_arch: arm64
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
+        include: ${{ fromJSON(needs.scope.outputs.matrix).geometry }}
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
