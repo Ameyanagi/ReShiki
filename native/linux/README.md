@@ -27,6 +27,10 @@ consumer. Primary selections are not changed by drawing Copy/Paste.
 
 Wayland ownership lasts with the GUI clipboard owner. Persistence after ReShiki
 exits depends on the desktop clipboard manager and must be tested separately.
+GNOME's keeps one MIME type and prefers UTF-8 text, so at exit the GUI owner
+re-offers an ordinary Copy without its text aliases and waits up to 1.5 s for a
+reader to finish, leaving the SVG picture. This needs keyboard focus at exit;
+without it GNOME keeps the text.
 The standalone worker is X11-only. The optional LibreOffice adapter must publish
 through its host's `SystemClipboard` and use workers only to validate/render data.
 
@@ -36,9 +40,11 @@ representations use their explicit MIME types. Native/chemical formats precede
 pictures and text on ordinary Paste; Paste picture considers only raster formats.
 Advertising a picture does not claim it is editable chemistry.
 
-Ordinary **Ctrl+C** publishes drawing data, CDX, PDF, PNG and SVG without plain
-text aliases. Use **Ctrl+Alt+C** to copy chemical text separately: molecular SMILES
-or, for a supported selected reaction, ChemDoodle reaction JSON. Explicit text
+Ordinary **Ctrl+C** publishes drawing data, CDX, PDF, PNG and SVG. When
+**Ctrl+Alt+C** would copy molecular SMILES, Copy adds that SMILES as the plain
+text aliases; a reaction or a selection without molecules gets none. Use
+**Ctrl+Alt+C** to copy chemical text separately: molecular SMILES or, for a
+supported selected reaction, ChemDoodle reaction JSON. Explicit text
 formats from **Copy as…** also publish ordinary clipboard text.
 
 Decoded data is limited to 64 MiB combined, the JSON request/response to 128 MiB,
@@ -100,8 +106,9 @@ The script requires a new output directory and the workflow's compositor, GTK4,
 input and Mesa packages. It sends real compositor keyboard events for Copy,
 chemical text, Cut, Copy Image, Paste, Save and Undo. A separate focused GTK window
 reads exact native JSON/CDX/PDF/PNG/SVG bytes and publishes foreign clipboard items
-on a real F12 event. Ordinary Copy is checked for absent plain text aliases;
-**Ctrl+Alt+C** is checked separately for SMILES text. Saved native drawings verify
+on a real F12 event. Ordinary Copy is checked for its SMILES plain text aliases,
+and Paste for preferring the drawing over text; **Ctrl+Alt+C** is checked
+separately for SMILES text. Saved native drawings verify
 deletion, restoration and editable paste.
 
 The default-off `wayland-qa` feature observes normal App updates and offers two

@@ -101,7 +101,7 @@ impl State {
         };
 
         match operation {
-            Operation::Write { offer, completion } => {
+            Operation::Write { offer, exit_mime_types, completion } => {
                 if seat.latest_serial == 0 {
                     completion.finish(Err(io::Error::other("no valid clipboard input serial")));
                     return;
@@ -132,7 +132,7 @@ impl State {
                     },
                 );
                 source.set_selection(device, seat.latest_serial);
-                self.data_sources.push(ClipboardSource { source, offer });
+                self.data_sources.push(ClipboardSource { source, offer, exit_mime_types });
             },
             Operation::Read { mime_types, generation: expected, completion } => {
                 let selection = device.data().selection_offer();
@@ -269,6 +269,9 @@ impl State {
 
     pub fn maintain(&mut self) {
         let now = Instant::now();
+        if self.exit_handoff.as_ref().is_some_and(|handoff| now >= handoff.deadline) {
+            self.exit = true;
+        }
         let expired: Vec<_> = self
             .binary
             .pending
@@ -301,7 +304,16 @@ impl State {
 
     pub fn timeout(&self) -> Option<Duration> {
         let now = Instant::now();
-        self.binary.timeout(now).into_iter().chain(self.transfers.timeout(now)).min()
+        self.binary
+            .timeout(now)
+            .into_iter()
+            .chain(self.transfers.timeout(now))
+            .chain(
+                self.exit_handoff
+                    .as_ref()
+                    .map(|handoff| handoff.deadline.saturating_duration_since(now)),
+            )
+            .min()
     }
 }
 

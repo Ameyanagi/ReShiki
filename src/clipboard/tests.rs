@@ -632,10 +632,19 @@ async fn both_canvas_modes_copy_visible_ink_without_background_objects() {
             .await
             .unwrap();
         assert!(outcome.external_editable, "{:?}", outcome.notices);
-        assert!(representations.iter().all(|item| !matches!(
-            item.kind.as_str(),
-            "public.utf8-plain-text" | "org.opensmiles.smiles"
-        )));
+        let text = representations
+            .iter()
+            .find(|item| item.kind == "public.utf8-plain-text");
+        if cfg!(target_os = "linux") {
+            assert_eq!(text.unwrap().bytes().unwrap(), b"C=O");
+        } else {
+            assert!(text.is_none());
+        }
+        assert!(
+            representations
+                .iter()
+                .all(|item| item.kind != "org.opensmiles.smiles")
+        );
         let native = representations.iter().find(|r| r.kind == NATIVE).unwrap();
         let original: Document = serde_json::from_slice(&native.bytes().unwrap()).unwrap();
         assert_eq!(original.canvas_theme, theme);

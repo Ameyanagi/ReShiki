@@ -351,7 +351,8 @@ async fn prepare_copy(
 }
 
 /// A browser can hold neither CDX nor PDF, so its copy has SMILES text for
-/// other apps instead, when the drawing has one.
+/// other apps instead, when the drawing has one. Linux desktop also includes
+/// SMILES when chemical text copy selects that format.
 async fn prepare_copy_for(
     engine: LocalEngine,
     original: Document,
@@ -395,7 +396,14 @@ async fn prepare_copy_with_limit(
             &serde_json::to_vec(&doc).map_err(|e| e.to_string())?,
         ));
     }
-    if !image_only && browser {
+    let wants_smiles = !image_only
+        && (browser
+            || (cfg!(target_os = "linux")
+                && matches!(
+                    chemical_text_snapshot(&doc, &doc),
+                    Ok((CopyFormat::Smiles, _))
+                )));
+    if wants_smiles {
         let mut request = Request::molecule("export", doc.clone());
         request.format = Some("smiles".into());
         if !doc.atoms.is_empty()
@@ -414,7 +422,8 @@ async fn prepare_copy_with_limit(
                 smiles.as_bytes(),
             ));
         }
-    } else if !image_only {
+    }
+    if !image_only && !browser {
         // External editors receive explicit visible ink colors, without the
         // source page background. Native data above retains the original theme.
         // Resolve depth paint against the source paper before changing the
