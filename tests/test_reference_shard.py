@@ -9,7 +9,26 @@ import shutil
 import subprocess
 import unittest
 
-from scripts.run_reference_shard import METADATA_COMMAND, ROOT, integration_targets
+from scripts.run_reference_shard import (
+    DEFAULT_SECONDS,
+    METADATA_COMMAND,
+    ROOT,
+    SHARD_SECONDS,
+    TARGET_SECONDS,
+    assign_targets,
+    integration_targets,
+)
+
+
+class AssignmentTests(unittest.TestCase):
+    def test_every_target_runs_once_and_shard_0_leaves_room_for_its_workspace_tests(self):
+        targets = sorted([*TARGET_SECONDS, *(f"quick_{index}" for index in range(40))])
+        shards = assign_targets(targets, 4)
+        self.assertEqual(sorted(name for shard in shards for name in shard), targets)
+        loads = [
+            sum(TARGET_SECONDS.get(name, DEFAULT_SECONDS) for name in shard) for shard in shards
+        ]
+        self.assertLess(loads[0] + SHARD_SECONDS[0] / 2, min(loads[1:]))
 
 
 @unittest.skipUnless(shutil.which("cargo"), "Cargo is required to read workspace targets")

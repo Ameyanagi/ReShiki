@@ -10,27 +10,60 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 METADATA_COMMAND = ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"]
-# Approximate seconds from the Windows x64 Checks run. The aromatic estimate
-# allows headroom over the measured four-worker live + golden replay (~380 s).
-# These affect assignment only; new/unmeasured targets cost 20 s.
+# Wall seconds per target in the 2026-11-13 live run on Windows x64, the slowest
+# platform (Linux and macOS take 35-100% of these). Targets under 20 s and
+# new/unmeasured targets cost DEFAULT_SECONDS. These affect assignment only.
 # Longest-first scheduling avoids putting all expensive oracle suites together.
 TARGET_SECONDS = {
-    "native_aromatic": 500,
-    "inchi_generator": 231,
-    "engine_migration": 230,
-    "reaction_smiles": 167,
-    "aromatic_display": 107,
-    "wedging": 98,
-    "native_import": 96,
-    "depict_pipeline": 74,
-    "kekulize": 66,
-    "perception": 65,
-    "sanitize": 65,
-    "reaction_import": 61,
-    "drawn_stereo": 60,
-    "smiles_traversal": 58,
+    "abbreviation_detection": 3214,
+    "smiles_traversal": 1699,
+    "abbreviation_engine": 1532,
+    "native_aromatic": 609,
+    "engine_migration": 437,
+    "inchi_generator": 342,
+    "abbreviation_replacement": 200,
+    "native_import": 181,
+    "reaction_smiles": 165,
+    "aromatic_display": 95,
+    "reaction_import": 80,
+    "wedging": 80,
+    "inchi_reader": 75,
+    "depict_pipeline": 70,
+    "depict_expansion": 67,
+    "kekulize": 63,
+    "molfile_drawing": 63,
+    "native_response": 58,
+    "drawing_output": 55,
+    "perception": 49,
+    "sanitize": 49,
+    "composed_native_roundtrip": 47,
+    "drawn_stereo": 46,
+    "metafile_worker": 46,
+    "reaction_output": 45,
+    "reaction_drawing": 41,
+    "smiles_stereo": 40,
+    "molfile_import": 39,
+    "smiles_write": 38,
+    "bond_geometry": 33,
+    "cip_pairing": 31,
+    "molfile": 31,
+    "cip_rules": 29,
+    "ranking": 29,
+    "document_preparation": 28,
+    "stereo": 27,
+    "cip_ranking": 26,
+    "stated_ez_wedges": 25,
+    "cdxml_scene": 23,
+    "cip_molecule": 21,
+    "native_cleanup": 21,
+    "smiles_read": 21,
+    "haworth": 20,
+    "native_routing": 20,
 }
-DEFAULT_SECONDS = 20
+DEFAULT_SECONDS = 10
+# Shard 0 also runs the workspace library, binary and doc tests and every
+# WORKSPACE_TARGET_SHARDS target: about 1700 s on Windows x64 in the same run.
+SHARD_SECONDS = {0: 1700}
 # Non-root integration targets need a package-qualified command. Keep their
 # assignment explicit so a new workspace test can never silently disappear.
 # Shard 0 exists for every --count, so an assignment can never fall outside it.
@@ -99,7 +132,7 @@ def assign_targets(targets: list[str], count: int) -> list[list[str]]:
     if len(targets) != len(set(targets)) or any(not name.strip() for name in targets):
         raise ValueError("Integration target names must be unique and nonempty")
     shards: list[list[str]] = [[] for _ in range(count)]
-    loads = [0] * count
+    loads = [SHARD_SECONDS.get(index, 0) for index in range(count)]
     for name in sorted(
         targets, key=lambda name: (-TARGET_SECONDS.get(name, DEFAULT_SECONDS), name)
     ):
@@ -174,7 +207,7 @@ def run_shard(index: int, count: int, root: Path = ROOT) -> int:
     print("\n".join(f"  {name}" for name in selected), flush=True)
     manifest["targets"] = selected
     manifest["total_targets"] = len(targets)
-    manifest["estimated_seconds"] = sum(
+    manifest["estimated_seconds"] = SHARD_SECONDS.get(index, 0) + sum(
         TARGET_SECONDS.get(name, DEFAULT_SECONDS) for name in selected
     )
     batches: list[dict[str, Any]] = [

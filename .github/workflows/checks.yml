@@ -23,7 +23,9 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: checks-${{ github.workflow }}-${{ github.ref }}
+  # Manual and scheduled runs (the live reference suite) do not queue behind a
+  # push run of the same branch; the 2026-11-13 live run waited 35 minutes.
+  group: checks-${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id || 'ref' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   UV_PYTHON_PREFERENCE: only-managed
@@ -624,8 +626,17 @@ jobs:
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          shared-key: reference-${{ matrix.shard }}
+          # All shards compile the same dependencies, and rust-cache drops the
+          # workspace's own artifacts before saving, so one cache per platform
+          # serves every shard. Twelve per-shard caches (about 16 GB) overflowed
+          # the 10 GB repository cache: no shard ever restored one, and saving
+          # them evicted the `rust` caches every pull request restores.
+          # macOS and Windows read the `rust` cache, which the rust job warms
+          # with the reference feature on every main push. The Linux rust job
+          # runs in a container with a different cache key, so Linux keeps a
+          # reference cache that shard 0, the superset build, saves.
+          save-if: ${{ github.ref == 'refs/heads/main' && runner.os == 'Linux' && matrix.shard == 0 }}
+          shared-key: ${{ runner.os == 'Linux' && 'reference' || 'rust' }}
           cache-on-failure: true
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
