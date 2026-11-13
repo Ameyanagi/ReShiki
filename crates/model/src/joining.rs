@@ -321,7 +321,12 @@ impl Prepared {
         // Restore IDs of moved objects simultaneously. Only shared atoms disappear;
         // destination IDs, labels, remote stereo and unrelated objects retain identity.
         for a in &mut placed.atoms {
-            a.id = original_id(a.id);
+            if let Some(&id) = restore.get(&a.id) {
+                a.id = id;
+                // Template insertion gives copies fresh groups; these atoms were
+                // moved within this drawing and keep their original membership.
+                a.stereo_group = self.fragment.atom(id).and_then(|atom| atom.stereo_group);
+            }
             for member in &mut a.centroid {
                 *member = original_id(*member);
             }

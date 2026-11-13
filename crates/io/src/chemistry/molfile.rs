@@ -6,6 +6,7 @@ use super::{
     document::{self, Molecule},
     graph::{Atom, Graph, Valence},
     kekulize::Direction,
+    ranking::{Metadata, StereoGroup},
     stereo::{allene, perception::RingKind, wedging},
 };
 use std::collections::{HashMap, HashSet};
@@ -55,14 +56,15 @@ fn at<T>(items: &[T], index: usize) -> Result<&T, Error> {
 }
 
 /// Write a prepared 2D molecule using the default publication interchange
-/// conventions. V3000 is automatic for dative bonds, large graphs/coordinates.
-/// Queries, enhanced stereo groups and unsupported atom stereo are not drawing data.
+/// conventions. V3000 is automatic for enhanced stereo groups, dative bonds,
+/// and large graphs/coordinates. Queries and unsupported atom stereo are not
+/// drawing data.
 pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
     write_part(molecule, options, false, &[], &[], false, false)
 }
 
-/// Drawing stereocenters describe a specific configuration. Mark them absolute
-/// so consumers such as ChemDraw do not interpret the file as a racemate.
+/// Ungrouped drawing stereocenters describe a specific configuration. Mark them
+/// absolute while retaining enhanced stereo groups for relative configurations.
 /// Keep `write` unchanged for RDKit-compatible reference output.
 pub fn write_absolute(molecule: &Molecule, options: Options) -> Result<String, Error> {
     write_part(molecule, options, false, &[], &[], true, false)
@@ -316,7 +318,8 @@ pub(crate) fn reaction_ctab_drawing(
         Options { force_v3000: true },
         true,
         &[],
-        false,
+        !molecule.state.metadata.groups.is_empty()
+            || doc.atoms.iter().any(|atom| atom.stereo_group.is_some()),
     )
 }
 
@@ -355,7 +358,6 @@ fn write_part(
         || source.hybridizations.len() != n
         || source.conjugated.len() != e
         || source.rings.kind != RingKind::Symmetric
-        || !source.metadata.groups.is_empty()
         || source.metadata.atoms.iter().enumerate().any(|(center, a)| {
             !allene::supported(&source.graph, center, a.chiral_tag, a.chiral_permutation)
         })
@@ -435,6 +437,7 @@ fn write_part(
     let v3000 = options.force_v3000
         || n > 999
         || e > 999
+        || !source.metadata.groups.is_empty()
         || graph.bonds.iter().any(|b| b.order == 5)
         || molecule.positions.iter().any(|p| {
             [p.x, p.y, p.z]
@@ -443,6 +446,7 @@ fn write_part(
         });
     let chiral = u8::from(
         absolute
+            && !source.metadata.groups.iter().any(|group| group.kind != 0)
             && source
                 .metadata
                 .atoms
@@ -584,6 +588,9 @@ fn write_part(
         if e != 0 {
             output.push_str("M  V30 END BOND\n");
         }
+        if !source.metadata.groups.is_empty() || reaction && absolute {
+            collections(&mut output, &source.metadata, absolute)?;
+        }
         output.push_str("M  V30 END CTAB\n");
     } else {
         properties(&mut output, graph, valences, &degrees, singlets)?;
@@ -592,6 +599,132 @@ fn write_part(
         output.push_str("M  END\n");
     }
     Ok(output)
+}
+
+fn collections(output: &mut String, metadata: &Metadata, absolute: bool) -> Result<(), Error> {
+    // Mixed enhanced stereo needs explicit ABS members, including a wholly
+    // absolute participant alongside another participant's relative group.
+    let groups = if absolute {
+        let mut grouped_atoms = HashSet::new();
+        let mut grouped_bonds = HashSet::new();
+        let mut groups = Vec::new();
+        for group in metadata.groups.iter().filter(|group| group.kind != 0) {
+            grouped_atoms.extend(group.atoms.iter().copied());
+            grouped_bonds.extend(group.bonds.iter().copied());
+            let mut group = group.clone();
+            group.bonds.retain(|&index| {
+                metadata
+                    .bonds
+                    .get(index)
+                    .is_some_and(|bond| matches!(bond.stereo, 6 | 7))
+            });
+            // Drawing labels are global, including across RXN participants.
+            // The plain writer instead follows RDKit's default renumbering.
+            if group.write_id == 0 {
+                group.write_id = group.read_id;
+            }
+            groups.push(group);
+        }
+        let ungrouped = StereoGroup {
+            atoms: metadata
+                .atoms
+                .iter()
+                .enumerate()
+                .filter_map(|(index, atom)| {
+                    (matches!(atom.chiral_tag, 1 | 2 | 5) && !grouped_atoms.contains(&index))
+                        .then_some(index)
+                })
+                .collect(),
+            bonds: metadata
+                .bonds
+                .iter()
+                .enumerate()
+                .filter_map(|(index, bond)| {
+                    (matches!(bond.stereo, 6 | 7) && !grouped_bonds.contains(&index))
+                        .then_some(index)
+                })
+                .collect(),
+            ..StereoGroup::default()
+        };
+        if !ungrouped.atoms.is_empty() || !ungrouped.bonds.is_empty() {
+            groups.insert(0, ungrouped);
+        }
+        groups
+    } else {
+        metadata.groups.clone()
+    };
+    if groups.is_empty() {
+        return Ok(());
+    }
+    let mut used = [HashSet::new(), HashSet::new(), HashSet::new()];
+    for group in &groups {
+        if group.kind != 0 && group.write_id != 0 {
+            used.get_mut(usize::from(group.kind))
+                .ok_or_else(|| invalid("Unknown stereo group kind"))?
+                .insert(group.write_id);
+        }
+    }
+    let mut next = [1u32; 3];
+    output.push_str("M  V30 BEGIN COLLECTION\n");
+    for group in &groups {
+        let mut line = match group.kind {
+            0 => String::from("M  V30 MDLV30/STEABS"),
+            kind @ (1 | 2) => {
+                let mut id = group.write_id;
+                if id == 0 {
+                    let index = usize::from(kind);
+                    let used_ids = used
+                        .get_mut(index)
+                        .ok_or_else(|| invalid("Unknown stereo group kind"))?;
+                    let next_id = next
+                        .get_mut(index)
+                        .ok_or_else(|| invalid("Unknown stereo group kind"))?;
+                    while used_ids.contains(next_id) {
+                        *next_id = next_id
+                            .checked_add(1)
+                            .ok_or_else(|| invalid("Stereo group IDs exhausted"))?;
+                    }
+                    id = *next_id;
+                    used_ids.insert(id);
+                }
+                format!(
+                    "M  V30 MDLV30/STE{}{id}",
+                    if kind == 1 { "REL" } else { "RAC" }
+                )
+            }
+            _ => return Err(invalid("Unknown stereo group kind")),
+        };
+        collection_list(output, &mut line, "ATOMS", &group.atoms)?;
+        // RDKit's reference writer emits only atom members. Absolute drawing
+        // exchange can also retain configured axes supplied by a caller.
+        if absolute && !group.bonds.is_empty() {
+            collection_list(output, &mut line, "BONDS", &group.bonds)?;
+        }
+        writeln!(output, "{line}")?;
+    }
+    output.push_str("M  V30 END COLLECTION\n");
+    Ok(())
+}
+
+fn collection_list(
+    output: &mut String,
+    line: &mut String,
+    kind: &str,
+    members: &[usize],
+) -> Result<(), Error> {
+    write!(line, " {kind}=({}", members.len())?;
+    for &member in members {
+        let item = (member + 1).to_string();
+        if line.len() + 1 + item.len() > 78 {
+            writeln!(output, "{line} -")?;
+            *line = String::from("M  V30 ");
+        } else {
+            line.push(' ');
+        }
+        line.push_str(&item);
+    }
+    line.push(')');
+    Ok(())
 }
 
 fn nondefault_valence(atom: &Atom, cache: &Valence, degree: usize) -> Result<u32, Error> {

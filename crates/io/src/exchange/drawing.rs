@@ -265,8 +265,21 @@ fn write_impl(
         }
     }
     let interchange = crate::attachments::interchange_graph(document).map_err(invalid)?;
-    let (graph, rings) = match crate::chemistry::document::prepare(&interchange) {
-        Ok(molecule) => (molecule.state.graph, molecule.state.rings.atoms),
+    let (graph, rings, stereocentres) = match crate::chemistry::document::prepare(&interchange) {
+        Ok(molecule) => {
+            let stereocentres = molecule
+                .state
+                .metadata
+                .atoms
+                .iter()
+                .map(|atom| matches!(atom.chiral_tag, 1 | 2 | 5))
+                .collect::<Vec<_>>();
+            (
+                molecule.state.graph,
+                molecule.state.rings.atoms,
+                stereocentres,
+            )
+        }
         Err(
             crate::chemistry::document::Error::Sanitization(_)
             | crate::chemistry::document::Error::DistanceBonds,
@@ -275,7 +288,12 @@ fn write_impl(
             let rings = crate::chemistry::rings::perceive(&graph, Default::default())
                 .map_err(|e| invalid(e.to_string()))?
                 .atoms;
-            (graph, rings)
+            let stereocentres = document
+                .atoms
+                .iter()
+                .map(|atom| atom.stereo.is_some())
+                .collect();
+            (graph, rings, stereocentres)
         }
         Err(error) => return Err(error.into()),
     };
@@ -312,7 +330,7 @@ fn write_impl(
         crate::palette::Palette::of(original),
     )?;
     w.variable_labels = variable_labels;
-    w.atoms(&graph)?;
+    w.atoms(&graph, &stereocentres)?;
     w.bonds()?;
     w.circles(&rings)?;
     w.labels()?;

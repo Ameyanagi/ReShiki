@@ -18,6 +18,23 @@ const CATEGORIES: &[&str] = &[
 ];
 
 #[test]
+fn collapsed_catalog_groups_report_enhanced_stereo_as_the_cause() {
+    let mut state = smiles::prepare("*C").unwrap().state;
+    state
+        .metadata
+        .groups
+        .push(crate::chemistry::ranking::StereoGroup {
+            kind: 2,
+            atoms: vec![1],
+            ..Default::default()
+        });
+    assert_eq!(
+        check_annotations(&state).unwrap_err(),
+        "Enhanced stereo groups cannot be retained in collapsed abbreviations"
+    );
+}
+
+#[test]
 fn bundled_entries_are_complete_and_rdkit_comparable() {
     let (presets, errors) = parse(BUILTIN, false);
     assert!(errors.is_empty(), "{errors:#?}");

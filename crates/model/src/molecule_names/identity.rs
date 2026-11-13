@@ -11,6 +11,7 @@ use super::{chemistry, encode_axis_markers};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityRejection {
     UnsupportedAtomsOrBonds,
+    EnhancedStereo,
     NonclassicalStereo,
     /// Preserve the SMILES writer's own diagnostic at both call sites.
     Write(String),
@@ -22,6 +23,9 @@ pub enum IdentityRejection {
 pub fn canonical_identity(
     state: &chemistry::stereo::perception::State,
 ) -> Result<String, IdentityRejection> {
+    if !state.metadata.groups.is_empty() {
+        return Err(IdentityRejection::EnhancedStereo);
+    }
     if state
         .graph
         .atoms
@@ -32,7 +36,6 @@ pub fn canonical_identity(
             .bonds
             .iter()
             .any(|bond| !(1..=4).contains(&bond.order))
-        || !state.metadata.groups.is_empty()
     {
         return Err(IdentityRejection::UnsupportedAtomsOrBonds);
     }

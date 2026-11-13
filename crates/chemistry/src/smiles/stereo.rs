@@ -87,7 +87,6 @@ impl<'a> Context<'a> {
             || walk.atom_bond_order().len() != n
             || walk.ring_closures().len() != n
             || input.properties.done.is_none()
-            || !input.metadata.groups.is_empty()
         {
             return Err(invalid(
                 "Component must have perceived stereo and matching annotations",

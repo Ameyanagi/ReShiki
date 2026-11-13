@@ -3,6 +3,24 @@ use crate::chemistry::abbreviations::presets;
 use crate::document::Point;
 
 #[test]
+fn replacement_cannot_discard_selected_stereo_group_membership() {
+    let mut source = Document::default();
+    let atom = source.add_atom("C", Point::default());
+    source.atom_mut(atom).unwrap().stereo_group = Some(crate::stereo_groups::StereoGroup {
+        kind: crate::stereo_groups::Kind::And,
+        number: 1,
+    });
+    let before = source.clone();
+    assert!(
+        replace(&source, &[atom], "Et")
+            .unwrap_err()
+            .to_string()
+            .contains("enhanced stereo group membership")
+    );
+    assert_eq!(source, before);
+}
+
+#[test]
 fn every_preset_can_replace_an_isolated_or_attached_atom() {
     for preset in presets().unwrap().iter() {
         for outside in [

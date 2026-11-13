@@ -424,6 +424,9 @@ fn mapped_append_part(
         .collect();
     let mapping = mapping?;
     let mut part = source.clone();
+    if matches!(mode, AppendMode::Ordinary) {
+        crate::stereo_groups::renumber_incoming(doc, &mut part.atoms);
+    }
     part.generic.remap(&mapping)?;
     for name in &mut part.molecule_names {
         let mapped = mapping.get(&name.annotation).copied()?;
@@ -456,6 +459,10 @@ fn mapped_append_part(
                 .stereo
                 .show
                 .get_or_insert(source.atom_labels.stereo);
+            a.display
+                .stereo_group
+                .show
+                .get_or_insert(source.atom_labels.stereo_groups);
         }
         let mapped = mapping.get(&a.id).copied()?;
         a.id = mapped;
@@ -804,6 +811,7 @@ fn map_positions(
             for offset in [
                 a.display.number.as_mut().and_then(|n| n.offset.as_mut()),
                 a.display.stereo.offset.as_mut(),
+                a.display.stereo_group.offset.as_mut(),
                 a.display.mapping.offset.as_mut(),
             ]
             .into_iter()

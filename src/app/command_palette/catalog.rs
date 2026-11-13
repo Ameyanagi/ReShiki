@@ -1423,6 +1423,21 @@ fn view(app: &App) -> Vec<Command> {
                 Message::Labels(Labels::Scope(app.tab.labels.scope)),
             ]),
         ),
+        Command::new(
+            if app.tab.doc.atom_labels.stereo_groups {
+                "Hide stereo groups"
+            } else {
+                "Show stereo groups"
+            },
+            View,
+            "Show or hide the abs, and1 and or1 labels of enhanced stereo groups throughout the drawing",
+            "enhanced stereochemistry racemic relative rac rel ABS AND OR and1 or1 stereo group",
+            Run::Send(vec![
+                Message::Labels(Labels::Scope(Scope::Drawing)),
+                Message::Labels(Labels::StereoGroups(!app.tab.doc.atom_labels.stereo_groups)),
+                Message::Labels(Labels::Scope(app.tab.labels.scope)),
+            ]),
+        ),
         send(
             if app.tab.doc.atom_labels.dl_descriptors {
                 "Hide D/L for amino acids and sugars"

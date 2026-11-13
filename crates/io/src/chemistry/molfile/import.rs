@@ -25,6 +25,16 @@ impl Imported {
             crate::chemistry::drop_added_axis_wedges(&mut document, &imported.molecule)
                 .into_iter()
                 .collect();
+        if imported
+            .molecule
+            .state
+            .metadata
+            .groups
+            .iter()
+            .any(|group| !group.bonds.is_empty())
+        {
+            notices.push(crate::chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+        }
         if let Some(notice) = imported.restore_superatoms(&mut document) {
             notices.push(notice);
         }

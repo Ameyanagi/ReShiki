@@ -14,6 +14,60 @@ fn dummy(label: &str) -> Document {
 }
 
 #[test]
+fn stereo_group_visibility_overrides_roundtrip_through_cdxml_and_cdx() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+
+    for show in [false, true] {
+        let mut document = Document::default();
+        let center = document.add_atom("C", Point::default());
+        let f = document.add_atom("F", Point::new(42., 0.));
+        let cl = document.add_atom("Cl", Point::new(-21., 36.));
+        let br = document.add_atom("Br", Point::new(-21., -36.));
+        document.add_bond(center, f, 1, "wedge");
+        document.add_bond(center, cl, 1, "plain");
+        document.add_bond(center, br, 1, "plain");
+        document.atom_labels.stereo_groups = !show;
+        let atom = document.atom_mut(center).unwrap();
+        atom.stereo_group = Some(StereoGroup {
+            kind: Kind::And,
+            number: 1,
+        });
+        atom.display.stereo_group.show = Some(show);
+        let before = document.clone();
+        let xml = super::super::write(&document, Options::default()).unwrap();
+        let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+        for xml in [&xml, &decoded] {
+            let tree = roxmltree::Document::parse(xml).unwrap();
+            assert_eq!(
+                tree.root_element().attribute("ShowAtomEnhancedStereo"),
+                Some(if show { "no" } else { "yes" })
+            );
+            let atom = tree
+                .descendants()
+                .find(|node| node.attribute("EnhancedStereoType") == Some("And"))
+                .unwrap();
+            assert_eq!(
+                atom.attribute("ShowAtomEnhancedStereo"),
+                Some(if show { "yes" } else { "no" })
+            );
+            let imported = cdxml::import_cdxml(xml).unwrap().document;
+            assert_eq!(imported.atom_labels.stereo_groups, !show);
+            let atom = imported
+                .atoms
+                .iter()
+                .find(|atom| atom.stereo_group.is_some())
+                .unwrap();
+            assert_eq!(atom.display.stereo_group.show, Some(show));
+            assert_eq!(
+                crate::atom_labels::stereo_group_texts(&imported).contains_key(&atom.id),
+                show
+            );
+        }
+        assert_eq!(document, before);
+    }
+}
+
+#[test]
 fn stereo_parentheses_export_as_optional_cdxml_and_cdx_style_runs_and_roundtrip() {
     for roman in [false, true] {
         let mut document = Document::default();

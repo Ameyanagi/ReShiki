@@ -10,7 +10,7 @@ use super::{
 };
 use crate::document::Document;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 mod aromatic;
 pub use aromatic::{Aromatic, AromaticEdit, aromatic_display};
 mod output;
@@ -18,7 +18,9 @@ pub use output::{
     BondLabel, Drawing, DrawingOptions, Labels, depict_unknown_alkene, for_drawing, for_generated,
     for_import,
 };
-pub use output::{for_import_scene, for_import_with_attachments, kekule, validate_molecule};
+pub use output::{
+    atom_stereo_groups, for_import_scene, for_import_with_attachments, kekule, validate_molecule,
+};
 
 /// Drawing world units per depiction (RDKit coordinate) unit.
 pub const WORLD_PER_DEPICT_UNIT: f64 = 28.0;
@@ -245,6 +247,27 @@ fn build(document: &Document) -> Result<Input, Error> {
             m.chiral_tag = winding(&neighbors, &stereo.neighbors, stereo.winding == "cw")?;
         }
     }
+    // Equal labels identify one group across the whole drawing.
+    let mut groups = BTreeMap::<_, Vec<_>>::new();
+    for (i, atom) in document.atoms.iter().enumerate() {
+        if let Some(group) = atom.stereo_group {
+            let kind = match group.kind {
+                crate::stereo_groups::Kind::And => 2,
+                crate::stereo_groups::Kind::Or => 1,
+            };
+            groups.entry((kind, group.number)).or_default().push(i);
+        }
+    }
+    metadata.groups = groups
+        .into_iter()
+        .map(|((kind, number), atoms)| super::ranking::StereoGroup {
+            kind,
+            atoms,
+            read_id: number,
+            write_id: number,
+            ..Default::default()
+        })
+        .collect();
     let directions = document
         .bonds
         .iter()
@@ -495,7 +518,6 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
             !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
         })
         || state.metadata.bonds.iter().any(|b| b.stereo > 7)
-        || !state.metadata.groups.is_empty()
     {
         return Err(invalid(
             "This radical count or stereochemistry class is not supported yet",

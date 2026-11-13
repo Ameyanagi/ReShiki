@@ -549,7 +549,6 @@ impl Parsed {
                     )
                 })
             || state.metadata.bonds.iter().any(|b| b.stereo > 7)
-            || !state.metadata.groups.is_empty()
         {
             return Err(ReadError::Unsupported(
                 "radical count or stereochemistry class",

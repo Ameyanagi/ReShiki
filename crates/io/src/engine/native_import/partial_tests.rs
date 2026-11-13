@@ -646,25 +646,35 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
             "{text}"
         );
     }
-    let grouped = "F[Pt@SP1](Cl)(Br)I.C[C@H](O)Cl |&1:6|";
-    assert_eq!(
-        prepare(Request::import_smiles(grouped))
-            .err()
-            .unwrap()
-            .to_string(),
-        "Invalid drawing: Unsupported drawing stereochemistry or radical count",
-        "normalizing SP must not discard the independent enhanced stereo group"
-    );
-    assert_eq!(
-        prepare(Request::import(
-            "rsmi",
-            "F[Pt@SP1](Cl)(Br)I.C[C@H](O)Cl>>FI |&1:6|"
-        ))
-        .err()
-        .unwrap()
-        .to_string(),
-        "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
-    );
+    // Normalizing SP keeps the independent enhanced stereo group (#766).
+    let sp = "ReShiki cannot draw the square-planar configuration (@SP) at Pt2; it imported that atom without a configuration";
+    for (format, text) in [
+        ("smiles", "F[Pt@SP1](Cl)(Br)I.C[C@H](O)Cl |&1:6|"),
+        ("rsmi", "F[Pt@SP1](Cl)(Br)I.C[C@H](O)Cl>>FI |&1:6|"),
+    ] {
+        let prepared = imported(format, text)?;
+        assert_eq!(prepared.warnings, [sp], "{text}");
+        let grouped: Vec<_> = prepared
+            .document
+            .atoms
+            .iter()
+            .filter_map(|atom| {
+                atom.stereo_group
+                    .map(|group| (atom.element.as_str(), group))
+            })
+            .collect();
+        assert_eq!(
+            grouped,
+            [(
+                "C",
+                crate::stereo_groups::StereoGroup {
+                    kind: crate::stereo_groups::Kind::And,
+                    number: 1,
+                }
+            )],
+            "{text}"
+        );
+    }
     Ok(())
 }
 
@@ -826,7 +836,6 @@ fn partial_import_warning_classifier_excludes_other_notices() -> anyhow::Result<
     for warning in [
         "",
         CUMULENE_EZ_NOTICE,
-        RELATIVE_STEREO_NOTICE,
         "Bond C1–C2",
         "Atom C1 had 3 radical electrons",
         "ReShiki cannot draw the atom",

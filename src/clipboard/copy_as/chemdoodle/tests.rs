@@ -34,6 +34,17 @@ fn reaction() -> Document {
 }
 
 #[test]
+fn enhanced_stereo_has_a_specific_copy_rejection() {
+    let mut source = reaction();
+    source.atoms[0].stereo_group = Some(crate::stereo_groups::StereoGroup {
+        kind: crate::stereo_groups::Kind::Or,
+        number: 1,
+    });
+    assert_eq!(reason(&source), Some(GROUPS));
+    assert_eq!(write(&source).unwrap_err(), GROUPS);
+}
+
+#[test]
 fn role_references_follow_explicit_membership_and_leave_source_unchanged() {
     let mut doc = reaction();
     let before = doc.clone();

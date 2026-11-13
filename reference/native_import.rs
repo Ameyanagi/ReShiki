@@ -532,6 +532,16 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             (Err(error), Some(_)) if matches!(format, "mol" | "rxn") => {
                 Some(format!("Unexpected rejection: {error}"))
             }
+            // Enhanced stereo groups import since #766.
+            (Ok(Outcome::Complete(_)), None)
+                if case.failure.as_deref()
+                    == Some(
+                        "Enhanced stereo groups are not supported yet; import was cancelled.",
+                    ) =>
+            {
+                accepted += 1;
+                None
+            }
             (a, b) => Some(format!(
                 "Outcome changed: {a:?} != {b:?}; native error {:?}",
                 case.failure

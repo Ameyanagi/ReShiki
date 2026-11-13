@@ -1406,6 +1406,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         no_implicit,
         aromatic,
         stereo,
+        stereo_group,
         map_num,
         label_h: _,
         text_style,
@@ -1427,6 +1428,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         && *no_implicit == b.no_implicit
         && *aromatic == b.aromatic
         && *stereo == b.stereo
+        && *stereo_group == b.stereo_group
         && *map_num == b.map_num
         && *text_style == b.text_style
 }

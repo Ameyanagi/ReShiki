@@ -88,8 +88,13 @@ impl Writer<'_> {
         self.tree.node_mut(node)?.text = Some(text.into());
         Ok(())
     }
-    pub(super) fn atoms(&mut self, graph: &crate::chemistry::graph::Graph) -> Result<()> {
+    pub(super) fn atoms(
+        &mut self,
+        graph: &crate::chemistry::graph::Graph,
+        stereocentres: &[bool],
+    ) -> Result<()> {
         let doc = self.doc;
+        let enhanced_stereo = doc.atoms.iter().any(|a| a.stereo_group.is_some());
         let valences = graph.provisional_valences().map_err(invalid)?;
         let isotope_labels = HydrogenIsotopeLabels::new(doc);
         let mut degrees: HashMap<u64, usize> = HashMap::new();
@@ -130,6 +135,24 @@ impl Writer<'_> {
             )?;
             self.atom_nodes.push(node);
             self.objects.push((a.id, node));
+            let centre = *stereocentres.get(i).ok_or(Error::Limit)?;
+            if let Some(group) = a.stereo_group.filter(|_| centre) {
+                let number = u16::try_from(group.number).map_err(|_| {
+                    invalid("CDXML/CDX stereo group numbers must be between 1 and 65535")
+                })?;
+                self.tree.set(
+                    node,
+                    "EnhancedStereoType",
+                    match group.kind {
+                        crate::stereo_groups::Kind::And => "And",
+                        crate::stereo_groups::Kind::Or => "Or",
+                    },
+                )?;
+                self.tree
+                    .set(node, "EnhancedStereoGroupNum", number.to_string())?;
+            } else if enhanced_stereo && centre {
+                self.tree.set(node, "EnhancedStereoType", "Absolute")?;
+            }
             // ChemDraw's "not a stereocentre" tells import that this metal's
             // wedges are frame projection, not tetrahedral stereo.
             if frame_metals.get(&a.id) == Some(&true) {
@@ -570,6 +593,7 @@ impl Writer<'_> {
         let doc = self.doc;
         let settings = &doc.atom_labels;
         let atom_stereo = crate::atom_labels::atom_stereo_texts(doc);
+        let enhanced_stereo = doc.atoms.iter().any(|a| a.stereo_group.is_some());
         for (k, v) in carbon_attributes(settings.carbons) {
             self.tree.set(0, k, v)?;
         }
@@ -579,6 +603,10 @@ impl Writer<'_> {
             ("ShowBondStereo", settings.stereo),
         ] {
             self.tree.set(0, k, yes(v))?;
+        }
+        if enhanced_stereo {
+            self.tree
+                .set(0, "ShowAtomEnhancedStereo", yes(settings.stereo_groups))?;
         }
         for a in &doc.atoms {
             let n = self.atom_node(a.id)?;
@@ -619,6 +647,10 @@ impl Writer<'_> {
             }
             let show = d.stereo.show.unwrap_or(settings.stereo);
             self.tree.set(n, "ShowAtomStereo", yes(show))?;
+            if enhanced_stereo {
+                let show = d.stereo_group.show.unwrap_or(settings.stereo_groups);
+                self.tree.set(n, "ShowAtomEnhancedStereo", yes(show))?;
+            }
             if show && let Some(text) = atom_stereo.get(&a.id) {
                 self.indicator(
                     n,

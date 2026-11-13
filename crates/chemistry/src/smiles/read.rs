@@ -55,28 +55,15 @@ pub struct Imported {
     /// Some fragment has a CX relative flag, normalized into stereo groups.
     #[serde(skip)]
     pub relative: bool,
-    /// The CX relative flag put configured centres in the last stereo group.
+    /// Index of the stereo group the relative flag added, if any.
     #[serde(skip)]
-    pub relative_group: bool,
+    pub relative_group: Option<usize>,
     /// Reaction CX attachment markers affect wedge selection before drawing.
     #[serde(skip)]
     pub reaction_attachments: Vec<bool>,
     /// Preserve native string types until the temporary layout pass reads them.
     #[serde(skip)]
     pub reaction_properties: Vec<Vec<(Vec<u8>, Vec<u8>)>>,
-}
-
-impl Imported {
-    /// Drops the relative flag's group, so a drawing shows the stated
-    /// enantiomer until relative/racemic labels are supported. Returns
-    /// whether there was one.
-    pub fn draw_relative_as_stated(&mut self) -> bool {
-        let grouped = std::mem::take(&mut self.relative_group);
-        if grouped {
-            self.prepared.state.metadata.groups.pop();
-        }
-        grouped
-    }
 }
 
 fn at<T>(items: &[T], id: usize) -> Result<&T> {
@@ -446,7 +433,7 @@ fn relative_stereo(state: &mut State, relative: &HashSet<usize>) -> Result<bool>
 
 /// Reactions apply CX annotations after bare parsing and keep explicit H.
 /// They sanitize without the default molecule import's stereo perception.
-/// Explicit enhanced stereo groups are refused before relative flags are normalized.
+/// Explicit enhanced stereo groups and normalized relative flags are retained.
 pub fn reaction_part(parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
     reaction_part_with(parsed, events, None)
 }
@@ -577,7 +564,7 @@ fn reaction_part_with(
         dropped,
         dropped_cumulene_ez: false,
         relative: !annotations.relative.is_empty(),
-        relative_group: false,
+        relative_group: None,
         reaction_properties,
         reaction_attachments: annotations
             .properties
@@ -603,14 +590,11 @@ fn reaction_part_with(
         conformers: annotations.context.conformers,
         name: None,
     };
-    if !imported.prepared.state.metadata.groups.is_empty() {
-        return Err(Error::Unsupported(
-            "reaction stereochemistry or radical count",
-        ));
-    }
     if imported.relative {
-        imported.relative_group =
-            relative_stereo(&mut imported.prepared.state, &annotations.relative)?;
+        let index = imported.prepared.state.metadata.groups.len();
+        if relative_stereo(&mut imported.prepared.state, &annotations.relative)? {
+            imported.relative_group = Some(index);
+        }
     }
     Ok(imported)
 }
@@ -646,6 +630,14 @@ fn partial_state(
             }
         }
     }
+    // A centre in an enhanced stereo group keeps its tag, so the import is
+    // refused instead of silently dropping it from the group.
+    let grouped: HashSet<usize> = state
+        .metadata
+        .groups
+        .iter()
+        .flat_map(|group| group.atoms.iter().copied())
+        .collect();
     for (id, (atom, meta)) in state
         .graph
         .atoms
@@ -653,6 +645,9 @@ fn partial_state(
         .zip(&mut state.metadata.atoms)
         .enumerate()
     {
+        if grouped.contains(&id) {
+            continue;
+        }
         let input = input_atom(atom, *at(positions, id)?)?;
         let class = match meta.chiral_tag {
             6 => Some(Configuration::SquarePlanar),
@@ -973,10 +968,7 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
         .metadata;
     }
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
-    if partial
-        && prepared.state.metadata.groups.is_empty()
-        && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)?
-    {
+    if partial && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)? {
         prepared.state = stereo::perception::perceive(
             &prepared.state,
             stereo::perception::Options {
@@ -997,16 +989,18 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     }
     // After cumulene detection: an `r` group would make enantiomorphic ligands
     // rank equal and hide the dropped E/Z.
-    let relative_group = if !annotations.relative.is_empty() {
+    let mut relative_group = None;
+    if !annotations.relative.is_empty() {
         let relative = kept_atoms
             .iter()
             .enumerate()
             .filter_map(|(atom, original)| annotations.relative.contains(original).then_some(atom))
             .collect();
-        relative_stereo(&mut prepared.state, &relative)?
-    } else {
-        false
-    };
+        let index = prepared.state.metadata.groups.len();
+        if relative_stereo(&mut prepared.state, &relative)? {
+            relative_group = Some(index);
+        }
+    }
     // Native RemoveHs preserves properties on retained atoms. Keep the raw
     // values for the later depiction stage, which converts rank properties
     // only when the selected fragment/neighbor ordering reads them.

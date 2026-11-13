@@ -6,6 +6,37 @@ const PROPYLBENZENE: &str = "CCCc1ccccc1";
 const ASPIRIN: &str = "CC(=O)Oc1ccccc1C(=O)O";
 
 #[test]
+fn stereo_groups_cleanup_preserves_all_source_members() -> anyhow::Result<()> {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut source = drawing("C[C@H](O)c1ccccc1")?;
+    source.atoms[1].stereo_group = Some(StereoGroup {
+        kind: Kind::And,
+        number: 7,
+    });
+    // Even a member removed by stereocentre perception remains an editable assignment.
+    source.atoms[0].stereo_group = Some(StereoGroup {
+        kind: Kind::Or,
+        number: 3,
+    });
+    let expected: Vec<_> = source
+        .atoms
+        .iter()
+        .map(|atom| (atom.id, atom.stereo_group))
+        .collect();
+    let cleaned = clean(&source, Options::default(), &[], 0.)?;
+    assert_eq!(
+        cleaned
+            .document
+            .atoms
+            .iter()
+            .map(|atom| (atom.id, atom.stereo_group))
+            .collect::<Vec<_>>(),
+        expected
+    );
+    Ok(())
+}
+
+#[test]
 fn unspecified_alkene_cleanup_uses_document_depiction_and_notice() -> anyhow::Result<()> {
     for wavy in [false, true] {
         let mut source = Document::default();

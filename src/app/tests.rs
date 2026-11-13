@@ -1536,13 +1536,9 @@ fn palette_scopes_recolor_selected_bonds_and_objects_in_one_undo() {
             .iter()
             .all(|b| b.color == blue && b.indicator.style.color == blue)
     );
-    assert!(
-        app.tab
-            .doc
-            .atoms
-            .iter()
-            .all(|a| a.text_style.as_ref().unwrap().color == blue)
-    );
+    assert!(app.tab.doc.atoms.iter().all(|a| {
+        a.text_style.as_ref().unwrap().color == blue && a.display.stereo_group.style.color == blue
+    }));
     assert_eq!(
         app.tab
             .doc
@@ -1573,10 +1569,12 @@ fn palette_scopes_recolor_selected_bonds_and_objects_in_one_undo() {
         app.tab.doc.atoms[1].text_style.as_ref().unwrap().color,
         blue
     );
+    assert_eq!(app.tab.doc.atoms[1].display.stereo_group.style.color, blue);
     assert_eq!(app.tab.doc.arrows, recolored.arrows);
     let _ = app.update(Message::ColorScope(ColorScope::Text));
     let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
     assert_eq!(app.tab.doc.atoms[0].text_style.as_ref().unwrap().color, red);
+    assert_eq!(app.tab.doc.atoms[0].display.stereo_group.style.color, red);
     assert_eq!(app.tab.doc.atoms[2], recolored.atoms[2]);
     assert_eq!(app.tab.doc.bonds[1].color, blue);
     assert_eq!(app.tab.doc.arrows, recolored.arrows);

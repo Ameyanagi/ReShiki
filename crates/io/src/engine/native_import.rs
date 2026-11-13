@@ -101,7 +101,6 @@ pub enum Error {
 }
 
 const CUMULENE_EZ_NOTICE: &str = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored";
-const RELATIVE_STEREO_NOTICE: &str = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
 const CONFIGURATION_NOTICE_END: &str = "; it imported that atom without a configuration";
 const RADICAL_NOTICE: &str = " radical electrons; ReShiki keeps at most 2 and drew it as a triplet";
 const ALLENE_NOTICE_END: &str = " is invalid; ReShiki imported that atom without a configuration";
@@ -437,15 +436,11 @@ fn prepare_smiles(
             }
         }
     }
-    let relative = imported.draw_relative_as_stated();
     let mut molecule = molecule(imported.prepared.state)?;
     let (mut warnings, row) = layout(&mut molecule, &imported.reaction_properties)?;
     // Import perception does not keep cumulene E/Z; say so.
     if imported.dropped_cumulene_ez {
         warnings.push(CUMULENE_EZ_NOTICE.into());
-    }
-    if relative {
-        warnings.push(RELATIVE_STEREO_NOTICE.into());
     }
     warnings.extend(dropped_notices(imported.dropped));
     let mut prepared = finish_molecule(
@@ -475,14 +470,6 @@ fn prepare_reaction_smiles(text: &str, partial: bool) -> Result<Prepared, Error>
             .chain(&mut reaction.products)
             .flat_map(|part| std::mem::take(&mut part.dropped)),
     );
-    let relative = reaction
-        .reactants
-        .iter_mut()
-        .chain(&mut reaction.agents)
-        .chain(&mut reaction.products)
-        .fold(false, |relative, part| {
-            relative | part.draw_relative_as_stated()
-        });
     let layout = reaction.layout()?;
     let layouts = layout
         .requests()
@@ -497,9 +484,6 @@ fn prepare_reaction_smiles(text: &str, partial: bool) -> Result<Prepared, Error>
         .unzip();
     let mut prepared = finish_reaction(layout.finish(positions)?)?;
     prepared.warnings.extend(warnings.into_iter().flatten());
-    if relative {
-        prepared.warnings.push(RELATIVE_STEREO_NOTICE.into());
-    }
     prepared.warnings.extend(dropped);
     Ok(prepared)
 }
@@ -695,6 +679,15 @@ fn finish_molecule(
         }
     }
     warnings.extend(chemistry::drop_added_axis_wedges(&mut document, &molecule));
+    if molecule
+        .state
+        .metadata
+        .groups
+        .iter()
+        .any(|group| !group.bonds.is_empty())
+    {
+        warnings.push(chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+    }
     if let Some(read) = readback {
         molecule = read;
     }

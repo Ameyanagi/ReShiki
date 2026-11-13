@@ -138,6 +138,51 @@ fn indicators_move_transform_and_copy_with_their_owners() {
     assert_eq!(target.atoms[0].display.hydrogens, Some(true));
 }
 
+#[test]
+fn stereo_group_offsets_follow_rotation_reflection_and_scaling() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("C", Point::new(10., 20.));
+    doc.atom_mut(id).unwrap().display.stereo_group.offset = Some(Point::new(12., -8.));
+    for (operation, expected) in [
+        (editing::Transform::Rotate(90.), Point::new(8., 12.)),
+        (editing::Transform::FlipHorizontal, Point::new(-8., 12.)),
+    ] {
+        editing::transform(&mut doc, &[id], operation);
+        assert!(
+            doc.atom(id)
+                .unwrap()
+                .display
+                .stereo_group
+                .offset
+                .unwrap()
+                .distance(expected)
+                < 0.001
+        );
+    }
+    editing::transform_about(&mut doc, &[id], Point::new(10., 20.), 2., 0.);
+    assert!(
+        doc.atom(id)
+            .unwrap()
+            .display
+            .stereo_group
+            .offset
+            .unwrap()
+            .distance(Point::new(-16., 24.))
+            < 0.001
+    );
+    editing::scale_axes_about(&mut doc, &[id], Point::new(10., 20.), 2., 3.);
+    assert!(
+        doc.atom(id)
+            .unwrap()
+            .display
+            .stereo_group
+            .offset
+            .unwrap()
+            .distance(Point::new(-32., 72.))
+            < 0.001
+    );
+}
+
 #[tokio::test]
 async fn saved_chemdraw_fixture_preserves_owned_indicators_and_chemistry() {
     let engine = LocalEngine::default();

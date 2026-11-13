@@ -76,17 +76,17 @@ analysis = reshiki.properties("CCO")
 
 ## Import warnings
 
-Some inputs import with a change or an assumption: CXSMILES that marks a
-configuration as relative is drawn as the stated enantiomer, and stereo on an
-extended double bond (C=C=C=C) is dropped. The app shows such a warning in its
+Some inputs import with a change or an assumption: a SMILES bond of any order
+(`~`) is drawn as a single bond, and stereo on an extended double bond
+(C=C=C=C) is dropped. The app shows such a warning in its
 status bar and `reshiki --cli` prints it as `reshiki: warning:`. The Python
 package issues it as a `reshiki.StructureWarning`, a `UserWarning`, through
 Python's `warnings` module, attributed to your line of code:
 
 ```python
-molecule = reshiki.Molecule.from_smiles("C[C@H](O)C(=O)O |r|")
-# demo.py:3: StructureWarning: The input marks a molecule's stereo configuration
-# as relative (CXSMILES r); ReShiki drew it as the stated enantiomer
+molecule = reshiki.Molecule.from_smiles("C~C")
+# demo.py:3: StructureWarning: Bond C1–C2 has any order (~); bond order assumed
+# single
 ```
 
 The import still returns the drawing. Python's default filter shows a warning
@@ -169,9 +169,9 @@ a failed row. Import warnings are not issued as Python warnings here: the
 result's `.warnings` lists them as `(index, message)` pairs, in row order.
 
 ```python
-pngs = reshiki.render_many(["CCO", "C1CC", "C[C@H](O)C(=O)O |r|"], width=300)
+pngs = reshiki.render_many(["CCO", "C1CC", "C~C"], width=300)
 print(pngs.errors)    # [(1, '...')]
-print(pngs.warnings)  # [(2, "The input marks a molecule's stereo configuration as relative ...")]
+print(pngs.warnings)  # [(2, 'Bond C1–C2 has any order (~); bond order assumed single')]
 ```
 
 The Excel extra uses openpyxl and embeds PNG images:
@@ -188,7 +188,7 @@ reshiki.excel.add_structures(
 Install `reshiki[excel]` for this helper. The header defaults to row 1; use
 `header=False` to render from row 1, or `start_row=` to choose the first row.
 Import warnings are issued as `StructureWarning`s that start with the source
-cell, such as `A3: The input marks a molecule's stereo configuration as relative …`.
+cell, such as `A3: Bond C1–C2 has any order (~); bond order assumed single`.
 
 Install `reshiki[pandas]` and explicitly import `reshiki.pandas` to register
 the pandas Series accessor:

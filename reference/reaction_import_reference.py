@@ -55,9 +55,9 @@ def read(text):
                         raise ValueError("Query reaction atom")
                     mol.ReplaceAtom(atom.GetIdx(), Chem.Atom(atom), preserveProps=True)
             Chem.SanitizeMol(mol)
+            # Enhanced stereo groups are editable since #766.
             if (
                 not mol.GetNumAtoms()
-                or mol.GetStereoGroups()
                 or any(
                     a.HasQuery() or a.GetNumRadicalElectrons() > 2 or int(a.GetChiralTag()) > 2
                     for a in mol.GetAtoms()

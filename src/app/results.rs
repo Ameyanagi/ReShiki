@@ -299,7 +299,9 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Centroid
                 | Action::Attachment(..)
                 | Action::DepthBonds
-                | Action::RingArc => None,
+                | Action::RingArc
+                | Action::StereoGroup(_)
+                | Action::RenumberStereoGroups => None,
             }
         }
         Message::Nmr(action) => {
@@ -517,6 +519,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Position(..)
                 | Action::Attachment(..)
                 | Action::Stereo(..)
+                | Action::StereoGroups(..)
                 | Action::DlDescriptors(..)
                 | Action::MarkUndefined(..)
                 | Action::UndefinedXi(..)

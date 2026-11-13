@@ -602,8 +602,7 @@ fn relative_cx_groups_keep_configurations_and_explicit_groups() -> anyhow::Resul
 #[test]
 fn relative_cx_adds_one_group_without_inverting_explicit_absolute_centres() -> anyhow::Result<()> {
     let molecule = "C[C@H](O)[C@H](F)[C@H](Br)Cl";
-    let mut imported = super::read(&format!("{molecule} |r,o1:1,a:3|"))?;
-    assert!(imported.relative_group);
+    let imported = super::read(&format!("{molecule} |r,o1:1,a:3|"))?;
     let groups = &imported.prepared.state.metadata.groups;
     assert_eq!(groups.len(), 3);
     assert_eq!((groups[0].kind, groups[0].atoms.as_slice()), (1, &[1][..]));
@@ -619,15 +618,8 @@ fn relative_cx_adds_one_group_without_inverting_explicit_absolute_centres() -> a
         ]
         .into()
     );
-    assert!(imported.draw_relative_as_stated());
-    assert_eq!(
-        serde_json::to_value(imported)?,
-        serde_json::to_value(super::read(&format!("{molecule} |o1:1,a:3|"))?)?
-    );
     let molecule = "C[C@H](O)[C@H](F)Cl";
-    let mut imported = super::read(&format!("{molecule} |r,o1:1,a:3|"))?;
-    assert!(!imported.relative_group);
-    assert!(!imported.draw_relative_as_stated());
+    let imported = super::read(&format!("{molecule} |r,o1:1,a:3|"))?;
     assert_eq!(imported.prepared.state.metadata.groups.len(), 2);
     assert_eq!(
         serde_json::to_value(imported)?,
@@ -680,7 +672,7 @@ fn relative_cx_without_configured_tetrahedral_centres_is_unchanged() -> anyhow::
 }
 
 #[test]
-fn relative_cx_drawing_keeps_the_stated_configuration() -> anyhow::Result<()> {
+fn relative_cx_groups_only_selected_configured_centres() -> anyhow::Result<()> {
     for (molecule, marker, atoms) in [
         ("C[C@H](O)C(=O)O", "r", vec![1]),
         ("C[C@H](O)F.C[C@H](O)Cl", "r:1", vec![5]),
@@ -691,23 +683,18 @@ fn relative_cx_drawing_keeps_the_stated_configuration() -> anyhow::Result<()> {
         ("O[C@H]1CC[C@@H](O)CC1", "r", vec![]),
     ] {
         let text = format!("{molecule} |{marker}|");
-        let mut imported = super::read(&text)?;
+        let imported = super::read(&text)?;
         assert!(imported.relative, "{text}");
         let grouped = !atoms.is_empty();
-        assert_eq!(imported.relative_group, grouped, "{text}");
         let groups = &imported.prepared.state.metadata.groups;
         assert_eq!(groups.len(), usize::from(grouped), "{text}");
         if grouped {
             assert_eq!(groups[0].kind, 2, "{text}");
             assert_eq!(groups[0].atoms, atoms, "{text}");
         }
-        assert_eq!(imported.draw_relative_as_stated(), grouped, "{text}");
-        assert!(!imported.relative_group, "{text}");
-        assert!(!imported.draw_relative_as_stated(), "{text}");
-        assert!(imported.relative, "{text}");
         assert_eq!(
-            serde_json::to_value(imported)?,
-            serde_json::to_value(super::read(molecule)?)?,
+            serde_json::to_value(&imported.prepared.state.metadata.atoms)?,
+            serde_json::to_value(&super::read(molecule)?.prepared.state.metadata.atoms)?,
             "{text}"
         );
     }
@@ -725,18 +712,20 @@ fn reaction_relative_cx_groups_configured_centres_and_keeps_controls() -> anyhow
     ] {
         let parsed = super::parse(molecule)?;
         let atoms = (0..parsed.graph.atoms.len()).collect();
-        let mut relative =
-            super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)])?;
+        let relative = super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)])?;
         assert!(relative.relative, "{molecule}");
-        assert!(relative.relative_group, "{molecule}");
         let groups = &relative.prepared.state.metadata.groups;
         assert_eq!(groups.len(), 1, "{molecule}");
         assert_eq!(groups[0].kind, 2, "{molecule}");
-        assert!(relative.draw_relative_as_stated(), "{molecule}");
-        assert!(!relative.relative_group, "{molecule}");
         assert_eq!(
-            serde_json::to_value(relative)?,
-            serde_json::to_value(super::reaction_part(super::parse(molecule)?, vec![])?)?,
+            serde_json::to_value(&relative.prepared.state.metadata.atoms)?,
+            serde_json::to_value(
+                &super::reaction_part(super::parse(molecule)?, vec![])?
+                    .prepared
+                    .state
+                    .metadata
+                    .atoms
+            )?,
             "{molecule}"
         );
     }
@@ -751,11 +740,8 @@ fn reaction_relative_cx_groups_configured_centres_and_keeps_controls() -> anyhow
         let absolute = super::reaction_part(super::parse(molecule)?, Vec::new())?;
         let parsed = super::parse(molecule)?;
         let atoms = (0..parsed.graph.atoms.len()).collect();
-        let mut relative =
-            super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)])?;
+        let relative = super::reaction_part(parsed, vec![crate::cx::Event::RelativeStereo(atoms)])?;
         assert!(relative.relative);
-        assert!(!relative.relative_group);
-        assert!(!relative.draw_relative_as_stated());
         assert!(relative.prepared.state.metadata.groups.is_empty());
         assert_eq!(
             serde_json::to_value(relative)?,
@@ -775,7 +761,6 @@ fn reaction_relative_cx_limits_groups_to_selected_atoms() -> anyhow::Result<()> 
         vec![crate::cx::Event::RelativeStereo(vec![0, 1, 2])],
     )?;
     assert!(relative.relative);
-    assert!(!relative.relative_group);
     assert!(relative.prepared.state.metadata.groups.is_empty());
     assert_eq!(
         serde_json::to_value(relative)?,
@@ -785,10 +770,115 @@ fn reaction_relative_cx_limits_groups_to_selected_atoms() -> anyhow::Result<()> 
         super::parse(molecule)?,
         vec![crate::cx::Event::RelativeStereo(vec![3, 4, 5, 6])],
     )?;
-    assert!(relative.relative_group);
     let groups = &relative.prepared.state.metadata.groups;
     assert_eq!(groups.len(), 1);
     assert_eq!((groups[0].kind, groups[0].atoms.as_slice()), (2, &[4][..]));
+    Ok(())
+}
+
+#[test]
+fn reaction_cx_keeps_explicit_absolute_or_and_groups() -> anyhow::Result<()> {
+    let molecule = "C[C@H](O)[C@H](F)[C@H](Br)Cl";
+    let events = [(0, 0, 1), (1, 7, 3), (2, 9, 5)]
+        .into_iter()
+        .map(|(kind, id, atom)| crate::cx::Event::StereoGroup {
+            kind,
+            id,
+            atoms: vec![atom],
+        })
+        .chain([crate::cx::Event::RelativeStereo((0..8).collect())])
+        .collect();
+    let imported = super::reaction_part(super::parse(molecule)?, events)?;
+    let groups = &imported.prepared.state.metadata.groups;
+    assert_eq!(groups.len(), 3);
+    assert_eq!(
+        (
+            groups[0].kind,
+            groups[0].read_id,
+            groups[0].atoms.as_slice()
+        ),
+        (0, 0, &[1][..])
+    );
+    assert_eq!(
+        (
+            groups[1].kind,
+            groups[1].read_id,
+            groups[1].atoms.as_slice()
+        ),
+        (1, 7, &[3][..])
+    );
+    assert_eq!(
+        (
+            groups[2].kind,
+            groups[2].read_id,
+            groups[2].atoms.as_slice()
+        ),
+        (2, 9, &[5][..])
+    );
+    Ok(())
+}
+
+#[test]
+fn stereo_traversal_accepts_groups_and_retains_configurations() -> anyhow::Result<()> {
+    let grouped = super::read("C[C@H](O)[C@H](F)Cl |a:1,&7:3|")?
+        .prepared
+        .state;
+    let mut absolute = grouped.clone();
+    absolute.metadata.groups.clear();
+    let n = grouped.graph.atoms.len();
+    let walk = super::traversal::build(
+        &grouped.graph,
+        &vec![false; grouped.graph.bonds.len()],
+        &(0..n as u32).collect::<Vec<_>>(),
+        n - 1,
+    )?;
+    let with = super::stereo::canonicalize(&grouped, &walk, &vec![false; n], true)?;
+    let without = super::stereo::canonicalize(&absolute, &walk, &vec![false; n], true)?;
+    assert_eq!(
+        serde_json::to_value(&with.metadata.atoms)?,
+        serde_json::to_value(&without.metadata.atoms)?
+    );
+    assert_eq!(
+        serde_json::to_value(&with.metadata.groups)?,
+        serde_json::to_value(&grouped.metadata.groups)?
+    );
+    Ok(())
+}
+
+#[test]
+fn cx_group_writer_remaps_members_and_keeps_ungrouped_centres_absolute() -> anyhow::Result<()> {
+    let source = "C[C@H](O)[C@H](F)[C@H](Br)Cl |o7:1,&9:3|";
+    let state = super::read(source)?.prepared.state;
+    let output = super::write::write(
+        &state,
+        super::write::Options {
+            canonical: false,
+            root: Some(7),
+            ..Default::default()
+        },
+    )?;
+    assert_ne!(output.atom_order, (0..8).collect::<Vec<_>>());
+    let suffix = super::write::cx_groups(&state.metadata, &output.atom_order)?;
+    let position = |atom| output.atom_order.iter().position(|&id| id == atom).unwrap();
+    assert_eq!(
+        suffix,
+        format!(" |a:{},o7:{},&9:{}|", position(5), position(1), position(3))
+    );
+    assert_eq!(
+        super::stereoisomers(source)?,
+        super::stereoisomers(&format!("{}{suffix}", output.text))?
+    );
+    for text in ["C[C@H](O)F", "C[C@H](O)F |a:1|"] {
+        let state = super::read(text)?.prepared.state;
+        let output = super::write::write(&state, Default::default())?;
+        assert!(super::write::cx_groups(&state.metadata, &output.atom_order)?.is_empty());
+    }
+    assert!(super::write::cx_groups(&state.metadata, &[0; 8]).is_err());
+    // Two groups without numbers stay two groups.
+    let state = super::read("C[C@H](O)[C@H](F)Cl |&0:1,r|")?.prepared.state;
+    let output = super::write::write(&state, Default::default())?;
+    let suffix = super::write::cx_groups(&state.metadata, &output.atom_order)?;
+    assert_eq!(suffix.matches('&').count(), 2, "{suffix}");
     Ok(())
 }
 

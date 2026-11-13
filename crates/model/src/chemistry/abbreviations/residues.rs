@@ -493,6 +493,7 @@ pub(super) fn find(
             target.atoms.get(id).is_none_or(|atom| {
                 atom.isotope != 0
                     || atom.map_num != 0
+                    || atom.stereo_group.is_some()
                     || !atom.marks.is_empty()
                     || atom.display.number.is_some()
             })
