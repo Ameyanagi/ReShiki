@@ -216,7 +216,8 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     // Nine original raw Documents failed the projection requirement. The
     // independently adapted paint now passes the same validation boundary.
     assert_eq!(dative_extensions, 9);
-    assert_eq!(final_only_rejected, 292);
+    // The 46 drawings above were final-only rejections before #1168.
+    assert_eq!(final_only_rejected, 246);
     assert_eq!(extensions, 1);
     assert_eq!(
         (restrictions, restricted_native, restricted_documents),
