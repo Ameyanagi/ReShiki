@@ -393,3 +393,30 @@ async fn analysis_of_bracket_radicals_matches_rdkit() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn more_than_four_radical_electrons_are_still_refused() -> anyhow::Result<()> {
+    // RDKit reads [LiH3] with four radical electrons and [LiH2] with five.
+    // Drawings keep 0-4, so the second is refused, as the frozen worker does.
+    let four = imported("smiles", "[LiH3]")?;
+    assert!(four.warnings.is_empty());
+    assert_eq!(four.document.atoms[0].radical_electrons, 4);
+    for format in ["smiles", "naming_smiles"] {
+        assert_eq!(
+            prepare(Request::import(format, "[LiH2]"))
+                .err()
+                .unwrap()
+                .to_string(),
+            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
+            "{format}"
+        );
+    }
+    assert_eq!(
+        prepare(Request::import("rsmi", "[LiH2]>>[Li]"))
+            .err()
+            .unwrap()
+            .to_string(),
+        "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
+    );
+    Ok(())
+}

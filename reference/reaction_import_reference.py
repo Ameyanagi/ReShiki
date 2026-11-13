@@ -55,7 +55,10 @@ def read(text):
             if (
                 not mol.GetNumAtoms()
                 or mol.GetStereoGroups()
-                or any(a.HasQuery() or int(a.GetChiralTag()) > 2 for a in mol.GetAtoms())
+                or any(
+                    a.HasQuery() or a.GetNumRadicalElectrons() > 4 or int(a.GetChiralTag()) > 2
+                    for a in mol.GetAtoms()
+                )
                 or any(
                     b.HasQuery() or b.GetBondType() not in ORDERS.values() or int(b.GetStereo()) > 5
                     for b in mol.GetBonds()

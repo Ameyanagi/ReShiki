@@ -514,11 +514,16 @@ fn reaction_part_with(
     if let Some(positions) = positions {
         partial_state(&mut state, positions, &mut dropped)?;
     }
-    if state.metadata.atoms.iter().enumerate().any(|(i, a)| {
-        !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
-    }) || state.metadata.bonds.iter().any(|b| b.stereo > 7)
+    // RDKit can derive more than four, as in [LiH2]; drawings keep 0-4.
+    if state.graph.atoms.iter().any(|a| a.radical_electrons > 4)
+        || state.metadata.atoms.iter().enumerate().any(|(i, a)| {
+            !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
+        })
+        || state.metadata.bonds.iter().any(|b| b.stereo > 7)
     {
-        return Err(Error::Unsupported("reaction stereochemistry"));
+        return Err(Error::Unsupported(
+            "reaction stereochemistry or radical count",
+        ));
     }
     let properties = &mut state.properties;
     properties.needs_detection = annotations.context.needs_bond_stereo.then_some(true);
@@ -595,7 +600,9 @@ fn reaction_part_with(
         name: None,
     };
     if !imported.prepared.state.metadata.groups.is_empty() {
-        return Err(Error::Unsupported("reaction stereochemistry"));
+        return Err(Error::Unsupported(
+            "reaction stereochemistry or radical count",
+        ));
     }
     if imported.relative {
         imported.relative_group =

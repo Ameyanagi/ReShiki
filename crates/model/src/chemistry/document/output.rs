@@ -540,16 +540,19 @@ pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
     {
         return Err(invalid("Drawing molecule dimensions or identities changed"));
     }
-    if state
-        .metadata
-        .atoms
-        .iter()
-        .enumerate()
-        .any(|(i, a)| !allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation))
+    if state.graph.atoms.iter().any(|a| a.radical_electrons > 4)
+        || state
+            .metadata
+            .atoms
+            .iter()
+            .enumerate()
+            .any(|(i, a)| !allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation))
         || state.metadata.bonds.iter().any(|b| b.stereo > 7)
         || !state.metadata.groups.is_empty()
     {
-        return Err(invalid("Unsupported drawing stereochemistry"));
+        return Err(invalid(
+            "Unsupported drawing stereochemistry or radical count",
+        ));
     }
     Ok(())
 }

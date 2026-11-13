@@ -462,7 +462,7 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
             molecular::validate_molecule(&molecule(strict)?)
                 .unwrap_err()
                 .to_string(),
-            "Invalid drawing: Unsupported drawing stereochemistry",
+            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
             "{text}: strict drawing"
         );
         assert_eq!(
@@ -470,14 +470,14 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
                 .err()
                 .unwrap()
                 .to_string(),
-            "Invalid drawing: Unsupported drawing stereochemistry",
+            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
             "{text}: naming_smiles"
         );
     }
     for (text, error) in [
         (
             "F[Pt@SP1](Cl)(Br)I>>FI",
-            "SMILES contains unsupported chemistry: reaction stereochemistry",
+            "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
         ),
         (
             "CCO>>CC=O |u:0|",
@@ -508,7 +508,7 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
             .err()
             .unwrap()
             .to_string(),
-        "Invalid drawing: Unsupported drawing stereochemistry",
+        "Invalid drawing: Unsupported drawing stereochemistry or radical count",
         "normalizing SP must not discard the independent enhanced stereo group"
     );
     assert_eq!(
@@ -519,7 +519,7 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
         .err()
         .unwrap()
         .to_string(),
-        "SMILES contains unsupported chemistry: reaction stereochemistry",
+        "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
     );
     Ok(())
 }
@@ -585,17 +585,17 @@ fn partial_import_does_not_drop_enhanced_groups_on_unsupported_centres() {
         (
             "smiles",
             "F[Pt@SP1](Cl)(Br)I |&1:1|",
-            "Invalid drawing: Unsupported drawing stereochemistry",
+            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
         ),
         (
             "smiles",
             "F[Pt@SP1](Cl)(Br)I |o1:1|",
-            "Invalid drawing: Unsupported drawing stereochemistry",
+            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
         ),
         (
             "rsmi",
             "F[Pt@SP1](Cl)(Br)I>>FI |&1:1|",
-            "SMILES contains unsupported chemistry: reaction stereochemistry",
+            "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
         ),
         (
             "smiles",

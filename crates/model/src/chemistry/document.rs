@@ -461,12 +461,17 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
         perception::perceive(&state, options)
     }
     .map_err(Error::Stereo)?;
-    if state.metadata.atoms.iter().enumerate().any(|(i, a)| {
-        !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
-    }) || state.metadata.bonds.iter().any(|b| b.stereo > 7)
+    // RDKit can derive more than four, as in [LiH2]; drawings keep 0-4.
+    if state.graph.atoms.iter().any(|a| a.radical_electrons > 4)
+        || state.metadata.atoms.iter().enumerate().any(|(i, a)| {
+            !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
+        })
+        || state.metadata.bonds.iter().any(|b| b.stereo > 7)
         || !state.metadata.groups.is_empty()
     {
-        return Err(invalid("This stereochemistry class is not supported yet"));
+        return Err(invalid(
+            "This radical count or stereochemistry class is not supported yet",
+        ));
     }
     Ok(Molecule {
         rdkit_version: RDKIT_VERSION,

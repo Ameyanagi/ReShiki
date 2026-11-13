@@ -142,7 +142,8 @@ the whole lobe without a halo.
   CDXML has no three- or four-electron radical, so export writes a doublet
   for three and a triplet for four, with the atom's hydrogen count; the
   formula survives, the exact radical count does not. Drawings with these
-  atoms save as document version 37.
+  atoms save as document version 37. RDKit can derive more than four for an
+  over-filled atom such as `[LiH2]` (five); ReShiki still refuses those.
 - Drawing a bond to such an atom, or removing one, recounts its electrons
   from its open valence: `[C]` with one bond has three. Atom details offer 3
   and 4 only when the selection already has them.
