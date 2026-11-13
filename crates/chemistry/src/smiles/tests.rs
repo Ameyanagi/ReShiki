@@ -8,6 +8,26 @@ fn binol(wedges: &str) -> String {
 }
 
 #[test]
+fn strict_reading_rejects_implicit_cx_star_queries() -> anyhow::Result<()> {
+    for text in [
+        "* |(0,0,)|",
+        "* |wD:1.0|",
+        "* |atomProp:0._chiralPermutation.-1|",
+        "C* |atomProp:0._UnknownStereo.bad|",
+    ] {
+        assert!(
+            matches!(super::read(text), Err(Error::Unsupported("query atom"))),
+            "{text}"
+        );
+    }
+    assert!(matches!(
+        super::reaction_part(super::parse("*C")?, vec![crate::cx::Event::ProcessLabels]),
+        Err(Error::Unsupported("reaction query or bond type"))
+    ));
+    Ok(())
+}
+
+#[test]
 fn wedge_flags_leave_other_double_bonds_and_wavy_flags_unchanged() -> anyhow::Result<()> {
     for text in [
         "[H]/N=N/C |wU:1.0|",

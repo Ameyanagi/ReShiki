@@ -613,6 +613,18 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 None
             }
             (Ok(actual), None)
+                if partial_import::implicit_dummy_query(
+                    format,
+                    &case.text,
+                    case.failure.as_deref(),
+                    &actual.warnings,
+                ) =>
+            {
+                accepted += 1;
+                partial_imports.push(case.name.clone());
+                None
+            }
+            (Ok(actual), None)
                 if plain.is_some() && serde_json::to_value(&actual).ok() == plain =>
             {
                 accepted += 1;

@@ -426,6 +426,18 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 partial_imports += 1;
                 None
             }
+            (Ok(Outcome::Complete(a)), None)
+                if partial_import::implicit_dummy_query(
+                    format,
+                    &case.text,
+                    case.failure.as_deref(),
+                    &a.warnings,
+                ) =>
+            {
+                accepted += 1;
+                partial_imports += 1;
+                None
+            }
             // Partial import draws an atom whose invalid `@AL` tag the strict
             // reader refuses (#892) and the frozen worker silently drops.
             (Ok(Outcome::Complete(a)), Some(_))
