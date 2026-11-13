@@ -310,6 +310,19 @@
 		<token value="=S(=O)=O">sulfonylidene|sulfonyliden</token>
 		<token value="-S(=O)(=O)[O-]">sulfonato</token>
 		<token value="-S(=O)[O-]">sulfinato</token>
+		<!--P-72.6.1 acid-anion prefixes of the P-65.3.1.3 chalcogen analogues-->
+		<token value="-S(=S)[O-]">sulfinothioato</token>
+		<token value="-S(=[Se])[O-]">sulfinoselenoato</token>
+		<token value="-S(=[Te])[O-]">sulfinotelluroato</token>
+		<token value="-S(=O)(=S)[O-]">sulfonothioato</token>
+		<token value="-S(=O)(=[Se])[O-]">sulfonoselenoato</token>
+		<token value="-S(=O)(=[Te])[O-]">sulfonotelluroato</token>
+		<token value="-S(=S)(=S)[O-]">sulfonodithioato</token>
+		<token value="-S(=[Se])(=[Se])[O-]">sulfonodiselenoato</token>
+		<token value="-S(=[Te])(=[Te])[O-]">sulfonoditelluroato</token>
+		<token value="-S(=S)(=[Se])[O-]">sulfonoselenothioato</token>
+		<token value="-S(=[Se])(=[Te])[O-]">sulfonoselenotelluroato</token>
+		<token value="-S(=S)(=[Te])[O-]">sulfonotellurothioato</token>
 		<token value="-SO">sulfeno</token>
 
 		<token value="-N=O">nitroso</token>

@@ -2,7 +2,7 @@
   "schema": 1,
   "nazuchem": {
     "repository": "https://github.com/Ameyanagi/nazuchem",
-    "rev": "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3"
+    "rev": "5dd39d8245b43d3437c9bb2ab881eeafca8221d7"
   },
   "opsin": {
     "repository": "https://github.com/dan2097/opsin",
@@ -73,8 +73,8 @@
       "path": "tests/fixtures/naming/opsin/xml/functionalTerms.xml",
       "source_path": "crates/nazuchem-n2s/resources/xml/functionalTerms.xml",
       "purpose": "Retained-name catalog source evidence in tests",
-      "bytes": 10416,
-      "sha256": "1aff14ca9925c609780c50e82d8c6b4b555848155504972c96a5c50ab1451257"
+      "bytes": 11310,
+      "sha256": "3d857b636dafc5fc25599baba90f239378740de0784f38ab9e52578fa49d3fc3"
     },
     {
       "path": "tests/fixtures/naming/opsin/xml/groupStemsAllowingInlineSuffixes.xml",
@@ -87,8 +87,8 @@
       "path": "tests/fixtures/naming/opsin/xml/inlineSuffixes.xml",
       "source_path": "crates/nazuchem-n2s/resources/xml/inlineSuffixes.xml",
       "purpose": "Retained-name catalog source evidence in tests",
-      "bytes": 3047,
-      "sha256": "9d5ce3bc345dd15ed6a8be0a6b46a22007b1801c190519164f45369eb0c37a9c"
+      "bytes": 3161,
+      "sha256": "c39af1385995f32b01930836b13de5cd5c290d650d5acaa18fbcff05c6d81be3"
     },
     {
       "path": "tests/fixtures/naming/opsin/xml/miscTokens.xml",
@@ -101,8 +101,8 @@
       "path": "tests/fixtures/naming/opsin/xml/multipliers.xml",
       "source_path": "crates/nazuchem-n2s/resources/xml/multipliers.xml",
       "purpose": "Retained-name catalog source evidence in tests",
-      "bytes": 5149,
-      "sha256": "c2401556d2111cf7dbd94a2e6d6ec5dc96bdee999373a892bbdd08d62e62ed12"
+      "bytes": 144388,
+      "sha256": "08030f378924bf9e5662eb808957817474acc0c3bd46c3a347fdaf5bcf356994"
     },
     {
       "path": "tests/fixtures/naming/opsin/xml/simpleCyclicGroups.xml",
@@ -122,15 +122,15 @@
       "path": "tests/fixtures/naming/opsin/xml/simpleSubstituents.xml",
       "source_path": "crates/nazuchem-n2s/resources/xml/simpleSubstituents.xml",
       "purpose": "Retained-name catalog source evidence in tests",
-      "bytes": 40165,
-      "sha256": "41348a77f2135ad2047f836b52ca2c5db983bcb26c44e04e1694818d24066876"
+      "bytes": 40968,
+      "sha256": "1be5a17895f332fc2351a00820b53c158217a88e9719ff3d2eacb55a0ebf80b7"
     },
     {
       "path": "tests/fixtures/naming/opsin/xml/suffixes.xml",
       "source_path": "crates/nazuchem-n2s/resources/xml/suffixes.xml",
       "purpose": "Retained-name catalog source evidence in tests",
-      "bytes": 8732,
-      "sha256": "6a76924255cceee29e99917d5808c4ae904d071243cf367d387f977992634b08"
+      "bytes": 14389,
+      "sha256": "983c60d02a5f89036766a35ba82fd897a090ffdf9b40d2ef70baaebd4677a620"
     },
     {
       "path": "tests/fixtures/naming/opsin/xml/unsaturators.xml",
