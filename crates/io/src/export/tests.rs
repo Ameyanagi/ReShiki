@@ -391,7 +391,7 @@ fn outlined_svg_and_office_exports_preserve_text_geometry_and_physical_size() {
                 scene::svg_with_background(&doc)
             };
             let bytes = if clipboard {
-                clipboard_svg(&doc).unwrap()
+                clipboard_figure(&doc, "svg-office").unwrap().bytes
             } else {
                 drawing(&doc, "svg-office").unwrap()
             };

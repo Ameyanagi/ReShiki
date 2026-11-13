@@ -10,5 +10,12 @@ below the export button (off by default; ReShiki remembers it) or pass
 reopens in ReShiki. **SVG for Office** is unchanged.
 [Text in SVG files](figure-export.md#text-in-svg-files).
 
+The SVG that ReShiki puts on the clipboard draws its text as outlines on
+macOS, Linux and in the browser editor, as Copy Image on Windows already did.
+**Copy**, **Copy Image** and **Copy as → SVG** used live `<text>` there, so an
+app that pastes the SVG flavor substituted its own fonts. The SVG keeps its
+physical size, transparent background and the editable drawing inside it.
+[Clipboard](clipboard.md).
+
 See [ReShiki 0.14.0](changes-0.14.md) for the prepared release notes and
 [release validation](release-0.14.0-validation.md) for publication status.

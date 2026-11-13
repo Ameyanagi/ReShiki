@@ -18,7 +18,7 @@ Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Exp
 
 SVG export draws text as outlines by default. The outlines have the same glyphs, positions and sizes as the PNG, so labels look the same in every app, including apps and computers that do not have the drawing's font. The file keeps the drawing's physical size.
 
-Turn on **Keep text editable**, below the export button when **SVG** is chosen, to write text as `<text>` elements instead. You can then edit and search the labels in an illustration app, but each app draws them with its own copy of the font (usually Arial), and an app without that font substitutes another one, so labels can shift or, in some viewers, disappear. The option is off by default, and ReShiki remembers your choice. **SVG for Office** always draws outlines.
+Turn on **Keep text editable**, below the export button when **SVG** is chosen, to write text as `<text>` elements instead. You can then edit and search the labels in an illustration app, but each app draws them with its own copy of the font (usually Arial), and an app without that font substitutes another one, so labels can shift or, in some viewers, disappear. The option is off by default, and ReShiki remembers your choice. **SVG for Office** always draws outlines, and so does the SVG that **Copy**, **Copy image** and **Copy as → SVG** put on the clipboard, on every platform.
 
 ## Keep the drawing editable inside a picture
 
