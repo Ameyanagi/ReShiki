@@ -52,20 +52,25 @@ class ReferenceShardTests(unittest.TestCase):
                 self.assertFalse(set(shard) & set(other))
         self.assertEqual(runner.assign_targets(list(reversed(targets)), 4), shards)
         loads = [
-            sum(runner.TARGET_SECONDS.get(name, runner.DEFAULT_SECONDS) for name in shard)
-            for shard in shards
+            runner.SHARD_SECONDS.get(index, 0)
+            + sum(runner.TARGET_SECONDS.get(name, runner.DEFAULT_SECONDS) for name in shard)
+            for index, shard in enumerate(shards)
         ]
-        self.assertLessEqual(max(loads) - min(loads), runner.DEFAULT_SECONDS)
-        heavy_shards = [
+        # Shards balance within one default target, except that the longest
+        # oracle alone may set a floor the others cannot fill up to.
+        rest = sorted(loads)[:-1]
+        self.assertLessEqual(rest[-1] - rest[0], runner.DEFAULT_SECONDS)
+        self.assertLessEqual(
+            max(loads), max(rest[0] + runner.DEFAULT_SECONDS, max(runner.TARGET_SECONDS.values()))
+        )
+        # The three longest oracles each outweigh shard 0's fixed workspace load
+        # and must land on three other shards.
+        heavy_shards = {
             next(i for i, shard in enumerate(shards) if name in shard)
-            for name in [
-                "native_aromatic",
-                "inchi_generator",
-                "engine_migration",
-                "reaction_smiles",
-            ]
-        ]
-        self.assertEqual(len(set(heavy_shards)), 4)
+            for name in sorted(runner.TARGET_SECONDS, key=runner.TARGET_SECONDS.get)[-3:]
+        }
+        self.assertEqual(len(heavy_shards), 3)
+        self.assertNotIn(0, heavy_shards)
         # An auto-discovered target has no required-features metadata. It must
         # be selected without updating the timing table or runner source.
         data["packages"][0]["targets"].append({"name": "new_implicit_test", "kind": ["test"]})
@@ -106,6 +111,7 @@ class ReferenceShardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.commands_for([], 0)
 
+    @patch.dict(runner.SHARD_SECONDS, {}, clear=True)
     def test_native_print_is_recognized_and_runs_in_exactly_one_shard(self):
         data = metadata(["one", "two", "three", "four"])
         data["packages"][1].update(
@@ -126,6 +132,7 @@ class ReferenceShardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.integration_targets(data)
 
+    @patch.dict(runner.SHARD_SECONDS, {}, clear=True)
     def test_geometry_tests_are_recognized_and_every_workspace_target_runs_once(self):
         data = metadata(["one", "two", "three", "four"])
         data["packages"][1].update(
@@ -150,6 +157,7 @@ class ReferenceShardTests(unittest.TestCase):
                     self.assertEqual(commands.count(expected), 1)
 
     @patch.dict(runner.WORKSPACE_TARGET_SHARDS, NATIVE_PRINT_ONLY, clear=True)
+    @patch.dict(runner.SHARD_SECONDS, {}, clear=True)
     def test_batches_preserve_reference_flags_and_run_workspace_units_and_docs_once(self):
         shards = runner.assign_targets(["alpha", "beta", "gamma", "delta", "epsilon"], 4)
         all_commands = []
@@ -177,6 +185,7 @@ class ReferenceShardTests(unittest.TestCase):
         self.assertIn("--doc", workspace[1])
 
     @patch.dict(runner.WORKSPACE_TARGET_SHARDS, NATIVE_PRINT_ONLY, clear=True)
+    @patch.dict(runner.SHARD_SECONDS, {}, clear=True)
     def test_failed_batch_is_reported_and_later_batches_still_execute(self):
         for results, expected in [
             ([101, 0, 0, 0], 101),
@@ -229,6 +238,7 @@ class ReferenceShardTests(unittest.TestCase):
                 self.assertEqual(manifest["commands"], [])
 
     @patch.dict(runner.WORKSPACE_TARGET_SHARDS, NATIVE_PRINT_ONLY, clear=True)
+    @patch.dict(runner.SHARD_SECONDS, {}, clear=True)
     def test_cargo_launch_error_still_runs_later_batches(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

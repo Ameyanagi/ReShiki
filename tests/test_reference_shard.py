@@ -40,7 +40,9 @@ class ReferenceShardTests(unittest.TestCase):
         return json.loads(result.stdout)
 
     def test_every_workspace_integration_target_has_a_shard(self):
-        self.assertTrue(integration_targets(self.metadata()))
+        targets = integration_targets(self.metadata())
+        # Shard 0's fixed workspace load must still leave it integration targets.
+        self.assertTrue(all(assign_targets(targets, 4)))
 
     def test_an_unassigned_target_is_named(self):
         metadata = self.metadata()
