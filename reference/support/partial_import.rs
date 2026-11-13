@@ -1,5 +1,7 @@
 //! #1138 imports SMILES features that the frozen worker refused, with a
-//! warning naming what was dropped or assumed.
+//! warning naming what was dropped or assumed. Atoms with three or four
+//! radical electrons import as written instead: support/frozen_radicals.py
+//! lifts that refusal, so their imports are compared in full.
 
 /// The frozen refusal is one that partial import replaces, and the import
 /// reports a partial-import warning.
@@ -8,8 +10,7 @@ pub fn replaces_failure(format: &str, failure: Option<&str>, warnings: &[String]
         && (matches!(
             failure,
             Some(
-                "More than two unpaired electrons on an atom are not supported yet"
-                    | "Query atoms are not supported yet; import was cancelled."
+                "Query atoms are not supported yet; import was cancelled."
                     | "This bond type is not supported yet."
                     | "This stereochemistry class is not supported yet."
             )

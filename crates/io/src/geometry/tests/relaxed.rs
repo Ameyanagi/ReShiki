@@ -445,7 +445,7 @@ fn relaxed_retains_bounds_structural_guards_and_machine_capacity() {
         |document: &mut Document| document.atoms[0].charge = -9,
         |document: &mut Document| document.atoms[0].isotope = 501,
         |document: &mut Document| document.atoms[0].explicit_h = 9,
-        |document: &mut Document| document.atoms[0].radical_electrons = 3,
+        |document: &mut Document| document.atoms[0].radical_electrons = 5,
         |document: &mut Document| document.atoms[0].position.x = f32::NAN,
         |document: &mut Document| document.bonds[0].order = 0,
         |document: &mut Document| document.bonds[0].order = 8,

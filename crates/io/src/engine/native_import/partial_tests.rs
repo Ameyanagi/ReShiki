@@ -109,140 +109,6 @@ fn partial_import_drops_each_unsupported_coordination_configuration() -> anyhow:
 }
 
 #[test]
-fn partial_import_replaces_excess_radicals_with_hydrogens_and_round_trips() -> anyhow::Result<()> {
-    for (format, text, count, before, formula, hydrogens) in [
-        ("smiles", "[CH] |^4:0|", 3, 1, "CH2", vec![2]),
-        ("smiles", "[CH]", 3, 1, "CH2", vec![2]),
-        ("smiles", "[C]", 4, 0, "CH2", vec![2]),
-        ("smiles", "[N]", 3, 0, "HN", vec![1]),
-        ("smiles", "C |^5:0|", 3, 1, "CH2", vec![2]),
-        ("smiles", "CCO |^5:0|", 3, 0, "C2H4O", vec![1, 2, 1]),
-        ("smiles", "S |^5:0|", 3, 1, "S", vec![0]),
-        ("smiles", "PC |^5:0|", 3, 1, "CH3P", vec![0, 3]),
-        ("rsmi", "[CH]>>C |^4:0|", 3, 1, "C2H6", vec![2, 4]),
-    ] {
-        if format == "smiles" {
-            let source = smiles::read(text)?.prepared.state;
-            let source_facts = source.graph.atom_facts().map_err(anyhow::Error::msg)?;
-            assert_eq!(source.graph.atoms[0].radical_electrons, count, "{text}");
-            assert_eq!(
-                source_facts[0].hydrogens, before,
-                "{text}: source hydrogens"
-            );
-        }
-        let prepared = imported(format, text)?;
-        let element = &prepared.document.atoms[0].element;
-        assert_eq!(
-            prepared.warnings,
-            [format!(
-                "Atom {element}1 had {count} radical electrons; ReShiki keeps at most 2 and drew it as a triplet; its hydrogen count changed from {before} to {}",
-                hydrogens[0]
-            )],
-            "{text}"
-        );
-        assert_eq!(prepared.document.atoms.len(), hydrogens.len(), "{text}");
-        assert_eq!(prepared.document.atoms[0].radical_electrons, 2, "{text}");
-        assert_eq!(
-            prepared.document.atoms[0].explicit_h,
-            u32::from(hydrogens[0]),
-            "{text}"
-        );
-        assert!(!prepared.document.atoms[0].singlet, "{text}");
-
-        let assert_state =
-            |name: &str, state: &State, atom_order: &[usize]| -> anyhow::Result<()> {
-                let facts = state.graph.atom_facts().map_err(anyhow::Error::msg)?;
-                assert_eq!(facts.len(), hydrogens.len(), "{text}: {name} atoms");
-                assert_eq!(
-                    facts.iter().map(|atom| atom.hydrogens).collect::<Vec<_>>(),
-                    atom_order
-                        .iter()
-                        .map(|&atom| hydrogens[atom])
-                        .collect::<Vec<_>>(),
-                    "{text}: {name} hydrogens"
-                );
-                assert_eq!(
-                    facts
-                        .iter()
-                        .map(|atom| atom.radical_electrons)
-                        .collect::<Vec<_>>(),
-                    atom_order
-                        .iter()
-                        .map(|&atom| if atom == 0 { 2 } else { 0 })
-                        .collect::<Vec<_>>(),
-                    "{text}: {name} radicals"
-                );
-                assert_eq!(
-                    chemistry::properties(&facts)
-                        .map_err(anyhow::Error::msg)?
-                        .formula,
-                    formula,
-                    "{text}: {name} formula"
-                );
-                Ok(())
-            };
-        let atom_order = (0..hydrogens.len()).collect::<Vec<_>>();
-        assert_state("prepared", &prepared.molecule.state, &atom_order)?;
-        let readback = molecular::prepare(&prepared.document)?;
-        assert_state("reprepared", &readback.state, &atom_order)?;
-
-        let reopened: Document = serde_json::from_str(&serde_json::to_string(&prepared.document)?)?;
-        reopened.validate().map_err(anyhow::Error::msg)?;
-        assert_eq!(
-            molecular::prepare(&reopened)?.state.graph,
-            prepared.molecule.state.graph,
-            "{text}: native document round trip"
-        );
-        let mol = molfile::write_document(&prepared.document)?;
-        assert_state(
-            "MOL round trip",
-            &molfile::read(&mol)?.molecule.state,
-            &atom_order,
-        )?;
-        let smiles = smiles::write::write(&readback.state, Default::default())?;
-        assert_state(
-            "SMILES round trip",
-            &smiles::read(&smiles.text)?.prepared.state,
-            &smiles.atom_order,
-        )?;
-    }
-    Ok(())
-}
-
-#[test]
-fn partial_import_keeps_radicals_without_a_valence_derived_triplet_refused() -> anyhow::Result<()> {
-    let text = "CS(C)C |^5:1|";
-    let source = smiles::read(text)?.prepared.state;
-    assert_eq!(source.graph.atoms[1].radical_electrons, 3);
-    let mut bare = source.graph.clone();
-    bare.atoms[1].no_implicit = true;
-    bare.atoms[1].explicit_hydrogens = 0;
-    assert_eq!(
-        chemistry::sanitize::sanitize(&bare, &source.metadata, &source.directions)?
-            .graph
-            .atoms[1]
-            .radical_electrons,
-        1
-    );
-    assert_eq!(
-        smiles::read_partial(text)?.prepared.state.graph,
-        source.graph
-    );
-    assert!(prepare_smiles(text, false, Default::default(), true).is_err());
-    assert_eq!(
-        prepare(Request::import("smiles", text))
-            .err()
-            .unwrap()
-            .to_string(),
-        prepare_smiles(text, false, Default::default(), false)
-            .err()
-            .unwrap()
-            .to_string()
-    );
-    Ok(())
-}
-
-#[test]
 fn partial_import_clears_invalid_allene_tags() -> anyhow::Result<()> {
     for (format, text, plain, atom) in [
         ("smiles", "C[C@AL1](F)Cl", "C[C](F)Cl", "C2"),
@@ -570,12 +436,6 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
         "F[Pt@SP1](Cl)(Br)I",
         "F[P@TB1](Cl)(Br)(I)N",
         "F[Co@OH1](Cl)(Br)(I)(N)O",
-        "[CH] |^4:0|",
-        "[CH]",
-        "[C]",
-        "[N]",
-        "C |^5:0|",
-        "CCO |^5:0|",
     ] {
         let strict = smiles::read(text)?.prepared.state;
         let dropping = smiles::read_dropping_flagged_ez(text)?.prepared.state;
@@ -602,7 +462,7 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
             molecular::validate_molecule(&molecule(strict)?)
                 .unwrap_err()
                 .to_string(),
-            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
+            "Invalid drawing: Unsupported drawing stereochemistry",
             "{text}: strict drawing"
         );
         assert_eq!(
@@ -610,18 +470,14 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
                 .err()
                 .unwrap()
                 .to_string(),
-            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
+            "Invalid drawing: Unsupported drawing stereochemistry",
             "{text}: naming_smiles"
         );
     }
     for (text, error) in [
         (
             "F[Pt@SP1](Cl)(Br)I>>FI",
-            "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
-        ),
-        (
-            "[CH]>>C |^4:0|",
-            "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
+            "SMILES contains unsupported chemistry: reaction stereochemistry",
         ),
         (
             "CCO>>CC=O |u:0|",
@@ -652,7 +508,7 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
             .err()
             .unwrap()
             .to_string(),
-        "Invalid drawing: Unsupported drawing stereochemistry or radical count",
+        "Invalid drawing: Unsupported drawing stereochemistry",
         "normalizing SP must not discard the independent enhanced stereo group"
     );
     assert_eq!(
@@ -663,22 +519,14 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
         .err()
         .unwrap()
         .to_string(),
-        "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
+        "SMILES contains unsupported chemistry: reaction stereochemistry",
     );
     Ok(())
 }
 
 #[tokio::test]
 async fn partial_import_exact_notices_reach_the_native_response() -> anyhow::Result<()> {
-    for (format, text, warning, formula) in [
-        ("smiles", "C~C", ANY_NOTICE, "C2H6"),
-        (
-            "smiles",
-            "[CH]",
-            "Atom C1 had 3 radical electrons; ReShiki keeps at most 2 and drew it as a triplet; its hydrogen count changed from 1 to 2",
-            "CH2",
-        ),
-    ] {
+    for (format, text, warning, formula) in [("smiles", "C~C", ANY_NOTICE, "C2H6")] {
         let Outcome::Complete(response) = execute(
             Request::import(format, text),
             Some(native_response::Config::in_process()),
@@ -737,17 +585,17 @@ fn partial_import_does_not_drop_enhanced_groups_on_unsupported_centres() {
         (
             "smiles",
             "F[Pt@SP1](Cl)(Br)I |&1:1|",
-            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
+            "Invalid drawing: Unsupported drawing stereochemistry",
         ),
         (
             "smiles",
             "F[Pt@SP1](Cl)(Br)I |o1:1|",
-            "Invalid drawing: Unsupported drawing stereochemistry or radical count",
+            "Invalid drawing: Unsupported drawing stereochemistry",
         ),
         (
             "rsmi",
             "F[Pt@SP1](Cl)(Br)I>>FI |&1:1|",
-            "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
+            "SMILES contains unsupported chemistry: reaction stereochemistry",
         ),
         (
             "smiles",
@@ -780,34 +628,9 @@ fn partial_import_does_not_drop_enhanced_groups_on_unsupported_centres() {
 }
 
 #[test]
-fn partial_import_radical_notices_count_bonded_hydrogen_vertices() -> anyhow::Result<()> {
-    for (format, text) in [("rsmi", "[H][C]>>C"), ("smiles", "[2H][C]")] {
-        let prepared = imported(format, text)?;
-        assert_eq!(
-            prepared.warnings,
-            [
-                "Atom C2 had 3 radical electrons; ReShiki keeps at most 2 and drew it as a triplet; its hydrogen count changed from 1 to 2"
-            ],
-            "{text}"
-        );
-        let carbon = prepared
-            .molecule
-            .state
-            .graph
-            .atoms
-            .iter()
-            .find(|a| a.radical_electrons == 2)
-            .unwrap();
-        assert_eq!(carbon.explicit_hydrogens, 1, "{text}");
-    }
-    Ok(())
-}
-
-#[test]
 fn partial_import_warning_classifier_excludes_other_notices() -> anyhow::Result<()> {
     for text in [
         "F[Pt@SP1](Cl)(Br)I",
-        "[CH]",
         "C[C@AL1](F)Cl",
         "CCO |u:0|",
         "C~C",

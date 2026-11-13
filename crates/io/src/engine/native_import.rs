@@ -28,6 +28,8 @@ pub(super) mod chain_layout;
 mod molfile_atrop_tests;
 #[cfg(test)]
 mod partial_tests;
+#[cfg(test)]
+mod radical_tests;
 pub(super) mod template_retry;
 #[cfg(test)]
 mod tests;
@@ -101,7 +103,6 @@ pub enum Error {
 const CUMULENE_EZ_NOTICE: &str = "Extended double-bond stereochemistry (e.g. C=C=C=C) ignored";
 const RELATIVE_STEREO_NOTICE: &str = "The input marks a molecule's stereo configuration as relative (CXSMILES r); ReShiki drew it as the stated enantiomer";
 const CONFIGURATION_NOTICE_END: &str = "; it imported that atom without a configuration";
-const RADICAL_NOTICE: &str = " radical electrons; ReShiki keeps at most 2 and drew it as a triplet";
 const ALLENE_NOTICE_END: &str = " is invalid; ReShiki imported that atom without a configuration";
 const QUERY_NOTICE: &str = "The input's query constraints (such as CXSMILES u, rb or s) were ignored; ReShiki imported the plain structure";
 const ANY_BOND_NOTICE_END: &str = " has any order (~); bond order assumed single";
@@ -111,7 +112,6 @@ const ZERO_BOND_NOTICE_END: &str =
 /// Recognize the feature-loss notices emitted only by partial SMILES import.
 pub fn is_partial_import_warning(warning: &str) -> bool {
     (warning.starts_with("ReShiki cannot draw the ") && warning.ends_with(CONFIGURATION_NOTICE_END))
-        || (warning.starts_with("Atom ") && warning.contains(RADICAL_NOTICE))
         || (warning.starts_with("The allene stereo tag (@AL) at ")
             && warning.ends_with(ALLENE_NOTICE_END))
         || warning == QUERY_NOTICE
@@ -138,19 +138,6 @@ fn dropped_notices(dropped: impl IntoIterator<Item = smiles::Dropped>) -> Vec<St
                     "ReShiki cannot draw the {class} at {}{CONFIGURATION_NOTICE_END}",
                     name(atom)
                 )
-            }
-            Dropped::Radical {
-                atom,
-                electrons,
-                hydrogens: (before, after),
-            } => {
-                let mut notice = format!("Atom {} had {electrons}{RADICAL_NOTICE}", name(atom));
-                if before != after {
-                    notice.push_str(&format!(
-                        "; its hydrogen count changed from {before} to {after}"
-                    ));
-                }
-                notice
             }
             Dropped::Allene(atom) => format!(
                 "The allene stereo tag (@AL) at {}{ALLENE_NOTICE_END}",

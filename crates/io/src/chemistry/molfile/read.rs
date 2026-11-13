@@ -539,26 +539,23 @@ impl Parsed {
             )
             .map_err(ReadError::Chemistry)?;
         }
-        if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
-            || state
-                .metadata
-                .atoms
-                .iter()
-                .enumerate()
-                .any(|(center, atom)| {
-                    !stereo::allene::supported(
-                        &state.graph,
-                        center,
-                        atom.chiral_tag,
-                        atom.chiral_permutation,
-                    )
-                })
+        if state
+            .metadata
+            .atoms
+            .iter()
+            .enumerate()
+            .any(|(center, atom)| {
+                !stereo::allene::supported(
+                    &state.graph,
+                    center,
+                    atom.chiral_tag,
+                    atom.chiral_permutation,
+                )
+            })
             || state.metadata.bonds.iter().any(|b| b.stereo > 7)
             || !state.metadata.groups.is_empty()
         {
-            return Err(ReadError::Unsupported(
-                "radical count or stereochemistry class",
-            ));
+            return Err(ReadError::Unsupported("stereochemistry class"));
         }
         let molecule = Molecule {
             rdkit_version: RDKIT_VERSION,

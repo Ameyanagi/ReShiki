@@ -10,6 +10,8 @@ from rdkit import Chem, RDLogger, rdBase
 from rdkit.Chem import rdChemReactions
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import support.frozen_radicals  # noqa: F401  (before check_supported is imported)
+
 from engine import reactions
 from engine.worker import analyze, check_supported, from_document, handle, to_document
 

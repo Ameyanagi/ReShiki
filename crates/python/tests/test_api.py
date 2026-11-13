@@ -45,6 +45,30 @@ def test_hydrogen_isotope_style_modes_preserve_chemical_identity(mode: str) -> N
 
 
 @pytest.mark.parametrize(
+    ("smiles", "formula", "inchi", "unpaired"),
+    [
+        ("[C]", "C", "InChI=1S/C", 4),
+        ("[CH]", "CH", "InChI=1S/CH/h1H", 3),
+        ("[Si]", "Si", "InChI=1S/Si", 4),
+        ("[N]", "N", "InChI=1S/N", 3),
+    ],
+)
+def test_bracket_radicals_import_as_written(
+    smiles: str, formula: str, inchi: str, unpaired: int
+) -> None:
+    # As RDKit reads them: a bracket atom has only the written hydrogens.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        molecule = reshiki.Molecule.from_smiles(smiles)
+    properties = molecule.properties()
+    assert properties.formula == formula
+    assert properties.inchi == inchi
+    assert properties.unpaired_electrons == unpaired
+    assert molecule.smiles() == smiles
+    assert json.loads(molecule.rsk())["version"] == 37
+
+
+@pytest.mark.parametrize(
     ("filename", "formula"),
     [
         ("ethanol.mol", "C2H6O"),

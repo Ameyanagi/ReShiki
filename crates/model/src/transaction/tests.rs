@@ -498,3 +498,87 @@ fn stage_order_is_fixed() {
         assert_eq!(doc, before);
     }
 }
+
+/// One atom with no implicit hydrogens, as SMILES `[C]` or `[CH]` imports.
+fn bracket_atom(element: &str, hydrogens: u32, electrons: u8) -> (Document, u64) {
+    let mut doc = Document::default();
+    let id = doc.add_atom(element, Point::default());
+    let atom = doc.atom_mut(id).unwrap();
+    atom.no_implicit = true;
+    atom.explicit_h = hydrogens;
+    atom.radical_electrons = electrons;
+    (doc, id)
+}
+
+fn radicals(doc: &Document, id: u64) -> u8 {
+    doc.atom(id).unwrap().radical_electrons
+}
+
+#[test]
+fn bonds_drawn_to_or_removed_from_bracket_radicals_recount_their_electrons() {
+    for (element, hydrogens, bare, bonded, double) in [
+        ("C", 0, 4, 3, 2),
+        ("C", 1, 3, 2, 1),
+        ("Si", 0, 4, 3, 2),
+        ("N", 0, 3, 2, 1),
+        ("B", 0, 3, 2, 1),
+    ] {
+        let (doc, id) = bracket_atom(element, hydrogens, bare);
+        let (mut drawn, other) =
+            crate::editing::add_bonded_atom(&doc, id, Point::new(42., 0.), None, "C").unwrap();
+        let _ = reconcile(&mut drawn, doc.clone()).unwrap();
+        assert_eq!(radicals(&drawn, id), bonded, "{element}H{hydrogens} + C");
+        crate::chemistry::document::prepare(&drawn).unwrap();
+
+        let mut raised = drawn.clone();
+        raised.bonds[0].order = 2;
+        let _ = reconcile(&mut raised, drawn.clone()).unwrap();
+        assert_eq!(radicals(&raised, id), double, "{element}H{hydrogens} = C");
+        crate::chemistry::document::prepare(&raised).unwrap();
+
+        let mut removed = drawn.clone();
+        removed.bonds.clear();
+        removed.atoms.retain(|a| a.id != other);
+        let _ = reconcile(&mut removed, drawn.clone()).unwrap();
+        assert_eq!(radicals(&removed, id), bare, "{element}H{hydrogens} again");
+        assert_eq!(removed.atoms, doc.atoms);
+    }
+}
+
+#[test]
+fn radical_recount_keeps_a_set_count_and_unrelated_atoms() {
+    // A filled valence leaves no radical, and the singlet flag needs two.
+    let (mut doc, id) = bracket_atom("C", 2, 2);
+    doc.atom_mut(id).unwrap().singlet = true;
+    let (mut drawn, _) =
+        crate::editing::add_bonded_atom(&doc, id, Point::new(42., 0.), None, "C").unwrap();
+    drawn.bonds[0].order = 2;
+    let _ = reconcile(&mut drawn, doc).unwrap();
+    assert_eq!(radicals(&drawn, id), 0);
+    assert!(!drawn.atom(id).unwrap().singlet);
+
+    // An edit that sets the count itself keeps it, as do implicit-H atoms
+    // and atoms the edit did not touch.
+    let (doc, id) = bracket_atom("C", 0, 4);
+    let mut set = doc.clone();
+    set.atom_mut(id).unwrap().radical_electrons = 2;
+    let _ = reconcile(&mut set, doc).unwrap();
+    assert_eq!(radicals(&set, id), 2);
+
+    let mut doc = Document::default();
+    let marked = doc.add_atom("C", Point::default());
+    doc.atom_mut(marked).unwrap().radical_electrons = 3;
+    // Inconsistent on purpose: only edited atoms are recounted.
+    let (untouched, _) = bracket_atom("C", 0, 1);
+    let bare = doc.add_atom("C", Point::new(200., 0.));
+    *doc.atom_mut(bare).unwrap() = crate::document::Atom {
+        id: bare,
+        position: Point::new(200., 0.),
+        ..untouched.atoms[0].clone()
+    };
+    let (mut drawn, _) =
+        crate::editing::add_bonded_atom(&doc, marked, Point::new(42., 0.), None, "C").unwrap();
+    let _ = reconcile(&mut drawn, doc).unwrap();
+    assert_eq!(radicals(&drawn, marked), 3);
+    assert_eq!(radicals(&drawn, bare), 1);
+}
