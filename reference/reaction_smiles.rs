@@ -28,7 +28,14 @@ struct Case {
 /// RDKit leaves a group without a number (and the relative flag's group) at
 /// read id 0 in each participant. ReShiki gives such groups numbers that are
 /// unique across the reaction (#766), so compare them as unnumbered.
-fn without_allocated_group_numbers(actual: &mut Value, expected: &Value) {
+///
+/// RDKit 2026.09.1 reads CX group ids with `std::atoi` (`read_int`,
+/// CXSmilesOps.cpp:127, rdkit#9273). The MSVC runtime saturates an id beyond
+/// INT_MAX at 2147483647; glibc and macOS keep it modulo 2^32, as ReShiki does
+/// (`o2147483649`, `o4294967295`). On Windows x64 only, such an id is compared
+/// as saturated and counted.
+fn adopt_rdkit_group_numbers(actual: &mut Value, expected: &Value) -> usize {
+    let mut saturated = 0;
     for role in ["reactants", "agents", "products"] {
         let (Some(actual), Some(expected)) = (
             actual.get_mut(role).and_then(Value::as_array_mut),
@@ -48,10 +55,19 @@ fn without_allocated_group_numbers(actual: &mut Value, expected: &Value) {
                 if expected["read_id"] == 0 && expected["write_id"] == 0 {
                     actual["read_id"] = 0.into();
                     actual["write_id"] = 0.into();
+                } else if cfg!(windows)
+                    && expected["read_id"] == i32::MAX
+                    && actual["read_id"]
+                        .as_u64()
+                        .is_some_and(|id| id > i32::MAX as u64)
+                {
+                    actual["read_id"] = i32::MAX.into();
+                    saturated += 1;
                 }
             }
         }
     }
+    saturated
 }
 
 fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
@@ -136,6 +152,7 @@ fn compare_reference(suite: &str) -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut lenient, mut other_basis) = (0, 0, 0, 0);
+    let mut saturated = 0;
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -149,7 +166,7 @@ fn compare_reference(suite: &str) -> anyhow::Result<()> {
             (Ok(a), Some(e)) => {
                 accepted += 1;
                 other_basis += ring_basis::adopt_rdkit_basis(a, e);
-                without_allocated_group_numbers(a, e);
+                saturated += adopt_rdkit_group_numbers(a, e);
                 difference(a, e, "reaction")
             }
             (Err(_), None) => {
@@ -182,7 +199,7 @@ fn compare_reference(suite: &str) -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success(), "Reaction SMILES reference failed");
     eprintln!(
-        "Reaction SMILES ({suite}): {accepted} accepted, {rejected} rejected, {lenient} rejected where RDKit reads lenient CX numbers, {other_basis} RDKit SSSR basis differences, {} mismatches",
+        "Reaction SMILES ({suite}): {accepted} accepted, {rejected} rejected, {lenient} rejected where RDKit reads lenient CX numbers, {other_basis} RDKit SSSR basis differences, {saturated} group ids RDKit saturates at INT_MAX on Windows x64, {} mismatches",
         failures.len()
     );
     if !failures.is_empty() {
