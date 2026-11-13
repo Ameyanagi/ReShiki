@@ -80,8 +80,8 @@ charge, isotope or radical count (#1138), which no captured aromaticity request 
 
 `aromatic-document-preparation-source.py.gz` retains
 `reference/document_preparation_reference.py` from commit
-`568513c2333a7f1402eef86fca8ba9efca7f9cea`, decompressed SHA256
-`f9d833b9ed0f09b8c50026fa798ad8909295a9df6c70b89dab7f3dd5dab00216`. The live
+`00651dd60a933e0d7bee019b3254201214a90931`, decompressed SHA256
+`ac64d8b8b0d46fcc355b7930bbe210496b1b991759c13df0baa1551fc85d6811`. The live
 mirror later accepted three or four radical electrons on an atom (#1168), which
 no captured aromaticity request uses.
 
