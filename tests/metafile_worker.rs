@@ -34,11 +34,11 @@ fn main() -> anyhow::Result<()> {
     let path = directory.path().join("controlled-spectrum.EMF");
     std::fs::write(&path, source)?;
     let runtime = tokio::runtime::Runtime::new()?;
-    let started = Instant::now();
+    // A debug build takes 10-11 s here and over 20 s under load; open()
+    // itself fails at PLAYBACK_LIMIT, so no separate time bound.
     let picture = runtime
         .block_on(reshiki::metafile::open(&path))
         .map_err(anyhow::Error::msg)?;
-    assert!(started.elapsed() < Duration::from_secs(20));
     assert_eq!(picture.emf(), Some(source.as_slice()));
     assert_eq!((picture.width(), picture.height()), (4724, 2834));
     let doc = picture.document();
