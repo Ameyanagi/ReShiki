@@ -72,6 +72,13 @@ commit `568513c2333a7f1402eef86fca8ba9efca7f9cea`, decompressed SHA256
 module later accepted RDKit's RXN wrapper when it only restates an atom's own
 charge, isotope or radical count (#1138), which no captured aromaticity request uses.
 
+`aromatic-document-preparation-source.py.gz` retains
+`reference/document_preparation_reference.py` from commit
+`568513c2333a7f1402eef86fca8ba9efca7f9cea`, decompressed SHA256
+`f9d833b9ed0f09b8c50026fa798ad8909295a9df6c70b89dab7f3dd5dab00216`. The live
+mirror later accepted three or four radical electrons on an atom (#1168), which
+no captured aromaticity request uses.
+
 These are the original recorded hashes in all three fixture headers. The current
 worker adds cubic controls only to CDXML export bounds; its aromaticity handler
 is unchanged. The current abbreviation module reads its presets from the catalog,

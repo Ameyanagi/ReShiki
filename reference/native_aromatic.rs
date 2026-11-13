@@ -525,6 +525,10 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
             }
             "reference/engine/worker.py" => Some("aromatic-worker-source.py.gz"),
             "reference/engine/reactions.py" => Some("aromatic-reactions-source.py.gz"),
+            // Since #1168 the live mirror accepts three or four radical electrons.
+            "reference/document_preparation_reference.py" => {
+                Some("aromatic-document-preparation-source.py.gz")
+            }
             _ => None,
         };
         let bytes = if let Some(snapshot) = snapshot {

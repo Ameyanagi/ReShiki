@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING
 from rdkit import Chem, RDConfig, RDLogger, rdBase
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import support.frozen_radicals  # noqa: F401  (before check_supported is imported)
-
 from engine.aromatic import toggle
 from engine.worker import to_document
 
