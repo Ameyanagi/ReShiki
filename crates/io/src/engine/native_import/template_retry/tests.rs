@@ -217,12 +217,14 @@ fn a_template_that_increases_collisions_is_not_published() -> anyhow::Result<()>
         },
     )?
     .positions;
-    // #9208 changes the untemplated layout from four overlaps to two; RDKit
-    // 2026.09.1 legacy agrees on macOS and Linux. Its Windows build, which
-    // ReShiki follows there, still puts atoms 18 and 19 on atoms 8 and 9 (same
-    // rings, different native layout). The unchanged template still has nine.
-    let overlaps = if cfg!(windows) { 4 } else { 2 };
-    assert_eq!(collisions(state, &original, 4096, 1.5), overlaps);
+    // #9208 changes the untemplated layout from four overlaps to two on macOS
+    // arm64 and Linux x64; RDKit 2026.09.1 legacy agrees there. Its Windows
+    // build, which ReShiki follows there, still puts atoms 18 and 19 on atoms
+    // 8 and 9 (same rings, different native layout), and the macOS x64 libm
+    // gives that layout as well. Either way the untemplated layout beats the
+    // unchanged template's nine, so the template is not published.
+    let overlaps = collisions(state, &original, 4096, 1.5);
+    assert!(matches!(overlaps, 2 | 4), "{overlaps} overlaps");
     assert_eq!(collisions(state, &candidate, 4096, 1.5), 9);
     let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
     super::super::tests::assert_rigid_rotation(&original, &positions);

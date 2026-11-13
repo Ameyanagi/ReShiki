@@ -1,5 +1,12 @@
 # Unreleased changes
 
+Importing an atropisomer whose axis wedge sits on a ring amide nitrogen gives
+that nitrogen the same R/S label at import that **Analyze**, export and
+reopening the drawing compute from the wedges. Before, a layout that drew every
+axis kept the source labels, which have no centre there, so the label appeared
+only after the next analysis; the macOS x64 layout of one coupled-axes test
+hit this first.
+
 On Linux, **Copy** (**Ctrl+C**) also puts the selection's SMILES on the
 clipboard as plain text, the same text **Copy SMILES** gives, so a plain-text
 box gets the SMILES. LibreOffice, Chromium pages and ReShiki still paste the
