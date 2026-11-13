@@ -35,6 +35,11 @@ See the [developer guide](https://reshiki.com/developer/development/) for setup
 and checks. Describe the problem your change solves and the relevant validation
 in your pull request.
 
+Ordinary pull requests run CI on Linux and Windows only. The macOS legs run on
+stacked `merge/*` pull requests, on pull requests labelled `full-ci`, and on
+`main`, nightly and release builds. CI reads the label when it starts, so add
+`full-ci` before the next push, or close and reopen the pull request.
+
 Include [visual review evidence](docs/visual-review.md): example images for new
 features, labeled examples for each new shortcut, and matched before/after
 images for visible bug fixes. Provide a reusable caption and image link for the

@@ -10,6 +10,7 @@ on:
       - "licenses/**"
       - "scripts/license_notices.py"
       - "scripts/check_python_wheel_notices.py"
+      - "scripts/ci_scope.py"
       - ".github/workflows/python-wheels.yml"
   workflow_call:
 permissions:
@@ -21,45 +22,12 @@ concurrency:
 env:
   UV_PYTHON_PREFERENCE: only-managed
 jobs:
-  # No sdist: the package compiles assets, presets and vendored crates from the
-  # repository root, which maturin cannot include in a source distribution.
-  # Free-threaded Python needs a separate non-abi3 build and is not covered.
-  wheel:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            artifact: linux-x64
-            target: x86_64-unknown-linux-gnu
-            test: true
-          - os: ubuntu-24.04-arm
-            artifact: linux-arm64
-            target: aarch64-unknown-linux-gnu
-            test: true
-          - os: macos-15
-            artifact: macos-arm64
-            target: aarch64-apple-darwin
-            test: true
-          # The tests' RDKit has no Intel macOS or Windows ARM64 wheel.
-          - os: macos-15-intel
-            artifact: macos-x64
-            target: x86_64-apple-darwin
-          - os: windows-2022
-            artifact: windows-x64
-            target: x86_64-pc-windows-msvc
-            msvc_arch: x64
-            python: cpython-3.12.15-windows-x86_64-none
-            test: true
-          - os: windows-11-arm
-            artifact: windows-arm64
-            target: aarch64-pc-windows-msvc
-            msvc_arch: arm64
-            python: cpython-3.12.15-windows-aarch64-none
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    env:
-      UV_PYTHON: ${{ matrix.python || '3.12.15' }}
+  # macOS wheels build only on stacked merge/* PRs, full-ci-labelled PRs and
+  # releases; scripts/ci_scope.py leaves their rows out otherwise.
+  scope:
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
     steps:
       - &actions_runtime
         name: Patch the Actions Node runtime when needed
@@ -123,6 +91,26 @@ jobs:
               }
           }
           Write-Host "Verified Actions runtime: $version ($node)"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: scope
+        run: python3 scripts/ci_scope.py
+  # No sdist: the package compiles assets, presets and vendored crates from the
+  # repository root, which maturin cannot include in a source distribution.
+  # Free-threaded Python needs a separate non-abi3 build and is not covered.
+  wheel:
+    needs: scope
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.scope.outputs.matrix).wheel }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      UV_PYTHON: ${{ matrix.python || '3.12.15' }}
+    steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
