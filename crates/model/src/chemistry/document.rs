@@ -513,7 +513,8 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
     ) {
         state.metadata = metadata;
     }
-    if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
+    // RDKit can derive more than four, as in [LiH2]; drawings keep 0-4.
+    if state.graph.atoms.iter().any(|a| a.radical_electrons > 4)
         || state.metadata.atoms.iter().enumerate().any(|(i, a)| {
             !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
         })

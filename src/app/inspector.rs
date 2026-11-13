@@ -1857,10 +1857,16 @@ impl App {
         controls = controls.push(
             row![
                 text("Radical electrons").size(11).width(Length::Fill),
-                crate::appearance::pick_list([0u8, 1, 2], count, Message::AtomRadical)
-                    .placeholder("Mixed")
-                    .text_size(12)
-                    .padding(6)
+                // Three or four come only from imports, such as SMILES [C];
+                // they are offered while the selection has them.
+                crate::appearance::pick_list(
+                    (0..=count.unwrap_or(0).max(2)).collect::<Vec<u8>>(),
+                    count,
+                    Message::AtomRadical
+                )
+                .placeholder("Mixed")
+                .text_size(12)
+                .padding(6)
             ]
             .spacing(6)
             .align_y(Alignment::Center),

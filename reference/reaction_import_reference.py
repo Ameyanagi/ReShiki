@@ -59,7 +59,7 @@ def read(text):
             if (
                 not mol.GetNumAtoms()
                 or any(
-                    a.HasQuery() or a.GetNumRadicalElectrons() > 2 or int(a.GetChiralTag()) > 2
+                    a.HasQuery() or a.GetNumRadicalElectrons() > 4 or int(a.GetChiralTag()) > 2
                     for a in mol.GetAtoms()
                 )
                 or any(

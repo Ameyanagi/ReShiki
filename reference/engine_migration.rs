@@ -745,6 +745,12 @@ fn partial_import_exception_requires_replaced_failure_format_and_warning() {
             Some("Enhanced stereo groups are not supported yet; import was cancelled."),
             false,
         ),
+        // Compared in full since the references lift this frozen refusal.
+        (
+            "smiles",
+            Some("More than two unpaired electrons on an atom are not supported yet"),
+            false,
+        ),
     ] {
         assert_eq!(
             partial_import::replaces_failure(format, failure, &warnings),

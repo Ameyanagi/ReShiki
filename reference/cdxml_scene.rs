@@ -208,14 +208,17 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     // every top-level fixture runs twice, adding two native and two document accepts.
     // tests/fixtures/aa-nicknames.cdxml (A and a generic nicknames) and #371
     // (519e91c6) tests/fixtures/cobalt-hexammine.cdxml add two more each.
+    // #1168 keeps three or four radical electrons, so 46 drawings whose atoms
+    // have them now become documents instead of being rejected.
     assert_eq!(
         (accepted, rejected, converted, bounds),
-        (2651, 286, 2359, 578)
+        (2651, 286, 2405, 532)
     );
     // Nine original raw Documents failed the projection requirement. The
     // independently adapted paint now passes the same validation boundary.
     assert_eq!(dative_extensions, 9);
-    assert_eq!(final_only_rejected, 292);
+    // The 46 drawings above were final-only rejections before #1168.
+    assert_eq!(final_only_rejected, 246);
     assert_eq!(extensions, 1);
     assert_eq!(
         (restrictions, restricted_native, restricted_documents),

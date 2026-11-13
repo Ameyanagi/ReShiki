@@ -22,6 +22,7 @@ from valence_reference import graph
 Chem.SetUseLegacyRingFinding(True)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import support.frozen_radicals  # noqa: F401  (before check_supported is imported)
 
 
 def xml(atoms, bonds=(), *, length="14.4", fragment_id=7000):

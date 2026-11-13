@@ -546,3 +546,29 @@ fn rejects_dangling_bond_and_duplicate_ids() {
     doc.atoms.push(doc.atoms[0].clone());
     assert!(doc.validate().is_err());
 }
+
+#[test]
+fn three_or_four_radical_electrons_raise_the_saved_version() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("C", Point::default());
+    doc.atom_mut(id).unwrap().no_implicit = true;
+    for (electrons, version) in [
+        (0, DISTANCE_BONDS),
+        (2, DISTANCE_BONDS),
+        (3, RADICAL_ELECTRONS),
+        (4, RADICAL_ELECTRONS),
+    ] {
+        doc.atom_mut(id).unwrap().radical_electrons = electrons;
+        doc.validate().unwrap();
+        assert_eq!(doc.file_version(), version, "{electrons}");
+        let json = doc.file_json().unwrap();
+        let reopened = Document::from_native_file(&json).unwrap();
+        assert_eq!(reopened.version, version);
+        assert_eq!(reopened.atoms[0].radical_electrons, electrons);
+    }
+    doc.atom_mut(id).unwrap().radical_electrons = 5;
+    assert_eq!(
+        doc.validate().unwrap_err(),
+        "Invalid atom radical count or mark position"
+    );
+}

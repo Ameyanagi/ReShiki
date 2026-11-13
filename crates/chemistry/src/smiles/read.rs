@@ -31,11 +31,6 @@ pub enum Dropped {
         atom: InputAtom,
         class: Configuration,
     },
-    Radical {
-        atom: InputAtom,
-        electrons: u8,
-        hydrogens: (u32, u32),
-    },
     Allene(InputAtom),
     Queries,
     AnyBond(InputAtom, InputAtom),
@@ -514,7 +509,8 @@ fn reaction_part_with(
     if let Some(positions) = positions {
         partial_state(&mut state, positions, &mut dropped)?;
     }
-    if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
+    // RDKit can derive more than four, as in [LiH2]; drawings keep 0-4.
+    if state.graph.atoms.iter().any(|a| a.radical_electrons > 4)
         || state.metadata.atoms.iter().enumerate().any(|(i, a)| {
             !stereo::allene::supported(&state.graph, i, a.chiral_tag, a.chiral_permutation)
         })
@@ -613,31 +609,6 @@ fn partial_state(
     dropped: &mut Vec<Dropped>,
 ) -> Result<bool> {
     let mut changed = false;
-    let bare_radicals = if state.graph.atoms.iter().any(|a| a.radical_electrons > 2) {
-        let mut graph = state.graph.clone();
-        for atom in &mut graph.atoms {
-            if atom.radical_electrons > 2 {
-                atom.no_implicit = true;
-                atom.explicit_hydrogens = 0;
-            }
-        }
-        crate::sanitize::sanitize(&graph, &state.metadata, &state.directions)?
-            .graph
-            .atoms
-            .into_iter()
-            .map(|atom| atom.radical_electrons)
-            .collect::<Vec<_>>()
-    } else {
-        Vec::new()
-    };
-    let mut bonded_hydrogens = vec![0u32; state.graph.atoms.len()];
-    for bond in &state.graph.bonds {
-        for (atom, neighbour) in [(bond.a, bond.b), (bond.b, bond.a)] {
-            if at(&state.graph.atoms, neighbour)?.atomic_number == 1 {
-                *bonded_hydrogens.get_mut(atom).ok_or(Error::Limit)? += 1;
-            }
-        }
-    }
     // A centre in an enhanced stereo group keeps its tag, so the import is
     // refused instead of silently dropping it from the group.
     let grouped: HashSet<usize> = state
@@ -649,7 +620,7 @@ fn partial_state(
     for (id, (atom, meta)) in state
         .graph
         .atoms
-        .iter_mut()
+        .iter()
         .zip(&mut state.metadata.atoms)
         .enumerate()
     {
@@ -667,27 +638,6 @@ fn partial_state(
             dropped.push(Dropped::Configuration { atom: input, class });
             meta.chiral_tag = 0;
             meta.chiral_permutation = Some(0);
-            changed = true;
-        }
-        if atom.radical_electrons > 2 {
-            let r0 = *at(&bare_radicals, id)?;
-            if r0 < 2 {
-                continue;
-            }
-            let before =
-                u32::from(atom.explicit_hydrogens) + at(&state.valences, id)?.implicit_hydrogens;
-            let after = u32::from(r0 - 2);
-            dropped.push(Dropped::Radical {
-                atom: input,
-                electrons: atom.radical_electrons,
-                hydrogens: (
-                    before + at(&bonded_hydrogens, id)?,
-                    after + at(&bonded_hydrogens, id)?,
-                ),
-            });
-            // Store a valence-derived triplet that survives preparation and export.
-            atom.no_implicit = true;
-            atom.explicit_hydrogens = r0 - 2;
             changed = true;
         }
     }

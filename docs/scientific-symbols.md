@@ -132,6 +132,21 @@ the whole lobe without a halo.
   filled orbital lobes and rotated marks.
 - SMILES/MOL/CDXML keep supported one/two-unpaired-electron chemistry;
   molecular formats omit drawing annotations.
+- An atom can carry up to four nonbonding electrons, as RDKit reads them. A
+  SMILES bracket atom has only the hydrogens written, so `[C]` is a carbon
+  atom with four, `[CH]`, `[N]`, `[B]`, `[Al]` and `[C+]` have three, and
+  `[Si]` four. CXSMILES `^1`–`^7` set the count of an atom outside brackets,
+  as in RDKit, and the valence decides it inside brackets. SMILES and MOL
+  export keep these atoms exactly: MOL writes a bare atom with valence 15 and
+  any other with `RAD` 2 (odd) or 3 (even) and its valence, as RDKit does.
+  CDXML has no three- or four-electron radical, so export writes a doublet
+  for three and a triplet for four, with the atom's hydrogen count; the
+  formula survives, the exact radical count does not. Drawings with these
+  atoms save as document version 37. RDKit can derive more than four for an
+  over-filled atom such as `[LiH2]` (five); ReShiki still refuses those.
+- Drawing a bond to such an atom, or removing one, recounts its electrons
+  from its open valence: `[C]` with one bond has three. Atom details offer 3
+  and 4 only when the selection already has them.
 - An atom with two nonbonding electrons is a triplet unless **Atom details →
   Spin state** marks it singlet. `.rsk`, MOL (`RAD 1`/`RAD 3`, V2000 and V3000)
   and CDXML (`Radical="Singlet"`/`"Triplet"`) keep the spin state; SMILES and
@@ -160,6 +175,8 @@ the whole lobe without a halo.
   label ink (of the atom itself when it has no label), so orbited marks beside
   hydrogens still export, and closer to that atom than any other atom. A visible atom label and hydrogen
   count are written explicitly.
+- Naming does not name these atoms; it reports that it does not support
+  radicals.
 - Template attachment rejects marked or radical anchor atoms; free insertion of
   these templates keeps their full drawing.
 

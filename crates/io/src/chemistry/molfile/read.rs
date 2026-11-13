@@ -534,7 +534,7 @@ impl Parsed {
             )
             .map_err(ReadError::Chemistry)?;
         }
-        if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
+        if state.graph.atoms.iter().any(|a| a.radical_electrons > 4)
             || state
                 .metadata
                 .atoms

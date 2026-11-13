@@ -14,7 +14,8 @@
 //! rings.rs:236, templates.rs:271/729 and src/keyboard_drawing.rs:520
 //! intentionally use their own order (groups before reactions) and are NOT
 //! routed here.
-use crate::document::{Document, History};
+use crate::document::{Atom, Document, History};
+use std::collections::{HashMap, HashSet};
 
 /// Whether the edit from `before` to `after` changes chemistry rather than only
 /// its presentation.
@@ -89,6 +90,132 @@ pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
         })
 }
 
+/// The atoms whose valence inputs an edit from `before` changed: new atoms,
+/// atoms with a changed element, charge, radical count, hydrogens,
+/// aromaticity or isotope, and both ends of each bond added, removed or
+/// changed in order or direction.
+pub(crate) fn edited_atoms(before: &Document, document: &Document) -> HashSet<u64> {
+    let pair = |a: u64, b: u64| (a.min(b), a.max(b));
+    let valence = |a: &Atom| {
+        (
+            a.element.clone(),
+            a.charge,
+            a.radical_electrons,
+            a.explicit_h,
+            a.no_implicit,
+            a.aromatic,
+            a.isotope,
+        )
+    };
+    let atoms: HashMap<_, _> = before.atoms.iter().map(|a| (a.id, a)).collect();
+    let old: HashMap<_, _> = before.bonds.iter().map(|b| (pair(b.a, b.b), b)).collect();
+    let new: HashMap<_, _> = document.bonds.iter().map(|b| (pair(b.a, b.b), b)).collect();
+    document
+        .atoms
+        .iter()
+        .filter(|a| {
+            atoms
+                .get(&a.id)
+                .is_none_or(|old| valence(old) != valence(a))
+        })
+        .map(|a| a.id)
+        .chain(
+            document
+                .bonds
+                .iter()
+                .filter(|b| {
+                    old.get(&pair(b.a, b.b))
+                        .is_none_or(|o| (o.a, o.order) != (b.a, b.order))
+                })
+                .chain(
+                    before
+                        .bonds
+                        .iter()
+                        .filter(|b| !new.contains_key(&pair(b.a, b.b))),
+                )
+                .flat_map(|b| [b.a, b.b]),
+        )
+        .collect()
+}
+
+/// Recounts the radicals of each radical atom with a fixed hydrogen count
+/// whose bonds, charge or hydrogens an edit from `before` changed. As in
+/// RDKit, such an atom's radicals are its valence deficit, so a bond drawn to
+/// `[C]` leaves three and removing it restores four, instead of a stored
+/// count that conflicts with the chemistry. An edit that sets the radical
+/// count itself keeps it.
+pub fn recount_radicals(before: &Document, document: &mut Document) {
+    let previous: HashMap<_, _> = before
+        .atoms
+        .iter()
+        .map(|a| (a.id, a.radical_electrons))
+        .collect();
+    let edited = edited_atoms(before, document);
+    let counts: HashMap<_, _> = document
+        .atoms
+        .iter()
+        .filter(|a| {
+            a.no_implicit
+                && a.radical_electrons != 0
+                && edited.contains(&a.id)
+                && previous
+                    .get(&a.id)
+                    .is_none_or(|&count| count == a.radical_electrons)
+        })
+        .filter_map(|a| Some((a.id, valence_radicals(document, a)?)))
+        .collect();
+    for atom in &mut document.atoms {
+        if let Some(&count) = counts.get(&atom.id) {
+            atom.radical_electrons = count;
+            atom.singlet &= count == 2;
+        }
+    }
+}
+
+/// RDKit's radical count for `atom` with no implicit hydrogens, from its own
+/// bonds and fixed hydrogens. Neighbours are placeholders: only their bond
+/// orders count.
+fn valence_radicals(document: &Document, atom: &Atom) -> Option<u8> {
+    use crate::chemistry::{ELEMENTS, graph};
+    let focus = graph::Atom {
+        atomic_number: u8::try_from(ELEMENTS.iter().position(|e| e.symbol == atom.element)?)
+            .ok()?,
+        charge: i8::try_from(atom.charge).ok()?,
+        explicit_hydrogens: u8::try_from(atom.explicit_h).ok()?,
+        no_implicit: true,
+        aromatic: atom.aromatic,
+        radical_electrons: atom.radical_electrons,
+        ..Default::default()
+    };
+    let mut graph = graph::Graph {
+        atoms: vec![focus],
+        bonds: Vec::new(),
+    };
+    for bond in document
+        .bonds
+        .iter()
+        .filter(|b| b.a == atom.id || b.b == atom.id)
+    {
+        let other = graph.atoms.len();
+        graph.atoms.push(graph::Atom {
+            no_implicit: true,
+            ..Default::default()
+        });
+        let (a, b) = if bond.a == atom.id {
+            (0, other)
+        } else {
+            (other, 0)
+        };
+        graph.bonds.push(graph::Bond {
+            a,
+            b,
+            order: bond.order,
+            aromatic: bond.order == 4,
+        });
+    }
+    graph.assign_radicals().ok()?.first().copied()
+}
+
 /// Why [`reconcile`] rolled an edit back.
 ///
 /// The app shows a `Reactions` message as is and prefixes an `Invalid` message
@@ -143,7 +270,9 @@ pub struct Committed {
 /// Reconciles `doc` after an edit from `before`, or rolls it back to `before`.
 ///
 /// The stages run in a fixed order:
-/// 1. Explicit Fischer crosses are read from their page geometry.
+/// 1. Radicals on edited atoms with fixed hydrogens are recounted
+///    ([`recount_radicals`]), and explicit Fischer crosses are read from their
+///    page geometry.
 /// 2. Centroids follow their members, and stale ring fills and depth scopes are
 ///    pruned.
 /// 3. Abbreviations the edit broke are dropped before validation, which would
@@ -154,6 +283,7 @@ pub struct Committed {
 ///    validation, because their final prune would repair a stale member that
 ///    validation rejects.
 pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rejection> {
+    recount_radicals(&before, doc);
     crate::fischer::reconcile(doc, &before);
     crate::projection::sync_centroids(doc);
     crate::ring_fills::prune(doc);

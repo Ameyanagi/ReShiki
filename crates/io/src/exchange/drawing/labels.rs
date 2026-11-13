@@ -174,11 +174,14 @@ impl Writer<'_> {
                 self.tree.set(
                     node,
                     "Radical",
+                    // CDXML has no three- or four-electron radical. Like the
+                    // MOL writer's RAD, an odd count reads as a doublet and an
+                    // even one as a triplet; the hydrogen count written below
+                    // keeps the formula.
                     match a.radical_electrons {
-                        1 => "Doublet",
                         2 if a.singlet => "Singlet",
-                        2 => "Triplet",
-                        _ => return Err(invalid("Unsupported radical count")),
+                        n if n % 2 == 1 => "Doublet",
+                        _ => "Triplet",
                     },
                 )?;
             }
@@ -304,7 +307,7 @@ impl Writer<'_> {
                 self.tree
                     .set(node, "NumHydrogens", a.explicit_h.to_string())?;
             }
-            if !a.marks.is_empty() {
+            if !a.marks.is_empty() || a.radical_electrons > 2 {
                 self.tree.set(node, "NumHydrogens", label_h.to_string())?;
             }
             let mut s = a

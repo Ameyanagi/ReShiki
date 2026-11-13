@@ -75,6 +75,8 @@ pub struct Atom {
     pub attachment: Option<crate::attachments::Kind>,
     #[serde(default)]
     pub charge: i32,
+    /// Radical (nonbonding, unpaired) electrons, 0–4 as in RDKit; 3 and 4
+    /// need document version [`RADICAL_ELECTRONS`].
     #[serde(default)]
     pub radical_electrons: u8,
     /// Spin state of two nonbonding electrons; meaningful only when
@@ -249,12 +251,15 @@ pub const RESIDUE_GROUPS: u32 = 34;
 pub const MULTI_NODE_ARROWS: u32 = 35;
 /// Enhanced stereo groups (ABS / AND / OR) on atoms.
 pub const STEREO_GROUPS: u32 = 36;
+/// Atoms with three or four radical (nonbonding) electrons.
+pub const RADICAL_ELECTRONS: u32 = 37;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
 /// require version 32, model polish requires version 33 or two-sided groups
-/// require version 34, arrows with interior nodes require version 35, or
-/// stereo groups require version 36.
+/// require version 34, arrows with interior nodes require version 35, stereo
+/// groups require version 36, or atoms with three or four radical electrons
+/// require version 37.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 ///
@@ -289,7 +294,8 @@ pub const STEREO_GROUPS: u32 = 36;
 /// | 34 | Collapsed groups with two attachment atoms (#870). |
 /// | 35 | Arrows with interior nodes (#761). |
 /// | 36 | Enhanced stereo groups (#766). |
-pub const VERSION: u32 = 36;
+/// | 37 | Three or four radical electrons on an atom. |
+pub const VERSION: u32 = 37;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -456,7 +462,9 @@ impl Document {
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
-        if self.atoms.iter().any(|a| a.stereo_group.is_some()) {
+        if self.atoms.iter().any(|a| a.radical_electrons > 2) {
+            RADICAL_ELECTRONS
+        } else if self.atoms.iter().any(|a| a.stereo_group.is_some()) {
             STEREO_GROUPS
         } else if self.arrows.iter().any(|arrow| !arrow.nodes.is_empty()) {
             MULTI_NODE_ARROWS
@@ -839,7 +847,7 @@ impl Document {
             {
                 return Err("Unsupported atom CIP label".into());
             }
-            if a.radical_electrons > 2
+            if a.radical_electrons > 4
                 || (a.singlet && a.radical_electrons != 2)
                 || a.marks.len() > 12
                 || a.marks.iter().any(|m| {

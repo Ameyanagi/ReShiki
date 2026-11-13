@@ -228,46 +228,8 @@ pub fn refresh_edited(before: &Document, document: &mut Document) {
     if !crate::transaction::chemistry_changed(before, document) {
         return;
     }
-    let valence = |a: &crate::document::Atom| {
-        (
-            a.element.clone(),
-            a.charge,
-            a.radical_electrons,
-            a.explicit_h,
-            a.no_implicit,
-            a.aromatic,
-            a.isotope,
-        )
-    };
-    let atoms: HashMap<_, _> = before.atoms.iter().map(|a| (a.id, a)).collect();
-    let old: HashMap<_, _> = before.bonds.iter().map(|b| (pair(b.a, b.b), b)).collect();
-    let new: HashMap<_, _> = document.bonds.iter().map(|b| (pair(b.a, b.b), b)).collect();
-    let edited: HashSet<_> = document
-        .atoms
-        .iter()
-        .filter(|a| {
-            atoms
-                .get(&a.id)
-                .is_none_or(|old| valence(old) != valence(a))
-        })
-        .map(|a| a.id)
-        .chain(
-            document
-                .bonds
-                .iter()
-                .filter(|b| {
-                    old.get(&pair(b.a, b.b))
-                        .is_none_or(|o| (o.a, o.order) != (b.a, b.order))
-                })
-                .chain(
-                    before
-                        .bonds
-                        .iter()
-                        .filter(|b| !new.contains_key(&pair(b.a, b.b))),
-                )
-                .flat_map(|b| [b.a, b.b]),
-        )
-        .collect();
+    crate::transaction::recount_radicals(before, document);
+    let edited = crate::transaction::edited_atoms(before, document);
     if edited.is_empty() {
         return;
     }

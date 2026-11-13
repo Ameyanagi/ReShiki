@@ -10,6 +10,7 @@ are applied separately by the shared source-coordinate reference guard.
 from collections import Counter
 from copy import deepcopy
 
+import support.frozen_radicals  # noqa: F401  (before check_supported is imported)
 from rdkit import Chem
 from rdkit.Chem import rdCIPLabeler
 

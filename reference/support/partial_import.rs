@@ -1,6 +1,9 @@
 //! #1138 imports SMILES features that the frozen worker refused, with a
 //! warning naming what was dropped or assumed. A bare dummy's implicit CX
 //! query marker needs no warning when no explicit query constraint remains.
+//! Atoms with three or four radical electrons import as written instead:
+//! support/frozen_radicals.py lifts that refusal, so their imports are
+//! compared in full.
 
 /// The frozen refusal is one that partial import replaces, and the import
 /// reports a partial-import warning.
@@ -9,8 +12,7 @@ pub fn replaces_failure(format: &str, failure: Option<&str>, warnings: &[String]
         && (matches!(
             failure,
             Some(
-                "More than two unpaired electrons on an atom are not supported yet"
-                    | "Query atoms are not supported yet; import was cancelled."
+                "Query atoms are not supported yet; import was cancelled."
                     | "This bond type is not supported yet."
                     | "This stereochemistry class is not supported yet."
             )
@@ -59,8 +61,8 @@ pub fn implicit_dummy_query(
     let text = with_uranium_atoms(text);
     match format {
         // Strict reading also accepts features that partial import drops with
-        // a notice (SP/TB/OH tags, more than two radical electrons, `~`/`Z`
-        // bonds to a removed H), so those must not be dropped either.
+        // a notice (SP/TB/OH tags, `~`/`Z` bonds to a removed H), so those
+        // must not be dropped either.
         "smiles" => {
             reshiki::chemistry::smiles::read(&text).is_ok()
                 && reshiki::chemistry::smiles::read_partial(&text)
@@ -195,7 +197,6 @@ mod tests {
             "* |$star_e$|",
             "CC* |rb:2:2|",
             "*~[H] |(0,0,;1,0,)|",
-            "*.[CH] |(0,0,;1,0,)|",
             "*.F[Pt@SP1](Cl)(Br)I |(0,0,;1,0,;2,0,;3,0,;4,0,;5,0,)|",
         ] {
             assert!(

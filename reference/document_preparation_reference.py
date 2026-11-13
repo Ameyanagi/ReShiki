@@ -95,7 +95,7 @@ def molecule(doc):
     Chem.AssignStereochemistry(mol, cleanIt=False, force=True)
     if (
         mol.GetStereoGroups()
-        or any(a.GetNumRadicalElectrons() > 2 or int(a.GetChiralTag()) > 2 for a in mol.GetAtoms())
+        or any(a.GetNumRadicalElectrons() > 4 or int(a.GetChiralTag()) > 2 for a in mol.GetAtoms())
         or any(int(b.GetStereo()) > 5 for b in mol.GetBonds())
     ):
         raise ValueError("Unsupported molecular state")
@@ -258,7 +258,7 @@ def cases(emit):
     ]
     for i, text in enumerate(examples):
         mol = Chem.MolFromSmiles(text)
-        if mol is None or any(a.GetNumRadicalElectrons() > 2 for a in mol.GetAtoms()):
+        if mol is None or any(a.GetNumRadicalElectrons() > 4 for a in mol.GetAtoms()):
             continue
         doc = drawing(mol)
         if text == "[CH3:1][OH:9]":
