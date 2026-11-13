@@ -15,7 +15,9 @@ explains the commands themselves.
 Each result is marked:
 
 - **Tested**: checked on 2026-11-12 with ReShiki 0.14.0 (main at `11df00d5`,
-  or `fb508e23` for the plain-text rows, Paint and the browser editor).
+  or `fb508e23` for the plain-text rows, Paint and the browser editor). The
+  Linux rows were checked again on 2026-11-13 with
+  [#1161](https://github.com/Ameyanagi/ReShiki/pull/1161).
 - **Docs/code**: taken from ReShiki's code or the other app's documented
   behavior, not tested.
 - **Unknown**: not tested, and the behavior is not documented well enough to say.
@@ -24,7 +26,8 @@ The test machines were macOS 27.0.1 arm64, Windows 11 x64 25H2 and Arch Linux
 x64. Dumps, scripts and screenshots are in the [evidence
 folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/35d36522504604bc275cfc51154da61f09b2a1b7/issues/1146);
 the plain-text rows, Paint and the browser editor results are in
-[another](https://github.com/Ameyanagi/ReShiki-evidence/tree/5998c1d1eddc0640a912a1822e61195684aa8c33/pr-reviews/pr1157).
+[another](https://github.com/Ameyanagi/ReShiki-evidence/tree/5998c1d1eddc0640a912a1822e61195684aa8c33/pr-reviews/pr1157),
+and the Linux Copy text results in [a third](https://github.com/Ameyanagi/ReShiki-evidence/tree/79ecc509cd3d47cfea5da355b24b398a56a6e6eb/pr-reviews/pr1161).
 
 ## Quick advice
 
@@ -41,10 +44,11 @@ the plain-text rows, Paint and the browser editor results are in
   object, but it keeps ReShiki's PDF: copy the picture in Word, PowerPoint or
   Excel and paste it into ReShiki to get the editable drawing back.
 - **Text-only places** (plain-text boxes, TextEdit in plain-text mode, Notes in a
-  Google account): in the desktop app, **Copy** and **Copy Image** put no text on
-  the clipboard, so use **Copy SMILES** (**Cmd/Ctrl+Alt+C**). The browser
-  editor's **Copy** does include SMILES. [Why Copy has no text](#why-copy-has-no-text)
-  explains why.
+  Google account): on Windows and macOS, **Copy** and **Copy Image** put no text
+  on the clipboard, so use **Copy SMILES** (**Cmd/Ctrl+Alt+C**). On Linux,
+  **Copy** also puts the SMILES there as text, except for a reaction. The browser
+  editor's **Copy** includes SMILES too. [Why Copy has no text on Windows and
+  macOS](#why-copy-has-no-text-on-windows-and-macos) explains why.
 - **Web apps:** the picture has 1200 dpi resolution metadata, which browsers
   ignore, so it pastes large. A 3 cm drawing appears about 35 cm wide. Resize it
   after pasting.
@@ -95,18 +99,30 @@ Special → Picture (Enhanced Metafile)**, or **Copy Image** in ReShiki.
 
 ### Linux
 
-| App                                                             | Copy                                          | Copy Image                | Status                                        |
-| --------------------------------------------------------------- | --------------------------------------------- | ------------------------- | --------------------------------------------- |
-| LibreOffice 25.8 Writer and Impress                             | Vector (PDF graphic)                          | Vector (PDF graphic)      | Tested on X11                                 |
-| Chromium and Chrome-based apps (web apps, Slack, Teams, Notion) | Bitmap (PNG)                                  | Bitmap (PNG)              | Tested with a Chromium 149 paste event on X11 |
-| Inkscape                                                        | Vector paths from the SVG                     | Vector paths from the SVG | Docs/code                                     |
-| GIMP                                                            | Bitmap (PNG)                                  | Bitmap (PNG)              | Docs/code                                     |
-| Plain-text boxes                                                | No text: use **Copy SMILES** (**Ctrl+Alt+C**) | No text                   | Tested in a Chromium 149 text box on X11      |
-| ReShiki                                                         | Editable                                      | Editable                  | Docs/code                                     |
+| App                                                             | Copy                                                                     | Copy Image                | Status                                                                                                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| LibreOffice 25.8 Writer and Impress                             | Vector (PDF graphic)                                                     | Vector (PDF graphic)      | Tested on X11                                                                                                             |
+| Chromium and Chrome-based apps (web apps, Slack, Teams, Notion) | Bitmap (PNG)                                                             | Bitmap (PNG)              | Tested with a Chromium 149 paste event on X11; web apps that read the paste themselves may take the SMILES text, untested |
+| Inkscape                                                        | Vector paths from the SVG                                                | Vector paths from the SVG | Docs/code                                                                                                                 |
+| GIMP                                                            | Bitmap (PNG)                                                             | Bitmap (PNG)              | Docs/code                                                                                                                 |
+| Plain-text boxes                                                | SMILES (since #1161); none for a reaction or a drawing without molecules | No text                   | Tested in a Chromium 149 text box on X11                                                                                  |
+| ReShiki                                                         | Editable                                                                 | Editable                  | Tested on X11 for Copy; Copy Image: docs/code                                                                             |
 
-The Linux tests published the Copy and Copy Image bytes through ReShiki's own X11
-clipboard worker under Xvfb. Wayland offers the same MIME types; it is
-docs/code only.
+The first Linux tests published the Copy and Copy Image bytes through ReShiki's
+own X11 clipboard worker under Xvfb. For #1161, a real Copy in the ReShiki
+window, with its SMILES text, was pasted into LibreOffice, Chromium and a second
+ReShiki on X11 under Xvfb. Wayland offers the same MIME types; it is docs/code
+only, apart from the Wayland clipboard check on GNOME and Sway, which pastes a
+drawing offered next to different SMILES text and gets the drawing.
+
+On GNOME, once ReShiki quits, the desktop keeps one format of the last copy,
+and it prefers text to pictures. So when ReShiki quits while its **Copy** is
+still on the clipboard, it offers that copy again without the SMILES text and
+waits up to 1.5 seconds for the desktop to save it. A later paste then gives
+the SVG picture, as before
+[#1161](https://github.com/Ameyanagi/ReShiki/pull/1161). This needs ReShiki to
+have keyboard focus as it quits; without it, the desktop keeps the SMILES. On
+X11, ReShiki's clipboard process keeps every format after the app quits.
 
 ### The browser editor
 
@@ -156,7 +172,11 @@ The portable names below are what `src/clipboard.rs` prepares
 in `native/macos/src/clipboard.rs`, `native/windows/src/clipboard.rs` and
 `native/windows/src/ole.rs`, `native/linux/src/protocol.rs`, and
 `src/clipboard/browser.rs`. The Copy PNG is 1200 dpi with transparency and
-`pHYs` metadata. On Windows it is limited to 16 megapixels.
+`pHYs` metadata. On Windows it is limited to 16 megapixels. Every clipboard SVG
+(Copy, Copy Image and Copy as → SVG, on every platform and in the browser) is
+the outlined `svg-office` figure: text drawn as paths, width and height in
+points with a matching `viewBox`, a transparent background and the drawing
+inside it.
 
 ### macOS: NSPasteboard types
 
@@ -170,8 +190,8 @@ command:
 | 3   | `com.perkinelmer.chemdraw.cdx-clipboard` (same bytes) | `com.perkinelmer.chemdraw.cdx-clipboard`                                     |
 | 4   | `com.cambridgesoft.cdx` (same bytes)                  | `com.cambridgesoft.cdx`                                                      |
 | 5   | `com.adobe.pdf`                                       | `public.png`                                                                 |
-| 6   | `public.png`                                          | `public.svg-image`                                                           |
-| 7   | `public.svg-image`                                    | `dev.reshiki.drawing` (the drawing, when it fits the 2 MB limit)             |
+| 6   | `public.png`                                          | `public.svg-image` (text outlined)                                           |
+| 7   | `public.svg-image` (text outlined)                    | `dev.reshiki.drawing` (the drawing, when it fits the 2 MB limit)             |
 
 Copy writes no `public.tiff`, `public.html`, `public.rtf` or text type. When
 editable CDX export fails, Copy writes the picture-only CDX instead, just before
@@ -233,8 +253,11 @@ formats were re-published with one extra format.
 
 ### Linux: X11 and Wayland MIME types
 
-Copy and Copy Image offer the same MIME types in sorted order. Only the bytes
-differ: Copy Image's CDX holds the picture.
+Copy and Copy Image share these drawing and picture MIME types, in sorted
+order; Copy Image's CDX holds the picture. When **Copy SMILES** would copy
+SMILES, Copy also offers that SMILES as `text/plain;charset=utf-8`,
+`text/plain` and `UTF8_STRING`. A reaction, or a selection without molecules,
+gets no text.
 
 ```text
 application/pdf
@@ -251,19 +274,20 @@ image/png
 image/svg+xml
 ```
 
-X11 adds `TARGETS`, `TIMESTAMP` and `MULTIPLE`. Wayland adds a private random
-receipt type. There is no `text/plain`, `UTF8_STRING` or `text/html`.
+`image/svg+xml` draws its text as outlines. X11 adds `TARGETS`, `TIMESTAMP` and
+`MULTIPLE`. Wayland adds a private random receipt type. There is no `text/html`.
 
 Observed picks: LibreOffice lists `application/pdf`, `application/x-chemdraw`,
 `application/x-reshiki-drawing+json`, `chemical/x-cdx`, `image/png` and
-`image/svg+xml`, and pastes the PDF. Chromium exposes `image/png` and
-`image/svg+xml`.
+`image/svg+xml`, and pastes the PDF, also when Copy offers text. Chromium
+exposes `text/plain`, `image/png` and `image/svg+xml`: a page gets the picture
+and a text box the SMILES. ReShiki reads its drawing before text.
 
 ### Browser: Clipboard API types
 
 The browser editor writes one `ClipboardItem`:
 
-- **Copy:** `text/html`, `image/png`, `image/svg+xml` (only where
+- **Copy:** `text/html`, `image/png`, `image/svg+xml` (text outlined, only where
   `ClipboardItem.supports` allows it, as in Chromium) and `text/plain` with
   SMILES when the selection has molecules. The HTML is
   `<img src="data:image/png…" data-reshiki="…">`, sized in CSS pixels from the
@@ -271,11 +295,12 @@ The browser editor writes one `ClipboardItem`:
 - **Copy Image:** the same without `text/plain`. Its `data-reshiki` holds the
   drawing too.
 
-### Why Copy has no text
+### Why Copy has no text on Windows and macOS
 
-Copy and Copy Image carry no plain-text flavor on the desktop, and the browser's
-Copy Image has none either. Text-only places get nothing from them; **Copy
-SMILES** (**Cmd/Ctrl+Alt+C**) is the command for those. Many apps prefer text
+Copy and Copy Image carry no plain-text flavor on Windows and macOS, Copy Image
+has none on Linux, and the browser's Copy Image has none either. Text-only
+places get nothing from them; **Copy SMILES** (**Cmd/Ctrl+Alt+C**) is the
+command for those. Many apps prefer text
 over pictures, so a SMILES text flavor would replace the picture or object in
 them. ReShiki removed one from Copy in 0.12 after PowerPoint for Mac pasted a
 SMILES text box.
@@ -313,10 +338,11 @@ folder](https://github.com/Ameyanagi/ReShiki-evidence/tree/5998c1d1eddc0640a912a
 
 So a text flavor would break Excel on both systems and PowerPoint on macOS, and
 it would not even reach Notes. On Linux, LibreOffice and a Chromium page kept
-the picture, and only text boxes changed, but the web apps that read a paste
-themselves could not be tested there, and Copy stays the same on every platform.
-Browser Copy Image would hand desktop ReShiki a re-laid-out molecule instead of
-the picture that was asked for.
+the picture, and only text boxes changed, so Linux Copy has offered the SMILES
+since [#1161](https://github.com/Ameyanagi/ReShiki/pull/1161). Web apps that
+read a paste themselves, such as Slack and Google Docs, need accounts and are
+not tested there. Browser Copy Image would hand desktop ReShiki a re-laid-out
+molecule instead of the picture that was asked for.
 
 ### What ReShiki reads on Paste
 
@@ -363,6 +389,10 @@ Native names for these:
   testing on machines with accounts. Classic Outlook and OneNote are installed
   on the Windows test machine, but Outlook has no mail profile and OneNote asks
   to sign in.
-- Linux could offer a text flavor: LibreOffice and a Chromium page kept the
-  picture with it. Web apps such as Slack or Google Docs, which read a paste
-  themselves, may prefer text over a picture file and need accounts to test.
+- On Linux, web apps that read a paste themselves, such as Slack or Google
+  Docs, may prefer Copy's SMILES text over the picture. They need accounts to
+  test.
+- After ReShiki quits on Wayland with its window focused, GNOME keeps the
+  picture (tested); without focus it keeps the SMILES. KDE and other clipboard
+  managers are not tested; one that keeps text over pictures and reads only
+  when the app quits could keep the SMILES instead.

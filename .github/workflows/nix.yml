@@ -40,6 +40,9 @@ jobs:
       fail-fast: false
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+        # macOS runs only on stacked merge/* PRs, full-ci-labelled PRs, main and
+        # manual runs, like scripts/ci_scope.py; other PRs leave the leg out.
+        exclude: ${{ fromJSON((github.event_name != 'pull_request' || startsWith(github.head_ref, 'merge/') || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[]' || '[{"runner":"macos-15"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     steps:

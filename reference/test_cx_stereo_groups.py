@@ -1,10 +1,11 @@
 """Keep the #1006 oracle exception limited to actual wrapping collisions."""
 
+import sys
 import unittest
 
 from rdkit import Chem
 from smiles_read_reference import cases, prepared_snapshot, restored_snapshot
-from support.cx_stereo_groups import query_renumbering, renumber
+from support.cx_stereo_groups import native_keys_wrap, query_renumbering, renumber
 
 
 class StereoGroupRenumbering(unittest.TestCase):
@@ -71,6 +72,7 @@ class StereoGroupRenumbering(unittest.TestCase):
 class SmilesReadStereoGroups(unittest.TestCase):
     def test_corpus_renumberings_change_native_reading(self):
         corpus = {text for _, text in cases()}
+        unwrapped = 0
         for text in (
             "CC |o1:0,o2147483649:0|",
             "CC |o2147483649:0,o1:0|",
@@ -85,10 +87,22 @@ class SmilesReadStereoGroups(unittest.TestCase):
                 mol = Chem.MolFromSmiles(rewritten)
                 self.assertIsNotNone(mol)
                 original = Chem.MolFromSmiles(text)
-                self.assertNotEqual(
-                    restored_snapshot(mol, text),
-                    prepared_snapshot(original) if original is not None else None,
-                )
+                native = prepared_snapshot(original) if original is not None else None
+                if native_keys_wrap():
+                    self.assertNotEqual(restored_snapshot(mol, text), native)
+                else:
+                    # Expected difference, RDKit 2026.09.1 on Windows x64 only: MSVC's
+                    # std::atoi in read_int (CXSmilesOps.cpp:127) saturates o2147483649 at
+                    # INT_MAX, so the groups never share a key and the native reading
+                    # already equals the renumbered one.
+                    self.assertEqual(sys.platform, "win32")
+                    self.assertEqual(restored_snapshot(mol, text), native)
+                    unwrapped += 1
+        print(
+            f"CX stereo groups: {unwrapped} corpus collisions read without the key wrap"
+            " (expected difference: RDKit 2026.09.1 on Windows x64)",
+            file=sys.stderr,
+        )
 
     def test_snapshot_restores_large_read_id_on_retained_stereo_group(self):
         text = "F[C@H](Cl)[C@@H](Br)I |o1:1,o2147483649:3|"

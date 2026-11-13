@@ -540,7 +540,8 @@ impl<'a> Input<'a> {
                 .ok_or(Error::Invalid("second angle anchor"))?,
         )?
         .location;
-        if reference.rotation_direction == 0 {
+        let can_choose_direction = reference.rotation_direction == 0;
+        if can_choose_direction {
             let a = sub(first, reference.location)?;
             let b = sub(second, reference.location)?;
             let cross = number(arithmetic::cross(a.x, a.y, b.x, b.y))?;
@@ -553,12 +554,15 @@ impl<'a> Input<'a> {
         }
         angle *= f64::from(atom(value, target)?.rotation_direction);
         let mut location = Transform::rotate(reference.location, angle)?.apply(second)?;
-        if remaining.abs() - PI < 1.0e-3 {
+        // RDKit #9650: only an unassigned half-plane allows either direction.
+        // Reversing a selected gap would place the atom outside that gap.
+        if can_choose_direction && (remaining - PI).abs() < 1.0e-3 {
             let alternate = Transform::rotate(reference.location, -angle)?.apply(second)?;
             if Self::nearby(value, location, 0.5, work)?
                 > Self::nearby(value, alternate, 0.5, work)?
             {
                 location = alternate;
+                atom_mut(value, target)?.rotation_direction *= -1;
             }
         }
         atom_mut(value, target)?.neighbor2 = Some(id);

@@ -1,4 +1,1 @@
 relation	smiles	reason
-atom_maps	C1=Cc2cc3ccc(cc4ccc(cc5nc(cc1n2)C=C5)[nH]4)[nH]3	issue #953: atom maps move the double-bond locants of the von Baeyer porphyrin name (tetracosa-1,3(24),4,... vs 1(20),2,4,...)
-atom_order	C1=Cc2cc3ccc(cc4ccc(cc5nc(cc1n2)C=C5)[nH]4)[nH]3	issue #953: atom order moves the double-bond locants of the von Baeyer porphyrin name (tetracosa-1,3(24),4,... vs 1(20),2,4,...)
-atom_order	CCOc1cc(CN(CC(=O)NC(=O)NCC(C)C)C2CC2)ccc1OC(F)F	issue #953: atom order picks the acetamide or the urea as parent, both labelled preferred

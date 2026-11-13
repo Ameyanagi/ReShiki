@@ -1,3 +1,5 @@
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::{
     chemistry::{
@@ -65,7 +67,7 @@ fn drawing_state_and_editable_document_match_native_reference() -> anyhow::Resul
     let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
     let version: Value = serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
-    let (mut count, mut changed, mut mismatches) = (0, 0, 0);
+    let (mut count, mut changed, mut mismatches, mut other_basis) = (0, 0, 0, 0);
     let mut failures = Vec::new();
     for line in lines {
         let mut case: Case = serde_json::from_str(&line?)?;
@@ -79,11 +81,9 @@ fn drawing_state_and_editable_document_match_native_reference() -> anyhow::Resul
                     serde_json::to_value(&molecule.state)?
                         != serde_json::to_value(&draft.molecule().state)?,
                 );
-                let state = difference(
-                    &serde_json::to_value(&draft.molecule().state)?,
-                    expected,
-                    "state",
-                );
+                let mut state = serde_json::to_value(&draft.molecule().state)?;
+                other_basis += ring_basis::adopt_rdkit_basis(&mut state, expected);
+                let state = difference(&state, expected, "state");
                 let labels = draft.labels()?;
                 let label_difference = difference(
                     &serde_json::to_value(&labels)?,
@@ -125,7 +125,7 @@ fn drawing_state_and_editable_document_match_native_reference() -> anyhow::Resul
         failures.join("\n")
     );
     eprintln!(
-        "Verified {count} drawing outputs: {changed} changed states, {mismatches} mismatches"
+        "Verified {count} drawing outputs: {changed} changed states, {other_basis} RDKit SSSR basis differences, {mismatches} mismatches"
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(count > 10000 && changed > 1000, "Insufficient coverage");

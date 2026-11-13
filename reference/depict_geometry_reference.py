@@ -11,13 +11,14 @@ import gzip
 import hashlib
 import json
 import math
+import os
 import platform
 import random
 import struct
 import subprocess
 from pathlib import Path
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 FIXTURE = Path(__file__).resolve().parents[1] / "tests/fixtures/depict-geometry-native.json.gz"
 SOURCES = (
     "Code/GraphMol/Depictor/DepictUtils.cpp",
@@ -127,7 +128,7 @@ def cases():
     from rdkit import Chem, rdBase
     from rdkit.Chem import rdDepictor
 
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     texts = (
         "C",
         "CC",
@@ -197,6 +198,11 @@ def main():
     parser.add_argument("--write-fixture", action="store_true")
     args = parser.parse_args()
     if args.oracle:
+        from rdkit import Chem
+
+        Chem.SetUseLegacyRingFinding(True)
+        # RDKit's setenv is invisible to os.environ; native observers inherit this copy.
+        os.environ["RDK_USE_LEGACY_RING_FINDING"] = "1"
         assert args.rdkit_source is not None
         source_hashes = {
             name: hashlib.sha256((args.rdkit_source / name).read_bytes()).hexdigest()
@@ -220,7 +226,7 @@ def main():
         import rdkit
         from rdkit import rdBase
 
-        assert rdBase.rdkitVersion == "2026.03.6"
+        assert rdBase.rdkitVersion == "2026.09.1"
         package = Path(rdkit.__file__).parent
         library_dir = (
             package / ".dylibs" if platform.system() == "Darwin" else package.parent / "rdkit.libs"
@@ -250,7 +256,7 @@ def main():
             json.dumps(
                 {
                     "provenance": {
-                        "version": "2026.03.6",
+                        "version": "2026.09.1",
                         "commit": PIN,
                         "platform": platform.platform(),
                         "source_sha256": source_hashes,

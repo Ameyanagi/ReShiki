@@ -119,7 +119,7 @@ fn readback(state: &WedgeState, conformer: &Conformer) -> anyhow::Result<Metadat
         true,
     )
     .map_err(anyhow::Error::msg)?;
-    Ok(detect_atropisomers(
+    Ok(crate::stereo::drawing::detect_atropisomers(
         &drawn.graph,
         &drawn.metadata,
         &state.directions,

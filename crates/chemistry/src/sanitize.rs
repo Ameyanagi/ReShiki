@@ -94,15 +94,13 @@ pub fn sanitize(
         stage: Rings,
         cause: Cause::Rings(error),
     })?;
-    // RDKit #9427 kekulizes before symmetrization; #9208 normalizes the SSSR.
-    let mut basis = perceived
+    // RDKit #9427 kekulizes before symmetrization.
+    let basis = perceived
         .atoms
         .iter()
         .take(perceived.basis_count)
         .cloned()
         .collect::<Vec<_>>();
-    basis.iter_mut().for_each(|ring| rings::normalize(ring));
-    basis.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
     let mut attempt = at_stage(
         Kekulize,
         kekulize::if_possible_cached(

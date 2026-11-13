@@ -18,7 +18,7 @@ from pathlib import Path
 import rdkit
 from rdkit import rdBase
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 
 
 def digest(path):
@@ -36,7 +36,7 @@ def main():
     args = parser.parse_args()
     if args.fma3 is not None and sys.platform != "win32":
         parser.error("--fma3 requires the Windows native observer")
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     boost = args.boost_include.resolve()
     match = re.search(r"#define BOOST_VERSION\s+(\d+)", (boost / "boost/version.hpp").read_text())
     assert match is not None
@@ -51,7 +51,7 @@ def main():
     native = (source / "GraphMol/Depictor/RDDepictor.cpp").read_bytes()
     assert (
         digest(source / "GraphMol/Depictor/RDDepictor.cpp")
-        == "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f"
+        == "0296929261958395437b04c8d5d34a7ffbeb95d81aa28e41eb1ec10f169642c3"
     )
     extracted = []
 
@@ -97,6 +97,8 @@ def main():
         source,
         source / "GraphMol/Depictor",
         boost,
+        args.rdkit_source.resolve()
+        / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib",
     ]
     package = Path(rdkit.__file__).parent
     libraries = package / ".dylibs" if sys.platform == "darwin" else package.parent / "rdkit.libs"

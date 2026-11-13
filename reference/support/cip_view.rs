@@ -52,14 +52,9 @@ impl View {
             .iter()
             .map(|&id| -> anyhow::Result<Value> {
                 let n = g.node(id)?;
-                let distance = if n.is_duplicate() {
-                    i32::from(n.distance as u8)
-                } else {
-                    n.distance
-                };
                 Ok(json!([
                     n.atom.map_or(-1, |a| a as i64),
-                    distance,
+                    n.distance,
                     n.fraction.0,
                     n.fraction.1,
                     n.number,

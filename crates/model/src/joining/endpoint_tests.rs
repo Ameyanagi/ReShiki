@@ -213,6 +213,78 @@ fn actual_delete_after_merge_detaches_only_affected_ends_at_cached_curve_and_und
 }
 
 #[test]
+fn prepared_attachment_preserves_stereo_groups_with_members_left_in_the_drawing() {
+    use crate::{
+        document::AtomStereo,
+        stereo_groups::{Kind, StereoGroup},
+    };
+
+    for kind in [Kind::And, Kind::Or] {
+        for mode in [
+            Connection::Connect,
+            Connection::ShareAtom,
+            Connection::FuseBond,
+        ] {
+            let mut doc = Document::default();
+            let host = doc.add_atom("C", Point::default());
+            let host_end = doc.add_atom("C", Point::new(42., 0.));
+            let source = doc.add_atom("C", Point::new(180., 0.));
+            let source_end = doc.add_atom("C", Point::new(222., 0.));
+            doc.add_bond(host, host_end, 1, "plain");
+            doc.add_bond(source, source_end, 1, "plain");
+            let group = StereoGroup { kind, number: 7 };
+            let mut centres = Vec::new();
+            for (x, y, anchor) in [(264., 0., source_end), (0., 250., 0)] {
+                let centre = doc.add_atom("C", Point::new(x, y));
+                let carbon = if anchor == 0 {
+                    doc.add_atom("C", Point::new(x - 42., y))
+                } else {
+                    anchor
+                };
+                let mut neighbors = vec![carbon];
+                for (element, dx, dy) in [("F", 0., 42.), ("Cl", 42., 0.), ("Br", 0., -42.)] {
+                    neighbors.push(doc.add_atom(element, Point::new(x + dx, y + dy)));
+                }
+                for &neighbor in &neighbors {
+                    doc.add_bond(centre, neighbor, 1, "plain");
+                }
+                let atom = doc.atom_mut(centre).unwrap();
+                atom.stereo = Some(AtomStereo {
+                    winding: "ccw".into(),
+                    neighbors,
+                });
+                atom.stereo_group = Some(group);
+                centres.push(centre);
+            }
+            let prepared = Prepared::new(&doc, &[source]).unwrap();
+            assert_eq!(
+                prepared.fragment.atom(centres[0]).unwrap().stereo_group,
+                Some(group)
+            );
+            assert_eq!(
+                prepared.base.atom(centres[1]).unwrap().stereo_group,
+                Some(group)
+            );
+            let (point, anchor) = if mode == Connection::FuseBond {
+                (Point::new(21., 0.), Anchor::Bond(source, source_end))
+            } else {
+                (Point::default(), Anchor::Atom(source))
+            };
+            let (joined, ids) = prepared.place(point, None, 5., anchor, mode).unwrap();
+            assert!(ids.contains(&centres[0]));
+            for centre in &centres {
+                let atom = joined.atom(*centre).unwrap();
+                assert_eq!(atom.stereo_group, Some(group), "{kind:?}, {mode:?}");
+            }
+            assert_eq!(joined.atom(host).unwrap().stereo_group, None);
+            assert_eq!(joined.atom(host_end).unwrap().stereo_group, None);
+            joined.validate().unwrap();
+            one_frame_and_reopen(&doc, &joined);
+        }
+    }
+}
+
+#[test]
 fn prepared_connect_share_and_fuse_keep_retained_and_moved_links_under_original_ids() {
     for mode in [
         Connection::Connect,
@@ -606,4 +678,33 @@ fn first_coordination_bridge_stretches_but_second_contact_closes_a_cycle_with_li
     assert_eq!(once, copied);
     one_frame_and_reopen(&chelate, &rotated);
     one_frame_and_reopen(&rotated, &copied);
+}
+
+/// Sharing or merging would keep only one atom's group, so grouped atoms
+/// are not shared and atoms in different groups are not merged.
+#[test]
+fn grouped_atoms_are_not_shared_or_merged_across_groups() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    assert!(crate::templates::compatible(
+        doc.atom(a).unwrap(),
+        doc.atom(b).unwrap()
+    ));
+    doc.atom_mut(a).unwrap().stereo_group = Some(StereoGroup {
+        kind: Kind::And,
+        number: 1,
+    });
+    assert!(!crate::templates::compatible(
+        doc.atom(a).unwrap(),
+        doc.atom(b).unwrap()
+    ));
+    assert!(!crate::templates::compatible(
+        doc.atom(b).unwrap(),
+        doc.atom(a).unwrap()
+    ));
+    let c = doc.add_atom("C", Point::new(21., 36.));
+    let error = merge_atoms(&doc, &[a, b, c]).unwrap_err();
+    assert!(error.contains("stereo groups"), "{error}");
 }

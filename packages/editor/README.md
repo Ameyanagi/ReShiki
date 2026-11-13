@@ -86,9 +86,8 @@ them after the drawing opens, as the desktop does. The status bar also shows
 the warnings for `mount`'s `data`.
 
 ```js
-const { warnings } = await editor.load("C[C@H](O)C(=O)O |r|", "smiles");
-// ["The input marks a molecule's stereo configuration as relative (CXSMILES r);
-//   ReShiki drew it as the stated enantiomer"]
+const { warnings } = await editor.load("C~C", "smiles");
+// ["Bond C1–C2 has any order (~); bond order assumed single"]
 ```
 
 A page runs one editor: the editor and the page share one thread and one
@@ -382,8 +381,8 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 
 Failures reject with an `Error` that carries the app's message.
 
-Some inputs import with a change or an assumption, such as CXSMILES that marks
-its stereo as relative, which is drawn as the stated enantiomer. The app shows
+Some inputs import with a change or an assumption, such as a SMILES bond of any
+order (`~`), which is drawn as a single bond. The app shows
 a warning for these; `convert`, `renderSvg`, `renderPng`, `smiles` and `inchi`
 return only their result. To see the warnings, `read` the input first and
 continue from its drawing:
@@ -391,7 +390,7 @@ continue from its drawing:
 ```js
 import { convert, read } from "@ameyanagi/reshiki";
 
-const { drawing, warnings } = await read("C[C@H](O)C(=O)O |r|", "smiles");
+const { drawing, warnings } = await read("C~C", "smiles");
 for (const warning of warnings) console.warn(warning);
 const mol = await convert(drawing, "rsk", "mol");
 ```

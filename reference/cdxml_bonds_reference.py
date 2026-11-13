@@ -15,6 +15,9 @@ from rdkit import Chem, RDLogger, rdBase
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine import bonds_exchange
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 COLORS = [[255, 255, 255], [0, 0, 0], [20, 40, 60], [80, 100, 120], [140, 160, 180]]
 SCALE = 42 / 14.4
 

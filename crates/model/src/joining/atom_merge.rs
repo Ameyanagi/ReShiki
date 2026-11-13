@@ -237,6 +237,7 @@ fn metadata_compatible(first: &Atom, atom: &Atom) -> Result<(), String> {
         ),
         (first.aromatic != atom.aromatic, "aromatic states"),
         (first.map_num != atom.map_num, "atom maps"),
+        (first.stereo_group != atom.stereo_group, "stereo groups"),
         (first.marks != atom.marks, "atom marks"),
     ] {
         if conflict {

@@ -38,6 +38,7 @@ pub struct Drawing {
     separators: Vec<(u64, Position)>,
     reaction: Reaction,
     arrow: Arrow,
+    independent_stereo_groups: bool,
 }
 impl Drawing {
     /// Participants follow canvas order: reactants, agents, then products.
@@ -77,11 +78,26 @@ impl Drawing {
                 &mut drawing,
                 &source,
             ));
+            if source
+                .state
+                .metadata
+                .groups
+                .iter()
+                .any(|group| !group.bonds.is_empty())
+                && !notices
+                    .iter()
+                    .any(|notice| notice == crate::chemistry::STEREO_GROUP_BONDS_NOTICE)
+            {
+                notices.push(crate::chemistry::STEREO_GROUP_BONDS_NOTICE.into());
+            }
             if let [atom] = drawing.atoms.as_mut_slice()
                 && atom.element == "O"
                 && atom.label_h == 2
             {
                 atom.display.hydrogen_position = HydrogenPosition::Left;
+            }
+            if self.independent_stereo_groups {
+                crate::stereo_groups::renumber_incoming(&doc, &mut drawing.atoms);
             }
             doc.atoms.extend(drawing.atoms);
             doc.bonds.extend(drawing.bonds);
@@ -328,12 +344,13 @@ fn height(parts: &[Part]) -> f64 {
 
 impl Imported {
     pub fn drawing(&self) -> Result<Drawing, Error> {
-        self.drawing_with_attachments(None)
+        self.drawing_with_attachments(None, true)
     }
 
     pub(super) fn drawing_with_attachments(
         &self,
         attachments: Option<&[Vec<bool>]>,
+        independent_stereo_groups: bool,
     ) -> Result<Drawing, Error> {
         if attachments.is_some_and(|items| {
             items.len() != self.reactants.len() + self.agents.len() + self.products.len()
@@ -409,6 +426,7 @@ impl Imported {
             separators: builder.separators,
             reaction,
             arrow,
+            independent_stereo_groups,
         })
     }
 }

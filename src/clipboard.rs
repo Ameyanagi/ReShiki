@@ -351,7 +351,8 @@ async fn prepare_copy(
 }
 
 /// A browser can hold neither CDX nor PDF, so its copy has SMILES text for
-/// other apps instead, when the drawing has one.
+/// other apps instead, when the drawing has one. Linux desktop also includes
+/// SMILES when chemical text copy selects that format.
 async fn prepare_copy_for(
     engine: LocalEngine,
     original: Document,
@@ -395,7 +396,14 @@ async fn prepare_copy_with_limit(
             &serde_json::to_vec(&doc).map_err(|e| e.to_string())?,
         ));
     }
-    if !image_only && browser {
+    let wants_smiles = !image_only
+        && (browser
+            || (cfg!(target_os = "linux")
+                && matches!(
+                    chemical_text_snapshot(&doc, &doc),
+                    Ok((CopyFormat::Smiles, _))
+                )));
+    if wants_smiles {
         let mut request = Request::molecule("export", doc.clone());
         request.format = Some("smiles".into());
         if !doc.atoms.is_empty()
@@ -414,7 +422,8 @@ async fn prepare_copy_with_limit(
                 smiles.as_bytes(),
             ));
         }
-    } else if !image_only {
+    }
+    if !image_only && !browser {
         // External editors receive explicit visible ink colors, without the
         // source page background. Native data above retains the original theme.
         // Resolve depth paint against the source paper before changing the
@@ -543,24 +552,18 @@ async fn prepare_copy_with_limit(
     Ok((outcome, representations))
 }
 
-/// Preserve Office's outlined SVG while adding the same payload as the other
-/// pictures. PDF needs its drawing passed to the exporter before serialization.
+/// Every clipboard SVG outlines its text so apps that paste SVG keep the labels
+/// without the fonts. PDF needs its drawing passed to the exporter before serialization.
 fn clipboard_figure(
     doc: &Document,
     format: &str,
     drawing: Option<&[u8]>,
 ) -> Result<export::Figure, String> {
-    #[cfg(windows)]
-    if format == "svg" {
-        let bytes = export::clipboard_svg(doc)?;
-        return Ok(export::Figure {
-            bytes: match drawing {
-                Some(drawing) => payload::embed("svg", bytes, drawing)?,
-                None => bytes,
-            },
-            detail: None,
-        });
-    }
+    let format = if format == "svg" {
+        "svg-office"
+    } else {
+        format
+    };
     export::clipboard_figure_with_drawing(doc, format, drawing)
 }
 

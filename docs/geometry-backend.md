@@ -151,12 +151,15 @@ energies and analytic gradients with RDKit's public Python API:
 ```sh
 RESHIKI_GEOMETRY_REFERENCE_APP=/absolute/path/to/reshiki \
 RESHIKI_REQUIRE_GEOMETRY_REFERENCE=1 \
-uv run --locked python -m unittest tests.test_geometry_reference
+uv run --no-project --isolated --with rdkit==2026.3.6 \
+  python -m unittest tests.test_geometry_reference
 ```
 
-The oracle uses RDKit 2026.03.6 and compares MMFF94, MMFF94s, and UFF on organic,
-aromatic, charged, tetrahedral, and alkene fixtures, plus exact fixed atoms and
-UFF-only boron parameters. Values are compared at identical Cartesian coordinates:
+The oracle uses RDKit 2026.03.6, not the locked reference pin (2026.09.1): under
+2026.09 every ETKDG embedding changes, including the C60 reference coordinates,
+while force-field energies are identical. It moves in a separate change. It
+compares MMFF94, MMFF94s, and UFF on organic, aromatic, charged, tetrahedral, and
+alkene fixtures, plus exact fixed atoms and UFF-only boron parameters. Values are compared at identical Cartesian coordinates:
 energy tolerance is `1e-6 + 1e-8*abs(E)` kcal/mol; each gradient component tolerance
 is `1e-5 + 1e-7*abs(g)` kcal/(mol Å). These checks establish the tested numerical
 agreements and local minimization, not a global energy minimum or universal

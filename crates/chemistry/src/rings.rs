@@ -1,4 +1,5 @@
-//! Symmetric SSSR ring perception adapted from RDKit FindRings.cpp (2026.03.6).
+//! Figueras symmetric SSSR perception from RDKit FindRings.cpp (2026.03.6),
+//! with normalized traversal and legacy result ordering from 2026.09.1.
 //! Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 //!
@@ -65,6 +66,9 @@ fn invariant(ring: &[usize]) -> Vec<usize> {
     let mut result = ring.to_vec();
     result.sort_unstable_by(|a, b| b.cmp(a));
     result
+}
+fn compare(a: &Ring, b: &Ring) -> std::cmp::Ordering {
+    a.len().cmp(&b.len()).then_with(|| a.cmp(b))
 }
 
 struct Budget {
@@ -365,22 +369,17 @@ impl State {
     }
 
     fn remove_extra(&mut self, top: &Topology, rings: &mut Vec<Ring>) -> Result<(), String> {
-        let keys = rings
-            .iter()
-            .map(|r| i32::try_from(r.len()).map_err(|_| "Ring size limit exceeded".to_string()))
-            .collect::<Result<Vec<_>, _>>()?;
         self.budget.spend(
             rings
                 .len()
                 .saturating_mul(1 + rings.len().checked_ilog2().unwrap_or(0) as usize),
         )?;
-        let order = super::native_order::indices(&keys).map_err(|e| e.to_string())?;
-        let mut original = std::mem::take(rings);
-        for i in order {
-            rings.push(std::mem::take(
-                original.get_mut(i).ok_or("Missing sorted ring")?,
-            ));
-        }
+        // 2026.03.6 sorted on size with the platform's std::sort, so equal
+        // sizes reached the greedy choice below in a libc++, libstdc++ or MSVC
+        // order. 2026.09.1 picks its basis greedily from cycles ranked by size
+        // with a stable sort (RingDecomposerLib, qsort overridden), so equal
+        // sizes keep the order they were found in on every platform.
+        rings.sort_by_key(Vec::len);
         let bonds = rings
             .iter()
             .map(|r| top.bonds(r).map(|v| v.into_iter().collect::<HashSet<_>>()))
@@ -541,6 +540,18 @@ impl State {
         mut rings: Vec<Ring>,
         approximate: bool,
     ) -> Result<Rings, String> {
+        // #9208 normalizes traversal; 2026.09.1 legacy symmetrization appends
+        // sorted Figueras candidates minus the basis. Keep our basis selection.
+        for ring in rings.iter_mut().chain(&mut self.extras) {
+            normalize(ring);
+        }
+        rings.sort_unstable_by(compare);
+        self.extras.sort_unstable_by(compare);
+        self.extras.retain(|ring| {
+            rings
+                .binary_search_by(|basis| compare(basis, ring))
+                .is_err()
+        });
         let basis_count = rings.len();
         let basis_bonds = rings
             .iter()

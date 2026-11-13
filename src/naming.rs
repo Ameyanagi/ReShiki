@@ -294,9 +294,11 @@ fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<Strin
     // molecule_names::identity keeps its component checks and one semantics
     // message; this adapter retains the naming-specific diagnostics and order.
     molecule_names::canonical_identity(state).map_err(|error| match error {
+        IdentityRejection::EnhancedStereo => {
+            "Naming doesn't support racemic (AND) or relative (OR) stereo groups yet".into()
+        }
         IdentityRejection::UnsupportedAtomsOrBonds => {
-            "Naming does not support query atoms, radicals, exotic bonds or relative stereo groups"
-                .into()
+            "Naming does not support query atoms, radicals or exotic bonds".into()
         }
         IdentityRejection::NonclassicalStereo => {
             const MESSAGE: &str = "Naming supports tetrahedral, ordinary alkene and biaryl axis stereochemistry; other stereo classes cannot be discarded";

@@ -196,8 +196,18 @@ impl Client {
     /// generation in the focused seat's resulting standard selection offer.
     /// Queueing a request or completing a display roundtrip is not success.
     pub fn write(&self, offer: Offer) -> Request<()> {
+        self.write_with_exit_filter(offer, &[])
+    }
+
+    /// Publishes an offer whose listed MIME types are omitted at shutdown, so a
+    /// clipboard manager can retain another representation. Only mixed offers
+    /// are replaced, while this client still owns the focused seat's selection.
+    pub fn write_with_exit_filter(&self, offer: Offer, omit: &[&str]) -> Request<()> {
         self.submit(|completion| match StoredOffer::new(offer, self.inner.memory.clone(), true) {
-            Ok(offer) => Some(Operation::Write { offer, completion }),
+            Ok(offer) => {
+                let exit_mime_types = exit_mime_types(&offer.data, omit);
+                Some(Operation::Write { offer, exit_mime_types, completion })
+            },
             Err(error) => {
                 completion.finish(Err(error));
                 None
@@ -296,6 +306,7 @@ impl<T> Completion<T> {
 pub(crate) enum Operation {
     Write {
         offer: Arc<StoredOffer>,
+        exit_mime_types: Option<Vec<String>>,
         completion: Completion<()>,
     },
     Read {
@@ -326,6 +337,12 @@ impl Operation {
             Self::Read { completion, .. } => completion.finish(Err(error)),
         }
     }
+}
+
+fn exit_mime_types(offer: &Offer, omit: &[&str]) -> Option<Vec<String>> {
+    let remaining: Vec<_> =
+        offer.keys().filter(|mime| !omit.contains(&mime.as_str())).cloned().collect();
+    (!remaining.is_empty() && remaining.len() < offer.len()).then_some(remaining)
 }
 
 pub(crate) struct StoredOffer {
@@ -523,7 +540,7 @@ mod tests {
         assert!(poll(&mut request).is_pending());
         let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
         assert!(poll(&mut request).is_pending());
-        let Operation::Write { offer, completion } = operation else { panic!() };
+        let Operation::Write { offer, completion, .. } = operation else { panic!() };
         let marker = offer.marker.as_ref().unwrap();
         assert!(marker.starts_with(MARKER_PREFIX));
         assert_eq!(marker.len(), MARKER_PREFIX.len() + 32);
@@ -686,6 +703,32 @@ mod tests {
         assert_eq!(memory.load(Ordering::Acquire), 3);
         drop(replacement);
         assert_eq!(memory.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn exit_filter_only_replaces_mixed_offers_and_preserves_payloads() {
+        let text = ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING"];
+        let mut mixed = offer(b"picture");
+        let smiles: Arc<[u8]> = Arc::from(b"CCO".as_slice());
+        for mime in text {
+            mixed.insert(mime.into(), smiles.clone());
+        }
+        mixed.insert("image/svg+xml".into(), Arc::from(b"svg".as_slice()));
+        assert_eq!(
+            exit_mime_types(&mixed, &text),
+            Some(vec!["image/png".into(), "image/svg+xml".into()])
+        );
+        assert_eq!(mixed["image/png"].as_ref(), b"picture");
+        assert!(Arc::ptr_eq(&mixed["text/plain"], &smiles));
+        assert_eq!(exit_mime_types(&mixed, &[]), None);
+        assert_eq!(exit_mime_types(&offer(b"picture"), &text), None);
+        let only_text = text.into_iter().map(|mime| (mime.into(), smiles.clone())).collect();
+        assert_eq!(exit_mime_types(&only_text, &text), None);
+        for mime in text {
+            let mut one_alias = offer(b"picture");
+            one_alias.insert(mime.into(), smiles.clone());
+            assert_eq!(exit_mime_types(&one_alias, &text), Some(vec!["image/png".into()]));
+        }
     }
 
     #[test]

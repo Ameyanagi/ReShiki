@@ -98,9 +98,20 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
 }
 
 #[tokio::test]
-async fn phane_names_are_verified_alternatives_or_the_only_name() -> Result<(), String> {
+async fn phane_names_are_verified_alternatives() -> Result<(), String> {
     use crate::naming::{AlternativeName, NameReason};
-    for smiles in ["C1Cc2ccc(cc2)CCc2ccc1cc2", "C1Cc2cccc(c2)CCc2cccc1c2"] {
+    for (smiles, title, alternative) in [
+        (
+            "C1Cc2ccc(cc2)CCc2ccc1cc2",
+            "tricyclo[8.2.2.2^{4,7}]hexadeca-1(12),4,6,10,13,15-hexaene",
+            "1,4(1,4)-dibenzenacyclohexaphane",
+        ),
+        (
+            "C1Cc2cccc(c2)CCc2cccc1c2",
+            "tricyclo[9.3.1.1^{4,8}]hexadeca-1(15),4(16),5,7,11,13-hexaene",
+            "1,4(1,3)-dibenzenacyclohexaphane",
+        ),
+    ] {
         let record = generate_name(
             &Identity {
                 smiles: smiles.into(),
@@ -113,26 +124,18 @@ async fn phane_names_are_verified_alternatives_or_the_only_name() -> Result<(), 
         )
         .await
         .map_err(|e| e.to_string())?;
-        if smiles == "C1Cc2cccc(c2)CCc2cccc1c2" {
-            assert_eq!(
-                record.name_status,
-                Some(NameStatus::NotPreferred(NameReason::Phane))
-            );
-            assert_eq!(
-                record.alternatives,
-                [AlternativeName {
-                    name: "1,4(1,3)-dibenzenacyclohexaphane".into(),
-                    status: NameStatus::Unverified(NameReason::Phane),
-                }]
-            );
-        } else {
-            assert_eq!(
-                record.name_status,
-                Some(NameStatus::Unverified(NameReason::Phane))
-            );
-            assert_eq!(record.title, "1,4(1,4)-dibenzenacyclohexaphane");
-            assert!(record.alternatives.is_empty());
-        }
+        assert_eq!(record.title, title);
+        assert_eq!(
+            record.name_status,
+            Some(NameStatus::NotPreferred(NameReason::Phane))
+        );
+        assert_eq!(
+            record.alternatives,
+            [AlternativeName {
+                name: alternative.into(),
+                status: NameStatus::Unverified(NameReason::Phane),
+            }]
+        );
     }
     Ok(())
 }

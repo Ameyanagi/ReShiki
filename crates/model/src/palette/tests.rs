@@ -209,9 +209,9 @@ fn both_color_visitors_see_every_stored_color() {
         visited += 1;
         *c = Color::Palette(Hue::ALL[visited % 8], Row::Strong);
     });
-    // Atom 5 (style, H, stereo, mapping, number) + second atom stereo/mapping,
-    // bond 2, text 2, arrow 1, graphic 2, ring fill 1.
-    assert_eq!(visited, 15);
+    // Atom 6 (style, H, stereo, mapping, stereo group, number) + second atom
+    // stereo/mapping/stereo group, bond 2, text 2, arrow 1, graphic 2, ring fill 1.
+    assert_eq!(visited, 17);
     let seen = std::cell::Cell::new(0);
     assert!(!any_color(&doc, |c| {
         seen.set(seen.get() + 1);
@@ -394,14 +394,23 @@ fn mapping_only_palette_resolves_on_both_canvases_with_embedded_hues() {
 }
 
 #[test]
-fn applying_a_theme_resets_mapping_ink_without_changing_labels_or_chemistry() {
+fn applying_a_theme_resets_mapping_and_group_ink_without_changing_labels_or_chemistry() {
     for theme in ColorTheme::ALL {
         let (mut doc, id) = mapping_color_sample(Color::Custom([31, 78, 121]));
+        let atom = doc.atom_mut(id).unwrap();
+        atom.display.stereo_group = atom.display.mapping.clone();
         set_hues(&mut doc, Hues::default());
         let mut expected = doc.clone();
         expected.color_theme = theme;
         expected.custom_theme = None;
         expected.atom_mut(id).unwrap().display.mapping.style.color = Color::Ink;
+        expected
+            .atom_mut(id)
+            .unwrap()
+            .display
+            .stereo_group
+            .style
+            .color = Color::Ink;
         theme.apply(&mut doc);
         assert_eq!(doc, expected);
     }

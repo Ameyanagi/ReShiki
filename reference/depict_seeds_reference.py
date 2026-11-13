@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/depict-seeds-macos-native.json.gz"
 SOURCES = (
@@ -44,7 +44,7 @@ def cases():
     else:
         from perception_reference import snapshot
 
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     rng = random.Random(924583)
 
     def emit(
@@ -268,9 +268,12 @@ def main():
         print(gzip.decompress(args.fixture.read_bytes()).decode(), end="")
         return
     import rdkit
-    from rdkit import rdBase
+    from rdkit import Chem, rdBase
 
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
+    Chem.SetUseLegacyRingFinding(True)
+    # RDKit's setenv is invisible to os.environ; native observers inherit this copy.
+    os.environ["RDK_USE_LEGACY_RING_FINDING"] = "1"
     package = Path(rdkit.__file__).parent
     library_dir = (
         package / ".dylibs" if platform.system() == "Darwin" else package.parent / "rdkit.libs"
@@ -324,7 +327,7 @@ def main():
             outputs[index] = line
     header = {
         "provenance": {
-            "version": "2026.03.6",
+            "version": "2026.09.1",
             "commit": PIN,
             "source_sha256": hashes,
             "library_sha256": {

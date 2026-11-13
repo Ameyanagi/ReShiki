@@ -1,7 +1,7 @@
 The fixture records the input arrays passed by RDKit's `MolToInchi` to
 `GetINCHI`. The oracle compiles the exact `fixOptionSymbol`, `rCleanUp` and
 `MolToInchi` bodies from RDKit commit
-`0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`. Only the generator and output-freeing
+`fece8caa860bdf6c9c82bdb9253f22a0cf87150c`. Only the generator and output-freeing
 calls are replaced with observation functions; expected arrays are not
 calculated in Python. Molecules cross the test boundary as native pickles,
 including double-precision conformer coordinates and their original caches.

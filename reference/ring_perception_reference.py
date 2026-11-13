@@ -13,6 +13,9 @@ if TYPE_CHECKING or __package__:
 else:
     from valence_reference import graph
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def emit(name, mol, dative=False, hydrogen=False):
     # Use separate copies: GetSSSR/GetSymmSSSR overwrite RDKit's ring cache.

@@ -165,7 +165,7 @@ The result, with the image data shortened:
     "content": [
       {
         "type": "text",
-        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.14.0\",\"document\":34,\"engine_protocol\":1,\"operation_api\":1},\"warnings\":[]}"
+        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.14.0\",\"document\":36,\"engine_protocol\":1,\"operation_api\":1},\"warnings\":[]}"
       },
       {
         "type": "image",
@@ -184,7 +184,7 @@ The result, with the image data shortened:
       },
       "versions": {
         "app": "0.14.0",
-        "document": 34,
+        "document": 36,
         "engine_protocol": 1,
         "operation_api": 1
       },
@@ -228,7 +228,7 @@ outlines. Other formats ignore `svg_text`.
     "revision": "0",
     "versions": {
       "app": "0.14.0",
-      "document": 34,
+      "document": 36,
       "engine_protocol": 1,
       "operation_api": 1
     }
@@ -260,7 +260,7 @@ old `base_revision`:
   },
   "versions": {
     "app": "0.14.0",
-    "document": 34,
+    "document": 36,
     "engine_protocol": 1,
     "operation_api": 1
   }
@@ -384,7 +384,7 @@ changes independently.
 | `app`             | 0.14.0 | The ReShiki build                                |
 | `operation_api`   | 1      | The operation tools and their results            |
 | `engine_protocol` | 1      | The internal chemistry engine's request protocol |
-| `document`        | 35     | The `.rsk` drawing format                        |
+| `document`        | 36     | The `.rsk` drawing format                        |
 
 Run the `info` tool or `reshiki --cli info` for the live values. CLI JSON lines
 carry `api.operation_api` and `api.stability`.

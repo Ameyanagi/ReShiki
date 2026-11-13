@@ -24,6 +24,9 @@ else:
     from molfile_import_reference import annotation_cases, native_molecules, v3_block
     from molfile_restrictions_reference import generic_restriction
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def superatoms(text):
     """SUP groups as RDKit reads them; ReShiki collapses them on import (#870)."""

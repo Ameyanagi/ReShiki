@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 FIXTURE = (
     ROOT
     / "tests/fixtures"
@@ -206,7 +206,10 @@ def main():
     from perception_reference import snapshot
     from rdkit import Chem, RDConfig, RDLogger, rdBase
 
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
+    Chem.SetUseLegacyRingFinding(True)
+    # RDKit's setenv is invisible to os.environ; native observers inherit this copy.
+    os.environ["RDK_USE_LEGACY_RING_FINDING"] = "1"
     RDLogger.DisableLog("rdApp.*")
     assert args.rdkit_source is not None
     hashes = {

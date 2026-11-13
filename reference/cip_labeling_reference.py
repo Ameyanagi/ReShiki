@@ -31,7 +31,7 @@ else:
     from perception_reference import snapshot
 
 CORPUS_SHA256 = "df178635c00b6c41fad820d2609fc4ff18403c63dec4e5c3e1756a6db5858059"
-RDKIT_COMMIT = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+RDKIT_COMMIT = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 
 
 def ring_kind(mol, previous):
@@ -89,7 +89,15 @@ def native_result(request):
                         else None,
                     )
                 )
-            assert mol.HasProp("_CIPComputed") and mol.GetBoolProp("_CIPComputed")
+            atoms, bonds = options["atoms"], options["bonds"]
+            full = (not atoms and not bonds) or (
+                set(atoms or []) == set(range(mol.GetNumAtoms()))
+                and set(bonds or []) == set(range(mol.GetNumBonds()))
+            )
+            if full:
+                assert mol.HasProp("_CIPComputed") and mol.GetBoolProp("_CIPComputed")
+            else:
+                assert not mol.HasProp("_CIPComputed")
             passes.append(dict(state=snapshot(mol, kind), labels=labels))
     except (ValueError, RuntimeError, OverflowError, IndexError) as error:
         message = str(error)
@@ -389,13 +397,15 @@ def cases(corpus):
 
 
 def main():
+    # ReShiki ports RDKit's legacy ring symmetrisation (#1117).
+    Chem.SetUseLegacyRingFinding(True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--worker", action="store_true")
     parser.add_argument("--validation-suite", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     RDLogger.DisableLog("rdApp.*")
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     Chem.SetUseLegacyStereoPerception(True)
     if args.worker:
         worker()

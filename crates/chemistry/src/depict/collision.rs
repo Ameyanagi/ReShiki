@@ -1,6 +1,7 @@
 //! Deterministic collision correction from RDKit 2026.03.6 EmbeddedFrag.cpp,
 //! DepictUtils.cpp and Matrices.cpp. BSD-3-Clause; see licenses/rdkit/NOTICE.
-//! Final path angle expansion comes from RDKit 2026.09.1 (#9378).
+//! Shared collision detection and path angle expansion follow RDKit 2026.09.1
+//! (#9378), with an optional second expansion trial for ReShiki (#632).
 //! Operations return detached state, including the native density side effects.
 
 mod repair;
@@ -12,7 +13,7 @@ use super::{
     rings::{EmbeddedAtom, Fragment},
 };
 use crate::{graph::Graph, ranking::Metadata, stereo::perception::RingCache};
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub const MAX_WORK: usize = 50_000_000;
 const MAX_DISTANCES: usize = 4_000_000;
@@ -21,6 +22,7 @@ const COLLISION_THRESHOLD: f64 = 0.70;
 const HETEROATOM_SCALE: f64 = 1.3;
 const MAX_ITERATIONS: usize = 15;
 const MAX_FLIPS: usize = 3;
+const SEGMENT_INTERSECTION_EPSILON: f64 = 1e-6;
 // RDKit 2026.09.1 (#9378) path angle expansion parameters.
 const ANGLE_EXPANSION_INCREMENT: f64 = 0.0873; // 5 degrees
 const MAX_ANGLE_EXPANSION: f64 = 3.0 * ANGLE_EXPANSION_INCREMENT;
@@ -106,6 +108,42 @@ fn squared(a: Point) -> Result<f64, Error> {
 fn cross(a: Point, b: Point) -> Result<f64, Error> {
     number(super::arithmetic::cross(a.x, a.y, b.x, b.y))
 }
+fn orientation(a: Point, b: Point, c: Point) -> Result<f64, Error> {
+    cross(sub(b, a)?, sub(c, a)?)
+}
+fn point_on_segment(a: Point, b: Point, p: Point) -> Result<bool, Error> {
+    Ok(orientation(a, b, p)?.abs() <= SEGMENT_INTERSECTION_EPSILON
+        && p.x >= a.x.min(b.x) - SEGMENT_INTERSECTION_EPSILON
+        && p.x <= a.x.max(b.x) + SEGMENT_INTERSECTION_EPSILON
+        && p.y >= a.y.min(b.y) - SEGMENT_INTERSECTION_EPSILON
+        && p.y <= a.y.max(b.y) + SEGMENT_INTERSECTION_EPSILON)
+}
+fn segments_intersect(a: Point, b: Point, c: Point, d: Point) -> Result<bool, Error> {
+    if a.x.max(b.x) + SEGMENT_INTERSECTION_EPSILON < c.x.min(d.x)
+        || c.x.max(d.x) + SEGMENT_INTERSECTION_EPSILON < a.x.min(b.x)
+        || a.y.max(b.y) + SEGMENT_INTERSECTION_EPSILON < c.y.min(d.y)
+        || c.y.max(d.y) + SEGMENT_INTERSECTION_EPSILON < a.y.min(b.y)
+    {
+        return Ok(false);
+    }
+    let [o1, o2, o3, o4] = [
+        orientation(a, b, c)?,
+        orientation(a, b, d)?,
+        orientation(c, d, a)?,
+        orientation(c, d, b)?,
+    ];
+    let straddles = |first: f64, second: f64| {
+        (first > SEGMENT_INTERSECTION_EPSILON && second < -SEGMENT_INTERSECTION_EPSILON)
+            || (first < -SEGMENT_INTERSECTION_EPSILON && second > SEGMENT_INTERSECTION_EPSILON)
+    };
+    if straddles(o1, o2) && straddles(o3, o4) {
+        return Ok(true);
+    }
+    Ok(point_on_segment(a, b, c)?
+        || point_on_segment(a, b, d)?
+        || point_on_segment(c, d, a)?
+        || point_on_segment(c, d, b)?)
+}
 fn normalize(a: Point) -> Result<Point, Error> {
     let length = squared(a)?.sqrt();
     if length < 1.0e-16 {
@@ -126,6 +164,7 @@ pub struct Input<'a> {
     ring_bonds: Vec<bool>,
     bonds: BTreeMap<(usize, usize), usize>,
     work_limit: usize,
+    path_angle_expansion_extra_trials: bool,
 }
 impl<'a> Input<'a> {
     /// Charge index construction once to the solver's cumulative allowance.
@@ -232,10 +271,17 @@ impl<'a> Input<'a> {
             ring_bonds,
             bonds,
             work_limit: MAX_WORK,
+            path_angle_expansion_extra_trials: true,
         })
     }
     pub fn with_work_limit(mut self, limit: usize) -> Self {
         self.work_limit = limit.min(MAX_WORK);
+        self
+    }
+    /// Allow a second 5-degree batch after a temporary increase in collisions
+    /// (#632). Disable for RDKit 2026.09.1's single-batch path expansion.
+    pub fn with_path_angle_expansion_extra_trials(mut self, enabled: bool) -> Self {
+        self.path_angle_expansion_extra_trials = enabled;
         self
     }
     pub(super) fn session(&self) -> Session {
@@ -313,7 +359,7 @@ impl<'a> Input<'a> {
         let mut session = self.session();
         self.validate(fragment, &mut session)?;
         let mut fragment = fragment.clone();
-        let pairs = self.find_in_place(&mut fragment, include_bonds, &mut session)?;
+        let pairs = self.find_in_place(&mut fragment, include_bonds, true, &mut session)?;
         let total_density = Self::density(&fragment)?;
         Ok(Report {
             fragment,
@@ -338,7 +384,7 @@ impl<'a> Input<'a> {
             self.apply_in_place(value, stage, session)
         })
     }
-    /// RDKit 2026.03.6 parity sequence; the solver applies
+    /// The first three collision stages; the solver applies
     /// `Stage::PathAngleExpansion` separately afterwards.
     pub(super) fn repair_with_work(
         &self,
@@ -494,6 +540,7 @@ impl<'a> Input<'a> {
         &self,
         value: &mut Fragment,
         include_bonds: bool,
+        include_bonded_atoms: bool,
         session: &mut Session,
     ) -> Result<Vec<(usize, usize)>, Error> {
         session.spend(value.atoms.len())?;
@@ -519,7 +566,9 @@ impl<'a> Input<'a> {
                 own = number(own + density)?;
                 *sum = number(*sum + density)?;
                 d2 /= factor1 * factor2;
-                if d2 < COLLISION_THRESHOLD * COLLISION_THRESHOLD {
+                if d2 < COLLISION_THRESHOLD * COLLISION_THRESHOLD
+                    && (include_bonded_atoms || !self.bonds.contains_key(&(a.min(b), a.max(b))))
+                {
                     if result.len() >= MAX_PAIRS {
                         return Err(Error::Limit);
                     }
@@ -532,58 +581,35 @@ impl<'a> Input<'a> {
             a.density = density;
         }
         if include_bonds {
-            // Crossings need midpoints closer than 0.5, so they share or touch
-            // a 0.5-wide grid cell. Candidates keep native ascending bond order.
-            let cell = |p: Point| ((p.x * 2.0).floor() as i64, (p.y * 2.0).floor() as i64);
             session.spend(self.graph.bonds.len())?;
             let mut bonds = Vec::new();
-            let mut grid = HashMap::<_, Vec<usize>>::new();
             for bond in &self.graph.bonds {
                 let (Some(a1), Some(a2)) = (value.atoms.get(&bond.a), value.atoms.get(&bond.b))
                 else {
                     continue;
                 };
-                let middle = scale(add(a2.location, a1.location)?, 0.5)?;
-                grid.entry(cell(middle)).or_default().push(bonds.len());
-                bonds.push((bond, a1.location, a2.location, middle));
+                bonds.push((bond, a1.location, a2.location));
             }
-            let mut near = Vec::new();
-            for (index, &(b1, p1, p2, avg1)) in bonds.iter().enumerate() {
-                let v1 = sub(p2, p1)?;
-                let (x, y) = cell(avg1);
-                near.clear();
-                for dx in -1..=1 {
-                    for dy in -1..=1 {
-                        if let Some(list) = grid.get(&(x.saturating_add(dx), y.saturating_add(dy)))
-                        {
-                            near.extend(list.iter().copied().filter(|&other| other > index));
-                        }
+            for (index, &(b1, p1, p2)) in bonds.iter().enumerate() {
+                for &(b2, p3, p4) in bonds.iter().skip(index + 1) {
+                    session.spend(1)?;
+                    if b1.a == b2.a || b1.a == b2.b || b1.b == b2.a || b1.b == b2.b {
+                        continue;
                     }
-                }
-                near.sort_unstable();
-                near.dedup();
-                session.spend(near.len())?;
-                for &other in &near {
-                    let &(b2, p3, p4, middle) = at(&bonds, other)?;
-                    let avg2 = sub(middle, avg1)?;
-                    let avg_sq = squared(avg2)?;
-                    // Native also tests < 0.5; the stricter squared threshold implies it.
-                    if avg_sq < 0.5 * 0.5 {
-                        let v2 = sub(p3, p1)?;
-                        let v3 = sub(p4, p1)?;
-                        if number(cross(v1, v2)? * cross(v1, v3)?)? < -1e-6 {
-                            let mut best = (usize::MAX, (b1.a, b2.a));
-                            for (a, b) in [(b1.a, b2.a), (b1.a, b2.b), (b1.b, b2.a), (b1.b, b2.b)] {
-                                let distance = self.distance(a, b, session)?;
-                                if distance < best.0 {
-                                    best = (distance, (a, b));
-                                }
+                    if segments_intersect(p1, p2, p3, p4)? {
+                        // Outer endpoints leave the adjacent path bonds
+                        // available to the downstream bond-flipping stage.
+                        let mut best = (0, (b1.a, b2.a));
+                        for (a, b) in [(b1.a, b2.a), (b1.a, b2.b), (b1.b, b2.a), (b1.b, b2.b)] {
+                            let distance = self.distance(a, b, session)?;
+                            if distance > best.0 {
+                                best = (distance, (a, b));
                             }
-                            if result.len() >= MAX_PAIRS {
-                                return Err(Error::Limit);
-                            }
-                            result.push(best.1);
                         }
+                        if result.len() >= MAX_PAIRS {
+                            return Err(Error::Limit);
+                        }
+                        result.push(best.1);
                     }
                 }
             }

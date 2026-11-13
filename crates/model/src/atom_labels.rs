@@ -464,6 +464,9 @@ pub struct Settings {
     /// Chemical atom-map labels are visible on imported mapped reactions.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub maps: bool,
+    /// Enhanced stereo group labels (`abs`, `and1`, `or1`).
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub stereo_groups: bool,
     #[serde(default, skip_serializing_if = "AxialDescriptors::is_helicity")]
     pub axial_descriptors: AxialDescriptors,
 }
@@ -479,6 +482,7 @@ impl Default for Settings {
             steroid_alpha_beta: false,
             roman_stereo_parentheses: false,
             maps: true,
+            stereo_groups: true,
             axial_descriptors: AxialDescriptors::default(),
         }
     }
@@ -601,8 +605,11 @@ pub struct AtomDisplay {
     #[serde(skip_serializing_if = "MappingDisplay::is_default")]
     pub mapping: MappingDisplay,
     pub stereo: StereoDisplay,
+    #[serde(skip_serializing_if = "MappingDisplay::is_default")]
+    pub stereo_group: MappingDisplay,
 }
-/// Presentation only: text is always derived from the owner's `map_num`.
+/// Presentation only: the text is always derived from the owner's chemistry,
+/// its `map_num` or its stereo group.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MappingDisplay {
@@ -680,6 +687,7 @@ impl AtomDisplay {
         }
         self.stereo.validate()?;
         self.mapping.validate()?;
+        self.stereo_group.validate()?;
         if let Some(n) = &self.number {
             if n.text.is_empty()
                 || n.text.chars().count() > 32
@@ -812,11 +820,14 @@ pub enum Owner {
     Mapping(u64),
     AtomStereo(u64),
     BondStereo(u64, u64),
+    StereoGroup(u64),
 }
 impl Owner {
     pub fn selected(self, ids: &[u64]) -> bool {
         match self {
-            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) => ids.contains(&id),
+            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) | Self::StereoGroup(id) => {
+                ids.contains(&id)
+            }
             Self::BondStereo(a, b) => ids.contains(&a) && ids.contains(&b),
         }
     }
@@ -824,13 +835,15 @@ impl Owner {
     /// shown as a 3D model.
     pub fn drawn(self, doc: &Document) -> bool {
         match self {
-            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) => doc.atom_drawn(id),
+            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) | Self::StereoGroup(id) => {
+                doc.atom_drawn(id)
+            }
             Self::BondStereo(a, b) => doc.bond_drawn(a, b),
         }
     }
     pub fn anchor(self, doc: &Document) -> Option<Point> {
         match self {
-            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) => {
+            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) | Self::StereoGroup(id) => {
                 doc.atom(id).map(|a| a.position)
             }
             Self::BondStereo(a, b) => {
@@ -855,6 +868,11 @@ impl Owner {
             Self::AtomStereo(id) => {
                 if let Some(a) = doc.atom_mut(id) {
                     a.display.stereo.offset = offset;
+                }
+            }
+            Self::StereoGroup(id) => {
+                if let Some(a) = doc.atom_mut(id) {
+                    a.display.stereo_group.offset = offset;
                 }
             }
             Self::BondStereo(a, b) => {
@@ -903,7 +921,10 @@ impl Indicator {
 }
 
 fn owned_indicator_format(owner: Owner, text: &str, style: &TextStyle, roman: bool) -> TextFormat {
-    if matches!(owner, Owner::Number(_) | Owner::Mapping(_)) {
+    if matches!(
+        owner,
+        Owner::Number(_) | Owner::Mapping(_) | Owner::StereoGroup(_)
+    ) {
         TextFormat {
             style: style.clone(),
             ..Default::default()
@@ -980,6 +1001,39 @@ pub(crate) fn stereo_indicator_shown(a: &Atom, doc: &Document) -> bool {
     a.display.stereo.show.unwrap_or(doc.atom_labels.stereo)
 }
 
+/// Enhanced stereo labels: `and1`/`or1` on grouped stereocentres and `abs` on
+/// the other stereocentres of a molecule with a group, where ungrouped would
+/// otherwise be ambiguous. Only centres with a CIP descriptor are labelled.
+pub fn stereo_group_texts(doc: &Document) -> std::collections::HashMap<u64, String> {
+    let grouped: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.stereo_group.is_some() && a.cip_label.is_some())
+        .map(|a| a.id)
+        .collect();
+    let molecules: std::collections::HashSet<_> = crate::reactions::molecules(doc, &grouped)
+        .into_iter()
+        .flatten()
+        .collect();
+    doc.atoms
+        .iter()
+        .filter(|a| {
+            a.cip_label.is_some()
+                && molecules.contains(&a.id)
+                && a.display
+                    .stereo_group
+                    .show
+                    .unwrap_or(doc.atom_labels.stereo_groups)
+        })
+        .map(|a| {
+            let text = a
+                .stereo_group
+                .map_or_else(|| "abs".into(), |g| g.to_string());
+            (a.id, text)
+        })
+        .collect()
+}
+
 pub(crate) fn bond_indicator_shown(b: &Bond, doc: &Document) -> bool {
     b.indicator.show.unwrap_or(doc.atom_labels.stereo)
 }
@@ -1041,6 +1095,7 @@ pub(crate) fn indicators_with_geometry(doc: &Document, drawn: &Document) -> Vec<
         a.display.number.is_some()
             || map_indicator_shown(a, doc)
             || (stereo_indicator_shown(a, doc) && atom_stereo_code(a, doc).is_some())
+            || a.stereo_group.is_some()
     });
     let bond_candidate = doc.bonds.iter().any(|b| {
         bond_indicator_shown(b, doc)
@@ -1054,6 +1109,11 @@ pub(crate) fn indicators_with_geometry(doc: &Document, drawn: &Document) -> Vec<
 
 fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
     let mut atom_stereo = atom_stereo_texts(doc);
+    let mut groups = stereo_group_texts(doc);
+    let centres: Vec<_> = groups
+        .keys()
+        .filter_map(|id| Some(doc.atom(*id)?.position))
+        .collect();
     let mut labels = Vec::new();
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         if let Some(n) = &a.display.number {
@@ -1085,6 +1145,15 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
                 a.display.stereo.offset,
                 indicator_style(&a.display.stereo.style, cip),
                 doc.atom_labels.roman_stereo_parentheses,
+            ));
+        }
+        if let Some(text) = groups.remove(&a.id) {
+            labels.push((
+                Owner::StereoGroup(a.id),
+                text,
+                a.display.stereo_group.offset,
+                a.display.stereo_group.style.clone(),
+                false,
             ));
         }
     }
@@ -1164,6 +1233,7 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
         let width = indicator_width(&text, height, &format);
         let dl = matches!(owner, Owner::AtomStereo(_))
             && (text.starts_with("D (") || text.starts_with("L ("));
+        let group = matches!(owner, Owner::StereoGroup(_));
         let outward = if matches!(owner, Owner::Number(_)) {
             outward_extent(width, height)
         } else {
@@ -1179,7 +1249,10 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
             anchor.offset(p.x, p.y)
         } else {
             let neighbors: Vec<_> = match owner {
-                Owner::Number(id) | Owner::Mapping(id) | Owner::AtomStereo(id) => doc
+                Owner::Number(id)
+                | Owner::Mapping(id)
+                | Owner::AtomStereo(id)
+                | Owner::StereoGroup(id) => doc
                     .bonds
                     .iter()
                     .filter_map(|b| {
@@ -1229,12 +1302,18 @@ fn layout_indicators(doc: &Document, drawn: &Document) -> Vec<Indicator> {
                             score += 500.;
                         }
                     }
+                    let distance2 = |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
                     if mapping.is_some() || dl {
                         // Extended stereo labels must still read as this atom's.
-                        let distance2 =
-                            |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
                         let own = distance2(&anchor);
                         if visible.iter().any(|p| distance2(p) < own) {
+                            score += 1000.;
+                        }
+                    } else if group {
+                        // Between two labelled centres a group label reads as
+                        // either's, so the others must be 1.3 times as far.
+                        let own = distance2(&anchor) * 1.3f32.powi(2);
+                        if centres.iter().any(|p| *p != anchor && distance2(p) < own) {
                             score += 1000.;
                         }
                     }

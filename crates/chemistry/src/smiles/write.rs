@@ -1,6 +1,7 @@
 //! Plain molecular SMILES from RDKit SmilesWrite.cpp (2026.03.6).
 //! Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
+mod cx;
 mod fragments;
 use super::{stereo, symbols, traversal};
 use crate::{
@@ -8,6 +9,7 @@ use crate::{
     ranking, rings,
     stereo::perception::{self, RingCache, RingKind, State},
 };
+pub use cx::groups as cx_groups;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -164,7 +166,7 @@ fn component(
         .iter()
         .map(|a| a.map_number)
         .collect::<Vec<_>>();
-    if options.ignore_maps {
+    if options.canonical && options.ignore_maps {
         for atom in &mut state.metadata.atoms {
             atom.map_number = 0;
             atom.map_present = false;

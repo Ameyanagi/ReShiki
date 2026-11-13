@@ -21,9 +21,12 @@ if sys.platform != "win32" or platform.machine().lower() not in ("amd64", "x86_6
     raise RuntimeError("Capture using the pinned Windows x64 CPython")
 sys.path[:0] = [str(ROOT), str(ROOT / "reference")]
 from cleanup_reference import distort, f32
-from rdkit import RDLogger, rdBase
+from rdkit import Chem, RDLogger, rdBase
 
 from engine import cleanup, worker
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
 
 RDLogger.DisableLog("rdApp.*")
 crt = ctypes.CDLL("ucrtbase")

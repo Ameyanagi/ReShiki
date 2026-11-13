@@ -1,4 +1,4 @@
-//! Atropisomer detection adapted from RDKit Atropisomers.cpp (2026.03.6).
+//! Atropisomer detection adapted from RDKit Atropisomers.cpp (2026.09.1, #9190).
 //! Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 use super::{Point3, wedging::Conformer};
@@ -240,7 +240,7 @@ fn perceive(
 
 /// Detect axial chirality from a freshly parsed molecule and optional geometry.
 /// Derives the provisional valences and hybridizations used by file imports.
-/// Only bond stereo tags change; ambiguous cases retain their previous tags.
+/// Candidate atrop tags are replaced; ambiguous evidence clears them.
 /// Geometry uses chemistry coordinates (Y up). Errors never change the caller.
 pub fn detect_atropisomers(
     graph: &Graph,
@@ -253,6 +253,7 @@ pub fn detect_atropisomers(
         metadata,
         directions,
         conformer,
+        true,
         super::CoordinateBounds::Drawing,
     )
 }
@@ -262,6 +263,7 @@ pub(crate) fn detect_atropisomers_with_bounds(
     metadata: &Metadata,
     directions: &[Direction],
     conformer: Option<&Conformer>,
+    replace_existing: bool,
     bounds: super::CoordinateBounds,
 ) -> Result<Metadata> {
     graph.validate().map_err(AtropError::Graph)?;
@@ -293,16 +295,29 @@ pub(crate) fn detect_atropisomers_with_bounds(
         }
     }
     let mut candidates = Vec::new();
+    let mut result = metadata.clone();
     for (id, (bond, dir)) in graph.bonds.iter().zip(directions).enumerate() {
-        if bond.order != 1 || at(&metadata.bonds, id)?.stereo == 1 {
+        let tagged = matches!(at(&metadata.bonds, id)?.stereo, 6 | 7);
+        if !replace_existing && tagged {
             continue;
         }
-        let own = usize::from(matches!(dir, Direction::Wedge | Direction::Hash));
-        if at(&neighbors, bond.a)?.wedges > own || at(&neighbors, bond.b)?.wedges > 0 {
+        let own = usize::from(
+            matches!(bond.order, 1 | 4) && matches!(dir, Direction::Wedge | Direction::Hash),
+        );
+        if at(&neighbors, bond.a)?.wedges > own
+            || at(&neighbors, bond.b)?.wedges > 0
+            || replace_existing && tagged && conformer.is_some_and(|c| c.is_3d)
+        {
             candidates.push(id);
+            if replace_existing && tagged {
+                result
+                    .bonds
+                    .get_mut(id)
+                    .ok_or(AtropError::Invalid("Missing axis"))?
+                    .stereo = 0;
+            }
         }
     }
-    let mut result = metadata.clone();
     if candidates.is_empty() {
         return Ok(result);
     }
@@ -315,7 +330,10 @@ pub(crate) fn detect_atropisomers_with_bounds(
     let mut possible = false;
     for &id in &candidates {
         let bond = at(&graph.bonds, id)?;
-        possible |= (2..=3).contains(&degree(bond.a)?) && (2..=3).contains(&degree(bond.b)?);
+        possible |= bond.order == 1
+            && at(&result.bonds, id)?.stereo != 1
+            && (2..=3).contains(&degree(bond.a)?)
+            && (2..=3).contains(&degree(bond.b)?);
     }
     if !possible {
         return Ok(result);
@@ -331,7 +349,9 @@ pub(crate) fn detect_atropisomers_with_bounds(
         .map_err(AtropError::Graph)?;
     for id in candidates {
         let bond = at(&graph.bonds, id)?;
-        if *at(&hybrids, bond.a)? != Hybridization::Sp2
+        if bond.order != 1
+            || at(&result.bonds, id)?.stereo == 1
+            || *at(&hybrids, bond.a)? != Hybridization::Sp2
             || *at(&hybrids, bond.b)? != Hybridization::Sp2
         {
             continue;

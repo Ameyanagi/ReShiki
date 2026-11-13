@@ -55,28 +55,15 @@ pub struct Imported {
     /// Some fragment has a CX relative flag, normalized into stereo groups.
     #[serde(skip)]
     pub relative: bool,
-    /// The CX relative flag put configured centres in the last stereo group.
+    /// Index of the stereo group the relative flag added, if any.
     #[serde(skip)]
-    pub relative_group: bool,
+    pub relative_group: Option<usize>,
     /// Reaction CX attachment markers affect wedge selection before drawing.
     #[serde(skip)]
     pub reaction_attachments: Vec<bool>,
     /// Preserve native string types until the temporary layout pass reads them.
     #[serde(skip)]
     pub reaction_properties: Vec<Vec<(Vec<u8>, Vec<u8>)>>,
-}
-
-impl Imported {
-    /// Drops the relative flag's group, so a drawing shows the stated
-    /// enantiomer until relative/racemic labels are supported. Returns
-    /// whether there was one.
-    pub fn draw_relative_as_stated(&mut self) -> bool {
-        let grouped = std::mem::take(&mut self.relative_group);
-        if grouped {
-            self.prepared.state.metadata.groups.pop();
-        }
-        grouped
-    }
 }
 
 fn at<T>(items: &[T], id: usize) -> Result<&T> {
@@ -91,6 +78,9 @@ struct Annotations {
     context: prepare::Context,
     properties: Vec<HashMap<Vec<u8>, Vec<u8>>>,
     queries: Vec<bool>,
+    // CX makes bare stars null queries for strict RDKit parity, without a
+    // constraint for partial import to discard.
+    implicit_queries: Vec<bool>,
     groups: HashMap<(u8, u32), usize>,
     labels_processed: bool,
     atom_stereo: bool,
@@ -103,6 +93,7 @@ impl Annotations {
             context: prepare::Context::new(parsed),
             properties: vec![HashMap::new(); parsed.graph.atoms.len()],
             queries: vec![false; parsed.graph.atoms.len()],
+            implicit_queries: vec![false; parsed.graph.atoms.len()],
             groups: HashMap::new(),
             labels_processed: false,
             atom_stereo: false,
@@ -120,16 +111,6 @@ impl Annotations {
             .iter()
             .find(|c| !c.is_3d)
             .or_else(|| self.context.conformers.first())
-    }
-    fn atropisomers(&self, parsed: &mut Parsed) -> Result<()> {
-        parsed.metadata = stereo::detect_atropisomers_with_bounds(
-            &parsed.graph,
-            &parsed.metadata,
-            &parsed.directions,
-            self.conformer(),
-            stereo::CoordinateBounds::NativeImport,
-        )?;
-        Ok(())
     }
     fn labels(&mut self, parsed: &mut Parsed) -> Result<()> {
         if self.labels_processed {
@@ -178,7 +159,7 @@ impl Annotations {
                     })
                     .is_none_or(|symbol| symbol == b"*")
             {
-                put(&mut self.queries, id, true)?;
+                put(&mut self.implicit_queries, id, true)?;
             }
         }
         Ok(())
@@ -456,7 +437,7 @@ fn relative_stereo(state: &mut State, relative: &HashSet<usize>) -> Result<bool>
 
 /// Reactions apply CX annotations after bare parsing and keep explicit H.
 /// They sanitize without the default molecule import's stereo perception.
-/// Explicit enhanced stereo groups are refused before relative flags are normalized.
+/// Explicit enhanced stereo groups and normalized relative flags are retained.
 pub fn reaction_part(parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
     reaction_part_with(parsed, events, None)
 }
@@ -489,7 +470,11 @@ fn reaction_part_with(
         partial_graph(&mut parsed, &mut annotations, positions, &mut dropped)?;
     }
     prepare::validate_allenes(&parsed)?;
-    if annotations.queries.iter().any(|&q| q)
+    if annotations
+        .queries
+        .iter()
+        .chain(&annotations.implicit_queries)
+        .any(|&q| q)
         || annotations.context.unsupported_bonds.iter().any(|&b| b)
         || parsed.query_bonds.iter().any(|&b| b)
     {
@@ -500,10 +485,20 @@ fn reaction_part_with(
     }
     // Read axial flags before kekulization and small-ring axis cleanup (#1048).
     if annotations.context.conformers.is_empty() {
-        annotations.atropisomers(&mut parsed)?;
+        parsed.metadata = stereo::from_directions_with_bounds(
+            &parsed.graph,
+            &parsed.metadata,
+            &parsed.directions,
+            None,
+            true,
+            stereo::CoordinateBounds::NativeImport,
+        )
+        .map_err(Error::Stereo)?
+        .metadata;
     }
     let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
     let mut state = State {
+        conformer: annotations.context.conformers.first().cloned(),
         properties: Properties::unspecified(&clean.graph),
         graph: clean.graph,
         metadata: clean.metadata,
@@ -577,7 +572,7 @@ fn reaction_part_with(
         dropped,
         dropped_cumulene_ez: false,
         relative: !annotations.relative.is_empty(),
-        relative_group: false,
+        relative_group: None,
         reaction_properties,
         reaction_attachments: annotations
             .properties
@@ -603,14 +598,11 @@ fn reaction_part_with(
         conformers: annotations.context.conformers,
         name: None,
     };
-    if !imported.prepared.state.metadata.groups.is_empty() {
-        return Err(Error::Unsupported(
-            "reaction stereochemistry or radical count",
-        ));
-    }
     if imported.relative {
-        imported.relative_group =
-            relative_stereo(&mut imported.prepared.state, &annotations.relative)?;
+        let index = imported.prepared.state.metadata.groups.len();
+        if relative_stereo(&mut imported.prepared.state, &annotations.relative)? {
+            imported.relative_group = Some(index);
+        }
     }
     Ok(imported)
 }
@@ -646,6 +638,14 @@ fn partial_state(
             }
         }
     }
+    // A centre in an enhanced stereo group keeps its tag, so the import is
+    // refused instead of silently dropping it from the group.
+    let grouped: HashSet<usize> = state
+        .metadata
+        .groups
+        .iter()
+        .flat_map(|group| group.atoms.iter().copied())
+        .collect();
     for (id, (atom, meta)) in state
         .graph
         .atoms
@@ -653,6 +653,9 @@ fn partial_state(
         .zip(&mut state.metadata.atoms)
         .enumerate()
     {
+        if grouped.contains(&id) {
+            continue;
+        }
         let input = input_atom(atom, *at(positions, id)?)?;
         let class = match meta.chiral_tag {
             6 => Some(Configuration::SquarePlanar),
@@ -723,6 +726,7 @@ fn partial_graph(
         dropped.push(Dropped::Queries);
         annotations.queries.fill(false);
     }
+    annotations.implicit_queries.fill(false);
     let mut mapping = vec![None; parsed.graph.bonds.len()];
     let mut kept = 0;
     for (id, (bond, query)) in parsed
@@ -933,7 +937,13 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     } else {
         suffix
     };
-    if !partial && annotations.queries.iter().any(|&q| q) {
+    if !partial
+        && annotations
+            .queries
+            .iter()
+            .chain(&annotations.implicit_queries)
+            .any(|&q| q)
+    {
         return Err(Error::Unsupported("query atom"));
     }
     annotations.numeric_props(&mut parsed)?;
@@ -944,41 +954,36 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     }
     prepare::validate_allenes(&parsed)?;
     let conf = annotations.conformer();
-    if let Some(conf) = conf {
-        if conf.is_3d {
-            parsed.metadata = stereo::from_3d_with_bounds(
-                &parsed.graph,
-                &parsed.metadata,
-                &parsed.directions,
-                Some(conf),
-                &stereo::SpatialAnnotations {
-                    non_explicit: vec![None; parsed.graph.atoms.len()],
-                    done: None,
-                },
-                stereo::SpatialOptions::default(),
-                stereo::CoordinateBounds::NativeImport,
-            )?
-            .metadata;
-        } else if annotations.atom_stereo {
-            let drawn = stereo::from_directions_with_bounds(
-                &parsed.graph,
-                &parsed.metadata,
-                &parsed.directions,
-                Some(&conf.positions),
-                true,
-                stereo::CoordinateBounds::NativeImport,
-            )
-            .map_err(Error::Stereo)?;
-            parsed.graph = drawn.graph;
-            parsed.metadata = drawn.metadata;
-        }
+    if annotations.atom_stereo {
+        let drawn = stereo::from_directions_with_bounds(
+            &parsed.graph,
+            &parsed.metadata,
+            &parsed.directions,
+            conf,
+            true,
+            stereo::CoordinateBounds::NativeImport,
+        )
+        .map_err(Error::Stereo)?;
+        parsed.graph = drawn.graph;
+        parsed.metadata = drawn.metadata;
     }
-    annotations.atropisomers(&mut parsed)?;
+    if let Some(conf) = conf.filter(|c| c.is_3d) {
+        parsed.metadata = stereo::from_3d_with_bounds(
+            &parsed.graph,
+            &parsed.metadata,
+            &parsed.directions,
+            Some(conf),
+            &stereo::SpatialAnnotations {
+                non_explicit: vec![None; parsed.graph.atoms.len()],
+                done: None,
+            },
+            stereo::SpatialOptions::default(),
+            stereo::CoordinateBounds::NativeImport,
+        )?
+        .metadata;
+    }
     let (mut prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
-    if partial
-        && prepared.state.metadata.groups.is_empty()
-        && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)?
-    {
+    if partial && partial_state(&mut prepared.state, &kept_atoms, &mut dropped)? {
         prepared.state = stereo::perception::perceive(
             &prepared.state,
             stereo::perception::Options {
@@ -999,16 +1004,18 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
     }
     // After cumulene detection: an `r` group would make enantiomorphic ligands
     // rank equal and hide the dropped E/Z.
-    let relative_group = if !annotations.relative.is_empty() {
+    let mut relative_group = None;
+    if !annotations.relative.is_empty() {
         let relative = kept_atoms
             .iter()
             .enumerate()
             .filter_map(|(atom, original)| annotations.relative.contains(original).then_some(atom))
             .collect();
-        relative_stereo(&mut prepared.state, &relative)?
-    } else {
-        false
-    };
+        let index = prepared.state.metadata.groups.len();
+        if relative_stereo(&mut prepared.state, &relative)? {
+            relative_group = Some(index);
+        }
+    }
     // Native RemoveHs preserves properties on retained atoms. Keep the raw
     // values for the later depiction stage, which converts rank properties
     // only when the selected fragment/neighbor ordering reads them.

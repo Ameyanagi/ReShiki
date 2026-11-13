@@ -1,3 +1,5 @@
+#[path = "support/ring_basis.rs"]
+mod ring_basis;
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
@@ -65,7 +67,7 @@ fn wedge_assignment_matches_independent_rdkit() -> anyhow::Result<()> {
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut changed, mut reversed, mut rejected, mut mismatches) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
-    let mut tied_choices = 0;
+    let (mut tied_choices, mut other_basis) = (0, 0);
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         count += 1;
@@ -99,13 +101,11 @@ fn wedge_assignment_matches_independent_rdkit() -> anyhow::Result<()> {
                         .zip(&case.before.graph.bonds)
                         .any(|(a, b)| a.a != b.a),
                 );
-                let mismatch = difference(
-                    &serde_json::to_value(actual)?,
-                    &serde_json::to_value(expected)?,
-                    "state",
-                );
+                let mut actual = serde_json::to_value(actual)?;
+                let expected = serde_json::to_value(expected)?;
+                other_basis += ring_basis::adopt_rdkit_basis(&mut actual, &expected);
+                let mismatch = difference(&actual, &expected, "state");
                 if mismatch.is_some() {
-                    let actual = serde_json::to_value(actual)?;
                     let mut matched = false;
                     for alternative in &case.alternatives {
                         if actual == serde_json::to_value(alternative)? {
@@ -155,7 +155,7 @@ fn wedge_assignment_matches_independent_rdkit() -> anyhow::Result<()> {
         failures.join("\n")
     );
     eprintln!(
-        "Verified {count} wedging cases: {changed} direction changes, {reversed} endpoint reversals, {rejected} rejected; {tied_choices} native tie variants, {mismatches} mismatches"
+        "Verified {count} wedging cases: {changed} direction changes, {reversed} endpoint reversals, {rejected} rejected; {tied_choices} native tie variants, {other_basis} RDKit SSSR basis differences, {mismatches} mismatches"
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(

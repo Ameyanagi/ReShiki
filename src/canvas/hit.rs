@@ -44,7 +44,8 @@ fn hit_selection_with_object(
         return match i.owner {
             reshiki::atom_labels::Owner::Number(id)
             | reshiki::atom_labels::Owner::Mapping(id)
-            | reshiki::atom_labels::Owner::AtomStereo(id) => {
+            | reshiki::atom_labels::Owner::AtomStereo(id)
+            | reshiki::atom_labels::Owner::StereoGroup(id) => {
                 vec![id]
             }
             reshiki::atom_labels::Owner::BondStereo(a, b) => vec![a, b],

@@ -26,6 +26,7 @@ fn chain(n: usize) -> anyhow::Result<State> {
             .collect(),
     };
     Ok(State {
+        conformer: None,
         metadata: Metadata::unspecified(&graph),
         directions: vec![Direction::None; graph.bonds.len()],
         valences: graph.provisional_valences().map_err(anyhow::Error::msg)?,
@@ -35,6 +36,47 @@ fn chain(n: usize) -> anyhow::Result<State> {
         properties: Properties::unspecified(&graph),
         graph,
     })
+}
+
+#[test]
+fn fractions_preserve_averaging_without_changing_numeric_observations() -> anyhow::Result<()> {
+    let average = Fraction::new(14, 2);
+    let integer = Fraction::integer(7);
+    assert_eq!(average, integer);
+    assert!(average.is_averaged());
+    assert!(!integer.is_averaged());
+    assert_eq!((average.0, average.1), (7, 1));
+    assert_eq!(serde_json::to_value(average)?, serde_json::json!([7, 1]));
+    assert_eq!(Fraction::new(0, 0), Fraction::integer(0));
+    assert!(!Fraction::new(0, 0).is_averaged());
+    Ok(())
+}
+
+#[test]
+fn integer_mancude_averages_remain_marked_after_reduction() -> anyhow::Result<()> {
+    for (text, atom, number) in [("[CH-]1C=C1", 0, 4), ("F[C@H](c1[o+]cccc1)C(O)N", 2, 7)] {
+        let state = crate::smiles::read(text)?.prepared.state;
+        let mut molecule = Molecule::new(&state)?;
+        let fraction = molecule.fraction(atom)?;
+        assert_eq!(fraction, Fraction::integer(number), "{text}, {atom}");
+        assert!(fraction.is_averaged(), "{text}, {atom}");
+    }
+    Ok(())
+}
+
+#[test]
+fn mancude_relaxation_keeps_only_the_typed_ring_two_core() -> anyhow::Result<()> {
+    for text in [
+        "[N-]1CCC1",
+        "[N+]1(c2ccccc2)=C([C@H](F)C(=N)C)C=C(c2ccccc2)CC1",
+    ] {
+        let state = crate::smiles::read(text)?.prepared.state;
+        let mut molecule = Molecule::new(&state)?;
+        let fraction = molecule.fraction(0)?;
+        assert_eq!(fraction, Fraction::integer(7), "{text}");
+        assert!(!fraction.is_averaged(), "{text}");
+    }
+    Ok(())
 }
 
 #[test]
@@ -82,7 +124,7 @@ fn deep_chain_is_iterative_and_preserves_the_input() -> anyhow::Result<()> {
     input.graph.atoms[99_999].isotope = 13;
     input.metadata.atoms[99_999].map_number = 73;
     let mut mol = Molecule::new(&input)?;
-    assert_eq!(mol.fraction(99_999)?, Fraction(6, 1));
+    assert_eq!(mol.fraction(99_999)?, Fraction::integer(6));
     assert_eq!(mol.bond_order(99_998)?, 1);
     assert!(!mol.is_in_ring(99_998)?);
     assert_eq!(input.graph.atoms[99_999].isotope, 13);
@@ -134,7 +176,9 @@ fn negative_mancude_fractions_average_the_complete_part_independent_of_order() -
             }
             let mut molecule = Molecule::new(&state)?;
             for atom in (0..state.graph.atoms.len()).rev() {
-                assert_eq!(molecule.fraction(atom)?, Fraction(24, 5), "{text}, {atom}");
+                let fraction = molecule.fraction(atom)?;
+                assert_eq!(fraction, Fraction::new(24, 5), "{text}, {atom}");
+                assert!(fraction.is_averaged(), "{text}, {atom}");
             }
         }
     }

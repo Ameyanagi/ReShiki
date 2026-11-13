@@ -460,7 +460,10 @@ impl Prepared {
                 };
             }
             let mut molecule = part.molecule;
-            molecule.positions = layout;
+            molecule.set_conformer(wedging::Conformer {
+                positions: layout,
+                is_3d: false,
+            });
             let fischer = crate::fischer::marked_centers(&part.base);
             let drawing = molecular::for_drawing(&molecule, &part.base).map_err(Error::from)?;
             let displays = rewedge(drawing.molecule(), &part.base, &mut work)?;

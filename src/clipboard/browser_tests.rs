@@ -17,11 +17,27 @@ fn rings(arrow: bool) -> Document {
     doc
 }
 
-fn assert_drawing_only(outcome: &CopyOutcome, representations: &[Representation]) {
-    assert!(representations.iter().all(|r| !matches!(
-        r.kind.as_str(),
-        "public.utf8-plain-text" | "org.opensmiles.smiles"
-    )));
+fn assert_chemical_text(
+    outcome: &CopyOutcome,
+    representations: &[Representation],
+    smiles: Option<&str>,
+) {
+    let text: Vec<_> = representations
+        .iter()
+        .filter(|r| {
+            matches!(
+                r.kind.as_str(),
+                "public.utf8-plain-text" | "org.opensmiles.smiles"
+            )
+        })
+        .collect();
+    if let Some(smiles) = smiles {
+        assert_eq!(text.len(), 1);
+        assert_eq!(text[0].kind, "public.utf8-plain-text");
+        assert_eq!(text[0].bytes().unwrap(), smiles.as_bytes());
+    } else {
+        assert!(text.is_empty());
+    }
     assert!(
         outcome
             .notices
@@ -31,16 +47,32 @@ fn assert_drawing_only(outcome: &CopyOutcome, representations: &[Representation]
 }
 
 #[tokio::test]
-async fn ordinary_copy_keeps_drawing_formats_in_order_without_chemical_text() {
+async fn ordinary_copy_keeps_drawing_formats_in_order_with_smiles_only_on_linux() {
     for arrow in [false, true] {
+        let engine = LocalEngine::default();
         let source = rings(arrow);
         let before = source.clone();
-        let (outcome, representations) = prepare_copy(Default::default(), source.clone(), false)
-            .await
-            .unwrap();
+        let smiles = if cfg!(target_os = "linux") && !arrow {
+            let (format, snapshot) = chemical_text_snapshot(&source, &source).unwrap();
+            assert_eq!(format, CopyFormat::Smiles);
+            Some(
+                prepare_chemical_text(engine.clone(), snapshot, CopyFormat::Smiles)
+                    .await
+                    .unwrap()
+                    .text()
+                    .unwrap()
+                    .to_owned(),
+            )
+        } else {
+            None
+        };
+        let (outcome, representations) = prepare_copy(engine, source.clone(), false).await.unwrap();
         assert!(outcome.external_editable);
-        assert_drawing_only(&outcome, &representations);
+        assert_chemical_text(&outcome, &representations, smiles.as_deref());
         let mut expected = vec![NATIVE];
+        if smiles.is_some() {
+            expected.push("public.utf8-plain-text");
+        }
         expected.extend(CDX_TYPES);
         expected.extend(["com.adobe.pdf", "public.png", "public.svg-image"]);
         if cfg!(windows) {
@@ -73,7 +105,7 @@ async fn ambiguous_reaction_copy_keeps_drawing_without_chemical_notices() {
         .await
         .unwrap();
     assert!(outcome.external_editable);
-    assert_drawing_only(&outcome, &representations);
+    assert_chemical_text(&outcome, &representations, None);
     assert!(
         outcome
             .notices
@@ -95,11 +127,23 @@ async fn ordinary_copy_keeps_atoms_when_explicit_role_selection_omits_arrow() {
     let ids: Vec<_> = source.atoms.iter().map(|a| a.id).collect();
     let snapshot = editing::selection(&source, &ids);
     assert!(crate::reactions::copy_reaction(&source, &snapshot).is_err());
+    let smiles = if cfg!(target_os = "linux") {
+        Some(
+            prepare_chemical_text(Default::default(), snapshot.clone(), CopyFormat::Smiles)
+                .await
+                .unwrap()
+                .text()
+                .unwrap()
+                .to_owned(),
+        )
+    } else {
+        None
+    };
     let (outcome, representations) = prepare_copy(Default::default(), snapshot, false)
         .await
         .unwrap();
     assert!(outcome.external_editable);
-    assert_drawing_only(&outcome, &representations);
+    assert_chemical_text(&outcome, &representations, smiles.as_deref());
     assert!(outcome.notices.iter().all(|n| !n.contains("participant")));
     let native: Document =
         serde_json::from_slice(&representations.first().unwrap().bytes().unwrap()).unwrap();
@@ -107,11 +151,31 @@ async fn ordinary_copy_keeps_atoms_when_explicit_role_selection_omits_arrow() {
 }
 
 #[tokio::test]
+async fn ordinary_copy_without_chemistry_has_no_chemical_text() {
+    let mut source = Document::default();
+    source.graphics.push(crate::graphics::Graphic::dragged(
+        source.next_id(),
+        crate::graphics::GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(60., 40.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    let (outcome, representations) = prepare_copy(Default::default(), source, false)
+        .await
+        .unwrap();
+    assert_chemical_text(&outcome, &representations, None);
+    assert!(representations.iter().any(|r| r.kind == NATIVE));
+    assert!(representations.iter().any(|r| r.kind == "public.png"));
+}
+
+#[tokio::test]
 async fn image_only_copy_has_no_chemical_text_and_retains_picture_formats() {
     let (outcome, representations) = prepare_copy(Default::default(), rings(false), true)
         .await
         .unwrap();
-    assert_drawing_only(&outcome, &representations);
+    assert_chemical_text(&outcome, &representations, None);
     assert!(outcome.image_only);
     let mut expected = vec!["com.adobe.pdf"];
     expected.extend(CDX_TYPES);

@@ -81,6 +81,55 @@ fn native_aliases_and_multiple_formats_share_one_complete_offer() {
 }
 
 #[test]
+fn drawing_copy_filters_text_at_exit_only_with_png_or_svg() {
+    let mut offer = prepare_offer(&[
+        item("dev.reshiki.drawing", b"{}"),
+        item(CDX[2], b"cdx"),
+        item("com.adobe.pdf", b"pdf"),
+        item("public.png", b"png"),
+        item("public.svg-image", b"svg"),
+        item("public.utf8-plain-text", b"CCO"),
+    ])
+    .unwrap();
+    assert_eq!(exit_text_filter(&offer), TEXT);
+    offer.remove("image/svg+xml");
+    assert_eq!(exit_text_filter(&offer), TEXT);
+    offer.remove("image/png");
+    assert!(exit_text_filter(&offer).is_empty());
+    offer.insert("image/svg+xml".into(), Arc::from(b"svg".as_slice()));
+    assert_eq!(exit_text_filter(&offer), TEXT);
+}
+
+#[test]
+fn chemical_text_copies_keep_text_at_exit() {
+    for kind in [
+        "org.opensmiles.smiles",
+        "com.mdli.molfile",
+        "chemical/x-cdxml",
+    ] {
+        let offer = prepare_offer(&[
+            item(kind, b"chemical text"),
+            item("public.utf8-plain-text", b"chemical text"),
+        ])
+        .unwrap();
+        assert!(exit_text_filter(&offer).is_empty(), "{kind}");
+    }
+}
+
+#[test]
+fn image_copy_exit_filter_omits_none_of_its_formats() {
+    let offer = prepare_offer(&[
+        item("com.adobe.pdf", b"pdf"),
+        item("public.png", b"png"),
+        item("public.svg-image", b"svg"),
+    ])
+    .unwrap();
+    let filter = exit_text_filter(&offer);
+    assert_eq!(filter, TEXT);
+    assert!(offer.keys().all(|mime| !filter.contains(&mime.as_str())));
+}
+
+#[test]
 fn invalid_offer_is_rejected_as_a_whole() {
     assert!(prepare_offer(&[]).is_err());
     assert!(prepare_offer(&[item("public.png", b"")]).is_err());
@@ -136,6 +185,7 @@ fn rich_names_publish_html_rtf_and_text_without_changing_paste() {
         br"{\rtf1\ansi {\i N}-ethyl}"
     );
     assert_eq!(offer.len(), TEXT.len() + 2);
+    assert!(exit_text_filter(&offer).is_empty());
     assert!(!priority::READABLE.contains(&"public.html"));
     assert!(!priority::READABLE.contains(&"public.rtf"));
     assert!(!READABLE.iter().any(|(kind, _)| *kind == "public.html"));

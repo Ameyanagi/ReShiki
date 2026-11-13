@@ -21,14 +21,17 @@ import sys
 import tempfile
 from pathlib import Path
 
-from rdkit import RDConfig, RDLogger, rdBase
+from rdkit import Chem, RDConfig, RDLogger, rdBase
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from engine.worker import handle
 
-VERSION = "2026.03.6"
-SOURCE = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
+VERSION = "2026.09.1"
+SOURCE = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 
 
 def encoded(value):
@@ -84,10 +87,10 @@ def provenance():
 
 def requests(path):
     if path:
+        # Serialized requests are fixed inputs: a new pin recaptures responses
+        # for the same requests, and the output keeps their source header.
         with gzip.open(path, "rt", encoding="utf-8") as stream:
-            header = json.loads(next(stream))
-            if header["rdkit_version"] != VERSION:
-                raise ValueError("Request fixture version differs")
+            next(stream)
             for line in stream:
                 record = json.loads(line)
                 yield record["name"], record["request"], record["preflight_error"]

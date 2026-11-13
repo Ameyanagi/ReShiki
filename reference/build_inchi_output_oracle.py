@@ -13,9 +13,12 @@ import subprocess
 from pathlib import Path
 
 import rdkit
-from rdkit import rdBase
+from rdkit import Chem, rdBase
 
-PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
+PIN = "fece8caa860bdf6c9c82bdb9253f22a0cf87150c"
 ADAPTER_SHA256 = "68c9b20d1d5920ed602ea931c1429395280c3d040971593073917618015183d1"
 HEADER_SHA256 = "2d41d745be35a47853bf67fea03a46b1f518e85c42af9027a104662dbcb20116"
 
@@ -26,7 +29,7 @@ def main():
     parser.add_argument("--inchi-source", type=Path, required=True)
     parser.add_argument("--boost-include", type=Path, default=Path("/opt/homebrew/include"))
     args = parser.parse_args()
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     assert (
         subprocess.check_output(
             ["git", "-C", str(args.rdkit_source), "rev-parse", "HEAD"], text=True
@@ -111,6 +114,9 @@ def main():
         "-O2",
         "-I" + str(include),
         "-I" + str(code),
+        # RingInfo.h includes RingDecomposerLib.h from RDKit's extracted dependency.
+        "-I"
+        + str(args.rdkit_source / "External/RingFamilies/RingDecomposerLib/src/RingDecomposerLib"),
         "-I" + str(inchi_include),
         "-I" + str(args.boost_include),
         str(root / "reference/inchi_output_reference.cpp"),

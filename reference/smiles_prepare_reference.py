@@ -12,6 +12,9 @@ else:
     from perception_reference import snapshot
     from smiles_parse_reference import cases
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def all_cases():
     yield from cases()

@@ -291,12 +291,40 @@ fn partial_import_clears_invalid_allene_tags() -> anyhow::Result<()> {
 }
 
 #[test]
+fn partial_import_keeps_bare_cx_stars_without_query_notices() -> anyhow::Result<()> {
+    for (format, text, plain) in [
+        ("smiles", "* |(0,0,)|", "*"),
+        ("smiles", "* |wD:1.0|", "*"),
+        ("smiles", "* |atomProp:0._chiralPermutation.-1|", "*"),
+        ("smiles", "C* |atomProp:0._UnknownStereo.bad|", "C*"),
+        ("rsmi", "*C>>*C |(0,0,;1,0,;0,0,;1,0,)|", "*C>>*C"),
+    ] {
+        assert_plain_import(format, text, plain, &[])?;
+    }
+    Ok(())
+}
+
+#[test]
 fn partial_import_ignores_each_query_constraint_with_one_notice() -> anyhow::Result<()> {
     for (format, text, plain) in [
         ("smiles", "CCO |u:0|", "CCO"),
         ("smiles", "CC1CC1 |rb:1:2|", "CC1CC1"),
         ("smiles", "CCO |s:0:2|", "CCO"),
+        ("smiles", "* |u:0|", "*"),
+        ("smiles", "*C |s:0:2|", "*C"),
+        ("smiles", "CC* |rb:2:2|", "CC*"),
+        ("smiles", "*CC |u:1|", "*CC"),
+        ("smiles", "* |$star_e$|", "*"),
+        ("smiles", "* |$Q_e$|", "*"),
+        ("smiles", "* |$QH_p$|", "*"),
+        ("smiles", "* |$AH_p$|", "*"),
+        ("smiles", "* |$X_p$|", "*"),
+        ("smiles", "* |$XH_p$|", "*"),
+        ("smiles", "* |$M_p$|", "*"),
+        ("smiles", "* |$MH_p$|", "*"),
         ("rsmi", "CCO>>CC=O |u:0|", "CCO>>CC=O"),
+        ("rsmi", "*C>>*C |u:0,2|", "*C>>*C"),
+        ("rsmi", "*C>>*C |$star_e;;Q_e$|", "*C>>*C"),
         ("smiles", "CCO |u:0,1,s:0:2|", "CCO"),
         ("rsmi", "CCO.CCO>CCO>CCO |u:0,3,6,9|", "CCO.CCO>CCO>CCO"),
     ] {
@@ -646,25 +674,35 @@ fn partial_import_does_not_relax_strict_readers_or_private_naming_import() -> an
             "{text}"
         );
     }
-    let grouped = "F[Pt@SP1](Cl)(Br)I.C[C@H](O)Cl |&1:6|";
-    assert_eq!(
-        prepare(Request::import_smiles(grouped))
-            .err()
-            .unwrap()
-            .to_string(),
-        "Invalid drawing: Unsupported drawing stereochemistry or radical count",
-        "normalizing SP must not discard the independent enhanced stereo group"
-    );
-    assert_eq!(
-        prepare(Request::import(
-            "rsmi",
-            "F[Pt@SP1](Cl)(Br)I.C[C@H](O)Cl>>FI |&1:6|"
-        ))
-        .err()
-        .unwrap()
-        .to_string(),
-        "SMILES contains unsupported chemistry: reaction stereochemistry or radical count",
-    );
+    // Normalizing SP keeps the independent enhanced stereo group (#766).
+    let sp = "ReShiki cannot draw the square-planar configuration (@SP) at Pt2; it imported that atom without a configuration";
+    for (format, text) in [
+        ("smiles", "F[Pt@SP1](Cl)(Br)I.C[C@H](O)Cl |&1:6|"),
+        ("rsmi", "F[Pt@SP1](Cl)(Br)I.C[C@H](O)Cl>>FI |&1:6|"),
+    ] {
+        let prepared = imported(format, text)?;
+        assert_eq!(prepared.warnings, [sp], "{text}");
+        let grouped: Vec<_> = prepared
+            .document
+            .atoms
+            .iter()
+            .filter_map(|atom| {
+                atom.stereo_group
+                    .map(|group| (atom.element.as_str(), group))
+            })
+            .collect();
+        assert_eq!(
+            grouped,
+            [(
+                "C",
+                crate::stereo_groups::StereoGroup {
+                    kind: crate::stereo_groups::Kind::And,
+                    number: 1,
+                }
+            )],
+            "{text}"
+        );
+    }
     Ok(())
 }
 
@@ -826,7 +864,6 @@ fn partial_import_warning_classifier_excludes_other_notices() -> anyhow::Result<
     for warning in [
         "",
         CUMULENE_EZ_NOTICE,
-        RELATIVE_STEREO_NOTICE,
         "Bond C1–C2",
         "Atom C1 had 3 radical electrons",
         "ReShiki cannot draw the atom",

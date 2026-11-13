@@ -16,6 +16,7 @@ if TYPE_CHECKING or __package__:
     from .degenerate_cx_coordinates import CoordinateInput
     from .smiles_prepare_reference import all_cases as molecular_cases
     from .smiles_read_reference import prepared_snapshot
+    from .support.cx_stereo_groups import renumber
     from .valence_reference import ORDERS
 else:
     from cxsmarts_reference import cases as extension_cases
@@ -23,13 +24,28 @@ else:
     from degenerate_cx_coordinates import CoordinateInput
     from smiles_prepare_reference import all_cases as molecular_cases
     from smiles_read_reference import prepared_snapshot
+    from support.cx_stereo_groups import renumber
     from valence_reference import ORDERS
+
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
+
+def restored(state, identities):
+    for group in state["metadata"]["groups"]:
+        group["read_id"] = identities.get((group["kind"], group["read_id"]), group["read_id"])
+    return state
 
 
 def read(text):
     if len(text.encode()) > 16 * 1024 * 1024:
         raise ValueError("Reaction exceeds 16 MB")
-    reaction = rdChemReactions.ReactionFromSmarts(text.strip(), useSmiles=True)
+    # Like the molecule reference, avoid RDKit's u32 group-key wrap (#1006).
+    normalized = renumber(text.strip())
+    identities = normalized[1] if normalized else {}
+    reaction = rdChemReactions.ReactionFromSmarts(
+        normalized[0] if normalized else text.strip(), useSmiles=True
+    )
     if (
         not reaction
         or not reaction.GetNumReactantTemplates()
@@ -59,9 +75,9 @@ def read(text):
                         raise ValueError("Query reaction atom")
                     mol.ReplaceAtom(atom.GetIdx(), Chem.Atom(atom), preserveProps=True)
             Chem.SanitizeMol(mol)
+            # Enhanced stereo groups are editable since #766.
             if (
                 not mol.GetNumAtoms()
-                or mol.GetStereoGroups()
                 or any(
                     a.HasQuery() or a.GetNumRadicalElectrons() > 2 or int(a.GetChiralTag()) > 2
                     for a in mol.GetAtoms()
@@ -75,7 +91,7 @@ def read(text):
             result[role].append(
                 dict(
                     prepared=dict(
-                        state=prepared_snapshot(mol),
+                        state=restored(prepared_snapshot(mol), identities),
                         dummy_labels=[
                             a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
                             for a in mol.GetAtoms()

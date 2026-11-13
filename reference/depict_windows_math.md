@@ -7,32 +7,27 @@ An unknown DLL or dispatch fails with instructions for a fresh native capture.
 
 ## Saved Server 2022 capture
 
-[Run 35709949046](https://github.com/Ameyanagi/ReShiki/actions/runs/35709949046)
-built all eight independent observers from the pinned source and passed all
-28 Windows x64 tests: 2,382,229 exact stage scalars, plus 2,854 public pipeline
-cases with 130,722 exact coordinates.
+[Run 43118080069](https://github.com/Ameyanagi/ReShiki/actions/runs/43118080069)
+built all eight independent observers from RDKit 2026.09.1 on UCRT
+`10.0.20348.5756` (SHA-256
+`d06d0a421398fb663c6c49586e09774143460fdb1dce489aa9844846b9398555`). Ten live
+Windows x64 tests passed. The four failures were the superseded server2022
+geometry and rings fixtures, replaced by this capture, and the cases on a
+different SSSR basis that the reference tests now count by rule.
 
-The four new `windows-server2022` fixtures are unchanged files from that run.
-Attachment, collision, seeds, and finalization reuse existing fixtures: their
-independently captured data rows are byte-identical. The capture's DLL hashes,
-compiler provenance, and fixture hashes are retained in
+The four `windows-server2022` fixtures are unchanged files from that run.
+Attachment, collision, seeds, and finalization reuse the physical-host fixtures:
+their independently captured data rows are byte-identical. The capture's DLL
+hashes, compiler provenance, and fixture hashes are retained in
 [`fixtures/depict-windows-server2022-profile.json`](../tests/fixtures/depict-windows-server2022-profile.json).
 No observers are compiled or queried during saved replay. Python reads the
 fixtures and probes the original CRT; it does not generate expected structures.
 
-### UCRT 10.0.20348.5756 (windows-2022 image 20261021)
-
-The windows-2022 image `20261021.343.1` replaced UCRT `10.0.20348.5622` with
-`10.0.20348.5756` (SHA-256
-`d06d0a421398fb663c6c49586e09774143460fdb1dce489aa9844846b9398555`), so saved
-replay failed as an uncaptured CRT. Its Python and native acos and ring
-witnesses equal the earlier Server 2022 capture.
-[Run 39957835372](https://github.com/Ameyanagi/ReShiki/actions/runs/39957835372)
-of the Windows depiction workflow rebuilt all eight observers on that image and
-passed all 32 live Windows x64 tests. Every stage's captured data rows are
-byte-identical to the fixture that the `server2022` profile replays, so this
-DLL selects the same fixtures and no fixture changed. The audit file records
-the capture under `server2022_ucrt_5756`.
+The RDKit 2026.03.6 captures also covered UCRT `10.0.20348.5622`
+([run 35709949046](https://github.com/Ameyanagi/ReShiki/actions/runs/35709949046)),
+and [run 39957835372](https://github.com/Ameyanagi/ReShiki/actions/runs/39957835372)
+showed byte-identical rows on both DLLs, so the classifier still accepts both.
+No current runner offers UCRT 5622 for a 2026.09.1 recapture.
 
 When a runner image changes the UCRT again, dispatch the Windows depiction
 workflow on a branch, compare each stage's captured rows with the saved

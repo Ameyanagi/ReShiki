@@ -5,7 +5,7 @@ mod tests;
 mod visits;
 use super::{Error, Fraction, Molecule, at, at_mut, invalid};
 use crate::{ELEMENTS, ISOTOPES, stereo::perception::State};
-use std::{num::NonZeroU32, os::raw::c_char};
+use std::num::NonZeroU32;
 use visits::Visits;
 
 pub const EXPANDED: u8 = 1;
@@ -207,12 +207,10 @@ impl<'a> Digraph<'a> {
         mut flags: u8,
         fraction: Option<Fraction>,
     ) -> Result<usize, Error> {
-        self.work.spend(1)?;
-        // Native expansion checks 100,000 nodes before a whole atom expansion.
-        // Allow its final batch while bounding pathological high-degree input.
-        if self.nodes.len() >= 500_000 {
-            return Err(Error::Limit);
+        if self.nodes.len() >= 100_000 {
+            return Err(Error::Nodes);
         }
+        self.work.spend(1)?;
         let source = atom.map(|i| at(&self.state.graph.atoms, i)).transpose()?;
         let number = source.map_or(1, |a| a.atomic_number);
         let isotope = if flags & DUPLICATE == 0 {
@@ -227,11 +225,16 @@ impl<'a> Digraph<'a> {
         } else if isotope == 0 || number == 1 && isotope == 1 {
             at(ELEMENTS, usize::from(number))?.average
         } else {
-            ISOTOPES
+            let mass = ISOTOPES
                 .binary_search_by_key(&(number, isotope), |&(n, i, _)| (n, i))
                 .ok()
                 .and_then(|i| ISOTOPES.get(i))
-                .map_or(0., |&(_, _, mass)| mass)
+                .map_or(0., |&(_, _, mass)| mass);
+            if number != 0 && mass == 0. {
+                f64::from(isotope)
+            } else {
+                mass
+            }
         };
         if visit.is_none() || flags & DUPLICATE != 0 {
             flags |= EXPANDED;
@@ -243,7 +246,7 @@ impl<'a> Digraph<'a> {
         self.nodes.push(Node {
             atom,
             distance,
-            fraction: fraction.unwrap_or(Fraction(u32::from(number), 1)),
+            fraction: fraction.unwrap_or(Fraction::integer(u32::from(number))),
             number,
             isotope,
             mass,
@@ -269,9 +272,12 @@ impl<'a> Digraph<'a> {
     fn child(&mut self, begin: usize, atom: usize) -> Result<usize, Error> {
         let parent = self.node(begin)?;
         let distance = parent.distance.checked_add(1).ok_or(Error::Limit)?;
-        let visit = self
-            .visits
-            .set(parent.visit, atom, distance as c_char, &mut self.work)?;
+        let visit = self.visits.set(
+            parent.visit,
+            atom,
+            u32::try_from(distance).map_err(|_| Error::Limit)?,
+            &mut self.work,
+        )?;
         self.add_node(Some(atom), visit, distance, 0, None)
     }
     fn terminal(
@@ -283,11 +289,12 @@ impl<'a> Digraph<'a> {
     ) -> Result<usize, Error> {
         let parent = self.node(begin)?;
         let distance = if flags & DUPLICATE != 0 {
-            i32::from(self.visits.get(
+            i32::try_from(self.visits.get(
                 parent.visit,
                 atom.ok_or_else(|| invalid("Missing duplicate atom"))?,
                 &mut self.work,
             )?)
+            .map_err(|_| Error::Limit)?
         } else {
             parent.distance.checked_add(1).ok_or(Error::Limit)?
         };
@@ -297,7 +304,7 @@ impl<'a> Digraph<'a> {
                     .atom
                     .ok_or_else(|| invalid("Missing source atom"))?,
             )?;
-            (f.1 > 1).then_some(f)
+            f.is_averaged().then_some(f)
         } else {
             None
         };
@@ -315,9 +322,6 @@ impl<'a> Digraph<'a> {
         Ok(&self.node(node)?.edges)
     }
     fn expand(&mut self, mol: &mut Molecule<'a>, begin: usize) -> Result<(), Error> {
-        if self.nodes.len() >= 100_000 {
-            return Err(Error::Nodes);
-        }
         let parent = self.node(begin)?;
         let atom = parent
             .atom
@@ -343,7 +347,7 @@ impl<'a> Digraph<'a> {
                 if begin == 0 && !self.atrop {
                     continue;
                 }
-                if negative && mol.fraction(atom)?.1 > 1 {
+                if negative && mol.fraction(atom)?.is_averaged() {
                     duplicates = 1;
                 }
             } else if previous == Some(bond) {
@@ -353,7 +357,7 @@ impl<'a> Digraph<'a> {
             } else {
                 let end = self.terminal(mol, begin, Some(neighbor), RING_DUPLICATE)?;
                 self.add_edge(begin, end, Some(bond))?;
-                if negative && mol.fraction(atom)?.1 > 1 {
+                if negative && mol.fraction(atom)?.is_averaged() {
                     duplicates = 1;
                 }
             }

@@ -95,8 +95,8 @@ stereospecific structure preserves molecular identity. Ambiguous names and
 unsupported structures raise `ValueError`; network failures raise a connection
 or timeout error. Each network request has a 15-second timeout.
 
-An input that imports with a change or an assumption, such as CXSMILES that
-marks its stereo as relative, issues a `reshiki.StructureWarning` through
+An input that imports with a change or an assumption, such as a SMILES bond of
+any order (`~`), issues a `reshiki.StructureWarning` through
 Python's `warnings` module with the app's message; the import still returns
 the drawing. `render_many` collects these as `(index, message)` pairs in
 `.warnings` instead.

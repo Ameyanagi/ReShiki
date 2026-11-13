@@ -26,6 +26,9 @@ else:
     from stereo_reference import state as structural_state
     from valence_reference import ORDERS
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/inchi-output.jsonl.gz"
 
@@ -376,13 +379,14 @@ def generate(args):
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
-        env={**os.environ, loader: str(libs)},
+        # An explicit environment would drop the legacy ring finding set above.
+        env={**os.environ, loader: str(libs), "RDK_USE_LEGACY_RING_FINDING": "1"},
     )
     assert process.stdin is not None and process.stdout is not None
     records = [
         dict(
             rdkit_version=rdBase.rdkitVersion,
-            rdkit_source="0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+            rdkit_source="fece8caa860bdf6c9c82bdb9253f22a0cf87150c",
             inchi_version="1.07.3",
             adapter_sha256="68c9b20d1d5920ed602ea931c1429395280c3d040971593073917618015183d1",
             capture_sha256=hashlib.sha256(
@@ -419,7 +423,10 @@ def generate(args):
                 if mol is None:
                     assert case["expected"] is None, case["name"]
                 else:
-                    assert snapshot(mol, "symmetric") == case["expected"], case["name"]
+                    # RDKit 2026.09.1 reports legacy-symmetrized rings as an
+                    # SSSR basis (rdkit#9753); keep the native label.
+                    kind = case["expected"]["rings"]["kind"]
+                    assert snapshot(mol, kind) == case["expected"], case["name"]
         records.append(case)
     process.stdin.close()
     assert process.wait() == 0
@@ -430,7 +437,7 @@ def generate(args):
 
 def main():
     rdBase.DisableLog("rdApp.*")
-    assert rdBase.rdkitVersion == "2026.03.6"
+    assert rdBase.rdkitVersion == "2026.09.1"
     parser = argparse.ArgumentParser()
     parser.add_argument("--oracle", type=Path)
     parser.add_argument("--rdkit-source", type=Path)

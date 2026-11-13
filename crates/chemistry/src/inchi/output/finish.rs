@@ -70,6 +70,7 @@ pub fn prepare(input: &Assembly, options: Options) -> Result<Assembly, Error> {
         p.unknown = unknown;
     }
     result.state = Some(State {
+        conformer: None,
         graph: prepared.graph,
         metadata: prepared.metadata,
         directions: prepared.directions,

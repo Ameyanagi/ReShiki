@@ -5,6 +5,7 @@ use crate::chemistry::{
     cx, graph::Graph, kekulize::Direction, ranking::Metadata, sanitize, smiles as molecule,
 };
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReadError {
@@ -138,6 +139,61 @@ struct Part {
     queries: Vec<bool>,
     positions: Vec<usize>,
 }
+
+// File group numbers are reaction-global. Reserve them before assigning the
+// relative flag or an explicit group without a number, even when their centres
+// belong to different participants.
+fn stereo_groups(parts: &mut [&mut molecule::Imported]) -> Result<()> {
+    let mut taken = HashSet::new();
+    let mut missing = HashSet::new();
+    for part in parts.iter() {
+        for (index, group) in part.prepared.state.metadata.groups.iter().enumerate() {
+            if group.kind == 0 || part.relative_group == Some(index) {
+                continue;
+            }
+            if group.read_id == 0 {
+                missing.insert(group.kind);
+            } else {
+                taken.insert((group.kind, group.read_id));
+            }
+        }
+    }
+    let mut allocate = |kind| -> Result<u32> {
+        let number = (1..=u32::MAX)
+            .find(|&number| !taken.contains(&(kind, number)))
+            .ok_or(ReadError::Limit)?;
+        taken.insert((kind, number));
+        Ok(number)
+    };
+    let mut replacements = HashMap::new();
+    for kind in [1, 2] {
+        if missing.contains(&kind) {
+            replacements.insert(kind, allocate(kind)?);
+        }
+    }
+    let relative = if parts.iter().any(|part| part.relative_group.is_some()) {
+        Some(allocate(2)?)
+    } else {
+        None
+    };
+    for part in parts.iter_mut() {
+        for (index, group) in part.prepared.state.metadata.groups.iter_mut().enumerate() {
+            let number = if part.relative_group == Some(index) {
+                relative
+            } else if group.kind != 0 && group.read_id == 0 {
+                replacements.get(&group.kind).copied()
+            } else {
+                None
+            };
+            if let Some(number) = number {
+                group.read_id = number;
+                group.write_id = number;
+            }
+        }
+    }
+    Ok(())
+}
+
 impl Part {
     fn read(text: &str, count: &mut usize, partial: bool) -> Result<Self> {
         let parsed = if partial {
@@ -391,9 +447,16 @@ fn read_with(text: &str, partial: bool) -> Result<SmilesReaction> {
             .map(|p| p.finish(suffix, &mut atoms, &mut bonds, &mut fragments, partial))
             .collect()
     };
-    let reactants = finish(reactants)?;
-    let agents = finish(agents)?;
-    let products = finish(products)?;
+    let mut reactants = finish(reactants)?;
+    let mut agents = finish(agents)?;
+    let mut products = finish(products)?;
+    stereo_groups(
+        &mut reactants
+            .iter_mut()
+            .chain(&mut agents)
+            .chain(&mut products)
+            .collect::<Vec<_>>(),
+    )?;
     Ok(SmilesReaction {
         reactants,
         products,

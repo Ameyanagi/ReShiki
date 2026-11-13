@@ -240,6 +240,35 @@ fn hydrogen_origin_and_annotated_hydrogen_vertices_remain_exact() {
     assert_eq!(projected.state.graph.atoms[0].isotope, 2);
     assert_eq!(prepared.state.graph.atoms.len(), 5);
     assert_eq!(projected.state.graph.atoms.len(), 4);
+    assert!(projected.state.conformer.is_none());
+    for is_3d in [false, true] {
+        let mut prepared = prepared.clone();
+        let positions = (0..5)
+            .map(|index| stereo::Point3 {
+                x: index as f64,
+                y: index as f64 / 2.,
+                z: if is_3d { index as f64 / 3. } else { 0. },
+            })
+            .collect::<Vec<_>>();
+        prepared.state.conformer = Some(stereo::wedging::Conformer {
+            positions: positions.clone(),
+            is_3d,
+        });
+        let (projected, survivors) = name_import_projection(&prepared).unwrap();
+        let conformer = projected.state.conformer.as_ref().unwrap();
+        assert_eq!(conformer.is_3d, is_3d);
+        assert_eq!(
+            conformer.positions,
+            survivors
+                .iter()
+                .map(|&index| positions[index])
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            prepared.state.conformer.as_ref().unwrap().positions,
+            positions
+        );
+    }
 }
 
 #[test]

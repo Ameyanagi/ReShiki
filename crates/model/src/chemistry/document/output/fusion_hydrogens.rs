@@ -162,5 +162,8 @@ pub(super) fn place(
         position.x = f64::from(best.3.x) / WORLD_PER_DEPICT_UNIT;
         position.y = -f64::from(best.3.y) / WORLD_PER_DEPICT_UNIT;
     }
+    if let Some(conformer) = &mut molecule.state.conformer {
+        conformer.positions.clone_from(&molecule.positions);
+    }
     Ok(())
 }

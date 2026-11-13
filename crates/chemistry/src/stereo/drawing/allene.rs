@@ -140,7 +140,10 @@ mod tests {
             &state.graph,
             &state.metadata,
             &state.directions,
-            Some(&positions),
+            Some(&super::wedging::Conformer {
+                positions: positions.to_vec(),
+                is_3d: false,
+            }),
             true,
             CoordinateBounds::NativeImport,
         )

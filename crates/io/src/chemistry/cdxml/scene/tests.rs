@@ -113,7 +113,7 @@ fn drawing_variable_detection_keeps_hidden_wildcards_and_fragment_wrappers() {
         let xml = format!("<CDXML><page><fragment id='1'>{node}</fragment></page></CDXML>");
         let (unchanged, variables) = super::super::drawing_variables(&xml).unwrap();
         assert_eq!(unchanged, xml);
-        assert!(variables.0.is_empty());
+        assert!(variables.is_empty());
     }
 }
 

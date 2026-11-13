@@ -58,7 +58,7 @@ impl Input<'_> {
             let mut candidate = original.clone();
             self.path_angle_expansion(&mut candidate, session)?;
             if self
-                .find_in_place(&mut candidate, true, session)?
+                .find_in_place(&mut candidate, true, true, session)?
                 .is_empty()
             {
                 *value = candidate;
@@ -259,7 +259,7 @@ impl Input<'_> {
             *tries += 1;
             for end in [true, false] {
                 self.flip_bond(value, id, end, session)?;
-                let pairs = self.find_in_place(value, true, session)?;
+                let pairs = self.find_in_place(value, true, true, session)?;
                 let new_density = Self::density(value)?;
                 if pairs.len() < count {
                     done.insert(id, MAX_FLIPS);
@@ -287,7 +287,7 @@ impl Input<'_> {
                 spiros.insert(id);
             }
         }
-        let mut pairs = self.find_in_place(value, true, session)?;
+        let mut pairs = self.find_in_place(value, true, true, session)?;
         let mut bonds = BTreeMap::new();
         let mut done_spiros = BTreeMap::new();
         for _ in 0..MAX_ITERATIONS {
@@ -304,7 +304,7 @@ impl Input<'_> {
                         continue;
                     }
                     self.flip_spiro(value, id, session)?;
-                    let trial = self.find_in_place(value, true, session)?;
+                    let trial = self.find_in_place(value, true, true, session)?;
                     let new_density = Self::density(value)?;
                     if trial.len() < count {
                         done_spiros.insert(id, MAX_FLIPS);
@@ -317,7 +317,7 @@ impl Input<'_> {
                     self.flip_spiro(value, id, session)?;
                 }
             }
-            pairs = self.find_in_place(value, true, session)?;
+            pairs = self.find_in_place(value, true, true, session)?;
         }
         Ok(())
     }
@@ -354,7 +354,7 @@ impl Input<'_> {
         value: &mut Fragment,
         session: &mut Session,
     ) -> Result<(), Error> {
-        for (a, b) in self.find_in_place(value, false, session)? {
+        for (a, b) in self.find_in_place(value, false, true, session)? {
             let (degree_a, degree_b) = (self.degree(a)?, self.degree(b)?);
             let (fixed_a, fixed_b) = (atom(value, a)?.fixed, atom(value, b)?.fixed);
             if (degree_a > 1 || fixed_a) && (degree_b > 1 || fixed_b) {
@@ -456,7 +456,7 @@ impl Input<'_> {
         value: &mut Fragment,
         session: &mut Session,
     ) -> Result<(), Error> {
-        let mut pairs = self.find_in_place(value, false, session)?;
+        let mut pairs = self.find_in_place(value, false, true, session)?;
         for _ in 0..MAX_ITERATIONS {
             let Some(&(mut a, mut b)) = pairs.first() else {
                 break;
@@ -518,7 +518,7 @@ impl Input<'_> {
                     a.location = add(a.location, movement)?;
                 }
             }
-            pairs = self.find_in_place(value, false, session)?;
+            pairs = self.find_in_place(value, false, true, session)?;
         }
         Ok(())
     }
@@ -620,51 +620,65 @@ impl Input<'_> {
         // Shortened bonds must not become actionable atom clashes. Resolve
         // atom clashes first so remaining crossings cannot reject an improvement.
         let find = |value: &mut Fragment, session: &mut Session| -> Result<Vec<_>, Error> {
-            let mut pairs = self.find_in_place(value, false, session)?;
-            session.spend(pairs.len())?;
-            pairs.retain(|&pair| !self.bonds.contains_key(&canonical(pair)));
+            let mut pairs = self.find_in_place(value, false, false, session)?;
             if pairs.is_empty() {
-                pairs = self.find_in_place(value, true, session)?;
-                session.spend(pairs.len())?;
-                pairs.retain(|&pair| !self.bonds.contains_key(&canonical(pair)));
+                pairs = self.find_in_place(value, true, false, session)?;
             }
             Ok(pairs)
         };
         let mut skipped = BTreeSet::new();
         let mut totals = BTreeMap::<_, f64>::new();
         let mut pairs = find(value, session)?;
+        let mut pending = VecDeque::from(pairs.clone());
         for _ in 0..MAX_ANGLE_EXPANSION_ITERS {
             session.spend(pairs.len())?;
-            let Some(&pair) = pairs
-                .iter()
-                .find(|&&pair| !skipped.contains(&canonical(pair)))
-            else {
+            let Some(&pair) = pending.front() else {
                 break;
             };
             let key = canonical(pair);
             let path = self.shortest_path(pair.0, pair.1, session)?;
+            if path.len() < 3 {
+                skipped.insert(key);
+                pending.pop_front();
+                continue;
+            }
+            let mut expandable = Vec::new();
+            for angle in path.windows(3) {
+                session.spend(1)?;
+                let [previous, center, next] = [*at(angle, 0)?, *at(angle, 1)?, *at(angle, 2)?];
+                let mut same_ring = false;
+                for &id in at(&self.atom_rings, center)? {
+                    let ring = at(&self.rings.atoms, id)?;
+                    session.spend(1 + 2 * ring.len())?;
+                    if ring.contains(&previous) && ring.contains(&next) {
+                        same_ring = true;
+                        break;
+                    }
+                }
+                if !same_ring {
+                    expandable.push([previous, center, next]);
+                }
+            }
+            if expandable.is_empty() {
+                skipped.insert(key);
+                pending.pop_front();
+                continue;
+            }
             session.spend(value.atoms.len())?;
             let saved = value.atoms.values().map(|a| a.location).collect::<Vec<_>>();
             let mut accepted = false;
-            // Try one further increment before rejecting a temporary increase.
-            // Only publish a trial with no more collisions than the saved layout.
-            for _ in 0..ANGLE_EXPANSION_TRIAL_STEPS {
+            let mut any_expanded = false;
+            let trial_steps = if self.path_angle_expansion_extra_trials {
+                ANGLE_EXPANSION_TRIAL_STEPS
+            } else {
+                1
+            };
+            // #632 optionally tries a second whole-path batch before rejecting
+            // a temporary increase. With it disabled, use the upstream batch.
+            for _ in 0..trial_steps {
                 let mut expanded = false;
-                for angle in path.windows(3) {
+                for &[previous, center, next] in &expandable {
                     session.spend(1)?;
-                    let [previous, center, next] = [*at(angle, 0)?, *at(angle, 1)?, *at(angle, 2)?];
-                    let mut same_ring = false;
-                    for &id in at(&self.atom_rings, center)? {
-                        let ring = at(&self.rings.atoms, id)?;
-                        session.spend(1 + 2 * ring.len())?;
-                        if ring.contains(&previous) && ring.contains(&next) {
-                            same_ring = true;
-                            break;
-                        }
-                    }
-                    if same_ring {
-                        continue;
-                    }
                     let total = totals.entry((key, center)).or_default();
                     if *total < MAX_ANGLE_EXPANSION
                         && self.open_angle_by_increment(value, [previous, center, next], session)?
@@ -676,12 +690,18 @@ impl Input<'_> {
                 if !expanded {
                     break;
                 }
+                any_expanded = true;
                 let trial = find(value, session)?;
                 if trial.len() <= pairs.len() {
                     pairs = trial;
                     accepted = true;
                     break;
                 }
+            }
+            if !any_expanded {
+                skipped.insert(key);
+                pending.pop_front();
+                continue;
             }
             if !accepted {
                 session.spend(value.atoms.len() + totals.len())?;
@@ -692,6 +712,14 @@ impl Input<'_> {
                 skipped.insert(key);
                 pairs = find(value, session)?;
             }
+            // RDKit #9378 filters skipped keys only after recomputing collisions.
+            // Early skips remove one entry, so duplicates still consume an
+            // iteration from the limit above.
+            pending = pairs
+                .iter()
+                .copied()
+                .filter(|&pair| !skipped.contains(&canonical(pair)))
+                .collect();
         }
         Ok(())
     }

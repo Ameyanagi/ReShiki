@@ -52,10 +52,10 @@ default-members = [
 version = "0.14.0"
 
 [workspace.dependencies]
-nazuchem-ir = { git = "https://github.com/Ameyanagi/nazuchem", rev = "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3" }
-nazuchem-kernel = { git = "https://github.com/Ameyanagi/nazuchem", rev = "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3" }
-nazuchem-n2s = { git = "https://github.com/Ameyanagi/nazuchem", rev = "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3" }
-nazuchem-s2n = { git = "https://github.com/Ameyanagi/nazuchem", rev = "6fcd7c4f9ef7b892ae97aa042b5b4e13ee1aebe3" }
+nazuchem-ir = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
+nazuchem-kernel = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
+nazuchem-n2s = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
+nazuchem-s2n = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }
@@ -371,6 +371,11 @@ required-features = ["rdkit-reference"]
 [[test]]
 name = "atropisomer"
 path = "reference/atropisomer.rs"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "atropisomer_normal_mode"
+path = "reference/atropisomer_normal_mode.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]

@@ -18,6 +18,9 @@ if TYPE_CHECKING or __package__:
 else:
     from document_preparation_reference import drawing, molecule, prepare
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def emit(name, doc, selection):
     expected, before, after, identity, failure = None, None, None, None, None

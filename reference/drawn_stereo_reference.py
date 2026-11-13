@@ -21,6 +21,9 @@ else:
     from stereo_reference import group
     from valence_reference import ORDERS, atom_molecule, graph
 
+# ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
+Chem.SetUseLegacyRingFinding(True)
+
 
 def state(mol):
     return dict(
@@ -52,9 +55,9 @@ def emit(name, original, replace=True, operation="atom"):
             Chem.SetBondStereoFromDirections(mol)
         else:
             Chem.AssignChiralTypesFromBondDirs(mol, replaceExistingTags=replace)
-        expected = state(mol)
-    except (ValueError, RuntimeError):
-        expected = None
+        expected, failure = state(mol), None
+    except (ValueError, RuntimeError) as error:
+        expected, failure = None, str(error)
     print(
         json.dumps(
             dict(
@@ -65,6 +68,7 @@ def emit(name, original, replace=True, operation="atom"):
                 replace=replace,
                 operation=operation,
                 expected=expected,
+                failure=failure,
             )
         )
     )
