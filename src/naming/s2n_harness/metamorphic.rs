@@ -204,16 +204,16 @@ fn amide_parent_seniority_keeps_name_status_and_structure_in_six_orders() {
     let mut parser = Measurements::default();
     let mut failures = Vec::new();
     for (smiles, expected, status) in [
-        // Shared-N imide and a separate skeletal cation: never Preferred here.
+        // Shared-N imide and a separate skeletal cation use distinct parent rules.
         (
             "O=C(NC(=O)CC(N)=O)c1ccccc1",
-            "N-(3-amino-1,3-dioxopropyl)benzamide",
-            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+            "N-benzoylpropanediamide",
+            NameStatus::NotPreferred(NameReason::DiamideLocants),
         ),
         (
             "NC(=O)c1ccc(NC(C)=O)cc1Cc1cc[nH+]cc1",
-            "4-acetamido-2-[(pyridin-1-ium-4-yl)methyl]benzamide",
-            NameStatus::Unverified(NameReason::PrincipalGroupTie),
+            "4-[(5-acetamido-2-carbamoylphenyl)methyl]pyridin-1-ium",
+            NameStatus::Preferred,
         ),
         (
             "CC(C)CC(=O)Nc1ccc(NC(=O)c2cccnc2Sc2ccccc2)cc1",

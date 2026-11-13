@@ -1003,11 +1003,11 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
         ),
         (
             "C1Cc2ccc(cc2)CCc2ccc1cc2",
-            "1,4(1,4)-dibenzenacyclohexaphane",
-            NameStatus::Unverified(NameReason::Phane),
+            "tricyclo[8.2.2.2^{4,7}]hexadeca-1(12),4,6,10,13,15-hexaene",
+            NameStatus::NotPreferred(NameReason::Phane),
             json!("phane"),
             json!([]),
-            json!([]),
+            json!([{"name": "1,4(1,4)-dibenzenacyclohexaphane", "status": "unverified", "reason": "phane"}]),
         ),
         (
             "C1Cc2cccc(c2)CCc2cccc1c2",
@@ -1066,7 +1066,7 @@ async fn name_json_keeps_biochemical_aliases_stereospecific() {
 #[tokio::test(flavor = "multi_thread")]
 async fn name_declined_inputs_fail_without_stdout() {
     // Import would drop the allene stereo; the raw SMILES check declines it.
-    for smiles in ["CC.O", "[13CH3]C1CCCCC1", "FC=[C@AL1]=CF"] {
+    for smiles in ["CC.O", "[13CH3][NH]", "FC=[C@AL1]=CF"] {
         for json in [false, true] {
             let mut tokens = vec!["name", "--smiles", smiles];
             if json {

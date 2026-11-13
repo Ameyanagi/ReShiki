@@ -78,6 +78,12 @@
 		<token value="SS">dithioperoxyanhydride|dithioperoxyanhydrid</token>
 		<token value="[Se|2][Se|2]">diselenoperoxyanhydride|diselenoperoxyanhydrid</token>
 		<token value="[Te|2][Te|2]">ditelluroperoxyanhydride|ditelluroperoxyanhydrid</token>
+		<token value="SO">thioperoxyanhydride|thioperoxyanhydrid</token>
+		<token value="[Se|2]O">selenoperoxyanhydride|selenoperoxyanhydrid</token>
+		<token value="[Te|2]O">telluroperoxyanhydride|telluroperoxyanhydrid</token>
+		<token value="[Se|2]S">selenothioperoxyanhydride|selenothioperoxyanhydrid</token>
+		<token value="[Te|2]S">tellurothioperoxyanhydride|tellurothioperoxyanhydrid</token>
+		<token value="[Se|2][Te|2]">selenotelluroperoxyanhydride|selenotelluroperoxyanhydrid</token>
 	</tokenList>
 
 	<tokenList tagname="functionalModifier" symbol="µ">
@@ -105,6 +111,12 @@ For these groups the charge on the first atom will be increased by 1 if they are
 		<token value="C=NO">ketoxime|ketoxim</token>
 		<token value="O">oxide|oxid</token>
 		<token value="OO-">peroxide|peroxid</token>
+		<token value="SO-">thioperoxide|thioperoxid</token>
+		<token value="[Se|2]O-">selenoperoxide|selenoperoxid</token>
+		<token value="[Te|2]O-">telluroperoxide|telluroperoxid</token>
+		<token value="[Se|2]S-">selenothioperoxide|selenothioperoxid</token>
+		<token value="[Te|2]S-">tellurothioperoxide|tellurothioperoxid</token>
+		<token value="[Se|2][Te|2]-">selenotelluroperoxide|selenotelluroperoxid</token>
 		<token value="[Se|2]">selenide|selenid</token>
 		<token value="[Se|2][Se|2]-">diselenide|diselenid</token>
 		<token value="[Se|2][Se|2][Se|2]-">triselenide|triselenid</token>

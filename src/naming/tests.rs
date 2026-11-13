@@ -215,20 +215,22 @@ fn specified_cumulene_ez_is_rejected_before_cleanup() {
 #[test]
 fn issue_946_parent_controls_keep_their_existing_names() {
     for (smiles, expected) in [
+        // P-45.5 gives the prefix cited first, chloro, the lower locant.
         (
             "C[C@H](Cl)[C@@H](F)C([C@H](Cl)[C@@H](F)C)=C=C=CC",
-            "(6S,7S)-7-chloro-5-[(1S,2S)-1-chloro-2-fluoropropyl]-6-fluoroocta-2,3,4-triene",
+            "(6S,7S)-6-chloro-5-[(1S,2S)-2-chloro-1-fluoropropyl]-7-fluoroocta-2,3,4-triene",
         ),
+        // P-44.4.1.12.2 prefers the like descriptor pair (SS) over RS.
         (
             "C[C@H](F)[C@H](Cl)C([C@H](Cl)[C@@H](F)C)=C=C=CC",
-            "(6R,7S)-6-chloro-5-[(1S,2S)-1-chloro-2-fluoropropyl]-7-fluoroocta-2,3,4-triene",
+            "(6S,7S)-6-chloro-5-[(1R,2S)-1-chloro-2-fluoropropyl]-7-fluoroocta-2,3,4-triene",
         ),
+        // An unspecified arm cannot determine a descriptor-pair preference.
         (
             "C[C@H](F)C(C(F)C)CCCC",
             "(2S)-2-fluoro-3-(1-fluoroethyl)heptane",
         ),
     ] {
-        // The bounded P-44.4.1.12.2 rule excludes two-centre or unspecified arms.
         let name = openclatura::name_smiles(smiles, &Default::default()).unwrap();
         assert_eq!(name.text, expected, "{smiles}");
         assert_eq!(name.status, NameStatus::Preferred, "{smiles}");

@@ -930,7 +930,7 @@ fn ring_assembly_names_intentionally_depart_from_upstream_spelling() {
         ),
         (
             "C=CC(=O)Oc1ccc(-c2ccc(CCCOSC)cc2)cc1",
-            "4'-[3-(methylsulfanyloxy)propyl][1,1'-biphenyl]-4-yl prop-2-enoate",
+            "4'-{3-[(methylsulfanyl)oxy]propyl}[1,1'-biphenyl]-4-yl prop-2-enoate",
         ),
     ] {
         // Match the canonical input used by Measurements::classify.
@@ -1143,7 +1143,7 @@ fn fr35_benzoheterocycles_and_higher_order_alternatives_round_trip() {
         ),
         (
             "S1CC2=CC=CC3=C2C1=CC=C3",
-            "2H-benzo[1,2,3-cd]1-benzothiophene",
+            "2H-benzo[cd][1]benzothiophene",
             None,
         ),
         (
