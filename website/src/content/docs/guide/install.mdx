@@ -63,7 +63,7 @@ launcher and icon.
 
 ### File compatibility
 
-ReShiki 0.14.0 saves most drawings in document version 30, which ReShiki 0.13.1 opens. A drawing with a custom reaction-label gap, ORTEP settings, a 3D model generated in 0.14.0 or an amino-acid residue collapsed with two attachment points uses versions 31–34, which 0.13.1 cannot open. ReShiki 0.13.0 and earlier cannot open any version 30 drawing. Older versions ask you to update. Older drawings still open in 0.14.0. If you share files with someone using an earlier version, keep a copy saved by that version before saving in 0.14.0. See [file compatibility](/developer/changes-0.14/#file-compatibility).
+ReShiki 0.15.0 saves each drawing in the lowest document version that can hold it. Most drawings use version 30, which ReShiki 0.13.1 and 0.14.0 open. A drawing with an arrow node (version 35), a stereocentre in an AND or OR stereo group (36) or an atom with three or four unpaired electrons (37) needs 0.15.0. A custom reaction-label gap, ORTEP settings, a generated 3D model or a two-sided residue group (31–34) needs 0.14.0. ReShiki 0.13.0 and earlier cannot open any version 30 drawing. Older versions ask you to update. One exception: a drawing whose style has a **Crossing clearance** other than 1.1 pt cannot be opened by 0.14.0 or earlier, which report an unknown field instead. Older drawings still open in 0.15.0. If you share files with someone using an earlier version, keep a copy saved by that version before saving in 0.15.0. See [file compatibility](/developer/changes-0.15/#file-compatibility).
 
 ## Try it in your browser
 

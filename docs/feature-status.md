@@ -3,7 +3,7 @@
 This inventory retains earlier workflow checks. For current packages and setup, see [installation](getting-started.md) and [release signing](releasing.md).
 
 Workflow checks began on 2026-09-20 for version 0.2.0. This page describes
-ReShiki 0.14.0. Dated validation records describe their original milestones.
+ReShiki 0.15.0. Dated validation records describe their original milestones.
 This inventory records supported workflows, explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
@@ -16,7 +16,7 @@ Evidence comes from ReShiki source, regression tests, saved interchange fixtures
 and desktop editing checks. Detailed feature documents record the tests and
 applicable boundaries.
 
-Most drawings saved by ReShiki 0.14.0 use document version 30, which ReShiki 0.13.1 opens and 0.13.0 and earlier cannot. Drawings that use some new 0.14.0 features need versions 31–34. Older drawings still open in 0.14.0. See [file compatibility](changes-0.14.md#file-compatibility).
+Most drawings saved by ReShiki 0.15.0 use document version 30, which ReShiki 0.13.1 and 0.14.0 open and 0.13.0 and earlier cannot. Drawings that use some newer features need versions 31–34 (0.14.0) or 35–37 (0.15.0). Older drawings still open in 0.15.0. See [file compatibility](changes-0.15.md#file-compatibility).
 
 ## Agent API — experimental
 
@@ -165,7 +165,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | NMR prediction / spectra assignment              | Scoped prediction        | Offline atom-linked ¹H groups / ¹³C from measured CDCl3 data, with support/radius/spread and unsupported sites. No experimental assignment or simulation; see [NMR prediction](nmr-prediction.md).                                                               |
 | Mass-fragmentation tools                         | Missing                  | No fragmentation model or editing workflow.                                                                                                                                                                                                                      |
 | HELM / biomolecular workflows                    | Missing                  | No biological sequence or monomer assembly workflow.                                                                                                                                                                                                             |
-| Database/service integrations                    | Partial                  | Opt-in PubChem name lookup in the desktop app and browser editor (0.14.0+), sent only after you confirm each name. Python `from_name(online=True)` is unreleased. No other chemistry service. [Lookup](chemical-naming-rust.md#look-up-a-common-name-online).    |
+| Database/service integrations                    | Partial                  | Opt-in PubChem name lookup in the desktop app and browser editor (0.14.0+), sent only after you confirm each name. Python `from_name(online=True)` from 0.15.0. No other chemistry service. [Lookup](chemical-naming-rust.md#look-up-a-common-name-online).      |
 
 ## Files, clipboard, automation and application behavior
 

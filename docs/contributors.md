@@ -109,7 +109,7 @@ edits, clear reversible-group placement and repeat gestures without an editor
 flash in [PR #568](https://github.com/Ameyanagi/ReShiki/pull/568).
 [Matched chemistry, rendering and native evidence](changes/qa-stereo-repeat.md).
 
-Unreleased: @Ameyanagi — selected-arrow scope counts and consistent Properties
+@Ameyanagi — selected-arrow scope counts and consistent Properties
 navigation in [PR #577](https://github.com/Ameyanagi/ReShiki/pull/577), with
 [matched native review](changes/qa-properties-clarity.md).
 
@@ -291,7 +291,7 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
-The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.14.md) credit contributors alongside their changes.
+The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.15.md) credit contributors alongside their changes.
 
 Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535); [validation and reusable evidence](changes/qa-513.md).
 
@@ -303,7 +303,9 @@ Artemisinin depiction and whole-molecule cleanup diagnostics: @Ameyanagi in [PR 
 
 Release preparation and documentation for 0.13.1: @Ameyanagi in [PR #583](https://github.com/Ameyanagi/ReShiki/pull/583).
 
-Release preparation and documentation for 0.14.0: @Ameyanagi.
+Release preparation and documentation for 0.14.0: @Ameyanagi in [PR #1028](https://github.com/Ameyanagi/ReShiki/pull/1028).
+
+Release preparation and documentation for 0.15.0: @Ameyanagi.
 
 @Ameyanagi — confirmed online chemical-name lookup in
 [PR #599](https://github.com/Ameyanagi/ReShiki/pull/599). @fusion809 reported

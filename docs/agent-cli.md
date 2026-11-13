@@ -322,7 +322,7 @@ to 9 decimal places to remove floating-point noise. This is
     "analyzed_atoms": ["1", "2", "3", "4", "5", "6", "7"]
   },
   "versions": {
-    "app": "0.14.0",
+    "app": "0.15.0",
     "document": 37,
     "engine_protocol": 1,
     "operation_api": 1
@@ -405,7 +405,7 @@ line. `cli` lists the formats the command line reads and writes. `grants` and
 neither.
 
 `reshiki --version` (or `reshiki --cli --version`) prints only the
-application version, such as `reshiki 0.14.0`, and exits without opening a
+application version, such as `reshiki 0.15.0`, and exits without opening a
 window.
 
 <details>
@@ -476,7 +476,7 @@ window.
   "operation_api": 1,
   "stability": "experimental",
   "versions": {
-    "app": "0.14.0",
+    "app": "0.15.0",
     "document": 37,
     "engine_protocol": 1,
     "operation_api": 1
