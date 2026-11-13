@@ -197,6 +197,7 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut separators, mut agents) = (0, 0, 0, 0);
     let (mut failed_cases, mut lenient, mut other_basis) = (0, 0, 0);
+    let mut stereo_groups = 0;
     let mut failures = Vec::new();
     let mut categories = BTreeMap::<String, usize>::new();
     let mut restriction_categories = BTreeMap::<String, usize>::new();
@@ -276,6 +277,11 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                                     separators += doc.annotations.len();
                                     agents +=
                                         doc.reactions.iter().map(|r| r.agents.len()).sum::<usize>();
+                                    // The oracle labels enhanced stereo groups (#766)
+                                    // itself; the frozen converter refused them.
+                                    stereo_groups += usize::from(
+                                        doc.atoms.iter().any(|a| a.stereo_group.is_some()),
+                                    );
                                     let mut actual = serde_json::to_value(doc)?;
                                     // RDKit keeps only the radical count; the MOL RAD 1
                                     // singlet spin is native drawing metadata.
@@ -371,7 +377,7 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success(), "Reaction drawing reference failed");
     eprintln!(
-        "RXN drawings: {accepted} accepted, {rejected} rejected, {} intended restrictions, {separators} separators, {agents} agents, {failed_cases} failed cases, {lenient} accepted where RDKit applies a leniently read SMARTSQ, {other_basis} participant ring lists from a different RDKit SSSR basis, {} mismatches",
+        "RXN drawings: {accepted} accepted, {rejected} rejected, {} intended restrictions, {separators} separators, {agents} agents, {stereo_groups} with enhanced stereo groups, {failed_cases} failed cases, {lenient} accepted where RDKit applies a leniently read SMARTSQ, {other_basis} participant ring lists from a different RDKit SSSR basis, {} mismatches",
         restriction_categories.values().sum::<usize>(),
         failures.len()
     );

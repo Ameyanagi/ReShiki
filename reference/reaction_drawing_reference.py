@@ -30,9 +30,59 @@ else:
 # ReShiki keeps RDKit's legacy ring symmetrization; child processes inherit it.
 Chem.SetUseLegacyRingFinding(True)
 
+STEREO_GROUP_KINDS = {
+    Chem.StereoGroupType.STEREO_OR: "or",
+    Chem.StereoGroupType.STEREO_AND: "and",
+}
+
+
+def check_editable(mol):
+    """The frozen worker's check without its stereo-group refusal; #766 draws them."""
+    copy = Chem.RWMol(mol)
+    copy.SetStereoGroups([])
+    check_supported(copy)
+
+
+def lowest_free(kind, used):
+    number = 1
+    while (kind, number) in used:
+        number += 1
+    return (kind, number)
+
+
+def stereo_group_labels(mol, taken):
+    """ReShiki's canvas label (`and1`, `or2`) by atom index for one participant (#766).
+
+    A group is numbered by its read id; one without an id takes the lowest
+    number its molecule leaves free. Imported participants are independent, so
+    a label an earlier participant already uses in the drawing (``taken``) takes
+    the lowest free number instead, as pasted atoms do.
+    """
+    groups = [
+        (STEREO_GROUP_KINDS[g.GetGroupType()], g.GetReadId() or g.GetWriteId(), g.GetAtoms())
+        for g in mol.GetStereoGroups()
+        if g.GetGroupType() in STEREO_GROUP_KINDS
+    ]
+    local = {(kind, number) for kind, number, _ in groups}
+    labels = {}
+    for kind, number, atoms in groups:
+        label = (kind, number) if number else lowest_free(kind, local)
+        local.add(label)
+        for atom in atoms:
+            labels[atom.GetIdx()] = label
+    renamed = {}
+    for index in sorted(labels):
+        label = labels[index]
+        if label not in renamed:
+            renamed[label] = label if label not in taken else lowest_free(label[0], taken)
+            taken.add(renamed[label])
+        labels[index] = renamed[label]
+    return labels
+
 
 def expected(text, format="rxn"):
     participants, labels = [], []
+    taken = set()
 
     def draw(mol):
         if mol.GetNumAtoms():
@@ -85,9 +135,19 @@ def expected(text, format="rxn"):
                     ],
                 )
             )
-        return to_document(mol)
+        # The frozen converter refuses stereo groups: draw without them, then
+        # label the atoms as ReShiki does.
+        groups = stereo_group_labels(mol, taken)
+        plain = Chem.RWMol(mol)
+        plain.SetStereoGroups([])
+        document = to_document(plain)
+        for index, atom in enumerate(document["atoms"]):
+            if index in groups:
+                kind, number = groups[index]
+                atom["stereo_group"] = dict(kind=kind, number=number)
+        return document
 
-    doc = reactions.import_reaction(text, format, draw, check_supported)
+    doc = reactions.import_reaction(text, format, draw, check_editable)
     return dict(document=doc, participants=participants, labels=labels)
 
 
