@@ -86,6 +86,15 @@ cargo test --workspace --locked --no-default-features --doc
 cargo run --locked -- --engine-check
 ```
 
+PowerShell continues a line with a backtick instead of a backslash:
+
+```powershell
+cargo nextest run --workspace --locked --no-default-features --profile ci `
+  -E 'not binary_id(reshiki::metafile_worker) & not binary_id(reshiki-macos::native_print) & not (package(reshiki) & kind(lib) & test(/^naming::s2n_harness::/))'
+```
+
+The other commands are the same in both shells.
+
 Without cargo-nextest, `cargo test --workspace --locked` runs the same tests in
 one command. `.config/nextest.toml` runs the tests that start the naming worker
 one at a time.
