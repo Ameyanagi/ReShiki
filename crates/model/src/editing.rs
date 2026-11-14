@@ -1773,13 +1773,8 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
             || atom.charge != 0
             || atom.isotope != 0
             || atom.aromatic
-            || atom.stereo.is_some()
-            || atom.stereo_group.is_some()
-            || atom.radical_electrons != 0
-            || !atom.marks.is_empty()
-            || atom.explicit_h != 0
-            || atom.no_implicit
-            || atom.map_num != 0
+            // Nor any state that sharing the atom would lose.
+            || !crate::templates::compatible(atom, atom)
         {
             return None;
         }
@@ -1920,6 +1915,8 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
     if ring.iter().any(|id| crate::models3d::hides(doc, *id)) {
         return None;
     }
+    // Every ring atom is the same plain carbon, so one stands for both shared atoms.
+    let shared = doc.atom(*ring.first()?)?;
     let mut targets = None;
     let mut best: Option<Candidate> = None;
     for (a, b) in ring
@@ -1953,9 +1950,7 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                     }
                     let (ta, tb) = doc.atom(bond.a).zip(doc.atom(bond.b))?;
                     if [ta, tb].iter().any(|a| {
-                        a.element != "C"
-                            || a.charge != 0
-                            || a.isotope != 0
+                        !crate::templates::compatible(shared, a)
                             || a.aromatic
                             || doc
                                 .bonds

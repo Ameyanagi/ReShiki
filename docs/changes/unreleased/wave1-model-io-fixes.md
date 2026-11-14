@@ -8,7 +8,8 @@ issues: [1121]
   caption, text and appearance move with the fragment.
 - Dragging a ring onto a bond no longer fuses it when a ring atom carries a
   radical, a lone pair or other mark, or a stereo group. Fusing used to delete
-  them without notice.
+  them without notice. A bond whose atoms carry any of these, stereo, an atom
+  map or a fixed hydrogen count is no longer a target, as with a ring template.
 - Saving over a file keeps its permissions, and saving through a symbolic link
   writes to the linked file instead of replacing the link. A newly saved file
   gets the usual permissions instead of owner-only ones; recovery drafts and

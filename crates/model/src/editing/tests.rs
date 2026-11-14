@@ -598,12 +598,15 @@ fn ring_snap_refuses_ring_atoms_with_state_it_would_delete() {
             })
         },
     ];
-    for change in changes {
-        let mut doc = base.clone();
-        change(doc.atom_mut(moving[0]).unwrap());
-        let before = doc.clone();
-        assert!(snap_ring(&mut doc, &moving, delta, 5.0).is_none());
-        assert_eq!(doc, before);
+    // The atoms it fuses onto are held to the same rule as any shared atom.
+    for id in [moving[0], fixed[0]] {
+        for change in changes {
+            let mut doc = base.clone();
+            change(doc.atom_mut(id).unwrap());
+            let before = doc.clone();
+            assert!(snap_ring(&mut doc, &moving, delta, 5.0).is_none());
+            assert_eq!(doc, before);
+        }
     }
 }
 
