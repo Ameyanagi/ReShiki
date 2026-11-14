@@ -165,7 +165,7 @@ Baseline first: freeze the outputs of the OPSIN gates (8,100 lexical, 2,624 stru
 | ---- | ----------------------------------------------------------------------------------------------------------------- |
 | 8    | IR v1 to §5's requirements; adapters both ways next to the string API; round-trip and corpus gates through the IR |
 | 9    | Python and npm bindings on the IR API                                                                             |
-| 10   | Done 2026-11-09; protocol 7; see [the harness](../structure-to-name-harness.md#direct-ir-migration-gates)         |
+| 10   | Done 2026-11-09; protocol 7; see [the migration record](../changes/naming-ir-migration.md)                        |
 | 11   | 0.1.0 via tag-triggered trusted publishing (crates.io, PyPI, npm); ReShiki moves from git rev to version          |
 
 Before 0.1.0, decide whether to add `#[non_exhaustive]` to `NameStatus` and `NameReason` so the shared vocabulary's public API evolution policy is explicit.

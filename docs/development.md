@@ -4,7 +4,7 @@ ReShiki uses one Rust application executable for the editor, chemistry and nativ
 
 ## Build and run
 
-Install Rust 1.99.0 with rustfmt and Clippy, a C/C++ compiler, and Python 3.12 for the build scripts. The repository pins this compiler and its rustfmt/Clippy components in `rust-toolchain.toml`, and CI uses the same version. On Windows, use a Visual Studio tools shell matching your Rust target.
+Install Rust 1.99.1 with rustfmt and Clippy, a C/C++ compiler, and Python 3.12 for the build scripts. The repository pins this compiler and its rustfmt/Clippy components in `rust-toolchain.toml`, and CI uses the same version. On Windows, use a Visual Studio tools shell matching your Rust target.
 
 On macOS, Cargo defaults C/C++ dependencies to Apple Clang from `/usr/bin`, so a GCC installation earlier on `PATH` does not change the compiler. Set `CC_aarch64_apple_darwin` and `CXX_aarch64_apple_darwin` (or the `x86_64_apple_darwin` equivalents for Intel) explicitly to override these repository defaults.
 
@@ -117,7 +117,7 @@ On Windows, CI runs every ignored `app::naming::` test, the `app::nmr::` and `ca
 
 ## Optional RDKit reference tests
 
-Install [uv 0.13.5 or later](https://docs.astral.sh/uv/getting-started/installation/) and run `uv sync --locked --python 3.12.15`. On Windows, use `--python cpython-3.12.15-windows-x86_64-none`, including on ARM.
+Install [uv 0.12.3 or later](https://docs.astral.sh/uv/getting-started/installation/) (`required-version` in `pyproject.toml`; CI uses 0.13.5) and run `uv sync --locked --python 3.12.15`. On Windows, use `--python cpython-3.12.15-windows-x86_64-none`, including on ARM.
 
 Run reference/source HTTPS downloads through the locked environment so they use
 the updated certifi CA bundle. Offline packaging does not need certifi. The
@@ -164,7 +164,19 @@ Everything that needs or captures from the pinned Python/RDKit reference lives i
 
 ## CI
 
-Pull requests run native tests and saved InChI, depiction, and aromatic-response fixtures on macOS ARM64, Linux x64, and Windows x64. Documentation-only changes skip native checks. Expected results come from pinned RDKit captures; fixture updates retain their source hashes and platform provenance.
+Pull requests run native tests and saved InChI, depiction, and aromatic-response fixtures on Linux x64 and Windows x64. The macOS ARM64 legs run only on stacked `merge/*` pull requests, pull requests labelled `full-ci`, `main`, nightly, release and manual runs (`scripts/ci_scope.py`). Documentation-only changes skip native checks. Expected results come from pinned RDKit captures; fixture updates retain their source hashes and platform provenance.
+
+CI runs the workspace tests with [cargo-nextest](https://nexte.st/) 0.9.150, split into two partitions. `.config/nextest.toml` runs the tests that start the naming worker one at a time. To run the same tests locally:
+
+```sh
+cargo nextest run --workspace --locked --no-default-features --profile ci \
+  -E 'not binary_id(reshiki::metafile_worker) & not binary_id(reshiki-macos::native_print) & not (package(reshiki) & kind(lib) & test(/^naming::s2n_harness::/))'
+cargo test --locked --no-default-features -p reshiki --lib naming::s2n_harness::
+cargo test --locked --no-default-features --test metafile_worker
+cargo test --workspace --locked --no-default-features --doc
+```
+
+The excluded targets have custom harnesses or share one baseline in one process, so they run under `cargo test`. Plain `cargo test --workspace --locked`, as in [native checks](#native-checks), also covers them.
 
 The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/editor` against a debug build of the headless library. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` with oxlint on every pull request. To run the same checks locally:
 
@@ -207,7 +219,7 @@ bun run docs:check
 bun run docs:build
 ```
 
-Edit the visual manual in `website/src/content/docs/guide/` and developer notes in `docs/*.md`. The sync script generates ignored Starlight copies of the developer notes; edit their originals. Landing page, navigation and theme live in `website/`. The production build checks local page and asset links. Follow [writing and terms](writing-style.md) for wording, UI labels and feature names.
+Edit the visual manual in `website/src/content/docs/guide/` and developer notes in `docs/*.md`. The sync script generates ignored Starlight copies of the developer notes; edit their originals. It builds the unreleased changes page with `scripts/assemble_changelog.py` from the [release-note fragments](changes/unreleased/README.md), so it needs `python3` (`python` on Windows). Landing page, navigation and theme live in `website/`. The production build checks local page and asset links. Follow [writing and terms](writing-style.md) for wording, UI labels and feature names.
 
 The Documentation workflow checks pull requests and deploys main to [GitHub Pages](https://reshiki.com/). Pages must use **GitHub Actions** as its source. See [release builds and signing](releasing.md) for distribution setup.
 

@@ -15,7 +15,6 @@ await cp(
   path.join(root, "website/public/examples/shortcut-examples.rsk"),
 );
 const guides = {
-  install: ["getting-started"],
   "first-molecule": ["bond-tools", "chain-tools", "tool-palettes"],
   templates: [
     "haworth-projections",

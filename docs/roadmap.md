@@ -1,14 +1,40 @@
 # Roadmap
 
-ReShiki 0.6 includes native offline chemistry, direct drawing tools, selection-aware properties, reaction roles, templates, and an asynchronous assistant with editable previews and visual review. This roadmap describes remaining work, not release commitments. See [feature status](feature-status.md) for supported workflows and limitations.
+This page lists the larger open directions after ReShiki 0.15.0, taken from
+the [open GitHub issues](https://github.com/Ameyanagi/ReShiki/issues). It is not
+a release commitment. See [feature status](feature-status.md) for what works
+today and the [latest release notes](changes-0.15.md) for what changed.
 
-JACS / ACS remains the default. Preserve physical drawing sizes, complete molecular graphs, and editable originals when adding features.
+JACS / ACS stays the default. New features keep physical drawing sizes,
+complete molecular graphs and editable originals.
 
-1. **Drawing quality:** improve exact label metrics and collision handling, rich-text caret layout, complex attachments, and orientation controls. Assistant corrections should be able to satisfy upright functional-group requests while preserving conventional bond angles.
-2. **Document workflows:** improve native filename handling, recent files, OS open-document events, multiple documents, accessibility, and keyboard-only operation. Expand interchange checks across applications and Office versions.
-3. **Reaction composition:** extend outward branches into general reaction networks, improve caption and condition placement, and add richer mapping, quantities, balancing and yield workflows. Keep reaction semantics separate from arrow appearance.
-4. **Advanced chemistry:** add supported query atoms/bonds, R-group logic, polymer repeat units, enhanced stereo, multicenter attachments and wider aromatic cases only with independent fixtures and validation.
-5. **Publication and analysis:** add reusable page/object stationery, calibrated actual-size view, broader printing controls and dedicated naming or spectra engines. Validate scientific correctness and licensing before exposing predictions.
-6. **Native engine coverage:** extend Rust chemistry and the bundled official InChI kernel with independent differential comparisons. Python and uv remain development tools; installed applications must continue to work without them.
+- **Browser editor:** make the WebAssembly build a full editor
+  ([#436](https://github.com/Ameyanagi/ReShiki/issues/436)), with heavy work off
+  the main thread, NMR and names
+  ([#430](https://github.com/Ameyanagi/ReShiki/issues/430)), an embedding API
+  ([#431](https://github.com/Ameyanagi/ReShiki/issues/431)) and a faster demo
+  page ([#433](https://github.com/Ameyanagi/ReShiki/issues/433)).
+- **Office and other apps:** reopen ReShiki pictures as editable drawings in
+  Office and other apps, and paste several items into one tab
+  ([#462](https://github.com/Ameyanagi/ReShiki/issues/462)); finish the remaining
+  Wayland, Windows focus and Office checks
+  ([#1118](https://github.com/Ameyanagi/ReShiki/issues/1118)).
+- **Chemistry files:** open computational chemistry input and output files
+  ([#418](https://github.com/Ameyanagi/ReShiki/issues/418)) and crystal and
+  periodic structures with their unit cell
+  ([#417](https://github.com/Ameyanagi/ReShiki/issues/417)); import more inputs
+  with a warning instead of refusing them
+  ([#1138](https://github.com/Ameyanagi/ReShiki/issues/1138)).
+- **3D and layout:** 3D model objects beside structures
+  ([#386](https://github.com/Ameyanagi/ReShiki/issues/386)), relaxed 3D
+  optimization for metal complexes
+  ([#371](https://github.com/Ameyanagi/ReShiki/issues/371)) and a CoordGen
+  layout for macrocycles in **Clean up**
+  ([#370](https://github.com/Ameyanagi/ReShiki/issues/370)).
+- **Distribution:** signed Windows builds through SignPath
+  ([#489](https://github.com/Ameyanagi/ReShiki/issues/489)), a Homebrew cask
+  ([#368](https://github.com/Ameyanagi/ReShiki/issues/368)) and a translated
+  interface ([#408](https://github.com/Ameyanagi/ReShiki/issues/408)).
 
-Acceptance includes real desktop workflows, saved and reopened drawings, Undo/Redo, and appropriate export checks. Follow the issues from the [0.6 release walkthrough](release-0.6-validation.md) for concrete UI, UX and performance findings.
+Bugs are tracked as issues with the
+[`bug` label](https://github.com/Ameyanagi/ReShiki/issues?q=is%3Aopen+label%3Abug).
